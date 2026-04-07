@@ -1,0 +1,63 @@
+name: theheat-bot
+
+on:
+  schedule:
+    # Daily leaderboard: 12:00 UTC (~8 AM ET)
+    - cron: '0 12 * * *'
+    # Alert polling: every 4 hours
+    - cron: '0 0,4,8,16,20 * * *'
+    # Note: the 12:00 UTC slot handles both leaderboard + alerts
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: true
+        default: 'alerts'
+        type: choice
+        options:
+          - alerts
+          - leaderboard
+          - both
+
+concurrency:
+  group: theheat-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Determine mode
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "$(date -u +%H)" = "12" ]; then
+            # 12:00 UTC run = leaderboard + alerts
+            echo "mode=both" >> $GITHUB_OUTPUT
+          else
+            echo "mode=alerts" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run bot
+        env:
+          TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
+          TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
+        run: python -m src.main ${{ steps.mode.outputs.mode }}

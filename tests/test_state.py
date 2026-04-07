@@ -1,0 +1,99 @@
+"""Tests for state management."""
+
+from datetime import date
+from unittest.mock import patch
+
+from src.state import (
+    is_duplicate,
+    record_event,
+    get_daily_count,
+    increment_daily_count,
+    check_daily_cap,
+    update_streaks,
+    log_error,
+    DEFAULT_STATE,
+)
+
+
+class TestDuplicate:
+    def test_new_event(self, fresh_state):
+        assert not is_duplicate(fresh_state, "new_event")
+
+    def test_existing_event(self, state_with_events):
+        assert is_duplicate(state_with_events, "event_1")
+
+    def test_record_event_adds_id(self, fresh_state):
+        record_event(fresh_state, "new_event")
+        assert is_duplicate(fresh_state, "new_event")
+
+    def test_record_event_caps_at_500(self):
+        state = {"posted_events": [f"event_{i}" for i in range(510)]}
+        record_event(state, "final")
+        assert len(state["posted_events"]) <= 501  # 500 kept + 1 new
+
+
+class TestDailyCap:
+    @patch("src.state.date")
+    def test_fresh_state_has_zero_count(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        assert get_daily_count(fresh_state) == 0
+
+    @patch("src.state.date")
+    def test_increment_count(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        increment_daily_count(fresh_state)
+        assert get_daily_count(fresh_state) == 1
+
+    @patch("src.state.date")
+    def test_cap_not_reached(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        assert check_daily_cap(fresh_state, cap=10)
+
+    @patch("src.state.date")
+    def test_cap_reached(self, mock_date):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        state = {"daily_tweet_count": {"2026-04-07": 10}}
+        assert not check_daily_cap(state, cap=10)
+
+    @patch("src.state.date")
+    def test_old_days_cleaned_up(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        fresh_state["daily_tweet_count"] = {"2026-04-06": 5, "2026-04-05": 3}
+        increment_daily_count(fresh_state)
+        assert "2026-04-06" not in fresh_state["daily_tweet_count"]
+        assert "2026-04-07" in fresh_state["daily_tweet_count"]
+
+
+class TestStreaks:
+    @patch("src.state.date")
+    def test_new_city_starts_streak(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        update_streaks(fresh_state, ["Miami"])
+        assert fresh_state["streaks"]["Miami"]["consecutive_days"] == 1
+
+    @patch("src.state.date")
+    def test_city_drops_off(self, mock_date):
+        mock_date.today.return_value = date(2026, 4, 9)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        state = {"streaks": {"Miami": {"consecutive_days": 5, "last_seen": "2026-04-07"}}}
+        update_streaks(state, ["Phoenix"])
+        assert "Miami" not in state["streaks"]
+        assert "Phoenix" in state["streaks"]
+
+
+class TestErrorLog:
+    def test_log_error_appends(self, fresh_state):
+        log_error(fresh_state, "test_source", "something broke")
+        assert len(fresh_state["errors"]) == 1
+        assert fresh_state["errors"][0]["source"] == "test_source"
+
+    def test_log_error_caps_at_50(self):
+        state = {"errors": [{"source": "x", "ts": "t", "msg": "m"} for _ in range(55)]}
+        log_error(state, "new", "msg")
+        assert len(state["errors"]) <= 51
