@@ -20,8 +20,6 @@ def co2_weekly_template(current: float, last_year: float, diff: float) -> str:
 
 
 def hot10_template(cities: list[dict]) -> str:
-    """Format Hot 10 as a simple list. cities: [{city, anomaly_c}, ...]"""
-    lines = ["Today's Hot 10 (degrees above normal):"]
-    for i, c in enumerate(cities[:10], 1):
-        lines.append(f"{i}. {c['city']}: +{c['anomaly_c']:.1f}C")
-    return "\n".join(lines)
+    """Format Hot 10 as a compact single tweet. cities: [{city, anomaly_c}, ...]"""
+    entries = [f"{c['city']} +{c['anomaly_c']:.0f}" for c in cities[:10]]
+    return f"Hot 10 today (above normal): {', '.join(entries)}."

@@ -10,11 +10,16 @@ from src.posting.twitter import post_tweet
 from src.posting.bluesky import post_to_bluesky
 
 
-def post_everywhere(tweet_text: str, bot_state: dict) -> bool:
+def post_everywhere(tweet_text: str, bot_state: dict, dry_run: bool = False) -> bool:
     """Post to X and Bluesky. Returns True if at least one succeeded."""
     if not state.check_daily_cap(bot_state):
         print("[main] Daily tweet cap reached, skipping")
         return False
+
+    if dry_run:
+        print(f"[dry-run] Would post: {tweet_text}")
+        state.increment_daily_count(bot_state)
+        return True
 
     x_result = post_tweet(tweet_text)
     bs_result = post_to_bluesky(tweet_text)
@@ -26,7 +31,7 @@ def post_everywhere(tweet_text: str, bot_state: dict) -> bool:
     return success
 
 
-def run_alerts(bot_state: dict) -> dict:
+def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
     """Check all alert data sources and post new events."""
     posted = 0
 
@@ -45,7 +50,7 @@ def run_alerts(bot_state: dict) -> dict:
                 old_record_c=record.old_record_c,
                 old_record_year=record.old_record_year,
             )
-            if tweet and post_everywhere(tweet, bot_state):
+            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
                 state.record_event(bot_state, record.event_id)
                 posted += 1
                 print(f"[alerts] Posted record: {record.city}")
@@ -66,7 +71,7 @@ def run_alerts(bot_state: dict) -> dict:
                 confidence=fire.confidence,
                 frp=fire.frp,
             )
-            if tweet and post_everywhere(tweet, bot_state):
+            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
                 state.record_event(bot_state, fire.event_id)
                 posted += 1
                 print(f"[alerts] Posted fire: {fire.nearest_city}")
@@ -84,7 +89,7 @@ def run_alerts(bot_state: dict) -> dict:
                 ppm_crossed=milestone.ppm_crossed,
                 actual_ppm=milestone.actual_ppm,
             )
-            if tweet and post_everywhere(tweet, bot_state):
+            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
                 state.record_event(bot_state, milestone.event_id)
                 posted += 1
                 print(f"[alerts] Posted CO2 milestone: {milestone.ppm_crossed} ppm")
@@ -99,7 +104,7 @@ def run_alerts(bot_state: dict) -> dict:
                     last_year=comparison.last_year_avg,
                     diff=comparison.difference,
                 )
-                if tweet and post_everywhere(tweet, bot_state):
+                if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
                     state.record_event(bot_state, comparison.event_id)
                     posted += 1
     except Exception as e:
@@ -110,7 +115,7 @@ def run_alerts(bot_state: dict) -> dict:
     return bot_state
 
 
-def run_leaderboard(bot_state: dict) -> dict:
+def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
     """Generate and post the daily Hot 10 leaderboard."""
     print("[leaderboard] Generating Hot 10...")
     try:
@@ -164,7 +169,7 @@ def run_leaderboard(bot_state: dict) -> dict:
         )
 
         if tweet:
-            post_everywhere(tweet, bot_state)
+            post_everywhere(tweet, bot_state, dry_run=dry_run)
 
         # Update state
         from datetime import date
@@ -196,10 +201,10 @@ def main():
     bot_state = state.read_state()
 
     if args.mode in ("alerts", "both"):
-        bot_state = run_alerts(bot_state)
+        bot_state = run_alerts(bot_state, dry_run=args.dry_run)
 
     if args.mode in ("leaderboard", "both"):
-        bot_state = run_leaderboard(bot_state)
+        bot_state = run_leaderboard(bot_state, dry_run=args.dry_run)
 
     if not args.dry_run:
         state.write_state(bot_state)

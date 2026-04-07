@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 
-import google.generativeai as genai
-
 from src.voice.safety import run_safety_pipeline
 from src.voice import templates
 
@@ -56,6 +54,8 @@ def generate_tweet(data_description: str, fallback_fn=None, fallback_args=None) 
         return None
 
     try:
+        import google.generativeai as genai
+
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel("gemini-1.5-flash")
     except Exception:
