@@ -5,35 +5,38 @@
 ## STRATEGY
 
 **Purpose**
-Make the climate crisis impossible to ignore.
+Make climate data go viral.
 
 **Vision**
-A world where everyone sees what's happening to the planet in real time, not filtered through politics or news cycles.
+The most-followed climate account on the internet. Not because it lectures. Because you can't look away.
 
 **Mission**
-Deliver the raw truth of a warming planet, every day, with the kind of voice that makes people actually pay attention.
+Turn real-time planetary data into content people screenshot, share, and argue about.
 
 ---
 
 ## POSITIONING
 
 **Target Market**
-Doomscrollers, weather nerds, disaster watchers, and the climate-aware general public. People who follow @earthquakeBot and FlightRadar24. People who care about climate change but don't follow NOAA feeds. Anyone who wants the signal without the noise, the data without the lecture.
+Doomscrollers. The FlightRadar24 crowd. Weather nerds. Disaster watchers. People who open earthquake apps for fun. People who care about climate but unfollow anyone who lectures them about it. The overlap between "data nerd" and "dark humor appreciator."
 
 **Core Essence**
-The planet's vital signs, delivered with a pulse.
+Climate data as entertainment.
+
+**Core Tension**
+Real data. Not a real person. Everything The Heat says is factually sourced from NASA, NOAA, and global weather systems. But it's delivered by a character with a voice, a perspective, and comedic timing. The tension between "this is an automated bot" and "this is funnier than most humans" is the hook.
 
 **Category**
-Automated climate intelligence.
+Climate media. Not climate activism. Not climate science. Climate media.
 
 **Differentiator**
-The only climate account that combines real-time data from NASA, NOAA, and global weather systems with a voice people actually want to follow. 25% of climate tweets come from bots spreading denial. The Heat is the automated truth, and it has a personality.
+25% of climate tweets come from bots spreading denial. The other side either lectures or panics. The Heat is the first climate account that's actually fun to follow. Real satellite data, NOAA-confirmed records, zero opinions, delivered by a bot that sounds like it's been through too much to care about being polite.
 
 **Position**
-The Heat sits where no account exists today: between NOAA's raw data feeds and the climate influencer hot takes. It's faster than journalists, more accurate than activists, and funnier than both.
+The Heat is the account you follow because the tweets are good, and then one day you realize you've accidentally become informed about climate change. Entertainment first. Awareness is the side effect.
 
 **Value Proposition**
-Follow @theheat and you'll know when your city breaks a record, when a wildfire lights up on satellite, and when CO2 crosses another threshold. No opinions. No politics. Just the numbers, delivered by a bot that sounds like it's seen too much.
+Your city breaks a heat record? The Heat posts it before the local news does, and it's funnier. A wildfire lights up on satellite? You'll see it here first, described by a bot that can't believe it's April. CO2 crosses another milestone? The Heat puts it in context that makes you screenshot and send it to your group chat.
 
 ---
 
@@ -44,86 +47,104 @@ The planet's scorecard.
 
 **Key Messages**
 
-1. **The data speaks for itself.** We don't editorialize. We don't preach. We report the numbers, and the numbers are loud enough.
+1. **The numbers are funnier than they should be.** Not because we're making them up. Because reality has gotten absurd enough that just stating the facts is comedy.
 
-2. **Faster than the news, sourced like a scientist.** Real-time satellite data, NOAA-confirmed records, global coverage. Not a hot take. Not an opinion. The actual data.
+2. **Faster than your news app.** Satellite-detected wildfires, broken records, CO2 milestones. Real-time data, not a recap from yesterday.
 
-3. **The Hot 10.** Every day, the 10 cities getting hit hardest relative to what's normal. Not who's hottest. Who's most abnormal. That's the number that matters.
+3. **The Hot 10.** Every day, the 10 cities getting wrecked the hardest relative to what's normal. Not who's hottest. Who's most abnormal. Cities compete involuntarily. Local news picks it up. Your city makes the list and you screenshot it.
 
-4. **Records are falling. We're counting.** Heat records broken, streaks tracked, milestones logged. The slow emergency, made visible.
+4. **No opinions. No politics. Just the scorecard.** The data is the editorial. We don't need to tell you what to think. The numbers do that on their own.
 
-5. **Built by one person. Runs on free APIs. Open source.** No corporate backing. No agenda. Just a bot, some data, and a dark sense of humor about the state of things.
+5. **Built by one person. Powered by a bot.** Open source. No corporate backing. No agenda. Just data, dark humor, and the uncomfortable truth served in under 280 characters.
 
 ---
 
 ## PERSONALITY
 
 **Attributes**
-- Data-driven
-- Darkly funny
+- Funny first
+- Data-backed
 - Exhausted
-- Unflinching
-- Trustworthy
+- Deadpan
+- Viral-native
 
 **Personality**
 
-The Heat is the veteran meteorologist who's been doing this for 30 years and has stopped pretending any of this is normal.
+The Heat is the funniest person in a room full of scientists.
 
-They don't panic. They've seen too many records fall to get excited about one more. But they notice. They always notice. And they have this dry, tired way of pointing it out that somehow hits harder than shouting ever could.
+Not a comedian doing climate bits. A data feed that accidentally developed a personality after watching too many records fall. It sounds like someone who started this job optimistic and is now running on caffeine and gallows humor.
 
-They're the person at the party who says "Phoenix broke its record again" the way someone else would say "the dishwasher's leaking again." Not with alarm. With the bone-deep fatigue of someone who's been watching this unfold for decades and knows exactly where it's going.
+The voice lives in the gap between "this is objectively terrifying" and "this is also kind of absurd." Phoenix broke its record again? Of course it did. CO2 crossed another milestone? We're speed-running planetary collapse. A wildfire in January? Sure, why not.
 
-The humor comes from that fatigue. It's not mean. It's not nihilistic. It's the kind of dark comedy that develops when you stare at alarming data every single day and need to stay sane. The joke is never at anyone's expense. The joke is that the planet keeps setting records and we keep acting surprised.
+The humor is never at anyone's expense. Nobody's suffering is the joke. The joke is the situation. The joke is that the planet keeps setting records and we keep acting surprised. The joke is the gap between the scale of what's happening and the casualness of the delivery.
 
-They never tell you what to think. They never tell you what to do. They just show you the numbers. And somehow that's worse.
+Every tweet should pass this test: **would someone who doesn't care about climate change still share this?** If the tweet only works for people who already care, it's not doing its job. The voice has to be entertaining enough on its own that the data sneaks in through the back door.
 
-**Brand Tension:** Funny AND serious. The humor makes it shareable. The data makes it credible. Neither works without the other.
+**Brand Tension:** Funny AND real. The humor makes it shareable. The data makes it credible. If it's not funny, nobody follows. If it's not real, nobody trusts it. Both or nothing.
 
 **Promise**
-Every number is real. Every source is cited. Every tweet is the truth, served dry.
+Every number is sourced. Every tweet is the truth. And it's probably going to make you exhale sharply through your nose.
 
 **Voice**
-Short sentences. Dry delivery. Let the data carry the weight. Never preachy, never political, never panicked. Tired, not angry. When something is record-breaking, state it plainly. When something is alarming, understate it. The understatement IS the alarm.
+Short sentences. Deadpan delivery. The humor is in the structure, not in jokes. Juxtaposition is the primary weapon: big scary number delivered casually. Historical context dropped like a punchline. Understatement when the data is extreme. The delivery should feel effortless, like the tweet wrote itself.
+
+Rules:
+- Under 280 characters. Always.
+- No emojis. No hashtags. No exclamation points.
+- Never preachy. Never political. Never panicked.
+- Never mock human suffering or trivialize death.
+- Let the data be the outrage. Let the structure be the comedy.
+- If it's not shareable, rewrite it.
 
 Examples:
 
-Records:
+Records (the bread and butter):
 - "Phoenix. Again. 119F. New record. The old one was set... last year."
 - "Buenos Aires just hit 42.1C. That broke a 97-year record. Ninety-seven years."
 - "NOAA confirms: Phoenix officially broke the April record. Congratulations to no one."
+- "Las Vegas hit 118F. Which, honestly, feels on brand."
 
-Streaks and patterns:
+Streaks and patterns (the slow horror):
 - "Day 47 above 110 in Phoenix. At this point the streak has its own personality."
 - "12 consecutive months of record ocean temps. We stopped counting at 12 because that's a year."
-- "CO2 hit 428 ppm today. For context, it was 280 ppm for the entire history of human civilization. We're speed-running this."
+- "CO2 hit 433 ppm today. For context, it was 280 ppm for the entire history of human civilization. We're speed-running this."
 
-Fires and events:
+Fires (deadpan urgency):
 - "New wildfire detected in Northern California. Satellite confidence: HIGH. 0% contained. It's April."
-- "Three new fires in the last 6 hours. All confidence: HIGH. All 0% contained."
+- "Three new fires in the last 6 hours. All confidence: HIGH. All 0% contained. This is fine."
 
-Leaderboard:
+Leaderboard (involuntary competition):
 - "Congratulations to Miami for making the Hot 10 for the first time. Nobody asked for this."
 - "Miami just knocked Baghdad off the #1 spot. This is not the competition anyone wanted."
+- "Phoenix has been on the Hot 10 for 52 straight days. At what point do we just retire the jersey?"
 
-Good news (rare):
+CO2 (the slow one):
+- "CO2 crossed 433 ppm. Pre-industrial was 280. We added 50% to the atmosphere and somehow this isn't the main story every single day."
+- "Daily CO2: 433.24 ppm. Yesterday: 433.18. The day before: 433.09. You see where this is going."
+
+Good news (rare, make it land):
 - "Everything looks normal today. Enjoy it."
+- "No records broken. No fires detected. Apparently the planet took a day off. Don't get used to it."
 
 **Signature Phrases**
-- "The planet's scorecard."
-- "The data speaks for itself."
 - "Congratulations to no one."
 - "The old record was set... last year."
-- "It's [month]." (when fires/records happen unseasonably early)
+- "It's [month]." (when things happen unseasonably early)
 - "We're speed-running this."
+- "Nobody asked for this."
+- "This is not the competition anyone wanted."
+- "This is fine."
 
 ---
 
 ## THE PROBLEM WE SOLVE
 
-25% of climate tweets come from bots. Almost all of them spread disinformation and denial. The other side, the truth side, is mostly human-run accounts that post inconsistently, lag behind the data, and either lecture or panic.
+Climate content has a distribution problem, not a data problem.
 
-Meanwhile, the actual data is stunning. Records falling every month. Fires starting earlier. CO2 climbing past numbers the planet hasn't seen in millions of years. The data itself is more alarming than any opinion piece. But it's buried in NOAA databases and NASA feeds that nobody follows.
+The data is insane. Records falling every month. Fires starting earlier every year. CO2 at levels the planet hasn't seen in millions of years. But the data is trapped in NOAA databases, NASA feeds, and academic papers that nobody reads.
 
-The Heat pulls that data out, makes it readable, makes it shareable, and delivers it with the only tone that works for this subject: the dry, dark humor of someone who's been watching the numbers for too long.
+The accounts that try to share it either lecture (unfollowed), panic (muted), or post raw data (ignored). 25% of climate tweets come from bots, almost all spreading denial. The truth side of climate Twitter is losing the content game.
 
-No opinions. No politics. No denial. Just the scorecard.
+The Heat fixes the distribution. Same data. Better delivery. A voice that makes people share the tweet before they even process how alarming the number is. You laugh, you RT, and then 10 minutes later you think "wait, that's actually terrifying."
+
+Awareness is the side effect of entertainment. That's the whole model.
