@@ -81,13 +81,15 @@ def detect_transition(readings: list[ENSOReading]) -> dict | None:
     previous = readings[-2]
 
     if current.status != previous.status and current.status != "Neutral":
-        # Count how many months the previous state lasted
-        prev_state = previous.status
+        # Count how many months the last non-Neutral phase lasted
+        prev_active = None
         streak = 0
         for r in reversed(readings[:-1]):
-            if r.status == prev_state:
+            if prev_active is None and r.status != "Neutral":
+                prev_active = r.status
+            if prev_active and r.status == prev_active:
                 streak += 1
-            else:
+            elif prev_active:
                 break
 
         return {

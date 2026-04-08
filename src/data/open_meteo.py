@@ -148,7 +148,11 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
             historical_highs.append((hist_date.year, hist_date))
 
         # Batch: fetch full range from archive
-        start = today.replace(year=today.year - 30)
+        try:
+            start = today.replace(year=today.year - 30)
+        except ValueError:
+            # Feb 29 on a non-leap year 30 years ago
+            start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
         resp_hist = requests.get(
             f"{BASE_URL}/archive",
@@ -233,7 +237,10 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
         if today_low is None:
             return None
 
-        start = today.replace(year=today.year - 30)
+        try:
+            start = today.replace(year=today.year - 30)
+        except ValueError:
+            start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
         resp_hist = requests.get(
             f"{BASE_URL}/archive",

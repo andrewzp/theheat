@@ -74,7 +74,11 @@ def fetch_alerts() -> list[SevereWeatherAlert]:
                 continue
             seen_events.add(dedup_key)
 
-            event_id = f"nws_{event.replace(' ', '_').lower()}_{date.today().isoformat()}_{len(alerts)}"
+            # Use NWS-provided ID for stable dedup; fall back to position-based
+            if nws_id:
+                event_id = f"nws_{nws_id}"
+            else:
+                event_id = f"nws_{event.replace(' ', '_').lower()}_{date.today().isoformat()}_{len(alerts)}"
 
             alerts.append(SevereWeatherAlert(
                 event_type=event,

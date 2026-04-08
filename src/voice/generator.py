@@ -267,13 +267,16 @@ def generate_sea_ice_record_tweet(
 
 
 def generate_drought_tweet(
-    states: list[dict],
+    states: list,
 ) -> str | None:
     """Generate a tweet about drought conditions."""
     top = states[:3]
     lines = []
     for s in top:
-        lines.append(f"{s['state']}: {s['d3_pct'] + s['d4_pct']:.0f}% extreme/exceptional drought")
+        name = s.state if hasattr(s, "state") else s["state"]
+        d3 = s.d3_pct if hasattr(s, "d3_pct") else s["d3_pct"]
+        d4 = s.d4_pct if hasattr(s, "d4_pct") else s["d4_pct"]
+        lines.append(f"{name}: {d3 + d4:.0f}% extreme/exceptional drought")
     data = (
         f"US Drought Monitor update. Worst drought conditions this week:\n"
         + "\n".join(lines)

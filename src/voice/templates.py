@@ -92,9 +92,14 @@ def sea_ice_record_template(hemisphere: str, extent: float, previous_extent: flo
     )
 
 
-def drought_template(states: list[dict]) -> str:
+def drought_template(states: list) -> str:
     top = states[:3]
-    parts = [f"{s['state']} {s['d3_pct'] + s['d4_pct']:.0f}%" for s in top]
+    parts = []
+    for s in top:
+        name = s.state if hasattr(s, "state") else s["state"]
+        d3 = s.d3_pct if hasattr(s, "d3_pct") else s["d3_pct"]
+        d4 = s.d4_pct if hasattr(s, "d4_pct") else s["d4_pct"]
+        parts.append(f"{name} {d3 + d4:.0f}%")
     return f"US Drought Monitor: Extreme/exceptional drought — {', '.join(parts)}."
 
 
