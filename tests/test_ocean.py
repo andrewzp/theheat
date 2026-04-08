@@ -11,12 +11,11 @@ from src.data.ocean import (
 )
 
 
-def _mock_marine_response(wave_height: float, sst: float = 22.0):
+def _mock_marine_response(wave_height: float):
     """Helper to generate a mock marine API response."""
     return {
         "daily": {
             "wave_height_max": [wave_height],
-            "sea_surface_temperature_max": [sst],
         }
     }
 
@@ -29,14 +28,14 @@ class TestFetchOceanConditions:
             responses.add(
                 responses.GET,
                 MARINE_URL,
-                json=_mock_marine_response(5.0, 22.0),
+                json=_mock_marine_response(5.0),
                 status=200,
             )
         readings = fetch_ocean_conditions()
         assert len(readings) == 16
         assert all(isinstance(r, OceanReading) for r in readings)
         assert readings[0].wave_height_max_m == 5.0
-        assert readings[0].sst_c == 22.0
+        assert readings[0].sst_c is None
 
     @responses.activate
     def test_skips_failed_points(self):
@@ -52,7 +51,7 @@ class TestFetchOceanConditions:
         responses.add(
             responses.GET,
             MARINE_URL,
-            json={"daily": {"wave_height_max": [None], "sea_surface_temperature_max": [22.0]}},
+            json={"daily": {"wave_height_max": [None]}},
             status=200,
         )
         for _ in range(15):

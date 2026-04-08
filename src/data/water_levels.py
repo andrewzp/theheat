@@ -63,8 +63,9 @@ def fetch_water_levels() -> list[WaterLevelReading]:
     """Fetch latest water level readings for all monitored stations."""
     readings = []
     today = date.today()
-    begin = (datetime.utcnow() - timedelta(hours=6)).strftime("%Y%m%d %H:%M")
-    end = datetime.utcnow().strftime("%Y%m%d %H:%M")
+    now = datetime.utcnow()
+    begin = (now - timedelta(hours=6)).strftime("%Y%m%d %H:%M")
+    end = now.strftime("%Y%m%d %H:%M")
 
     for station_id, name, state in STATIONS:
         try:
@@ -91,10 +92,11 @@ def fetch_water_levels() -> list[WaterLevelReading]:
                 continue
 
             # Get the most recent observation
-            latest = obs_data[-1]
-            observed = float(latest.get("v", 0))
+            latest_obs = obs_data[-1]
+            obs_time = latest_obs.get("t", "")
+            observed = float(latest_obs.get("v", 0))
 
-            # Now fetch predicted tide for comparison
+            # Fetch predicted tide for comparison
             resp_pred = requests.get(
                 COOPS_URL,
                 params={
@@ -115,7 +117,13 @@ def fetch_water_levels() -> list[WaterLevelReading]:
             if not pred_data:
                 continue
 
+            # Match prediction to observation by closest timestamp
             predicted = float(pred_data[-1].get("v", 0))
+            if obs_time:
+                for p in pred_data:
+                    if p.get("t", "") == obs_time:
+                        predicted = float(p.get("v", 0))
+                        break
             anomaly = observed - predicted
 
             event_id = f"water_{station_id}_{today.isoformat()}"

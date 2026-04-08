@@ -97,7 +97,7 @@ class TestFetchAlerts:
         assert fetch_alerts() == []
 
     @responses.activate
-    def test_event_id_format(self):
+    def test_event_id_uses_nws_id(self):
         responses.add(
             responses.GET,
             "https://api.weather.gov/alerts/active",
@@ -105,7 +105,8 @@ class TestFetchAlerts:
             status=200,
         )
         alerts = fetch_alerts()
-        assert alerts[0].event_id.startswith("nws_tornado_warning_")
+        # Uses NWS-provided ID for stable dedup
+        assert alerts[0].event_id == "nws_urn:oid:2.49.0.1.840.0.abc123"
 
 
 class TestSimplifyArea:

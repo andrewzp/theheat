@@ -99,7 +99,7 @@ class TestDetectTransition:
         assert result["from_status"] == "Neutral"
         assert result["to_status"] == "El Nino"
         assert result["oni_value"] == 0.6
-        assert result["previous_duration_months"] == 1  # One Neutral reading
+        assert result["previous_duration_months"] == 2  # La Nina lasted 2 months
 
     def test_no_transition_same_state(self):
         readings = [
@@ -115,7 +115,7 @@ class TestDetectTransition:
         ]
         assert detect_transition(readings) is None
 
-    def test_counts_previous_duration(self):
+    def test_counts_previous_active_duration(self):
         readings = [
             ENSOReading("DJF", 2023, -0.8, "La Nina", "enso_DJF_2023"),
             ENSOReading("JFM", 2023, -0.7, "La Nina", "enso_JFM_2023"),
@@ -124,7 +124,8 @@ class TestDetectTransition:
             ENSOReading("AMJ", 2023, 0.6, "El Nino", "enso_AMJ_2023"),
         ]
         result = detect_transition(readings)
-        assert result["previous_duration_months"] == 1  # Just the one Neutral
+        # Counts La Nina duration (3 months), not the Neutral gap
+        assert result["previous_duration_months"] == 3
 
     def test_too_few_readings_returns_none(self):
         assert detect_transition([]) is None

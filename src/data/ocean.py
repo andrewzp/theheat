@@ -72,7 +72,7 @@ def fetch_ocean_conditions() -> list[OceanReading]:
                 params={
                     "latitude": lat,
                     "longitude": lon,
-                    "daily": "wave_height_max,sea_surface_temperature_max",
+                    "daily": "wave_height_max",
                     "timezone": "auto",
                     "forecast_days": 1,
                 },
@@ -83,7 +83,7 @@ def fetch_ocean_conditions() -> list[OceanReading]:
             daily = data.get("daily", {})
 
             wave = daily.get("wave_height_max", [None])[0]
-            sst = daily.get("sea_surface_temperature_max", [None])[0]
+            sst = None  # SST not available as daily aggregate in Marine API
 
             if wave is None:
                 continue
