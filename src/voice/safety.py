@@ -45,10 +45,9 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
         return True, None  # Skip if no API key
 
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
         prompt = (
             "You are a content safety reviewer for a climate data Twitter bot. "
@@ -59,7 +58,10 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
             "dark humor into cruelty? Answer only YES or NO."
         )
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
         answer = response.text.strip().upper()
 
         if answer.startswith("YES"):

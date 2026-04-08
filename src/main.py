@@ -1,41 +1,62 @@
-"""@theheat bot orchestrator."""
+"""@theheat bot orchestrator.
+
+All generated tweets go to drafts in the state Gist.
+Nothing posts automatically. Approved tweets are posted
+via manual_tweet mode triggered from the dashboard.
+"""
 
 import argparse
+import os
 import sys
-
-from datetime import date
+from datetime import date, datetime
 
 from src import state
 from src.data import open_meteo, firms, co2, noaa_acis
 from src.voice import generator
 from src.posting.twitter import post_tweet
-from src.posting.bluesky import post_to_bluesky
 
 
-def post_everywhere(tweet_text: str, bot_state: dict, dry_run: bool = False) -> bool:
-    """Post to X and Bluesky. Returns True if at least one succeeded."""
-    if not state.check_daily_cap(bot_state):
-        print("[main] Daily tweet cap reached, skipping")
+def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str = "") -> bool:
+    """Save a generated tweet as a draft for review."""
+    drafts = bot_state.setdefault("drafts", [])
+
+    # Don't duplicate drafts for the same event
+    if event_id and any(d.get("event_id") == event_id for d in drafts):
+        print(f"[draft] Already drafted: {event_id}")
         return False
 
-    if dry_run:
-        print(f"[dry-run] Would post: {tweet_text}")
+    draft = {
+        "id": f"draft_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
+        "text": tweet_text,
+        "type": tweet_type,
+        "event_id": event_id,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "status": "pending",
+    }
+    drafts.append(draft)
+    print(f"[draft] Saved: {tweet_text[:60]}...")
+    return True
+
+
+def post_approved(tweet_text: str, bot_state: dict) -> bool:
+    """Post an approved tweet to X. Returns True on success."""
+    if not state.check_daily_cap(bot_state):
+        print("[post] Daily tweet cap reached, skipping")
+        return False
+
+    result = post_tweet(tweet_text)
+    if result is not None:
         state.increment_daily_count(bot_state)
+        print(f"[post] Posted to X: {tweet_text[:60]}...")
         return True
 
-    x_result = post_tweet(tweet_text)
-    bs_result = post_to_bluesky(tweet_text)
-    success = x_result is not None or bs_result is not None
-
-    if success:
-        state.increment_daily_count(bot_state)
-
-    return success
+    print("[post] Failed to post to X")
+    return False
 
 
-def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
-    """Check all alert data sources and post new events."""
-    posted = 0
+def run_alerts(bot_state: dict) -> dict:
+    """Check all alert data sources and save drafts."""
+    drafted = 0
 
     # 1. Heat records via Open-Meteo historical
     print("[alerts] Checking heat records...")
@@ -52,10 +73,9 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
                 old_record_c=record.old_record_c,
                 old_record_year=record.old_record_year,
             )
-            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
+            if tweet and save_draft(tweet, bot_state, "record", record.event_id):
                 state.record_event(bot_state, record.event_id)
-                posted += 1
-                print(f"[alerts] Posted record: {record.city}")
+                drafted += 1
 
             # Queue US records for later NOAA confirmation
             if record.country == "US":
@@ -71,7 +91,7 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
         print(f"[alerts] Heat records error: {e}")
         state.log_error(bot_state, "open_meteo_records", str(e))
 
-    # 1b. NOAA record confirmations (for previously detected US records)
+    # 1b. NOAA record confirmations
     print("[alerts] Checking NOAA confirmations...")
     try:
         expired = state.get_expired_confirmations(bot_state, min_hours=24)
@@ -97,12 +117,10 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
                     temp_f=confirmation.new_temp_f,
                     record_date=confirmation.date,
                 )
-                if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
+                if tweet and save_draft(tweet, bot_state, "noaa_confirmation", confirm_event_id):
                     state.record_event(bot_state, confirm_event_id)
-                    posted += 1
-                    print(f"[alerts] Posted NOAA confirmation: {pending['city']}")
+                    drafted += 1
                 state.remove_pending_confirmation(bot_state, pending["event_id"])
-            # If confirmation is None, leave it in pending for next run
     except Exception as e:
         print(f"[alerts] NOAA confirmation error: {e}")
         state.log_error(bot_state, "noaa_confirmation", str(e))
@@ -120,10 +138,9 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
                 confidence=fire.confidence,
                 frp=fire.frp,
             )
-            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
+            if tweet and save_draft(tweet, bot_state, "fire", fire.event_id):
                 state.record_event(bot_state, fire.event_id)
-                posted += 1
-                print(f"[alerts] Posted fire: {fire.nearest_city}")
+                drafted += 1
     except Exception as e:
         print(f"[alerts] FIRMS error: {e}")
         state.log_error(bot_state, "firms", str(e))
@@ -138,14 +155,12 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
                 ppm_crossed=milestone.ppm_crossed,
                 actual_ppm=milestone.actual_ppm,
             )
-            if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
+            if tweet and save_draft(tweet, bot_state, "co2_milestone", milestone.event_id):
                 state.record_event(bot_state, milestone.event_id)
-                posted += 1
-                print(f"[alerts] Posted CO2 milestone: {milestone.ppm_crossed} ppm")
+                drafted += 1
 
-        # Weekly comparison (post once per week on Sundays)
-        from datetime import date
-        if date.today().weekday() == 6:  # Sunday
+        # Weekly comparison (Sundays)
+        if date.today().weekday() == 6:
             comparison = co2.compute_weekly_comparison(readings)
             if comparison and not state.is_duplicate(bot_state, comparison.event_id):
                 tweet = generator.generate_co2_weekly_tweet(
@@ -153,19 +168,19 @@ def run_alerts(bot_state: dict, dry_run: bool = False) -> dict:
                     last_year=comparison.last_year_avg,
                     diff=comparison.difference,
                 )
-                if tweet and post_everywhere(tweet, bot_state, dry_run=dry_run):
+                if tweet and save_draft(tweet, bot_state, "co2_weekly", comparison.event_id):
                     state.record_event(bot_state, comparison.event_id)
-                    posted += 1
+                    drafted += 1
     except Exception as e:
         print(f"[alerts] CO2 error: {e}")
         state.log_error(bot_state, "co2", str(e))
 
-    print(f"[alerts] Done. Posted {posted} tweets.")
+    print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state
 
 
-def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
-    """Generate and post the daily Hot 10 leaderboard."""
+def run_leaderboard(bot_state: dict) -> dict:
+    """Generate the daily Hot 10 leaderboard as a draft."""
     print("[leaderboard] Generating Hot 10...")
     try:
         cities = open_meteo.load_cities()
@@ -183,7 +198,6 @@ def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
             print("[leaderboard] No valid anomalies to rank")
             return bot_state
 
-        # Build data description for Gemini
         hot10_data = []
         for i, ct in enumerate(hot10, 1):
             hot10_data.append(
@@ -192,7 +206,6 @@ def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
                 f"anomaly: +{ct.anomaly_c:.1f}C)"
             )
 
-        # Check for position changes vs yesterday
         prev_cities = bot_state.get("last_hot10", {}).get("cities", [])
         changes = []
         for i, ct in enumerate(hot10):
@@ -217,11 +230,10 @@ def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
             fallback_args={"cities": [{"city": ct.city, "anomaly_c": ct.anomaly_c} for ct in hot10]},
         )
 
+        event_id = f"hot10_{date.today().isoformat()}"
         if tweet:
-            post_everywhere(tweet, bot_state, dry_run=dry_run)
+            save_draft(tweet, bot_state, "hot10", event_id)
 
-        # Update state
-        from datetime import date
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
             "cities": [ct.city for ct in hot10],
@@ -235,8 +247,8 @@ def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
     return bot_state
 
 
-def run_manual_tweet(bot_state: dict, dry_run: bool = False) -> dict:
-    """Post a manually composed tweet from the TWEET_TEXT env var."""
+def run_manual_tweet(bot_state: dict) -> dict:
+    """Post an approved tweet from the TWEET_TEXT env var."""
     tweet_text = os.environ.get("TWEET_TEXT", "").strip()
     if not tweet_text:
         print("[manual] No TWEET_TEXT provided, skipping")
@@ -247,7 +259,7 @@ def run_manual_tweet(bot_state: dict, dry_run: bool = False) -> dict:
         return bot_state
 
     print(f"[manual] Posting: {tweet_text}")
-    post_everywhere(tweet_text, bot_state, dry_run=dry_run)
+    post_approved(tweet_text, bot_state)
     return bot_state
 
 
@@ -258,7 +270,6 @@ def main():
         choices=["alerts", "leaderboard", "both", "manual_tweet"],
         help="Which content to generate and post",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Don't post, just print")
     args = parser.parse_args()
 
     print(f"[main] Starting @theheat in {args.mode} mode")
@@ -266,20 +277,16 @@ def main():
     bot_state = state.read_state()
 
     if args.mode in ("alerts", "both"):
-        bot_state = run_alerts(bot_state, dry_run=args.dry_run)
+        bot_state = run_alerts(bot_state)
 
     if args.mode in ("leaderboard", "both"):
-        bot_state = run_leaderboard(bot_state, dry_run=args.dry_run)
+        bot_state = run_leaderboard(bot_state)
 
     if args.mode == "manual_tweet":
-        bot_state = run_manual_tweet(bot_state, dry_run=args.dry_run)
+        bot_state = run_manual_tweet(bot_state)
 
-    if not args.dry_run:
-        state.write_state(bot_state)
-        print("[main] State saved")
-    else:
-        print("[main] Dry run, state not saved")
-
+    state.write_state(bot_state)
+    print("[main] State saved")
     print("[main] Done")
 
 

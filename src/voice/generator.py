@@ -60,10 +60,9 @@ def generate_tweet(data_description: str, fallback_fn=None, fallback_args=None) 
         return None
 
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception:
         if fallback_fn and fallback_args:
             return fallback_fn(**fallback_args)
@@ -72,7 +71,10 @@ def generate_tweet(data_description: str, fallback_fn=None, fallback_args=None) 
     for attempt in range(MAX_RETRIES):
         try:
             prompt = f"{SYSTEM_PROMPT}\n\nWrite a tweet about this:\n{data_description}"
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+            )
             tweet = response.text.strip().strip('"').strip("'")
 
             # Run safety pipeline
