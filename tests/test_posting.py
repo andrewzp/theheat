@@ -36,7 +36,7 @@ class TestPostTweet:
     @patch("src.posting.twitter.API_SECRET", "s")
     @patch("src.posting.twitter.ACCESS_TOKEN", "t")
     @patch("src.posting.twitter.ACCESS_SECRET", "a")
-    def test_rate_limit_returns_none(self):
+    def test_rate_limit_returns_sentinel(self):
         import tweepy
 
         mock_client = MagicMock()
@@ -48,7 +48,7 @@ class TestPostTweet:
             from src.posting.twitter import post_tweet
 
             result = post_tweet("test tweet")
-            assert result is None
+            assert result == {"error": "rate_limited"}
 
     @patch("src.posting.twitter.API_KEY", "k")
     @patch("src.posting.twitter.API_SECRET", "s")

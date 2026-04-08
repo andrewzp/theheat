@@ -36,7 +36,7 @@ Most climate accounts either lecture or panic. The Heat just reports the numbers
 The Heat is the account you follow because the data is always clear and often surprising, and then one day you realize you've accidentally become the most informed person in the room about climate.
 
 **Value Proposition**
-Your city breaks a heat record? The Heat posts it with the old record and when it was set. A wildfire lights up on satellite? You see the MW reading and containment status. CO2 crosses a milestone? You see the pre-industrial baseline for context. Always clear. Always sourced. Always in under 280 characters.
+Your city breaks a heat record? The Heat posts it with the old record and when it was set. A wildfire lights up on satellite? You see the MW reading. CO2 crosses a milestone? You see the pre-industrial baseline. A tornado warning hits Oklahoma? You see it. The Mississippi crests flood stage? You see by how much. Arctic sea ice hits a record low? You see the previous record and when it was set. Always clear. Always sourced. Always in under 280 characters.
 
 ---
 
@@ -49,7 +49,7 @@ The planet's scorecard.
 
 1. **The numbers speak for themselves.** We don't editorialize. We give you the data point and the context to understand it. That's usually enough.
 
-2. **Faster than your news app.** Satellite-detected wildfires, broken records, CO2 milestones. Real-time data, not yesterday's recap.
+2. **Faster than your news app.** Satellite-detected wildfires, broken records, CO2 milestones, tornado warnings, flood stages, storm surge, extreme waves, drought, sea ice, ENSO transitions. Real-time data from 13 sources, not yesterday's recap.
 
 3. **The Hot 10.** Every day, the 10 cities furthest above their historical normal. Not who's hottest. Who's most abnormal. Your city makes the list and you send it to your group chat.
 
@@ -104,11 +104,15 @@ Rules:
 
 Examples:
 
-Records:
+Heat records:
 - "Phoenix: 121F today. New record for this date. Previous record: 119F, set in 2024."
 - "Buenos Aires recorded 42.1C. That breaks the April 7 record, which stood since 1929. Ninety-seven years."
 - "Delhi: 48.2C. Highest temperature recorded in the city since June 2014."
 - "Kuwait City: 53.2C (127.8F). Highest reading anywhere on Earth this year."
+
+Cold records:
+- "Buenos Aires recorded a low of 2.1C overnight. Coldest April night since 1928."
+- "Anchorage dropped to -31F. New record low for this date. Previous: -28F, set in 1989."
 
 Streaks and patterns:
 - "Phoenix has been above 110F for 47 consecutive days."
@@ -124,6 +128,32 @@ Fires:
 - "Large wildfire detected in Northern California. Satellite confidence: HIGH. 0% contained. Fire Radiative Power: 850 MW."
 - "Satellite detected a 1,200 MW fire in Siberia. For reference, a large power plant generates about 1,000 MW."
 
+Severe weather:
+- "Tornado Warning for Tulsa, OK and 3 other areas."
+- "Hurricane Warning for Miami-Dade, FL. It's October."
+- "Flash Flood Emergency for Harris County, TX."
+
+Global disasters:
+- "GDACS RED alert. Tropical Cyclone Freddy, Mozambique. Category 4."
+- "GDACS ORANGE alert. Earthquake, Turkey. 6.7 magnitude."
+
+Flooding:
+- "Mississippi River at St. Louis: 35.5ft. Flood stage is 30ft. Currently 5.5ft above."
+- "Water level at The Battery, NY: 2.3ft above predicted. Storm surge."
+
+Ocean:
+- "12.4m waves in the Drake Passage. That's 41 feet. It's April."
+- "Marine forecast: 10.8m waves in the North Sea."
+
+Sea ice:
+- "Arctic sea ice: 12.4 million sq km. Lowest for this date since satellite records began in 1979."
+
+Drought:
+- "US Drought Monitor: Extreme/exceptional drought. Texas 25%, Oklahoma 20%, Kansas 13%."
+
+ENSO:
+- "NOAA declares El Nino conditions. ONI: +0.6. Previous La Nina phase lasted 3 months."
+
 Leaderboard:
 - "Hottest cities by anomaly today: Algiers +9.7C, Brussels +8.2C, Urumqi +7.9C above normal."
 - "Houston is on the Hot 10 in April. That doesn't usually happen until July."
@@ -138,7 +168,7 @@ Quiet days:
 
 Climate content has a distribution problem, not a data problem.
 
-The data is extraordinary. Records falling monthly. Fires starting earlier every year. CO2 at levels unseen in millions of years. But the data is trapped in NOAA databases, NASA feeds, and academic papers that nobody reads.
+The data is extraordinary. Records falling monthly. Fires starting earlier every year. CO2 at levels unseen in millions of years. Rivers cresting flood stage. Sea ice at record lows. Category 4 cyclones. 40-foot waves. But the data is trapped in NOAA databases, NASA feeds, USGS gauges, and academic papers that nobody reads.
 
 The accounts that try to share it either lecture (unfollowed), panic (muted), or post raw data without context (ignored).
 

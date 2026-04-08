@@ -80,8 +80,9 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
             return False, "LLM flagged as potentially harmful"
         return True, None
 
-    except Exception:
+    except Exception as e:
         # If LLM check fails, allow the tweet through (regex already passed)
+        print(f"[safety] LLM safety check failed, falling back to regex only: {e}")
         return True, None
 
 
