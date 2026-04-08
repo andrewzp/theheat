@@ -48,7 +48,7 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
         import google.generativeai as genai
 
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = (
             "You are a content safety reviewer for a climate data Twitter bot. "
