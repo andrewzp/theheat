@@ -27,6 +27,13 @@ export default function Dashboard() {
   const [triggering, setTriggering] = useState(null)
   const [triggerResult, setTriggerResult] = useState(null)
 
+  // Compose state
+  const [composePrompt, setComposePrompt] = useState("")
+  const [composeTweet, setComposeTweet] = useState("")
+  const [generating, setGenerating] = useState(false)
+  const [posting, setPosting] = useState(false)
+  const [composeStatus, setComposeStatus] = useState(null)
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch("/api/state")
@@ -60,6 +67,54 @@ export default function Dashboard() {
       setTriggerResult(`Error: ${e.message}`)
     } finally {
       setTriggering(null)
+    }
+  }
+
+  async function generateTweet() {
+    setGenerating(true)
+    setComposeStatus(null)
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: composePrompt }),
+      })
+      const result = await res.json()
+      if (result.tweet) {
+        setComposeTweet(result.tweet)
+      } else {
+        setComposeStatus(`Error: ${result.error}`)
+      }
+    } catch (e) {
+      setComposeStatus(`Error: ${e.message}`)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function postTweet() {
+    if (!composeTweet.trim()) return
+    setPosting(true)
+    setComposeStatus(null)
+    try {
+      const res = await fetch("/api/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tweet: composeTweet.trim() }),
+      })
+      const result = await res.json()
+      if (result.ok) {
+        setComposeStatus("Sent to post queue. Check Recent Runs below.")
+        setComposeTweet("")
+        setComposePrompt("")
+        setTimeout(fetchData, 5000)
+      } else {
+        setComposeStatus(`Error: ${result.error}`)
+      }
+    } catch (e) {
+      setComposeStatus(`Error: ${e.message}`)
+    } finally {
+      setPosting(false)
     }
   }
 
@@ -221,6 +276,51 @@ export default function Dashboard() {
         .pending-list li { padding: 4px 0; color: #888; }
         .pending-city { color: #facc15; }
 
+        .compose { display: flex; flex-direction: column; gap: 10px; }
+        .compose-input {
+          background: #0a0a0a;
+          border: 1px solid #333;
+          border-radius: 4px;
+          color: #e0e0e0;
+          font-family: inherit;
+          font-size: 13px;
+          padding: 10px;
+          resize: vertical;
+        }
+        .compose-input:focus { outline: none; border-color: #ff4d00; }
+        .preview-box {
+          background: #0a0a0a;
+          border: 1px solid #ff4d00;
+          border-radius: 6px;
+          padding: 12px;
+        }
+        .preview-label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #ff4d00;
+          margin-bottom: 8px;
+          display: flex;
+          justify-content: space-between;
+        }
+        .char-count { color: #4ade80; }
+        .char-count.over { color: #f87171; }
+        .preview-tweet {
+          background: transparent;
+          border: none;
+          color: #fff;
+          font-family: inherit;
+          font-size: 15px;
+          line-height: 1.5;
+          width: 100%;
+          resize: vertical;
+          padding: 0;
+          margin-bottom: 10px;
+        }
+        .preview-tweet:focus { outline: none; }
+        .preview-actions { display: flex; gap: 8px; }
+        .compose-status { font-size: 12px; color: #4ade80; }
+
         .empty { color: #333; font-size: 13px; font-style: italic; }
         .loading { text-align: center; color: #333; padding: 60px; font-size: 14px; }
       `}</style>
@@ -261,6 +361,63 @@ export default function Dashboard() {
                   {triggering === "leaderboard" ? "..." : "Leaderboard Only"}
                 </button>
                 {triggerResult && <span className="trigger-result">{triggerResult}</span>}
+              </div>
+            </div>
+
+            {/* Compose Tweet */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Compose Tweet</h2>
+              <div className="compose">
+                <textarea
+                  className="compose-input"
+                  placeholder="Describe the data point (e.g. 'Phoenix hit 122F today, breaking the 2024 record of 121F')..."
+                  value={composePrompt}
+                  onChange={(e) => setComposePrompt(e.target.value)}
+                  rows={2}
+                />
+                <button
+                  className="trigger-btn"
+                  disabled={generating || !composePrompt.trim()}
+                  onClick={generateTweet}
+                >
+                  {generating ? "generating..." : "Generate"}
+                </button>
+
+                {composeTweet && (
+                  <div className="preview-box">
+                    <div className="preview-label">PREVIEW <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>{composeTweet.length}/280</span></div>
+                    <textarea
+                      className="preview-tweet"
+                      value={composeTweet}
+                      onChange={(e) => setComposeTweet(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="preview-actions">
+                      <button
+                        className="trigger-btn primary"
+                        disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
+                        onClick={postTweet}
+                      >
+                        {posting ? "posting..." : "Post Live"}
+                      </button>
+                      <button
+                        className="trigger-btn"
+                        disabled={generating}
+                        onClick={generateTweet}
+                      >
+                        Regenerate
+                      </button>
+                      <button
+                        className="trigger-btn"
+                        onClick={() => { setComposeTweet(""); setComposeStatus(null) }}
+                      >
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {composeStatus && <div className="compose-status">{composeStatus}</div>}
               </div>
             </div>
 
