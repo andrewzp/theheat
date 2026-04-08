@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 import re
 
-import google.generativeai as genai
-
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 # Layer 1: Deterministic regex patterns
@@ -47,8 +45,10 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
         return True, None  # Skip if no API key
 
     try:
+        import google.generativeai as genai
+
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
 
         prompt = (
             "You are a content safety reviewer for a climate data Twitter bot. "

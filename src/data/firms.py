@@ -71,18 +71,8 @@ def fetch_fires(
 
 
 def reverse_geocode_simple(lat: float, lon: float) -> tuple[str, str]:
-    """Simple reverse geocoding via Open-Meteo geocoding API (free, no auth)."""
-    try:
-        resp = requests.get(
-            "https://geocoding-api.open-meteo.com/v1/search",
-            params={"name": f"{lat},{lon}", "count": 1},
-            timeout=5,
-        )
-        # Open-Meteo geocoding doesn't support reverse geocoding directly.
-        # Fall back to coordinate-based description.
-        return _lat_lon_to_region(lat, lon), _lat_lon_to_country(lat, lon)
-    except requests.RequestException:
-        return f"{lat:.1f}N, {lon:.1f}W", "Unknown"
+    """Map coordinates to a rough region and country name."""
+    return _lat_lon_to_region(lat, lon), _lat_lon_to_country(lat, lon)
 
 
 def _lat_lon_to_region(lat: float, lon: float) -> str:

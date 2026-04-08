@@ -1,40 +1,280 @@
 city,month,avg_high_c
-Phoenix,1,20.0
-Phoenix,2,22.2
-Phoenix,3,25.6
-Phoenix,4,30.0
-Phoenix,5,35.6
-Phoenix,6,40.6
-Phoenix,7,41.1
-Phoenix,8,40.0
-Phoenix,9,37.8
-Phoenix,10,31.7
-Phoenix,11,24.4
-Phoenix,12,19.4
-Miami,1,25.0
-Miami,2,25.6
-Miami,3,27.2
-Miami,4,28.9
-Miami,5,30.6
-Miami,6,31.7
-Miami,7,32.2
-Miami,8,32.2
-Miami,9,31.7
-Miami,10,30.0
-Miami,11,27.8
-Miami,12,25.6
-Houston,1,16.1
-Houston,2,18.3
-Houston,3,21.7
-Houston,4,25.6
-Houston,5,29.4
-Houston,6,32.8
-Houston,7,33.9
-Houston,8,34.4
-Houston,9,31.7
-Houston,10,27.2
-Houston,11,21.7
-Houston,12,17.2
+Abidjan,1,29.8
+Abidjan,2,30.1
+Abidjan,3,30.1
+Abidjan,4,29.8
+Abidjan,5,28.9
+Abidjan,6,27.4
+Abidjan,7,26.6
+Abidjan,8,26.4
+Abidjan,9,27.1
+Abidjan,10,28.0
+Abidjan,11,28.8
+Abidjan,12,29.2
+Abuja,1,34.0
+Abuja,2,35.3
+Abuja,3,35.7
+Abuja,4,34.0
+Abuja,5,31.1
+Abuja,6,28.7
+Abuja,7,27.2
+Abuja,8,26.7
+Abuja,9,28.0
+Abuja,10,29.6
+Abuja,11,32.4
+Abuja,12,33.6
+Accra,1,30.7
+Accra,2,31.1
+Accra,3,31.2
+Accra,4,30.8
+Accra,5,29.5
+Accra,6,27.6
+Accra,7,26.6
+Accra,8,26.4
+Accra,9,27.2
+Accra,10,28.4
+Accra,11,29.6
+Accra,12,30.4
+Addis Ababa,1,22.0
+Addis Ababa,2,23.2
+Addis Ababa,3,23.5
+Addis Ababa,4,23.1
+Addis Ababa,5,22.9
+Addis Ababa,6,21.3
+Addis Ababa,7,19.7
+Addis Ababa,8,19.7
+Addis Ababa,9,19.9
+Addis Ababa,10,20.7
+Addis Ababa,11,21.4
+Addis Ababa,12,21.5
+Ahmedabad,1,27.4
+Ahmedabad,2,30.0
+Ahmedabad,3,34.6
+Ahmedabad,4,38.5
+Ahmedabad,5,40.3
+Ahmedabad,6,37.3
+Ahmedabad,7,32.0
+Ahmedabad,8,30.5
+Ahmedabad,9,31.8
+Ahmedabad,10,34.0
+Ahmedabad,11,31.7
+Ahmedabad,12,28.6
+Ahvaz,1,17.4
+Ahvaz,2,20.2
+Ahvaz,3,25.7
+Ahvaz,4,32.7
+Ahvaz,5,40.2
+Ahvaz,6,45.4
+Ahvaz,7,47.1
+Ahvaz,8,46.9
+Ahvaz,9,42.9
+Ahvaz,10,36.2
+Ahvaz,11,25.7
+Ahvaz,12,19.1
+Algiers,1,13.6
+Algiers,2,13.8
+Algiers,3,15.7
+Algiers,4,17.5
+Algiers,5,20.5
+Algiers,6,24.5
+Algiers,7,27.7
+Algiers,8,28.5
+Algiers,9,25.6
+Algiers,10,22.3
+Algiers,11,17.5
+Algiers,12,14.6
+Alice Springs,1,36.2
+Alice Springs,2,35.0
+Alice Springs,3,32.9
+Alice Springs,4,28.8
+Alice Springs,5,22.8
+Alice Springs,6,19.1
+Alice Springs,7,19.6
+Alice Springs,8,22.7
+Alice Springs,9,28.2
+Alice Springs,10,31.4
+Alice Springs,11,33.9
+Alice Springs,12,35.1
+Almaty,1,-1.8
+Almaty,2,0.2
+Almaty,3,8.0
+Almaty,4,14.3
+Almaty,5,19.7
+Almaty,6,24.2
+Almaty,7,26.8
+Almaty,8,25.9
+Almaty,9,21.0
+Almaty,10,13.9
+Almaty,11,5.5
+Almaty,12,-0.5
+Amman,1,12.4
+Amman,2,13.7
+Amman,3,17.6
+Amman,4,22.9
+Amman,5,27.7
+Amman,6,31.0
+Amman,7,32.8
+Amman,8,32.8
+Amman,9,30.6
+Amman,10,26.3
+Amman,11,19.5
+Amman,12,14.4
+Amsterdam,1,5.7
+Amsterdam,2,6.3
+Amsterdam,3,9.1
+Amsterdam,4,12.8
+Amsterdam,5,16.2
+Amsterdam,6,18.7
+Amsterdam,7,20.9
+Amsterdam,8,20.9
+Amsterdam,9,18.0
+Amsterdam,10,13.9
+Amsterdam,11,9.5
+Amsterdam,12,6.4
+Anchorage,1,-6.8
+Anchorage,2,-4.0
+Anchorage,3,-1.0
+Anchorage,4,5.0
+Anchorage,5,10.5
+Anchorage,6,15.8
+Anchorage,7,17.7
+Anchorage,8,16.6
+Anchorage,9,12.0
+Anchorage,10,4.5
+Anchorage,11,-2.7
+Anchorage,12,-5.2
+Antananarivo,1,24.7
+Antananarivo,2,24.4
+Antananarivo,3,24.4
+Antananarivo,4,23.6
+Antananarivo,5,22.0
+Antananarivo,6,19.7
+Antananarivo,7,18.7
+Antananarivo,8,20.3
+Antananarivo,9,22.9
+Antananarivo,10,25.3
+Antananarivo,11,26.2
+Antananarivo,12,25.7
+Apia,1,29.1
+Apia,2,29.2
+Apia,3,29.3
+Apia,4,29.2
+Apia,5,28.7
+Apia,6,28.3
+Apia,7,27.9
+Apia,8,28.0
+Apia,9,28.3
+Apia,10,28.6
+Apia,11,28.9
+Apia,12,29.0
+Arequipa,1,18.7
+Arequipa,2,18.2
+Arequipa,3,18.4
+Arequipa,4,19.4
+Arequipa,5,20.6
+Arequipa,6,20.8
+Arequipa,7,20.7
+Arequipa,8,21.5
+Arequipa,9,22.0
+Arequipa,10,22.2
+Arequipa,11,21.8
+Arequipa,12,20.6
+Ashgabat,1,8.5
+Ashgabat,2,10.2
+Ashgabat,3,15.8
+Ashgabat,4,22.1
+Ashgabat,5,28.2
+Ashgabat,6,34.0
+Ashgabat,7,36.5
+Ashgabat,8,35.2
+Ashgabat,9,29.8
+Ashgabat,10,22.6
+Ashgabat,11,14.6
+Ashgabat,12,9.6
+Asmara,1,20.4
+Asmara,2,21.9
+Asmara,3,23.2
+Asmara,4,23.6
+Asmara,5,24.6
+Asmara,6,25.4
+Asmara,7,22.2
+Asmara,8,22.1
+Asmara,9,23.4
+Asmara,10,21.9
+Asmara,11,20.9
+Asmara,12,20.3
+Astana,1,-10.8
+Astana,2,-8.8
+Astana,3,-1.1
+Astana,4,11.7
+Astana,5,19.7
+Astana,6,24.6
+Astana,7,25.3
+Astana,8,24.3
+Astana,9,17.7
+Astana,10,9.0
+Astana,11,-2.1
+Astana,12,-8.7
+Asuncion,1,32.2
+Asuncion,2,31.4
+Asuncion,3,30.4
+Asuncion,4,27.6
+Asuncion,5,23.5
+Asuncion,6,22.1
+Asuncion,7,21.7
+Asuncion,8,24.5
+Asuncion,9,26.6
+Asuncion,10,28.6
+Asuncion,11,29.6
+Asuncion,12,31.3
+Athens,1,11.8
+Athens,2,12.8
+Athens,3,15.6
+Athens,4,19.7
+Athens,5,25.1
+Athens,6,30.3
+Athens,7,32.7
+Athens,8,32.5
+Athens,9,28.1
+Athens,10,22.9
+Athens,11,17.5
+Athens,12,13.1
+Atlanta,1,10.7
+Atlanta,2,13.0
+Atlanta,3,17.0
+Atlanta,4,21.6
+Atlanta,5,26.0
+Atlanta,6,29.2
+Atlanta,7,30.7
+Atlanta,8,30.2
+Atlanta,9,27.4
+Atlanta,10,22.1
+Atlanta,11,16.4
+Atlanta,12,12.0
+Auckland,1,22.0
+Auckland,2,22.6
+Auckland,3,21.1
+Auckland,4,18.9
+Auckland,5,16.6
+Auckland,6,14.5
+Auckland,7,13.7
+Auckland,8,13.9
+Auckland,9,15.1
+Auckland,10,16.4
+Auckland,11,18.0
+Auckland,12,20.2
+Austin,1,15.9
+Austin,2,18.2
+Austin,3,21.8
+Austin,4,25.9
+Austin,5,29.3
+Austin,6,32.6
+Austin,7,34.6
+Austin,8,35.0
+Austin,9,31.3
+Austin,10,26.7
+Austin,11,20.7
+Austin,12,16.6
 Baghdad,1,15.6
 Baghdad,2,18.3
 Baghdad,3,23.3
@@ -47,6 +287,558 @@ Baghdad,9,40.6
 Baghdad,10,33.3
 Baghdad,11,23.3
 Baghdad,12,16.7
+Bakersfield,1,15.4
+Bakersfield,2,16.9
+Bakersfield,3,19.5
+Bakersfield,4,22.9
+Bakersfield,5,27.7
+Bakersfield,6,32.5
+Bakersfield,7,36.0
+Bakersfield,8,35.4
+Bakersfield,9,32.2
+Bakersfield,10,25.8
+Bakersfield,11,19.1
+Bakersfield,12,14.9
+Baku,1,7.3
+Baku,2,7.3
+Baku,3,9.9
+Baku,4,14.1
+Baku,5,20.3
+Baku,6,25.7
+Baku,7,28.7
+Baku,8,29.0
+Baku,9,24.7
+Baku,10,19.5
+Baku,11,13.3
+Baku,12,9.2
+Bamako,1,32.5
+Bamako,2,35.4
+Bamako,3,38.0
+Bamako,4,39.2
+Bamako,5,38.0
+Bamako,6,34.5
+Bamako,7,30.2
+Bamako,8,29.0
+Bamako,9,29.9
+Bamako,10,32.3
+Bamako,11,34.3
+Bamako,12,32.9
+Bandar-e Mahshahr,1,17.6
+Bandar-e Mahshahr,2,20.3
+Bandar-e Mahshahr,3,26.1
+Bandar-e Mahshahr,4,31.8
+Bandar-e Mahshahr,5,39.0
+Bandar-e Mahshahr,6,43.7
+Bandar-e Mahshahr,7,44.7
+Bandar-e Mahshahr,8,44.1
+Bandar-e Mahshahr,9,40.9
+Bandar-e Mahshahr,10,35.0
+Bandar-e Mahshahr,11,25.2
+Bandar-e Mahshahr,12,19.2
+Bangalore,1,27.3
+Bangalore,2,29.6
+Bangalore,3,32.2
+Bangalore,4,32.7
+Bangalore,5,31.5
+Bangalore,6,27.7
+Bangalore,7,26.4
+Bangalore,8,26.2
+Bangalore,9,26.7
+Bangalore,10,26.4
+Bangalore,11,25.7
+Bangalore,12,25.6
+Bangkok,1,31.0
+Bangkok,2,32.3
+Bangkok,3,33.6
+Bangkok,4,34.6
+Bangkok,5,33.3
+Bangkok,6,32.3
+Bangkok,7,31.7
+Bangkok,8,31.4
+Bangkok,9,30.9
+Bangkok,10,30.5
+Bangkok,11,30.9
+Bangkok,12,30.6
+Bangui,1,34.4
+Bangui,2,34.9
+Bangui,3,33.2
+Bangui,4,31.8
+Bangui,5,31.2
+Bangui,6,30.3
+Bangui,7,29.5
+Bangui,8,29.0
+Bangui,9,29.3
+Bangui,10,29.4
+Bangui,11,30.5
+Bangui,12,32.5
+Barrow,1,-21.2
+Barrow,2,-20.9
+Barrow,3,-18.9
+Barrow,4,-10.8
+Barrow,5,-1.9
+Barrow,6,5.6
+Barrow,7,7.8
+Barrow,8,6.0
+Barrow,9,2.3
+Barrow,10,-4.1
+Barrow,11,-12.6
+Barrow,12,-19.4
+Beijing,1,2.0
+Beijing,2,6.1
+Beijing,3,13.3
+Beijing,4,21.5
+Beijing,5,28.0
+Beijing,6,31.7
+Beijing,7,31.8
+Beijing,8,30.2
+Beijing,9,26.3
+Beijing,10,19.3
+Beijing,11,9.9
+Beijing,12,3.1
+Beirut,1,15.6
+Beirut,2,16.3
+Beirut,3,18.7
+Beirut,4,22.0
+Beirut,5,25.8
+Beirut,6,28.8
+Beirut,7,30.8
+Beirut,8,31.2
+Beirut,9,29.8
+Beirut,10,27.2
+Beirut,11,22.1
+Beirut,12,17.6
+Belem,1,29.3
+Belem,2,28.7
+Belem,3,28.7
+Belem,4,28.8
+Belem,5,29.3
+Belem,6,29.6
+Belem,7,30.0
+Belem,8,31.0
+Belem,9,31.8
+Belem,10,32.1
+Belem,11,31.9
+Belem,12,30.9
+Belgrade,1,4.6
+Belgrade,2,6.9
+Belgrade,3,11.8
+Belgrade,4,17.2
+Belgrade,5,22.8
+Belgrade,6,26.1
+Belgrade,7,28.2
+Belgrade,8,28.2
+Belgrade,9,22.7
+Belgrade,10,17.6
+Belgrade,11,11.2
+Belgrade,12,5.1
+Belize City,1,25.8
+Belize City,2,26.7
+Belize City,3,27.7
+Belize City,4,29.1
+Belize City,5,29.6
+Belize City,6,29.2
+Belize City,7,29.1
+Belize City,8,29.5
+Belize City,9,29.3
+Belize City,10,28.3
+Belize City,11,26.9
+Belize City,12,26.2
+Berlin,1,3.0
+Berlin,2,4.6
+Berlin,3,8.4
+Berlin,4,14.1
+Berlin,5,18.6
+Berlin,6,21.9
+Berlin,7,23.9
+Berlin,8,23.9
+Berlin,9,19.1
+Berlin,10,13.4
+Berlin,11,7.5
+Berlin,12,4.0
+Bishkek,1,1.6
+Bishkek,2,3.3
+Bishkek,3,9.1
+Bishkek,4,16.2
+Bishkek,5,21.4
+Bishkek,6,26.1
+Bishkek,7,28.8
+Bishkek,8,28.1
+Bishkek,9,23.0
+Bishkek,10,15.9
+Bishkek,11,8.6
+Bishkek,12,3.3
+Bogota,1,19.2
+Bogota,2,19.4
+Bogota,3,19.1
+Bogota,4,18.5
+Bogota,5,18.2
+Bogota,6,18.2
+Bogota,7,18.4
+Bogota,8,19.4
+Bogota,9,19.7
+Bogota,10,18.9
+Bogota,11,18.6
+Bogota,12,18.8
+Boston,1,1.7
+Boston,2,3.1
+Boston,3,7.0
+Boston,4,13.4
+Boston,5,19.0
+Boston,6,24.4
+Boston,7,27.8
+Boston,8,26.9
+Boston,9,22.7
+Boston,10,16.2
+Boston,11,10.1
+Boston,12,4.7
+Brasilia,1,26.3
+Brasilia,2,26.5
+Brasilia,3,26.2
+Brasilia,4,26.1
+Brasilia,5,25.8
+Brasilia,6,25.3
+Brasilia,7,25.5
+Brasilia,8,27.3
+Brasilia,9,29.3
+Brasilia,10,28.9
+Brasilia,11,26.4
+Brasilia,12,26.2
+Bratislava,1,2.9
+Bratislava,2,5.5
+Bratislava,3,10.2
+Bratislava,4,16.0
+Bratislava,5,20.4
+Bratislava,6,24.1
+Bratislava,7,26.3
+Bratislava,8,26.1
+Bratislava,9,20.7
+Bratislava,10,15.0
+Bratislava,11,8.9
+Bratislava,12,3.6
+Brazzaville,1,29.3
+Brazzaville,2,30.0
+Brazzaville,3,30.3
+Brazzaville,4,29.8
+Brazzaville,5,29.6
+Brazzaville,6,29.5
+Brazzaville,7,29.8
+Brazzaville,8,30.1
+Brazzaville,9,31.1
+Brazzaville,10,30.4
+Brazzaville,11,29.1
+Brazzaville,12,28.9
+Bridgetown,1,27.0
+Bridgetown,2,27.0
+Bridgetown,3,27.5
+Bridgetown,4,28.1
+Bridgetown,5,28.6
+Bridgetown,6,28.6
+Bridgetown,7,28.5
+Bridgetown,8,28.5
+Bridgetown,9,28.9
+Bridgetown,10,28.5
+Bridgetown,11,27.9
+Bridgetown,12,27.4
+Brisbane,1,28.9
+Brisbane,2,28.3
+Brisbane,3,27.2
+Brisbane,4,25.1
+Brisbane,5,22.5
+Brisbane,6,20.2
+Brisbane,7,20.1
+Brisbane,8,21.6
+Brisbane,9,24.3
+Brisbane,10,25.8
+Brisbane,11,27.3
+Brisbane,12,28.4
+Brunei,1,28.6
+Brunei,2,28.9
+Brunei,3,29.8
+Brunei,4,30.3
+Brunei,5,30.4
+Brunei,6,30.1
+Brunei,7,30.0
+Brunei,8,30.1
+Brunei,9,29.8
+Brunei,10,29.2
+Brunei,11,29.0
+Brunei,12,28.8
+Brussels,1,6.1
+Brussels,2,7.2
+Brussels,3,10.5
+Brussels,4,14.3
+Brussels,5,17.8
+Brussels,6,20.6
+Brussels,7,22.6
+Brussels,8,22.4
+Brussels,9,19.1
+Brussels,10,14.8
+Brussels,11,9.9
+Brussels,12,6.5
+Bucharest,1,2.8
+Bucharest,2,6.0
+Bucharest,3,11.3
+Bucharest,4,17.2
+Bucharest,5,22.6
+Bucharest,6,26.4
+Bucharest,7,28.6
+Bucharest,8,28.8
+Bucharest,9,23.4
+Bucharest,10,17.1
+Bucharest,11,10.4
+Bucharest,12,4.3
+Budapest,1,3.2
+Budapest,2,5.6
+Budapest,3,10.6
+Budapest,4,16.7
+Budapest,5,21.3
+Budapest,6,24.9
+Budapest,7,27.0
+Budapest,8,26.9
+Budapest,9,21.5
+Budapest,10,15.7
+Budapest,11,9.3
+Budapest,12,3.7
+Buenos Aires,1,27.6
+Buenos Aires,2,26.4
+Buenos Aires,3,24.5
+Buenos Aires,4,20.9
+Buenos Aires,5,17.2
+Buenos Aires,6,14.3
+Buenos Aires,7,13.4
+Buenos Aires,8,15.6
+Buenos Aires,9,17.3
+Buenos Aires,10,20.2
+Buenos Aires,11,23.5
+Buenos Aires,12,26.4
+Bujumbura,1,27.1
+Bujumbura,2,27.6
+Bujumbura,3,27.4
+Bujumbura,4,26.6
+Bujumbura,5,26.6
+Bujumbura,6,26.5
+Bujumbura,7,26.3
+Bujumbura,8,27.0
+Bujumbura,9,27.9
+Bujumbura,10,27.5
+Bujumbura,11,26.7
+Bujumbura,12,26.7
+Cairo,1,19.0
+Cairo,2,20.4
+Cairo,3,24.0
+Cairo,4,28.7
+Cairo,5,32.5
+Cairo,6,35.6
+Cairo,7,36.5
+Cairo,8,36.2
+Cairo,9,34.1
+Cairo,10,30.4
+Cairo,11,25.1
+Cairo,12,20.3
+Cape Town,1,25.6
+Cape Town,2,26.0
+Cape Town,3,24.5
+Cape Town,4,22.1
+Cape Town,5,19.3
+Cape Town,6,16.8
+Cape Town,7,16.6
+Cape Town,8,16.4
+Cape Town,9,17.9
+Cape Town,10,20.3
+Cape Town,11,22.1
+Cape Town,12,24.2
+Caracas,1,26.5
+Caracas,2,27.4
+Caracas,3,28.4
+Caracas,4,28.5
+Caracas,5,28.4
+Caracas,6,27.7
+Caracas,7,27.5
+Caracas,8,27.6
+Caracas,9,28.0
+Caracas,10,27.5
+Caracas,11,26.6
+Caracas,12,26.2
+Casablanca,1,17.4
+Casablanca,2,18.3
+Casablanca,3,20.6
+Casablanca,4,21.8
+Casablanca,5,24.6
+Casablanca,6,27.3
+Casablanca,7,29.3
+Casablanca,8,29.7
+Casablanca,9,27.7
+Casablanca,10,25.3
+Casablanca,11,21.2
+Casablanca,12,18.6
+Chengdu,1,10.0
+Chengdu,2,12.6
+Chengdu,3,17.4
+Chengdu,4,23.2
+Chengdu,5,27.1
+Chengdu,6,29.1
+Chengdu,7,30.0
+Chengdu,8,29.6
+Chengdu,9,25.6
+Chengdu,10,20.8
+Chengdu,11,16.4
+Chengdu,12,11.2
+Chennai,1,27.9
+Chennai,2,30.0
+Chennai,3,32.6
+Chennai,4,34.5
+Chennai,5,36.5
+Chennai,6,35.5
+Chennai,7,34.2
+Chennai,8,33.3
+Chennai,9,32.6
+Chennai,10,30.6
+Chennai,11,28.5
+Chennai,12,27.5
+Chicago,1,-1.3
+Chicago,2,-0.0
+Chicago,3,4.4
+Chicago,4,10.6
+Chicago,5,17.5
+Chicago,6,23.6
+Chicago,7,26.4
+Chicago,8,25.5
+Chicago,9,21.8
+Chicago,10,15.0
+Chicago,11,7.7
+Chicago,12,1.8
+Chisinau,1,1.6
+Chisinau,2,4.0
+Chisinau,3,9.3
+Chisinau,4,16.1
+Chisinau,5,22.1
+Chisinau,6,25.8
+Chisinau,7,28.0
+Chisinau,8,27.7
+Chisinau,9,21.9
+Chisinau,10,15.3
+Chisinau,11,8.4
+Chisinau,12,3.0
+Christchurch,1,21.2
+Christchurch,2,21.1
+Christchurch,3,19.3
+Christchurch,4,16.3
+Christchurch,5,13.5
+Christchurch,6,10.6
+Christchurch,7,10.0
+Christchurch,8,11.3
+Christchurch,9,13.5
+Christchurch,10,15.5
+Christchurch,11,17.3
+Christchurch,12,19.6
+Colombo,1,30.2
+Colombo,2,31.4
+Colombo,3,31.6
+Colombo,4,30.7
+Colombo,5,29.5
+Colombo,6,28.8
+Colombo,7,28.4
+Colombo,8,28.3
+Colombo,9,28.4
+Colombo,10,28.7
+Colombo,11,28.9
+Colombo,12,29.2
+Conakry,1,29.6
+Conakry,2,29.6
+Conakry,3,29.6
+Conakry,4,29.6
+Conakry,5,29.1
+Conakry,6,27.7
+Conakry,7,26.4
+Conakry,8,26.1
+Conakry,9,26.9
+Conakry,10,27.9
+Conakry,11,28.6
+Conakry,12,29.3
+Copenhagen,1,3.0
+Copenhagen,2,3.3
+Copenhagen,3,5.9
+Copenhagen,4,10.7
+Copenhagen,5,15.2
+Copenhagen,6,18.4
+Copenhagen,7,20.8
+Copenhagen,8,20.5
+Copenhagen,9,16.7
+Copenhagen,10,11.7
+Copenhagen,11,7.2
+Copenhagen,12,4.2
+Cotonou,1,29.5
+Cotonou,2,29.9
+Cotonou,3,30.1
+Cotonou,4,29.8
+Cotonou,5,29.0
+Cotonou,6,27.5
+Cotonou,7,26.4
+Cotonou,8,26.1
+Cotonou,9,26.8
+Cotonou,10,27.8
+Cotonou,11,28.8
+Cotonou,12,29.3
+Dakar,1,27.2
+Dakar,2,27.0
+Dakar,3,26.7
+Dakar,4,26.0
+Dakar,5,26.6
+Dakar,6,27.8
+Dakar,7,28.8
+Dakar,8,29.1
+Dakar,9,29.5
+Dakar,10,30.6
+Dakar,11,30.7
+Dakar,12,28.8
+Dallas,1,13.3
+Dallas,2,15.7
+Dallas,3,19.8
+Dallas,4,24.1
+Dallas,5,28.0
+Dallas,6,32.0
+Dallas,7,34.5
+Dallas,8,34.6
+Dallas,9,30.8
+Dallas,10,25.3
+Dallas,11,18.9
+Dallas,12,14.2
+Dar es Salaam,1,30.8
+Dar es Salaam,2,31.4
+Dar es Salaam,3,30.6
+Dar es Salaam,4,29.1
+Dar es Salaam,5,28.3
+Dar es Salaam,6,27.9
+Dar es Salaam,7,27.7
+Dar es Salaam,8,28.1
+Dar es Salaam,9,29.0
+Dar es Salaam,10,29.8
+Dar es Salaam,11,29.9
+Dar es Salaam,12,30.3
+Darwin,1,30.3
+Darwin,2,30.1
+Darwin,3,30.8
+Darwin,4,31.7
+Darwin,5,31.4
+Darwin,6,30.2
+Darwin,7,30.1
+Darwin,8,31.0
+Darwin,9,32.7
+Darwin,10,33.4
+Darwin,11,32.9
+Darwin,12,31.4
+Death Valley,1,16.9
+Death Valley,2,20.1
+Death Valley,3,25.1
+Death Valley,4,29.5
+Death Valley,5,34.7
+Death Valley,6,40.3
+Death Valley,7,43.6
+Death Valley,8,42.6
+Death Valley,9,37.9
+Death Valley,10,30.1
+Death Valley,11,21.7
+Death Valley,12,16.0
 Delhi,1,20.6
 Delhi,2,23.9
 Delhi,3,30.0
@@ -59,6 +851,594 @@ Delhi,9,34.4
 Delhi,10,33.3
 Delhi,11,28.3
 Delhi,12,22.8
+Denver,1,5.3
+Denver,2,5.7
+Denver,3,11.4
+Denver,4,15.5
+Denver,5,20.2
+Denver,6,27.4
+Denver,7,30.6
+Denver,8,29.1
+Denver,9,25.3
+Denver,10,17.5
+Denver,11,10.9
+Denver,12,4.8
+Detroit,1,-0.4
+Detroit,2,1.1
+Detroit,3,6.4
+Detroit,4,13.3
+Detroit,5,19.8
+Detroit,6,25.1
+Detroit,7,27.4
+Detroit,8,26.3
+Detroit,9,22.5
+Detroit,10,15.5
+Detroit,11,8.2
+Detroit,12,2.4
+Dhaka,1,24.3
+Dhaka,2,27.4
+Dhaka,3,31.6
+Dhaka,4,32.7
+Dhaka,5,32.1
+Dhaka,6,31.3
+Dhaka,7,30.6
+Dhaka,8,30.9
+Dhaka,9,30.8
+Dhaka,10,30.2
+Dhaka,11,28.2
+Dhaka,12,25.3
+Dili,1,30.2
+Dili,2,29.9
+Dili,3,30.2
+Dili,4,30.7
+Dili,5,30.9
+Dili,6,30.7
+Dili,7,30.8
+Dili,8,31.7
+Dili,9,33.1
+Dili,10,33.5
+Dili,11,32.4
+Dili,12,30.7
+Djibouti,1,26.9
+Djibouti,2,27.6
+Djibouti,3,29.1
+Djibouti,4,31.0
+Djibouti,5,34.1
+Djibouti,6,38.0
+Djibouti,7,39.3
+Djibouti,8,38.4
+Djibouti,9,36.2
+Djibouti,10,31.9
+Djibouti,11,29.2
+Djibouti,12,27.6
+Doha,1,21.5
+Doha,2,23.1
+Doha,3,26.6
+Doha,4,31.9
+Doha,5,37.5
+Doha,6,40.1
+Doha,7,40.9
+Doha,8,40.6
+Doha,9,38.5
+Doha,10,34.8
+Doha,11,28.8
+Doha,12,23.7
+Dubai,1,23.9
+Dubai,2,25.5
+Dubai,3,28.6
+Dubai,4,33.5
+Dubai,5,38.1
+Dubai,6,40.3
+Dubai,7,41.4
+Dubai,8,41.7
+Dubai,9,39.5
+Dubai,10,35.8
+Dubai,11,30.5
+Dubai,12,26.0
+Dublin,1,7.9
+Dublin,2,8.3
+Dublin,3,9.8
+Dublin,4,11.8
+Dublin,5,14.5
+Dublin,6,17.1
+Dublin,7,18.8
+Dublin,8,18.5
+Dublin,9,16.5
+Dublin,10,13.3
+Dublin,11,10.1
+Dublin,12,8.2
+Dushanbe,1,6.3
+Dushanbe,2,8.1
+Dushanbe,3,13.0
+Dushanbe,4,19.3
+Dushanbe,5,24.0
+Dushanbe,6,28.9
+Dushanbe,7,32.6
+Dushanbe,8,32.0
+Dushanbe,9,27.9
+Dushanbe,10,20.6
+Dushanbe,11,13.7
+Dushanbe,12,8.6
+Edinburgh,1,5.9
+Edinburgh,2,6.4
+Edinburgh,3,8.1
+Edinburgh,4,10.5
+Edinburgh,5,13.2
+Edinburgh,6,15.8
+Edinburgh,7,17.7
+Edinburgh,8,17.4
+Edinburgh,9,15.3
+Edinburgh,10,11.8
+Edinburgh,11,8.4
+Edinburgh,12,6.0
+El Paso,1,14.0
+El Paso,2,17.3
+El Paso,3,21.6
+El Paso,4,26.1
+El Paso,5,30.8
+El Paso,6,35.5
+El Paso,7,34.5
+El Paso,8,33.8
+El Paso,9,30.6
+El Paso,10,25.7
+El Paso,11,18.9
+El Paso,12,13.6
+Fairbanks,1,-17.0
+Fairbanks,2,-11.1
+Fairbanks,3,-4.8
+Fairbanks,4,6.1
+Fairbanks,5,15.0
+Fairbanks,6,20.6
+Fairbanks,7,21.4
+Fairbanks,8,18.1
+Fairbanks,9,11.7
+Fairbanks,10,0.9
+Fairbanks,11,-10.6
+Fairbanks,12,-15.1
+Freetown,1,27.8
+Freetown,2,27.6
+Freetown,3,27.5
+Freetown,4,27.7
+Freetown,5,27.8
+Freetown,6,27.1
+Freetown,7,26.0
+Freetown,8,25.7
+Freetown,9,26.3
+Freetown,10,27.1
+Freetown,11,27.7
+Freetown,12,28.0
+Fresno,1,14.5
+Fresno,2,16.4
+Fresno,3,19.4
+Fresno,4,23.1
+Fresno,5,28.3
+Fresno,6,33.3
+Fresno,7,36.7
+Fresno,8,35.9
+Fresno,9,32.7
+Fresno,10,26.2
+Fresno,11,19.0
+Fresno,12,14.1
+Gaborone,1,31.0
+Gaborone,2,30.6
+Gaborone,3,29.2
+Gaborone,4,26.7
+Gaborone,5,24.0
+Gaborone,6,21.1
+Gaborone,7,21.0
+Gaborone,8,24.7
+Gaborone,9,29.1
+Gaborone,10,31.2
+Gaborone,11,31.2
+Gaborone,12,31.2
+Georgetown,1,26.9
+Georgetown,2,27.1
+Georgetown,3,27.5
+Georgetown,4,27.9
+Georgetown,5,27.8
+Georgetown,6,27.5
+Georgetown,7,27.9
+Georgetown,8,28.7
+Georgetown,9,29.2
+Georgetown,10,29.2
+Georgetown,11,28.3
+Georgetown,12,27.3
+Guangzhou,1,18.7
+Guangzhou,2,20.3
+Guangzhou,3,23.2
+Guangzhou,4,26.7
+Guangzhou,5,29.2
+Guangzhou,6,30.7
+Guangzhou,7,31.7
+Guangzhou,8,31.5
+Guangzhou,9,30.5
+Guangzhou,10,28.3
+Guangzhou,11,24.7
+Guangzhou,12,20.1
+Guatemala City,1,24.1
+Guatemala City,2,25.7
+Guatemala City,3,26.8
+Guatemala City,4,27.3
+Guatemala City,5,25.8
+Guatemala City,6,24.1
+Guatemala City,7,24.4
+Guatemala City,8,24.7
+Guatemala City,9,24.0
+Guatemala City,10,23.3
+Guatemala City,11,23.0
+Guatemala City,12,23.6
+Guayaquil,1,28.2
+Guayaquil,2,28.2
+Guayaquil,3,28.6
+Guayaquil,4,28.7
+Guayaquil,5,28.1
+Guayaquil,6,27.3
+Guayaquil,7,27.1
+Guayaquil,8,27.3
+Guayaquil,9,27.6
+Guayaquil,10,27.8
+Guayaquil,11,28.3
+Guayaquil,12,28.8
+Hanoi,1,19.6
+Hanoi,2,21.7
+Hanoi,3,24.8
+Hanoi,4,28.7
+Hanoi,5,31.0
+Hanoi,6,32.5
+Hanoi,7,32.2
+Hanoi,8,31.3
+Hanoi,9,30.2
+Hanoi,10,28.2
+Hanoi,11,25.0
+Hanoi,12,21.0
+Harare,1,24.6
+Harare,2,24.7
+Harare,3,24.4
+Harare,4,23.5
+Harare,5,22.2
+Harare,6,20.4
+Harare,7,20.2
+Harare,8,23.3
+Harare,9,26.6
+Harare,10,28.1
+Harare,11,27.2
+Harare,12,25.1
+Havana,1,25.9
+Havana,2,27.0
+Havana,3,28.0
+Havana,4,29.8
+Havana,5,30.6
+Havana,6,31.1
+Havana,7,32.0
+Havana,8,32.2
+Havana,9,30.9
+Havana,10,29.4
+Havana,11,27.7
+Havana,12,26.7
+Helsinki,1,-1.9
+Helsinki,2,-2.7
+Helsinki,3,0.9
+Helsinki,4,7.0
+Helsinki,5,13.2
+Helsinki,6,17.4
+Helsinki,7,20.9
+Helsinki,8,19.8
+Helsinki,9,14.7
+Helsinki,10,8.3
+Helsinki,11,3.5
+Helsinki,12,0.3
+Ho Chi Minh City,1,31.3
+Ho Chi Minh City,2,32.8
+Ho Chi Minh City,3,34.0
+Ho Chi Minh City,4,34.0
+Ho Chi Minh City,5,32.8
+Ho Chi Minh City,6,31.1
+Ho Chi Minh City,7,30.6
+Ho Chi Minh City,8,30.7
+Ho Chi Minh City,9,30.4
+Ho Chi Minh City,10,30.1
+Ho Chi Minh City,11,30.3
+Ho Chi Minh City,12,30.4
+Hong Kong,1,18.6
+Hong Kong,2,19.7
+Hong Kong,3,22.3
+Hong Kong,4,25.1
+Hong Kong,5,27.6
+Hong Kong,6,29.1
+Hong Kong,7,29.7
+Hong Kong,8,29.7
+Hong Kong,9,29.0
+Hong Kong,10,27.0
+Hong Kong,11,23.9
+Hong Kong,12,19.9
+Honolulu,1,24.8
+Honolulu,2,24.4
+Honolulu,3,24.5
+Honolulu,4,25.7
+Honolulu,5,26.5
+Honolulu,6,27.3
+Honolulu,7,27.9
+Honolulu,8,28.4
+Honolulu,9,28.4
+Honolulu,10,27.7
+Honolulu,11,26.3
+Honolulu,12,25.3
+Houston,1,16.1
+Houston,2,18.3
+Houston,3,21.7
+Houston,4,25.6
+Houston,5,29.4
+Houston,6,32.8
+Houston,7,33.9
+Houston,8,34.4
+Houston,9,31.7
+Houston,10,27.2
+Houston,11,21.7
+Houston,12,17.2
+Hyderabad,1,28.6
+Hyderabad,2,31.4
+Hyderabad,3,34.8
+Hyderabad,4,36.7
+Hyderabad,5,38.0
+Hyderabad,6,32.8
+Hyderabad,7,29.2
+Hyderabad,8,28.3
+Hyderabad,9,29.0
+Hyderabad,10,29.3
+Hyderabad,11,28.5
+Hyderabad,12,27.9
+In Salah,1,19.8
+In Salah,2,22.9
+In Salah,3,28.0
+In Salah,4,33.0
+In Salah,5,37.9
+In Salah,6,42.3
+In Salah,7,44.4
+In Salah,8,43.3
+In Salah,9,40.2
+In Salah,10,33.7
+In Salah,11,25.9
+In Salah,12,20.8
+Islamabad,1,15.6
+Islamabad,2,17.6
+Islamabad,3,22.2
+Islamabad,4,27.9
+Islamabad,5,33.6
+Islamabad,6,36.0
+Islamabad,7,32.8
+Islamabad,8,31.3
+Islamabad,9,30.9
+Islamabad,10,28.2
+Islamabad,11,22.5
+Islamabad,12,18.1
+Istanbul,1,8.2
+Istanbul,2,8.9
+Istanbul,3,11.1
+Istanbul,4,15.3
+Istanbul,5,20.2
+Istanbul,6,24.9
+Istanbul,7,27.5
+Istanbul,8,27.8
+Istanbul,9,24.0
+Istanbul,10,19.2
+Istanbul,11,14.3
+Istanbul,12,10.1
+Jacobabad,1,22.0
+Jacobabad,2,25.1
+Jacobabad,3,30.7
+Jacobabad,4,37.3
+Jacobabad,5,42.2
+Jacobabad,6,43.2
+Jacobabad,7,40.8
+Jacobabad,8,38.4
+Jacobabad,9,37.3
+Jacobabad,10,34.5
+Jacobabad,11,29.0
+Jacobabad,12,23.9
+Jakarta,1,28.8
+Jakarta,2,28.7
+Jakarta,3,29.5
+Jakarta,4,29.9
+Jakarta,5,30.1
+Jakarta,6,30.1
+Jakarta,7,30.4
+Jakarta,8,31.0
+Jakarta,9,31.6
+Jakarta,10,31.4
+Jakarta,11,30.3
+Jakarta,12,29.3
+Jerusalem,1,12.7
+Jerusalem,2,14.2
+Jerusalem,3,18.1
+Jerusalem,4,22.4
+Jerusalem,5,27.2
+Jerusalem,6,30.5
+Jerusalem,7,32.5
+Jerusalem,8,32.6
+Jerusalem,9,30.5
+Jerusalem,10,26.3
+Jerusalem,11,19.6
+Jerusalem,12,14.8
+Johannesburg,1,24.8
+Johannesburg,2,24.6
+Johannesburg,3,23.3
+Johannesburg,4,20.8
+Johannesburg,5,18.9
+Johannesburg,6,16.5
+Johannesburg,7,16.7
+Johannesburg,8,20.0
+Johannesburg,9,23.9
+Johannesburg,10,25.2
+Johannesburg,11,24.8
+Johannesburg,12,25.0
+Juba,1,36.0
+Juba,2,37.5
+Juba,3,36.4
+Juba,4,34.0
+Juba,5,32.6
+Juba,6,31.8
+Juba,7,30.8
+Juba,8,31.0
+Juba,9,32.4
+Juba,10,33.0
+Juba,11,33.8
+Juba,12,35.0
+Kabul,1,4.5
+Kabul,2,5.5
+Kabul,3,12.5
+Kabul,4,19.2
+Kabul,5,24.4
+Kabul,6,30.2
+Kabul,7,32.7
+Kabul,8,32.0
+Kabul,9,28.5
+Kabul,10,22.0
+Kabul,11,14.6
+Kabul,12,7.2
+Kampala,1,26.6
+Kampala,2,26.8
+Kampala,3,26.0
+Kampala,4,25.1
+Kampala,5,24.6
+Kampala,6,24.4
+Kampala,7,24.3
+Kampala,8,25.1
+Kampala,9,25.8
+Kampala,10,25.5
+Kampala,11,25.3
+Kampala,12,25.7
+Karachi,1,25.8
+Karachi,2,27.5
+Karachi,3,30.7
+Karachi,4,33.5
+Karachi,5,34.8
+Karachi,6,35.0
+Karachi,7,33.3
+Karachi,8,32.1
+Karachi,9,32.8
+Karachi,10,34.0
+Karachi,11,31.3
+Karachi,12,27.1
+Kathmandu,1,18.0
+Kathmandu,2,21.0
+Kathmandu,3,25.1
+Kathmandu,4,28.0
+Kathmandu,5,29.0
+Kathmandu,6,28.8
+Kathmandu,7,28.0
+Kathmandu,8,28.6
+Kathmandu,9,27.8
+Kathmandu,10,26.4
+Kathmandu,11,23.0
+Kathmandu,12,19.6
+Khartoum,1,30.8
+Khartoum,2,32.5
+Khartoum,3,35.9
+Khartoum,4,38.9
+Khartoum,5,41.2
+Khartoum,6,41.3
+Khartoum,7,37.2
+Khartoum,8,35.5
+Khartoum,9,37.0
+Khartoum,10,38.5
+Khartoum,11,35.1
+Khartoum,12,31.7
+Kigali,1,25.6
+Kigali,2,26.1
+Kigali,3,25.6
+Kigali,4,24.4
+Kigali,5,24.1
+Kigali,6,24.7
+Kigali,7,25.5
+Kigali,8,26.6
+Kigali,9,26.8
+Kigali,10,25.9
+Kigali,11,24.5
+Kigali,12,25.0
+Kingston,1,30.1
+Kingston,2,30.1
+Kingston,3,30.5
+Kingston,4,31.0
+Kingston,5,31.5
+Kingston,6,32.1
+Kingston,7,32.5
+Kingston,8,32.4
+Kingston,9,32.0
+Kingston,10,31.5
+Kingston,11,31.0
+Kingston,12,30.5
+Kinshasa,1,29.7
+Kinshasa,2,30.5
+Kinshasa,3,30.5
+Kinshasa,4,30.5
+Kinshasa,5,29.8
+Kinshasa,6,28.5
+Kinshasa,7,27.6
+Kinshasa,8,28.8
+Kinshasa,9,30.2
+Kinshasa,10,30.0
+Kinshasa,11,29.1
+Kinshasa,12,29.0
+Kolkata,1,25.8
+Kolkata,2,28.7
+Kolkata,3,33.4
+Kolkata,4,35.4
+Kolkata,5,35.1
+Kolkata,6,33.5
+Kolkata,7,31.8
+Kolkata,8,31.5
+Kolkata,9,31.9
+Kolkata,10,31.4
+Kolkata,11,29.4
+Kolkata,12,26.3
+Kuala Lumpur,1,31.7
+Kuala Lumpur,2,32.3
+Kuala Lumpur,3,32.5
+Kuala Lumpur,4,32.4
+Kuala Lumpur,5,32.2
+Kuala Lumpur,6,32.0
+Kuala Lumpur,7,31.5
+Kuala Lumpur,8,31.3
+Kuala Lumpur,9,31.5
+Kuala Lumpur,10,31.6
+Kuala Lumpur,11,31.2
+Kuala Lumpur,12,31.1
+Kuwait City,1,18.5
+Kuwait City,2,20.9
+Kuwait City,3,25.4
+Kuwait City,4,32.1
+Kuwait City,5,38.6
+Kuwait City,6,42.6
+Kuwait City,7,44.4
+Kuwait City,8,44.2
+Kuwait City,9,40.7
+Kuwait City,10,34.4
+Kuwait City,11,26.4
+Kuwait City,12,20.1
+Kyiv,1,-1.0
+Kyiv,2,0.7
+Kyiv,3,6.4
+Kyiv,4,14.6
+Kyiv,5,20.6
+Kyiv,6,23.7
+Kyiv,7,25.7
+Kyiv,8,25.0
+Kyiv,9,19.1
+Kyiv,10,12.1
+Kyiv,11,4.4
+Kyiv,12,0.1
+La Paz,1,13.5
+La Paz,2,13.3
+La Paz,3,14.0
+La Paz,4,14.2
+La Paz,5,14.0
+La Paz,6,12.8
+La Paz,7,12.2
+La Paz,8,13.2
+La Paz,9,14.8
+La Paz,10,15.6
+La Paz,11,16.0
+La Paz,12,14.4
 Lagos,1,31.1
 Lagos,2,32.2
 Lagos,3,32.2
@@ -71,3 +1451,1635 @@ Lagos,9,28.3
 Lagos,10,29.4
 Lagos,11,31.1
 Lagos,12,31.7
+Lahore,1,19.5
+Lahore,2,21.8
+Lahore,3,27.4
+Lahore,4,34.1
+Lahore,5,38.6
+Lahore,6,40.0
+Lahore,7,36.4
+Lahore,8,35.5
+Lahore,9,35.1
+Lahore,10,32.5
+Lahore,11,26.3
+Lahore,12,21.0
+Las Vegas,1,14.4
+Las Vegas,2,17.0
+Las Vegas,3,20.7
+Las Vegas,4,25.4
+Las Vegas,5,31.3
+Las Vegas,6,37.4
+Las Vegas,7,40.6
+Las Vegas,8,39.6
+Las Vegas,9,35.0
+Las Vegas,10,27.5
+Las Vegas,11,19.4
+Las Vegas,12,13.6
+Lhasa,1,6.8
+Lhasa,2,9.2
+Lhasa,3,12.0
+Lhasa,4,15.7
+Lhasa,5,19.6
+Lhasa,6,22.9
+Lhasa,7,21.7
+Lhasa,8,20.8
+Lhasa,9,19.6
+Lhasa,10,16.4
+Lhasa,11,11.5
+Lhasa,12,7.8
+Libreville,1,29.5
+Libreville,2,30.0
+Libreville,3,30.2
+Libreville,4,30.1
+Libreville,5,29.4
+Libreville,6,27.6
+Libreville,7,26.4
+Libreville,8,27.0
+Libreville,9,27.9
+Libreville,10,28.4
+Libreville,11,28.6
+Libreville,12,29.0
+Lilongwe,1,27.0
+Lilongwe,2,26.8
+Lilongwe,3,27.0
+Lilongwe,4,26.1
+Lilongwe,5,24.2
+Lilongwe,6,22.0
+Lilongwe,7,21.9
+Lilongwe,8,24.1
+Lilongwe,9,27.4
+Lilongwe,10,29.6
+Lilongwe,11,29.5
+Lilongwe,12,27.6
+Lima,1,26.0
+Lima,2,26.6
+Lima,3,26.2
+Lima,4,24.5
+Lima,5,22.0
+Lima,6,19.8
+Lima,7,18.6
+Lima,8,18.3
+Lima,9,18.8
+Lima,10,20.1
+Lima,11,22.0
+Lima,12,24.1
+Lisbon,1,14.5
+Lisbon,2,15.6
+Lisbon,3,18.0
+Lisbon,4,19.1
+Lisbon,5,21.7
+Lisbon,6,25.5
+Lisbon,7,28.0
+Lisbon,8,28.3
+Lisbon,9,26.2
+Lisbon,10,21.8
+Lisbon,11,17.3
+Lisbon,12,15.0
+Ljubljana,1,3.4
+Ljubljana,2,6.4
+Ljubljana,3,11.2
+Ljubljana,4,16.0
+Ljubljana,5,20.8
+Ljubljana,6,24.5
+Ljubljana,7,26.7
+Ljubljana,8,26.1
+Ljubljana,9,21.0
+Ljubljana,10,15.5
+Ljubljana,11,8.8
+Ljubljana,12,4.0
+Lome,1,30.6
+Lome,2,31.0
+Lome,3,31.0
+Lome,4,30.6
+Lome,5,29.6
+Lome,6,27.9
+Lome,7,27.0
+Lome,8,27.0
+Lome,9,27.8
+Lome,10,29.0
+Lome,11,30.1
+Lome,12,30.5
+London,1,8.1
+London,2,8.4
+London,3,11.3
+London,4,14.2
+London,5,17.9
+London,6,21.0
+London,7,23.5
+London,8,23.2
+London,9,20.0
+London,10,15.5
+London,11,11.1
+London,12,8.3
+Los Angeles,1,20.0
+Los Angeles,2,19.8
+Los Angeles,3,20.3
+Los Angeles,4,21.3
+Los Angeles,5,22.1
+Los Angeles,6,24.0
+Los Angeles,7,27.0
+Los Angeles,8,27.8
+Los Angeles,9,27.0
+Los Angeles,10,24.8
+Los Angeles,11,21.6
+Los Angeles,12,19.4
+Luanda,1,28.4
+Luanda,2,29.4
+Luanda,3,30.0
+Luanda,4,29.5
+Luanda,5,28.0
+Luanda,6,25.3
+Luanda,7,23.3
+Luanda,8,23.8
+Luanda,9,25.4
+Luanda,10,27.0
+Luanda,11,28.1
+Luanda,12,28.0
+Lusaka,1,25.9
+Lusaka,2,25.8
+Lusaka,3,25.9
+Lusaka,4,25.8
+Lusaka,5,24.6
+Lusaka,6,22.9
+Lusaka,7,23.0
+Lusaka,8,25.4
+Lusaka,9,28.8
+Lusaka,10,30.6
+Lusaka,11,28.9
+Lusaka,12,26.2
+Madrid,1,9.8
+Madrid,2,12.0
+Madrid,3,16.3
+Madrid,4,18.2
+Madrid,5,22.2
+Madrid,6,28.2
+Madrid,7,32.1
+Madrid,8,31.3
+Madrid,9,26.4
+Madrid,10,19.4
+Madrid,11,13.5
+Madrid,12,10.0
+Male,1,30.3
+Male,2,31.0
+Male,3,31.4
+Male,4,31.7
+Male,5,31.2
+Male,6,30.6
+Male,7,30.2
+Male,8,30.2
+Male,9,30.2
+Male,10,30.2
+Male,11,30.1
+Male,12,30.1
+Managua,1,32.7
+Managua,2,33.5
+Managua,3,34.5
+Managua,4,35.0
+Managua,5,33.5
+Managua,6,30.8
+Managua,7,30.8
+Managua,8,31.1
+Managua,9,30.7
+Managua,10,30.4
+Managua,11,30.6
+Managua,12,31.5
+Manama,1,20.4
+Manama,2,21.6
+Manama,3,25.1
+Manama,4,30.2
+Manama,5,35.3
+Manama,6,37.7
+Manama,7,38.6
+Manama,8,38.6
+Manama,9,36.3
+Manama,10,32.7
+Manama,11,27.3
+Manama,12,22.2
+Manaus,1,30.5
+Manaus,2,30.4
+Manaus,3,30.5
+Manaus,4,30.6
+Manaus,5,31.0
+Manaus,6,31.4
+Manaus,7,31.9
+Manaus,8,33.0
+Manaus,9,33.4
+Manaus,10,33.1
+Manaus,11,32.0
+Manaus,12,31.1
+Manila,1,30.2
+Manila,2,31.2
+Manila,3,32.7
+Manila,4,34.2
+Manila,5,33.9
+Manila,6,32.7
+Manila,7,31.1
+Manila,8,30.5
+Manila,9,30.9
+Manila,10,31.2
+Manila,11,31.1
+Manila,12,30.1
+Maputo,1,30.8
+Maputo,2,30.5
+Maputo,3,29.9
+Maputo,4,28.3
+Maputo,5,26.3
+Maputo,6,24.4
+Maputo,7,24.0
+Maputo,8,25.1
+Maputo,9,26.3
+Maputo,10,27.2
+Maputo,11,28.2
+Maputo,12,29.8
+Marble Bar,1,41.3
+Marble Bar,2,39.8
+Marble Bar,3,38.6
+Marble Bar,4,35.3
+Marble Bar,5,29.6
+Marble Bar,6,26.2
+Marble Bar,7,25.9
+Marble Bar,8,28.7
+Marble Bar,9,33.0
+Marble Bar,10,36.6
+Marble Bar,11,39.2
+Marble Bar,12,40.7
+Marseille,1,11.2
+Marseille,2,12.1
+Marseille,3,14.9
+Marseille,4,17.5
+Marseille,5,21.5
+Marseille,6,25.8
+Marseille,7,29.0
+Marseille,8,28.6
+Marseille,9,24.9
+Marseille,10,20.1
+Marseille,11,14.9
+Marseille,12,11.7
+Mecca,1,30.4
+Mecca,2,31.6
+Mecca,3,34.6
+Mecca,4,38.1
+Mecca,5,41.2
+Mecca,6,43.5
+Mecca,7,43.1
+Mecca,8,42.9
+Mecca,9,42.5
+Mecca,10,39.3
+Mecca,11,34.5
+Mecca,12,31.3
+Medan,1,29.4
+Medan,2,30.2
+Medan,3,31.0
+Medan,4,31.4
+Medan,5,31.8
+Medan,6,31.4
+Medan,7,31.0
+Medan,8,30.9
+Medan,9,30.1
+Medan,10,29.6
+Medan,11,29.2
+Medan,12,29.2
+Medellin,1,28.0
+Medellin,2,28.2
+Medellin,3,28.3
+Medellin,4,27.6
+Medellin,5,27.4
+Medellin,6,27.9
+Medellin,7,28.5
+Medellin,8,28.4
+Medellin,9,27.7
+Medellin,10,26.8
+Medellin,11,26.9
+Medellin,12,27.2
+Melbourne,1,25.9
+Melbourne,2,25.8
+Melbourne,3,23.9
+Melbourne,4,20.3
+Melbourne,5,16.7
+Melbourne,6,14.1
+Melbourne,7,13.5
+Melbourne,8,15.0
+Melbourne,9,17.3
+Melbourne,10,19.7
+Melbourne,11,22.0
+Melbourne,12,24.2
+Mexico City,1,21.8
+Mexico City,2,23.4
+Mexico City,3,25.4
+Mexico City,4,26.0
+Mexico City,5,26.1
+Mexico City,6,24.2
+Mexico City,7,23.0
+Mexico City,8,23.2
+Mexico City,9,22.5
+Mexico City,10,22.5
+Mexico City,11,22.0
+Mexico City,12,21.5
+Miami,1,25.0
+Miami,2,25.6
+Miami,3,27.2
+Miami,4,28.9
+Miami,5,30.6
+Miami,6,31.7
+Miami,7,32.2
+Miami,8,32.2
+Miami,9,31.7
+Miami,10,30.0
+Miami,11,27.8
+Miami,12,25.6
+Minneapolis,1,-4.3
+Minneapolis,2,-1.3
+Minneapolis,3,5.1
+Minneapolis,4,13.7
+Minneapolis,5,20.2
+Minneapolis,6,25.3
+Minneapolis,7,27.9
+Minneapolis,8,26.8
+Minneapolis,9,22.3
+Minneapolis,10,14.5
+Minneapolis,11,5.6
+Minneapolis,12,-1.7
+Minsk,1,-2.5
+Minsk,2,-1.5
+Minsk,3,3.6
+Minsk,4,11.9
+Minsk,5,18.3
+Minsk,6,21.5
+Minsk,7,23.8
+Minsk,8,22.8
+Minsk,9,16.9
+Minsk,10,10.0
+Minsk,11,3.2
+Minsk,12,-1.3
+Mogadishu,1,28.6
+Mogadishu,2,28.7
+Mogadishu,3,29.5
+Mogadishu,4,29.8
+Mogadishu,5,28.7
+Mogadishu,6,27.4
+Mogadishu,7,26.8
+Mogadishu,8,26.9
+Mogadishu,9,27.9
+Mogadishu,10,28.7
+Mogadishu,11,29.2
+Mogadishu,12,28.9
+Monrovia,1,28.4
+Monrovia,2,28.5
+Monrovia,3,28.7
+Monrovia,4,28.7
+Monrovia,5,28.0
+Monrovia,6,26.2
+Monrovia,7,25.2
+Monrovia,8,25.2
+Monrovia,9,26.0
+Monrovia,10,27.0
+Monrovia,11,27.5
+Monrovia,12,28.0
+Montevideo,1,27.6
+Montevideo,2,27.0
+Montevideo,3,24.6
+Montevideo,4,20.6
+Montevideo,5,17.1
+Montevideo,6,14.3
+Montevideo,7,13.8
+Montevideo,8,14.9
+Montevideo,9,16.5
+Montevideo,10,19.5
+Montevideo,11,23.0
+Montevideo,12,25.8
+Moscow,1,-5.8
+Moscow,2,-4.2
+Moscow,3,1.6
+Moscow,4,10.9
+Moscow,5,18.0
+Moscow,6,21.8
+Moscow,7,23.7
+Moscow,8,22.0
+Moscow,9,15.7
+Moscow,10,8.3
+Moscow,11,0.7
+Moscow,12,-3.7
+Mumbai,1,31.4
+Mumbai,2,31.8
+Mumbai,3,32.8
+Mumbai,4,33.1
+Mumbai,5,33.4
+Mumbai,6,31.8
+Mumbai,7,29.8
+Mumbai,8,29.5
+Mumbai,9,30.2
+Mumbai,10,32.0
+Mumbai,11,33.0
+Mumbai,12,32.0
+Muscat,1,25.5
+Muscat,2,26.3
+Muscat,3,29.4
+Muscat,4,34.0
+Muscat,5,38.9
+Muscat,6,39.7
+Muscat,7,38.4
+Muscat,8,36.2
+Muscat,9,36.5
+Muscat,10,35.0
+Muscat,11,30.7
+Muscat,12,27.0
+N'Djamena,1,32.2
+N'Djamena,2,34.6
+N'Djamena,3,37.9
+N'Djamena,4,40.2
+N'Djamena,5,39.0
+N'Djamena,6,35.6
+N'Djamena,7,31.3
+N'Djamena,8,29.7
+N'Djamena,9,31.2
+N'Djamena,10,34.0
+N'Djamena,11,35.0
+N'Djamena,12,32.5
+Nagpur,1,29.0
+Nagpur,2,32.1
+Nagpur,3,36.4
+Nagpur,4,39.8
+Nagpur,5,42.0
+Nagpur,6,37.8
+Nagpur,7,31.8
+Nagpur,8,30.6
+Nagpur,9,31.7
+Nagpur,10,32.3
+Nagpur,11,30.3
+Nagpur,12,28.6
+Nairobi,1,24.5
+Nairobi,2,25.6
+Nairobi,3,25.2
+Nairobi,4,23.9
+Nairobi,5,22.2
+Nairobi,6,20.8
+Nairobi,7,19.7
+Nairobi,8,20.5
+Nairobi,9,22.8
+Nairobi,10,24.0
+Nairobi,11,22.8
+Nairobi,12,23.2
+New Orleans,1,16.7
+New Orleans,2,18.7
+New Orleans,3,21.7
+New Orleans,4,25.3
+New Orleans,5,29.0
+New Orleans,6,31.5
+New Orleans,7,32.3
+New Orleans,8,32.3
+New Orleans,9,30.5
+New Orleans,10,26.8
+New Orleans,11,21.3
+New Orleans,12,17.5
+New York,1,3.5
+New York,2,5.3
+New York,3,9.8
+New York,4,16.2
+New York,5,21.7
+New York,6,26.4
+New York,7,29.4
+New York,8,28.6
+New York,9,24.4
+New York,10,18.0
+New York,11,12.2
+New York,12,6.0
+Niamey,1,33.8
+Niamey,2,36.3
+Niamey,3,39.7
+Niamey,4,41.5
+Niamey,5,40.7
+Niamey,6,37.0
+Niamey,7,33.1
+Niamey,8,31.3
+Niamey,9,33.2
+Niamey,10,37.1
+Niamey,11,37.1
+Niamey,12,33.9
+Nicosia,1,15.1
+Nicosia,2,15.4
+Nicosia,3,18.6
+Nicosia,4,23.8
+Nicosia,5,29.5
+Nicosia,6,34.3
+Nicosia,7,37.0
+Nicosia,8,37.0
+Nicosia,9,33.6
+Nicosia,10,28.2
+Nicosia,11,21.6
+Nicosia,12,16.4
+Nouakchott,1,28.1
+Nouakchott,2,30.2
+Nouakchott,3,33.3
+Nouakchott,4,34.5
+Nouakchott,5,35.2
+Nouakchott,6,34.9
+Nouakchott,7,32.0
+Nouakchott,8,31.6
+Nouakchott,9,33.0
+Nouakchott,10,34.5
+Nouakchott,11,32.8
+Nouakchott,12,29.3
+Novosibirsk,1,-12.2
+Novosibirsk,2,-8.9
+Novosibirsk,3,-1.5
+Novosibirsk,4,8.2
+Novosibirsk,5,17.0
+Novosibirsk,6,22.5
+Novosibirsk,7,24.3
+Novosibirsk,8,21.4
+Novosibirsk,9,15.4
+Novosibirsk,10,6.6
+Novosibirsk,11,-3.7
+Novosibirsk,12,-10.2
+Nuku'alofa,1,29.3
+Nuku'alofa,2,29.6
+Nuku'alofa,3,29.3
+Nuku'alofa,4,27.8
+Nuku'alofa,5,25.9
+Nuku'alofa,6,24.4
+Nuku'alofa,7,23.6
+Nuku'alofa,8,23.4
+Nuku'alofa,9,24.2
+Nuku'alofa,10,25.4
+Nuku'alofa,11,27.0
+Nuku'alofa,12,28.5
+Nuuk,1,-4.7
+Nuuk,2,-5.1
+Nuuk,3,-4.6
+Nuuk,4,-0.2
+Nuuk,5,4.6
+Nuuk,6,8.5
+Nuuk,7,10.7
+Nuuk,8,9.9
+Nuuk,9,6.8
+Nuuk,10,2.1
+Nuuk,11,-1.3
+Nuuk,12,-3.4
+Oklahoma City,1,9.0
+Oklahoma City,2,11.6
+Oklahoma City,3,16.4
+Oklahoma City,4,21.6
+Oklahoma City,5,25.8
+Oklahoma City,6,30.4
+Oklahoma City,7,33.4
+Oklahoma City,8,33.1
+Oklahoma City,9,28.5
+Oklahoma City,10,22.2
+Oklahoma City,11,15.2
+Oklahoma City,12,9.6
+Osaka,1,9.5
+Osaka,2,10.2
+Osaka,3,13.7
+Osaka,4,19.9
+Osaka,5,24.5
+Osaka,6,27.8
+Osaka,7,31.6
+Osaka,8,33.4
+Osaka,9,29.3
+Osaka,10,23.3
+Osaka,11,17.6
+Osaka,12,11.9
+Oslo,1,-0.4
+Oslo,2,0.5
+Oslo,3,4.4
+Oslo,4,10.1
+Oslo,5,16.5
+Oslo,6,20.0
+Oslo,7,22.3
+Oslo,8,20.9
+Oslo,9,15.8
+Oslo,10,9.4
+Oslo,11,3.8
+Oslo,12,0.4
+Ouagadougou,1,33.0
+Ouagadougou,2,35.6
+Ouagadougou,3,38.2
+Ouagadougou,4,39.1
+Ouagadougou,5,37.2
+Ouagadougou,6,33.6
+Ouagadougou,7,30.6
+Ouagadougou,8,29.5
+Ouagadougou,9,30.4
+Ouagadougou,10,33.2
+Ouagadougou,11,35.0
+Ouagadougou,12,33.1
+Palermo,1,14.8
+Palermo,2,14.9
+Palermo,3,16.4
+Palermo,4,18.8
+Palermo,5,22.5
+Palermo,6,26.6
+Palermo,7,29.4
+Palermo,8,29.8
+Palermo,9,27.3
+Palermo,10,23.2
+Palermo,11,18.9
+Palermo,12,15.6
+Palm Springs,1,21.3
+Palm Springs,2,23.2
+Palm Springs,3,26.3
+Palm Springs,4,30.6
+Palm Springs,5,35.3
+Palm Springs,6,39.9
+Palm Springs,7,42.3
+Palm Springs,8,41.9
+Palm Springs,9,38.7
+Palm Springs,10,32.5
+Palm Springs,11,25.4
+Palm Springs,12,20.8
+Panama City,1,32.1
+Panama City,2,32.8
+Panama City,3,33.3
+Panama City,4,32.4
+Panama City,5,31.2
+Panama City,6,30.7
+Panama City,7,30.8
+Panama City,8,30.7
+Panama City,9,30.0
+Panama City,10,29.7
+Panama City,11,30.0
+Panama City,12,31.2
+Paramaribo,1,29.1
+Paramaribo,2,29.5
+Paramaribo,3,29.9
+Paramaribo,4,29.9
+Paramaribo,5,29.6
+Paramaribo,6,30.3
+Paramaribo,7,30.8
+Paramaribo,8,31.7
+Paramaribo,9,32.5
+Paramaribo,10,32.5
+Paramaribo,11,31.3
+Paramaribo,12,29.6
+Paris,1,7.2
+Paris,2,8.3
+Paris,3,12.2
+Paris,4,15.6
+Paris,5,19.6
+Paris,6,22.7
+Paris,7,25.2
+Paris,8,25.0
+Paris,9,21.1
+Paris,10,16.3
+Paris,11,10.8
+Paris,12,7.5
+Perth,1,31.5
+Perth,2,31.8
+Perth,3,29.5
+Perth,4,25.4
+Perth,5,21.5
+Perth,6,18.7
+Perth,7,17.8
+Perth,8,18.3
+Perth,9,19.8
+Perth,10,22.3
+Perth,11,25.6
+Perth,12,29.1
+Phnom Penh,1,31.6
+Phnom Penh,2,33.0
+Phnom Penh,3,34.4
+Phnom Penh,4,34.8
+Phnom Penh,5,34.0
+Phnom Penh,6,33.0
+Phnom Penh,7,32.3
+Phnom Penh,8,32.0
+Phnom Penh,9,31.3
+Phnom Penh,10,30.9
+Phnom Penh,11,30.8
+Phnom Penh,12,30.7
+Phoenix,1,20.0
+Phoenix,2,22.2
+Phoenix,3,25.6
+Phoenix,4,30.0
+Phoenix,5,35.6
+Phoenix,6,40.6
+Phoenix,7,41.1
+Phoenix,8,40.0
+Phoenix,9,37.8
+Phoenix,10,31.7
+Phoenix,11,24.4
+Phoenix,12,19.4
+Podgorica,1,9.5
+Podgorica,2,10.8
+Podgorica,3,14.8
+Podgorica,4,18.6
+Podgorica,5,23.6
+Podgorica,6,28.0
+Podgorica,7,31.8
+Podgorica,8,32.0
+Podgorica,9,27.1
+Podgorica,10,21.0
+Podgorica,11,15.2
+Podgorica,12,10.4
+Port Louis,1,29.2
+Port Louis,2,29.2
+Port Louis,3,28.8
+Port Louis,4,27.4
+Port Louis,5,25.5
+Port Louis,6,23.8
+Port Louis,7,22.9
+Port Louis,8,23.0
+Port Louis,9,24.0
+Port Louis,10,25.5
+Port Louis,11,27.2
+Port Louis,12,28.6
+Port Moresby,1,30.8
+Port Moresby,2,30.5
+Port Moresby,3,30.7
+Port Moresby,4,30.7
+Port Moresby,5,30.2
+Port Moresby,6,29.2
+Port Moresby,7,28.7
+Port Moresby,8,29.3
+Port Moresby,9,30.2
+Port Moresby,10,30.7
+Port Moresby,11,31.2
+Port Moresby,12,31.1
+Port of Spain,1,30.8
+Port of Spain,2,31.0
+Port of Spain,3,31.6
+Port of Spain,4,32.0
+Port of Spain,5,32.1
+Port of Spain,6,31.3
+Port of Spain,7,30.8
+Port of Spain,8,31.1
+Port of Spain,9,31.5
+Port of Spain,10,31.5
+Port of Spain,11,31.0
+Port of Spain,12,30.6
+Port-au-Prince,1,31.4
+Port-au-Prince,2,31.8
+Port-au-Prince,3,32.6
+Port-au-Prince,4,33.0
+Port-au-Prince,5,32.9
+Port-au-Prince,6,33.6
+Port-au-Prince,7,34.2
+Port-au-Prince,8,34.0
+Port-au-Prince,9,33.3
+Port-au-Prince,10,32.5
+Port-au-Prince,11,31.9
+Port-au-Prince,12,31.6
+Portland,1,7.9
+Portland,2,10.3
+Portland,3,13.2
+Portland,4,15.9
+Portland,5,19.4
+Portland,6,22.6
+Portland,7,27.3
+Portland,8,27.5
+Portland,9,24.4
+Portland,10,17.3
+Portland,11,10.7
+Portland,12,7.2
+Prague,1,1.9
+Prague,2,3.9
+Prague,3,8.3
+Prague,4,14.0
+Prague,5,18.6
+Prague,6,21.8
+Prague,7,24.0
+Prague,8,23.6
+Prague,9,18.9
+Prague,10,13.1
+Prague,11,6.5
+Prague,12,2.6
+Pristina,1,4.0
+Pristina,2,6.7
+Pristina,3,11.6
+Pristina,4,16.5
+Pristina,5,21.3
+Pristina,6,25.4
+Pristina,7,28.2
+Pristina,8,28.7
+Pristina,9,24.1
+Pristina,10,17.9
+Pristina,11,10.9
+Pristina,12,5.0
+Punta Arenas,1,14.3
+Punta Arenas,2,14.0
+Punta Arenas,3,12.1
+Punta Arenas,4,9.5
+Punta Arenas,5,6.7
+Punta Arenas,6,4.5
+Punta Arenas,7,4.1
+Punta Arenas,8,5.5
+Punta Arenas,9,8.0
+Punta Arenas,10,10.7
+Punta Arenas,11,12.3
+Punta Arenas,12,13.6
+Pyongyang,1,-1.7
+Pyongyang,2,1.6
+Pyongyang,3,8.3
+Pyongyang,4,16.5
+Pyongyang,5,22.6
+Pyongyang,6,26.8
+Pyongyang,7,28.2
+Pyongyang,8,28.6
+Pyongyang,9,24.4
+Pyongyang,10,17.7
+Pyongyang,11,8.8
+Pyongyang,12,0.5
+Quito,1,19.5
+Quito,2,19.2
+Quito,3,19.0
+Quito,4,18.9
+Quito,5,19.2
+Quito,6,19.3
+Quito,7,19.8
+Quito,8,20.2
+Quito,9,20.2
+Quito,10,19.9
+Quito,11,19.5
+Quito,12,19.4
+Recife,1,29.8
+Recife,2,29.9
+Recife,3,29.6
+Recife,4,29.0
+Recife,5,28.0
+Recife,6,27.1
+Recife,7,26.6
+Recife,8,27.0
+Recife,9,27.9
+Recife,10,28.8
+Recife,11,29.6
+Recife,12,29.8
+Reykjavik,1,2.1
+Reykjavik,2,2.5
+Reykjavik,3,3.2
+Reykjavik,4,5.7
+Reykjavik,5,9.4
+Reykjavik,6,11.7
+Reykjavik,7,13.3
+Reykjavik,8,13.0
+Reykjavik,9,10.1
+Reykjavik,10,6.5
+Reykjavik,11,3.5
+Reykjavik,12,2.2
+Riga,1,-1.4
+Riga,2,-0.7
+Riga,3,3.6
+Riga,4,10.5
+Riga,5,16.4
+Riga,6,19.7
+Riga,7,22.0
+Riga,8,21.3
+Riga,9,16.2
+Riga,10,10.0
+Riga,11,4.2
+Riga,12,0.4
+Rio de Janeiro,1,30.2
+Rio de Janeiro,2,30.2
+Rio de Janeiro,3,29.4
+Rio de Janeiro,4,27.5
+Rio de Janeiro,5,25.7
+Rio de Janeiro,6,24.8
+Rio de Janeiro,7,24.5
+Rio de Janeiro,8,25.2
+Rio de Janeiro,9,25.2
+Rio de Janeiro,10,26.0
+Rio de Janeiro,11,27.4
+Rio de Janeiro,12,28.9
+Riyadh,1,20.1
+Riyadh,2,23.0
+Riyadh,3,27.2
+Riyadh,4,32.8
+Riyadh,5,38.4
+Riyadh,6,41.6
+Riyadh,7,42.9
+Riyadh,8,42.7
+Riyadh,9,39.6
+Riyadh,10,34.2
+Riyadh,11,27.0
+Riyadh,12,21.6
+Rome,1,12.1
+Rome,2,13.1
+Rome,3,15.5
+Rome,4,18.0
+Rome,5,22.8
+Rome,6,26.9
+Rome,7,30.3
+Rome,8,30.6
+Rome,9,26.5
+Rome,10,21.8
+Rome,11,16.4
+Rome,12,12.6
+Sacramento,1,12.5
+Sacramento,2,15.1
+Sacramento,3,17.7
+Sacramento,4,21.3
+Sacramento,5,25.7
+Sacramento,6,30.5
+Sacramento,7,33.9
+Sacramento,8,33.4
+Sacramento,9,30.8
+Sacramento,10,24.8
+Sacramento,11,17.3
+Sacramento,12,12.3
+San Antonio,1,15.6
+San Antonio,2,18.1
+San Antonio,3,22.1
+San Antonio,4,26.1
+San Antonio,5,29.8
+San Antonio,6,33.2
+San Antonio,7,34.8
+San Antonio,8,35.2
+San Antonio,9,31.7
+San Antonio,10,27.1
+San Antonio,11,20.6
+San Antonio,12,16.2
+San Francisco,1,14.4
+San Francisco,2,15.6
+San Francisco,3,16.6
+San Francisco,4,17.5
+San Francisco,5,17.9
+San Francisco,6,19.2
+San Francisco,7,19.6
+San Francisco,8,20.2
+San Francisco,9,21.2
+San Francisco,10,20.8
+San Francisco,11,17.3
+San Francisco,12,14.5
+San Jose,1,24.3
+San Jose,2,24.9
+San Jose,3,25.8
+San Jose,4,26.1
+San Jose,5,26.0
+San Jose,6,25.8
+San Jose,7,25.4
+San Jose,8,25.6
+San Jose,9,25.6
+San Jose,10,24.9
+San Jose,11,24.5
+San Jose,12,24.1
+San Juan,1,28.6
+San Juan,2,28.7
+San Juan,3,29.3
+San Juan,4,30.0
+San Juan,5,30.6
+San Juan,6,31.3
+San Juan,7,31.5
+San Juan,8,31.6
+San Juan,9,31.5
+San Juan,10,31.0
+San Juan,11,30.0
+San Juan,12,29.0
+San Salvador,1,32.0
+San Salvador,2,33.0
+San Salvador,3,33.8
+San Salvador,4,33.6
+San Salvador,5,31.8
+San Salvador,6,30.5
+San Salvador,7,31.2
+San Salvador,8,31.3
+San Salvador,9,30.0
+San Salvador,10,30.2
+San Salvador,11,30.6
+San Salvador,12,31.3
+Sanaa,1,21.9
+Sanaa,2,22.9
+Sanaa,3,25.3
+Sanaa,4,26.3
+Sanaa,5,28.7
+Sanaa,6,30.5
+Sanaa,7,29.4
+Sanaa,8,28.8
+Sanaa,9,28.2
+Sanaa,10,24.5
+Sanaa,11,23.0
+Sanaa,12,22.1
+Santiago,1,30.1
+Santiago,2,29.4
+Santiago,3,27.3
+Santiago,4,23.0
+Santiago,5,18.7
+Santiago,6,15.2
+Santiago,7,14.9
+Santiago,8,16.9
+Santiago,9,19.1
+Santiago,10,22.5
+Santiago,11,25.9
+Santiago,12,28.7
+Santo Domingo,1,29.4
+Santo Domingo,2,29.5
+Santo Domingo,3,29.9
+Santo Domingo,4,30.3
+Santo Domingo,5,30.5
+Santo Domingo,6,31.2
+Santo Domingo,7,31.5
+Santo Domingo,8,31.5
+Santo Domingo,9,31.4
+Santo Domingo,10,31.0
+Santo Domingo,11,30.4
+Santo Domingo,12,29.5
+Sao Paulo,1,27.3
+Sao Paulo,2,27.8
+Sao Paulo,3,27.0
+Sao Paulo,4,25.0
+Sao Paulo,5,23.0
+Sao Paulo,6,21.6
+Sao Paulo,7,21.6
+Sao Paulo,8,23.0
+Sao Paulo,9,23.4
+Sao Paulo,10,24.5
+Sao Paulo,11,25.5
+Sao Paulo,12,26.3
+Sarajevo,1,3.7
+Sarajevo,2,5.6
+Sarajevo,3,10.4
+Sarajevo,4,14.4
+Sarajevo,5,19.5
+Sarajevo,6,22.9
+Sarajevo,7,25.9
+Sarajevo,8,26.0
+Sarajevo,9,21.0
+Sarajevo,10,15.6
+Sarajevo,11,9.4
+Sarajevo,12,4.2
+Seattle,1,8.2
+Seattle,2,9.6
+Seattle,3,12.1
+Seattle,4,14.4
+Seattle,5,17.8
+Seattle,6,20.4
+Seattle,7,24.3
+Seattle,8,24.5
+Seattle,9,21.4
+Seattle,10,15.3
+Seattle,11,10.3
+Seattle,12,7.5
+Seoul,1,1.5
+Seoul,2,4.7
+Seoul,3,10.4
+Seoul,4,17.8
+Seoul,5,23.0
+Seoul,6,27.1
+Seoul,7,28.6
+Seoul,8,29.6
+Seoul,9,25.8
+Seoul,10,19.8
+Seoul,11,11.6
+Seoul,12,4.0
+Seville,1,16.0
+Seville,2,17.9
+Seville,3,21.2
+Seville,4,23.4
+Seville,5,27.2
+Seville,6,33.5
+Seville,7,36.0
+Seville,8,35.5
+Seville,9,32.5
+Seville,10,26.0
+Seville,11,20.2
+Seville,12,16.6
+Shanghai,1,8.1
+Shanghai,2,10.1
+Shanghai,3,14.2
+Shanghai,4,19.4
+Shanghai,5,24.6
+Shanghai,6,27.8
+Shanghai,7,32.0
+Shanghai,8,31.6
+Shanghai,9,27.8
+Shanghai,10,22.9
+Shanghai,11,17.1
+Shanghai,12,10.5
+Shenzhen,1,19.4
+Shenzhen,2,20.3
+Shenzhen,3,23.0
+Shenzhen,4,26.5
+Shenzhen,5,29.1
+Shenzhen,6,30.6
+Shenzhen,7,31.6
+Shenzhen,8,31.4
+Shenzhen,9,30.6
+Shenzhen,10,28.6
+Shenzhen,11,25.1
+Shenzhen,12,20.8
+Singapore,1,30.4
+Singapore,2,31.6
+Singapore,3,31.6
+Singapore,4,31.7
+Singapore,5,31.7
+Singapore,6,31.3
+Singapore,7,30.9
+Singapore,8,30.9
+Singapore,9,30.9
+Singapore,10,31.0
+Singapore,11,30.6
+Singapore,12,30.2
+Skopje,1,4.8
+Skopje,2,8.3
+Skopje,3,13.3
+Skopje,4,18.2
+Skopje,5,23.5
+Skopje,6,27.8
+Skopje,7,30.7
+Skopje,8,31.0
+Skopje,9,25.9
+Skopje,10,19.2
+Skopje,11,11.8
+Skopje,12,5.7
+Sofia,1,3.3
+Sofia,2,5.9
+Sofia,3,10.6
+Sofia,4,15.7
+Sofia,5,20.5
+Sofia,6,24.2
+Sofia,7,27.1
+Sofia,8,27.2
+Sofia,9,22.4
+Sofia,10,16.3
+Sofia,11,9.7
+Sofia,12,4.1
+St Louis,1,3.9
+St Louis,2,7.0
+St Louis,3,13.1
+St Louis,4,19.2
+St Louis,5,24.2
+St Louis,6,28.9
+St Louis,7,31.1
+St Louis,8,30.7
+St Louis,9,26.6
+St Louis,10,20.0
+St Louis,11,12.3
+St Louis,12,5.7
+Stockholm,1,-0.7
+Stockholm,2,-0.2
+Stockholm,3,3.5
+Stockholm,4,9.4
+Stockholm,5,15.7
+Stockholm,6,20.0
+Stockholm,7,22.1
+Stockholm,8,20.8
+Stockholm,9,15.7
+Stockholm,10,9.6
+Stockholm,11,4.0
+Stockholm,12,0.7
+Surabaya,1,31.1
+Surabaya,2,30.7
+Surabaya,3,31.0
+Surabaya,4,31.5
+Surabaya,5,31.5
+Surabaya,6,31.0
+Surabaya,7,30.6
+Surabaya,8,31.0
+Surabaya,9,32.1
+Surabaya,10,32.8
+Surabaya,11,32.3
+Surabaya,12,31.2
+Suva,1,29.8
+Suva,2,29.8
+Suva,3,29.4
+Suva,4,28.5
+Suva,5,27.0
+Suva,6,26.0
+Suva,7,25.3
+Suva,8,25.5
+Suva,9,26.0
+Suva,10,27.0
+Suva,11,28.1
+Suva,12,29.2
+Svalbard,1,-10.1
+Svalbard,2,-10.8
+Svalbard,3,-11.0
+Svalbard,4,-6.8
+Svalbard,5,-1.1
+Svalbard,6,4.2
+Svalbard,7,7.5
+Svalbard,8,6.3
+Svalbard,9,2.3
+Svalbard,10,-2.7
+Svalbard,11,-5.7
+Svalbard,12,-8.5
+Sydney,1,25.9
+Sydney,2,25.7
+Sydney,3,24.7
+Sydney,4,22.4
+Sydney,5,19.5
+Sydney,6,17.0
+Sydney,7,16.3
+Sydney,8,17.8
+Sydney,9,20.0
+Sydney,10,22.1
+Sydney,11,23.6
+Sydney,12,25.2
+Taipei,1,18.5
+Taipei,2,19.2
+Taipei,3,21.5
+Taipei,4,25.2
+Taipei,5,28.2
+Taipei,6,31.4
+Taipei,7,33.6
+Taipei,8,33.2
+Taipei,9,30.8
+Taipei,10,27.2
+Taipei,11,23.5
+Taipei,12,19.8
+Tallinn,1,-1.2
+Tallinn,2,-1.6
+Tallinn,3,2.2
+Tallinn,4,8.5
+Tallinn,5,14.3
+Tallinn,6,18.2
+Tallinn,7,21.0
+Tallinn,8,20.3
+Tallinn,9,15.0
+Tallinn,10,9.0
+Tallinn,11,3.6
+Tallinn,12,0.4
+Tampa,1,21.7
+Tampa,2,22.8
+Tampa,3,24.7
+Tampa,4,27.3
+Tampa,5,30.3
+Tampa,6,31.6
+Tampa,7,32.0
+Tampa,8,32.1
+Tampa,9,31.3
+Tampa,10,28.9
+Tampa,11,25.6
+Tampa,12,22.4
+Tashkent,1,6.3
+Tashkent,2,8.8
+Tashkent,3,14.4
+Tashkent,4,21.0
+Tashkent,5,26.7
+Tashkent,6,31.8
+Tashkent,7,34.1
+Tashkent,8,33.0
+Tashkent,9,28.3
+Tashkent,10,20.8
+Tashkent,11,13.2
+Tashkent,12,7.9
+Tbilisi,1,6.2
+Tbilisi,2,7.8
+Tbilisi,3,12.2
+Tbilisi,4,17.8
+Tbilisi,5,22.4
+Tbilisi,6,26.4
+Tbilisi,7,29.6
+Tbilisi,8,29.8
+Tbilisi,9,25.3
+Tbilisi,10,18.8
+Tbilisi,11,12.1
+Tbilisi,12,7.6
+Tegucigalpa,1,25.1
+Tegucigalpa,2,26.4
+Tegucigalpa,3,28.4
+Tegucigalpa,4,29.2
+Tegucigalpa,5,28.6
+Tegucigalpa,6,27.0
+Tegucigalpa,7,26.2
+Tegucigalpa,8,27.0
+Tegucigalpa,9,27.2
+Tegucigalpa,10,26.0
+Tegucigalpa,11,25.0
+Tegucigalpa,12,24.6
+Tehran,1,8.1
+Tehran,2,10.4
+Tehran,3,15.5
+Tehran,4,22.1
+Tehran,5,28.0
+Tehran,6,33.5
+Tehran,7,36.0
+Tehran,8,35.3
+Tehran,9,31.0
+Tehran,10,23.7
+Tehran,11,16.1
+Tehran,12,10.0
+Thimphu,1,12.3
+Thimphu,2,14.0
+Thimphu,3,16.4
+Thimphu,4,19.5
+Thimphu,5,22.4
+Thimphu,6,23.6
+Thimphu,7,23.1
+Thimphu,8,23.8
+Thimphu,9,22.8
+Thimphu,10,21.6
+Thimphu,11,17.5
+Thimphu,12,13.8
+Timbuktu,1,31.0
+Timbuktu,2,34.2
+Timbuktu,3,37.6
+Timbuktu,4,40.9
+Timbuktu,5,42.9
+Timbuktu,6,41.6
+Timbuktu,7,37.7
+Timbuktu,8,35.1
+Timbuktu,9,37.0
+Timbuktu,10,39.2
+Timbuktu,11,36.1
+Timbuktu,12,31.5
+Tirana,1,10.6
+Tirana,2,12.0
+Tirana,3,14.8
+Tirana,4,18.6
+Tirana,5,23.2
+Tirana,6,27.6
+Tirana,7,30.8
+Tirana,8,30.8
+Tirana,9,27.0
+Tirana,10,21.5
+Tirana,11,16.1
+Tirana,12,11.6
+Tokyo,1,9.8
+Tokyo,2,10.9
+Tokyo,3,14.2
+Tokyo,4,19.4
+Tokyo,5,23.6
+Tokyo,6,25.8
+Tokyo,7,29.9
+Tokyo,8,31.3
+Tokyo,9,27.5
+Tokyo,10,22.0
+Tokyo,11,16.7
+Tokyo,12,12.0
+Tripoli,1,17.5
+Tripoli,2,18.4
+Tripoli,3,20.4
+Tripoli,4,23.4
+Tripoli,5,27.5
+Tripoli,6,31.3
+Tripoli,7,32.9
+Tripoli,8,33.3
+Tripoli,9,31.5
+Tripoli,10,27.5
+Tripoli,11,23.1
+Tripoli,12,18.8
+Tromsø,1,-1.8
+Tromsø,2,-1.6
+Tromsø,3,0.0
+Tromsø,4,3.3
+Tromsø,5,7.2
+Tromsø,6,12.1
+Tromsø,7,15.4
+Tromsø,8,14.0
+Tromsø,9,9.6
+Tromsø,10,4.5
+Tromsø,11,0.7
+Tromsø,12,-1.1
+Tucson,1,19.0
+Tucson,2,20.6
+Tucson,3,23.7
+Tucson,4,28.0
+Tucson,5,33.0
+Tucson,6,38.3
+Tucson,7,38.0
+Tucson,8,36.7
+Tucson,9,35.1
+Tucson,10,29.7
+Tucson,11,23.0
+Tucson,12,18.3
+Tunis,1,16.1
+Tunis,2,16.7
+Tunis,3,18.3
+Tunis,4,20.9
+Tunis,5,24.9
+Tunis,6,29.5
+Tunis,7,32.8
+Tunis,8,32.7
+Tunis,9,29.8
+Tunis,10,25.4
+Tunis,11,20.2
+Tunis,12,16.6
+Ulaanbaatar,1,-15.6
+Ulaanbaatar,2,-10.3
+Ulaanbaatar,3,-1.1
+Ulaanbaatar,4,8.5
+Ulaanbaatar,5,16.8
+Ulaanbaatar,6,22.0
+Ulaanbaatar,7,23.6
+Ulaanbaatar,8,22.2
+Ulaanbaatar,9,16.7
+Ulaanbaatar,10,7.2
+Ulaanbaatar,11,-4.5
+Ulaanbaatar,12,-12.6
+Urumqi,1,-8.2
+Urumqi,2,-4.6
+Urumqi,3,4.5
+Urumqi,4,15.4
+Urumqi,5,22.3
+Urumqi,6,27.2
+Urumqi,7,29.0
+Urumqi,8,27.9
+Urumqi,9,22.2
+Urumqi,10,12.8
+Urumqi,11,1.9
+Urumqi,12,-5.9
+Ushuaia,1,13.4
+Ushuaia,2,13.3
+Ushuaia,3,11.6
+Ushuaia,4,9.0
+Ushuaia,5,5.8
+Ushuaia,6,4.0
+Ushuaia,7,3.6
+Ushuaia,8,5.0
+Ushuaia,9,7.5
+Ushuaia,10,10.2
+Ushuaia,11,11.8
+Ushuaia,12,13.1
+Valletta,1,15.2
+Valletta,2,15.2
+Valletta,3,16.7
+Valletta,4,18.7
+Valletta,5,23.1
+Valletta,6,27.4
+Valletta,7,30.6
+Valletta,8,30.8
+Valletta,9,27.9
+Valletta,10,24.1
+Valletta,11,19.9
+Valletta,12,16.4
+Vienna,1,3.3
+Vienna,2,5.5
+Vienna,3,10.3
+Vienna,4,16.0
+Vienna,5,20.8
+Vienna,6,24.0
+Vienna,7,26.6
+Vienna,8,26.4
+Vienna,9,21.1
+Vienna,10,14.9
+Vienna,11,8.5
+Vienna,12,4.0
+Vientiane,1,28.4
+Vientiane,2,30.3
+Vientiane,3,33.0
+Vientiane,4,34.3
+Vientiane,5,33.0
+Vientiane,6,31.7
+Vientiane,7,31.0
+Vientiane,8,30.6
+Vientiane,9,30.6
+Vientiane,10,30.5
+Vientiane,11,29.3
+Vientiane,12,27.6
+Vilnius,1,-1.5
+Vilnius,2,-0.3
+Vilnius,3,4.6
+Vilnius,4,12.0
+Vilnius,5,17.8
+Vilnius,6,20.8
+Vilnius,7,23.1
+Vilnius,8,22.3
+Vilnius,9,16.5
+Vilnius,10,10.0
+Vilnius,11,3.9
+Vilnius,12,0.0
+Vladivostok,1,-7.9
+Vladivostok,2,-4.2
+Vladivostok,3,2.9
+Vladivostok,4,10.5
+Vladivostok,5,15.3
+Vladivostok,6,17.6
+Vladivostok,7,21.0
+Vladivostok,8,23.7
+Vladivostok,9,20.5
+Vladivostok,10,14.0
+Vladivostok,11,3.6
+Vladivostok,12,-4.7
+Wadi Halfa,1,23.3
+Wadi Halfa,2,25.7
+Wadi Halfa,3,29.5
+Wadi Halfa,4,34.7
+Wadi Halfa,5,38.7
+Wadi Halfa,6,41.5
+Wadi Halfa,7,41.1
+Wadi Halfa,8,40.1
+Wadi Halfa,9,38.8
+Wadi Halfa,10,36.4
+Wadi Halfa,11,30.1
+Wadi Halfa,12,24.6
+Warsaw,1,1.2
+Warsaw,2,2.7
+Warsaw,3,7.5
+Warsaw,4,13.7
+Warsaw,5,19.0
+Warsaw,6,22.2
+Warsaw,7,24.4
+Warsaw,8,23.9
+Warsaw,9,18.5
+Warsaw,10,12.3
+Warsaw,11,5.8
+Warsaw,12,1.9
+Washington DC,1,6.1
+Washington DC,2,8.1
+Washington DC,3,12.9
+Washington DC,4,19.0
+Washington DC,5,24.0
+Washington DC,6,28.6
+Washington DC,7,31.0
+Washington DC,8,30.0
+Washington DC,9,26.2
+Washington DC,10,19.9
+Washington DC,11,13.6
+Washington DC,12,7.8
+Windhoek,1,29.7
+Windhoek,2,28.5
+Windhoek,3,27.3
+Windhoek,4,25.2
+Windhoek,5,22.7
+Windhoek,6,20.0
+Windhoek,7,20.2
+Windhoek,8,23.0
+Windhoek,9,26.2
+Windhoek,10,28.8
+Windhoek,11,29.5
+Windhoek,12,30.2
+Wuhan,1,8.1
+Wuhan,2,10.9
+Wuhan,3,15.5
+Wuhan,4,22.4
+Wuhan,5,27.5
+Wuhan,6,30.4
+Wuhan,7,33.0
+Wuhan,8,32.7
+Wuhan,9,28.5
+Wuhan,10,22.7
+Wuhan,11,16.2
+Wuhan,12,10.1
+Xi'an,1,5.3
+Xi'an,2,9.2
+Xi'an,3,14.6
+Xi'an,4,21.3
+Xi'an,5,26.2
+Xi'an,6,31.0
+Xi'an,7,32.2
+Xi'an,8,30.6
+Xi'an,9,25.2
+Xi'an,10,19.3
+Xi'an,11,12.3
+Xi'an,12,5.9
+Yakutsk,1,-32.8
+Yakutsk,2,-26.3
+Yakutsk,3,-13.2
+Yakutsk,4,0.5
+Yakutsk,5,12.2
+Yakutsk,6,21.1
+Yakutsk,7,24.3
+Yakutsk,8,20.6
+Yakutsk,9,11.4
+Yakutsk,10,-1.8
+Yakutsk,11,-19.5
+Yakutsk,12,-30.7
+Yangon,1,32.1
+Yangon,2,34.5
+Yangon,3,36.0
+Yangon,4,37.0
+Yangon,5,33.5
+Yangon,6,30.3
+Yangon,7,29.6
+Yangon,8,29.5
+Yangon,9,30.3
+Yangon,10,31.2
+Yangon,11,31.9
+Yangon,12,31.3
+Yaounde,1,28.3
+Yaounde,2,29.1
+Yaounde,3,28.9
+Yaounde,4,28.2
+Yaounde,5,27.5
+Yaounde,6,26.6
+Yaounde,7,25.9
+Yaounde,8,26.1
+Yaounde,9,26.5
+Yaounde,10,26.7
+Yaounde,11,27.2
+Yaounde,12,27.6
+Yerevan,1,1.8
+Yerevan,2,5.1
+Yerevan,3,12.4
+Yerevan,4,18.5
+Yerevan,5,23.8
+Yerevan,6,28.6
+Yerevan,7,32.7
+Yerevan,8,32.8
+Yerevan,9,28.0
+Yerevan,10,20.1
+Yerevan,11,11.6
+Yerevan,12,4.3
+Zagreb,1,3.7
+Zagreb,2,6.6
+Zagreb,3,11.6
+Zagreb,4,16.4
+Zagreb,5,21.3
+Zagreb,6,24.7
+Zagreb,7,27.1
+Zagreb,8,26.9
+Zagreb,9,21.9
+Zagreb,10,15.9
+Zagreb,11,9.5
+Zagreb,12,4.3
+Zurich,1,3.3
+Zurich,2,5.3
+Zurich,3,9.9
+Zurich,4,14.2
+Zurich,5,18.6
+Zurich,6,22.0
+Zurich,7,24.3
+Zurich,8,23.6
+Zurich,9,19.3
+Zurich,10,13.6
+Zurich,11,7.7
+Zurich,12,3.8
