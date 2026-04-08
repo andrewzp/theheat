@@ -44,7 +44,7 @@ class TestPostApproved:
         mock_state.check_daily_cap.return_value = False
         state = _fresh_state()
         result = post_approved("test tweet", state)
-        assert result is False
+        assert result == "failed"
         mock_tw.assert_not_called()
 
     @patch("src.main.state")
@@ -54,17 +54,27 @@ class TestPostApproved:
         mock_tw.return_value = {"id": "123"}
         state = _fresh_state()
         result = post_approved("test tweet", state)
-        assert result is True
+        assert result == "posted"
         mock_state.increment_daily_count.assert_called_once_with(state)
 
     @patch("src.main.state")
     @patch("src.main.post_tweet")
-    def test_returns_false_on_failure(self, mock_tw, mock_state):
+    def test_returns_failed_on_failure(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
         mock_tw.return_value = None
         state = _fresh_state()
         result = post_approved("test tweet", state)
-        assert result is False
+        assert result == "failed"
+
+    @patch("src.main.state")
+    @patch("src.main.post_tweet")
+    def test_returns_rate_limited(self, mock_tw, mock_state):
+        mock_state.check_daily_cap.return_value = True
+        mock_tw.return_value = {"error": "rate_limited"}
+        state = _fresh_state()
+        result = post_approved("test tweet", state)
+        assert result == "rate_limited"
+        mock_state.increment_daily_count.assert_not_called()
 
 
 class TestRunAlerts:

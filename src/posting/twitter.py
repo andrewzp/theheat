@@ -24,7 +24,11 @@ def _get_client() -> tweepy.Client | None:
 
 
 def post_tweet(text: str) -> dict | None:
-    """Post a tweet. Returns response dict or None on failure."""
+    """Post a tweet. Returns response dict, rate-limit sentinel, or None on failure.
+
+    Returns ``{"error": "rate_limited"}`` on 429 so callers can distinguish
+    transient rate limits from permanent failures.
+    """
     client = _get_client()
     if not client:
         print("[twitter] No credentials configured, skipping post")
@@ -36,8 +40,8 @@ def post_tweet(text: str) -> dict | None:
         print(f"[twitter] Posted tweet {tweet_id}: {text[:60]}...")
         return {"id": tweet_id, "text": text}
     except tweepy.TooManyRequests:
-        print("[twitter] Rate limited (429)")
-        return None
+        print("[twitter] Rate limited (429), tweet will stay in drafts for retry")
+        return {"error": "rate_limited"}
     except tweepy.Unauthorized:
         print("[twitter] Auth failure (401)")
         return None

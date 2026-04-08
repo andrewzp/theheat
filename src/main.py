@@ -16,6 +16,9 @@ from src.voice import generator
 from src.posting.twitter import post_tweet
 
 
+MAX_DRAFTS = 200
+
+
 def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str = "") -> bool:
     """Save a generated tweet as a draft for review."""
     drafts = bot_state.setdefault("drafts", [])
@@ -24,6 +27,15 @@ def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str 
     if event_id and any(d.get("event_id") == event_id for d in drafts):
         print(f"[draft] Already drafted: {event_id}")
         return False
+
+    # Prune oldest non-pending drafts to prevent unbounded growth
+    if len(drafts) >= MAX_DRAFTS:
+        before = len(drafts)
+        bot_state["drafts"] = [
+            d for d in drafts if d.get("status") == "pending"
+        ][-MAX_DRAFTS:]
+        drafts = bot_state["drafts"]
+        print(f"[draft] Pruned {before - len(drafts)} old drafts")
 
     draft = {
         "id": f"draft_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
@@ -38,20 +50,26 @@ def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str 
     return True
 
 
-def post_approved(tweet_text: str, bot_state: dict) -> bool:
-    """Post an approved tweet to X. Returns True on success."""
+def post_approved(tweet_text: str, bot_state: dict) -> str:
+    """Post an approved tweet to X.
+
+    Returns "posted", "rate_limited", or "failed".
+    """
     if not state.check_daily_cap(bot_state):
         print("[post] Daily tweet cap reached, skipping")
-        return False
+        return "failed"
 
     result = post_tweet(tweet_text)
-    if result is not None:
-        state.increment_daily_count(bot_state)
-        print(f"[post] Posted to X: {tweet_text[:60]}...")
-        return True
+    if result is None:
+        print("[post] Failed to post to X")
+        return "failed"
 
-    print("[post] Failed to post to X")
-    return False
+    if result.get("error") == "rate_limited":
+        return "rate_limited"
+
+    state.increment_daily_count(bot_state)
+    print(f"[post] Posted to X: {tweet_text[:60]}...")
+    return "posted"
 
 
 def run_alerts(bot_state: dict) -> dict:
@@ -451,13 +469,18 @@ def run_manual_tweet(bot_state: dict) -> dict:
         return bot_state
 
     print(f"[manual] Posting: {tweet_text}")
-    success = post_approved(tweet_text, bot_state)
+    result = post_approved(tweet_text, bot_state)
 
     # Update draft status with post result
     for draft in bot_state.get("drafts", []):
         if draft.get("text") == tweet_text and draft.get("status") == "approved":
-            if success:
+            if result == "posted":
+                draft["status"] = "posted"
                 draft["posted_at"] = datetime.utcnow().isoformat() + "Z"
+            elif result == "rate_limited":
+                draft["status"] = "pending"
+                draft["post_error"] = "Rate limited — retry later"
+                print("[manual] Rate limited, draft kept as pending for retry")
             else:
                 draft["post_error"] = "Failed to post to X"
             break
@@ -487,8 +510,13 @@ def main():
     if args.mode == "manual_tweet":
         bot_state = run_manual_tweet(bot_state)
 
-    state.write_state(bot_state)
-    print("[main] State saved")
+    if not state.write_state(bot_state):
+        print("[main] WARNING: State write failed, retrying...")
+        if not state.write_state(bot_state):
+            print("[main] ERROR: State write failed twice. Drafts from this run may be lost.")
+            state.log_error(bot_state, "state", "write_state failed twice")
+    else:
+        print("[main] State saved")
     print("[main] Done")
 
 
