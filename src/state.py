@@ -123,6 +123,53 @@ def update_streaks(state: dict, hot10_cities: list[str]) -> dict:
     return state
 
 
+def add_pending_confirmation(state: dict, event: dict) -> dict:
+    """Add a record detection to *pending_confirmations* for later NOAA check.
+
+    *event* should contain at minimum ``event_id``, ``detected``, ``city``,
+    and ``country``.  Duplicate ``event_id`` values are silently ignored.
+    """
+    pending = state.setdefault("pending_confirmations", [])
+    if any(p.get("event_id") == event.get("event_id") for p in pending):
+        return state
+    pending.append(event)
+    return state
+
+
+def get_expired_confirmations(state: dict, min_hours: int = 24) -> list[dict]:
+    """Return pending confirmations whose ``detected`` date is at least
+    *min_hours* ago.
+
+    Because Open-Meteo records are detected once per daily run the smallest
+    resolution we track is full days (``detected`` stores an ISO date, not a
+    timestamp).  We treat each confirmation as ready once at least
+    ``min_hours // 24`` full calendar days have elapsed since detection.
+    """
+    min_days = max(min_hours // 24, 1)
+    today = date.today()
+    expired = []
+    for pending in state.get("pending_confirmations", []):
+        detected_str = pending.get("detected")
+        if not detected_str:
+            continue
+        try:
+            detected_date = date.fromisoformat(detected_str)
+        except (ValueError, TypeError):
+            continue
+        if (today - detected_date).days >= min_days:
+            expired.append(pending)
+    return expired
+
+
+def remove_pending_confirmation(state: dict, event_id: str) -> dict:
+    """Remove a confirmation from *pending_confirmations* by ``event_id``."""
+    state["pending_confirmations"] = [
+        p for p in state.get("pending_confirmations", [])
+        if p.get("event_id") != event_id
+    ]
+    return state
+
+
 def log_error(state: dict, source: str, msg: str) -> dict:
     errors = state.setdefault("errors", [])
     errors.append({

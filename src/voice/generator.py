@@ -153,3 +153,24 @@ def generate_co2_weekly_tweet(current: float, last_year: float, diff: float) -> 
         fallback_fn=templates.co2_weekly_template,
         fallback_args={"current": current, "last_year": last_year, "diff": diff},
     )
+
+
+def generate_noaa_confirmation_tweet(
+    city: str,
+    state: str,
+    temp_f: float,
+    record_date: str,
+) -> str | None:
+    """Generate a tweet about NOAA confirming a temperature record."""
+    data = (
+        f"NOAA ACIS has officially confirmed: {city}, {state} broke the temperature "
+        f"record on {record_date}. The recorded high was {temp_f}F."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.noaa_confirmation_template,
+        fallback_args={
+            "city": city, "state": state,
+            "temp_f": temp_f, "date": record_date,
+        },
+    )

@@ -23,3 +23,7 @@ def hot10_template(cities: list[dict]) -> str:
     """Format Hot 10 as a compact single tweet. cities: [{city, anomaly_c}, ...]"""
     entries = [f"{c['city']} +{c['anomaly_c']:.0f}" for c in cities[:10]]
     return f"Hot 10 today (above normal): {', '.join(entries)}."
+
+
+def noaa_confirmation_template(city: str, state: str, temp_f: float, date: str) -> str:
+    return f"NOAA confirms: {city}, {state} officially broke the record on {date}. {temp_f}F."

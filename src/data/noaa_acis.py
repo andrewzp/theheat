@@ -9,89 +9,103 @@ import requests
 
 ACIS_URL = "https://data.rcc-acis.org"
 
+# Map US city names to state abbreviations for ACIS lookups.
+# ACIS accepts "city, ST" as a station identifier via its name-matching logic.
+CITY_STATE_MAP: dict[str, str] = {
+    "Anchorage": "AK",
+    "Atlanta": "GA",
+    "Austin": "TX",
+    "Bakersfield": "CA",
+    "Barrow": "AK",
+    "Boston": "MA",
+    "Chicago": "IL",
+    "Dallas": "TX",
+    "Death Valley": "CA",
+    "Denver": "CO",
+    "Detroit": "MI",
+    "El Paso": "TX",
+    "Fairbanks": "AK",
+    "Fresno": "CA",
+    "Honolulu": "HI",
+    "Houston": "TX",
+    "Las Vegas": "NV",
+    "Los Angeles": "CA",
+    "Miami": "FL",
+    "Minneapolis": "MN",
+    "New Orleans": "LA",
+    "New York": "NY",
+    "Oklahoma City": "OK",
+    "Palm Springs": "CA",
+    "Phoenix": "AZ",
+    "Portland": "OR",
+    "Sacramento": "CA",
+    "San Antonio": "TX",
+    "San Francisco": "CA",
+    "Seattle": "WA",
+    "St Louis": "MO",
+    "Tampa": "FL",
+    "Tucson": "AZ",
+    "Washington DC": "VA",
+}
+
 
 @dataclass
 class RecordConfirmation:
     city: str
     state: str
     new_temp_f: float
-    old_record_f: float
-    old_record_year: int
     date: str
     event_id: str
 
 
-def fetch_us_records(days_back: int = 3) -> list[RecordConfirmation]:
-    """Query ACIS for recently broken temperature records at US stations."""
-    end = date.today()
-    start = end - timedelta(days=days_back)
+def get_state_code(city: str, state_code: str | None = None) -> str | None:
+    """Resolve a state abbreviation for a US city.
 
-    try:
-        # ACIS MultiStnData endpoint: query stations with record-breaking maxes
-        resp = requests.post(
-            f"{ACIS_URL}/MultiStnData",
-            json={
-                "sdate": start.isoformat(),
-                "edate": end.isoformat(),
-                "elems": [
-                    {
-                        "name": "maxt",
-                        "interval": "dly",
-                        "duration": "dly",
-                        "smry": {"type": "max"},
-                        "smry_only": 0,
-                        "normal": "departure",
-                    }
-                ],
-                "meta": "name,state",
-                "state": "AL,AK,AZ,AR,CA,CO,CT,DE,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY",
-            },
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        confirmations = []
-        for station in data.get("data", []):
-            meta = station.get("meta", {})
-            station_name = meta.get("name", "Unknown")
-            station_state = meta.get("state", "")
-
-            records = station.get("data", [])
-            for day_data in records:
-                if not day_data or len(day_data) < 1:
-                    continue
-                # Parse temperature and departure from normal
-                temp_val = day_data[0] if isinstance(day_data[0], (int, float)) else None
-                if temp_val is None:
-                    continue
-
-                # Note: ACIS doesn't directly return "record broken" flags in this query.
-                # A more targeted approach would use the StnData endpoint with record lookup.
-                # For MVP, we flag temperatures with large positive departures from normal.
-
-        return confirmations
-
-    except (requests.RequestException, KeyError):
-        return []
+    Uses the explicit *state_code* when provided, otherwise falls back to
+    the built-in ``CITY_STATE_MAP``.
+    """
+    if state_code:
+        return state_code
+    return CITY_STATE_MAP.get(city)
 
 
 def check_record_confirmation(
     city: str,
-    state: str,
-    record_date: str,
+    state_code: str | None = None,
+    record_date: str | None = None,
 ) -> RecordConfirmation | None:
-    """Check ACIS for a specific station's record on a specific date."""
+    """Check ACIS for official temperature data on *record_date*.
+
+    Args:
+        city: US city name (must be present in CITY_STATE_MAP or *state_code*
+              must be provided).
+        state_code: Two-letter US state abbreviation (e.g. ``"AZ"``).  When
+                    ``None`` the code is looked up in ``CITY_STATE_MAP``.
+        record_date: ISO-format date string (``"YYYY-MM-DD"``).  Defaults to
+                     yesterday if not supplied.
+
+    Returns:
+        A ``RecordConfirmation`` when ACIS returns valid temperature data for
+        the requested date, indicating the observation is available (i.e. the
+        record can be considered confirmed).  ``None`` if the data is missing
+        or an error occurs.
+    """
+    resolved_state = get_state_code(city, state_code)
+    if not resolved_state:
+        return None
+
+    if record_date is None:
+        record_date = (date.today() - timedelta(days=1)).isoformat()
+
     try:
+        # ACIS StnData accepts "city, ST" for its name-matching heuristic.
         resp = requests.post(
             f"{ACIS_URL}/StnData",
             json={
-                "sid": f"{city}, {state}",
+                "sid": f"{city} AP, {resolved_state}",
                 "sdate": record_date,
                 "edate": record_date,
-                "elems": [
-                    {"name": "maxt", "add": "t"},
-                ],
+                "elems": [{"name": "maxt"}],
                 "meta": "name,state",
             },
             timeout=15,
@@ -105,22 +119,29 @@ def check_record_confirmation(
         if not records:
             return None
 
+        # records is a list of [date_str, value, ...] rows
         day_data = records[0]
-        temp_str = day_data[0] if day_data else None
-        if temp_str is None or temp_str == "M":
+        # day_data looks like ["2026-04-07", "108"] — the temp is the second
+        # element when elems has one entry, but ACIS returns date first in
+        # StnData responses.  Handle both shapes defensively.
+        temp_str = None
+        if len(day_data) >= 2:
+            temp_str = day_data[1]
+        elif len(day_data) == 1:
+            temp_str = day_data[0]
+
+        if temp_str is None or temp_str == "M" or temp_str == "T":
             return None
 
         temp_f = float(temp_str)
 
         return RecordConfirmation(
             city=meta.get("name", city),
-            state=meta.get("state", state),
+            state=meta.get("state", resolved_state),
             new_temp_f=temp_f,
-            old_record_f=0,  # Would need historical query
-            old_record_year=0,
             date=record_date,
             event_id=f"noaa_confirm_{city.replace(' ', '_')}_{record_date}",
         )
 
-    except (requests.RequestException, KeyError, ValueError):
+    except (requests.RequestException, KeyError, ValueError, IndexError):
         return None
