@@ -65,3 +65,75 @@ def noaa_confirmation_template(city: str, state: str, temp_f: float, date: str) 
         f"It's official. NOAA says {city}, {state} broke the record on {date}. {temp_f}F. The paperwork is in.",
     ]
     return random.choice(variants)
+
+
+def severe_weather_template(event_type: str, area: str) -> str:
+    month = datetime.date.today().strftime("%B")
+    variants = [
+        f"{event_type} issued for {area}.",
+        f"{event_type} for {area}. It's {month}.",
+    ]
+    return random.choice(variants)
+
+
+def global_disaster_template(disaster_type: str, name: str, country: str, severity: str) -> str:
+    variants = [
+        f"{disaster_type}: {name}. Location: {country}. GDACS severity: {severity.upper()}.",
+        f"GDACS {severity.upper()} alert. {disaster_type} — {name}, {country}.",
+    ]
+    return random.choice(variants)
+
+
+def sea_ice_record_template(hemisphere: str, extent: float, previous_extent: float, previous_year: int) -> str:
+    return (
+        f"{hemisphere} sea ice: {extent} million sq km. "
+        f"Lowest for this date since satellite records began in 1979. "
+        f"Previous record: {previous_extent} million sq km ({previous_year})."
+    )
+
+
+def drought_template(states: list[dict]) -> str:
+    top = states[:3]
+    parts = [f"{s['state']} {s['d3_pct'] + s['d4_pct']:.0f}%" for s in top]
+    return f"US Drought Monitor: Extreme/exceptional drought — {', '.join(parts)}."
+
+
+def enso_template(status: str, oni: float, duration: int) -> str:
+    return f"NOAA declares {status} conditions. ONI: {oni:+.1f}. Previous phase lasted {duration} months."
+
+
+def record_low_template(city: str, country: str, temp_c: float, old_temp_c: float, old_year: int) -> str:
+    temp_f = round(temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_temp_c * 9 / 5 + 32, 1)
+    years_ago = datetime.date.today().year - old_year
+    variants = [
+        f"{city} dropped to {temp_f}F overnight. NEW RECORD LOW. Previous: {old_f}F from {old_year}. {years_ago} years.",
+        f"{city}, {country}: {temp_f}F low. Coldest for this date since {old_year}. Previous record: {old_f}F.",
+    ]
+    return random.choice(variants)
+
+
+def extreme_wave_template(location: str, ocean: str, wave_height_m: float) -> str:
+    wave_ft = round(wave_height_m * 3.281, 0)
+    month = datetime.date.today().strftime("%B")
+    variants = [
+        f"{wave_height_m:.1f}m waves in the {location}. That's {wave_ft:.0f} feet. It's {month}.",
+        f"Marine forecast: {wave_height_m:.1f}m ({wave_ft:.0f}ft) waves in the {location}.",
+    ]
+    return random.choice(variants)
+
+
+def storm_surge_template(station: str, state: str, anomaly_m: float, observed_m: float) -> str:
+    anomaly_ft = round(anomaly_m * 3.281, 1)
+    return (
+        f"Water level at {station}: {anomaly_ft}ft above predicted. "
+        f"Observed: {observed_m:.2f}m."
+    )
+
+
+def river_flood_template(river: str, location: str, gauge_ft: float, flood_stage_ft: float, above_ft: float) -> str:
+    variants = [
+        f"{river} at {location}: {gauge_ft:.1f}ft. Flood stage is {flood_stage_ft:.0f}ft. Currently {above_ft:.1f}ft above.",
+        f"{river} at {location} is {above_ft:.1f}ft above flood stage. Gauge: {gauge_ft:.1f}ft. Flood stage: {flood_stage_ft:.0f}ft.",
+    ]
+    return random.choice(variants)

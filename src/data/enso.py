@@ -1,0 +1,103 @@
+"""NOAA ENSO/ONI (Oceanic Nino Index) — El Nino/La Nina status.
+
+Free plain text download, no auth required. Updated monthly.
+Source: NOAA Climate Prediction Center
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date
+
+import requests
+
+ONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
+
+# ENSO thresholds (standard NOAA definitions)
+EL_NINO_THRESHOLD = 0.5
+LA_NINA_THRESHOLD = -0.5
+
+
+@dataclass
+class ENSOReading:
+    season: str  # e.g., "DJF", "JFM"
+    year: int
+    oni_value: float
+    status: str  # "El Nino", "La Nina", "Neutral"
+    event_id: str
+
+
+def fetch_enso_data() -> list[ENSOReading]:
+    """Fetch ONI time series data."""
+    try:
+        resp = requests.get(ONI_URL, timeout=30)
+        resp.raise_for_status()
+
+        readings = []
+        for line in resp.text.strip().split("\n"):
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+
+            try:
+                season = parts[0]
+                year = int(parts[1])
+                oni = float(parts[-1])
+            except (ValueError, IndexError):
+                continue
+
+            if oni >= EL_NINO_THRESHOLD:
+                status = "El Nino"
+            elif oni <= LA_NINA_THRESHOLD:
+                status = "La Nina"
+            else:
+                status = "Neutral"
+
+            event_id = f"enso_{season}_{year}"
+
+            readings.append(ENSOReading(
+                season=season,
+                year=year,
+                oni_value=oni,
+                status=status,
+                event_id=event_id,
+            ))
+
+        return readings
+
+    except (requests.RequestException, ValueError):
+        return []
+
+
+def detect_transition(readings: list[ENSOReading]) -> dict | None:
+    """Detect if a transition between ENSO states has occurred.
+
+    Returns a dict with transition info, or None if no transition.
+    """
+    if len(readings) < 2:
+        return None
+
+    current = readings[-1]
+    previous = readings[-2]
+
+    if current.status != previous.status and current.status != "Neutral":
+        # Count how many months the previous state lasted
+        prev_state = previous.status
+        streak = 0
+        for r in reversed(readings[:-1]):
+            if r.status == prev_state:
+                streak += 1
+            else:
+                break
+
+        return {
+            "from_status": previous.status,
+            "to_status": current.status,
+            "oni_value": current.oni_value,
+            "season": current.season,
+            "year": current.year,
+            "previous_duration_months": streak,
+            "event_id": f"enso_transition_{current.status.replace(' ', '_')}_{current.year}",
+        }
+
+    return None

@@ -11,7 +11,7 @@ import sys
 from datetime import date, datetime
 
 from src import state
-from src.data import open_meteo, firms, co2, noaa_acis
+from src.data import open_meteo, firms, co2, noaa_acis, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
 from src.voice import generator
 from src.posting.twitter import post_tweet
 
@@ -57,11 +57,16 @@ def post_approved(tweet_text: str, bot_state: dict) -> bool:
 def run_alerts(bot_state: dict) -> dict:
     """Check all alert data sources and save drafts."""
     drafted = 0
+    try:
+        cities = open_meteo.load_cities()
+    except Exception as e:
+        print(f"[alerts] Failed to load cities: {e}")
+        state.log_error(bot_state, "load_cities", str(e))
+        cities = []
 
     # 1. Heat records via Open-Meteo historical
     print("[alerts] Checking heat records...")
     try:
-        cities = open_meteo.load_cities()
         records = open_meteo.check_records_for_cities(cities, max_checks=20)
         for record in records:
             if state.is_duplicate(bot_state, record.event_id):
@@ -90,6 +95,27 @@ def run_alerts(bot_state: dict) -> dict:
     except Exception as e:
         print(f"[alerts] Heat records error: {e}")
         state.log_error(bot_state, "open_meteo_records", str(e))
+
+    # 1a. Record lows via Open-Meteo historical
+    print("[alerts] Checking record lows...")
+    try:
+        record_lows = open_meteo.check_record_lows_for_cities(cities, max_checks=20)
+        for record in record_lows:
+            if state.is_duplicate(bot_state, record.event_id):
+                continue
+            tweet = generator.generate_record_low_tweet(
+                city=record.city,
+                country=record.country,
+                new_temp_c=record.new_temp_c,
+                old_record_c=record.old_record_c,
+                old_record_year=record.old_record_year,
+            )
+            if tweet and save_draft(tweet, bot_state, "record_low", record.event_id):
+                state.record_event(bot_state, record.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] Record lows error: {e}")
+        state.log_error(bot_state, "open_meteo_record_lows", str(e))
 
     # 1b. NOAA record confirmations
     print("[alerts] Checking NOAA confirmations...")
@@ -180,6 +206,166 @@ def run_alerts(bot_state: dict) -> dict:
     except Exception as e:
         print(f"[alerts] CO2 error: {e}")
         state.log_error(bot_state, "co2", str(e))
+
+    # 4. NWS severe weather alerts (US)
+    print("[alerts] Checking NWS severe weather...")
+    try:
+        alerts = nws_alerts.fetch_alerts()
+        for alert in alerts:
+            if state.is_duplicate(bot_state, alert.event_id):
+                continue
+            tweet = generator.generate_severe_weather_tweet(
+                event_type=alert.event_type,
+                area=alert.area,
+                severity=alert.severity,
+            )
+            if tweet and save_draft(tweet, bot_state, "severe_weather", alert.event_id):
+                state.record_event(bot_state, alert.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] NWS error: {e}")
+        state.log_error(bot_state, "nws_alerts", str(e))
+
+    # 5. GDACS global disasters (Orange/Red severity)
+    print("[alerts] Checking GDACS global disasters...")
+    try:
+        disasters = gdacs.fetch_disasters(min_severity="Orange")
+        for disaster in disasters:
+            if state.is_duplicate(bot_state, disaster.event_id):
+                continue
+            tweet = generator.generate_global_disaster_tweet(
+                disaster_type=disaster.disaster_type,
+                name=disaster.name,
+                country=disaster.country,
+                severity=disaster.severity,
+                description=disaster.description,
+            )
+            if tweet and save_draft(tweet, bot_state, "global_disaster", disaster.event_id):
+                state.record_event(bot_state, disaster.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] GDACS error: {e}")
+        state.log_error(bot_state, "gdacs", str(e))
+
+    # 6. Sea ice records (check weekly on Mondays to avoid hammering NSIDC)
+    if date.today().weekday() == 0:
+        print("[alerts] Checking sea ice records...")
+        for hemisphere in ("Arctic", "Antarctic"):
+            try:
+                readings = sea_ice.fetch_sea_ice(hemisphere=hemisphere)
+                record = sea_ice.detect_record_low(readings)
+                if record and not state.is_duplicate(bot_state, record.event_id):
+                    tweet = generator.generate_sea_ice_record_tweet(
+                        hemisphere=record.hemisphere,
+                        extent=record.extent_million_km2,
+                        previous_extent=record.previous_extent,
+                        previous_year=record.previous_year,
+                    )
+                    if tweet and save_draft(tweet, bot_state, "sea_ice_record", record.event_id):
+                        state.record_event(bot_state, record.event_id)
+                        drafted += 1
+            except Exception as e:
+                print(f"[alerts] Sea ice ({hemisphere}) error: {e}")
+                state.log_error(bot_state, f"sea_ice_{hemisphere.lower()}", str(e))
+
+    # 7. US Drought Monitor (weekly, check on Fridays after Thursday update)
+    if date.today().weekday() == 4:
+        print("[alerts] Checking US drought conditions...")
+        try:
+            drought_updates = drought.fetch_drought_data()
+            if drought_updates:
+                event_id = f"drought_{date.today().isoformat()}"
+                if not state.is_duplicate(bot_state, event_id):
+                    tweet = generator.generate_drought_tweet(states=drought_updates)
+                    if tweet and save_draft(tweet, bot_state, "drought", event_id):
+                        state.record_event(bot_state, event_id)
+                        drafted += 1
+        except Exception as e:
+            print(f"[alerts] Drought error: {e}")
+            state.log_error(bot_state, "drought", str(e))
+
+    # 8. ENSO transitions (monthly, check on 1st of month)
+    if date.today().day == 1:
+        print("[alerts] Checking ENSO status...")
+        try:
+            enso_readings = enso.fetch_enso_data()
+            transition = enso.detect_transition(enso_readings)
+            if transition and not state.is_duplicate(bot_state, transition["event_id"]):
+                tweet = generator.generate_enso_tweet(
+                    to_status=transition["to_status"],
+                    oni_value=transition["oni_value"],
+                    previous_duration=transition["previous_duration_months"],
+                )
+                if tweet and save_draft(tweet, bot_state, "enso", transition["event_id"]):
+                    state.record_event(bot_state, transition["event_id"])
+                    drafted += 1
+        except Exception as e:
+            print(f"[alerts] ENSO error: {e}")
+            state.log_error(bot_state, "enso", str(e))
+
+    # 9. Extreme ocean waves (every run)
+    print("[alerts] Checking ocean conditions...")
+    try:
+        ocean_readings = ocean.fetch_ocean_conditions()
+        extreme_waves = ocean.detect_extreme_waves(ocean_readings)
+        for wave in extreme_waves:
+            if state.is_duplicate(bot_state, wave.event_id):
+                continue
+            tweet = generator.generate_extreme_wave_tweet(
+                location=wave.location,
+                ocean=wave.ocean,
+                wave_height_m=wave.wave_height_m,
+            )
+            if tweet and save_draft(tweet, bot_state, "extreme_wave", wave.event_id):
+                state.record_event(bot_state, wave.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] Ocean error: {e}")
+        state.log_error(bot_state, "ocean", str(e))
+
+    # 10. Storm surge / abnormal water levels (every run)
+    print("[alerts] Checking coastal water levels...")
+    try:
+        wl_readings = water_levels.fetch_water_levels()
+        surges = water_levels.detect_storm_surge(wl_readings)
+        for surge in surges:
+            if state.is_duplicate(bot_state, surge.event_id):
+                continue
+            tweet = generator.generate_storm_surge_tweet(
+                station_name=surge.station_name,
+                state=surge.state,
+                anomaly_m=surge.anomaly_m,
+                observed_m=surge.observed_m,
+                predicted_m=surge.predicted_m,
+            )
+            if tweet and save_draft(tweet, bot_state, "storm_surge", surge.event_id):
+                state.record_event(bot_state, surge.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] Water levels error: {e}")
+        state.log_error(bot_state, "water_levels", str(e))
+
+    # 11. River flood stages (every run)
+    print("[alerts] Checking river flood stages...")
+    try:
+        river_readings = river_gauges.fetch_river_levels()
+        floods = river_gauges.detect_floods(river_readings)
+        for flood in floods:
+            if state.is_duplicate(bot_state, flood.event_id):
+                continue
+            tweet = generator.generate_river_flood_tweet(
+                river=flood.river,
+                location=flood.location,
+                gauge_height_ft=flood.gauge_height_ft,
+                flood_stage_ft=flood.flood_stage_ft,
+                above_by_ft=flood.above_by_ft,
+            )
+            if tweet and save_draft(tweet, bot_state, "river_flood", flood.event_id):
+                state.record_event(bot_state, flood.event_id)
+                drafted += 1
+    except Exception as e:
+        print(f"[alerts] River gauges error: {e}")
+        state.log_error(bot_state, "river_gauges", str(e))
 
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state
