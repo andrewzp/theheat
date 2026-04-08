@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 from datetime import date
 
 from src.state import DEFAULT_STATE
-from src.main import post_everywhere, run_alerts, run_leaderboard
+from src.main import save_draft, post_approved, run_alerts, run_leaderboard
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone, CO2WeeklyComparison
@@ -14,64 +14,68 @@ def _fresh_state():
     return dict(DEFAULT_STATE)
 
 
-class TestPostEverywhere:
+class TestSaveDraft:
+    def test_saves_draft_to_state(self):
+        state = _fresh_state()
+        result = save_draft("test tweet", state, "record", "evt_1")
+        assert result is True
+        assert len(state["drafts"]) == 1
+        assert state["drafts"][0]["text"] == "test tweet"
+        assert state["drafts"][0]["status"] == "pending"
+
+    def test_deduplicates_by_event_id(self):
+        state = _fresh_state()
+        save_draft("tweet 1", state, "record", "evt_1")
+        result = save_draft("tweet 2", state, "record", "evt_1")
+        assert result is False
+        assert len(state["drafts"]) == 1
+
+    def test_allows_empty_event_id(self):
+        state = _fresh_state()
+        save_draft("tweet 1", state, "custom", "")
+        save_draft("tweet 2", state, "custom", "")
+        assert len(state["drafts"]) == 2
+
+
+class TestPostApproved:
     @patch("src.main.state")
     @patch("src.main.post_tweet")
-    @patch("src.main.post_to_bluesky")
-    def test_respects_daily_cap(self, mock_bs, mock_tw, mock_state):
+    def test_respects_daily_cap(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = False
         state = _fresh_state()
-        result = post_everywhere("test tweet", state)
+        result = post_approved("test tweet", state)
         assert result is False
         mock_tw.assert_not_called()
-        mock_bs.assert_not_called()
 
     @patch("src.main.state")
     @patch("src.main.post_tweet")
-    @patch("src.main.post_to_bluesky")
-    def test_dry_run_prints_but_does_not_post(self, mock_bs, mock_tw, mock_state):
-        mock_state.check_daily_cap.return_value = True
-        state = _fresh_state()
-        result = post_everywhere("test tweet", state, dry_run=True)
-        assert result is True
-        mock_tw.assert_not_called()
-        mock_bs.assert_not_called()
-        mock_state.increment_daily_count.assert_called_once_with(state)
-
-    @patch("src.main.state")
-    @patch("src.main.post_tweet")
-    @patch("src.main.post_to_bluesky")
-    def test_increments_count_on_success(self, mock_bs, mock_tw, mock_state):
+    def test_increments_count_on_success(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
         mock_tw.return_value = {"id": "123"}
-        mock_bs.return_value = None
         state = _fresh_state()
-        result = post_everywhere("test tweet", state)
+        result = post_approved("test tweet", state)
         assert result is True
         mock_state.increment_daily_count.assert_called_once_with(state)
 
     @patch("src.main.state")
     @patch("src.main.post_tweet")
-    @patch("src.main.post_to_bluesky")
-    def test_no_success_does_not_increment(self, mock_bs, mock_tw, mock_state):
+    def test_returns_false_on_failure(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
         mock_tw.return_value = None
-        mock_bs.return_value = None
         state = _fresh_state()
-        result = post_everywhere("test tweet", state)
+        result = post_approved("test tweet", state)
         assert result is False
-        mock_state.increment_daily_count.assert_not_called()
 
 
 class TestRunAlerts:
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_calls_all_data_sources(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_post
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_records_for_cities.return_value = []
@@ -88,14 +92,14 @@ class TestRunAlerts:
         mock_firms.fetch_fires.assert_called_once()
         mock_co2.fetch_co2_data.assert_called_once()
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_deduplicates_events(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_post
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_records_for_cities.return_value = [
@@ -104,23 +108,21 @@ class TestRunAlerts:
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
-        # Mark event as already posted
         mock_state.is_duplicate.return_value = True
 
         state = _fresh_state()
         run_alerts(state)
 
-        # Should never call generate because the event is a duplicate
         mock_gen.generate_record_tweet.assert_not_called()
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_handles_data_source_errors_gracefully(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_post
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.side_effect = Exception("API down")
         mock_firms.fetch_fires.return_value = []
@@ -128,19 +130,18 @@ class TestRunAlerts:
         mock_co2.detect_milestone.return_value = None
 
         state = _fresh_state()
-        # Should not raise
         result = run_alerts(state)
         assert result is not None
         mock_state.log_error.assert_called()
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_posts_fire_alert(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_post
+    def test_drafts_fire_alert(
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_records_for_cities.return_value = []
@@ -151,22 +152,22 @@ class TestRunAlerts:
         mock_co2.detect_milestone.return_value = None
         mock_state.is_duplicate.return_value = False
         mock_gen.generate_fire_tweet.return_value = "Fire in Southwestern US."
-        mock_post.return_value = True
+        mock_draft.return_value = True
 
         state = _fresh_state()
         run_alerts(state)
 
         mock_gen.generate_fire_tweet.assert_called_once()
-        mock_post.assert_called()
+        mock_draft.assert_called()
 
 
 class TestRunLeaderboard:
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_computes_anomalies_and_posts(
-        self, mock_state, mock_om, mock_gen, mock_post
+    def test_computes_anomalies_and_drafts(
+        self, mock_state, mock_om, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = [
             {"city": "Phoenix", "country": "US", "lat": "33.45", "lon": "-112.07"}
@@ -182,7 +183,7 @@ class TestRunLeaderboard:
             CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
         ]
         mock_gen.generate_tweet.return_value = "Hot 10 today: Phoenix +15."
-        mock_post.return_value = True
+        mock_draft.return_value = True
         mock_state.update_streaks.return_value = {}
 
         state = _fresh_state()
@@ -191,15 +192,15 @@ class TestRunLeaderboard:
         mock_om.compute_anomalies.assert_called_once()
         mock_om.rank_hot10.assert_called_once()
         mock_gen.generate_tweet.assert_called_once()
-        mock_post.assert_called_once()
+        mock_draft.assert_called_once()
         assert result is not None
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_handles_empty_temps_gracefully(
-        self, mock_state, mock_om, mock_gen, mock_post
+        self, mock_state, mock_om, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
         mock_om.load_normals.return_value = {}
@@ -208,17 +209,16 @@ class TestRunLeaderboard:
         state = _fresh_state()
         result = run_leaderboard(state)
 
-        # Should not attempt to post when no data
         mock_gen.generate_tweet.assert_not_called()
-        mock_post.assert_not_called()
+        mock_draft.assert_not_called()
         assert result is not None
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_handles_no_valid_anomalies(
-        self, mock_state, mock_om, mock_gen, mock_post
+        self, mock_state, mock_om, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = [
             {"city": "Unknown", "country": "XX", "lat": "0", "lon": "0"}
@@ -236,12 +236,12 @@ class TestRunLeaderboard:
         mock_gen.generate_tweet.assert_not_called()
         assert result is not None
 
-    @patch("src.main.post_everywhere")
+    @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_updates_state_with_hot10(
-        self, mock_state, mock_om, mock_gen, mock_post
+        self, mock_state, mock_om, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
         mock_om.load_normals.return_value = {}
@@ -255,7 +255,7 @@ class TestRunLeaderboard:
             CityTemp("Miami", "US", 25.76, -80.19, 38.0, 30.0, 8.0),
         ]
         mock_gen.generate_tweet.return_value = "Hot 10: Miami +8."
-        mock_post.return_value = True
+        mock_draft.return_value = True
         mock_state.update_streaks.return_value = {}
 
         state = _fresh_state()

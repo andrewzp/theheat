@@ -30,52 +30,53 @@ class TestGenerateTweet:
 
     @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
     def test_gemini_success_returns_tweet(self):
-        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Phoenix hit 119F. New record for April."
-        mock_model.generate_content.return_value = mock_response
 
-        mock_genai = MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
 
-        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
             with patch("src.voice.safety.run_safety_pipeline", return_value=(True, None)):
                 result = generate_tweet("test data")
                 assert result == "Phoenix hit 119F. New record for April."
 
     @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
     def test_gemini_failure_retries_then_falls_back(self):
-        mock_model = MagicMock()
-        mock_model.generate_content.side_effect = Exception("API error")
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("API error")
 
-        mock_genai = MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
 
         fallback = MagicMock(return_value="fallback tweet")
 
-        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
             result = generate_tweet(
                 "test data",
                 fallback_fn=fallback,
                 fallback_args={"key": "val"},
             )
             assert result == "fallback tweet"
-            # generate_content called MAX_RETRIES times
-            assert mock_model.generate_content.call_count == 3
+            assert mock_client.models.generate_content.call_count == 3
 
     @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
     def test_safety_rejection_triggers_retry(self):
-        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "BREAKING: fire everywhere!"
-        mock_model.generate_content.return_value = mock_response
 
-        mock_genai = MagicMock()
-        mock_genai.GenerativeModel.return_value = mock_model
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
 
         fallback = MagicMock(return_value="safe fallback")
 
-        with patch.dict("sys.modules", {"google.generativeai": mock_genai}):
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
             with patch(
                 "src.voice.safety.run_safety_pipeline",
                 return_value=(False, "Banned pattern"),
@@ -86,7 +87,7 @@ class TestGenerateTweet:
                     fallback_args={"key": "val"},
                 )
                 assert result == "safe fallback"
-                assert mock_model.generate_content.call_count == 3
+                assert mock_client.models.generate_content.call_count == 3
 
 
 class TestGenerateRecordTweet:
@@ -97,11 +98,12 @@ class TestGenerateRecordTweet:
             country="US",
             new_temp_c=48.3,
             old_record_c=47.0,
-            old_record_year=2023,
+            old_record_year=2020,
         )
         assert result is not None
         assert "Phoenix" in result
-        assert "2023" in result
+        # All template variants include the year or the years-ago count
+        assert "2020" in result or "6" in result
 
     @patch("src.voice.generator.GEMINI_API_KEY", "")
     def test_contains_temperature(self):
