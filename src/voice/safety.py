@@ -23,6 +23,18 @@ BANNED_PATTERNS = [
     re.compile(r"take action", re.IGNORECASE),
     re.compile(r"climate (denier|denial)", re.IGNORECASE),
     re.compile(r"wake up", re.IGNORECASE),
+    # Old voice patterns — prevent Gemini from reverting
+    re.compile(r"career high", re.IGNORECASE),
+    re.compile(r"unguardable", re.IGNORECASE),
+    re.compile(r"\bcooked\b", re.IGNORECASE),
+    re.compile(r"\brekt\b", re.IGNORECASE),
+    re.compile(r"speed.?running", re.IGNORECASE),
+    re.compile(r"drug test", re.IGNORECASE),
+    re.compile(r"retire the jersey", re.IGNORECASE),
+    re.compile(r"\brookie", re.IGNORECASE),
+    re.compile(r"debut performance", re.IGNORECASE),
+    re.compile(r"congratulations to no one", re.IGNORECASE),
+    re.compile(r"nobody asked", re.IGNORECASE),
 ]
 
 

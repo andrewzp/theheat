@@ -145,12 +145,17 @@ def run_alerts(bot_state: dict) -> dict:
         print(f"[alerts] FIRMS error: {e}")
         state.log_error(bot_state, "firms", str(e))
 
-    # 3. CO2 milestones
+    # 3. CO2 milestones (max one CO2 draft per day)
     print("[alerts] Checking CO2...")
+    co2_drafted_today = any(
+        d.get("type", "").startswith("co2")
+        and d.get("created_at", "").startswith(date.today().isoformat())
+        for d in bot_state.get("drafts", [])
+    )
     try:
         readings = co2.fetch_co2_data()
         milestone = co2.detect_milestone(readings)
-        if milestone and not state.is_duplicate(bot_state, milestone.event_id):
+        if milestone and not co2_drafted_today and not state.is_duplicate(bot_state, milestone.event_id):
             tweet = generator.generate_co2_milestone_tweet(
                 ppm_crossed=milestone.ppm_crossed,
                 actual_ppm=milestone.actual_ppm,
@@ -158,9 +163,10 @@ def run_alerts(bot_state: dict) -> dict:
             if tweet and save_draft(tweet, bot_state, "co2_milestone", milestone.event_id):
                 state.record_event(bot_state, milestone.event_id)
                 drafted += 1
+                co2_drafted_today = True
 
-        # Weekly comparison (Sundays)
-        if date.today().weekday() == 6:
+        # Weekly comparison (Sundays, skip if milestone already drafted today)
+        if date.today().weekday() == 6 and not co2_drafted_today:
             comparison = co2.compute_weekly_comparison(readings)
             if comparison and not state.is_duplicate(bot_state, comparison.event_id):
                 tweet = generator.generate_co2_weekly_tweet(
@@ -259,7 +265,17 @@ def run_manual_tweet(bot_state: dict) -> dict:
         return bot_state
 
     print(f"[manual] Posting: {tweet_text}")
-    post_approved(tweet_text, bot_state)
+    success = post_approved(tweet_text, bot_state)
+
+    # Update draft status with post result
+    for draft in bot_state.get("drafts", []):
+        if draft.get("text") == tweet_text and draft.get("status") == "approved":
+            if success:
+                draft["posted_at"] = datetime.utcnow().isoformat() + "Z"
+            else:
+                draft["post_error"] = "Failed to post to X"
+            break
+
     return bot_state
 
 
