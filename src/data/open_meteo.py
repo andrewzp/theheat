@@ -211,3 +211,87 @@ def check_records_for_cities(cities: list[dict], max_checks: int = 20) -> list[R
         if record:
             records.append(record)
     return records
+
+
+def detect_record_lows(lat: float, lon: float, city: str, country: str) -> RecordEvent | None:
+    """Check if today's low breaks the historical record low for this calendar date."""
+    today = date.today()
+    try:
+        resp_today = requests.get(
+            f"{BASE_URL}/forecast",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_min",
+                "timezone": "auto",
+                "forecast_days": 1,
+            },
+            timeout=10,
+        )
+        resp_today.raise_for_status()
+        today_low = resp_today.json()["daily"]["temperature_2m_min"][0]
+        if today_low is None:
+            return None
+
+        start = today.replace(year=today.year - 30)
+        end = today - timedelta(days=1)
+        resp_hist = requests.get(
+            f"{BASE_URL}/archive",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_min",
+                "start_date": start.isoformat(),
+                "end_date": end.isoformat(),
+                "timezone": "auto",
+            },
+            timeout=30,
+        )
+        resp_hist.raise_for_status()
+        hist_data = resp_hist.json()
+        dates = hist_data.get("daily", {}).get("time", [])
+        temps = hist_data.get("daily", {}).get("temperature_2m_min", [])
+
+        target_month = today.month
+        target_day = today.day
+        old_record_c = None
+        old_record_year = None
+
+        for d_str, t in zip(dates, temps):
+            if t is None:
+                continue
+            d = date.fromisoformat(d_str)
+            if d.month == target_month and d.day == target_day:
+                if old_record_c is None or t < old_record_c:
+                    old_record_c = t
+                    old_record_year = d.year
+
+        if old_record_c is not None and today_low < old_record_c:
+            return RecordEvent(
+                city=city,
+                country=country,
+                new_temp_c=today_low,
+                old_record_c=old_record_c,
+                old_record_year=old_record_year,
+                event_id=f"record_low_{city.replace(' ', '_')}_{today.isoformat()}",
+            )
+
+        return None
+
+    except (requests.RequestException, KeyError, IndexError):
+        return None
+
+
+def check_record_lows_for_cities(cities: list[dict], max_checks: int = 20) -> list[RecordEvent]:
+    """Check a subset of cities for broken record lows."""
+    records = []
+    for city in cities[:max_checks]:
+        record = detect_record_lows(
+            lat=float(city["lat"]),
+            lon=float(city["lon"]),
+            city=city["city"],
+            country=city["country"],
+        )
+        if record:
+            records.append(record)
+    return records

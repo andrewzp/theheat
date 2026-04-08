@@ -1,0 +1,79 @@
+"""GDACS (Global Disaster Alert and Coordination System) events.
+
+Free API, no auth required. Returns global cyclones, floods,
+volcanoes, droughts, and wildfires with severity ratings.
+Docs: https://www.gdacs.org/Knowledge/models.aspx
+"""
+
+from dataclasses import dataclass
+from datetime import date
+
+import requests
+
+GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
+
+# Event types GDACS tracks
+EVENT_TYPES = {
+    "TC": "Tropical Cyclone",
+    "FL": "Flood",
+    "EQ": "Earthquake",
+    "VO": "Volcano",
+    "DR": "Drought",
+    "WF": "Wildfire",
+}
+
+
+@dataclass
+class GlobalDisasterEvent:
+    disaster_type: str
+    name: str
+    country: str
+    severity: str  # Red, Orange, Green
+    description: str
+    event_id: str
+
+
+def fetch_disasters(min_severity: str = "Orange") -> list[GlobalDisasterEvent]:
+    """Fetch active global disaster events from GDACS.
+
+    Args:
+        min_severity: Minimum alert level — "Red", "Orange", or "Green".
+    """
+    severity_order = {"Green": 0, "Orange": 1, "Red": 2}
+    min_level = severity_order.get(min_severity, 1)
+
+    try:
+        resp = requests.get(GDACS_URL, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        events = []
+        for feature in data.get("features", []):
+            props = feature.get("properties", {})
+
+            alert_level = props.get("alertlevel", "Green")
+            if severity_order.get(alert_level, 0) < min_level:
+                continue
+
+            event_type_code = props.get("eventtype", "")
+            event_type = EVENT_TYPES.get(event_type_code, event_type_code)
+            name = props.get("name", "Unknown")
+            country = props.get("country", "Unknown")
+            description = props.get("description", "")
+            gdacs_id = props.get("eventid", "")
+
+            event_id = f"gdacs_{event_type_code}_{gdacs_id}_{date.today().isoformat()}"
+
+            events.append(GlobalDisasterEvent(
+                disaster_type=event_type,
+                name=name,
+                country=country,
+                severity=alert_level,
+                description=description,
+                event_id=event_id,
+            ))
+
+        return events
+
+    except (requests.RequestException, ValueError, KeyError):
+        return []

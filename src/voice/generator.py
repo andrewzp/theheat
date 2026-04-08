@@ -199,3 +199,205 @@ def generate_noaa_confirmation_tweet(
             "temp_f": temp_f, "date": record_date,
         },
     )
+
+
+def generate_severe_weather_tweet(
+    event_type: str,
+    area: str,
+    severity: str,
+) -> str | None:
+    """Generate a tweet about a US severe weather alert (NWS)."""
+    data = (
+        f"NWS has issued a {event_type} for {area}. "
+        f"Severity: {severity}. "
+        f"Today's date: {__import__('datetime').date.today().strftime('%B %d, %Y')}."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.severe_weather_template,
+        fallback_args={
+            "event_type": event_type, "area": area,
+        },
+    )
+
+
+def generate_global_disaster_tweet(
+    disaster_type: str,
+    name: str,
+    country: str,
+    severity: str,
+    description: str,
+) -> str | None:
+    """Generate a tweet about a global disaster event (GDACS)."""
+    data = (
+        f"GDACS alert: {disaster_type} — {name}. "
+        f"Location: {country}. Severity: {severity}. "
+        f"{description}"
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.global_disaster_template,
+        fallback_args={
+            "disaster_type": disaster_type, "name": name,
+            "country": country, "severity": severity,
+        },
+    )
+
+
+def generate_sea_ice_record_tweet(
+    hemisphere: str,
+    extent: float,
+    previous_extent: float,
+    previous_year: int,
+) -> str | None:
+    """Generate a tweet about a sea ice extent record."""
+    data = (
+        f"{hemisphere} sea ice extent: {extent} million sq km. "
+        f"This is the lowest for this calendar date since satellite records began in 1979. "
+        f"Previous record: {previous_extent} million sq km, set in {previous_year}."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.sea_ice_record_template,
+        fallback_args={
+            "hemisphere": hemisphere, "extent": extent,
+            "previous_extent": previous_extent, "previous_year": previous_year,
+        },
+    )
+
+
+def generate_drought_tweet(
+    states: list[dict],
+) -> str | None:
+    """Generate a tweet about drought conditions."""
+    top = states[:3]
+    lines = []
+    for s in top:
+        lines.append(f"{s['state']}: {s['d3_pct'] + s['d4_pct']:.0f}% extreme/exceptional drought")
+    data = (
+        f"US Drought Monitor update. Worst drought conditions this week:\n"
+        + "\n".join(lines)
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.drought_template,
+        fallback_args={"states": top},
+    )
+
+
+def generate_enso_tweet(
+    to_status: str,
+    oni_value: float,
+    previous_duration: int,
+) -> str | None:
+    """Generate a tweet about an ENSO state transition."""
+    data = (
+        f"NOAA declares {to_status} conditions. "
+        f"Oceanic Nino Index: {oni_value:+.1f}. "
+        f"Previous phase lasted {previous_duration} months."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.enso_template,
+        fallback_args={
+            "status": to_status, "oni": oni_value,
+            "duration": previous_duration,
+        },
+    )
+
+
+def generate_record_low_tweet(
+    city: str,
+    country: str,
+    new_temp_c: float,
+    old_record_c: float,
+    old_record_year: int,
+) -> str | None:
+    """Generate a tweet about a record low temperature."""
+    temp_f = round(new_temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_record_c * 9 / 5 + 32, 1)
+    data = (
+        f"{city}, {country} recorded a low of {temp_f}F ({new_temp_c}C) today. "
+        f"The previous record low for this calendar date was {old_f}F ({old_record_c}C), "
+        f"set in {old_record_year}. "
+        f"Today's date: {__import__('datetime').date.today().strftime('%B %d')}."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.record_low_template,
+        fallback_args={
+            "city": city, "country": country,
+            "temp_c": new_temp_c, "old_temp_c": old_record_c, "old_year": old_record_year,
+        },
+    )
+
+
+def generate_extreme_wave_tweet(
+    location: str,
+    ocean: str,
+    wave_height_m: float,
+) -> str | None:
+    """Generate a tweet about extreme ocean wave heights."""
+    wave_ft = round(wave_height_m * 3.281, 0)
+    data = (
+        f"Extreme wave event in the {location} ({ocean} Ocean). "
+        f"Max significant wave height: {wave_height_m:.1f} meters ({wave_ft:.0f} feet). "
+        f"Today's date: {__import__('datetime').date.today().strftime('%B %d, %Y')}."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.extreme_wave_template,
+        fallback_args={
+            "location": location, "ocean": ocean,
+            "wave_height_m": wave_height_m,
+        },
+    )
+
+
+def generate_storm_surge_tweet(
+    station_name: str,
+    state: str,
+    anomaly_m: float,
+    observed_m: float,
+    predicted_m: float,
+) -> str | None:
+    """Generate a tweet about a storm surge / abnormal water level."""
+    anomaly_ft = round(anomaly_m * 3.281, 1)
+    data = (
+        f"NOAA tide gauge at {station_name} ({state}): water level is "
+        f"{anomaly_ft}ft ({anomaly_m:.2f}m) above predicted. "
+        f"Observed: {observed_m:.2f}m. Predicted: {predicted_m:.2f}m. "
+        f"This indicates storm surge or abnormal tidal conditions."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.storm_surge_template,
+        fallback_args={
+            "station": station_name, "state": state,
+            "anomaly_m": anomaly_m, "observed_m": observed_m,
+        },
+    )
+
+
+def generate_river_flood_tweet(
+    river: str,
+    location: str,
+    gauge_height_ft: float,
+    flood_stage_ft: float,
+    above_by_ft: float,
+) -> str | None:
+    """Generate a tweet about a river above flood stage."""
+    data = (
+        f"USGS gauge: {river} at {location} is at {gauge_height_ft:.1f}ft. "
+        f"Flood stage is {flood_stage_ft:.0f}ft. "
+        f"Currently {above_by_ft:.1f}ft above flood stage."
+    )
+    return generate_tweet(
+        data,
+        fallback_fn=templates.river_flood_template,
+        fallback_args={
+            "river": river, "location": location,
+            "gauge_ft": gauge_height_ft, "flood_stage_ft": flood_stage_ft,
+            "above_ft": above_by_ft,
+        },
+    )
