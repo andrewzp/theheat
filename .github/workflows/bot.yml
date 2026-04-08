@@ -18,6 +18,11 @@ on:
           - alerts
           - leaderboard
           - both
+          - manual_tweet
+      tweet_text:
+        description: 'Tweet text (only used with manual_tweet mode)'
+        required: false
+        type: string
 
 concurrency:
   group: theheat-bot
@@ -60,4 +65,5 @@ jobs:
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
+          TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
         run: python -m src.main ${{ steps.mode.outputs.mode }}

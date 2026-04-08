@@ -235,11 +235,27 @@ def run_leaderboard(bot_state: dict, dry_run: bool = False) -> dict:
     return bot_state
 
 
+def run_manual_tweet(bot_state: dict, dry_run: bool = False) -> dict:
+    """Post a manually composed tweet from the TWEET_TEXT env var."""
+    tweet_text = os.environ.get("TWEET_TEXT", "").strip()
+    if not tweet_text:
+        print("[manual] No TWEET_TEXT provided, skipping")
+        return bot_state
+
+    if len(tweet_text) > 280:
+        print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
+        return bot_state
+
+    print(f"[manual] Posting: {tweet_text}")
+    post_everywhere(tweet_text, bot_state, dry_run=dry_run)
+    return bot_state
+
+
 def main():
     parser = argparse.ArgumentParser(description="@theheat climate bot")
     parser.add_argument(
         "mode",
-        choices=["alerts", "leaderboard", "both"],
+        choices=["alerts", "leaderboard", "both", "manual_tweet"],
         help="Which content to generate and post",
     )
     parser.add_argument("--dry-run", action="store_true", help="Don't post, just print")
@@ -254,6 +270,9 @@ def main():
 
     if args.mode in ("leaderboard", "both"):
         bot_state = run_leaderboard(bot_state, dry_run=args.dry_run)
+
+    if args.mode == "manual_tweet":
+        bot_state = run_manual_tweet(bot_state, dry_run=args.dry_run)
 
     if not args.dry_run:
         state.write_state(bot_state)
