@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from src.editorial._util import clamp as _clamp
+
 
 YEAR_RE = re.compile(r"\b(?:19|20)\d{2}\b")
 NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
@@ -34,10 +36,6 @@ CATEGORY_HINTS = {
 }
 
 
-def _clamp(value: float, low: int = 0, high: int = 100) -> int:
-    return max(low, min(high, int(round(value))))
-
-
 def _normalize_text(text: str) -> str:
     return re.sub(r"\s+", " ", text or "").strip().strip('"').strip("'")
 
@@ -54,7 +52,7 @@ class CandidateScore:
     voice: int
     punch: int
     total: int
-    reasons: list[str]
+    reasons: tuple[str, ...]
 
     def as_dict(self) -> dict:
         return {
@@ -171,7 +169,7 @@ def score_candidate_text(text: str, category: str) -> CandidateScore:
         voice=voice,
         punch=punch,
         total=total,
-        reasons=reasons[:3] or ["solid candidate structure"],
+        reasons=tuple(reasons[:3]) or ("solid candidate structure",),
     )
 
 

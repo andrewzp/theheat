@@ -1,8 +1,10 @@
 """@theheat bot orchestrator.
 
 All generated tweets go to drafts in the shared state store.
-Nothing posts automatically. Approved tweets are posted
-via manual_tweet mode triggered from the dashboard.
+Low-sensitivity drafts (Hot 10, CO2, official confirmations) may
+auto-post after a timed delay if both signal and copy scores are
+strong. Human-impact events (fires, disasters, floods, severe
+weather) always require manual approval via the dashboard.
 """
 
 import argparse
@@ -1280,13 +1282,25 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
     failures = []
     for draft in due_drafts:
         policy = draft.get("approval_policy", {})
-        if policy.get("can_auto_approve") is False:
+        if policy.get("mode") != "armed_auto" or policy.get("can_auto_approve") is False:
             draft.pop("auto_approve_at", None)
             draft["approval_mode"] = "manual"
             draft["post_error"] = "Auto-approval blocked by policy"
             _touch_draft(draft)
             failures.append(f"{draft.get('id')}: blocked by policy")
             continue
+
+        # Safety check before auto-posting (same gate as manual path)
+        passed, reason = run_safety_pipeline(draft["text"])
+        if not passed:
+            draft.pop("auto_approve_at", None)
+            draft["status"] = "pending"
+            draft["approval_mode"] = "manual"
+            draft["post_error"] = f"Auto-post safety rejected: {reason}"
+            _touch_draft(draft)
+            failures.append(f"{draft.get('id')}: safety rejected: {reason}")
+            continue
+
         result = post_approved(draft["text"], bot_state)
         draft["last_publish_attempt_at"] = _utc_now_iso()
         if result == "posted":

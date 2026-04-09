@@ -5,9 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
-
-def _clamp(value: float, low: int = 0, high: int = 100) -> int:
-    return max(low, min(high, int(round(value))))
+from src.editorial._util import clamp as _clamp
 
 
 def _label(total: int) -> str:

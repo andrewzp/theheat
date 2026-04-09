@@ -2,8 +2,8 @@ name: theheat-bot
 
 on:
   schedule:
-    # Auto-approval queue processing
-    - cron: '15,45 * * * *'
+    # Auto-approval queue processing (hourly)
+    - cron: '30 * * * *'
     # Daily leaderboard: 12:00 UTC (~8 AM ET)
     - cron: '0 12 * * *'
     # Alert polling: every 4 hours
@@ -41,7 +41,7 @@ concurrency:
 
 jobs:
   test:
-    if: github.event_name != 'schedule' || github.event.schedule != '15,45 * * * *'
+    if: github.event_name != 'schedule' || github.event.schedule != '30 * * * *'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -74,7 +74,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "15,45 * * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "30 * * * *" ]; then
             echo "mode=auto_publish_due" >> $GITHUB_OUTPUT
           elif [ "$(date -u +%H)" = "12" ]; then
             # 12:00 UTC run = leaderboard + alerts

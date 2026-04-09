@@ -453,18 +453,25 @@ class TestRunManualTweet:
 
 class TestProcessDueDrafts:
     @patch("src.main.post_approved")
-    def test_posts_due_auto_approved_drafts(self, mock_post):
+    @patch("src.main.run_safety_pipeline")
+    def test_posts_due_auto_approved_drafts(self, mock_safety, mock_post):
         mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
         state = _fresh_state()
         state["drafts"] = [{
             "id": "draft_1",
             "text": "Queued draft",
             "status": "pending",
             "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {
+                "mode": "armed_auto",
+                "can_auto_approve": True,
+            },
         }]
 
         result = process_due_drafts(state)
 
+        mock_safety.assert_called_once_with("Queued draft")
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["approval_mode"] == "auto"
         assert "auto_approve_at" not in result["drafts"][0]
@@ -494,6 +501,50 @@ class TestProcessDueDrafts:
             "status": "pending",
             "auto_approve_at": "2000-01-01T00:00:00Z",
             "approval_policy": {"can_auto_approve": False},
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"
+        assert result["drafts"][0]["post_error"] == "Auto-approval blocked by policy"
+
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_safety_rejection_blocks_auto_post(self, mock_safety, mock_post):
+        mock_safety.return_value = (False, "Banned pattern: '#climate'")
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Bad draft #climate",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {
+                "mode": "armed_auto",
+                "can_auto_approve": True,
+            },
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"
+        assert result["drafts"][0]["approval_mode"] == "manual"
+        assert "safety rejected" in result["drafts"][0]["post_error"]
+        assert "auto_approve_at" not in result["drafts"][0]
+
+    @patch("src.main.post_approved")
+    def test_suggested_auto_blocked_from_auto_posting(self, mock_post):
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Suggested draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {
+                "mode": "suggested_auto",
+                "can_auto_approve": True,
+            },
         }]
 
         result = process_due_drafts(state)
