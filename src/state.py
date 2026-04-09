@@ -19,6 +19,7 @@ DEFAULT_STATE = {
     "daily_tweet_count": {},
     "pending_confirmations": [],
     "drafts": [],
+    "run_history": [],
     "errors": [],
 }
 
@@ -196,4 +197,64 @@ def log_error(state: dict, source: str, msg: str) -> dict:
     # Keep last 50 errors
     if len(errors) > 50:
         state["errors"] = errors[-50:]
+    return state
+
+
+def init_run(mode: str) -> dict:
+    """Create an in-memory run record."""
+    started_at = datetime.now(UTC)
+    run_id = f"run_{mode}_{started_at.strftime('%Y%m%dT%H%M%SZ')}"
+    return {
+        "id": run_id,
+        "mode": mode,
+        "status": "running",
+        "started_at": started_at.isoformat().replace("+00:00", "Z"),
+        "sources": [],
+    }
+
+
+def add_source_run(
+    run: dict,
+    *,
+    source: str,
+    status: str,
+    duration_ms: int = 0,
+    observed: int = 0,
+    promoted: int = 0,
+    drafted: int = 0,
+    error: str | None = None,
+    note: str | None = None,
+) -> dict:
+    """Append a source-level result to an in-progress run record."""
+    run.setdefault("sources", []).append({
+        "source": source,
+        "status": status,
+        "duration_ms": duration_ms,
+        "observed": observed,
+        "promoted": promoted,
+        "drafted": drafted,
+        "error": error,
+        "note": note,
+    })
+    return run
+
+
+def finalize_run(state: dict, run: dict, status: str = "success", max_runs: int = 20) -> dict:
+    """Persist a completed run into state history."""
+    completed = deepcopy(run)
+    completed["status"] = status
+    completed["ended_at"] = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    completed["source_count"] = len(completed.get("sources", []))
+    completed["failure_count"] = sum(
+        1 for source in completed.get("sources", [])
+        if source.get("status") == "failed"
+    )
+    completed["drafted_count"] = sum(
+        source.get("drafted", 0) for source in completed.get("sources", [])
+    )
+
+    history = state.setdefault("run_history", [])
+    history.insert(0, completed)
+    if len(history) > max_runs:
+        state["run_history"] = history[:max_runs]
     return state

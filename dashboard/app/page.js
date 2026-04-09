@@ -16,9 +16,30 @@ function timeAgo(dateStr) {
 
 function RunStatus({ conclusion, status }) {
   if (status === "in_progress") return <span className="badge running">RUNNING</span>
+  if (status === "partial_failure") return <span className="badge neutral">PARTIAL</span>
+  if (status === "skipped") return <span className="badge neutral">SKIPPED</span>
   if (conclusion === "success") return <span className="badge success">OK</span>
   if (conclusion === "failure") return <span className="badge failure">FAIL</span>
+  if (status === "success") return <span className="badge success">OK</span>
+  if (status === "failed") return <span className="badge failure">FAIL</span>
   return <span className="badge neutral">{conclusion || status}</span>
+}
+
+function formatDuration(ms) {
+  if (!ms && ms !== 0) return "—"
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function countdownText(dateStr) {
+  if (!dateStr) return ""
+  const diff = new Date(dateStr).getTime() - Date.now()
+  if (diff <= 0) return "due now"
+  const mins = Math.ceil(diff / 60000)
+  if (mins < 60) return `auto in ${mins}m`
+  const hrs = Math.floor(mins / 60)
+  const rem = mins % 60
+  return `auto in ${hrs}h ${rem}m`
 }
 
 export default function Dashboard() {
@@ -150,6 +171,7 @@ export default function Dashboard() {
 
   const state = data?.state
   const runs = data?.runs || []
+  const botRuns = state?.run_history || []
   const hot10 = state?.last_hot10 || {}
   const streaks = state?.streaks || {}
   const errors = state?.errors || []
@@ -163,6 +185,9 @@ export default function Dashboard() {
   const sortedStreaks = Object.entries(streaks)
     .sort((a, b) => b[1].consecutive_days - a[1].consecutive_days)
     .slice(0, 10)
+  const latestBotRun = botRuns[0]
+  const latestSourceRuns = latestBotRun?.sources || []
+  const failedSourceRuns = latestSourceRuns.filter((source) => source.status === "failed")
 
   return (
     <>
@@ -300,6 +325,28 @@ export default function Dashboard() {
         .error-source { color: #f87171; font-weight: 600; }
         .error-ts { color: #444; margin-left: 8px; }
         .error-msg { color: #888; display: block; margin-top: 2px; }
+        .run-summary {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+        }
+        @media (max-width: 720px) { .run-summary { grid-template-columns: 1fr 1fr; } }
+        .run-stat {
+          background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 12px;
+        }
+        .run-stat-label {
+          color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+        }
+        .run-stat-value { color: #fff; font-size: 18px; font-weight: 700; }
+        .source-run-list { display: grid; gap: 10px; }
+        .source-run {
+          background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 12px;
+        }
+        .source-run-head {
+          display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px;
+        }
+        .source-run-name { color: #fff; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
+        .source-run-meta { display: flex; flex-wrap: wrap; gap: 10px; color: #666; font-size: 11px; }
+        .source-run-error { color: #f87171; font-size: 11px; margin-top: 6px; }
+        .source-run-note { color: #888; font-size: 11px; margin-top: 6px; }
         .empty { color: #333; font-size: 13px; font-style: italic; }
         .loading { text-align: center; color: #333; padding: 60px; font-size: 14px; }
       `}</style>
@@ -374,7 +421,27 @@ export default function Dashboard() {
                           >
                             Reject
                           </button>
+                          {d.auto_approve_at ? (
+                            <button
+                              className="btn sm"
+                              disabled={!!draftAction}
+                              onClick={() => draftAct(d.id, "cancel_auto_approve")}
+                            >
+                              Cancel {countdownText(d.auto_approve_at)}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn sm"
+                              disabled={!!draftAction}
+                              onClick={() => draftAct(d.id, "auto_approve", 30)}
+                            >
+                              Auto 30m
+                            </button>
+                          )}
                         </div>
+                        {d.auto_approve_at && (
+                          <div className="compose-status">{countdownText(d.auto_approve_at)}</div>
+                        )}
                       </>
                     )}
                   </div>
@@ -502,6 +569,59 @@ export default function Dashboard() {
                   <div className="empty">no active streaks</div>
                 )}
               </div>
+            </div>
+
+            {/* Run Center */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Run Center</h2>
+              {latestBotRun ? (
+                <>
+                  <div className="run-summary">
+                    <div className="run-stat">
+                      <div className="run-stat-label">Latest Mode</div>
+                      <div className="run-stat-value">{latestBotRun.mode}</div>
+                    </div>
+                    <div className="run-stat">
+                      <div className="run-stat-label">Started</div>
+                      <div className="run-stat-value">{timeAgo(latestBotRun.started_at)}</div>
+                    </div>
+                    <div className="run-stat">
+                      <div className="run-stat-label">Sources</div>
+                      <div className="run-stat-value">{latestBotRun.source_count || latestSourceRuns.length}</div>
+                    </div>
+                    <div className="run-stat">
+                      <div className="run-stat-label">Drafts Created</div>
+                      <div className="run-stat-value">{latestBotRun.drafted_count || 0}</div>
+                    </div>
+                  </div>
+
+                  <div className="source-run-list">
+                    {latestSourceRuns.map((source) => (
+                      <div className="source-run" key={`${latestBotRun.id}-${source.source}`}>
+                        <div className="source-run-head">
+                          <span className="source-run-name">{source.source}</span>
+                          <RunStatus status={source.status} />
+                        </div>
+                        <div className="source-run-meta">
+                          <span>Observed: {source.observed ?? 0}</span>
+                          <span>Promoted: {source.promoted ?? 0}</span>
+                          <span>Drafted: {source.drafted ?? 0}</span>
+                          <span>Duration: {formatDuration(source.duration_ms)}</span>
+                        </div>
+                        {source.note && <div className="source-run-note">{source.note}</div>}
+                        {source.error && <div className="source-run-error">{source.error}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  {failedSourceRuns.length > 0 && (
+                    <div className="compose-status" style={{ marginTop: 12 }}>
+                      {failedSourceRuns.length} source{failedSourceRuns.length === 1 ? "" : "s"} failed in the latest run.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="empty">no bot run telemetry yet</div>
+              )}
             </div>
 
             {/* Runs */}

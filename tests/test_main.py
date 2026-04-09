@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 from datetime import date
 
 from src.state import DEFAULT_STATE
-from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet
+from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet, process_due_drafts
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone, CO2WeeklyComparison
@@ -314,3 +314,37 @@ class TestRunManualTweet:
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "pending"
         assert result["drafts"][0]["post_error"] == "Banned pattern: '!'"
+
+
+class TestProcessDueDrafts:
+    @patch("src.main.post_approved")
+    def test_posts_due_auto_approved_drafts(self, mock_post):
+        mock_post.return_value = "posted"
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Queued draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+        }]
+
+        result = process_due_drafts(state)
+
+        assert result["drafts"][0]["status"] == "posted"
+        assert result["drafts"][0]["approval_mode"] == "auto"
+
+    @patch("src.main.post_approved")
+    def test_skips_future_auto_approval_windows(self, mock_post):
+        mock_post.return_value = "posted"
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Queued draft",
+            "status": "pending",
+            "auto_approve_at": "2999-01-01T00:00:00Z",
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"

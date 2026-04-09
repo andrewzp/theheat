@@ -4,10 +4,13 @@ from datetime import date
 from unittest.mock import patch
 
 from src.state import (
+    add_source_run,
     is_duplicate,
+    finalize_run,
     record_event,
     get_daily_count,
     increment_daily_count,
+    init_run,
     check_daily_cap,
     update_streaks,
     log_error,
@@ -97,3 +100,31 @@ class TestErrorLog:
         state = {"errors": [{"source": "x", "ts": "t", "msg": "m"} for _ in range(55)]}
         log_error(state, "new", "msg")
         assert len(state["errors"]) <= 51
+
+
+class TestRunHistory:
+    def test_init_run_creates_running_record(self):
+        run = init_run("alerts")
+        assert run["mode"] == "alerts"
+        assert run["status"] == "running"
+        assert run["sources"] == []
+
+    def test_add_source_run_appends_source_metrics(self):
+        run = init_run("alerts")
+        add_source_run(run, source="firms", status="success", observed=3, promoted=1, drafted=1, duration_ms=150)
+        assert len(run["sources"]) == 1
+        assert run["sources"][0]["source"] == "firms"
+        assert run["sources"][0]["drafted"] == 1
+
+    def test_finalize_run_prepends_to_history(self, fresh_state):
+        run = init_run("alerts")
+        add_source_run(run, source="firms", status="success", drafted=1)
+        finalize_run(fresh_state, run, status="success")
+        assert len(fresh_state["run_history"]) == 1
+        assert fresh_state["run_history"][0]["drafted_count"] == 1
+
+    def test_finalize_run_caps_history(self):
+        state = {"run_history": [{"id": f"old_{i}"} for i in range(25)]}
+        run = init_run("alerts")
+        finalize_run(state, run, status="success", max_runs=20)
+        assert len(state["run_history"]) == 20

@@ -54,9 +54,9 @@ export async function GET() {
 
 // POST — approve, reject, or edit a draft
 export async function POST(request) {
-  const { action, draftId, editedText } = await request.json()
+  const { action, draftId, editedText, delayMinutes } = await request.json()
 
-  if (!["approve", "reject", "edit"].includes(action)) {
+  if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve"].includes(action)) {
     return Response.json({ error: "Invalid action" }, { status: 400 })
   }
 
@@ -71,6 +71,8 @@ export async function POST(request) {
 
     if (action === "reject") {
       draft.status = "rejected"
+      delete draft.auto_approve_at
+      delete draft.auto_approve_requested_at
       await writeState(state)
       return Response.json({ ok: true, action: "rejected" })
     }
@@ -82,6 +84,29 @@ export async function POST(request) {
       draft.text = editedText
       await writeState(state)
       return Response.json({ ok: true, action: "edited" })
+    }
+
+    if (action === "auto_approve") {
+      const minutes = Number(delayMinutes || 30)
+      if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) {
+        return Response.json({ error: "Delay must be between 5 and 1440 minutes" }, { status: 400 })
+      }
+      const autoApproveAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+      draft.auto_approve_at = autoApproveAt
+      draft.auto_approve_requested_at = new Date().toISOString()
+      draft.approval_mode = "auto"
+      await writeState(state)
+      return Response.json({ ok: true, action: "auto_approved", autoApproveAt })
+    }
+
+    if (action === "cancel_auto_approve") {
+      delete draft.auto_approve_at
+      delete draft.auto_approve_requested_at
+      if (draft.approval_mode === "auto") {
+        draft.approval_mode = "manual"
+      }
+      await writeState(state)
+      return Response.json({ ok: true, action: "cancelled_auto_approve" })
     }
 
     if (action === "approve") {
@@ -101,6 +126,9 @@ export async function POST(request) {
       if (res.ok || res.status === 204) {
         draft.status = "approved"
         draft.approved_at = new Date().toISOString()
+        delete draft.auto_approve_at
+        delete draft.auto_approve_requested_at
+        draft.approval_mode = "manual"
         await writeState(state)
         return Response.json({ ok: true, action: "approved" })
       }
