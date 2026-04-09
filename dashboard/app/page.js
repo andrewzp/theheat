@@ -369,7 +369,10 @@ export default function Dashboard() {
                   <div key={d.id} className={`draft-item ${editingId === d.id ? "highlight" : ""}`}>
                     <div className="draft-meta">
                       <span className="draft-type">{d.type}</span>
-                      <span className="draft-time">{timeAgo(d.created_at)}</span>
+                      <span className="draft-time">
+                        {d.score?.total ? `score ${d.score.total} · ` : ""}
+                        {timeAgo(d.created_at)}
+                      </span>
                     </div>
 
                     {editingId === d.id ? (
@@ -399,6 +402,11 @@ export default function Dashboard() {
                     ) : (
                       <>
                         <div className="draft-text">{d.text}</div>
+                        {d.score?.reasons?.length > 0 && (
+                          <div className="draft-chars">
+                            {d.score.reasons.join(" · ")}
+                          </div>
+                        )}
                         <div className="draft-chars">{d.text.length}/280</div>
                         <div className="draft-actions">
                           <button

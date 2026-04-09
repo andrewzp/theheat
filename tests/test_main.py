@@ -37,6 +37,15 @@ class TestSaveDraft:
         save_draft("tweet 2", state, "custom", "")
         assert len(state["drafts"]) == 2
 
+    def test_persists_score_metadata(self):
+        from src.editorial.scoring import score_co2_milestone
+
+        state = _fresh_state()
+        score = score_co2_milestone(434, 434.02)
+        save_draft("test tweet", state, "co2_milestone", "evt_1", score=score)
+        assert state["drafts"][0]["score"]["total"] == score.total
+        assert state["drafts"][0]["score"]["passes"] is True
+
 
 class TestPostApproved:
     @patch("src.main.state")

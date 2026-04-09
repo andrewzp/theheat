@@ -45,7 +45,11 @@ export async function GET() {
     const state = await readState()
     const drafts = (state.drafts || [])
       .filter((d) => d.status === "pending")
-      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+      .sort((a, b) => {
+        const scoreDiff = (b.score?.total || 0) - (a.score?.total || 0)
+        if (scoreDiff !== 0) return scoreDiff
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+      })
     return Response.json({ drafts })
   } catch (e) {
     return Response.json({ drafts: [], error: e.message })

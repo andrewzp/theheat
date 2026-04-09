@@ -13,6 +13,24 @@ from datetime import UTC, date, datetime
 
 from src import state
 from src.data import open_meteo, firms, co2, noaa_acis, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
+from src.editorial.scoring import (
+    EditorialScore,
+    score_co2_milestone,
+    score_co2_weekly,
+    score_drought,
+    score_enso_transition,
+    score_extreme_wave,
+    score_fire_event,
+    score_global_disaster,
+    score_hot10,
+    score_noaa_confirmation_event,
+    score_record_event,
+    score_record_low_event,
+    score_river_flood,
+    score_sea_ice_record,
+    score_severe_weather,
+    score_storm_surge,
+)
 from src.voice import generator
 from src.voice.safety import run_safety_pipeline
 from src.posting.bluesky import post_to_bluesky
@@ -84,7 +102,25 @@ def _record_source_run(
     )
 
 
-def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str = "") -> bool:
+def _should_draft(score: EditorialScore, event_id: str = "") -> bool:
+    """Decide whether an event is strong enough to enter the draft queue."""
+    if score.passes:
+        return True
+    event_desc = f" {event_id}" if event_id else ""
+    print(
+        f"[score] Suppressed{event_desc}: {score.category} "
+        f"{score.total} < {score.threshold} ({', '.join(score.reasons)})"
+    )
+    return False
+
+
+def save_draft(
+    tweet_text: str,
+    bot_state: dict,
+    tweet_type: str,
+    event_id: str = "",
+    score: EditorialScore | None = None,
+) -> bool:
     """Save a generated tweet as a draft for review."""
     drafts = bot_state.setdefault("drafts", [])
 
@@ -110,6 +146,8 @@ def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str 
         "created_at": _utc_now_iso(),
         "status": "pending",
     }
+    if score is not None:
+        draft["score"] = score.as_dict()
     drafts.append(draft)
     print(f"[draft] Saved: {tweet_text[:60]}...")
     return True
@@ -167,6 +205,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for record in records:
             if state.is_duplicate(bot_state, record.event_id):
                 continue
+            score = score_record_event(record.new_temp_c, record.old_record_c, record.old_record_year)
+            if not _should_draft(score, record.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_record_tweet(
                 city=record.city,
@@ -175,7 +216,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 old_record_c=record.old_record_c,
                 old_record_year=record.old_record_year,
             )
-            if tweet and save_draft(tweet, bot_state, "record", record.event_id):
+            if tweet and save_draft(tweet, bot_state, "record", record.event_id, score=score):
                 state.record_event(bot_state, record.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -212,6 +253,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for record in record_lows:
             if state.is_duplicate(bot_state, record.event_id):
                 continue
+            score = score_record_low_event(record.new_temp_c, record.old_record_c, record.old_record_year)
+            if not _should_draft(score, record.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_record_low_tweet(
                 city=record.city,
@@ -220,7 +264,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 old_record_c=record.old_record_c,
                 old_record_year=record.old_record_year,
             )
-            if tweet and save_draft(tweet, bot_state, "record_low", record.event_id):
+            if tweet and save_draft(tweet, bot_state, "record_low", record.event_id, score=score):
                 state.record_event(bot_state, record.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -258,13 +302,17 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 record_date=pending["detected"],
             )
             if confirmation:
+                score = score_noaa_confirmation_event(confirmation.new_temp_f)
+                if not _should_draft(score, confirm_event_id):
+                    state.remove_pending_confirmation(bot_state, pending["event_id"])
+                    continue
                 tweet = generator.generate_noaa_confirmation_tweet(
                     city=confirmation.city,
                     state=confirmation.state,
                     temp_f=confirmation.new_temp_f,
                     record_date=confirmation.date,
                 )
-                if tweet and save_draft(tweet, bot_state, "noaa_confirmation", confirm_event_id):
+                if tweet and save_draft(tweet, bot_state, "noaa_confirmation", confirm_event_id, score=score):
                     state.record_event(bot_state, confirm_event_id)
                     drafted += 1
                     source_drafted += 1
@@ -291,6 +339,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for fire in fires:
             if state.is_duplicate(bot_state, fire.event_id):
                 continue
+            score = score_fire_event(fire.confidence, fire.frp, region=fire.nearest_city)
+            if not _should_draft(score, fire.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_fire_tweet(
                 region=fire.nearest_city,
@@ -298,7 +349,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 confidence=fire.confidence,
                 frp=fire.frp,
             )
-            if tweet and save_draft(tweet, bot_state, "fire", fire.event_id):
+            if tweet and save_draft(tweet, bot_state, "fire", fire.event_id, score=score):
                 state.record_event(bot_state, fire.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -328,31 +379,35 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         source_promoted = 0
         source_drafted = 0
         if milestone and not co2_drafted_today and not state.is_duplicate(bot_state, milestone.event_id):
-            source_promoted += 1
-            tweet = generator.generate_co2_milestone_tweet(
-                ppm_crossed=milestone.ppm_crossed,
-                actual_ppm=milestone.actual_ppm,
-            )
-            if tweet and save_draft(tweet, bot_state, "co2_milestone", milestone.event_id):
-                state.record_event(bot_state, milestone.event_id)
-                drafted += 1
-                co2_drafted_today = True
-                source_drafted += 1
+            score = score_co2_milestone(milestone.ppm_crossed, milestone.actual_ppm)
+            if _should_draft(score, milestone.event_id):
+                source_promoted += 1
+                tweet = generator.generate_co2_milestone_tweet(
+                    ppm_crossed=milestone.ppm_crossed,
+                    actual_ppm=milestone.actual_ppm,
+                )
+                if tweet and save_draft(tweet, bot_state, "co2_milestone", milestone.event_id, score=score):
+                    state.record_event(bot_state, milestone.event_id)
+                    drafted += 1
+                    co2_drafted_today = True
+                    source_drafted += 1
 
         # Weekly comparison (Sundays, skip if milestone already drafted today)
         if date.today().weekday() == 6 and not co2_drafted_today:
             comparison = co2.compute_weekly_comparison(readings)
             if comparison and not state.is_duplicate(bot_state, comparison.event_id):
-                source_promoted += 1
-                tweet = generator.generate_co2_weekly_tweet(
-                    current=comparison.current_avg,
-                    last_year=comparison.last_year_avg,
-                    diff=comparison.difference,
-                )
-                if tweet and save_draft(tweet, bot_state, "co2_weekly", comparison.event_id):
-                    state.record_event(bot_state, comparison.event_id)
-                    drafted += 1
-                    source_drafted += 1
+                score = score_co2_weekly(comparison.difference)
+                if _should_draft(score, comparison.event_id):
+                    source_promoted += 1
+                    tweet = generator.generate_co2_weekly_tweet(
+                        current=comparison.current_avg,
+                        last_year=comparison.last_year_avg,
+                        diff=comparison.difference,
+                    )
+                    if tweet and save_draft(tweet, bot_state, "co2_weekly", comparison.event_id, score=score):
+                        state.record_event(bot_state, comparison.event_id)
+                        drafted += 1
+                        source_drafted += 1
         _record_source_run(
             current_run, "co2", co2_start,
             status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted
@@ -375,13 +430,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for alert in alerts:
             if state.is_duplicate(bot_state, alert.event_id):
                 continue
+            score = score_severe_weather(alert.event_type, alert.severity)
+            if not _should_draft(score, alert.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_severe_weather_tweet(
                 event_type=alert.event_type,
                 area=alert.area,
                 severity=alert.severity,
             )
-            if tweet and save_draft(tweet, bot_state, "severe_weather", alert.event_id):
+            if tweet and save_draft(tweet, bot_state, "severe_weather", alert.event_id, score=score):
                 state.record_event(bot_state, alert.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -407,6 +465,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for disaster in disasters:
             if state.is_duplicate(bot_state, disaster.event_id):
                 continue
+            score = score_global_disaster(disaster.severity, disaster.disaster_type)
+            if not _should_draft(score, disaster.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_global_disaster_tweet(
                 disaster_type=disaster.disaster_type,
@@ -415,7 +476,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 severity=disaster.severity,
                 description=disaster.description,
             )
-            if tweet and save_draft(tweet, bot_state, "global_disaster", disaster.event_id):
+            if tweet and save_draft(tweet, bot_state, "global_disaster", disaster.event_id, score=score):
                 state.record_event(bot_state, disaster.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -439,16 +500,23 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             try:
                 readings = sea_ice.fetch_sea_ice(hemisphere=hemisphere)
                 record = sea_ice.detect_record_low(readings)
-                source_promoted = 1 if record and not state.is_duplicate(bot_state, record.event_id) else 0
-                source_drafted = 0
+                score = None
                 if record and not state.is_duplicate(bot_state, record.event_id):
+                    score = score_sea_ice_record(
+                        record.extent_million_km2,
+                        record.previous_extent,
+                        record.previous_year,
+                    )
+                source_promoted = 1 if score and _should_draft(score, record.event_id) else 0
+                source_drafted = 0
+                if record and source_promoted:
                     tweet = generator.generate_sea_ice_record_tweet(
                         hemisphere=record.hemisphere,
                         extent=record.extent_million_km2,
                         previous_extent=record.previous_extent,
                         previous_year=record.previous_year,
                     )
-                    if tweet and save_draft(tweet, bot_state, "sea_ice_record", record.event_id):
+                    if tweet and save_draft(tweet, bot_state, "sea_ice_record", record.event_id, score=score):
                         state.record_event(bot_state, record.event_id)
                         drafted += 1
                         source_drafted = 1
@@ -483,12 +551,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if drought_updates:
                 event_id = f"drought_{date.today().isoformat()}"
                 if not state.is_duplicate(bot_state, event_id):
-                    source_promoted = 1
-                    tweet = generator.generate_drought_tweet(states=drought_updates)
-                    if tweet and save_draft(tweet, bot_state, "drought", event_id):
-                        state.record_event(bot_state, event_id)
-                        drafted += 1
-                        source_drafted = 1
+                    score = score_drought(drought_updates)
+                    if _should_draft(score, event_id):
+                        source_promoted = 1
+                        tweet = generator.generate_drought_tweet(states=drought_updates)
+                        if tweet and save_draft(tweet, bot_state, "drought", event_id, score=score):
+                            state.record_event(bot_state, event_id)
+                            drafted += 1
+                            source_drafted = 1
             _record_source_run(
                 current_run, "drought", drought_start,
                 status="success", observed=len(drought_updates), promoted=source_promoted, drafted=source_drafted
@@ -514,15 +584,21 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         try:
             enso_readings = enso.fetch_enso_data()
             transition = enso.detect_transition(enso_readings)
-            source_promoted = 1 if transition and not state.is_duplicate(bot_state, transition["event_id"]) else 0
-            source_drafted = 0
+            score = None
             if transition and not state.is_duplicate(bot_state, transition["event_id"]):
+                score = score_enso_transition(
+                    transition["oni_value"],
+                    transition["previous_duration_months"],
+                )
+            source_promoted = 1 if score and _should_draft(score, transition["event_id"]) else 0
+            source_drafted = 0
+            if transition and source_promoted:
                 tweet = generator.generate_enso_tweet(
                     to_status=transition["to_status"],
                     oni_value=transition["oni_value"],
                     previous_duration=transition["previous_duration_months"],
                 )
-                if tweet and save_draft(tweet, bot_state, "enso", transition["event_id"]):
+                if tweet and save_draft(tweet, bot_state, "enso", transition["event_id"], score=score):
                     state.record_event(bot_state, transition["event_id"])
                     drafted += 1
                     source_drafted = 1
@@ -556,13 +632,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for wave in extreme_waves:
             if state.is_duplicate(bot_state, wave.event_id):
                 continue
+            score = score_extreme_wave(wave.wave_height_m)
+            if not _should_draft(score, wave.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_extreme_wave_tweet(
                 location=wave.location,
                 ocean=wave.ocean,
                 wave_height_m=wave.wave_height_m,
             )
-            if tweet and save_draft(tweet, bot_state, "extreme_wave", wave.event_id):
+            if tweet and save_draft(tweet, bot_state, "extreme_wave", wave.event_id, score=score):
                 state.record_event(bot_state, wave.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -589,6 +668,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for surge in surges:
             if state.is_duplicate(bot_state, surge.event_id):
                 continue
+            score = score_storm_surge(surge.anomaly_m)
+            if not _should_draft(score, surge.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_storm_surge_tweet(
                 station_name=surge.station_name,
@@ -597,7 +679,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 observed_m=surge.observed_m,
                 predicted_m=surge.predicted_m,
             )
-            if tweet and save_draft(tweet, bot_state, "storm_surge", surge.event_id):
+            if tweet and save_draft(tweet, bot_state, "storm_surge", surge.event_id, score=score):
                 state.record_event(bot_state, surge.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -624,6 +706,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for flood in floods:
             if state.is_duplicate(bot_state, flood.event_id):
                 continue
+            score = score_river_flood(flood.above_by_ft)
+            if not _should_draft(score, flood.event_id):
+                continue
             source_promoted += 1
             tweet = generator.generate_river_flood_tweet(
                 river=flood.river,
@@ -632,7 +717,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 flood_stage_ft=flood.flood_stage_ft,
                 above_by_ft=flood.above_by_ft,
             )
-            if tweet and save_draft(tweet, bot_state, "river_flood", flood.event_id):
+            if tweet and save_draft(tweet, bot_state, "river_flood", flood.event_id, score=score):
                 state.record_event(bot_state, flood.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -706,6 +791,8 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
             data_desc += "\n\nChanges from yesterday: " + ", ".join(changes[:3])
 
         from src.voice.templates import hot10_template
+        top_anomaly = hot10[0].anomaly_c if hot10 else 0.0
+        score = score_hot10(top_anomaly, len(hot10), len(changes))
         tweet = generator.generate_tweet(
             data_desc,
             fallback_fn=hot10_template,
@@ -714,8 +801,8 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
 
         event_id = f"hot10_{date.today().isoformat()}"
         drafted_count = 0
-        if tweet:
-            drafted_count = 1 if save_draft(tweet, bot_state, "hot10", event_id) else 0
+        if tweet and _should_draft(score, event_id):
+            drafted_count = 1 if save_draft(tweet, bot_state, "hot10", event_id, score=score) else 0
 
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
@@ -724,7 +811,7 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
         state.update_streaks(bot_state, [ct.city for ct in hot10])
         _record_source_run(
             current_run, "leaderboard", leaderboard_start,
-            status="success", observed=len(temps), promoted=len(hot10), drafted=drafted_count
+            status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=drafted_count
         )
 
     except Exception as e:
