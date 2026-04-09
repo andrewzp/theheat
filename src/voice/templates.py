@@ -120,25 +120,29 @@ def record_low_template(city: str, country: str, temp_c: float, old_temp_c: floa
 
 def extreme_wave_template(location: str, ocean: str, wave_height_m: float) -> str:
     wave_ft = round(wave_height_m * 3.281, 0)
-    month = datetime.date.today().strftime("%B")
+    stories = max(1, round(wave_height_m / 3))
     variants = [
-        f"{wave_height_m:.1f}m waves in the {location}. That's {wave_ft:.0f} feet. It's {month}.",
-        f"Marine forecast: {wave_height_m:.1f}m ({wave_ft:.0f}ft) waves in the {location}.",
+        f"{wave_ft:.0f}-foot waves in the {location} today. {wave_height_m:.1f} meters. That's a {stories}-story building made of ocean.",
+        f"{wave_height_m:.1f}m waves in the {location}. {wave_ft:.0f} feet of {ocean} Ocean.",
+        f"Marine buoys in the {location} are reporting {wave_height_m:.1f}m swells. That's {wave_ft:.0f} feet.",
     ]
     return random.choice(variants)
 
 
 def storm_surge_template(station: str, state: str, anomaly_m: float, observed_m: float) -> str:
     anomaly_ft = round(anomaly_m * 3.281, 1)
-    return (
-        f"Water level at {station}: {anomaly_ft}ft above predicted. "
-        f"Observed: {observed_m:.2f}m."
-    )
+    variants = [
+        f"Water level at {station}, {state} is {anomaly_ft}ft above where it should be right now.",
+        f"NOAA tide gauge at {station}, {state}: {anomaly_ft}ft above predicted. The ocean is not where it's supposed to be.",
+        f"{station}, {state}. Water level is running {anomaly_ft}ft above predicted. That's not a rounding error.",
+    ]
+    return random.choice(variants)
 
 
 def river_flood_template(river: str, location: str, gauge_ft: float, flood_stage_ft: float, above_ft: float) -> str:
     variants = [
-        f"{river} at {location}: {gauge_ft:.1f}ft. Flood stage is {flood_stage_ft:.0f}ft. Currently {above_ft:.1f}ft above.",
-        f"{river} at {location} is {above_ft:.1f}ft above flood stage. Gauge: {gauge_ft:.1f}ft. Flood stage: {flood_stage_ft:.0f}ft.",
+        f"{river} at {location}: {gauge_ft:.1f}ft. Flood stage is {flood_stage_ft:.0f}ft. The river doesn't care what month it is.",
+        f"{river} at {location} is {above_ft:.1f}ft above flood stage right now. Gauge reading: {gauge_ft:.1f}ft.",
+        f"{river} at {location}: {gauge_ft:.1f}ft and rising. Flood stage is {flood_stage_ft:.0f}ft. That's {above_ft:.1f}ft of overflow.",
     ]
     return random.choice(variants)
