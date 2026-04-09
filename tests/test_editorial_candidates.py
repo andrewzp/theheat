@@ -1,0 +1,35 @@
+from src.editorial.candidates import rank_candidates, score_candidate_text
+
+
+class TestEditorialCandidates:
+    def test_prefers_context_rich_candidate(self):
+        bundle = rank_candidates(
+            [
+                "Phoenix is hot today.",
+                "Phoenix just hit 121F. NEW RECORD. The old one was from 1998.",
+            ],
+            "record",
+        )
+
+        assert bundle.candidates[0].text == "Phoenix just hit 121F. NEW RECORD. The old one was from 1998."
+        assert bundle.candidates[0].score.total > bundle.candidates[1].score.total
+
+    def test_deduplicates_candidates_case_insensitive(self):
+        bundle = rank_candidates(
+            [
+                "CO2 at Mauna Loa hit 434.0 ppm. Pre-industrial was 280.",
+                "co2 at mauna loa hit 434.0 ppm. pre-industrial was 280.",
+            ],
+            "co2_milestone",
+        )
+
+        assert len(bundle.candidates) == 1
+
+    def test_candidate_scoring_rewards_factual_structure(self):
+        score = score_candidate_text(
+            "Mauna Loa CO2: 434.1 ppm. First time above 434. Pre-industrial was 280.",
+            "co2_milestone",
+        )
+
+        assert score.context >= 80
+        assert score.total >= 75

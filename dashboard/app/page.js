@@ -102,13 +102,13 @@ export default function Dashboard() {
     }
   }
 
-  async function draftAct(draftId, action, editedText) {
+  async function draftAct(draftId, action, payload = {}) {
     setDraftAction(draftId)
     try {
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, draftId, editedText }),
+        body: JSON.stringify({ action, draftId, ...payload }),
       })
       await res.json()
       setEditingId(null)
@@ -244,6 +244,21 @@ export default function Dashboard() {
         .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
         .draft-chars.over { color: #f87171; }
         .draft-actions { display: flex; gap: 8px; }
+        .draft-reason-block { display: grid; gap: 4px; margin-bottom: 10px; }
+        .draft-reason-line { font-size: 11px; color: #666; }
+        .draft-reason-line strong { color: #888; font-weight: 600; }
+        .candidate-list {
+          display: grid; gap: 8px; margin: 12px 0; padding-top: 12px; border-top: 1px solid #1a1a1a;
+        }
+        .candidate-item {
+          background: #111; border: 1px solid #222; border-radius: 6px; padding: 10px;
+        }
+        .candidate-head {
+          display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 6px;
+          font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.8px;
+        }
+        .candidate-text { color: #d8d8d8; font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
+        .candidate-meta { color: #555; font-size: 10px; }
         .draft-edit-area {
           width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
           color: #fff; font-family: inherit; font-size: 14px; padding: 10px;
@@ -370,7 +385,9 @@ export default function Dashboard() {
                     <div className="draft-meta">
                       <span className="draft-type">{d.type}</span>
                       <span className="draft-time">
-                        {d.score?.total ? `score ${d.score.total} · ` : ""}
+                        {d.score?.total ? `signal ${d.score.total}` : "signal —"}
+                        {d.candidate_score?.total ? ` · copy ${d.candidate_score.total}` : ""}
+                        {" · "}
                         {timeAgo(d.created_at)}
                       </span>
                     </div>
@@ -390,7 +407,7 @@ export default function Dashboard() {
                           <button
                             className="btn approve sm"
                             disabled={draftAction === d.id || editText.length > 280}
-                            onClick={() => draftAct(d.id, "edit", editText)}
+                            onClick={() => draftAct(d.id, "edit", { editedText: editText })}
                           >
                             Save
                           </button>
@@ -402,12 +419,46 @@ export default function Dashboard() {
                     ) : (
                       <>
                         <div className="draft-text">{d.text}</div>
-                        {d.score?.reasons?.length > 0 && (
-                          <div className="draft-chars">
-                            {d.score.reasons.join(" · ")}
+                        {(d.score?.reasons?.length > 0 || d.candidate_score?.reasons?.length > 0) && (
+                          <div className="draft-reason-block">
+                            {d.score?.reasons?.length > 0 && (
+                              <div className="draft-reason-line">
+                                <strong>Signal:</strong> {d.score.reasons.join(" · ")}
+                              </div>
+                            )}
+                            {d.candidate_score?.reasons?.length > 0 && (
+                              <div className="draft-reason-line">
+                                <strong>Copy:</strong> {d.candidate_score.reasons.join(" · ")}
+                              </div>
+                            )}
                           </div>
                         )}
                         <div className="draft-chars">{d.text.length}/280</div>
+                        {d.candidates?.length > 1 && (
+                          <div className="candidate-list">
+                            {d.candidates
+                              .filter((candidate) => candidate.text !== d.text)
+                              .slice(0, 3)
+                              .map((candidate) => (
+                                <div key={`${d.id}-${candidate.rank}`} className="candidate-item">
+                                  <div className="candidate-head">
+                                    <span>alt #{candidate.rank} · copy {candidate.score?.total || 0} · {candidate.source}</span>
+                                    <button
+                                      className="btn sm"
+                                      disabled={!!draftAction}
+                                      onClick={() => draftAct(d.id, "select_candidate", { candidateRank: candidate.rank })}
+                                    >
+                                      Use This
+                                    </button>
+                                  </div>
+                                  <div className="candidate-text">{candidate.text}</div>
+                                  {candidate.score?.reasons?.length > 0 && (
+                                    <div className="candidate-meta">{candidate.score.reasons.join(" · ")}</div>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        )}
                         <div className="draft-actions">
                           <button
                             className="btn approve sm"
@@ -441,7 +492,7 @@ export default function Dashboard() {
                             <button
                               className="btn sm"
                               disabled={!!draftAction}
-                              onClick={() => draftAct(d.id, "auto_approve", 30)}
+                              onClick={() => draftAct(d.id, "auto_approve", { delayMinutes: 30 })}
                             >
                               Auto 30m
                             </button>

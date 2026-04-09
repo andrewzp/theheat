@@ -46,6 +46,32 @@ class TestSaveDraft:
         assert state["drafts"][0]["score"]["total"] == score.total
         assert state["drafts"][0]["score"]["passes"] is True
 
+    def test_persists_candidate_metadata(self):
+        from src.editorial.candidates import rank_candidates
+        from src.editorial.scoring import score_record_event
+
+        state = _fresh_state()
+        bundle = rank_candidates(
+            [
+                "Phoenix just hit 121F. NEW RECORD. The old one was from 1998.",
+                "Phoenix with 121F today. That broke a 27-year record.",
+            ],
+            "record",
+        )
+        score = score_record_event(49.4, 47.2, 1998)
+        save_draft(
+            bundle.text,
+            state,
+            "record",
+            "evt_record",
+            score=score,
+            candidates=[candidate.as_dict() for candidate in bundle.candidates],
+            candidate_score=bundle.selected_score.as_dict(),
+        )
+
+        assert len(state["drafts"][0]["candidates"]) == 2
+        assert state["drafts"][0]["candidate_score"]["total"] == bundle.selected_score.total
+
 
 class TestPostApproved:
     @patch("src.main.state")

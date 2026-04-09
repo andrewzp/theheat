@@ -46,7 +46,9 @@ export async function GET() {
     const drafts = (state.drafts || [])
       .filter((d) => d.status === "pending")
       .sort((a, b) => {
-        const scoreDiff = (b.score?.total || 0) - (a.score?.total || 0)
+        const priorityA = (a.score?.total || 0) + (a.candidate_score?.total || 0) * 0.35
+        const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
+        const scoreDiff = priorityB - priorityA
         if (scoreDiff !== 0) return scoreDiff
         return new Date(b.created_at || 0) - new Date(a.created_at || 0)
       })
@@ -58,9 +60,9 @@ export async function GET() {
 
 // POST — approve, reject, or edit a draft
 export async function POST(request) {
-  const { action, draftId, editedText, delayMinutes } = await request.json()
+  const { action, draftId, editedText, delayMinutes, candidateRank } = await request.json()
 
-  if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve"].includes(action)) {
+  if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve", "select_candidate"].includes(action)) {
     return Response.json({ error: "Invalid action" }, { status: 400 })
   }
 
@@ -86,8 +88,31 @@ export async function POST(request) {
         return Response.json({ error: "Invalid text" }, { status: 400 })
       }
       draft.text = editedText
+      draft.manual_override = true
       await writeState(state)
       return Response.json({ ok: true, action: "edited" })
+    }
+
+    if (action === "select_candidate") {
+      const rank = Number(candidateRank)
+      if (!Number.isFinite(rank)) {
+        return Response.json({ error: "Invalid candidate rank" }, { status: 400 })
+      }
+      const candidates = draft.candidates || []
+      const selected = candidates.find((candidate) => candidate.rank === rank)
+      if (!selected) {
+        return Response.json({ error: "Candidate not found" }, { status: 404 })
+      }
+      draft.text = selected.text
+      draft.candidate_score = selected.score
+      draft.selected_candidate_rank = selected.rank
+      draft.manual_override = false
+      draft.candidates = [
+        selected,
+        ...candidates.filter((candidate) => candidate.rank !== rank),
+      ]
+      await writeState(state)
+      return Response.json({ ok: true, action: "selected_candidate" })
     }
 
     if (action === "auto_approve") {

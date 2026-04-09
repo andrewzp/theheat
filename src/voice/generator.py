@@ -2,8 +2,11 @@ from __future__ import annotations
 
 """Tweet generation via Gemini Flash with safety pipeline and fallback."""
 
+import json
 import os
+import re
 
+from src.editorial.candidates import CandidateBundle, rank_candidates
 from src.voice.safety import run_safety_pipeline
 from src.voice import templates
 
@@ -53,9 +56,161 @@ Examples (match this energy exactly):
 """
 
 MAX_RETRIES = 3
+DEFAULT_CANDIDATE_COUNT = 4
 
 
-def generate_tweet(data_description: str, fallback_fn=None, fallback_args=None) -> str | None:
+def _fallback_candidates(fallback_fn=None, fallback_args=None, count: int = DEFAULT_CANDIDATE_COUNT) -> list[tuple[str, str]]:
+    if fallback_fn is None:
+        return []
+
+    args = fallback_args or {}
+    collected: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    attempts = max(count * 4, 6)
+
+    for _ in range(attempts):
+        try:
+            tweet = fallback_fn(**args)
+        except Exception:
+            break
+        if not tweet:
+            continue
+        normalized = re.sub(r"\s+", " ", tweet).strip()
+        if not normalized:
+            continue
+        dedupe_key = normalized.lower()
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        collected.append((normalized, "template"))
+        if len(collected) >= count:
+            break
+
+    if not collected:
+        try:
+            tweet = fallback_fn(**args)
+        except Exception:
+            tweet = None
+        if tweet:
+            collected.append((re.sub(r"\s+", " ", tweet).strip(), "template"))
+
+    return collected
+
+
+def _parse_candidate_response(raw_text: str) -> list[str]:
+    text = (raw_text or "").strip()
+    if not text:
+        return []
+
+    if text.startswith("{") or text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                parsed = parsed.get("candidates", [])
+            if isinstance(parsed, list):
+                return [str(item).strip().strip('"').strip("'") for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            pass
+
+    candidates = []
+    for line in text.splitlines():
+        stripped = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line.strip())
+        stripped = stripped.strip('"').strip("'")
+        if stripped:
+            candidates.append(stripped)
+    return candidates
+
+
+def generate_tweet_bundle(
+    data_description: str,
+    *,
+    category: str,
+    fallback_fn=None,
+    fallback_args=None,
+    candidate_count: int = DEFAULT_CANDIDATE_COUNT,
+) -> CandidateBundle | None:
+    """Generate and rank multiple tweet candidates for the same signal."""
+    candidates: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    def add_candidate(text: str, source: str) -> None:
+        normalized = re.sub(r"\s+", " ", (text or "")).strip().strip('"').strip("'")
+        if not normalized:
+            return
+        dedupe_key = normalized.lower()
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+        candidates.append((normalized, source))
+
+    client = None
+    if GEMINI_API_KEY:
+        try:
+            from google import genai
+
+            client = genai.Client(api_key=GEMINI_API_KEY)
+        except Exception as e:
+            print(f"[generator] WARNING: Gemini client init failed ({e}) — using template fallback")
+    else:
+        print("[generator] WARNING: No GEMINI_API_KEY — using template fallback")
+
+    if client is not None:
+        for attempt in range(MAX_RETRIES):
+            try:
+                prompt = (
+                    f"{SYSTEM_PROMPT}\n\n"
+                    f"Write {candidate_count} DISTINCT tweet options about this data.\n"
+                    "Each option must use the same facts but a different rhythm or framing.\n"
+                    "Return only the options, one per line, with no numbering and no commentary.\n\n"
+                    f"Data:\n{data_description}"
+                )
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                )
+                parsed = _parse_candidate_response(response.text)
+                accepted_this_attempt = 0
+                for candidate in parsed:
+                    passed, reason = run_safety_pipeline(candidate)
+                    if passed:
+                        before = len(candidates)
+                        add_candidate(candidate, "gemini")
+                        if len(candidates) > before:
+                            accepted_this_attempt += 1
+                    else:
+                        print(f"[generator] Safety rejected candidate on attempt {attempt + 1}: {reason}")
+
+                if len(candidates) >= candidate_count:
+                    break
+                if accepted_this_attempt == 0 and not parsed:
+                    print(f"[generator] Gemini returned no parseable candidates on attempt {attempt + 1}")
+            except Exception as e:
+                print(f"[generator] Gemini attempt {attempt + 1} failed: {e}")
+
+    if len(candidates) < max(candidate_count, 1):
+        for candidate, source in _fallback_candidates(
+            fallback_fn=fallback_fn,
+            fallback_args=fallback_args,
+            count=max(candidate_count - len(candidates), 1),
+        ):
+            add_candidate(candidate, source)
+
+    if not candidates:
+        return None
+
+    bundle = rank_candidates(candidates, category)
+    return bundle if bundle.candidates else None
+
+
+def generate_tweet(
+    data_description: str,
+    fallback_fn=None,
+    fallback_args=None,
+    *,
+    category: str = "general",
+    candidate_count: int = DEFAULT_CANDIDATE_COUNT,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet using Gemini Flash with safety checks.
 
     Args:
@@ -64,48 +219,22 @@ def generate_tweet(data_description: str, fallback_fn=None, fallback_args=None) 
         fallback_args: Args for the fallback function.
 
     Returns:
-        Tweet text, or None if all attempts fail.
+        Best tweet text, or a full ranked bundle when ``return_bundle`` is True.
     """
-    if not GEMINI_API_KEY:
-        print("[generator] WARNING: No GEMINI_API_KEY — using template fallback")
-        if fallback_fn and fallback_args:
-            return fallback_fn(**fallback_args)
-        return None
+    requested_count = candidate_count
+    if not return_bundle and candidate_count == DEFAULT_CANDIDATE_COUNT:
+        requested_count = 1
 
-    try:
-        from google import genai
-
-        client = genai.Client(api_key=GEMINI_API_KEY)
-    except Exception as e:
-        print(f"[generator] WARNING: Gemini client init failed ({e}) — using template fallback")
-        if fallback_fn and fallback_args:
-            return fallback_fn(**fallback_args)
-        return None
-
-    for attempt in range(MAX_RETRIES):
-        try:
-            prompt = f"{SYSTEM_PROMPT}\n\nWrite a tweet about this:\n{data_description}"
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt,
-            )
-            tweet = response.text.strip().strip('"').strip("'")
-
-            # Run safety pipeline
-            passed, reason = run_safety_pipeline(tweet)
-            if passed:
-                return tweet
-            print(f"[generator] Safety rejected attempt {attempt + 1}: {reason}")
-
-        except Exception as e:
-            print(f"[generator] Gemini attempt {attempt + 1} failed: {e}")
-            continue
-
-    # All retries exhausted, use template fallback
-    print("[generator] WARNING: All Gemini retries exhausted — using template fallback")
-    if fallback_fn and fallback_args:
-        return fallback_fn(**fallback_args)
-    return None
+    bundle = generate_tweet_bundle(
+        data_description,
+        category=category,
+        fallback_fn=fallback_fn,
+        fallback_args=fallback_args,
+        candidate_count=requested_count,
+    )
+    if return_bundle:
+        return bundle
+    return bundle.text if bundle else None
 
 
 def generate_record_tweet(
@@ -114,7 +243,9 @@ def generate_record_tweet(
     new_temp_c: float,
     old_record_c: float,
     old_record_year: int,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
     data = (
@@ -124,6 +255,8 @@ def generate_record_tweet(
     )
     return generate_tweet(
         data,
+        category="record",
+        return_bundle=return_bundle,
         fallback_fn=templates.record_template,
         fallback_args={
             "city": city, "country": country,
@@ -137,7 +270,9 @@ def generate_fire_tweet(
     country: str,
     confidence: int,
     frp: float,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     data = (
         f"Large wildfire detected in {region}, {country}. "
         f"Satellite confidence: {confidence}%. "
@@ -146,6 +281,8 @@ def generate_fire_tweet(
     )
     return generate_tweet(
         data,
+        category="fire",
+        return_bundle=return_bundle,
         fallback_fn=templates.fire_template,
         fallback_args={
             "region": region, "country": country,
@@ -154,7 +291,12 @@ def generate_fire_tweet(
     )
 
 
-def generate_co2_milestone_tweet(ppm_crossed: int, actual_ppm: float) -> str | None:
+def generate_co2_milestone_tweet(
+    ppm_crossed: int,
+    actual_ppm: float,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     data = (
         f"Daily CO2 reading at Mauna Loa: {actual_ppm} ppm. "
         f"This is the first time the daily reading has been above {ppm_crossed} ppm. "
@@ -162,12 +304,20 @@ def generate_co2_milestone_tweet(ppm_crossed: int, actual_ppm: float) -> str | N
     )
     return generate_tweet(
         data,
+        category="co2_milestone",
+        return_bundle=return_bundle,
         fallback_fn=templates.co2_milestone_template,
         fallback_args={"ppm": ppm_crossed, "actual": actual_ppm},
     )
 
 
-def generate_co2_weekly_tweet(current: float, last_year: float, diff: float) -> str | None:
+def generate_co2_weekly_tweet(
+    current: float,
+    last_year: float,
+    diff: float,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     data = (
         f"Average CO2 this week: {current} ppm. "
         f"Same week last year: {last_year} ppm. "
@@ -175,6 +325,8 @@ def generate_co2_weekly_tweet(current: float, last_year: float, diff: float) -> 
     )
     return generate_tweet(
         data,
+        category="co2_weekly",
+        return_bundle=return_bundle,
         fallback_fn=templates.co2_weekly_template,
         fallback_args={"current": current, "last_year": last_year, "diff": diff},
     )
@@ -185,7 +337,9 @@ def generate_noaa_confirmation_tweet(
     state: str,
     temp_f: float,
     record_date: str,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about NOAA confirming a temperature record."""
     data = (
         f"NOAA ACIS has officially confirmed: {city}, {state} broke the temperature "
@@ -193,6 +347,8 @@ def generate_noaa_confirmation_tweet(
     )
     return generate_tweet(
         data,
+        category="record_confirmation",
+        return_bundle=return_bundle,
         fallback_fn=templates.noaa_confirmation_template,
         fallback_args={
             "city": city, "state": state,
@@ -205,7 +361,9 @@ def generate_severe_weather_tweet(
     event_type: str,
     area: str,
     severity: str,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a US severe weather alert (NWS)."""
     data = (
         f"NWS has issued a {event_type} for {area}. "
@@ -214,6 +372,8 @@ def generate_severe_weather_tweet(
     )
     return generate_tweet(
         data,
+        category="severe_weather",
+        return_bundle=return_bundle,
         fallback_fn=templates.severe_weather_template,
         fallback_args={
             "event_type": event_type, "area": area,
@@ -227,7 +387,9 @@ def generate_global_disaster_tweet(
     country: str,
     severity: str,
     description: str,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a global disaster event (GDACS)."""
     data = (
         f"GDACS alert: {disaster_type} — {name}. "
@@ -236,6 +398,8 @@ def generate_global_disaster_tweet(
     )
     return generate_tweet(
         data,
+        category="global_disaster",
+        return_bundle=return_bundle,
         fallback_fn=templates.global_disaster_template,
         fallback_args={
             "disaster_type": disaster_type, "name": name,
@@ -249,7 +413,9 @@ def generate_sea_ice_record_tweet(
     extent: float,
     previous_extent: float,
     previous_year: int,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a sea ice extent record."""
     data = (
         f"{hemisphere} sea ice extent: {extent} million sq km. "
@@ -258,6 +424,8 @@ def generate_sea_ice_record_tweet(
     )
     return generate_tweet(
         data,
+        category="sea_ice_record",
+        return_bundle=return_bundle,
         fallback_fn=templates.sea_ice_record_template,
         fallback_args={
             "hemisphere": hemisphere, "extent": extent,
@@ -268,7 +436,9 @@ def generate_sea_ice_record_tweet(
 
 def generate_drought_tweet(
     states: list,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about drought conditions."""
     top = states[:3]
     lines = []
@@ -283,6 +453,8 @@ def generate_drought_tweet(
     )
     return generate_tweet(
         data,
+        category="drought",
+        return_bundle=return_bundle,
         fallback_fn=templates.drought_template,
         fallback_args={"states": top},
     )
@@ -292,7 +464,9 @@ def generate_enso_tweet(
     to_status: str,
     oni_value: float,
     previous_duration: int,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about an ENSO state transition."""
     data = (
         f"NOAA declares {to_status} conditions. "
@@ -301,6 +475,8 @@ def generate_enso_tweet(
     )
     return generate_tweet(
         data,
+        category="enso",
+        return_bundle=return_bundle,
         fallback_fn=templates.enso_template,
         fallback_args={
             "status": to_status, "oni": oni_value,
@@ -315,7 +491,9 @@ def generate_record_low_tweet(
     new_temp_c: float,
     old_record_c: float,
     old_record_year: int,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a record low temperature."""
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
@@ -327,6 +505,8 @@ def generate_record_low_tweet(
     )
     return generate_tweet(
         data,
+        category="record_low",
+        return_bundle=return_bundle,
         fallback_fn=templates.record_low_template,
         fallback_args={
             "city": city, "country": country,
@@ -339,7 +519,9 @@ def generate_extreme_wave_tweet(
     location: str,
     ocean: str,
     wave_height_m: float,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about extreme ocean wave heights."""
     wave_ft = round(wave_height_m * 3.281, 0)
     data = (
@@ -349,6 +531,8 @@ def generate_extreme_wave_tweet(
     )
     return generate_tweet(
         data,
+        category="extreme_wave",
+        return_bundle=return_bundle,
         fallback_fn=templates.extreme_wave_template,
         fallback_args={
             "location": location, "ocean": ocean,
@@ -363,7 +547,9 @@ def generate_storm_surge_tweet(
     anomaly_m: float,
     observed_m: float,
     predicted_m: float,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a storm surge / abnormal water level."""
     anomaly_ft = round(anomaly_m * 3.281, 1)
     data = (
@@ -374,6 +560,8 @@ def generate_storm_surge_tweet(
     )
     return generate_tweet(
         data,
+        category="storm_surge",
+        return_bundle=return_bundle,
         fallback_fn=templates.storm_surge_template,
         fallback_args={
             "station": station_name, "state": state,
@@ -388,7 +576,9 @@ def generate_river_flood_tweet(
     gauge_height_ft: float,
     flood_stage_ft: float,
     above_by_ft: float,
-) -> str | None:
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
     """Generate a tweet about a river above flood stage."""
     data = (
         f"USGS gauge: {river} at {location} is at {gauge_height_ft:.1f}ft. "
@@ -397,6 +587,8 @@ def generate_river_flood_tweet(
     )
     return generate_tweet(
         data,
+        category="river_flood",
+        return_bundle=return_bundle,
         fallback_fn=templates.river_flood_template,
         fallback_args={
             "river": river, "location": location,

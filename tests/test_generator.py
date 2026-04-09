@@ -4,6 +4,7 @@ from unittest.mock import patch, MagicMock
 
 from src.voice.generator import (
     generate_tweet,
+    generate_tweet_bundle,
     generate_record_tweet,
     generate_fire_tweet,
     generate_co2_milestone_tweet,
@@ -88,6 +89,53 @@ class TestGenerateTweet:
                 )
                 assert result == "safe fallback"
                 assert mock_client.models.generate_content.call_count == 3
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "")
+    def test_bundle_generation_uses_multiple_fallback_variants(self):
+        fallback = MagicMock(
+            side_effect=[
+                "Phoenix just hit 121F. NEW RECORD. The old one was from 1998.",
+                "Phoenix with 121F today. That broke a 27-year record.",
+                "Phoenix, Arizona: 121F. New record for this date.",
+            ]
+        )
+
+        bundle = generate_tweet_bundle(
+            "Phoenix record heat",
+            category="record",
+            fallback_fn=fallback,
+            fallback_args={},
+            candidate_count=3,
+        )
+
+        assert bundle is not None
+        assert len(bundle.candidates) == 3
+        assert bundle.candidates[0].source == "template"
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
+    def test_return_bundle_ranks_gemini_candidates(self):
+        mock_response = MagicMock()
+        mock_response.text = (
+            "1. Phoenix is hot today.\n"
+            "2. Phoenix just hit 121F. NEW RECORD. The old one was from 1998.\n"
+            "3. Phoenix reached 121F."
+        )
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
+            with patch("src.voice.generator.run_safety_pipeline", return_value=(True, None)):
+                bundle = generate_tweet(
+                    "Phoenix record heat",
+                    category="record",
+                    return_bundle=True,
+                )
+                assert bundle is not None
+                assert "NEW RECORD" in bundle.text
 
 
 class TestGenerateRecordTweet:
