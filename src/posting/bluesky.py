@@ -3,9 +3,6 @@ from __future__ import annotations
 """Bluesky posting via AT Protocol."""
 
 import os
-from datetime import datetime, timezone
-
-from atproto import Client
 
 
 BLUESKY_HANDLE = os.environ.get("BLUESKY_HANDLE", "")
@@ -19,6 +16,8 @@ def post_to_bluesky(text: str) -> dict | None:
         return None
 
     try:
+        from atproto import Client
+
         client = Client()
         client.login(BLUESKY_HANDLE, BLUESKY_APP_PASSWORD)
         response = client.send_post(text=text)

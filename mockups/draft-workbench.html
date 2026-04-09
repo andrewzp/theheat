@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@theheat Draft Workbench</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --bg-2: #151923;
+      --panel: rgba(22, 26, 35, 0.9);
+      --line: rgba(197, 132, 78, 0.18);
+      --text: #f4eee7;
+      --muted: #a59a8d;
+      --soft: #7f776f;
+      --accent: #ff7d3b;
+      --accent-2: #ffc48d;
+      --good: #85d288;
+      --warn: #ffd37a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top center, rgba(255, 125, 59, 0.12), transparent 25%),
+        linear-gradient(180deg, #0d1014 0%, #11141a 100%);
+      font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+    }
+
+    .frame {
+      width: min(1480px, calc(100% - 32px));
+      margin: 24px auto 40px;
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      gap: 18px;
+    }
+
+    .card {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 22px;
+      box-shadow: 0 26px 90px rgba(0, 0, 0, 0.32);
+      backdrop-filter: blur(18px);
+    }
+
+    .eyebrow {
+      color: var(--accent-2);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      margin-bottom: 12px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 42px;
+      line-height: 0.98;
+      font-family: "Iowan Old Style", "Book Antiqua", serif;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      font-size: 14px;
+      color: var(--accent-2);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .facts,
+    .rules,
+    .actions,
+    .variant {
+      display: grid;
+      gap: 12px;
+    }
+
+    .fact,
+    .rule,
+    .action,
+    .variant {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--line);
+    }
+
+    .fact strong,
+    .rule strong,
+    .action strong,
+    .variant strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .main {
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .tweet-box,
+    .alt-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .tweet {
+      padding: 24px;
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 125, 59, 0.12), rgba(255, 125, 59, 0.04)),
+        rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 125, 59, 0.22);
+    }
+
+    .tweet blockquote {
+      margin: 0 0 16px;
+      font-size: 28px;
+      line-height: 1.28;
+      color: var(--text);
+      font-family: "Iowan Old Style", "Book Antiqua", serif;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .chip.good { color: var(--good); }
+    .chip.warn { color: var(--warn); }
+
+    .composer {
+      padding: 18px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid var(--line);
+    }
+
+    .composer .textarea {
+      min-height: 210px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.16);
+      padding: 18px;
+      font-size: 17px;
+      line-height: 1.55;
+      color: var(--text);
+      margin-top: 12px;
+    }
+
+    .alt-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .variant small {
+      display: block;
+      margin-top: 8px;
+      color: var(--soft);
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1280px) {
+      .frame {
+        grid-template-columns: 1fr;
+      }
+
+      .hero,
+      .alt-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .frame {
+        width: min(100% - 16px, 100%);
+        margin: 12px auto 28px;
+      }
+
+      .tweet blockquote {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <aside class="card">
+      <div class="eyebrow">Event Brief</div>
+      <h1>Phoenix record workbench</h1>
+      <p>The reviewer sees the facts, the writing options, the scores, and the publication rule in one place. Editing is not blind anymore.</p>
+
+      <h2 style="margin-top: 24px;">Signal Facts</h2>
+      <div class="facts">
+        <div class="fact">
+          <strong>Observed high</strong>
+          <p>122F at Phoenix today. Old record for this date: 121F from 2025.</p>
+        </div>
+        <div class="fact">
+          <strong>Why the event scored high</strong>
+          <p>Repeat offender, strong historical contrast, clean one-line context, and strong audience familiarity.</p>
+        </div>
+        <div class="fact">
+          <strong>Supporting context</strong>
+          <p>Fourth top-tier anomaly in eight days. Out-of-season intensity is accelerating faster than expected.</p>
+        </div>
+      </div>
+
+      <h2 style="margin-top: 24px;">Guardrails</h2>
+      <div class="rules">
+        <div class="rule">
+          <strong>Tone rule</strong>
+          <p>Dry, not gleeful. Context can be sharp, but never cartoonish.</p>
+        </div>
+        <div class="rule">
+          <strong>Approval policy</strong>
+          <p>Manual by default. Can be switched to delayed auto-approve for this category if reviewer trusts the draft.</p>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="card hero">
+        <div class="tweet-box">
+          <div class="eyebrow">Chosen Draft</div>
+          <div class="tweet">
+            <blockquote>
+              Phoenix hit 122F today. New record for this date. The old one was 121F. From last year. Records are not supposed to age like fruit.
+            </blockquote>
+            <div class="meta">
+              <span class="chip good">clarity 98</span>
+              <span class="chip good">voice 94</span>
+              <span class="chip warn">risk 18</span>
+              <span class="chip good">viral score 96</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <div class="action">
+            <strong>Auto-approve countdown</strong>
+            <p>Off right now. If enabled, this draft publishes in 30 minutes unless canceled.</p>
+          </div>
+          <div class="action">
+            <strong>Publish routing</strong>
+            <p>X + Bluesky. Save final URL pair to post ledger.</p>
+          </div>
+          <div class="action">
+            <strong>Reviewer tools</strong>
+            <p>Approve now, hold, reject, schedule, regenerate, or push to image-card flow.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="eyebrow">Edit and Compose</div>
+        <div class="composer">
+          <p>The future compose box uses the same safety, scoring, and publishing pipeline as generated drafts. Human-written tweets no longer bypass system rules.</p>
+          <div class="textarea">Phoenix hit 122F today. New record for this date. The old one was 121F. From last year. Records are not supposed to age like fruit.</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="eyebrow">Alternate Variants</div>
+        <div class="alt-grid">
+          <div class="variant">
+            <strong>Variant B</strong>
+            <p>Phoenix just set a new daily record at 122F. The previous record was 121F. Set last year. That turnaround used to take longer.</p>
+            <small>Cleaner, safer, slightly flatter.</small>
+          </div>
+          <div class="variant">
+            <strong>Variant C</strong>
+            <p>Phoenix hit 122F. New record for this date. The old one was 121F, from 2025. One year is a very aggressive retirement plan for a record.</p>
+            <small>Sharper joke, slightly hotter tone.</small>
+          </div>
+          <div class="variant">
+            <strong>Variant D</strong>
+            <p>Phoenix: 122F today. New record for this date. The old one was 121F. From last year.</p>
+            <small>Most factual, least memorable.</small>
+          </div>
+          <div class="variant">
+            <strong>Variant E</strong>
+            <p>Phoenix reached 122F today. That breaks the daily record of 121F, set in 2025. The records department is not getting much time off.</p>
+            <small>Good rhythm, moderate personality.</small>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="card">
+      <div class="eyebrow">Decision Panel</div>
+      <h2>Why this draft wins</h2>
+      <div class="actions">
+        <div class="action">
+          <strong>Specificity</strong>
+          <p>The numbers are immediate and the old-record comparison lands fast.</p>
+        </div>
+        <div class="action">
+          <strong>Hook quality</strong>
+          <p>The joke is short, not try-hard, and built on the data instead of bolted onto it.</p>
+        </div>
+        <div class="action">
+          <strong>Risk check</strong>
+          <p>No harm framing, no policy language, no overreaction vocabulary.</p>
+        </div>
+      </div>
+
+      <h2 style="margin-top: 24px;">Publication Choices</h2>
+      <div class="actions">
+        <div class="action">
+          <strong>Approve now</strong>
+          <p>Send directly to publisher.</p>
+        </div>
+        <div class="action">
+          <strong>Approve later</strong>
+          <p>Schedule for the next editorial window.</p>
+        </div>
+        <div class="action">
+          <strong>Auto-approve</strong>
+          <p>Start a 30-minute countdown and cancel if needed.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+</body>
+</html>

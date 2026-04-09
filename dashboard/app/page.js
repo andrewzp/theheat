@@ -153,8 +153,11 @@ export default function Dashboard() {
   const hot10 = state?.last_hot10 || {}
   const streaks = state?.streaks || {}
   const errors = state?.errors || []
-  const todayCount = state?.daily_tweet_count
-    ? Object.values(state.daily_tweet_count)[0] || 0
+  const latestCountDate = state?.daily_tweet_count
+    ? Object.keys(state.daily_tweet_count).sort().at(-1)
+    : null
+  const todayCount = latestCountDate
+    ? state.daily_tweet_count[latestCountDate] || 0
     : 0
 
   const sortedStreaks = Object.entries(streaks)

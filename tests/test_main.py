@@ -1,17 +1,18 @@
 """Integration tests for main orchestrator with all externals mocked."""
 
+from copy import deepcopy
 from unittest.mock import patch, MagicMock
 from datetime import date
 
 from src.state import DEFAULT_STATE
-from src.main import save_draft, post_approved, run_alerts, run_leaderboard
+from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone, CO2WeeklyComparison
 
 
 def _fresh_state():
-    return dict(DEFAULT_STATE)
+    return deepcopy(DEFAULT_STATE)
 
 
 class TestSaveDraft:
@@ -48,13 +49,15 @@ class TestPostApproved:
         mock_tw.assert_not_called()
 
     @patch("src.main.state")
+    @patch("src.main.post_to_bluesky")
     @patch("src.main.post_tweet")
-    def test_increments_count_on_success(self, mock_tw, mock_state):
+    def test_increments_count_on_success(self, mock_tw, mock_bluesky, mock_state):
         mock_state.check_daily_cap.return_value = True
         mock_tw.return_value = {"id": "123"}
         state = _fresh_state()
         result = post_approved("test tweet", state)
         assert result == "posted"
+        mock_bluesky.assert_called_once_with("test tweet")
         mock_state.increment_daily_count.assert_called_once_with(state)
 
     @patch("src.main.state")
@@ -273,3 +276,41 @@ class TestRunLeaderboard:
 
         assert "last_hot10" in result
         assert "Miami" in result["last_hot10"]["cities"]
+
+
+class TestRunManualTweet:
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_updates_matching_draft_by_id(self, mock_safety, mock_post):
+        mock_safety.return_value = (True, None)
+        mock_post.return_value = "posted"
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Manual draft",
+            "status": "approved",
+        }]
+
+        result = run_manual_tweet(state)
+
+        assert result["drafts"][0]["status"] == "posted"
+        assert result["drafts"][0]["posted_at"].endswith("Z")
+
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_returns_draft_to_pending_on_safety_failure(self, mock_safety, mock_post):
+        mock_safety.return_value = (False, "Banned pattern: '!'")
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Manual draft",
+            "status": "approved",
+        }]
+
+        result = run_manual_tweet(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"
+        assert result["drafts"][0]["post_error"] == "Banned pattern: '!'"

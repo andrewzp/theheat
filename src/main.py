@@ -8,15 +8,39 @@ via manual_tweet mode triggered from the dashboard.
 import argparse
 import os
 import sys
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from src import state
 from src.data import open_meteo, firms, co2, noaa_acis, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
 from src.voice import generator
+from src.voice.safety import run_safety_pipeline
+from src.posting.bluesky import post_to_bluesky
 from src.posting.twitter import post_tweet
 
 
 MAX_DRAFTS = 200
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _utc_now_iso() -> str:
+    return _utc_now().isoformat().replace("+00:00", "Z")
+
+
+def _find_draft(bot_state: dict, draft_id: str = "", tweet_text: str = "") -> dict | None:
+    """Find a draft by explicit id first, then by approved tweet text fallback."""
+    drafts = bot_state.get("drafts", [])
+    if draft_id:
+        for draft in drafts:
+            if draft.get("id") == draft_id:
+                return draft
+
+    for draft in drafts:
+        if draft.get("text") == tweet_text and draft.get("status") == "approved":
+            return draft
+    return None
 
 
 def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str = "") -> bool:
@@ -38,11 +62,11 @@ def save_draft(tweet_text: str, bot_state: dict, tweet_type: str, event_id: str 
         print(f"[draft] Pruned {before - len(drafts)} old drafts")
 
     draft = {
-        "id": f"draft_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
+        "id": f"draft_{_utc_now().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
         "text": tweet_text,
         "type": tweet_type,
         "event_id": event_id,
-        "created_at": datetime.utcnow().isoformat() + "Z",
+        "created_at": _utc_now_iso(),
         "status": "pending",
     }
     drafts.append(draft)
@@ -67,6 +91,7 @@ def post_approved(tweet_text: str, bot_state: dict) -> str:
     if result.get("error") == "rate_limited":
         return "rate_limited"
 
+    post_to_bluesky(tweet_text)
     state.increment_daily_count(bot_state)
     print(f"[post] Posted to X: {tweet_text[:60]}...")
     return "posted"
@@ -460,30 +485,44 @@ def run_leaderboard(bot_state: dict) -> dict:
 def run_manual_tweet(bot_state: dict) -> dict:
     """Post an approved tweet from the TWEET_TEXT env var."""
     tweet_text = os.environ.get("TWEET_TEXT", "").strip()
+    draft_id = os.environ.get("DRAFT_ID", "").strip()
+    draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
     if not tweet_text:
         print("[manual] No TWEET_TEXT provided, skipping")
         return bot_state
 
     if len(tweet_text) > 280:
         print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
+        if draft:
+            draft["status"] = "pending"
+            draft["post_error"] = f"Tweet too long ({len(tweet_text)} chars)"
+        return bot_state
+
+    passed, reason = run_safety_pipeline(tweet_text)
+    if not passed:
+        print(f"[manual] Safety rejected tweet: {reason}")
+        if draft:
+            draft["status"] = "pending"
+            draft["post_error"] = reason
         return bot_state
 
     print(f"[manual] Posting: {tweet_text}")
     result = post_approved(tweet_text, bot_state)
 
     # Update draft status with post result
-    for draft in bot_state.get("drafts", []):
-        if draft.get("text") == tweet_text and draft.get("status") == "approved":
-            if result == "posted":
-                draft["status"] = "posted"
-                draft["posted_at"] = datetime.utcnow().isoformat() + "Z"
-            elif result == "rate_limited":
-                draft["status"] = "pending"
-                draft["post_error"] = "Rate limited — retry later"
-                print("[manual] Rate limited, draft kept as pending for retry")
-            else:
-                draft["post_error"] = "Failed to post to X"
-            break
+    if draft:
+        draft["last_publish_attempt_at"] = _utc_now_iso()
+        if result == "posted":
+            draft["status"] = "posted"
+            draft["posted_at"] = _utc_now_iso()
+            draft.pop("post_error", None)
+        elif result == "rate_limited":
+            draft["status"] = "pending"
+            draft["post_error"] = "Rate limited — retry later"
+            print("[manual] Rate limited, draft kept as pending for retry")
+        else:
+            draft["status"] = "pending"
+            draft["post_error"] = "Failed to post to X"
 
     return bot_state
 

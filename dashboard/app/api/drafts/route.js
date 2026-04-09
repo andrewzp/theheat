@@ -13,25 +13,39 @@ async function readState() {
     headers: gistHeaders(),
     cache: "no-store",
   })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to read state: ${res.status} ${errorText}`)
+  }
   const gist = await res.json()
-  return JSON.parse(gist.files["state.json"].content)
+  const content = gist?.files?.["state.json"]?.content
+  if (!content) {
+    throw new Error("state.json not found in Gist")
+  }
+  return JSON.parse(content)
 }
 
 async function writeState(state) {
-  await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
     method: "PATCH",
     headers: { ...gistHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({
       files: { "state.json": { content: JSON.stringify(state, null, 2) } },
     }),
   })
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Failed to write state: ${res.status} ${errorText}`)
+  }
 }
 
 // GET — return pending drafts
 export async function GET() {
   try {
     const state = await readState()
-    const drafts = (state.drafts || []).filter((d) => d.status === "pending")
+    const drafts = (state.drafts || [])
+      .filter((d) => d.status === "pending")
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
     return Response.json({ drafts })
   } catch (e) {
     return Response.json({ drafts: [], error: e.message })
@@ -79,7 +93,7 @@ export async function POST(request) {
           headers: { ...gistHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
             ref: "main",
-            inputs: { mode: "manual_tweet", tweet_text: draft.text },
+            inputs: { mode: "manual_tweet", tweet_text: draft.text, draft_id: draft.id },
           }),
         }
       )

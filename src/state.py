@@ -1,8 +1,9 @@
 """State management via GitHub Gist."""
 
+from copy import deepcopy
 import json
 import os
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import requests
 
@@ -17,8 +18,22 @@ DEFAULT_STATE = {
     "posted_events": [],
     "daily_tweet_count": {},
     "pending_confirmations": [],
+    "drafts": [],
     "errors": [],
 }
+
+
+def _fresh_state() -> dict:
+    """Return an isolated copy of the default state."""
+    return deepcopy(DEFAULT_STATE)
+
+
+def _normalize_state(state: dict | None) -> dict:
+    """Ensure all expected top-level keys exist in the state payload."""
+    normalized = _fresh_state()
+    if isinstance(state, dict):
+        normalized.update(state)
+    return normalized
 
 
 def _headers():
@@ -30,7 +45,7 @@ def _headers():
 
 def read_state() -> dict:
     if not GIST_ID or not GITHUB_TOKEN:
-        return dict(DEFAULT_STATE)
+        return _fresh_state()
 
     try:
         resp = requests.get(
@@ -41,9 +56,9 @@ def read_state() -> dict:
         resp.raise_for_status()
         gist = resp.json()
         content = gist["files"][STATE_FILENAME]["content"]
-        return json.loads(content)
+        return _normalize_state(json.loads(content))
     except (requests.RequestException, KeyError, json.JSONDecodeError):
-        return dict(DEFAULT_STATE)
+        return _fresh_state()
 
 
 def write_state(state: dict) -> bool:
@@ -51,10 +66,11 @@ def write_state(state: dict) -> bool:
         return False
 
     try:
+        normalized = _normalize_state(state)
         resp = requests.patch(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),
-            json={"files": {STATE_FILENAME: {"content": json.dumps(state, indent=2)}}},
+            json={"files": {STATE_FILENAME: {"content": json.dumps(normalized, indent=2)}}},
             timeout=15,
         )
         resp.raise_for_status()
@@ -174,7 +190,7 @@ def log_error(state: dict, source: str, msg: str) -> dict:
     errors = state.setdefault("errors", [])
     errors.append({
         "source": source,
-        "ts": datetime.utcnow().isoformat(),
+        "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "msg": str(msg)[:200],
     })
     # Keep last 50 errors

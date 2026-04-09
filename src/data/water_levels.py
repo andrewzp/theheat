@@ -8,7 +8,7 @@ Docs: https://api.tidesandcurrents.noaa.gov/api/prod/
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import requests
 
@@ -63,7 +63,7 @@ def fetch_water_levels() -> list[WaterLevelReading]:
     """Fetch latest water level readings for all monitored stations."""
     readings = []
     today = date.today()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     begin = (now - timedelta(hours=6)).strftime("%Y%m%d %H:%M")
     end = now.strftime("%Y%m%d %H:%M")
 

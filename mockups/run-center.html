@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@theheat Run Center</title>
+  <style>
+    :root {
+      --bg: #0c0f14;
+      --panel: rgba(19, 24, 32, 0.9);
+      --line: rgba(103, 148, 255, 0.14);
+      --text: #eef4ff;
+      --muted: #9aa8bf;
+      --soft: #6f7d93;
+      --accent: #8fb0ff;
+      --accent-2: #d5e1ff;
+      --good: #86d796;
+      --warn: #ffd266;
+      --bad: #ff8f8f;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, rgba(143, 176, 255, 0.18), transparent 24%),
+        linear-gradient(180deg, #0a0d12 0%, #0d1117 100%);
+      font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+    }
+
+    .wrap {
+      width: min(1440px, calc(100% - 32px));
+      margin: 24px auto 40px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero,
+    .grid > article,
+    .timeline,
+    .table {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 24px;
+      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(16px);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 18px;
+    }
+
+    .eyebrow {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      margin-bottom: 12px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 0.98;
+      font-family: "Iowan Old Style", "Book Antiqua", serif;
+      margin-bottom: 12px;
+    }
+
+    p {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .hero-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .metric span {
+      display: block;
+      color: var(--soft);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 10px;
+      margin-bottom: 10px;
+    }
+
+    .metric strong {
+      font-size: 28px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .grid h2,
+    .timeline h2,
+    .table h2 {
+      font-size: 13px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 18px;
+    }
+
+    .source-row,
+    .timeline-row,
+    .table-row {
+      display: grid;
+      gap: 10px;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .source-row:first-of-type,
+    .timeline-row:first-of-type,
+    .table-row:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .source-head,
+    .table-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+
+    .timeline {
+      display: grid;
+      gap: 0;
+    }
+
+    .table-grid {
+      display: grid;
+      gap: 0;
+    }
+
+    .table-head strong,
+    .source-head strong {
+      font-size: 15px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1120px) {
+      .hero,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .wrap {
+        width: min(100% - 16px, 100%);
+        margin: 12px auto 28px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Run Center</div>
+        <h1>Operational truth, not workflow vibes.</h1>
+        <p>The future run view tells you what each source returned, what got filtered out, what got promoted into events, what became drafts, and what failed. GitHub Actions success alone is no longer treated as the whole story.</p>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric">
+          <span>Current run</span>
+          <strong>83%</strong>
+          <p>11 of 13 sources finished healthy.</p>
+        </div>
+        <div class="metric">
+          <span>Signals</span>
+          <strong>182</strong>
+          <p>14 events, 7 draft candidates.</p>
+        </div>
+        <div class="metric">
+          <span>Failures</span>
+          <strong>2</strong>
+          <p>Both retryable. No publish impact yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article>
+        <h2>Source Health</h2>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Open-Meteo</strong>
+            <span class="badge good">healthy</span>
+          </div>
+          <div class="meta">
+            <span>257 cities</span>
+            <span>38s latency</span>
+            <span>1 promoted event</span>
+            <span>0 retries</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>NOAA ACIS</strong>
+            <span class="badge good">healthy</span>
+          </div>
+          <div class="meta">
+            <span>3 confirmations checked</span>
+            <span>4s latency</span>
+            <span>1 official confirmation</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>NASA FIRMS</strong>
+            <span class="badge warn">noisy</span>
+          </div>
+          <div class="meta">
+            <span>24 detections</span>
+            <span>22 below editorial threshold</span>
+            <span>Noise rate 91%</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Marine</strong>
+            <span class="badge bad">retrying</span>
+          </div>
+          <div class="meta">
+            <span>Timeout on point 12</span>
+            <span>Partial results preserved</span>
+            <span>Next attempt in 90s</span>
+          </div>
+        </div>
+      </article>
+
+      <article>
+        <h2>Funnel</h2>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Observations ingested</strong>
+            <span class="badge good">182</span>
+          </div>
+          <div class="meta">
+            <span>raw payloads normalized into canonical facts</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Events created</strong>
+            <span class="badge good">14</span>
+          </div>
+          <div class="meta">
+            <span>duplicates clustered and low-confidence items suppressed</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Draft candidates generated</strong>
+            <span class="badge good">23</span>
+          </div>
+          <div class="meta">
+            <span>3-5 variants per high-scoring event</span>
+          </div>
+        </div>
+
+        <div class="source-row">
+          <div class="source-head">
+            <strong>Queue-ready drafts</strong>
+            <span class="badge warn">7</span>
+          </div>
+          <div class="meta">
+            <span>best candidates survived quality gate and policy rules</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="timeline">
+      <h2>Run Timeline</h2>
+
+      <div class="timeline-row">
+        <div class="table-head">
+          <strong>00:00:02 UTC</strong>
+          <span class="badge good">run started</span>
+        </div>
+        <p>Scheduler created run `alerts-2026-04-08T00:00Z` and locked publish queue.</p>
+      </div>
+
+      <div class="timeline-row">
+        <div class="table-head">
+          <strong>00:00:48 UTC</strong>
+          <span class="badge good">signal scoring</span>
+        </div>
+        <p>Open-Meteo record and anomaly events ranked. Phoenix and Buenos Aires cleared editorial threshold.</p>
+      </div>
+
+      <div class="timeline-row">
+        <div class="table-head">
+          <strong>00:01:31 UTC</strong>
+          <span class="badge warn">safety review</span>
+        </div>
+        <p>One Drake Passage draft rejected for tone. Alternate candidate selected automatically.</p>
+      </div>
+
+      <div class="timeline-row">
+        <div class="table-head">
+          <strong>00:02:04 UTC</strong>
+          <span class="badge good">queue updated</span>
+        </div>
+        <p>7 drafts entered editorial queue. 3 eligible for delayed auto-approval under current rules.</p>
+      </div>
+    </section>
+
+    <section class="table">
+      <h2>Recent Publishing Outcomes</h2>
+      <div class="table-grid">
+        <div class="table-row">
+          <div class="table-head">
+            <strong>Hot 10 / posted</strong>
+            <span class="badge good">x + bluesky ok</span>
+          </div>
+          <div class="meta">
+            <span>Approved in 14m</span>
+            <span>Posted at 12:03 UTC</span>
+            <span>2 retries avoided</span>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="table-head">
+            <strong>CO2 milestone / scheduled</strong>
+            <span class="badge warn">publishes in 41m</span>
+          </div>
+          <div class="meta">
+            <span>auto-approval enabled</span>
+            <span>cancel window still open</span>
+          </div>
+        </div>
+
+        <div class="table-row">
+          <div class="table-head">
+            <strong>Marine event / blocked</strong>
+            <span class="badge bad">tone review needed</span>
+          </div>
+          <div class="meta">
+            <span>humor score too hot</span>
+            <span>alternate variant available</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

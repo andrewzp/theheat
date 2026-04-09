@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@theheat Editorial Desk</title>
+  <style>
+    :root {
+      --bg: #130f0d;
+      --bg-2: #1c1612;
+      --panel: rgba(34, 25, 20, 0.88);
+      --panel-2: rgba(24, 19, 16, 0.88);
+      --line: rgba(255, 184, 128, 0.16);
+      --text: #f7efe8;
+      --muted: #b7a89b;
+      --soft: #8b7767;
+      --accent: #ff7a2f;
+      --accent-2: #ffb36f;
+      --good: #86d77a;
+      --warn: #ffd166;
+      --bad: #ff8a80;
+      --shadow: 0 22px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 122, 47, 0.18), transparent 28%),
+        radial-gradient(circle at top right, rgba(255, 179, 111, 0.08), transparent 24%),
+        linear-gradient(180deg, #0f0c0b 0%, #16110e 54%, #100d0c 100%);
+      font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+    }
+
+    .shell {
+      width: min(1440px, calc(100% - 32px));
+      margin: 24px auto 40px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+    }
+
+    .sidebar,
+    .panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+      border-radius: 26px;
+    }
+
+    .sidebar {
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    .brand {
+      padding: 10px 8px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      color: var(--accent-2);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+
+    .brand h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      line-height: 0.95;
+      font-family: "Iowan Old Style", "Book Antiqua", serif;
+      font-weight: 700;
+    }
+
+    .brand p,
+    .nav a,
+    .mini p,
+    .meta-row {
+      color: var(--muted);
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .nav a.active {
+      color: var(--text);
+      border-color: rgba(255, 122, 47, 0.35);
+      background: linear-gradient(180deg, rgba(255, 122, 47, 0.16), rgba(255, 122, 47, 0.05));
+    }
+
+    .mini {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    .mini strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .main {
+      display: grid;
+      gap: 20px;
+    }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+    }
+
+    .hero h2 {
+      margin: 0 0 10px;
+      font-size: clamp(32px, 5vw, 56px);
+      line-height: 0.96;
+      font-family: "Iowan Old Style", "Book Antiqua", serif;
+      font-weight: 700;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 56ch;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      align-content: start;
+    }
+
+    .kpi {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    .kpi .label {
+      color: var(--soft);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 10px;
+      margin-bottom: 12px;
+    }
+
+    .kpi .value {
+      font-size: 30px;
+      font-weight: 700;
+    }
+
+    .kpi .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+
+    .panel {
+      padding: 24px;
+    }
+
+    .panel h3 {
+      margin: 0 0 18px;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--accent-2);
+    }
+
+    .draft {
+      padding: 18px;
+      border-radius: 20px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      margin-bottom: 14px;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+    }
+
+    .chip.good { color: var(--good); }
+    .chip.warn { color: var(--warn); }
+    .chip.bad { color: var(--bad); }
+
+    .draft p {
+      margin: 0 0 14px;
+      font-size: 18px;
+      line-height: 1.48;
+    }
+
+    .draft-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .queue-card {
+      padding: 16px 0;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+    }
+
+    .queue-card:first-of-type {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .queue-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 15px;
+    }
+
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+
+    .sources {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+
+    .source {
+      padding: 16px;
+      border-radius: 18px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+    }
+
+    .source strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .source span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    @media (max-width: 1120px) {
+      .shell,
+      .content,
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-grid,
+      .sources {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100% - 16px, 100%);
+        margin: 12px auto 32px;
+      }
+
+      .hero-grid,
+      .sources {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="eyebrow">The Planet's Scorecard</div>
+        <h1>@theheat</h1>
+        <p>Editorial desk for climate signals, drafts, approvals, and publishing.</p>
+      </div>
+
+      <nav class="nav">
+        <a class="active" href="#">Desk <span>07</span></a>
+        <a href="#">Drafts <span>23</span></a>
+        <a href="#">Runs <span>1 live</span></a>
+        <a href="#">Sources <span>13</span></a>
+        <a href="#">Compose <span>new</span></a>
+        <a href="#">Rules <span>4 auto</span></a>
+      </nav>
+
+      <div class="mini">
+        <strong>Auto-approval window</strong>
+        <p>Low-risk leaderboard and CO2 items can publish after a review countdown. Disaster and severe-alert content always stays manual.</p>
+      </div>
+
+      <div class="mini">
+        <strong>What changed</strong>
+        <p>Open-Meteo and marine runs are now scored for anomaly, novelty, and shareability before draft generation.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="hero panel">
+        <div>
+          <div class="eyebrow">Editorial Desk</div>
+          <h2>See what the bot saw. See what it wants to say.</h2>
+          <p>The future dashboard leads with editorial clarity: what is new, what is strong, what is risky, what is queued, and what will publish next. The bot is no longer a black box with a refresh button.</p>
+        </div>
+        <div class="hero-grid">
+          <div class="kpi">
+            <div class="label">Ready now</div>
+            <div class="value">7</div>
+            <div class="sub">4 manual review, 3 auto-approving</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Signals seen</div>
+            <div class="value">182</div>
+            <div class="sub">14 became events, 7 became drafts</div>
+          </div>
+          <div class="kpi">
+            <div class="label">Next publish</div>
+            <div class="value">18m</div>
+            <div class="sub">Hot 10 countdown is running</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="content">
+        <div class="panel">
+          <h3>Drafts That Need You</h3>
+
+          <article class="draft">
+            <div class="meta-row">
+              <span>Record high / Phoenix / score 96</span>
+              <span class="chip good">viral potential high</span>
+            </div>
+            <p>Phoenix hit 122F today. New record for this date. The old one was 121F. From last year. That is not how records are supposed to age.</p>
+            <div class="draft-foot">
+              <span>Why it exists: extreme anomaly, repeat offender, clean comparison</span>
+              <span>Alternates: 4</span>
+              <span>Safety: clean</span>
+            </div>
+          </article>
+
+          <article class="draft">
+            <div class="meta-row">
+              <span>CO2 milestone / Mauna Loa / score 91</span>
+              <span class="chip warn">auto-approves in 41m</span>
+            </div>
+            <p>Atmospheric CO2 at Mauna Loa: 434.02 ppm. First daily reading above 434 in recorded history. Pre-industrial was 280.</p>
+            <div class="draft-foot">
+              <span>Why it exists: milestone crossing, simple context, evergreen shareability</span>
+              <span>Approval rule: delayed auto</span>
+              <span>Reviewer can cancel countdown</span>
+            </div>
+          </article>
+
+          <article class="draft">
+            <div class="meta-row">
+              <span>Wave event / Drake Passage / score 84</span>
+              <span class="chip bad">needs human tone review</span>
+            </div>
+            <p>12.8m waves in the Drake Passage today. Forty-two feet. The Southern Ocean remains completely uninterested in subtlety.</p>
+            <div class="draft-foot">
+              <span>Why it exists: seasonal surprise, scale reference</span>
+              <span>Risk: humor slightly hot for category</span>
+              <span>Suggested fix: reduce flourish</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="panel">
+          <h3>Queue and Health</h3>
+
+          <div class="queue-card">
+            <div class="queue-title">
+              <strong>Auto-approval queue</strong>
+              <span class="chip warn">3 pending</span>
+            </div>
+            <div class="bar"><span style="width: 72%"></span></div>
+            <div class="meta-row">
+              <span>Hot 10 publishes in 18m</span>
+              <span>CO2 publishes in 41m</span>
+            </div>
+          </div>
+
+          <div class="queue-card">
+            <div class="queue-title">
+              <strong>Manual review backlog</strong>
+              <span class="chip good">4 under SLA</span>
+            </div>
+            <div class="bar"><span style="width: 44%"></span></div>
+            <div class="meta-row">
+              <span>Average age 11m</span>
+              <span>Target under 45m</span>
+            </div>
+          </div>
+
+          <div class="queue-card">
+            <div class="queue-title">
+              <strong>Publisher</strong>
+              <span class="chip good">healthy</span>
+            </div>
+            <div class="meta-row">
+              <span>X posting latency 22s</span>
+              <span>Bluesky latency 9s</span>
+            </div>
+          </div>
+
+          <div class="sources">
+            <div class="source">
+              <strong>Open-Meteo</strong>
+              <span>257 cities fetched</span>
+              <span>1 anomaly promoted</span>
+              <span>Latency 38s</span>
+            </div>
+            <div class="source">
+              <strong>NASA FIRMS</strong>
+              <span>24 detections</span>
+              <span>22 suppressed by thresholds</span>
+              <span>Latency 7s</span>
+            </div>
+            <div class="source">
+              <strong>NOAA ACIS</strong>
+              <span>3 confirmations checked</span>
+              <span>1 confirmed event</span>
+              <span>Latency 4s</span>
+            </div>
+            <div class="source">
+              <strong>Marine</strong>
+              <span>16 points scored</span>
+              <span>1 event flagged</span>
+              <span>Latency 9s</span>
+            </div>
+            <div class="source">
+              <strong>USGS Water</strong>
+              <span>12 gauges healthy</span>
+              <span>0 above threshold</span>
+              <span>Latency 3s</span>
+            </div>
+            <div class="source">
+              <strong>System</strong>
+              <span>No publish retries open</span>
+              <span>State sync healthy</span>
+              <span>Next run 03:59 UTC</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

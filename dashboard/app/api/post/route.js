@@ -18,6 +18,7 @@ export async function POST(request) {
       headers: {
         Authorization: `token ${GITHUB_TOKEN}`,
         Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         ref: "main",
