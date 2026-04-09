@@ -42,6 +42,40 @@ function countdownText(dateStr) {
   return `auto in ${hrs}h ${rem}m`
 }
 
+function clipText(text, max = 96) {
+  if (!text || text.length <= max) return text
+  return `${text.slice(0, max - 1)}…`
+}
+
+function ScoreMeter({ label, value, inverse = false }) {
+  const safeValue = Number.isFinite(value) ? value : 0
+  const fillValue = inverse ? Math.max(8, 100 - safeValue) : safeValue
+  return (
+    <div className="score-meter">
+      <div className="score-meter-head">
+        <span>{label}</span>
+        <span>{safeValue}</span>
+      </div>
+      <div className="score-meter-track">
+        <div className={`score-meter-fill ${inverse ? "inverse" : ""}`} style={{ width: `${fillValue}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function findDraftRun(draft, botRuns) {
+  const runId = draft?.review_context?.run_id
+  if (!runId) return null
+  return botRuns.find((run) => run.id === runId) || null
+}
+
+function findDraftSourceRun(draft, botRuns) {
+  const run = findDraftRun(draft, botRuns)
+  const sourceKey = draft?.review_context?.source_key
+  if (!run || !sourceKey) return null
+  return run.sources?.find((source) => source.source === sourceKey) || null
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -53,6 +87,7 @@ export default function Dashboard() {
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState("")
   const [draftAction, setDraftAction] = useState(null)
+  const [selectedDraftId, setSelectedDraftId] = useState(null)
 
   // Compose
   const [composePrompt, setComposePrompt] = useState("")
@@ -82,6 +117,16 @@ export default function Dashboard() {
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  useEffect(() => {
+    if (!drafts.length) {
+      setSelectedDraftId(null)
+      return
+    }
+    if (!drafts.some((draft) => draft.id === selectedDraftId)) {
+      setSelectedDraftId(drafts[0].id)
+    }
+  }, [drafts, selectedDraftId])
 
   async function trigger(mode) {
     setTriggering(mode)
@@ -188,6 +233,11 @@ export default function Dashboard() {
   const latestBotRun = botRuns[0]
   const latestSourceRuns = latestBotRun?.sources || []
   const failedSourceRuns = latestSourceRuns.filter((source) => source.status === "failed")
+  const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) || drafts[0] || null
+  const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
+  const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
+  const selectedCandidate = selectedDraft?.candidates?.find((candidate) => candidate.text === selectedDraft?.text)
+    || selectedDraft?.candidates?.[0]
 
   return (
     <>
@@ -231,6 +281,38 @@ export default function Dashboard() {
           padding: 14px; margin-bottom: 10px;
         }
         .draft-item.highlight { border-color: #ff4d00; }
+        .draft-desk {
+          display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px;
+        }
+        @media (max-width: 860px) {
+          .draft-desk { grid-template-columns: 1fr; }
+        }
+        .draft-queue {
+          display: grid; gap: 10px; align-content: start;
+        }
+        .queue-item {
+          width: 100%; text-align: left; background: #0a0a0a; border: 1px solid #222;
+          border-radius: 8px; padding: 12px; color: inherit; cursor: pointer;
+        }
+        .queue-item:hover { border-color: #3a3a3a; }
+        .queue-item.selected {
+          border-color: #ff4d00;
+          box-shadow: 0 0 0 1px rgba(255, 77, 0, 0.18);
+        }
+        .queue-item-head {
+          display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px;
+        }
+        .queue-score { color: #666; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
+        .queue-text {
+          color: #ededed; font-size: 13px; line-height: 1.45; margin-bottom: 8px;
+        }
+        .queue-meta {
+          display: flex; justify-content: space-between; gap: 8px; color: #555; font-size: 10px;
+        }
+        .draft-workbench {
+          background: linear-gradient(180deg, rgba(26, 26, 26, 0.78), rgba(10, 10, 10, 0.88));
+          border: 1px solid #242424; border-radius: 10px; padding: 16px;
+        }
         .draft-meta {
           display: flex; justify-content: space-between; align-items: center;
           margin-bottom: 8px; font-size: 11px;
@@ -244,6 +326,36 @@ export default function Dashboard() {
         .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
         .draft-chars.over { color: #f87171; }
         .draft-actions { display: flex; gap: 8px; }
+        .draft-status-row {
+          display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+        }
+        .workbench-pill {
+          display: inline-flex; align-items: center; gap: 6px;
+          background: #141414; border: 1px solid #2a2a2a; border-radius: 999px;
+          padding: 5px 10px; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: #888;
+        }
+        .workbench-grid {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0;
+        }
+        @media (max-width: 860px) {
+          .workbench-grid { grid-template-columns: 1fr; }
+        }
+        .workbench-panel {
+          background: #0c0c0c; border: 1px solid #1d1d1d; border-radius: 8px; padding: 12px;
+        }
+        .workbench-panel h3 {
+          font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #666; margin-bottom: 10px;
+        }
+        .workbench-headline {
+          color: #fff; font-size: 14px; line-height: 1.4; margin-bottom: 10px;
+        }
+        .fact-list { display: grid; gap: 8px; }
+        .fact-row {
+          display: flex; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid #171717;
+        }
+        .fact-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .fact-label { color: #666; font-size: 11px; }
+        .fact-value { color: #e3e3e3; font-size: 11px; text-align: right; }
         .draft-reason-block { display: grid; gap: 4px; margin-bottom: 10px; }
         .draft-reason-line { font-size: 11px; color: #666; }
         .draft-reason-line strong { color: #888; font-weight: 600; }
@@ -259,6 +371,26 @@ export default function Dashboard() {
         }
         .candidate-text { color: #d8d8d8; font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
         .candidate-meta { color: #555; font-size: 10px; }
+        .score-meter { margin-bottom: 10px; }
+        .score-meter:last-child { margin-bottom: 0; }
+        .score-meter-head {
+          display: flex; justify-content: space-between; gap: 8px; color: #777; font-size: 10px;
+          text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;
+        }
+        .score-meter-track {
+          height: 6px; border-radius: 999px; background: #161616; overflow: hidden;
+        }
+        .score-meter-fill {
+          height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff4d00, #ff8a3d);
+        }
+        .score-meter-fill.inverse {
+          background: linear-gradient(90deg, #4ade80, #facc15);
+        }
+        .run-trace { display: grid; gap: 8px; }
+        .trace-line {
+          display: flex; justify-content: space-between; gap: 10px; color: #777; font-size: 11px;
+        }
+        .trace-line strong { color: #ddd; font-weight: 600; }
         .draft-edit-area {
           width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
           color: #fff; font-family: inherit; font-size: 14px; padding: 10px;
@@ -378,75 +510,200 @@ export default function Dashboard() {
           <>
             {/* DRAFTS — primary view */}
             <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Drafts to Review ({drafts.length})</h2>
+              <h2>Draft Workbench ({drafts.length})</h2>
               {drafts.length > 0 ? (
-                drafts.map((d) => (
-                  <div key={d.id} className={`draft-item ${editingId === d.id ? "highlight" : ""}`}>
-                    <div className="draft-meta">
-                      <span className="draft-type">{d.type}</span>
-                      <span className="draft-time">
-                        {d.score?.total ? `signal ${d.score.total}` : "signal —"}
-                        {d.candidate_score?.total ? ` · copy ${d.candidate_score.total}` : ""}
-                        {" · "}
-                        {timeAgo(d.created_at)}
-                      </span>
-                    </div>
+                <div className="draft-desk">
+                  <div className="draft-queue">
+                    {drafts.map((draft) => (
+                      <button
+                        key={draft.id}
+                        className={`queue-item ${selectedDraft?.id === draft.id ? "selected" : ""}`}
+                        onClick={() => {
+                          setSelectedDraftId(draft.id)
+                          setEditingId(null)
+                          setEditText("")
+                        }}
+                      >
+                        <div className="queue-item-head">
+                          <span className="draft-type">{draft.type}</span>
+                          <span className="queue-score">
+                            S {draft.score?.total ?? "—"} · C {draft.candidate_score?.total ?? "—"}
+                          </span>
+                        </div>
+                        <div className="queue-text">{clipText(draft.text, 118)}</div>
+                        <div className="queue-meta">
+                          <span>{timeAgo(draft.created_at)}</span>
+                          <span>{draft.auto_approve_at ? countdownText(draft.auto_approve_at) : "manual review"}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
 
-                    {editingId === d.id ? (
+                  <div className="draft-workbench">
+                    {selectedDraft && (
                       <>
-                        <textarea
-                          className="draft-edit-area"
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          rows={3}
-                        />
-                        <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
-                          {editText.length}/280
+                        <div className="draft-meta">
+                          <span className="draft-type">{selectedDraft.type}</span>
+                          <span className="draft-time">
+                            {selectedDraft.review_context?.source || "draft queue"}
+                            {" · "}
+                            {timeAgo(selectedDraft.created_at)}
+                          </span>
                         </div>
-                        <div className="draft-actions">
-                          <button
-                            className="btn approve sm"
-                            disabled={draftAction === d.id || editText.length > 280}
-                            onClick={() => draftAct(d.id, "edit", { editedText: editText })}
-                          >
-                            Save
-                          </button>
-                          <button className="btn sm" onClick={() => setEditingId(null)}>
-                            Cancel
-                          </button>
+
+                        <div className="draft-status-row">
+                          <span className="workbench-pill">
+                            signal {selectedDraft.score?.total ?? "—"}
+                            {selectedDraft.score?.label ? ` · ${selectedDraft.score.label}` : ""}
+                          </span>
+                          <span className="workbench-pill">
+                            copy {selectedDraft.candidate_score?.total ?? "—"}
+                            {selectedCandidate?.source ? ` · ${selectedCandidate.source}` : ""}
+                          </span>
+                          {selectedDraft.auto_approve_at ? (
+                            <span className="workbench-pill">{countdownText(selectedDraft.auto_approve_at)}</span>
+                          ) : (
+                            <span className="workbench-pill">manual approval</span>
+                          )}
+                          {selectedDraft.review_context?.run_mode && (
+                            <span className="workbench-pill">{selectedDraft.review_context.run_mode}</span>
+                          )}
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="draft-text">{d.text}</div>
-                        {(d.score?.reasons?.length > 0 || d.candidate_score?.reasons?.length > 0) && (
+
+                        {editingId === selectedDraft.id ? (
+                          <>
+                            <textarea
+                              className="draft-edit-area"
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              rows={4}
+                            />
+                            <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
+                              {editText.length}/280
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="draft-text">{selectedDraft.text}</div>
+                            <div className="draft-chars">{selectedDraft.text.length}/280</div>
+                          </>
+                        )}
+
+                        {(selectedDraft.score?.reasons?.length > 0 || selectedDraft.candidate_score?.reasons?.length > 0) && (
                           <div className="draft-reason-block">
-                            {d.score?.reasons?.length > 0 && (
+                            {selectedDraft.score?.reasons?.length > 0 && (
                               <div className="draft-reason-line">
-                                <strong>Signal:</strong> {d.score.reasons.join(" · ")}
+                                <strong>Signal:</strong> {selectedDraft.score.reasons.join(" · ")}
                               </div>
                             )}
-                            {d.candidate_score?.reasons?.length > 0 && (
+                            {selectedDraft.candidate_score?.reasons?.length > 0 && (
                               <div className="draft-reason-line">
-                                <strong>Copy:</strong> {d.candidate_score.reasons.join(" · ")}
+                                <strong>Copy:</strong> {selectedDraft.candidate_score.reasons.join(" · ")}
                               </div>
                             )}
                           </div>
                         )}
-                        <div className="draft-chars">{d.text.length}/280</div>
-                        {d.candidates?.length > 1 && (
+
+                        <div className="workbench-grid">
+                          <div className="workbench-panel">
+                            <h3>Why This Exists</h3>
+                            <div className="workbench-headline">
+                              {selectedDraft.review_context?.headline || "Pending draft awaiting review"}
+                            </div>
+                            {selectedDraft.review_context?.facts?.length > 0 ? (
+                              <div className="fact-list">
+                                {selectedDraft.review_context.facts.map((fact) => (
+                                  <div key={`${selectedDraft.id}-${fact.label}`} className="fact-row">
+                                    <span className="fact-label">{fact.label}</span>
+                                    <span className="fact-value">{fact.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="empty">no structured source facts saved</div>
+                            )}
+                          </div>
+
+                          <div className="workbench-panel">
+                            <h3>Signal Score</h3>
+                            {selectedDraft.score ? (
+                              <>
+                                <ScoreMeter label="severity" value={selectedDraft.score.severity} />
+                                <ScoreMeter label="novelty" value={selectedDraft.score.novelty} />
+                                <ScoreMeter label="timeliness" value={selectedDraft.score.timeliness} />
+                                <ScoreMeter label="confidence" value={selectedDraft.score.confidence} />
+                                <ScoreMeter label="shareability" value={selectedDraft.score.shareability} />
+                                <ScoreMeter label="sensitivity" value={selectedDraft.score.sensitivity} inverse />
+                              </>
+                            ) : (
+                              <div className="empty">no signal score available</div>
+                            )}
+                          </div>
+
+                          <div className="workbench-panel">
+                            <h3>Copy Score</h3>
+                            {selectedDraft.candidate_score ? (
+                              <>
+                                <ScoreMeter label="clarity" value={selectedDraft.candidate_score.clarity} />
+                                <ScoreMeter label="context" value={selectedDraft.candidate_score.context} />
+                                <ScoreMeter label="voice" value={selectedDraft.candidate_score.voice} />
+                                <ScoreMeter label="punch" value={selectedDraft.candidate_score.punch} />
+                              </>
+                            ) : (
+                              <div className="empty">single-candidate draft</div>
+                            )}
+                          </div>
+
+                          <div className="workbench-panel">
+                            <h3>Run Trace</h3>
+                            <div className="run-trace">
+                              <div className="trace-line">
+                                <span>workflow run</span>
+                                <strong>{selectedDraftRun?.id || selectedDraft.review_context?.run_id || "—"}</strong>
+                              </div>
+                              <div className="trace-line">
+                                <span>source slot</span>
+                                <strong>{selectedDraft.review_context?.source_key || "—"}</strong>
+                              </div>
+                              <div className="trace-line">
+                                <span>source status</span>
+                                <strong>{selectedDraftSourceRun?.status || "—"}</strong>
+                              </div>
+                              <div className="trace-line">
+                                <span>observed / promoted</span>
+                                <strong>
+                                  {selectedDraftSourceRun
+                                    ? `${selectedDraftSourceRun.observed} / ${selectedDraftSourceRun.promoted}`
+                                    : "—"}
+                                </strong>
+                              </div>
+                              <div className="trace-line">
+                                <span>source duration</span>
+                                <strong>{selectedDraftSourceRun ? formatDuration(selectedDraftSourceRun.duration_ms) : "—"}</strong>
+                              </div>
+                              <div className="trace-line">
+                                <span>event id</span>
+                                <strong>{selectedDraft.event_id || "manual"}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {selectedDraft.candidates?.length > 1 && (
                           <div className="candidate-list">
-                            {d.candidates
-                              .filter((candidate) => candidate.text !== d.text)
+                            {selectedDraft.candidates
+                              .filter((candidate) => candidate.text !== selectedDraft.text)
                               .slice(0, 3)
                               .map((candidate) => (
-                                <div key={`${d.id}-${candidate.rank}`} className="candidate-item">
+                                <div key={`${selectedDraft.id}-${candidate.rank}`} className="candidate-item">
                                   <div className="candidate-head">
-                                    <span>alt #{candidate.rank} · copy {candidate.score?.total || 0} · {candidate.source}</span>
+                                    <span>
+                                      alt #{candidate.rank} · copy {candidate.score?.total || 0} · {candidate.source}
+                                    </span>
                                     <button
                                       className="btn sm"
                                       disabled={!!draftAction}
-                                      onClick={() => draftAct(d.id, "select_candidate", { candidateRank: candidate.rank })}
+                                      onClick={() => draftAct(selectedDraft.id, "select_candidate", { candidateRank: candidate.rank })}
                                     >
                                       Use This
                                     </button>
@@ -459,52 +716,70 @@ export default function Dashboard() {
                               ))}
                           </div>
                         )}
+
                         <div className="draft-actions">
-                          <button
-                            className="btn approve sm"
-                            disabled={!!draftAction}
-                            onClick={() => draftAct(d.id, "approve")}
-                          >
-                            {draftAction === d.id ? "..." : "Approve + Post"}
-                          </button>
-                          <button
-                            className="btn sm"
-                            onClick={() => { setEditingId(d.id); setEditText(d.text) }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn reject sm"
-                            disabled={!!draftAction}
-                            onClick={() => draftAct(d.id, "reject")}
-                          >
-                            Reject
-                          </button>
-                          {d.auto_approve_at ? (
-                            <button
-                              className="btn sm"
-                              disabled={!!draftAction}
-                              onClick={() => draftAct(d.id, "cancel_auto_approve")}
-                            >
-                              Cancel {countdownText(d.auto_approve_at)}
-                            </button>
+                          {editingId === selectedDraft.id ? (
+                            <>
+                              <button
+                                className="btn approve sm"
+                                disabled={draftAction === selectedDraft.id || editText.length > 280}
+                                onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText })}
+                              >
+                                Save
+                              </button>
+                              <button className="btn sm" onClick={() => setEditingId(null)}>
+                                Cancel
+                              </button>
+                            </>
                           ) : (
-                            <button
-                              className="btn sm"
-                              disabled={!!draftAction}
-                              onClick={() => draftAct(d.id, "auto_approve", { delayMinutes: 30 })}
-                            >
-                              Auto 30m
-                            </button>
+                            <>
+                              <button
+                                className="btn approve sm"
+                                disabled={!!draftAction}
+                                onClick={() => draftAct(selectedDraft.id, "approve")}
+                              >
+                                {draftAction === selectedDraft.id ? "..." : "Approve + Post"}
+                              </button>
+                              <button
+                                className="btn sm"
+                                onClick={() => {
+                                  setEditingId(selectedDraft.id)
+                                  setEditText(selectedDraft.text)
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="btn reject sm"
+                                disabled={!!draftAction}
+                                onClick={() => draftAct(selectedDraft.id, "reject")}
+                              >
+                                Reject
+                              </button>
+                              {selectedDraft.auto_approve_at ? (
+                                <button
+                                  className="btn sm"
+                                  disabled={!!draftAction}
+                                  onClick={() => draftAct(selectedDraft.id, "cancel_auto_approve")}
+                                >
+                                  Cancel {countdownText(selectedDraft.auto_approve_at)}
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn sm"
+                                  disabled={!!draftAction}
+                                  onClick={() => draftAct(selectedDraft.id, "auto_approve", { delayMinutes: 30 })}
+                                >
+                                  Auto 30m
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
-                        {d.auto_approve_at && (
-                          <div className="compose-status">{countdownText(d.auto_approve_at)}</div>
-                        )}
                       </>
                     )}
                   </div>
-                ))
+                </div>
               ) : (
                 <div className="draft-empty">
                   No drafts waiting. Trigger a run below or compose one manually.

@@ -72,6 +72,31 @@ class TestSaveDraft:
         assert len(state["drafts"][0]["candidates"]) == 2
         assert state["drafts"][0]["candidate_score"]["total"] == bundle.selected_score.total
 
+    def test_persists_review_context(self):
+        from src.editorial.scoring import score_fire_event
+
+        state = _fresh_state()
+        score = score_fire_event(97, 1200, region="Northern California")
+        review_context = {
+            "source": "NASA FIRMS",
+            "source_key": "firms",
+            "headline": "Wildfire signal near Northern California",
+            "facts": [{"label": "Satellite confidence", "value": "97%"}],
+            "run_id": "run_alerts_1",
+        }
+
+        save_draft(
+            "Fire signal draft",
+            state,
+            "fire",
+            "fire_evt",
+            score=score,
+            review_context=review_context,
+        )
+
+        assert state["drafts"][0]["review_context"]["source"] == "NASA FIRMS"
+        assert state["drafts"][0]["review_context"]["facts"][0]["value"] == "97%"
+
 
 class TestPostApproved:
     @patch("src.main.state")

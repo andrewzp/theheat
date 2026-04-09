@@ -146,6 +146,39 @@ def _unwrap_generated_result(
     return text, candidate_payload, selected_payload
 
 
+def _fact(label: str, value: str | int | float | None) -> dict | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return {"label": label, "value": text}
+
+
+def _temp_pair_c(temp_c: float) -> str:
+    temp_f = round(temp_c * 9 / 5 + 32, 1)
+    return f"{temp_c:.1f}C / {temp_f:.1f}F"
+
+
+def _review_context(
+    *,
+    source: str,
+    source_key: str,
+    headline: str,
+    facts: list[dict | None],
+    current_run: dict | None = None,
+) -> dict:
+    return {
+        "source": source,
+        "source_key": source_key,
+        "headline": headline,
+        "facts": [fact for fact in facts if fact],
+        "run_id": current_run.get("id") if current_run else None,
+        "run_mode": current_run.get("mode") if current_run else None,
+        "run_started_at": current_run.get("started_at") if current_run else None,
+    }
+
+
 def save_draft(
     tweet_text: str,
     bot_state: dict,
@@ -154,6 +187,7 @@ def save_draft(
     score: EditorialScore | None = None,
     candidates: list[dict] | None = None,
     candidate_score: dict | None = None,
+    review_context: dict | None = None,
 ) -> bool:
     """Save a generated tweet as a draft for review."""
     drafts = bot_state.setdefault("drafts", [])
@@ -186,6 +220,8 @@ def save_draft(
         draft["candidates"] = candidates
     if candidate_score:
         draft["candidate_score"] = candidate_score
+    if review_context:
+        draft["review_context"] = review_context
     drafts.append(draft)
     print(f"[draft] Saved: {tweet_text[:60]}...")
     return True
@@ -197,6 +233,7 @@ def _save_generated_draft(
     tweet_type: str,
     event_id: str,
     score: EditorialScore,
+    review_context: dict | None = None,
 ) -> bool:
     tweet_text, candidates, candidate_score = _unwrap_generated_result(generated)
     if not tweet_text:
@@ -209,6 +246,7 @@ def _save_generated_draft(
         score=score,
         candidates=candidates,
         candidate_score=candidate_score,
+        review_context=review_context,
     )
 
 
@@ -276,7 +314,20 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 old_record_year=record.old_record_year,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "record", record.event_id, score):
+            review_context = _review_context(
+                source="Open-Meteo historical",
+                source_key="open_meteo_records",
+                headline=f"{record.city} set a heat record",
+                current_run=current_run,
+                facts=[
+                    _fact("New high", _temp_pair_c(record.new_temp_c)),
+                    _fact("Previous record", _temp_pair_c(record.old_record_c)),
+                    _fact("Old record year", record.old_record_year),
+                    _fact("Record gap", f"+{record.new_temp_c - record.old_record_c:.1f}C"),
+                    _fact("Country", record.country),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "record", record.event_id, score, review_context=review_context):
                 state.record_event(bot_state, record.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -325,7 +376,20 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 old_record_year=record.old_record_year,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "record_low", record.event_id, score):
+            review_context = _review_context(
+                source="Open-Meteo historical",
+                source_key="open_meteo_record_lows",
+                headline=f"{record.city} set a cold record",
+                current_run=current_run,
+                facts=[
+                    _fact("New low", _temp_pair_c(record.new_temp_c)),
+                    _fact("Previous low", _temp_pair_c(record.old_record_c)),
+                    _fact("Old record year", record.old_record_year),
+                    _fact("Record gap", f"-{record.old_record_c - record.new_temp_c:.1f}C"),
+                    _fact("Country", record.country),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "record_low", record.event_id, score, review_context=review_context):
                 state.record_event(bot_state, record.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -374,7 +438,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     record_date=confirmation.date,
                     return_bundle=True,
                 )
-                if _save_generated_draft(generated, bot_state, "noaa_confirmation", confirm_event_id, score):
+                review_context = _review_context(
+                    source="NOAA ACIS",
+                    source_key="noaa_confirmation",
+                    headline=f"NOAA confirmed {confirmation.city}'s record",
+                    current_run=current_run,
+                    facts=[
+                        _fact("Official high", f"{confirmation.new_temp_f:.0f}F"),
+                        _fact("Record date", confirmation.date),
+                        _fact("City", confirmation.city),
+                        _fact("State", confirmation.state),
+                    ],
+                )
+                if _save_generated_draft(generated, bot_state, "noaa_confirmation", confirm_event_id, score, review_context=review_context):
                     state.record_event(bot_state, confirm_event_id)
                     drafted += 1
                     source_drafted += 1
@@ -412,7 +488,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 frp=fire.frp,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "fire", fire.event_id, score):
+            review_context = _review_context(
+                source="NASA FIRMS",
+                source_key="firms",
+                headline=f"Wildfire signal near {fire.nearest_city}",
+                current_run=current_run,
+                facts=[
+                    _fact("Nearest region", fire.nearest_city),
+                    _fact("Country", fire.country),
+                    _fact("Satellite confidence", f"{fire.confidence}%"),
+                    _fact("Fire radiative power", f"{fire.frp:.0f} MW"),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "fire", fire.event_id, score, review_context=review_context):
                 state.record_event(bot_state, fire.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -450,7 +538,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     actual_ppm=milestone.actual_ppm,
                     return_bundle=True,
                 )
-                if _save_generated_draft(generated, bot_state, "co2_milestone", milestone.event_id, score):
+                review_context = _review_context(
+                    source="NOAA GML",
+                    source_key="co2",
+                    headline=f"Mauna Loa crossed {milestone.ppm_crossed} ppm",
+                    current_run=current_run,
+                    facts=[
+                        _fact("Actual reading", f"{milestone.actual_ppm:.2f} ppm"),
+                        _fact("Milestone crossed", f"{milestone.ppm_crossed} ppm"),
+                        _fact("Pre-industrial baseline", "280 ppm"),
+                    ],
+                )
+                if _save_generated_draft(generated, bot_state, "co2_milestone", milestone.event_id, score, review_context=review_context):
                     state.record_event(bot_state, milestone.event_id)
                     drafted += 1
                     co2_drafted_today = True
@@ -469,7 +568,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         diff=comparison.difference,
                         return_bundle=True,
                     )
-                    if _save_generated_draft(generated, bot_state, "co2_weekly", comparison.event_id, score):
+                    review_context = _review_context(
+                        source="NOAA GML",
+                        source_key="co2",
+                        headline="Weekly Mauna Loa CO2 comparison",
+                        current_run=current_run,
+                        facts=[
+                            _fact("This week", f"{comparison.current_avg:.2f} ppm"),
+                            _fact("Same week last year", f"{comparison.last_year_avg:.2f} ppm"),
+                            _fact("Year-over-year change", f"{comparison.difference:+.2f} ppm"),
+                        ],
+                    )
+                    if _save_generated_draft(generated, bot_state, "co2_weekly", comparison.event_id, score, review_context=review_context):
                         state.record_event(bot_state, comparison.event_id)
                         drafted += 1
                         source_drafted += 1
@@ -505,7 +615,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 severity=alert.severity,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "severe_weather", alert.event_id, score):
+            review_context = _review_context(
+                source="NWS Alerts",
+                source_key="nws_alerts",
+                headline=f"{alert.event_type} for {alert.area}",
+                current_run=current_run,
+                facts=[
+                    _fact("Event", alert.event_type),
+                    _fact("Area", alert.area),
+                    _fact("Severity", alert.severity),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "severe_weather", alert.event_id, score, review_context=review_context):
                 state.record_event(bot_state, alert.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -543,7 +664,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 description=disaster.description,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "global_disaster", disaster.event_id, score):
+            review_context = _review_context(
+                source="GDACS",
+                source_key="gdacs",
+                headline=f"{disaster.disaster_type} alert: {disaster.name}",
+                current_run=current_run,
+                facts=[
+                    _fact("Alert tier", disaster.severity),
+                    _fact("Disaster type", disaster.disaster_type),
+                    _fact("Country", disaster.country),
+                    _fact("Name", disaster.name),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "global_disaster", disaster.event_id, score, review_context=review_context):
                 state.record_event(bot_state, disaster.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -584,7 +717,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         previous_year=record.previous_year,
                         return_bundle=True,
                     )
-                    if _save_generated_draft(generated, bot_state, "sea_ice_record", record.event_id, score):
+                    review_context = _review_context(
+                        source="NSIDC",
+                        source_key=f"sea_ice_{hemisphere.lower()}",
+                        headline=f"{record.hemisphere} sea ice record low",
+                        current_run=current_run,
+                        facts=[
+                            _fact("Current extent", f"{record.extent_million_km2:.2f} million sq km"),
+                            _fact("Previous record", f"{record.previous_extent:.2f} million sq km"),
+                            _fact("Previous record year", record.previous_year),
+                        ],
+                    )
+                    if _save_generated_draft(generated, bot_state, "sea_ice_record", record.event_id, score, review_context=review_context):
                         state.record_event(bot_state, record.event_id)
                         drafted += 1
                         source_drafted = 1
@@ -623,7 +767,30 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     if _should_draft(score, event_id):
                         source_promoted = 1
                         generated = generator.generate_drought_tweet(states=drought_updates, return_bundle=True)
-                        if _save_generated_draft(generated, bot_state, "drought", event_id, score):
+                        worst_state = max(
+                            drought_updates,
+                            key=lambda item: (
+                                (item.d3_pct if hasattr(item, "d3_pct") else item["d3_pct"])
+                                + (item.d4_pct if hasattr(item, "d4_pct") else item["d4_pct"])
+                            ),
+                        )
+                        worst_name = worst_state.state if hasattr(worst_state, "state") else worst_state["state"]
+                        worst_total = (
+                            (worst_state.d3_pct if hasattr(worst_state, "d3_pct") else worst_state["d3_pct"])
+                            + (worst_state.d4_pct if hasattr(worst_state, "d4_pct") else worst_state["d4_pct"])
+                        )
+                        review_context = _review_context(
+                            source="US Drought Monitor",
+                            source_key="drought",
+                            headline="Weekly drought footprint update",
+                            current_run=current_run,
+                            facts=[
+                                _fact("Worst state", worst_name),
+                                _fact("Extreme + exceptional drought", f"{worst_total:.0f}%"),
+                                _fact("States summarized", len(drought_updates)),
+                            ],
+                        )
+                        if _save_generated_draft(generated, bot_state, "drought", event_id, score, review_context=review_context):
                             state.record_event(bot_state, event_id)
                             drafted += 1
                             source_drafted = 1
@@ -667,7 +834,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     previous_duration=transition["previous_duration_months"],
                     return_bundle=True,
                 )
-                if _save_generated_draft(generated, bot_state, "enso", transition["event_id"], score):
+                review_context = _review_context(
+                    source="NOAA CPC",
+                    source_key="enso",
+                    headline=f"ENSO shifted to {transition['to_status']}",
+                    current_run=current_run,
+                    facts=[
+                        _fact("New phase", transition["to_status"]),
+                        _fact("ONI", f"{transition['oni_value']:+.1f}"),
+                        _fact("Previous duration", f"{transition['previous_duration_months']} months"),
+                    ],
+                )
+                if _save_generated_draft(generated, bot_state, "enso", transition["event_id"], score, review_context=review_context):
                     state.record_event(bot_state, transition["event_id"])
                     drafted += 1
                     source_drafted = 1
@@ -711,7 +889,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 wave_height_m=wave.wave_height_m,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "extreme_wave", wave.event_id, score):
+            review_context = _review_context(
+                source="Open-Meteo Marine",
+                source_key="ocean",
+                headline=f"Extreme wave signal in {wave.location}",
+                current_run=current_run,
+                facts=[
+                    _fact("Location", wave.location),
+                    _fact("Ocean", wave.ocean),
+                    _fact("Wave height", f"{wave.wave_height_m:.1f}m / {wave.wave_height_m * 3.281:.0f}ft"),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "extreme_wave", wave.event_id, score, review_context=review_context):
                 state.record_event(bot_state, wave.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -750,7 +939,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 predicted_m=surge.predicted_m,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "storm_surge", surge.event_id, score):
+            review_context = _review_context(
+                source="NOAA CO-OPS",
+                source_key="water_levels",
+                headline=f"Storm surge signal at {surge.station_name}",
+                current_run=current_run,
+                facts=[
+                    _fact("Station", surge.station_name),
+                    _fact("State", surge.state),
+                    _fact("Anomaly", f"{surge.anomaly_m:.2f}m / {surge.anomaly_m * 3.281:.1f}ft above predicted"),
+                    _fact("Observed vs predicted", f"{surge.observed_m:.2f}m vs {surge.predicted_m:.2f}m"),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "storm_surge", surge.event_id, score, review_context=review_context):
                 state.record_event(bot_state, surge.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -789,7 +990,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 above_by_ft=flood.above_by_ft,
                 return_bundle=True,
             )
-            if _save_generated_draft(generated, bot_state, "river_flood", flood.event_id, score):
+            review_context = _review_context(
+                source="USGS Water",
+                source_key="river_gauges",
+                headline=f"{flood.river} flood-stage exceedance",
+                current_run=current_run,
+                facts=[
+                    _fact("River", flood.river),
+                    _fact("Location", flood.location),
+                    _fact("Gauge height", f"{flood.gauge_height_ft:.1f}ft"),
+                    _fact("Above flood stage", f"{flood.above_by_ft:.1f}ft"),
+                ],
+            )
+            if _save_generated_draft(generated, bot_state, "river_flood", flood.event_id, score, review_context=review_context):
                 state.record_event(bot_state, flood.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -876,7 +1089,20 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
         event_id = f"hot10_{date.today().isoformat()}"
         drafted_count = 0
         if generated and _should_draft(score, event_id):
-            drafted_count = 1 if _save_generated_draft(generated, bot_state, "hot10", event_id, score) else 0
+            leader = hot10[0] if hot10 else None
+            review_context = _review_context(
+                source="Open-Meteo + normals",
+                source_key="leaderboard",
+                headline="Daily Hot 10 anomaly leaderboard",
+                current_run=current_run,
+                facts=[
+                    _fact("Leader", leader.city if leader else None),
+                    _fact("Top anomaly", f"+{leader.anomaly_c:.1f}C" if leader else None),
+                    _fact("Cities ranked", len(hot10)),
+                    _fact("Ranking changes", len(changes)),
+                ],
+            )
+            drafted_count = 1 if _save_generated_draft(generated, bot_state, "hot10", event_id, score, review_context=review_context) else 0
 
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
