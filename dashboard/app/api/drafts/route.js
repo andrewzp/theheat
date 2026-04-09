@@ -116,7 +116,12 @@ export async function POST(request) {
     }
 
     if (action === "auto_approve") {
-      const minutes = Number(delayMinutes || 30)
+      const policy = draft.approval_policy || {}
+      if (policy.can_auto_approve === false) {
+        return Response.json({ error: "This draft type requires manual approval" }, { status: 400 })
+      }
+      const requestedMinutes = delayMinutes ?? policy.recommended_delay_minutes ?? 30
+      const minutes = Number(requestedMinutes)
       if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) {
         return Response.json({ error: "Delay must be between 5 and 1440 minutes" }, { status: 400 })
       }
@@ -125,7 +130,7 @@ export async function POST(request) {
       draft.auto_approve_requested_at = new Date().toISOString()
       draft.approval_mode = "auto"
       await writeState(state)
-      return Response.json({ ok: true, action: "auto_approved", autoApproveAt })
+      return Response.json({ ok: true, action: "auto_approved", autoApproveAt, minutes })
     }
 
     if (action === "cancel_auto_approve") {

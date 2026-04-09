@@ -42,6 +42,23 @@ function countdownText(dateStr) {
   return `auto in ${hrs}h ${rem}m`
 }
 
+function delayLabel(minutes) {
+  if (!minutes) return "manual"
+  if (minutes < 60) return `${minutes}m`
+  const hrs = Math.floor(minutes / 60)
+  const rem = minutes % 60
+  return rem ? `${hrs}h ${rem}m` : `${hrs}h`
+}
+
+function policySummary(draft) {
+  const policy = draft?.approval_policy
+  if (!policy) return "policy pending"
+  if (policy.mode === "manual_only") return "review only"
+  if (draft?.auto_approve_at) return countdownText(draft.auto_approve_at)
+  if (policy.recommended_delay_minutes) return `auto ${delayLabel(policy.recommended_delay_minutes)}`
+  return "manual review"
+}
+
 function clipText(text, max = 96) {
   if (!text || text.length <= max) return text
   return `${text.slice(0, max - 1)}…`
@@ -533,7 +550,7 @@ export default function Dashboard() {
                         <div className="queue-text">{clipText(draft.text, 118)}</div>
                         <div className="queue-meta">
                           <span>{timeAgo(draft.created_at)}</span>
-                          <span>{draft.auto_approve_at ? countdownText(draft.auto_approve_at) : "manual review"}</span>
+                          <span>{policySummary(draft)}</span>
                         </div>
                       </button>
                     ))}
@@ -562,8 +579,14 @@ export default function Dashboard() {
                           </span>
                           {selectedDraft.auto_approve_at ? (
                             <span className="workbench-pill">{countdownText(selectedDraft.auto_approve_at)}</span>
+                          ) : selectedDraft.approval_policy?.mode === "manual_only" ? (
+                            <span className="workbench-pill">manual only</span>
                           ) : (
-                            <span className="workbench-pill">manual approval</span>
+                            <span className="workbench-pill">
+                              {selectedDraft.approval_policy?.recommended_delay_minutes
+                                ? `recommended ${delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)}`
+                                : "manual approval"}
+                            </span>
                           )}
                           {selectedDraft.review_context?.run_mode && (
                             <span className="workbench-pill">{selectedDraft.review_context.run_mode}</span>
@@ -652,6 +675,39 @@ export default function Dashboard() {
                             ) : (
                               <div className="empty">single-candidate draft</div>
                             )}
+                          </div>
+
+                          <div className="workbench-panel">
+                            <h3>Approval Policy</h3>
+                            <div className="workbench-headline">
+                              {selectedDraft.approval_policy?.mode === "armed_auto"
+                                ? "Policy armed this draft automatically."
+                                : selectedDraft.approval_policy?.mode === "suggested_auto"
+                                  ? "Policy recommends a timed auto-approval."
+                                  : "Policy requires explicit human approval."}
+                            </div>
+                            <div className="fact-list">
+                              <div className="fact-row">
+                                <span className="fact-label">Policy key</span>
+                                <span className="fact-value">{selectedDraft.approval_policy?.key || "—"}</span>
+                              </div>
+                              <div className="fact-row">
+                                <span className="fact-label">Mode</span>
+                                <span className="fact-value">{selectedDraft.approval_policy?.mode || "—"}</span>
+                              </div>
+                              <div className="fact-row">
+                                <span className="fact-label">Recommended window</span>
+                                <span className="fact-value">
+                                  {selectedDraft.approval_policy?.recommended_delay_minutes
+                                    ? delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)
+                                    : "manual only"}
+                                </span>
+                              </div>
+                              <div className="fact-row">
+                                <span className="fact-label">Why</span>
+                                <span className="fact-value">{selectedDraft.approval_policy?.reason || "—"}</span>
+                              </div>
+                            </div>
                           </div>
 
                           <div className="workbench-panel">
@@ -764,13 +820,19 @@ export default function Dashboard() {
                                 >
                                   Cancel {countdownText(selectedDraft.auto_approve_at)}
                                 </button>
+                              ) : selectedDraft.approval_policy?.can_auto_approve === false ? (
+                                <button className="btn sm" disabled>
+                                  Review Only
+                                </button>
                               ) : (
                                 <button
                                   className="btn sm"
                                   disabled={!!draftAction}
-                                  onClick={() => draftAct(selectedDraft.id, "auto_approve", { delayMinutes: 30 })}
+                                  onClick={() => draftAct(selectedDraft.id, "auto_approve", {
+                                    delayMinutes: selectedDraft.approval_policy?.recommended_delay_minutes,
+                                  })}
                                 >
-                                  Auto 30m
+                                  Auto {delayLabel(selectedDraft.approval_policy?.recommended_delay_minutes || 30)}
                                 </button>
                               )}
                             </>

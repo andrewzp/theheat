@@ -9,10 +9,11 @@ import argparse
 import os
 import sys
 import time
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from src import state
 from src.data import open_meteo, firms, co2, noaa_acis, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
+from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
     EditorialScore,
@@ -47,6 +48,10 @@ def _utc_now() -> datetime:
 
 def _utc_now_iso() -> str:
     return _utc_now().isoformat().replace("+00:00", "Z")
+
+
+def _utc_after_minutes_iso(minutes: int) -> str:
+    return (_utc_now() + timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
 
 
 def _parse_iso_utc(value: str | None) -> datetime | None:
@@ -222,6 +227,20 @@ def save_draft(
         draft["candidate_score"] = candidate_score
     if review_context:
         draft["review_context"] = review_context
+
+    policy = recommend_approval_policy(
+        tweet_type,
+        signal_total=score.total if score is not None else 0,
+        candidate_score=candidate_score,
+    )
+    draft["approval_policy"] = policy.as_dict()
+    draft.setdefault("approval_mode", "manual")
+
+    if policy.mode == "armed_auto" and policy.recommended_delay_minutes:
+        draft["auto_approve_at"] = _utc_after_minutes_iso(policy.recommended_delay_minutes)
+        draft["auto_approve_requested_at"] = _utc_now_iso()
+        draft["approval_mode"] = "policy_auto"
+
     drafts.append(draft)
     print(f"[draft] Saved: {tweet_text[:60]}...")
     return True
@@ -1211,13 +1230,20 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
     published = 0
     failures = []
     for draft in due_drafts:
+        policy = draft.get("approval_policy", {})
+        if policy.get("can_auto_approve") is False:
+            draft.pop("auto_approve_at", None)
+            draft["approval_mode"] = "manual"
+            draft["post_error"] = "Auto-approval blocked by policy"
+            failures.append(f"{draft.get('id')}: blocked by policy")
+            continue
         result = post_approved(draft["text"], bot_state)
         draft["last_publish_attempt_at"] = _utc_now_iso()
         if result == "posted":
             draft["status"] = "posted"
             draft["approved_at"] = draft.get("approved_at") or _utc_now_iso()
             draft["posted_at"] = _utc_now_iso()
-            draft["approval_mode"] = "auto"
+            draft["approval_mode"] = draft.get("approval_mode") or "auto"
             draft.pop("post_error", None)
             published += 1
         elif result == "rate_limited":

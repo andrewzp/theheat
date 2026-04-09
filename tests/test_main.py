@@ -97,6 +97,41 @@ class TestSaveDraft:
         assert state["drafts"][0]["review_context"]["source"] == "NASA FIRMS"
         assert state["drafts"][0]["review_context"]["facts"][0]["value"] == "97%"
 
+    def test_arms_policy_auto_for_hot10(self):
+        from src.editorial.scoring import score_hot10
+
+        state = _fresh_state()
+        score = score_hot10(9.2, 10, 3)
+        save_draft(
+            "Hot 10 draft",
+            state,
+            "hot10",
+            "hot10_evt",
+            score=score,
+            candidate_score={"total": 81},
+        )
+
+        assert state["drafts"][0]["approval_policy"]["mode"] == "armed_auto"
+        assert state["drafts"][0]["auto_approve_at"].endswith("Z")
+        assert state["drafts"][0]["approval_mode"] == "policy_auto"
+
+    def test_blocks_auto_policy_for_sensitive_drafts(self):
+        from src.editorial.scoring import score_global_disaster
+
+        state = _fresh_state()
+        score = score_global_disaster("Red", "Cyclone")
+        save_draft(
+            "Disaster draft",
+            state,
+            "global_disaster",
+            "gdacs_evt",
+            score=score,
+            candidate_score={"total": 84},
+        )
+
+        assert state["drafts"][0]["approval_policy"]["mode"] == "manual_only"
+        assert "auto_approve_at" not in state["drafts"][0]
+
 
 class TestPostApproved:
     @patch("src.main.state")
@@ -408,3 +443,20 @@ class TestProcessDueDrafts:
 
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "pending"
+
+    @patch("src.main.post_approved")
+    def test_blocks_due_drafts_when_policy_forbids_auto(self, mock_post):
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Queued draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {"can_auto_approve": False},
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"
+        assert result["drafts"][0]["post_error"] == "Auto-approval blocked by policy"
