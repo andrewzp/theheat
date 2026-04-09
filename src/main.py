@@ -1,6 +1,6 @@
 """@theheat bot orchestrator.
 
-All generated tweets go to drafts in the state Gist.
+All generated tweets go to drafts in the shared state store.
 Nothing posts automatically. Approved tweets are posted
 via manual_tweet mode triggered from the dashboard.
 """

@@ -1,12 +1,14 @@
 """Tests for state management."""
 
 from datetime import date
+import tempfile
 from unittest.mock import patch
 
 from src.state import (
     add_source_run,
     is_duplicate,
     finalize_run,
+    read_state,
     record_event,
     get_daily_count,
     increment_daily_count,
@@ -15,6 +17,7 @@ from src.state import (
     update_streaks,
     log_error,
     DEFAULT_STATE,
+    write_state,
 )
 
 
@@ -128,3 +131,31 @@ class TestRunHistory:
         run = init_run("alerts")
         finalize_run(state, run, status="success", max_runs=20)
         assert len(state["run_history"]) == 20
+
+
+class TestSqliteBackend:
+    def test_round_trips_state_via_sqlite_backend(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "last_hot10": {"date": "2026-04-08", "cities": ["Phoenix", "Miami"]},
+                "posted_events": ["event_1"],
+                "drafts": [{"id": "draft_1", "text": "hello", "status": "pending", "type": "hot10"}],
+                "run_history": [{"id": "run_1", "mode": "alerts", "status": "success", "sources": []}],
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["last_hot10"]["cities"] == ["Phoenix", "Miami"]
+            assert loaded["posted_events"] == ["event_1"]
+            assert loaded["drafts"][0]["id"] == "draft_1"
+            assert loaded["run_history"][0]["id"] == "run_1"

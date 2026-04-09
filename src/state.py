@@ -1,4 +1,4 @@
-"""State management via GitHub Gist."""
+"""State management via pluggable durable backends."""
 
 from copy import deepcopy
 import json
@@ -7,10 +7,13 @@ from datetime import UTC, date, datetime
 
 import requests
 
+from src.storage import sqlite_store
 
 GIST_ID = os.environ.get("GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 STATE_FILENAME = "state.json"
+STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
+DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
 
 DEFAULT_STATE = {
     "last_hot10": {"date": None, "cities": []},
@@ -44,7 +47,13 @@ def _headers():
     }
 
 
-def read_state() -> dict:
+def _configured_backend() -> str:
+    if STATE_BACKEND in {"gist", "sqlite"}:
+        return STATE_BACKEND
+    return "sqlite" if DB_PATH else "gist"
+
+
+def _read_gist_state() -> dict:
     if not GIST_ID or not GITHUB_TOKEN:
         return _fresh_state()
 
@@ -62,7 +71,7 @@ def read_state() -> dict:
         return _fresh_state()
 
 
-def write_state(state: dict) -> bool:
+def _write_gist_state(state: dict) -> bool:
     if not GIST_ID or not GITHUB_TOKEN:
         return False
 
@@ -78,6 +87,30 @@ def write_state(state: dict) -> bool:
         return True
     except requests.RequestException:
         return False
+
+
+def read_state() -> dict:
+    backend = _configured_backend()
+    if backend == "sqlite":
+        if not DB_PATH:
+            return _fresh_state()
+        try:
+            if sqlite_store.is_empty(DB_PATH) and GIST_ID and GITHUB_TOKEN:
+                gist_state = _read_gist_state()
+                sqlite_store.write_state(DB_PATH, gist_state)
+            return _normalize_state(sqlite_store.read_state(DB_PATH, DEFAULT_STATE))
+        except Exception:
+            return _fresh_state()
+    return _read_gist_state()
+
+
+def write_state(state: dict) -> bool:
+    normalized = _normalize_state(state)
+    if _configured_backend() == "sqlite":
+        if not DB_PATH:
+            return False
+        return sqlite_store.write_state(DB_PATH, normalized)
+    return _write_gist_state(normalized)
 
 
 def is_duplicate(state: dict, event_id: str) -> bool:

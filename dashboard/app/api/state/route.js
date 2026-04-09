@@ -1,5 +1,7 @@
-const GIST_ID = process.env.GIST_ID
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN
+import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
+
+export const runtime = "nodejs"
+
 const REPO = "andrewzp/theheat"
 
 async function githubJson(url, headers) {
@@ -13,19 +15,17 @@ async function githubJson(url, headers) {
 
 export async function GET() {
   const headers = { Accept: "application/vnd.github.v3+json" }
-  if (GITHUB_TOKEN) headers.Authorization = `token ${GITHUB_TOKEN}`
+  if (process.env.GITHUB_TOKEN) headers.Authorization = `token ${process.env.GITHUB_TOKEN}`
 
   const results = {}
 
-  // Fetch bot state from Gist
-  if (GIST_ID) {
-    try {
-      const gist = await githubJson(`https://api.github.com/gists/${GIST_ID}`, headers)
-      results.state = JSON.parse(gist.files["state.json"].content)
-    } catch (error) {
-      results.state = null
-      results.stateError = `Failed to fetch state Gist: ${error.message}`
-    }
+  try {
+    results.state = await readStateStore()
+    results.stateBackend = getStateBackend()
+  } catch (error) {
+    results.state = null
+    results.stateBackend = getStateBackend()
+    results.stateError = `Failed to fetch state store: ${error.message}`
   }
 
   // Fetch recent workflow runs

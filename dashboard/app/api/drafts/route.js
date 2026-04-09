@@ -1,4 +1,7 @@
-const GIST_ID = process.env.GIST_ID
+import { readStateStore, writeStateStore } from "../../../lib/state-store.js"
+
+export const runtime = "nodejs"
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
 
@@ -8,41 +11,10 @@ function gistHeaders() {
   return h
 }
 
-async function readState() {
-  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-    headers: gistHeaders(),
-    cache: "no-store",
-  })
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to read state: ${res.status} ${errorText}`)
-  }
-  const gist = await res.json()
-  const content = gist?.files?.["state.json"]?.content
-  if (!content) {
-    throw new Error("state.json not found in Gist")
-  }
-  return JSON.parse(content)
-}
-
-async function writeState(state) {
-  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-    method: "PATCH",
-    headers: { ...gistHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      files: { "state.json": { content: JSON.stringify(state, null, 2) } },
-    }),
-  })
-  if (!res.ok) {
-    const errorText = await res.text()
-    throw new Error(`Failed to write state: ${res.status} ${errorText}`)
-  }
-}
-
 // GET — return pending drafts
 export async function GET() {
   try {
-    const state = await readState()
+    const state = await readStateStore()
     const drafts = (state.drafts || [])
       .filter((d) => d.status === "pending")
       .sort((a, b) => {
@@ -67,7 +39,7 @@ export async function POST(request) {
   }
 
   try {
-    const state = await readState()
+    const state = await readStateStore()
     const drafts = state.drafts || []
     const draft = drafts.find((d) => d.id === draftId)
 
@@ -79,7 +51,7 @@ export async function POST(request) {
       draft.status = "rejected"
       delete draft.auto_approve_at
       delete draft.auto_approve_requested_at
-      await writeState(state)
+      await writeStateStore(state)
       return Response.json({ ok: true, action: "rejected" })
     }
 
@@ -89,7 +61,7 @@ export async function POST(request) {
       }
       draft.text = editedText
       draft.manual_override = true
-      await writeState(state)
+      await writeStateStore(state)
       return Response.json({ ok: true, action: "edited" })
     }
 
@@ -111,7 +83,7 @@ export async function POST(request) {
         selected,
         ...candidates.filter((candidate) => candidate.rank !== rank),
       ]
-      await writeState(state)
+      await writeStateStore(state)
       return Response.json({ ok: true, action: "selected_candidate" })
     }
 
@@ -129,7 +101,7 @@ export async function POST(request) {
       draft.auto_approve_at = autoApproveAt
       draft.auto_approve_requested_at = new Date().toISOString()
       draft.approval_mode = "auto"
-      await writeState(state)
+      await writeStateStore(state)
       return Response.json({ ok: true, action: "auto_approved", autoApproveAt, minutes })
     }
 
@@ -139,7 +111,7 @@ export async function POST(request) {
       if (draft.approval_mode === "auto") {
         draft.approval_mode = "manual"
       }
-      await writeState(state)
+      await writeStateStore(state)
       return Response.json({ ok: true, action: "cancelled_auto_approve" })
     }
 
@@ -163,7 +135,7 @@ export async function POST(request) {
         delete draft.auto_approve_at
         delete draft.auto_approve_requested_at
         draft.approval_mode = "manual"
-        await writeState(state)
+        await writeStateStore(state)
         return Response.json({ ok: true, action: "approved" })
       }
 
