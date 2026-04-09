@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import os
+import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -202,10 +203,40 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
         return None
 
 
-def check_records_for_cities(cities: list[dict], max_checks: int = 20) -> list[RecordEvent]:
-    """Check a subset of cities for broken records. Limit checks to manage API usage."""
+# Cities most likely to break heat records — check these every run.
+# These are the world's hottest cities plus US cities that routinely set records.
+PRIORITY_HEAT_CITIES = {
+    "Phoenix", "Death Valley", "Las Vegas", "Tucson", "Sacramento",
+    "Dubai", "Abu Dhabi", "Doha", "Kuwait City", "Riyadh", "Mecca", "Muscat",
+    "Baghdad", "Basra", "Ahvaz",
+    "Delhi", "Jacobabad", "Karachi",
+    "Djibouti", "Bamako", "Niamey", "N'Djamena", "Khartoum",
+    "Miami", "Houston", "San Antonio", "Dallas",
+    "Alice Springs", "Seville", "Athens",
+}
+
+
+def prioritize_cities(cities: list[dict]) -> list[dict]:
+    """Put known extreme-heat cities first, shuffle the rest.
+
+    Over 6 daily runs with shuffled tails, we cover far more than 50 cities/day.
+    """
+    priority = [c for c in cities if c["city"] in PRIORITY_HEAT_CITIES]
+    rest = [c for c in cities if c["city"] not in PRIORITY_HEAT_CITIES]
+    random.shuffle(rest)
+    return priority + rest
+
+
+def check_records_for_cities(cities: list[dict], max_checks: int | None = None) -> list[RecordEvent]:
+    """Check cities for broken heat records.
+
+    All 257 cities by default. Priority cities checked first so if the run
+    is interrupted, the most likely record-breakers were already checked.
+    """
+    ordered = prioritize_cities(cities)
+    to_check = ordered if max_checks is None else ordered[:max_checks]
     records = []
-    for city in cities[:max_checks]:
+    for city in to_check:
         record = detect_records(
             lat=float(city["lat"]),
             lon=float(city["lon"]),
@@ -289,10 +320,33 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
         return None
 
 
-def check_record_lows_for_cities(cities: list[dict], max_checks: int = 20) -> list[RecordEvent]:
-    """Check a subset of cities for broken record lows."""
+# Cities most likely to break cold records — polar + high-altitude + surprise-freeze cities.
+PRIORITY_COLD_CITIES = {
+    "Anchorage", "Fairbanks", "Yakutsk", "Ulaanbaatar", "Astana",
+    "Moscow", "Helsinki", "Reykjavik", "Tromsø",
+    "Denver", "Minneapolis", "Chicago", "Montreal", "Winnipeg",
+    "La Paz", "Bogota", "Quito", "Lhasa", "Addis Ababa",
+    "Dallas", "Atlanta", "Houston",  # surprise freezes are sensational
+}
+
+
+def prioritize_cities_cold(cities: list[dict]) -> list[dict]:
+    """Put known cold-record cities first, shuffle the rest."""
+    priority = [c for c in cities if c["city"] in PRIORITY_COLD_CITIES]
+    rest = [c for c in cities if c["city"] not in PRIORITY_COLD_CITIES]
+    random.shuffle(rest)
+    return priority + rest
+
+
+def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = None) -> list[RecordEvent]:
+    """Check cities for broken cold records.
+
+    All 257 cities by default. Priority cold cities checked first.
+    """
+    ordered = prioritize_cities_cold(cities)
+    to_check = ordered if max_checks is None else ordered[:max_checks]
     records = []
-    for city in cities[:max_checks]:
+    for city in to_check:
         record = detect_record_lows(
             lat=float(city["lat"]),
             lon=float(city["lon"]),

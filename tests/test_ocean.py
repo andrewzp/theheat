@@ -7,6 +7,7 @@ from src.data.ocean import (
     ExtremeWaveEvent,
     fetch_ocean_conditions,
     detect_extreme_waves,
+    LOCATION_THRESHOLDS_M,
     MARINE_URL,
 )
 
@@ -68,16 +69,43 @@ class TestFetchOceanConditions:
 
 
 class TestDetectExtremeWaves:
-    def test_detects_extreme_waves(self):
+    def test_detects_extreme_waves_calm_location(self):
+        """12m in Gulf of Mexico is extreme (default threshold 10m)."""
         readings = [
             OceanReading("Gulf of Mexico", "Atlantic", 28.5, -88.0, 12.0, 25.0, "2026-04-08", "ocean_gom_1"),
-            OceanReading("North Sea", "Atlantic", 58.0, -5.0, 5.0, 10.0, "2026-04-08", "ocean_ns_1"),
         ]
         events = detect_extreme_waves(readings)
         assert len(events) == 1
-        assert isinstance(events[0], ExtremeWaveEvent)
         assert events[0].location == "Gulf of Mexico"
-        assert events[0].wave_height_m == 12.0
+
+    def test_drake_passage_normal_waves_filtered(self):
+        """11m in Drake Passage is normal — threshold is 15m there."""
+        readings = [
+            OceanReading("Drake Passage", "Southern", -60.0, -60.0, 11.0, None, "2026-04-08", "ocean_dp_1"),
+        ]
+        events = detect_extreme_waves(readings)
+        assert len(events) == 0
+
+    def test_drake_passage_truly_extreme(self):
+        """16m in Drake Passage IS extreme — above the 15m local threshold."""
+        readings = [
+            OceanReading("Drake Passage", "Southern", -60.0, -60.0, 16.0, None, "2026-04-08", "ocean_dp_1"),
+        ]
+        events = detect_extreme_waves(readings)
+        assert len(events) == 1
+
+    def test_north_sea_needs_higher_threshold(self):
+        """11m in North Sea filtered out — threshold is 12m there."""
+        readings = [
+            OceanReading("North Sea", "Atlantic", 58.0, -5.0, 11.0, 10.0, "2026-04-08", "ocean_ns_1"),
+        ]
+        events = detect_extreme_waves(readings)
+        assert len(events) == 0
+
+    def test_rough_locations_all_have_thresholds(self):
+        """Every notoriously rough location has a raised threshold."""
+        for loc in LOCATION_THRESHOLDS_M:
+            assert LOCATION_THRESHOLDS_M[loc] > 10.0, f"{loc} threshold too low"
 
     def test_custom_threshold(self):
         readings = [

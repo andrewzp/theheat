@@ -1,6 +1,21 @@
 from __future__ import annotations
 
-"""Editorial scoring heuristics for deciding what is worth drafting."""
+"""Editorial scoring heuristics for deciding what is worth drafting.
+
+EDITORIAL PRINCIPLE: The "Wait, what?" test.
+Every event must pass this: would a weather-aware person react with genuine
+surprise? If the answer is "yeah, that happens" — suppress it.
+
+Guidelines:
+- Record-breaking means something only if the old record was old or the margin
+  is large. Breaking a 2-year record by 0.1C is not news.
+- Context matters. 11m waves in Drake Passage is Tuesday. 11m in the Caribbean
+  is catastrophic. An Orange cyclone alert is routine; Red is extraordinary.
+- Routine drought updates, minor flood stage exceedances, and medium-severity
+  disaster alerts are NOT astounding. Only the extremes of the extremes.
+- The data is already public. Our value is editorial judgement — knowing when
+  a number is genuinely extraordinary vs. merely large.
+"""
 
 from dataclasses import dataclass
 from datetime import date
@@ -311,7 +326,7 @@ def score_global_disaster(severity: str, disaster_type: str) -> EditorialScore:
         confidence=88,
         shareability=58,
         sensitivity=82,
-        threshold=54,
+        threshold=62,
         reasons=reasons,
     )
 
@@ -368,7 +383,7 @@ def score_drought(states: list) -> EditorialScore:
         confidence=88,
         shareability=48 + min(worst, 30) * 0.7,
         sensitivity=38,
-        threshold=52,
+        threshold=62,
         reasons=reasons,
     )
 
@@ -441,7 +456,7 @@ def score_river_flood(above_by_ft: float) -> EditorialScore:
         confidence=88,
         shareability=54 + above_by_ft * 4,
         sensitivity=72,
-        threshold=58,
+        threshold=62,
         reasons=reasons,
     )
 

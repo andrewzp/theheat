@@ -42,7 +42,22 @@ SAMPLE_RESPONSE = {
 
 class TestFetchDisasters:
     @responses.activate
-    def test_filters_by_min_severity_orange(self):
+    def test_default_filters_to_red_only(self):
+        """Default is Red-only — Orange isn't extraordinary."""
+        responses.add(
+            responses.GET,
+            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
+            json=SAMPLE_RESPONSE,
+            status=200,
+        )
+        events = fetch_disasters()
+        assert len(events) == 1
+        assert events[0].name == "Cyclone Freddy"
+        assert events[0].severity == "Red"
+
+    @responses.activate
+    def test_explicit_orange_still_works(self):
+        """Can still pass Orange explicitly if needed."""
         responses.add(
             responses.GET,
             "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
@@ -51,21 +66,8 @@ class TestFetchDisasters:
         )
         events = fetch_disasters(min_severity="Orange")
         assert len(events) == 2
-        assert all(isinstance(e, GlobalDisasterEvent) for e in events)
         severities = [e.severity for e in events]
         assert "Green" not in severities
-
-    @responses.activate
-    def test_filters_by_min_severity_red(self):
-        responses.add(
-            responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
-            status=200,
-        )
-        events = fetch_disasters(min_severity="Red")
-        assert len(events) == 1
-        assert events[0].name == "Cyclone Freddy"
 
     @responses.activate
     def test_maps_event_type_codes(self):

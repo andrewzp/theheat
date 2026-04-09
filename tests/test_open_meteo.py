@@ -6,6 +6,10 @@ from src.data.open_meteo import (
     compute_anomalies,
     rank_hot10,
     fetch_city_temp,
+    prioritize_cities,
+    prioritize_cities_cold,
+    PRIORITY_HEAT_CITIES,
+    PRIORITY_COLD_CITIES,
 )
 
 
@@ -68,6 +72,48 @@ class TestRankHot10:
         ]
         result = rank_hot10(temps)
         assert len(result) == 2
+
+
+class TestPrioritizeCities:
+    def test_priority_cities_come_first(self):
+        cities = [
+            {"city": "Zurich", "country": "CH", "lat": "47.37", "lon": "8.54"},
+            {"city": "Phoenix", "country": "US", "lat": "33.45", "lon": "-112.07"},
+            {"city": "Amsterdam", "country": "NL", "lat": "52.37", "lon": "4.90"},
+            {"city": "Dubai", "country": "UAE", "lat": "25.20", "lon": "55.27"},
+        ]
+        result = prioritize_cities(cities)
+        # Phoenix and Dubai should be in the first 2 positions
+        first_two = {result[0]["city"], result[1]["city"]}
+        assert first_two == {"Phoenix", "Dubai"}
+
+    def test_cold_priority_cities_come_first(self):
+        cities = [
+            {"city": "Zurich", "country": "CH", "lat": "47.37", "lon": "8.54"},
+            {"city": "Yakutsk", "country": "RU", "lat": "62.03", "lon": "129.73"},
+            {"city": "Anchorage", "country": "US", "lat": "61.22", "lon": "-149.90"},
+        ]
+        result = prioritize_cities_cold(cities)
+        first_two = {result[0]["city"], result[1]["city"]}
+        assert first_two == {"Yakutsk", "Anchorage"}
+
+    def test_all_cities_preserved(self):
+        cities = [
+            {"city": "Zurich", "country": "CH", "lat": "0", "lon": "0"},
+            {"city": "Phoenix", "country": "US", "lat": "0", "lon": "0"},
+            {"city": "Oslo", "country": "NO", "lat": "0", "lon": "0"},
+        ]
+        result = prioritize_cities(cities)
+        assert len(result) == 3
+        result_names = {c["city"] for c in result}
+        assert result_names == {"Zurich", "Phoenix", "Oslo"}
+
+    def test_priority_heat_cities_exist_in_real_csv(self):
+        """Sanity: at least 20 priority cities to ensure good coverage."""
+        assert len(PRIORITY_HEAT_CITIES) >= 20
+
+    def test_priority_cold_cities_exist(self):
+        assert len(PRIORITY_COLD_CITIES) >= 15
 
 
 class TestFetchCityTemp:

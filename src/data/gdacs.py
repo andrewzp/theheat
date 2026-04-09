@@ -33,8 +33,10 @@ class GlobalDisasterEvent:
     event_id: str
 
 
-def fetch_disasters(min_severity: str = "Orange") -> list[GlobalDisasterEvent]:
+def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
     """Fetch active global disaster events from GDACS.
+
+    Only Red alerts by default — Orange is medium severity, not extraordinary.
 
     Args:
         min_severity: Minimum alert level — "Red", "Orange", or "Green".

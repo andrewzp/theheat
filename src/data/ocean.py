@@ -35,8 +35,18 @@ OCEAN_POINTS = [
     (75.0, 30.0, "Barents Sea", "Arctic"),
 ]
 
-# Thresholds for extreme events
-EXTREME_WAVE_HEIGHT_M = 10.0  # 10+ meters = extreme
+# Per-location thresholds — rough-water locations need much higher readings
+# to qualify as "extreme". Drake Passage regularly hits 10-12m; that's not news.
+LOCATION_THRESHOLDS_M: dict[str, float] = {
+    "Drake Passage": 15.0,     # Southern Ocean, routinely 10-12m
+    "Barents Sea": 13.0,       # Arctic, routinely rough
+    "North Sea": 12.0,         # Notoriously rough
+    "Bay of Biscay": 12.0,     # Notoriously rough
+    "Tasman Sea": 13.0,        # Roaring Forties
+    "South Africa Coast": 13.0, # Agulhas current, big swells
+    "Pacific Northwest": 12.0,  # Winter storms push big swells
+}
+EXTREME_WAVE_HEIGHT_M = 10.0  # default for calmer locations
 EXTREME_SST_HIGH_C = 32.0  # unusually warm sea surface
 EXTREME_SST_LOW_C = -1.5  # approaching freeze
 
@@ -108,10 +118,15 @@ def fetch_ocean_conditions() -> list[OceanReading]:
 
 
 def detect_extreme_waves(readings: list[OceanReading], threshold_m: float = EXTREME_WAVE_HEIGHT_M) -> list[ExtremeWaveEvent]:
-    """Find locations with extreme wave heights."""
+    """Find locations with extreme wave heights.
+
+    Uses per-location thresholds for notoriously rough waters.
+    Drake Passage at 11m is Tuesday; Gulf of Mexico at 11m is news.
+    """
     events = []
     for r in readings:
-        if r.wave_height_max_m >= threshold_m:
+        local_threshold = LOCATION_THRESHOLDS_M.get(r.location, threshold_m)
+        if r.wave_height_max_m >= local_threshold:
             events.append(ExtremeWaveEvent(
                 location=r.location,
                 ocean=r.ocean,

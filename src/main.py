@@ -322,7 +322,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking heat records...")
     records_start = time.perf_counter()
     try:
-        records = open_meteo.check_records_for_cities(cities, max_checks=20)
+        records = open_meteo.check_records_for_cities(cities)
         source_promoted = 0
         source_drafted = 0
         for record in records:
@@ -384,7 +384,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking record lows...")
     record_lows_start = time.perf_counter()
     try:
-        record_lows = open_meteo.check_record_lows_for_cities(cities, max_checks=20)
+        record_lows = open_meteo.check_record_lows_for_cities(cities)
         source_promoted = 0
         source_drafted = 0
         for record in record_lows:
@@ -668,11 +668,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             status="failed", error=str(e)
         )
 
-    # 5. GDACS global disasters (Orange/Red severity)
+    # 5. GDACS global disasters (Red only — Orange isn't extraordinary)
     print("[alerts] Checking GDACS global disasters...")
     gdacs_start = time.perf_counter()
     try:
-        disasters = gdacs.fetch_disasters(min_severity="Orange")
+        disasters = gdacs.fetch_disasters(min_severity="Red")
         source_promoted = 0
         source_drafted = 0
         for disaster in disasters:
