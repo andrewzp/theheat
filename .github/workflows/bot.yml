@@ -30,6 +30,10 @@ on:
         description: 'Draft id for approved draft posting'
         required: false
         type: string
+      publish_intent_id:
+        description: 'Idempotency token for approved draft posting'
+        required: false
+        type: string
 
 concurrency:
   group: theheat-bot
@@ -93,4 +97,5 @@ jobs:
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
+          PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}
         run: python -m src.main ${{ steps.mode.outputs.mode }}

@@ -27,6 +27,10 @@ DEFAULT_STATE = {
 }
 
 
+class StateReadError(RuntimeError):
+    """Raised when a configured durable backend cannot be read safely."""
+
+
 def _fresh_state() -> dict:
     """Return an isolated copy of the default state."""
     return deepcopy(DEFAULT_STATE)
@@ -51,6 +55,143 @@ def _configured_backend() -> str:
     if STATE_BACKEND in {"gist", "sqlite"}:
         return STATE_BACKEND
     return "sqlite" if DB_PATH else "gist"
+
+
+def _parse_state_timestamp(value: str | None) -> datetime:
+    parsed = datetime.fromtimestamp(0, UTC)
+    if not value:
+        return parsed
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return parsed
+
+
+def _merge_ordered_unique(current: list, incoming: list, max_items: int | None = None) -> list:
+    merged = []
+    seen = set()
+    for item in [*(current or []), *(incoming or [])]:
+        if item in seen:
+            continue
+        seen.add(item)
+        merged.append(item)
+    if max_items is not None and len(merged) > max_items:
+        return merged[-max_items:]
+    return merged
+
+
+def _draft_status_rank(draft: dict) -> int:
+    return {
+        "posted": 4,
+        "approved": 3,
+        "rejected": 2,
+        "pending": 1,
+    }.get(draft.get("status"), 0)
+
+
+def _draft_recency_key(draft: dict) -> tuple[datetime, int]:
+    return (
+        _parse_state_timestamp(
+            draft.get("updated_at")
+            or draft.get("posted_at")
+            or draft.get("approved_at")
+            or draft.get("created_at")
+        ),
+        _draft_status_rank(draft),
+    )
+
+
+def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = 200) -> list[dict]:
+    merged: dict[str, dict] = {}
+    anonymous: list[dict] = []
+
+    for draft in [*(current or []), *(incoming or [])]:
+        draft_copy = deepcopy(draft)
+        draft_id = draft_copy.get("id")
+        if not draft_id:
+            anonymous.append(draft_copy)
+            continue
+        existing = merged.get(draft_id)
+        if existing is None or _draft_recency_key(draft_copy) >= _draft_recency_key(existing):
+            merged[draft_id] = draft_copy
+
+    ordered = list(merged.values()) + anonymous
+    ordered.sort(
+        key=lambda draft: (
+            _parse_state_timestamp(draft.get("created_at") or draft.get("updated_at")),
+            _parse_state_timestamp(draft.get("updated_at") or draft.get("created_at")),
+        )
+    )
+    if len(ordered) > max_items:
+        ordered = ordered[-max_items:]
+    return ordered
+
+
+def _merge_run_history(current: list[dict], incoming: list[dict], max_items: int = 20) -> list[dict]:
+    merged: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for run in [*(current or []), *(incoming or [])]:
+        run_copy = deepcopy(run)
+        run_id = run_copy.get("id")
+        if not run_id:
+            anonymous.append(run_copy)
+            continue
+        existing = merged.get(run_id)
+        if existing is None:
+            merged[run_id] = run_copy
+            continue
+        existing_key = (
+            _parse_state_timestamp(existing.get("ended_at") or existing.get("started_at")),
+            len(existing.get("sources", [])),
+        )
+        candidate_key = (
+            _parse_state_timestamp(run_copy.get("ended_at") or run_copy.get("started_at")),
+            len(run_copy.get("sources", [])),
+        )
+        if candidate_key >= existing_key:
+            merged[run_id] = run_copy
+
+    ordered = list(merged.values()) + anonymous
+    ordered.sort(
+        key=lambda run: _parse_state_timestamp(run.get("started_at") or run.get("ended_at")),
+        reverse=True,
+    )
+    return ordered[:max_items]
+
+
+def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50) -> list[dict]:
+    merged = []
+    seen = set()
+    for error in [*(current or []), *(incoming or [])]:
+        key = (error.get("source"), error.get("ts"), error.get("msg"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(deepcopy(error))
+    merged.sort(key=lambda error: _parse_state_timestamp(error.get("ts")))
+    return merged[-max_items:]
+
+
+def _merge_state(current: dict | None, incoming: dict | None) -> dict:
+    base = _normalize_state(current)
+    next_state = _normalize_state(incoming)
+    merged = _fresh_state()
+    merged["last_hot10"] = deepcopy(next_state.get("last_hot10", base["last_hot10"]))
+    merged["streaks"] = deepcopy(next_state.get("streaks", base["streaks"]))
+    merged["posted_events"] = _merge_ordered_unique(
+        base.get("posted_events", []),
+        next_state.get("posted_events", []),
+        max_items=500,
+    )
+    merged["daily_tweet_count"] = {
+        **deepcopy(base.get("daily_tweet_count", {})),
+        **deepcopy(next_state.get("daily_tweet_count", {})),
+    }
+    merged["pending_confirmations"] = deepcopy(next_state.get("pending_confirmations", []))
+    merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
+    merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
+    merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
+    return merged
 
 
 def _read_gist_state() -> dict:
@@ -93,14 +234,14 @@ def read_state() -> dict:
     backend = _configured_backend()
     if backend == "sqlite":
         if not DB_PATH:
-            return _fresh_state()
+            raise StateReadError("SQLite backend selected but THEHEAT_DB_PATH is not set")
         try:
             if sqlite_store.is_empty(DB_PATH) and GIST_ID and GITHUB_TOKEN:
                 gist_state = _read_gist_state()
                 sqlite_store.write_state(DB_PATH, gist_state)
             return _normalize_state(sqlite_store.read_state(DB_PATH, DEFAULT_STATE))
-        except Exception:
-            return _fresh_state()
+        except Exception as exc:
+            raise StateReadError(f"Failed to read SQLite state store: {exc}") from exc
     return _read_gist_state()
 
 
@@ -109,8 +250,12 @@ def write_state(state: dict) -> bool:
     if _configured_backend() == "sqlite":
         if not DB_PATH:
             return False
-        return sqlite_store.write_state(DB_PATH, normalized)
-    return _write_gist_state(normalized)
+        try:
+            current = sqlite_store.read_state(DB_PATH, DEFAULT_STATE)
+        except Exception:
+            return False
+        return sqlite_store.write_state(DB_PATH, _merge_state(current, normalized))
+    return _write_gist_state(_merge_state(_read_gist_state(), normalized))
 
 
 def is_duplicate(state: dict, event_id: str) -> bool:

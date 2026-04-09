@@ -8,6 +8,7 @@ from src.state import (
     add_source_run,
     is_duplicate,
     finalize_run,
+    StateReadError,
     read_state,
     record_event,
     get_daily_count,
@@ -159,3 +160,68 @@ class TestSqliteBackend:
             assert loaded["posted_events"] == ["event_1"]
             assert loaded["drafts"][0]["id"] == "draft_1"
             assert loaded["run_history"][0]["id"] == "run_1"
+
+    def test_write_state_preserves_newer_draft_versions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            current = {
+                **DEFAULT_STATE,
+                "drafts": [{
+                    "id": "draft_1",
+                    "text": "edited by reviewer",
+                    "status": "pending",
+                    "type": "record",
+                    "created_at": "2026-04-08T12:00:00Z",
+                    "updated_at": "2026-04-08T12:10:00Z",
+                }],
+            }
+            stale_bot_state = {
+                **DEFAULT_STATE,
+                "drafts": [
+                    {
+                        "id": "draft_1",
+                        "text": "stale bot copy",
+                        "status": "pending",
+                        "type": "record",
+                        "created_at": "2026-04-08T12:00:00Z",
+                        "updated_at": "2026-04-08T12:05:00Z",
+                    },
+                    {
+                        "id": "draft_2",
+                        "text": "new draft",
+                        "status": "pending",
+                        "type": "hot10",
+                        "created_at": "2026-04-08T12:15:00Z",
+                        "updated_at": "2026-04-08T12:15:00Z",
+                    },
+                ],
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(current) is True
+                assert write_state(stale_bot_state) is True
+                loaded = read_state()
+
+            drafts = {draft["id"]: draft for draft in loaded["drafts"]}
+            assert drafts["draft_1"]["text"] == "edited by reviewer"
+            assert drafts["draft_2"]["text"] == "new draft"
+
+    def test_read_state_raises_when_sqlite_backend_is_unreadable(self):
+        with patch.multiple(
+            "src.state",
+            STATE_BACKEND="sqlite",
+            DB_PATH="/tmp/theheat-broken.sqlite",
+            GIST_ID="",
+            GITHUB_TOKEN="",
+        ), patch("src.state.sqlite_store.is_empty", side_effect=RuntimeError("db unavailable")):
+            try:
+                read_state()
+                assert False, "Expected StateReadError"
+            except StateReadError as exc:
+                assert "Failed to read SQLite state store" in str(exc)

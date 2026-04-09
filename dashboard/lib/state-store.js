@@ -121,6 +121,135 @@ function configuredBackend() {
   return DB_PATH ? "sqlite" : "gist"
 }
 
+function parseTimestamp(value) {
+  if (!value) return 0
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function mergeOrderedUnique(current = [], incoming = [], maxItems) {
+  const merged = []
+  const seen = new Set()
+  ;[...current, ...incoming].forEach((item) => {
+    if (seen.has(item)) return
+    seen.add(item)
+    merged.push(item)
+  })
+  return typeof maxItems === "number" && merged.length > maxItems
+    ? merged.slice(-maxItems)
+    : merged
+}
+
+function draftStatusRank(draft) {
+  return {
+    posted: 4,
+    approved: 3,
+    rejected: 2,
+    pending: 1,
+  }[draft?.status] || 0
+}
+
+function draftRecencyKey(draft) {
+  return [
+    parseTimestamp(draft?.updated_at || draft?.posted_at || draft?.approved_at || draft?.created_at),
+    draftStatusRank(draft),
+  ]
+}
+
+function compareTuple(a, b) {
+  if (a[0] !== b[0]) return a[0] - b[0]
+  return a[1] - b[1]
+}
+
+function mergeDrafts(current = [], incoming = [], maxItems = 200) {
+  const merged = new Map()
+  const anonymous = []
+
+  ;[...current, ...incoming].forEach((draft) => {
+    const copy = structuredClone(draft)
+    if (!copy.id) {
+      anonymous.push(copy)
+      return
+    }
+    const existing = merged.get(copy.id)
+    if (!existing || compareTuple(draftRecencyKey(copy), draftRecencyKey(existing)) >= 0) {
+      merged.set(copy.id, copy)
+    }
+  })
+
+  const ordered = [...merged.values(), ...anonymous].sort((a, b) => {
+    const createdDelta = parseTimestamp(a.created_at || a.updated_at) - parseTimestamp(b.created_at || b.updated_at)
+    if (createdDelta !== 0) return createdDelta
+    return parseTimestamp(a.updated_at || a.created_at) - parseTimestamp(b.updated_at || b.created_at)
+  })
+
+  return ordered.length > maxItems ? ordered.slice(-maxItems) : ordered
+}
+
+function mergeRunHistory(current = [], incoming = [], maxItems = 20) {
+  const merged = new Map()
+  const anonymous = []
+
+  ;[...current, ...incoming].forEach((run) => {
+    const copy = structuredClone(run)
+    if (!copy.id) {
+      anonymous.push(copy)
+      return
+    }
+    const existing = merged.get(copy.id)
+    if (!existing) {
+      merged.set(copy.id, copy)
+      return
+    }
+    const existingKey = [
+      parseTimestamp(existing.ended_at || existing.started_at),
+      existing.sources?.length || 0,
+    ]
+    const candidateKey = [
+      parseTimestamp(copy.ended_at || copy.started_at),
+      copy.sources?.length || 0,
+    ]
+    if (compareTuple(candidateKey, existingKey) >= 0) {
+      merged.set(copy.id, copy)
+    }
+  })
+
+  return [...merged.values(), ...anonymous]
+    .sort((a, b) => parseTimestamp(b.started_at || b.ended_at) - parseTimestamp(a.started_at || a.ended_at))
+    .slice(0, maxItems)
+}
+
+function mergeErrors(current = [], incoming = [], maxItems = 50) {
+  const merged = []
+  const seen = new Set()
+  ;[...current, ...incoming].forEach((error) => {
+    const key = `${error?.source || ""}|${error?.ts || ""}|${error?.msg || ""}`
+    if (seen.has(key)) return
+    seen.add(key)
+    merged.push(structuredClone(error))
+  })
+  merged.sort((a, b) => parseTimestamp(a.ts) - parseTimestamp(b.ts))
+  return merged.slice(-maxItems)
+}
+
+function mergeState(current, incoming) {
+  const base = normalizeState(current)
+  const next = normalizeState(incoming)
+  return normalizeState({
+    last_hot10: structuredClone(next.last_hot10 || base.last_hot10),
+    streaks: structuredClone(next.streaks || base.streaks),
+    posted_events: mergeOrderedUnique(base.posted_events, next.posted_events, 500),
+    daily_tweet_count: {
+      ...(base.daily_tweet_count || {}),
+      ...(next.daily_tweet_count || {}),
+    },
+    pending_confirmations: structuredClone(next.pending_confirmations || []),
+    drafts: mergeDrafts(base.drafts, next.drafts),
+    run_history: mergeRunHistory(base.run_history, next.run_history),
+    errors: mergeErrors(base.errors, next.errors),
+  })
+}
+
 async function readGistState() {
   if (!GIST_ID) return structuredClone(DEFAULT_STATE)
   const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
@@ -341,6 +470,39 @@ function readSqliteState(db) {
   return normalizeState(state)
 }
 
+function upsertSqliteDraft(db, draftId, draft, fallbackSeq) {
+  const existing = db.prepare("SELECT seq FROM drafts WHERE draft_id = ?").get(draftId)
+  const seq = existing?.seq ?? fallbackSeq
+  db.prepare(`
+    INSERT INTO drafts
+    (draft_id, seq, event_id, type, status, created_at, approved_at, posted_at, auto_approve_at, approval_mode, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(draft_id) DO UPDATE SET
+      seq = excluded.seq,
+      event_id = excluded.event_id,
+      type = excluded.type,
+      status = excluded.status,
+      created_at = excluded.created_at,
+      approved_at = excluded.approved_at,
+      posted_at = excluded.posted_at,
+      auto_approve_at = excluded.auto_approve_at,
+      approval_mode = excluded.approval_mode,
+      payload_json = excluded.payload_json
+  `).run(
+    draft.id,
+    seq,
+    draft.event_id ?? null,
+    draft.type ?? null,
+    draft.status ?? null,
+    draft.created_at ?? null,
+    draft.approved_at ?? null,
+    draft.posted_at ?? null,
+    draft.auto_approve_at ?? null,
+    draft.approval_mode ?? null,
+    JSON.stringify(draft)
+  )
+}
+
 async function bootstrapSqliteFromGist(db) {
   if (!GIST_ID || sqliteIsEmpty(db) === false) return
   try {
@@ -373,11 +535,67 @@ export async function writeStateStore(state) {
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
-      writeSqliteState(db, normalized)
+      await bootstrapSqliteFromGist(db)
+      const merged = mergeState(readSqliteState(db), normalized)
+      writeSqliteState(db, merged)
       return
     } finally {
       db.close()
     }
   }
-  await writeGistState(normalized)
+  const merged = mergeState(await readGistState(), normalized)
+  await writeGistState(merged)
+}
+
+export async function updateDraftStore(draftId, updater) {
+  if (configuredBackend() === "sqlite") {
+    const db = connectDb()
+    try {
+      await bootstrapSqliteFromGist(db)
+      const state = readSqliteState(db)
+      const drafts = state.drafts || []
+      const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
+      if (draftIndex === -1) {
+        return { state, draft: null }
+      }
+
+      const draft = structuredClone(drafts[draftIndex])
+      const nextDraft = await updater(draft, state)
+      if (!nextDraft) {
+        return { state, draft: null }
+      }
+
+      nextDraft.updated_at = new Date().toISOString()
+      state.drafts[draftIndex] = nextDraft
+      db.exec("BEGIN")
+      try {
+        upsertSqliteDraft(db, draftId, nextDraft, draftIndex)
+        db.exec("COMMIT")
+      } catch (error) {
+        db.exec("ROLLBACK")
+        throw error
+      }
+      return { state, draft: nextDraft }
+    } finally {
+      db.close()
+    }
+  }
+
+  const state = await readGistState()
+  const drafts = state.drafts || []
+  const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
+  if (draftIndex === -1) {
+    return { state, draft: null }
+  }
+
+  const draft = structuredClone(drafts[draftIndex])
+  const nextDraft = await updater(draft, state)
+  if (!nextDraft) {
+    return { state, draft: null }
+  }
+
+  nextDraft.updated_at = new Date().toISOString()
+  state.drafts[draftIndex] = nextDraft
+  await writeGistState(state)
+  return { state, draft: nextDraft }
 }

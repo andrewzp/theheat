@@ -391,6 +391,7 @@ class TestRunManualTweet:
 
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["posted_at"].endswith("Z")
+        assert "publish_intent_id" not in result["drafts"][0]
 
     @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
     @patch("src.main.post_approved")
@@ -410,6 +411,45 @@ class TestRunManualTweet:
         assert result["drafts"][0]["status"] == "pending"
         assert result["drafts"][0]["post_error"] == "Banned pattern: '!'"
 
+    @patch.dict(
+        "os.environ",
+        {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1", "PUBLISH_INTENT_ID": "stale-token"},
+        clear=True,
+    )
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_skips_stale_publish_intent(self, mock_safety, mock_post):
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Manual draft",
+            "status": "approved",
+            "publish_intent_id": "fresh-token",
+        }]
+
+        result = run_manual_tweet(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "approved"
+
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_rejects_non_approved_draft_posts(self, mock_safety, mock_post):
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Manual draft",
+            "status": "pending",
+        }]
+
+        result = run_manual_tweet(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "pending"
+
 
 class TestProcessDueDrafts:
     @patch("src.main.post_approved")
@@ -427,6 +467,7 @@ class TestProcessDueDrafts:
 
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["approval_mode"] == "auto"
+        assert "auto_approve_at" not in result["drafts"][0]
 
     @patch("src.main.post_approved")
     def test_skips_future_auto_approval_windows(self, mock_post):

@@ -184,6 +184,10 @@ def _review_context(
     }
 
 
+def _touch_draft(draft: dict) -> None:
+    draft["updated_at"] = _utc_now_iso()
+
+
 def save_draft(
     tweet_text: str,
     bot_state: dict,
@@ -217,6 +221,7 @@ def save_draft(
         "type": tweet_type,
         "event_id": event_id,
         "created_at": _utc_now_iso(),
+        "updated_at": _utc_now_iso(),
         "status": "pending",
     }
     if score is not None:
@@ -1149,6 +1154,7 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
     manual_start = time.perf_counter()
     tweet_text = os.environ.get("TWEET_TEXT", "").strip()
     draft_id = os.environ.get("DRAFT_ID", "").strip()
+    publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
     draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
     if not tweet_text:
         print("[manual] No TWEET_TEXT provided, skipping")
@@ -1158,11 +1164,48 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
         )
         return bot_state
 
+    if draft_id and not draft:
+        reason = f"Draft not found for id {draft_id}"
+        print(f"[manual] {reason}, skipping")
+        _record_source_run(
+            current_run, "manual_publish", manual_start,
+            status="failed", observed=1, error=reason
+        )
+        return bot_state
+
+    if draft_id and draft and draft.get("status") == "posted":
+        print(f"[manual] Draft {draft_id} already posted, skipping duplicate publish")
+        _record_source_run(
+            current_run, "manual_publish", manual_start,
+            status="skipped", observed=1, note=f"Draft {draft_id} already posted"
+        )
+        return bot_state
+
+    if draft_id and draft and draft.get("status") != "approved":
+        reason = f"Draft {draft_id} is not approved for publishing"
+        print(f"[manual] {reason}")
+        _record_source_run(
+            current_run, "manual_publish", manual_start,
+            status="failed", observed=1, error=reason
+        )
+        return bot_state
+
+    if draft_id and draft and publish_intent_id and draft.get("publish_intent_id") != publish_intent_id:
+        reason = f"Draft {draft_id} publish intent is stale"
+        print(f"[manual] {reason}, skipping")
+        _record_source_run(
+            current_run, "manual_publish", manual_start,
+            status="skipped", observed=1, note=reason
+        )
+        return bot_state
+
     if len(tweet_text) > 280:
         print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
         if draft:
             draft["status"] = "pending"
             draft["post_error"] = f"Tweet too long ({len(tweet_text)} chars)"
+            draft.pop("publish_intent_id", None)
+            _touch_draft(draft)
         _record_source_run(
             current_run, "manual_publish", manual_start,
             status="failed", observed=1, error=f"Tweet too long ({len(tweet_text)} chars)"
@@ -1175,6 +1218,8 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
         if draft:
             draft["status"] = "pending"
             draft["post_error"] = reason
+            draft.pop("publish_intent_id", None)
+            _touch_draft(draft)
         _record_source_run(
             current_run, "manual_publish", manual_start,
             status="failed", observed=1, error=reason
@@ -1191,13 +1236,17 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
             draft["status"] = "posted"
             draft["posted_at"] = _utc_now_iso()
             draft.pop("post_error", None)
+            draft.pop("publish_intent_id", None)
         elif result == "rate_limited":
             draft["status"] = "pending"
             draft["post_error"] = "Rate limited — retry later"
+            draft.pop("publish_intent_id", None)
             print("[manual] Rate limited, draft kept as pending for retry")
         else:
             draft["status"] = "pending"
             draft["post_error"] = "Failed to post to X"
+            draft.pop("publish_intent_id", None)
+        _touch_draft(draft)
 
     source_status = "success" if result == "posted" else "failed"
     error = None if result == "posted" else ("Rate limited — retry later" if result == "rate_limited" else "Failed to post to X")
@@ -1235,6 +1284,7 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
             draft.pop("auto_approve_at", None)
             draft["approval_mode"] = "manual"
             draft["post_error"] = "Auto-approval blocked by policy"
+            _touch_draft(draft)
             failures.append(f"{draft.get('id')}: blocked by policy")
             continue
         result = post_approved(draft["text"], bot_state)
@@ -1244,6 +1294,8 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
             draft["approved_at"] = draft.get("approved_at") or _utc_now_iso()
             draft["posted_at"] = _utc_now_iso()
             draft["approval_mode"] = draft.get("approval_mode") or "auto"
+            draft.pop("auto_approve_at", None)
+            draft.pop("auto_approve_requested_at", None)
             draft.pop("post_error", None)
             published += 1
         elif result == "rate_limited":
@@ -1252,6 +1304,7 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
         else:
             draft["post_error"] = "Failed to post to X"
             failures.append(f"{draft.get('id')}: failed to post")
+        _touch_draft(draft)
 
     status = "success" if not failures else "partial_failure"
     _record_source_run(
@@ -1276,7 +1329,11 @@ def main():
 
     print(f"[main] Starting @theheat in {args.mode} mode")
 
-    bot_state = state.read_state()
+    try:
+        bot_state = state.read_state()
+    except state.StateReadError as exc:
+        print(f"[main] ERROR: {exc}")
+        sys.exit(1)
     current_run = state.init_run(args.mode)
     final_status = "success"
 

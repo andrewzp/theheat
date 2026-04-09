@@ -1,4 +1,4 @@
-import { readStateStore, writeStateStore } from "../../../lib/state-store.js"
+import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
 
 export const runtime = "nodejs"
 
@@ -40,18 +40,20 @@ export async function POST(request) {
 
   try {
     const state = await readStateStore()
-    const drafts = state.drafts || []
-    const draft = drafts.find((d) => d.id === draftId)
-
+    const draft = (state.drafts || []).find((candidate) => candidate.id === draftId)
     if (!draft) {
       return Response.json({ error: "Draft not found" }, { status: 404 })
     }
 
     if (action === "reject") {
-      draft.status = "rejected"
-      delete draft.auto_approve_at
-      delete draft.auto_approve_requested_at
-      await writeStateStore(state)
+      await updateDraftStore(draftId, async (draftRecord) => {
+        draftRecord.status = "rejected"
+        delete draftRecord.auto_approve_at
+        delete draftRecord.auto_approve_requested_at
+        draftRecord.post_error = null
+        delete draftRecord.publish_intent_id
+        return draftRecord
+      })
       return Response.json({ ok: true, action: "rejected" })
     }
 
@@ -59,9 +61,13 @@ export async function POST(request) {
       if (!editedText || editedText.length > 280) {
         return Response.json({ error: "Invalid text" }, { status: 400 })
       }
-      draft.text = editedText
-      draft.manual_override = true
-      await writeStateStore(state)
+      await updateDraftStore(draftId, async (draftRecord) => {
+        draftRecord.text = editedText
+        draftRecord.manual_override = true
+        draftRecord.post_error = null
+        delete draftRecord.publish_intent_id
+        return draftRecord
+      })
       return Response.json({ ok: true, action: "edited" })
     }
 
@@ -75,15 +81,27 @@ export async function POST(request) {
       if (!selected) {
         return Response.json({ error: "Candidate not found" }, { status: 404 })
       }
-      draft.text = selected.text
-      draft.candidate_score = selected.score
-      draft.selected_candidate_rank = selected.rank
-      draft.manual_override = false
-      draft.candidates = [
-        selected,
-        ...candidates.filter((candidate) => candidate.rank !== rank),
-      ]
-      await writeStateStore(state)
+      const { draft: updatedDraft } = await updateDraftStore(draftId, async (draftRecord) => {
+        const currentCandidates = draftRecord.candidates || []
+        const nextSelected = currentCandidates.find((candidate) => candidate.rank === rank)
+        if (!nextSelected) {
+          return null
+        }
+        draftRecord.text = nextSelected.text
+        draftRecord.candidate_score = nextSelected.score
+        draftRecord.selected_candidate_rank = nextSelected.rank
+        draftRecord.manual_override = false
+        draftRecord.candidates = [
+          nextSelected,
+          ...currentCandidates.filter((candidate) => candidate.rank !== rank),
+        ]
+        draftRecord.post_error = null
+        delete draftRecord.publish_intent_id
+        return draftRecord
+      })
+      if (!updatedDraft) {
+        return Response.json({ error: "Candidate not found" }, { status: 404 })
+      }
       return Response.json({ ok: true, action: "selected_candidate" })
     }
 
@@ -98,24 +116,48 @@ export async function POST(request) {
         return Response.json({ error: "Delay must be between 5 and 1440 minutes" }, { status: 400 })
       }
       const autoApproveAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
-      draft.auto_approve_at = autoApproveAt
-      draft.auto_approve_requested_at = new Date().toISOString()
-      draft.approval_mode = "auto"
-      await writeStateStore(state)
+      await updateDraftStore(draftId, async (draftRecord) => {
+        draftRecord.auto_approve_at = autoApproveAt
+        draftRecord.auto_approve_requested_at = new Date().toISOString()
+        draftRecord.approval_mode = "auto"
+        draftRecord.post_error = null
+        delete draftRecord.publish_intent_id
+        return draftRecord
+      })
       return Response.json({ ok: true, action: "auto_approved", autoApproveAt, minutes })
     }
 
     if (action === "cancel_auto_approve") {
-      delete draft.auto_approve_at
-      delete draft.auto_approve_requested_at
-      if (draft.approval_mode === "auto") {
-        draft.approval_mode = "manual"
-      }
-      await writeStateStore(state)
+      await updateDraftStore(draftId, async (draftRecord) => {
+        delete draftRecord.auto_approve_at
+        delete draftRecord.auto_approve_requested_at
+        if (draftRecord.approval_mode === "auto") {
+          draftRecord.approval_mode = "manual"
+        }
+        delete draftRecord.publish_intent_id
+        return draftRecord
+      })
       return Response.json({ ok: true, action: "cancelled_auto_approve" })
     }
 
     if (action === "approve") {
+      const publishIntentId = crypto.randomUUID()
+      const { draft: approvedDraft } = await updateDraftStore(draftId, async (draftRecord) => {
+        draftRecord.status = "approved"
+        draftRecord.approved_at = new Date().toISOString()
+        delete draftRecord.auto_approve_at
+        delete draftRecord.auto_approve_requested_at
+        draftRecord.approval_mode = "manual"
+        draftRecord.post_error = null
+        draftRecord.publish_intent_id = publishIntentId
+        draftRecord.publish_requested_at = new Date().toISOString()
+        return draftRecord
+      })
+
+      if (!approvedDraft) {
+        return Response.json({ error: "Draft not found" }, { status: 404 })
+      }
+
       // Trigger GitHub Actions to post the tweet
       const res = await fetch(
         `https://api.github.com/repos/${REPO}/actions/workflows/bot.yml/dispatches`,
@@ -124,22 +166,32 @@ export async function POST(request) {
           headers: { ...gistHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({
             ref: "main",
-            inputs: { mode: "manual_tweet", tweet_text: draft.text, draft_id: draft.id },
+            inputs: {
+              mode: "manual_tweet",
+              tweet_text: approvedDraft.text,
+              draft_id: approvedDraft.id,
+              publish_intent_id: publishIntentId,
+            },
           }),
         }
       )
 
       if (res.ok || res.status === 204) {
-        draft.status = "approved"
-        draft.approved_at = new Date().toISOString()
-        delete draft.auto_approve_at
-        delete draft.auto_approve_requested_at
-        draft.approval_mode = "manual"
-        await writeStateStore(state)
         return Response.json({ ok: true, action: "approved" })
       }
 
-      return Response.json({ error: "Failed to trigger workflow" }, { status: 500 })
+      const errorText = await res.text()
+      await updateDraftStore(draftId, async (draftRecord) => {
+        draftRecord.status = "pending"
+        draftRecord.post_error = `Failed to trigger workflow: ${res.status}`
+        delete draftRecord.publish_intent_id
+        delete draftRecord.publish_requested_at
+        return draftRecord
+      })
+      return Response.json(
+        { error: `Failed to trigger workflow: ${res.status} ${errorText}` },
+        { status: 500 }
+      )
     }
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })

@@ -105,6 +105,7 @@ export default function Dashboard() {
   const [editText, setEditText] = useState("")
   const [draftAction, setDraftAction] = useState(null)
   const [selectedDraftId, setSelectedDraftId] = useState(null)
+  const [draftFeedback, setDraftFeedback] = useState(null)
 
   // Compose
   const [composePrompt, setComposePrompt] = useState("")
@@ -166,18 +167,31 @@ export default function Dashboard() {
 
   async function draftAct(draftId, action, payload = {}) {
     setDraftAction(draftId)
+    setDraftFeedback(null)
     try {
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, draftId, ...payload }),
       })
-      await res.json()
+      const result = await res.json()
+      if (!res.ok || result.ok === false) {
+        setDraftFeedback({
+          type: "error",
+          text: result.error || "Draft action failed",
+        })
+        return
+      }
       setEditingId(null)
       setEditText("")
+      setDraftFeedback({
+        type: "success",
+        text: result.action ? `${result.action.replaceAll("_", " ")}.` : "Draft updated.",
+      })
       await fetchData()
     } catch (e) {
       console.error(e)
+      setDraftFeedback({ type: "error", text: e.message })
     } finally {
       setDraftAction(null)
     }
@@ -343,6 +357,12 @@ export default function Dashboard() {
         .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
         .draft-chars.over { color: #f87171; }
         .draft-actions { display: flex; gap: 8px; }
+        .draft-feedback {
+          margin-top: 10px; font-size: 12px; padding: 8px 10px; border-radius: 6px;
+          border: 1px solid #222;
+        }
+        .draft-feedback.success { color: #4ade80; background: #0d1c11; border-color: #1f4d2c; }
+        .draft-feedback.error { color: #fca5a5; background: #1c0f0f; border-color: #4b1d1d; }
         .draft-status-row {
           display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
         }
@@ -838,6 +858,11 @@ export default function Dashboard() {
                             </>
                           )}
                         </div>
+                        {draftFeedback && (
+                          <div className={`draft-feedback ${draftFeedback.type}`}>
+                            {draftFeedback.text}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
