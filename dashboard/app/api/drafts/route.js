@@ -1,4 +1,5 @@
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
+import { requireDashboardAuth } from "../../../lib/auth.js"
 
 export const runtime = "nodejs"
 
@@ -12,7 +13,11 @@ function gistHeaders() {
 }
 
 // GET — return pending drafts
-export async function GET() {
+export async function GET(request) {
+  const authError = requireDashboardAuth(request)
+  if (authError) {
+    return authError
+  }
   try {
     const state = await readStateStore()
     const drafts = (state.drafts || [])
@@ -32,6 +37,10 @@ export async function GET() {
 
 // POST — approve, reject, or edit a draft
 export async function POST(request) {
+  const authError = requireDashboardAuth(request)
+  if (authError) {
+    return authError
+  }
   const { action, draftId, editedText, delayMinutes, candidateRank } = await request.json()
 
   if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve", "select_candidate"].includes(action)) {

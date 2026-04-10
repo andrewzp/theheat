@@ -194,8 +194,12 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     return merged
 
 
-def _read_gist_state() -> dict:
+def _read_gist_state(*, strict: bool = False) -> dict:
+    if not GIST_ID and not GITHUB_TOKEN:
+        return _fresh_state()
     if not GIST_ID or not GITHUB_TOKEN:
+        if strict:
+            raise StateReadError("Gist backend requires both GIST_ID and GITHUB_TOKEN")
         return _fresh_state()
 
     try:
@@ -208,8 +212,16 @@ def _read_gist_state() -> dict:
         gist = resp.json()
         content = gist["files"][STATE_FILENAME]["content"]
         return _normalize_state(json.loads(content))
-    except (requests.RequestException, KeyError, json.JSONDecodeError):
-        return _fresh_state()
+    except requests.RequestException as exc:
+        if strict:
+            raise StateReadError(f"Failed to read gist state: {exc}") from exc
+    except KeyError as exc:
+        if strict:
+            raise StateReadError(f"Gist is missing {STATE_FILENAME}") from exc
+    except json.JSONDecodeError as exc:
+        if strict:
+            raise StateReadError(f"{STATE_FILENAME} is not valid JSON") from exc
+    return _fresh_state()
 
 
 def _write_gist_state(state: dict) -> bool:
@@ -237,12 +249,12 @@ def read_state() -> dict:
             raise StateReadError("SQLite backend selected but THEHEAT_DB_PATH is not set")
         try:
             if sqlite_store.is_empty(DB_PATH) and GIST_ID and GITHUB_TOKEN:
-                gist_state = _read_gist_state()
+                gist_state = _read_gist_state(strict=True)
                 sqlite_store.write_state(DB_PATH, gist_state)
             return _normalize_state(sqlite_store.read_state(DB_PATH, DEFAULT_STATE))
         except Exception as exc:
             raise StateReadError(f"Failed to read SQLite state store: {exc}") from exc
-    return _read_gist_state()
+    return _read_gist_state(strict=True)
 
 
 def write_state(state: dict) -> bool:
@@ -255,7 +267,11 @@ def write_state(state: dict) -> bool:
         except Exception:
             return False
         return sqlite_store.write_state(DB_PATH, _merge_state(current, normalized))
-    return _write_gist_state(_merge_state(_read_gist_state(), normalized))
+    try:
+        current = _read_gist_state(strict=True)
+    except StateReadError:
+        return False
+    return _write_gist_state(_merge_state(current, normalized))
 
 
 def is_duplicate(state: dict, event_id: str) -> bool:

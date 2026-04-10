@@ -1,3 +1,5 @@
+import { requireDashboardAuth } from "../../../lib/auth.js"
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
 const SYSTEM_PROMPT = `You are @theheat, a climate data account with a voice. You report \
@@ -29,6 +31,10 @@ Examples:
 - "Ocean surface temps just broke the record for the 400th consecutive day. Four. Hundred. Days."`
 
 export async function POST(request) {
+  const authError = requireDashboardAuth(request)
+  if (authError) {
+    return authError
+  }
   if (!GEMINI_API_KEY) {
     return Response.json({ error: "No Gemini API key configured" }, { status: 500 })
   }

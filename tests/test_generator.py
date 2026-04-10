@@ -6,6 +6,7 @@ from src.voice.generator import (
     generate_tweet,
     generate_tweet_bundle,
     generate_record_tweet,
+    generate_record_low_tweet,
     generate_fire_tweet,
     generate_co2_milestone_tweet,
     generate_co2_weekly_tweet,
@@ -165,6 +166,34 @@ class TestGenerateRecordTweet:
         assert result is not None
         # Template uses Fahrenheit
         assert "F" in result
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "")
+    def test_uses_provisional_language(self):
+        result = generate_record_tweet(
+            city="Phoenix",
+            country="US",
+            new_temp_c=48.3,
+            old_record_c=47.0,
+            old_record_year=2020,
+        )
+        assert result is not None
+        assert "forecast" in result.lower() or "if it" in result.lower()
+        assert "just recorded" not in result.lower()
+
+
+class TestGenerateRecordLowTweet:
+    @patch("src.voice.generator.GEMINI_API_KEY", "")
+    def test_uses_provisional_language(self):
+        result = generate_record_low_tweet(
+            city="Denver",
+            country="US",
+            new_temp_c=-8.0,
+            old_record_c=-6.0,
+            old_record_year=1985,
+        )
+        assert result is not None
+        assert "forecast" in result.lower() or "if that verifies" in result.lower()
+        assert "recorded a low" not in result.lower()
 
 
 class TestGenerateFireTweet:

@@ -341,12 +341,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 return_bundle=True,
             )
             review_context = _review_context(
-                source="Open-Meteo historical",
+                source="Open-Meteo forecast + archive",
                 source_key="open_meteo_records",
-                headline=f"{record.city} set a heat record",
+                headline=f"{record.city} is forecast to challenge a heat record",
                 current_run=current_run,
                 facts=[
-                    _fact("New high", _temp_pair_c(record.new_temp_c)),
+                    _fact("Forecast high", _temp_pair_c(record.new_temp_c)),
                     _fact("Previous record", _temp_pair_c(record.old_record_c)),
                     _fact("Old record year", record.old_record_year),
                     _fact("Record gap", f"+{record.new_temp_c - record.old_record_c:.1f}C"),
@@ -403,12 +403,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 return_bundle=True,
             )
             review_context = _review_context(
-                source="Open-Meteo historical",
+                source="Open-Meteo forecast + archive",
                 source_key="open_meteo_record_lows",
-                headline=f"{record.city} set a cold record",
+                headline=f"{record.city} is forecast to challenge a cold record",
                 current_run=current_run,
                 facts=[
-                    _fact("New low", _temp_pair_c(record.new_temp_c)),
+                    _fact("Forecast low", _temp_pair_c(record.new_temp_c)),
                     _fact("Previous low", _temp_pair_c(record.old_record_c)),
                     _fact("Old record year", record.old_record_year),
                     _fact("Record gap", f"-{record.old_record_c - record.new_temp_c:.1f}C"),
@@ -1282,7 +1282,12 @@ def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict
     failures = []
     for draft in due_drafts:
         policy = draft.get("approval_policy", {})
-        if policy.get("mode") != "armed_auto" or policy.get("can_auto_approve") is False:
+        is_policy_auto = policy.get("mode") == "armed_auto"
+        is_requested_auto = (
+            policy.get("mode") == "suggested_auto"
+            and draft.get("approval_mode") == "auto"
+        )
+        if policy.get("can_auto_approve") is False or not (is_policy_auto or is_requested_auto):
             draft.pop("auto_approve_at", None)
             draft["approval_mode"] = "manual"
             draft["post_error"] = "Auto-approval blocked by policy"

@@ -534,7 +534,31 @@ class TestProcessDueDrafts:
         assert "auto_approve_at" not in result["drafts"][0]
 
     @patch("src.main.post_approved")
-    def test_suggested_auto_blocked_from_auto_posting(self, mock_post):
+    @patch("src.main.run_safety_pipeline")
+    def test_suggested_auto_posts_when_human_queued_it(self, mock_safety, mock_post):
+        mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Suggested draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_mode": "auto",
+            "approval_policy": {
+                "mode": "suggested_auto",
+                "can_auto_approve": True,
+            },
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_called_once_with("Suggested draft", state)
+        assert result["drafts"][0]["status"] == "posted"
+        assert result["drafts"][0]["approval_mode"] == "auto"
+
+    @patch("src.main.post_approved")
+    def test_suggested_auto_still_blocks_unqueued_state(self, mock_post):
         state = _fresh_state()
         state["drafts"] = [{
             "id": "draft_1",

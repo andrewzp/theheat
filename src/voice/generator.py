@@ -24,6 +24,9 @@ Rules:
 - CAPS for emphasis, but sparingly. Not every tweet needs it.
 - Every tweet must include enough context that someone seeing it for the first time \
 understands what happened and why it matters.
+- Open-Meteo record and record-low alerts are provisional. If the signal comes from \
+  a forecast or unconfirmed detection, describe it as likely / on pace / forecast to \
+  break a record, not as an already-observed official fact.
 - CO2 tweets must mention Mauna Loa and reference pre-industrial levels (280 ppm).
 - Record tweets must mention when the old record was set.
 - Never preach, never political, never moralize.
@@ -41,6 +44,7 @@ familiar things, timeline context ("that used to take..."), geographic surprise 
 
 Examples (notice how each one uses a DIFFERENT structure):
 - "Phoenix just dropped 121F. NEW RECORD. The old one was from last year."
+- "Phoenix is forecast to hit 121F today. If it gets there, the old record from 2024 is gone."
 - "Buenos Aires hit 42.1C. That broke a 97-year record set in 1929."
 - "Delhi with 48.2C today. Highest temperature recorded in the city since June 2014."
 - "Kuwait City: 53.2C. That's 127.8F. Highest reading anywhere on Earth this year."
@@ -251,9 +255,9 @@ def generate_record_tweet(
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
     data = (
-        f"{city}, {country} just recorded {temp_f}F ({new_temp_c}C) today. "
-        f"The previous record for this calendar date was {old_f}F ({old_record_c}C), "
-        f"set in {old_record_year}."
+        f"Open-Meteo forecast high for {city}, {country} today is {temp_f}F ({new_temp_c}C). "
+        f"If that holds, it would beat the previous record for this calendar date: "
+        f"{old_f}F ({old_record_c}C), set in {old_record_year}."
     )
     return generate_tweet(
         data,
@@ -500,9 +504,9 @@ def generate_record_low_tweet(
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
     data = (
-        f"{city}, {country} recorded a low of {temp_f}F ({new_temp_c}C) today. "
-        f"The previous record low for this calendar date was {old_f}F ({old_record_c}C), "
-        f"set in {old_record_year}. "
+        f"Open-Meteo forecast low for {city}, {country} tonight is {temp_f}F ({new_temp_c}C). "
+        f"If that verifies, it would break the previous record low for this calendar date: "
+        f"{old_f}F ({old_record_c}C), set in {old_record_year}. "
         f"Today's date: {__import__('datetime').date.today().strftime('%B %d')}."
     )
     return generate_tweet(

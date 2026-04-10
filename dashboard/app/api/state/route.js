@@ -1,4 +1,5 @@
 import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
+import { requireDashboardAuth } from "../../../lib/auth.js"
 
 export const runtime = "nodejs"
 
@@ -13,7 +14,11 @@ async function githubJson(url, headers) {
   return res.json()
 }
 
-export async function GET() {
+export async function GET(request) {
+  const authError = requireDashboardAuth(request)
+  if (authError) {
+    return authError
+  }
   const headers = { Accept: "application/vnd.github.v3+json" }
   if (process.env.GITHUB_TOKEN) headers.Authorization = `token ${process.env.GITHUB_TOKEN}`
 

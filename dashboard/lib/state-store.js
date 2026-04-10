@@ -1,10 +1,5 @@
 import { DatabaseSync } from "node:sqlite"
 
-const GIST_ID = process.env.GIST_ID
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const DB_PATH = process.env.THEHEAT_DB_PATH || ""
-const STATE_BACKEND = (process.env.THEHEAT_STATE_BACKEND || "").toLowerCase()
-
 const DEFAULT_STATE = {
   last_hot10: { date: null, cities: [] },
   streaks: {},
@@ -105,8 +100,21 @@ CREATE TABLE IF NOT EXISTS errors (
 
 function gistHeaders() {
   const headers = { Accept: "application/vnd.github.v3+json" }
-  if (GITHUB_TOKEN) headers.Authorization = `token ${GITHUB_TOKEN}`
+  const githubToken = process.env.GITHUB_TOKEN || ""
+  if (githubToken) headers.Authorization = `token ${githubToken}`
   return headers
+}
+
+function configuredDbPath() {
+  return process.env.THEHEAT_DB_PATH || ""
+}
+
+function configuredStateBackend() {
+  return (process.env.THEHEAT_STATE_BACKEND || "").toLowerCase()
+}
+
+function configuredGistId() {
+  return process.env.GIST_ID || ""
 }
 
 function normalizeState(state) {
@@ -117,8 +125,9 @@ function normalizeState(state) {
 }
 
 function configuredBackend() {
-  if (STATE_BACKEND === "sqlite" || STATE_BACKEND === "gist") return STATE_BACKEND
-  return DB_PATH ? "sqlite" : "gist"
+  const stateBackend = configuredStateBackend()
+  if (stateBackend === "sqlite" || stateBackend === "gist") return stateBackend
+  return configuredDbPath() ? "sqlite" : "gist"
 }
 
 function parseTimestamp(value) {
@@ -251,8 +260,9 @@ function mergeState(current, incoming) {
 }
 
 async function readGistState() {
-  if (!GIST_ID) return structuredClone(DEFAULT_STATE)
-  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+  const gistId = configuredGistId()
+  if (!gistId) return structuredClone(DEFAULT_STATE)
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     headers: gistHeaders(),
     cache: "no-store",
   })
@@ -269,7 +279,8 @@ async function readGistState() {
 }
 
 async function writeGistState(state) {
-  const res = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+  const gistId = configuredGistId()
+  const res = await fetch(`https://api.github.com/gists/${gistId}`, {
     method: "PATCH",
     headers: { ...gistHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -282,8 +293,12 @@ async function writeGistState(state) {
   }
 }
 
+function mergeDraftIntoState(state, draft) {
+  return mergeState(state, { drafts: [draft] })
+}
+
 function connectDb() {
-  const db = new DatabaseSync(DB_PATH)
+  const db = new DatabaseSync(configuredDbPath())
   db.exec(SQLITE_SCHEMA)
   return db
 }
@@ -504,7 +519,7 @@ function upsertSqliteDraft(db, draftId, draft, fallbackSeq) {
 }
 
 async function bootstrapSqliteFromGist(db) {
-  if (!GIST_ID || sqliteIsEmpty(db) === false) return
+  if (!configuredGistId() || sqliteIsEmpty(db) === false) return
   try {
     const gistState = await readGistState()
     writeSqliteState(db, gistState)
@@ -595,7 +610,9 @@ export async function updateDraftStore(draftId, updater) {
   }
 
   nextDraft.updated_at = new Date().toISOString()
-  state.drafts[draftIndex] = nextDraft
-  await writeGistState(state)
-  return { state, draft: nextDraft }
+  const latestState = await readGistState()
+  const mergedState = mergeDraftIntoState(latestState, nextDraft)
+  await writeGistState(mergedState)
+  const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft
+  return { state: mergedState, draft: mergedDraft }
 }

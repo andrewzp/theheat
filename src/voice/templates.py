@@ -15,9 +15,9 @@ def record_template(city: str, country: str, temp_c: float, old_temp_c: float, o
     old_f = round(old_temp_c * 9 / 5 + 32, 1)
     years_ago = datetime.date.today().year - old_year
     variants = [
-        f"{city} just dropped {temp_f}F. NEW RECORD. The old one was {old_f}F from {old_year}. That's {years_ago} years.",
-        f"{city} with {temp_f}F today. That broke a {years_ago}-year record. Previous: {old_f}F, set in {old_year}.",
-        f"{city}, {country}: {temp_f}F. New record for this date. The old one stood since {old_year}. {years_ago} years.",
+        f"{city} is forecast to hit {temp_f}F today. If it gets there, the old mark of {old_f}F from {old_year} is gone.",
+        f"{city} has a forecast high of {temp_f}F today. That would break a {years_ago}-year record. Previous: {old_f}F, set in {old_year}.",
+        f"{city}, {country}: forecast {temp_f}F. If it verifies, that's a new record for this date. The old one stood since {old_year}.",
     ]
     return random.choice(variants)
 
@@ -112,8 +112,8 @@ def record_low_template(city: str, country: str, temp_c: float, old_temp_c: floa
     old_f = round(old_temp_c * 9 / 5 + 32, 1)
     years_ago = datetime.date.today().year - old_year
     variants = [
-        f"{city} dropped to {temp_f}F overnight. NEW RECORD LOW. Previous: {old_f}F from {old_year}. {years_ago} years.",
-        f"{city}, {country}: {temp_f}F low. Coldest for this date since {old_year}. Previous record: {old_f}F.",
+        f"{city} is forecast to drop to {temp_f}F overnight. If that verifies, it's a new record low. Previous: {old_f}F from {old_year}.",
+        f"{city}, {country}: forecast low {temp_f}F. That would be the coldest for this date since {old_year}. Previous record: {old_f}F.",
     ]
     return random.choice(variants)
 

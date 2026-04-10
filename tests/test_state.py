@@ -4,6 +4,8 @@ from datetime import date
 import tempfile
 from unittest.mock import patch
 
+import requests
+
 from src.state import (
     add_source_run,
     is_duplicate,
@@ -225,3 +227,17 @@ class TestSqliteBackend:
                 assert False, "Expected StateReadError"
             except StateReadError as exc:
                 assert "Failed to read SQLite state store" in str(exc)
+
+    def test_read_state_raises_when_gist_backend_cannot_be_read(self):
+        with patch.multiple(
+            "src.state",
+            STATE_BACKEND="gist",
+            DB_PATH="",
+            GIST_ID="gist_123",
+            GITHUB_TOKEN="token_123",
+        ), patch("src.state.requests.get", side_effect=requests.RequestException("gist unavailable")):
+            try:
+                read_state()
+                assert False, "Expected StateReadError"
+            except StateReadError as exc:
+                assert "Failed to read gist state" in str(exc)

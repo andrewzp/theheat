@@ -1,7 +1,13 @@
+import { requireDashboardAuth } from "../../../lib/auth.js"
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
 
 export async function POST(request) {
+  const authError = requireDashboardAuth(request)
+  if (authError) {
+    return authError
+  }
   if (!GITHUB_TOKEN) {
     return Response.json({ error: "No GitHub token configured" }, { status: 500 })
   }

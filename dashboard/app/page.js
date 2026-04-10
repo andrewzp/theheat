@@ -93,6 +93,49 @@ function findDraftSourceRun(draft, botRuns) {
   return run.sources?.find((source) => source.source === sourceKey) || null
 }
 
+function toneForStatus(status, conclusion) {
+  if (status === "success" || conclusion === "success") return "good"
+  if (status === "in_progress") return "warn"
+  if (status === "partial_failure" || status === "skipped") return "warn"
+  if (status === "failed" || conclusion === "failure") return "bad"
+  return "neutral"
+}
+
+function labelForStatus(status, conclusion) {
+  if (status === "in_progress") return "running"
+  if (status === "partial_failure") return "partial"
+  if (status === "skipped") return "skipped"
+  if (status === "success" || conclusion === "success") return "healthy"
+  if (status === "failed" || conclusion === "failure") return "failed"
+  return conclusion || status || "unknown"
+}
+
+function formatUtcStamp(dateStr) {
+  if (!dateStr) return "—"
+  const date = new Date(dateStr)
+  return `${date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "UTC",
+  })} UTC`
+}
+
+function draftOutcomeTone(draft) {
+  if (draft?.status === "posted") return "good"
+  if (draft?.status === "rejected") return "bad"
+  if (draft?.auto_approve_at) return "warn"
+  return "neutral"
+}
+
+function draftOutcomeLabel(draft) {
+  if (draft?.status === "posted") return "posted"
+  if (draft?.status === "approved") return "approved"
+  if (draft?.status === "rejected") return "rejected"
+  if (draft?.auto_approve_at) return countdownText(draft.auto_approve_at)
+  return draft?.status || "pending"
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -269,285 +312,936 @@ export default function Dashboard() {
   const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
   const selectedCandidate = selectedDraft?.candidates?.find((candidate) => candidate.text === selectedDraft?.text)
     || selectedDraft?.candidates?.[0]
+  const healthySourceRuns = latestSourceRuns.filter((source) => source.status === "success")
+  const totalObserved = latestSourceRuns.reduce((sum, source) => sum + (source.observed || 0), 0)
+  const totalPromoted = latestSourceRuns.reduce((sum, source) => sum + (source.promoted || 0), 0)
+  const totalDrafted = latestSourceRuns.reduce((sum, source) => sum + (source.drafted || 0), 0)
+  const runHealth = latestSourceRuns.length
+    ? Math.round((healthySourceRuns.length / latestSourceRuns.length) * 100)
+    : 0
+  const autoQueuedDrafts = drafts.filter((draft) => !!draft.auto_approve_at).length
+  const manualOnlyDrafts = drafts.filter((draft) => draft.approval_policy?.can_auto_approve === false).length
+  const recentDraftOutcomes = [...(state?.drafts || [])]
+    .sort((a, b) => new Date(b.updated_at || b.posted_at || b.created_at || 0) - new Date(a.updated_at || a.posted_at || a.created_at || 0))
+    .slice(0, 3)
+  const timelineRows = latestBotRun
+    ? [
+        {
+          key: `${latestBotRun.id}-start`,
+          time: latestBotRun.started_at,
+          tone: latestBotRun.failure_count ? "warn" : "good",
+          label: "run started",
+          text: `${latestBotRun.mode} created ${latestBotRun.id} and opened ${latestSourceRuns.length || latestBotRun.source_count || 0} source slots.`,
+        },
+        ...latestSourceRuns
+          .filter((source) => source.observed || source.promoted || source.drafted || source.note || source.error)
+          .slice(0, 3)
+          .map((source) => ({
+            key: `${latestBotRun.id}-${source.source}`,
+            time: latestBotRun.ended_at || latestBotRun.started_at,
+            tone: toneForStatus(source.status),
+            label: source.source,
+            text: source.error
+              ? `${source.source} failed after ${formatDuration(source.duration_ms)}. ${source.error}`
+              : `${source.observed || 0} observations, ${source.promoted || 0} promoted, ${source.drafted || 0} drafts in ${formatDuration(source.duration_ms)}.`,
+          })),
+        {
+          key: `${latestBotRun.id}-queue`,
+          time: latestBotRun.ended_at || latestBotRun.started_at,
+          tone: autoQueuedDrafts ? "warn" : "good",
+          label: "queue updated",
+          text: `${drafts.length} drafts are waiting. ${autoQueuedDrafts} timed auto-approvals and ${manualOnlyDrafts} manual-only reviews remain in the queue.`,
+        },
+      ]
+    : []
 
   return (
     <>
       <style jsx global>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-          font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-          background: #0a0a0a;
-          color: #e0e0e0;
-          min-height: 100vh;
+        :root {
+          --bg: #0c0f14;
+          --bg-soft: #111722;
+          --panel: rgba(19, 24, 32, 0.9);
+          --panel-alt: rgba(16, 21, 29, 0.86);
+          --line: rgba(103, 148, 255, 0.14);
+          --line-strong: rgba(143, 176, 255, 0.3);
+          --text: #eef4ff;
+          --muted: #9aa8bf;
+          --soft: #6f7d93;
+          --accent: #8fb0ff;
+          --accent-2: #d5e1ff;
+          --good: #86d796;
+          --warn: #ffd266;
+          --bad: #ff8f8f;
         }
-        .dash { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-        header {
-          display: flex; justify-content: space-between; align-items: center;
-          margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid #222;
-        }
-        h1 { font-size: 20px; font-weight: 600; color: #ff4d00; }
-        h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
-        .refresh-btn {
-          background: none; border: 1px solid #333; color: #888;
-          padding: 6px 12px; border-radius: 4px; cursor: pointer;
-          font-family: inherit; font-size: 12px;
-        }
-        .refresh-btn:hover { border-color: #555; color: #ccc; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
-        .card {
-          background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px;
-        }
-        .card h2 {
-          font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-          color: #666; margin-bottom: 12px;
-        }
-        .card.full { grid-column: 1 / -1; }
-        .stat { font-size: 28px; font-weight: 700; color: #ff4d00; }
-        .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
 
-        /* Drafts */
-        .draft-item {
-          background: #0a0a0a; border: 1px solid #222; border-radius: 6px;
-          padding: 14px; margin-bottom: 10px;
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+          min-height: 100vh;
+          color: var(--text);
+          background:
+            radial-gradient(circle at top right, rgba(143, 176, 255, 0.18), transparent 24%),
+            linear-gradient(180deg, #0a0d12 0%, #0d1117 100%);
+          font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
         }
-        .draft-item.highlight { border-color: #ff4d00; }
+        button, input, textarea { font: inherit; }
+        a { color: inherit; }
+
+        .shell {
+          width: min(1440px, calc(100% - 32px));
+          margin: 24px auto 40px;
+          display: grid;
+          gap: 18px;
+        }
+        .panel {
+          border-radius: 24px;
+          border: 1px solid var(--line);
+          background: var(--panel);
+          padding: 24px;
+          box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(16px);
+        }
+        .topbar {
+          display: flex;
+          justify-content: space-between;
+          gap: 20px;
+          align-items: flex-start;
+        }
+        .eyebrow {
+          color: var(--accent);
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+          font-size: 11px;
+          margin-bottom: 10px;
+        }
+        .brand-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          align-items: baseline;
+          margin-bottom: 12px;
+        }
+        h1, h2, h3, p { margin: 0; }
+        h1 {
+          font-size: clamp(34px, 5vw, 58px);
+          line-height: 0.98;
+          font-family: "Iowan Old Style", "Book Antiqua", serif;
+          letter-spacing: -0.03em;
+        }
+        .subhead {
+          color: var(--soft);
+          text-transform: uppercase;
+          letter-spacing: 0.18em;
+          font-size: 11px;
+        }
+        .lede {
+          color: var(--muted);
+          font-size: 15px;
+          line-height: 1.6;
+          max-width: 62ch;
+        }
+        .top-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          align-items: center;
+        }
+        .backend-pill, .signal-badge, .workbench-pill, .badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--accent-2);
+          background: rgba(255, 255, 255, 0.025);
+        }
+        .backend-pill { color: var(--accent); }
+        .signal-badge.good, .badge.success { color: var(--good); }
+        .signal-badge.warn, .badge.running { color: var(--warn); }
+        .signal-badge.bad, .badge.failure { color: var(--bad); }
+        .signal-badge.neutral { color: var(--soft); }
+        .badge.neutral { color: var(--soft); }
+        .refresh-btn, .btn {
+          appearance: none;
+          border: 1px solid var(--line-strong);
+          background: rgba(255, 255, 255, 0.04);
+          color: var(--text);
+          cursor: pointer;
+          transition: 120ms ease;
+        }
+        .refresh-btn {
+          padding: 10px 14px;
+          border-radius: 999px;
+          font-size: 12px;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+        .refresh-btn:hover, .btn:hover {
+          border-color: rgba(143, 176, 255, 0.5);
+          background: rgba(143, 176, 255, 0.08);
+        }
+        .hero {
+          display: grid;
+          grid-template-columns: 1.18fr 0.82fr;
+          gap: 18px;
+          align-items: stretch;
+        }
+        .hero h2 {
+          font-size: clamp(32px, 4.6vw, 54px);
+          line-height: 0.98;
+          font-family: "Iowan Old Style", "Book Antiqua", serif;
+          letter-spacing: -0.03em;
+          margin-bottom: 14px;
+        }
+        .hero-copy {
+          color: var(--muted);
+          font-size: 15px;
+          line-height: 1.6;
+          max-width: 60ch;
+        }
+        .hero-metrics {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .metric {
+          padding: 18px;
+          border-radius: 20px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.03);
+        }
+        .metric span {
+          display: block;
+          color: var(--soft);
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          font-size: 10px;
+          margin-bottom: 10px;
+        }
+        .metric strong {
+          display: block;
+          font-size: clamp(28px, 4vw, 36px);
+          margin-bottom: 8px;
+        }
+        .metric p {
+          color: var(--muted);
+          font-size: 13px;
+          line-height: 1.45;
+        }
+        .two-up {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+        .section-title {
+          font-size: 13px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--accent-2);
+          margin-bottom: 18px;
+        }
+        .section-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: flex-start;
+          margin-bottom: 18px;
+        }
+        .section-kicker {
+          color: var(--soft);
+          font-size: 13px;
+          line-height: 1.5;
+          max-width: 56ch;
+        }
+        .source-row, .timeline-row, .table-row {
+          display: grid;
+          gap: 10px;
+          padding: 14px 0;
+          border-top: 1px solid var(--line);
+        }
+        .source-row:first-of-type,
+        .timeline-row:first-of-type,
+        .table-row:first-of-type {
+          border-top: none;
+          padding-top: 0;
+        }
+        .source-head, .table-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          align-items: center;
+        }
+        .source-head strong, .table-head strong {
+          font-size: 15px;
+        }
+        .meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 18px;
+          color: var(--muted);
+          font-size: 13px;
+        }
+        .timeline-panel p,
+        .table-panel p {
+          color: var(--muted);
+          font-size: 14px;
+          line-height: 1.55;
+        }
+        .source-run-error, .error-source { color: var(--bad); }
+        .source-run-note { color: var(--soft); }
+        .desk-panel { padding: 26px; }
         .draft-desk {
-          display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px;
-        }
-        @media (max-width: 860px) {
-          .draft-desk { grid-template-columns: 1fr; }
+          display: grid;
+          grid-template-columns: 320px minmax(0, 1fr);
+          gap: 18px;
+          align-items: start;
         }
         .draft-queue {
-          display: grid; gap: 10px; align-content: start;
+          display: grid;
+          gap: 10px;
+          align-content: start;
+          max-height: 920px;
+          overflow: auto;
+          padding-right: 4px;
         }
         .queue-item {
-          width: 100%; text-align: left; background: #0a0a0a; border: 1px solid #222;
-          border-radius: 8px; padding: 12px; color: inherit; cursor: pointer;
+          width: 100%;
+          text-align: left;
+          border-radius: 18px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.03);
+          padding: 14px;
+          color: inherit;
+          cursor: pointer;
+          transition: 140ms ease;
         }
-        .queue-item:hover { border-color: #3a3a3a; }
+        .queue-item:hover,
         .queue-item.selected {
-          border-color: #ff4d00;
-          box-shadow: 0 0 0 1px rgba(255, 77, 0, 0.18);
+          border-color: rgba(143, 176, 255, 0.5);
+          background: rgba(143, 176, 255, 0.08);
+          transform: translateY(-1px);
         }
         .queue-item-head {
-          display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px;
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          align-items: center;
+          margin-bottom: 8px;
         }
-        .queue-score { color: #666; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
-        .queue-text {
-          color: #ededed; font-size: 13px; line-height: 1.45; margin-bottom: 8px;
-        }
-        .queue-meta {
-          display: flex; justify-content: space-between; gap: 8px; color: #555; font-size: 10px;
-        }
-        .draft-workbench {
-          background: linear-gradient(180deg, rgba(26, 26, 26, 0.78), rgba(10, 10, 10, 0.88));
-          border: 1px solid #242424; border-radius: 10px; padding: 16px;
-        }
-        .draft-meta {
-          display: flex; justify-content: space-between; align-items: center;
-          margin-bottom: 8px; font-size: 11px;
+        .queue-score {
+          color: var(--soft);
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
         }
         .draft-type {
-          background: #1a1a1a; color: #888; padding: 2px 8px;
-          border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px;
+          display: inline-flex;
+          align-items: center;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          padding: 5px 10px;
+          color: var(--accent-2);
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          background: rgba(255, 255, 255, 0.03);
         }
-        .draft-time { color: #444; }
-        .draft-text { font-size: 15px; line-height: 1.5; color: #fff; margin-bottom: 10px; }
-        .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
-        .draft-chars.over { color: #f87171; }
-        .draft-actions { display: flex; gap: 8px; }
-        .draft-feedback {
-          margin-top: 10px; font-size: 12px; padding: 8px 10px; border-radius: 6px;
-          border: 1px solid #222;
+        .queue-text {
+          color: var(--text);
+          font-size: 14px;
+          line-height: 1.5;
+          margin-bottom: 10px;
         }
-        .draft-feedback.success { color: #4ade80; background: #0d1c11; border-color: #1f4d2c; }
-        .draft-feedback.error { color: #fca5a5; background: #1c0f0f; border-color: #4b1d1d; }
+        .queue-meta {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          color: var(--soft);
+          font-size: 11px;
+        }
+        .draft-workbench {
+          border-radius: 22px;
+          border: 1px solid var(--line);
+          background: linear-gradient(180deg, rgba(16, 21, 29, 0.94), rgba(12, 17, 24, 0.9));
+          padding: 20px;
+        }
+        .draft-meta {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 12px;
+          font-size: 12px;
+        }
+        .draft-time { color: var(--soft); }
         .draft-status-row {
-          display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 14px;
         }
-        .workbench-pill {
-          display: inline-flex; align-items: center; gap: 6px;
-          background: #141414; border: 1px solid #2a2a2a; border-radius: 999px;
-          padding: 5px 10px; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: #888;
+        .workbench-pill { color: var(--muted); }
+        .draft-text {
+          font-size: 22px;
+          line-height: 1.45;
+          color: var(--text);
+          margin-bottom: 10px;
+          font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+        }
+        .draft-chars {
+          font-size: 11px;
+          color: var(--soft);
+          margin-bottom: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+        }
+        .draft-chars.over { color: var(--bad); }
+        .draft-reason-block { display: grid; gap: 4px; margin-bottom: 12px; }
+        .draft-reason-line { font-size: 12px; color: var(--muted); }
+        .draft-reason-line strong { color: var(--accent-2); font-weight: 600; }
+        .draft-edit-area,
+        .compose-input,
+        .preview-tweet {
+          width: 100%;
+          border-radius: 18px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.03);
+          color: var(--text);
+          padding: 14px 16px;
+          font-size: 14px;
+          line-height: 1.6;
+          resize: vertical;
+        }
+        .draft-edit-area:focus,
+        .compose-input:focus,
+        .preview-tweet:focus {
+          outline: none;
+          border-color: rgba(143, 176, 255, 0.5);
         }
         .workbench-grid {
-          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0;
-        }
-        @media (max-width: 860px) {
-          .workbench-grid { grid-template-columns: 1fr; }
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin: 18px 0;
         }
         .workbench-panel {
-          background: #0c0c0c; border: 1px solid #1d1d1d; border-radius: 8px; padding: 12px;
+          border-radius: 18px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.02);
+          padding: 14px;
         }
         .workbench-panel h3 {
-          font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #666; margin-bottom: 10px;
+          font-size: 10px;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: var(--accent-2);
+          margin-bottom: 10px;
         }
         .workbench-headline {
-          color: #fff; font-size: 14px; line-height: 1.4; margin-bottom: 10px;
+          color: var(--text);
+          font-size: 15px;
+          line-height: 1.45;
+          margin-bottom: 10px;
         }
         .fact-list { display: grid; gap: 8px; }
         .fact-row {
-          display: flex; justify-content: space-between; gap: 10px; padding-bottom: 6px; border-bottom: 1px solid #171717;
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid var(--line);
         }
         .fact-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .fact-label { color: #666; font-size: 11px; }
-        .fact-value { color: #e3e3e3; font-size: 11px; text-align: right; }
-        .draft-reason-block { display: grid; gap: 4px; margin-bottom: 10px; }
-        .draft-reason-line { font-size: 11px; color: #666; }
-        .draft-reason-line strong { color: #888; font-weight: 600; }
-        .candidate-list {
-          display: grid; gap: 8px; margin: 12px 0; padding-top: 12px; border-top: 1px solid #1a1a1a;
-        }
-        .candidate-item {
-          background: #111; border: 1px solid #222; border-radius: 6px; padding: 10px;
-        }
-        .candidate-head {
-          display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 6px;
-          font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 0.8px;
-        }
-        .candidate-text { color: #d8d8d8; font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
-        .candidate-meta { color: #555; font-size: 10px; }
-        .score-meter { margin-bottom: 10px; }
-        .score-meter:last-child { margin-bottom: 0; }
-        .score-meter-head {
-          display: flex; justify-content: space-between; gap: 8px; color: #777; font-size: 10px;
-          text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;
-        }
-        .score-meter-track {
-          height: 6px; border-radius: 999px; background: #161616; overflow: hidden;
-        }
-        .score-meter-fill {
-          height: 100%; border-radius: 999px; background: linear-gradient(90deg, #ff4d00, #ff8a3d);
-        }
-        .score-meter-fill.inverse {
-          background: linear-gradient(90deg, #4ade80, #facc15);
-        }
+        .fact-label { color: var(--soft); font-size: 12px; }
+        .fact-value { color: var(--text); font-size: 12px; text-align: right; }
         .run-trace { display: grid; gap: 8px; }
         .trace-line {
-          display: flex; justify-content: space-between; gap: 10px; color: #777; font-size: 11px;
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          color: var(--muted);
+          font-size: 12px;
         }
-        .trace-line strong { color: #ddd; font-weight: 600; }
-        .draft-edit-area {
-          width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
-          color: #fff; font-family: inherit; font-size: 14px; padding: 10px;
-          resize: vertical; margin-bottom: 8px;
+        .trace-line strong { color: var(--text); font-weight: 600; }
+        .score-meter { margin-bottom: 12px; }
+        .score-meter:last-child { margin-bottom: 0; }
+        .score-meter-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          color: var(--soft);
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          margin-bottom: 6px;
         }
-        .draft-edit-area:focus { outline: none; border-color: #ff4d00; }
-        .draft-empty { color: #333; font-size: 13px; font-style: italic; padding: 20px 0; }
-
-        /* Buttons */
-        .trigger-bar { display: flex; gap: 8px; align-items: center; }
+        .score-meter-track {
+          height: 8px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.05);
+          overflow: hidden;
+        }
+        .score-meter-fill {
+          height: 100%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #8fb0ff, #d5e1ff);
+        }
+        .score-meter-fill.inverse {
+          background: linear-gradient(90deg, #86d796, #ffd266);
+        }
+        .candidate-list {
+          display: grid;
+          gap: 10px;
+          padding-top: 16px;
+          border-top: 1px solid var(--line);
+        }
+        .candidate-item {
+          border-radius: 18px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.03);
+          padding: 12px;
+        }
+        .candidate-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          align-items: center;
+          margin-bottom: 8px;
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--soft);
+        }
+        .candidate-text { color: var(--text); font-size: 14px; line-height: 1.55; margin-bottom: 8px; }
+        .candidate-meta { color: var(--muted); font-size: 11px; }
+        .draft-actions, .trigger-bar, .preview-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
         .btn {
-          background: #1a1a1a; border: 1px solid #333; color: #e0e0e0;
-          padding: 8px 16px; border-radius: 4px; cursor: pointer;
-          font-family: inherit; font-size: 12px; font-weight: 600;
+          border-radius: 999px;
+          padding: 10px 15px;
+          font-size: 12px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
-        .btn:hover { border-color: #ff4d00; color: #ff4d00; }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn.primary { background: #ff4d00; border-color: #ff4d00; color: #000; }
-        .btn.primary:hover { background: #ff6620; }
-        .btn.approve { background: #0a2a0a; border-color: #4ade80; color: #4ade80; }
-        .btn.approve:hover { background: #0f3a0f; }
-        .btn.reject { background: #1a1010; border-color: #666; color: #888; }
-        .btn.sm { padding: 5px 10px; font-size: 11px; }
-        .trigger-result { font-size: 12px; color: #4ade80; }
-
-        /* Compose */
-        .compose { display: flex; flex-direction: column; gap: 10px; }
-        .compose-input {
-          background: #0a0a0a; border: 1px solid #333; border-radius: 4px;
-          color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 10px;
-          resize: vertical;
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .btn.primary {
+          background: rgba(143, 176, 255, 0.16);
+          color: var(--accent-2);
         }
-        .compose-input:focus { outline: none; border-color: #ff4d00; }
+        .btn.approve {
+          background: rgba(134, 215, 150, 0.1);
+          color: var(--good);
+          border-color: rgba(134, 215, 150, 0.3);
+        }
+        .btn.reject {
+          background: rgba(255, 143, 143, 0.08);
+          color: var(--bad);
+          border-color: rgba(255, 143, 143, 0.2);
+        }
+        .btn.sm {
+          padding: 8px 12px;
+          font-size: 11px;
+        }
+        .draft-feedback, .status-banner {
+          margin-top: 12px;
+          padding: 12px 14px;
+          border-radius: 16px;
+          border: 1px solid var(--line);
+          font-size: 13px;
+        }
+        .draft-feedback.success, .status-banner.success {
+          color: var(--good);
+          background: rgba(134, 215, 150, 0.08);
+        }
+        .draft-feedback.error, .status-banner.error {
+          color: var(--bad);
+          background: rgba(255, 143, 143, 0.08);
+        }
+        .compose {
+          display: grid;
+          gap: 12px;
+        }
         .preview-box {
-          background: #0a0a0a; border: 1px solid #ff4d00; border-radius: 6px; padding: 12px;
+          border-radius: 20px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.025);
+          padding: 16px;
         }
         .preview-label {
-          font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
-          color: #ff4d00; margin-bottom: 8px; display: flex; justify-content: space-between;
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+          color: var(--accent);
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          font-size: 11px;
         }
-        .char-count { color: #4ade80; }
-        .char-count.over { color: #f87171; }
-        .preview-tweet {
-          background: transparent; border: none; color: #fff; font-family: inherit;
-          font-size: 15px; line-height: 1.5; width: 100%; resize: vertical;
-          padding: 0; margin-bottom: 10px;
+        .char-count { color: var(--good); }
+        .char-count.over { color: var(--bad); }
+        .card-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
         }
-        .preview-tweet:focus { outline: none; }
-        .preview-actions { display: flex; gap: 8px; }
-        .compose-status { font-size: 12px; color: #4ade80; }
-
-        /* Tables / lists */
-        .hot10-list { list-style: none; }
-        .hot10-list li {
-          display: flex; justify-content: space-between; padding: 4px 0;
-          border-bottom: 1px solid #1a1a1a; font-size: 13px;
+        .stat-block {
+          border-radius: 18px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.025);
+          padding: 16px;
+          margin-bottom: 12px;
         }
-        .hot10-list li:last-child { border-bottom: none; }
-        .rank { color: #666; width: 24px; }
+        .stat-block:last-child { margin-bottom: 0; }
+        .stat-label {
+          color: var(--soft);
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          font-size: 10px;
+          margin-bottom: 8px;
+        }
+        .stat {
+          font-size: 26px;
+          margin-bottom: 8px;
+          font-family: "Iowan Old Style", "Book Antiqua", serif;
+        }
+        .stat-copy {
+          color: var(--muted);
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .hot10-list, .error-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        .hot10-list li, .error-list li {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 0;
+          border-top: 1px solid var(--line);
+          font-size: 13px;
+        }
+        .hot10-list li:first-child, .error-list li:first-child { border-top: none; padding-top: 0; }
+        .rank { color: var(--soft); width: 28px; }
         .city { flex: 1; }
-        .streak-list { display: flex; flex-wrap: wrap; gap: 8px; }
-        .streak-chip { background: #1a1a1a; padding: 4px 10px; border-radius: 4px; font-size: 12px; }
-        .streak-chip .days { color: #ff4d00; font-weight: 600; }
-        .runs-table { width: 100%; font-size: 12px; }
-        .runs-table th { text-align: left; color: #444; font-weight: 400; padding: 4px 8px 8px 0; }
-        .runs-table td { padding: 6px 8px 6px 0; border-top: 1px solid #1a1a1a; }
-        .runs-table a { color: #888; text-decoration: none; }
-        .runs-table a:hover { color: #ff4d00; }
-        .badge {
-          display: inline-block; padding: 2px 8px; border-radius: 3px;
-          font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+        .streak-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
-        .badge.success { background: #0a2a0a; color: #4ade80; }
-        .badge.failure { background: #2a0a0a; color: #f87171; }
-        .badge.running { background: #1a1a0a; color: #facc15; }
-        .badge.neutral { background: #1a1a1a; color: #888; }
-        .error-list { list-style: none; max-height: 200px; overflow-y: auto; }
-        .error-list li { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
-        .error-source { color: #f87171; font-weight: 600; }
-        .error-ts { color: #444; margin-left: 8px; }
-        .error-msg { color: #888; display: block; margin-top: 2px; }
-        .run-summary {
-          display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;
+        .streak-chip {
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          padding: 8px 12px;
+          font-size: 12px;
+          color: var(--muted);
+          background: rgba(255, 255, 255, 0.03);
         }
-        @media (max-width: 720px) { .run-summary { grid-template-columns: 1fr 1fr; } }
-        .run-stat {
-          background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 12px;
+        .streak-chip .days { color: var(--accent-2); font-weight: 600; }
+        .runs-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
         }
-        .run-stat-label {
-          color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+        .runs-table th {
+          text-align: left;
+          color: var(--soft);
+          font-weight: 500;
+          padding: 0 0 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-size: 10px;
         }
-        .run-stat-value { color: #fff; font-size: 18px; font-weight: 700; }
-        .source-run-list { display: grid; gap: 10px; }
-        .source-run {
-          background: #0a0a0a; border: 1px solid #222; border-radius: 6px; padding: 12px;
+        .runs-table td {
+          padding: 12px 10px 12px 0;
+          border-top: 1px solid var(--line);
+          color: var(--muted);
         }
-        .source-run-head {
-          display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px;
+        .runs-table a {
+          color: var(--accent);
+          text-decoration: none;
         }
-        .source-run-name { color: #fff; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; }
-        .source-run-meta { display: flex; flex-wrap: wrap; gap: 10px; color: #666; font-size: 11px; }
-        .source-run-error { color: #f87171; font-size: 11px; margin-top: 6px; }
-        .source-run-note { color: #888; font-size: 11px; margin-top: 6px; }
-        .empty { color: #333; font-size: 13px; font-style: italic; }
-        .loading { text-align: center; color: #333; padding: 60px; font-size: 14px; }
+        .runs-table a:hover { color: var(--accent-2); }
+        .error-source { font-weight: 600; }
+        .error-msg {
+          color: var(--muted);
+          display: block;
+          margin-top: 4px;
+          line-height: 1.5;
+        }
+        .error-ts { color: var(--soft); }
+        .empty {
+          color: var(--soft);
+          font-size: 13px;
+          font-style: italic;
+        }
+        .draft-empty {
+          color: var(--soft);
+          font-size: 14px;
+          font-style: italic;
+          padding: 16px 0;
+        }
+        .loading {
+          padding: 120px 0;
+          text-align: center;
+          color: var(--soft);
+          font-size: 14px;
+        }
+
+        @media (max-width: 1120px) {
+          .hero, .two-up, .card-grid, .draft-desk, .workbench-grid {
+            grid-template-columns: 1fr;
+          }
+          .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 720px) {
+          .shell {
+            width: min(100% - 16px, 100%);
+            margin: 12px auto 28px;
+          }
+          .panel { padding: 18px; border-radius: 20px; }
+          .topbar, .section-head, .draft-meta, .source-head, .table-head {
+            flex-direction: column;
+            align-items: flex-start;
+          }
+          .hero-metrics { grid-template-columns: 1fr; }
+        }
       `}</style>
 
-      <div className="dash">
-        <header>
-          <h1>@theheat <span>control panel</span></h1>
-          <button className="refresh-btn" onClick={fetchData}>refresh</button>
+      <div className="shell">
+        <header className="topbar">
+          <div>
+            <div className="eyebrow">Run Center</div>
+            <div className="brand-row">
+              <h1>@theheat</h1>
+              <span className="subhead">editorial desk</span>
+            </div>
+            <p className="lede">
+              Operational truth, not workflow vibes. The dashboard now treats source health, funnel quality,
+              queue state, and publishing outcomes as the product instead of hiding everything behind a green
+              GitHub Actions check.
+            </p>
+          </div>
+          <div className="top-actions">
+            <span className="backend-pill">{(data?.stateBackend || "gist").toUpperCase()} backend</span>
+            <button className="refresh-btn" onClick={fetchData}>Refresh</button>
+          </div>
         </header>
 
         {loading ? (
           <div className="loading">loading...</div>
         ) : (
           <>
-            {/* DRAFTS — primary view */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Draft Workbench ({drafts.length})</h2>
+            <section className="hero panel">
+              <div>
+                <div className="eyebrow">Live Ops</div>
+                <h2>Operational truth, not workflow vibes.</h2>
+                <p className="hero-copy">
+                  The current run view tells you what each source returned, what got filtered out, what cleared
+                  editorial scoring, what made it into the queue, and what failed. Success is measured in signal
+                  quality and publishing safety, not just cron completion.
+                </p>
+              </div>
+              <div className="hero-metrics">
+                <div className="metric">
+                  <span>Current run</span>
+                  <strong>{latestBotRun ? `${runHealth}%` : "—"}</strong>
+                  <p>
+                    {latestBotRun
+                      ? `${healthySourceRuns.length} of ${latestSourceRuns.length || latestBotRun.source_count || 0} sources finished healthy.`
+                      : "No run telemetry yet."}
+                  </p>
+                </div>
+                <div className="metric">
+                  <span>Signals</span>
+                  <strong>{latestBotRun ? totalObserved : drafts.length}</strong>
+                  <p>
+                    {latestBotRun
+                      ? `${totalPromoted} promoted events, ${totalDrafted} queue-ready drafts.`
+                      : `${drafts.length} drafts waiting for review.`}
+                  </p>
+                </div>
+                <div className="metric">
+                  <span>Failures</span>
+                  <strong>{failedSourceRuns.length}</strong>
+                  <p>
+                    {failedSourceRuns.length
+                      ? `${failedSourceRuns.length} source slots need attention.`
+                      : "No source failures in the latest run."}
+                  </p>
+                </div>
+                <div className="metric">
+                  <span>Queue</span>
+                  <strong>{drafts.length}</strong>
+                  <p>{autoQueuedDrafts} auto-timed drafts. {manualOnlyDrafts} review-only items.</p>
+                </div>
+              </div>
+            </section>
+
+            <section className="two-up">
+              <article className="panel">
+                <h2 className="section-title">Source Health</h2>
+                {latestSourceRuns.length > 0 ? (
+                  latestSourceRuns.map((source) => (
+                    <div className="source-row" key={`${latestBotRun.id}-${source.source}`}>
+                      <div className="source-head">
+                        <strong>{source.source}</strong>
+                        <span className={`signal-badge ${toneForStatus(source.status)}`}>
+                          {labelForStatus(source.status)}
+                        </span>
+                      </div>
+                      <div className="meta">
+                        <span>{source.observed || 0} observed</span>
+                        <span>{source.promoted || 0} promoted</span>
+                        <span>{source.drafted || 0} drafted</span>
+                        <span>{formatDuration(source.duration_ms)} latency</span>
+                      </div>
+                      {source.note && <div className="source-run-note">{source.note}</div>}
+                      {source.error && <div className="source-run-error">{source.error}</div>}
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty">No source telemetry yet.</div>
+                )}
+              </article>
+
+              <article className="panel">
+                <h2 className="section-title">Funnel</h2>
+                <div className="source-row">
+                  <div className="source-head">
+                    <strong>Observations ingested</strong>
+                    <span className="signal-badge good">{totalObserved}</span>
+                  </div>
+                  <div className="meta">
+                    <span>raw payloads normalized into canonical facts</span>
+                  </div>
+                </div>
+                <div className="source-row">
+                  <div className="source-head">
+                    <strong>Events created</strong>
+                    <span className="signal-badge good">{totalPromoted}</span>
+                  </div>
+                  <div className="meta">
+                    <span>duplicates clustered and low-confidence items suppressed</span>
+                  </div>
+                </div>
+                <div className="source-row">
+                  <div className="source-head">
+                    <strong>Draft candidates generated</strong>
+                    <span className="signal-badge good">
+                      {drafts.reduce((sum, draft) => sum + (draft.candidates?.length || 1), 0)}
+                    </span>
+                  </div>
+                  <div className="meta">
+                    <span>3-5 variants per high-scoring event when available</span>
+                  </div>
+                </div>
+                <div className="source-row">
+                  <div className="source-head">
+                    <strong>Queue-ready drafts</strong>
+                    <span className={`signal-badge ${drafts.length ? "warn" : "neutral"}`}>{drafts.length}</span>
+                  </div>
+                  <div className="meta">
+                    <span>best candidates that survived quality gates and policy rules</span>
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <section className="panel timeline-panel">
+              <h2 className="section-title">Run Timeline</h2>
+              {timelineRows.length > 0 ? (
+                timelineRows.map((entry) => (
+                  <div className="timeline-row" key={entry.key}>
+                    <div className="table-head">
+                      <strong>{formatUtcStamp(entry.time)}</strong>
+                      <span className={`signal-badge ${entry.tone}`}>{entry.label}</span>
+                    </div>
+                    <p>{entry.text}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="empty">No run timeline yet.</div>
+              )}
+            </section>
+
+            <section className="two-up">
+              <article className="panel table-panel">
+                <h2 className="section-title">Recent Publishing Outcomes</h2>
+                {recentDraftOutcomes.length > 0 ? (
+                  recentDraftOutcomes.map((draft) => (
+                    <div className="table-row" key={`outcome-${draft.id}`}>
+                      <div className="table-head">
+                        <strong>{`${draft.type || "draft"} / ${draftOutcomeLabel(draft)}`}</strong>
+                        <span className={`signal-badge ${draftOutcomeTone(draft)}`}>{draftOutcomeLabel(draft)}</span>
+                      </div>
+                      <div className="meta">
+                        <span>{clipText(draft.text, 72)}</span>
+                        <span>{timeAgo(draft.updated_at || draft.posted_at || draft.created_at)}</span>
+                        {draft.post_error && <span>{draft.post_error}</span>}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty">No publishing outcomes yet.</div>
+                )}
+              </article>
+
+              <article className="panel">
+                <div className="section-head">
+                  <div>
+                    <h2 className="section-title">Command Deck</h2>
+                    <p className="section-kicker">
+                      Trigger the pipeline, watch the queue, and keep manual intervention close without leaving the run view.
+                    </p>
+                  </div>
+                </div>
+                <div className="trigger-bar">
+                  <button
+                    className="btn primary"
+                    disabled={!!triggering}
+                    onClick={() => trigger("both")}
+                  >
+                    {triggering === "both" ? "Running..." : "Run Both"}
+                  </button>
+                  <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
+                    {triggering === "alerts" ? "Running..." : "Alerts Only"}
+                  </button>
+                  <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
+                    {triggering === "leaderboard" ? "Running..." : "Leaderboard Only"}
+                  </button>
+                </div>
+                {triggerResult && (
+                  <div className={`status-banner ${triggerResult.startsWith("Error") ? "error" : "success"}`}>
+                    {triggerResult}
+                  </div>
+                )}
+                {data?.stateError && <div className="status-banner error">{data.stateError}</div>}
+                {data?.runsError && <div className="status-banner error">{data.runsError}</div>}
+              </article>
+            </section>
+
+            <section className="panel desk-panel">
+              <div className="section-head">
+                <div>
+                  <h2 className="section-title">Draft Workbench</h2>
+                  <p className="section-kicker">
+                    Review the queue with source facts, score context, alternate copy, and approval policy all in one place.
+                  </p>
+                </div>
+                <span className="backend-pill">{drafts.length} pending drafts</span>
+              </div>
               {drafts.length > 0 ? (
                 <div className="draft-desk">
                   <div className="draft-queue">
@@ -872,112 +1566,112 @@ export default function Dashboard() {
                   No drafts waiting. Trigger a run below or compose one manually.
                 </div>
               )}
-            </div>
+            </section>
 
-            {/* Generate Drafts */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Generate Drafts</h2>
-              <div className="trigger-bar">
-                <button
-                  className="btn primary"
-                  disabled={!!triggering}
-                  onClick={() => trigger("both")}
-                >
-                  {triggering === "both" ? "..." : "Run Both"}
-                </button>
-                <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
-                  {triggering === "alerts" ? "..." : "Alerts Only"}
-                </button>
-                <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
-                  {triggering === "leaderboard" ? "..." : "Leaderboard Only"}
-                </button>
-                {triggerResult && <span className="trigger-result">{triggerResult}</span>}
-              </div>
-            </div>
-
-            {/* Compose */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Compose Tweet</h2>
-              <div className="compose">
-                <textarea
-                  className="compose-input"
-                  placeholder="Describe the data (e.g. 'Phoenix hit 122F today, old record 121F from 2024')..."
-                  value={composePrompt}
-                  onChange={(e) => setComposePrompt(e.target.value)}
-                  rows={2}
-                />
-                <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
-                  {generating ? "generating..." : "Generate Preview"}
-                </button>
-                {composeTweet && (
-                  <div className="preview-box">
-                    <div className="preview-label">
-                      PREVIEW
-                      <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
-                        {composeTweet.length}/280
-                      </span>
-                    </div>
-                    <textarea
-                      className="preview-tweet"
-                      value={composeTweet}
-                      onChange={(e) => setComposeTweet(e.target.value)}
-                      rows={3}
-                    />
-                    <div className="preview-actions">
-                      <button
-                        className="btn approve"
-                        disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
-                        onClick={postComposed}
-                      >
-                        {posting ? "..." : "Approve + Post"}
-                      </button>
-                      <button className="btn" disabled={generating} onClick={generateTweet}>
-                        Regenerate
-                      </button>
-                      <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
-                        Discard
-                      </button>
-                    </div>
+            <section className="two-up">
+              <article className="panel">
+                <div className="section-head">
+                  <div>
+                    <h2 className="section-title">Compose Tweet</h2>
+                    <p className="section-kicker">
+                      Manually write or generate a tweet, then send it through the same review and posting pathway.
+                    </p>
                   </div>
-                )}
-                {composeStatus && <div className="compose-status">{composeStatus}</div>}
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid">
-              <div className="card">
-                <h2>Tweets Today</h2>
-                <div className="stat">{todayCount}</div>
-                <div className="stat-label">of 10 daily cap</div>
-              </div>
-              <div className="card">
-                <h2>Last Hot 10</h2>
-                <div className="stat">{hot10.date || "—"}</div>
-                <div className="stat-label">
-                  {hot10.date ? timeAgo(hot10.date + "T12:00:00Z") : "no data yet"}
                 </div>
-              </div>
-            </div>
+                <div className="compose">
+                  <textarea
+                    className="compose-input"
+                    placeholder="Describe the data (e.g. Phoenix hit 122F today, old record 121F from 2024)..."
+                    value={composePrompt}
+                    onChange={(e) => setComposePrompt(e.target.value)}
+                    rows={3}
+                  />
+                  <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
+                    {generating ? "Generating..." : "Generate Preview"}
+                  </button>
+                  {composeTweet && (
+                    <div className="preview-box">
+                      <div className="preview-label">
+                        <span>Preview</span>
+                        <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
+                          {composeTweet.length}/280
+                        </span>
+                      </div>
+                      <textarea
+                        className="preview-tweet"
+                        value={composeTweet}
+                        onChange={(e) => setComposeTweet(e.target.value)}
+                        rows={4}
+                      />
+                      <div className="preview-actions">
+                        <button
+                          className="btn approve"
+                          disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
+                          onClick={postComposed}
+                        >
+                          {posting ? "Sending..." : "Approve + Post"}
+                        </button>
+                        <button className="btn" disabled={generating} onClick={generateTweet}>
+                          Regenerate
+                        </button>
+                        <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
+                          Discard
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {composeStatus && (
+                    <div className={`status-banner ${composeStatus.startsWith("Error") ? "error" : "success"}`}>
+                      {composeStatus}
+                    </div>
+                  )}
+                </div>
+              </article>
 
-            <div className="grid">
-              <div className="card">
-                <h2>Hot 10 Leaderboard</h2>
+              <article className="panel">
+                <h2 className="section-title">Desk Stats</h2>
+                <div className="stat-block">
+                  <div className="stat-label">Tweets today</div>
+                  <div className="stat">{todayCount}</div>
+                  <div className="stat-copy">of the 10-post daily cap</div>
+                </div>
+                <div className="stat-block">
+                  <div className="stat-label">Last Hot 10</div>
+                  <div className="stat">{hot10.date || "—"}</div>
+                  <div className="stat-copy">
+                    {hot10.date ? `${hot10.cities?.[0] || "Leader"} led ${timeAgo(`${hot10.date}T12:00:00Z`)}` : "No leaderboard yet."}
+                  </div>
+                </div>
+                <div className="stat-block">
+                  <div className="stat-label">Streak leader</div>
+                  <div className="stat">{sortedStreaks[0]?.[0] || "—"}</div>
+                  <div className="stat-copy">
+                    {sortedStreaks[0] ? `${sortedStreaks[0][1].consecutive_days} consecutive days in the Hot 10.` : "No active streaks."}
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <section className="two-up">
+              <article className="panel">
+                <h2 className="section-title">Hot 10 Leaderboard</h2>
                 {hot10.cities?.length > 0 ? (
                   <ul className="hot10-list">
                     {hot10.cities.map((city, i) => (
                       <li key={city}>
                         <span className="rank">{i + 1}.</span>
                         <span className="city">{city}</span>
+                        <span className="error-ts">{i === 0 ? "leader" : "tracking"}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div className="empty">no leaderboard data yet</div>
+                  <div className="empty">No leaderboard data yet.</div>
                 )}
-              </div>
-              <div className="card">
-                <h2>Streaks</h2>
+              </article>
+
+              <article className="panel">
+                <h2 className="section-title">Streaks</h2>
                 {sortedStreaks.length > 0 ? (
                   <div className="streak-list">
                     {sortedStreaks.map(([city, s]) => (
@@ -987,105 +1681,52 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="empty">no active streaks</div>
+                  <div className="empty">No active streaks.</div>
                 )}
-              </div>
-            </div>
+              </article>
+            </section>
 
-            {/* Run Center */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Run Center</h2>
-              {latestBotRun ? (
-                <>
-                  <div className="run-summary">
-                    <div className="run-stat">
-                      <div className="run-stat-label">Latest Mode</div>
-                      <div className="run-stat-value">{latestBotRun.mode}</div>
-                    </div>
-                    <div className="run-stat">
-                      <div className="run-stat-label">Started</div>
-                      <div className="run-stat-value">{timeAgo(latestBotRun.started_at)}</div>
-                    </div>
-                    <div className="run-stat">
-                      <div className="run-stat-label">Sources</div>
-                      <div className="run-stat-value">{latestBotRun.source_count || latestSourceRuns.length}</div>
-                    </div>
-                    <div className="run-stat">
-                      <div className="run-stat-label">Drafts Created</div>
-                      <div className="run-stat-value">{latestBotRun.drafted_count || 0}</div>
-                    </div>
-                  </div>
+            <section className="two-up">
+              <article className="panel">
+                <h2 className="section-title">Recent Workflow Runs</h2>
+                {runs.length > 0 ? (
+                  <table className="runs-table">
+                    <thead>
+                      <tr><th>Status</th><th>Trigger</th><th>When</th><th>Link</th></tr>
+                    </thead>
+                    <tbody>
+                      {runs.map((r) => (
+                        <tr key={r.id}>
+                          <td><RunStatus conclusion={r.conclusion} status={r.status} /></td>
+                          <td>{r.event === "schedule" ? "cron" : r.event}</td>
+                          <td>{timeAgo(r.created_at)}</td>
+                          <td><a href={r.html_url} target="_blank" rel="noopener">logs</a></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty">No workflow runs yet.</div>
+                )}
+              </article>
 
-                  <div className="source-run-list">
-                    {latestSourceRuns.map((source) => (
-                      <div className="source-run" key={`${latestBotRun.id}-${source.source}`}>
-                        <div className="source-run-head">
-                          <span className="source-run-name">{source.source}</span>
-                          <RunStatus status={source.status} />
-                        </div>
-                        <div className="source-run-meta">
-                          <span>Observed: {source.observed ?? 0}</span>
-                          <span>Promoted: {source.promoted ?? 0}</span>
-                          <span>Drafted: {source.drafted ?? 0}</span>
-                          <span>Duration: {formatDuration(source.duration_ms)}</span>
-                        </div>
-                        {source.note && <div className="source-run-note">{source.note}</div>}
-                        {source.error && <div className="source-run-error">{source.error}</div>}
-                      </div>
+              <article className="panel">
+                <h2 className="section-title">Recent Errors</h2>
+                {errors.length > 0 ? (
+                  <ul className="error-list">
+                    {errors.slice(-10).reverse().map((e, i) => (
+                      <li key={`${e.source}-${e.ts}-${i}`}>
+                        <span className="error-source">{e.source}</span>
+                        <span className="error-ts">{timeAgo(e.ts)}</span>
+                        <span className="error-msg">{e.msg}</span>
+                      </li>
                     ))}
-                  </div>
-                  {failedSourceRuns.length > 0 && (
-                    <div className="compose-status" style={{ marginTop: 12 }}>
-                      {failedSourceRuns.length} source{failedSourceRuns.length === 1 ? "" : "s"} failed in the latest run.
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="empty">no bot run telemetry yet</div>
-              )}
-            </div>
-
-            {/* Runs */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Recent Runs</h2>
-              {runs.length > 0 ? (
-                <table className="runs-table">
-                  <thead>
-                    <tr><th>Status</th><th>Trigger</th><th>When</th><th>Link</th></tr>
-                  </thead>
-                  <tbody>
-                    {runs.map((r) => (
-                      <tr key={r.id}>
-                        <td><RunStatus conclusion={r.conclusion} status={r.status} /></td>
-                        <td>{r.event === "schedule" ? "cron" : r.event}</td>
-                        <td>{timeAgo(r.created_at)}</td>
-                        <td><a href={r.html_url} target="_blank" rel="noopener">logs</a></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="empty">no runs yet</div>
-              )}
-            </div>
-
-            {/* Errors */}
-            <div className="card full">
-              <h2>Recent Errors</h2>
-              {errors.length > 0 ? (
-                <ul className="error-list">
-                  {errors.slice(-10).reverse().map((e, i) => (
-                    <li key={i}>
-                      <span className="error-source">{e.source}</span>
-                      <span className="error-ts">{timeAgo(e.ts)}</span>
-                      <span className="error-msg">{e.msg}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="empty">no errors. suspicious.</div>
-              )}
-            </div>
+                  </ul>
+                ) : (
+                  <div className="empty">No recent errors. Suspicious in a good way.</div>
+                )}
+              </article>
+            </section>
           </>
         )}
       </div>

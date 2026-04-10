@@ -45,7 +45,7 @@ CITY_STATE_MAP: dict[str, str] = {
     "St Louis": "MO",
     "Tampa": "FL",
     "Tucson": "AZ",
-    "Washington DC": "VA",
+    "Washington DC": "DC",
 }
 
 

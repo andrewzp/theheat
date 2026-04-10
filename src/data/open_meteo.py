@@ -122,10 +122,10 @@ def rank_hot10(temps: list[CityTemp]) -> list[CityTemp]:
 
 
 def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEvent | None:
-    """Check if today's high breaks the historical record for this calendar date."""
+    """Check whether today's forecast high would break the record for this date."""
     today = date.today()
     try:
-        # Fetch today's temp
+        # Use the forecast high as an early warning signal; NOAA confirmations land later.
         resp_today = requests.get(
             f"{BASE_URL}/forecast",
             params={
@@ -249,7 +249,7 @@ def check_records_for_cities(cities: list[dict], max_checks: int | None = None) 
 
 
 def detect_record_lows(lat: float, lon: float, city: str, country: str) -> RecordEvent | None:
-    """Check if today's low breaks the historical record low for this calendar date."""
+    """Check whether today's forecast low would break the record low for this date."""
     today = date.today()
     try:
         resp_today = requests.get(
