@@ -31,6 +31,25 @@ class GlobalDisasterEvent:
     severity: str  # Red, Orange, Green
     description: str
     event_id: str
+    # Rich fields for sharper tweet generation:
+    alert_score: float = 0.0
+    severity_value: float = 0.0  # wind speed for TC (km/h), magnitude for EQ, etc.
+    severity_unit: str = ""
+    population_affected: int = 0
+
+
+def _safe_float(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_int(value) -> int:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return 0
 
 
 def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
@@ -64,6 +83,19 @@ def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
             description = props.get("description", "")
             gdacs_id = props.get("eventid", "")
 
+            # Rich data — GDACS severity.value is wind speed (km/h) for cyclones,
+            # magnitude for earthquakes, etc.
+            severity_obj = props.get("severitydata") or props.get("severity") or {}
+            if isinstance(severity_obj, dict):
+                severity_value = _safe_float(severity_obj.get("severity"))
+                severity_unit = str(severity_obj.get("severityunit", ""))
+            else:
+                severity_value = 0.0
+                severity_unit = ""
+
+            alert_score = _safe_float(props.get("alertscore", 0))
+            population_affected = _safe_int(props.get("population", 0))
+
             event_id = f"gdacs_{event_type_code}_{gdacs_id}_{date.today().isoformat()}"
 
             events.append(GlobalDisasterEvent(
@@ -73,6 +105,10 @@ def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
                 severity=alert_level,
                 description=description,
                 event_id=event_id,
+                alert_score=alert_score,
+                severity_value=severity_value,
+                severity_unit=severity_unit,
+                population_affected=population_affected,
             ))
 
         return events

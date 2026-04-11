@@ -7,6 +7,11 @@ import re
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+MONTHS = (
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december",
+)
+
 # Layer 1: Deterministic regex patterns
 BANNED_PATTERNS = [
     re.compile(r"[\U0001F600-\U0001F64F]"),  # Emoticons
@@ -35,7 +40,33 @@ BANNED_PATTERNS = [
     re.compile(r"debut performance", re.IGNORECASE),
     re.compile(r"congratulations to no one", re.IGNORECASE),
     re.compile(r"nobody asked", re.IGNORECASE),
+    # Press-release openers — never start a tweet with agency name
+    re.compile(r"^(NWS|NOAA|GDACS|USGS|NSIDC|NASA|FEMA)\b", re.IGNORECASE),
+    re.compile(r"^A (NWS|NOAA|GDACS)\b", re.IGNORECASE),
+    re.compile(r"^An? \w+ (issued|warning|alert) (by|from)", re.IGNORECASE),
+    # Label:value phrasing — never press-release format
+    re.compile(r"\bSeverity:\s*(Severe|Extreme|Moderate|Minor|Red|Orange|Green)\b", re.IGNORECASE),
+    re.compile(r"\bAlert [Ll]evel:\s*(Red|Orange|Green)\b"),
+    re.compile(r"\bConfidence:\s*(HIGH|MEDIUM|LOW|Nominal)\b"),
+    # Redundant explainers that kill the punch
+    re.compile(r"highest (severity )?level [A-Z]+ issues?", re.IGNORECASE),
+    re.compile(r"the highest (possible )?(alert|severity|warning) (tier|level)", re.IGNORECASE),
 ]
+
+
+def check_month_repetition(tweet: str) -> tuple[bool, str | None]:
+    """Flag tweets that mention the same month twice in close proximity.
+
+    Catches failures like:
+      "NWS issued a Tropical Storm Warning. April 10, 2026. It's April."
+    """
+    lowered = tweet.lower()
+    for month in MONTHS:
+        # Count occurrences of the month word, ignoring it appearing inside a longer word.
+        count = len(re.findall(rf"\b{month}\b", lowered))
+        if count >= 2:
+            return False, f"Month '{month}' mentioned {count} times — redundant date"
+    return True, None
 
 
 def check_regex(tweet: str) -> tuple[bool, str | None]:
@@ -88,8 +119,13 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
 
 def run_safety_pipeline(tweet: str) -> tuple[bool, str | None]:
     """Run both safety layers. Returns (passed, reason)."""
-    # Layer 1: Deterministic
+    # Layer 1a: Regex — banned tokens, press-release openers, label:value
     passed, reason = check_regex(tweet)
+    if not passed:
+        return False, reason
+
+    # Layer 1b: Structural — repeated dates, etc.
+    passed, reason = check_month_repetition(tweet)
     if not passed:
         return False, reason
 

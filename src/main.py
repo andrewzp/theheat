@@ -639,6 +639,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 event_type=alert.event_type,
                 area=alert.area,
                 severity=alert.severity,
+                description=alert.description,
+                max_wind_gust=alert.max_wind_gust,
+                max_hail_size=alert.max_hail_size,
+                tornado_detection=alert.tornado_detection,
                 return_bundle=True,
             )
             review_context = _review_context(
@@ -650,6 +654,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Event", alert.event_type),
                     _fact("Area", alert.area),
                     _fact("Severity", alert.severity),
+                    _fact("Max wind gust", alert.max_wind_gust or "—"),
+                    _fact("Max hail", alert.max_hail_size or "—"),
+                    _fact("Tornado detection", alert.tornado_detection or "—"),
                 ],
             )
             if _save_generated_draft(generated, bot_state, "severe_weather", alert.event_id, score, review_context=review_context):
@@ -688,6 +695,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 country=disaster.country,
                 severity=disaster.severity,
                 description=disaster.description,
+                severity_value=disaster.severity_value,
+                severity_unit=disaster.severity_unit,
+                alert_score=disaster.alert_score,
+                population_affected=disaster.population_affected,
                 return_bundle=True,
             )
             review_context = _review_context(

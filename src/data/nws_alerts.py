@@ -1,31 +1,29 @@
 """NWS (National Weather Service) severe weather alerts.
 
-Free API, no auth required. Returns active tornado, hurricane,
-flood, and severe storm warnings across the US.
+Free API, no auth required.
 Docs: https://www.weather.gov/documentation/services-web-api
+
+Editorial note: We ONLY track the rarest, genuinely-newsworthy tiers.
+Tornado warnings in tornado alley in April are routine — we skip them.
+The remaining events are either Emergency-tier (catastrophic) or
+hurricane-related (rare by definition).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 import requests
 
 NWS_URL = "https://api.weather.gov/alerts/active"
 
-# High-severity event types we care about
+# ONLY truly rare, always-newsworthy events. Emergency-tier + hurricane only.
+# If it happens every week in some part of the US, it's not in this list.
 TRACKED_EVENTS = {
-    "Tornado Warning",
-    "Tornado Watch",
-    "Hurricane Warning",
-    "Hurricane Watch",
-    "Tropical Storm Warning",
-    "Flash Flood Emergency",
-    "Flash Flood Warning",
-    "Severe Thunderstorm Warning",
-    "Extreme Wind Warning",
-    "Storm Surge Warning",
-    "Blizzard Warning",
-    "Ice Storm Warning",
+    "Tornado Emergency",      # Extremely rare, catastrophic tornado confirmed
+    "Flash Flood Emergency",  # Extremely rare, catastrophic flooding
+    "Hurricane Warning",      # Hurricanes themselves are rare, each one is news
+    "Extreme Wind Warning",   # Only issued for major hurricane eyewalls (115+ mph)
+    "Storm Surge Warning",    # Hurricane-specific, rare
 }
 
 
@@ -36,6 +34,11 @@ class SevereWeatherAlert:
     severity: str
     headline: str
     event_id: str
+    description: str = ""
+    max_wind_gust: str = ""   # e.g. "75 mph"
+    max_hail_size: str = ""   # e.g. "2.00 IN"
+    tornado_detection: str = ""  # "RADAR INDICATED" or "OBSERVED"
+    sender_name: str = ""     # e.g. "NWS Topeka KS"
 
 
 def fetch_alerts() -> list[SevereWeatherAlert]:
@@ -66,7 +69,15 @@ def fetch_alerts() -> list[SevereWeatherAlert]:
             severity = props.get("severity", "Unknown")
             area = props.get("areaDesc", "Unknown area")
             headline = props.get("headline", "")
+            description = props.get("description", "") or ""
+            sender_name = props.get("senderName", "") or ""
             nws_id = props.get("id", "")
+
+            # Rich structured parameters — NWS includes wind gusts, hail size, tornado type
+            parameters = props.get("parameters", {}) or {}
+            max_wind_gust = _first_param(parameters, "maxWindGust")
+            max_hail_size = _first_param(parameters, "maxHailSize")
+            tornado_detection = _first_param(parameters, "tornadoDetection")
 
             # Deduplicate by event type + area (NWS sends many alerts per storm)
             dedup_key = f"{event}_{_simplify_area(area)}"
@@ -86,12 +97,27 @@ def fetch_alerts() -> list[SevereWeatherAlert]:
                 severity=severity,
                 headline=headline,
                 event_id=event_id,
+                description=description[:500],  # cap description length
+                max_wind_gust=max_wind_gust,
+                max_hail_size=max_hail_size,
+                tornado_detection=tornado_detection,
+                sender_name=sender_name,
             ))
 
         return alerts
 
     except (requests.RequestException, ValueError, KeyError):
         return []
+
+
+def _first_param(parameters: dict, key: str) -> str:
+    """NWS parameters are dict[str, list]. Return the first value or empty string."""
+    val = parameters.get(key)
+    if isinstance(val, list) and val:
+        return str(val[0])
+    if isinstance(val, str):
+        return val
+    return ""
 
 
 def _simplify_area(area: str) -> str:

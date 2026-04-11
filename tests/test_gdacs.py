@@ -14,6 +14,12 @@ SAMPLE_RESPONSE = {
                 "country": "Mozambique",
                 "description": "Category 4 tropical cyclone",
                 "eventid": "1001",
+                "alertscore": 3.5,
+                "population": 450000,
+                "severitydata": {
+                    "severity": 230.0,
+                    "severityunit": "km/h",
+                },
             }
         },
         {
@@ -24,6 +30,12 @@ SAMPLE_RESPONSE = {
                 "country": "Turkey",
                 "description": "6.7 magnitude earthquake",
                 "eventid": "1002",
+                "alertscore": 2.1,
+                "population": 120000,
+                "severitydata": {
+                    "severity": 6.7,
+                    "severityunit": "M",
+                },
             }
         },
         {
@@ -112,3 +124,19 @@ class TestFetchDisasters:
         )
         events = fetch_disasters(min_severity="Green")
         assert len(events) == 3
+
+    @responses.activate
+    def test_rich_fields_captured_for_cyclone(self):
+        """Cyclone should expose wind speed, alert score, population."""
+        responses.add(
+            responses.GET,
+            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
+            json=SAMPLE_RESPONSE,
+            status=200,
+        )
+        events = fetch_disasters()
+        cyclone = events[0]
+        assert cyclone.severity_value == 230.0
+        assert cyclone.severity_unit == "km/h"
+        assert cyclone.alert_score == 3.5
+        assert cyclone.population_affected == 450000
