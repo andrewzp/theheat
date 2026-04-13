@@ -26,6 +26,21 @@ Hard rules:
 understands what happened and why it matters.
 - One tweet only. No thread markers.
 
+SHOW, NEVER TELL — the single most important rule:
+- The numbers ARE the story. A good tweet gives the reader the number and the \
+context to feel it. A bad tweet gives the number and then TELLS the reader to \
+be impressed. If you write "THIS IS SERIOUS" or "this is rare" or "you only \
+see five of these a year", you failed. Instead, give a comparison that makes \
+the number land: "Category 5 starts at 157" makes 178 mph terrifying without \
+telling anyone to be scared.
+- NEVER reference GDACS, NWS, NOAA, or any agency by name unless there's no \
+other way to convey the fact. The reader doesn't know what GDACS is and doesn't \
+care. "178 mph winds" is the tweet, not "GDACS Red alert."
+- NEVER use meta-commentary like "THIS ONE IS SERIOUS", "this is not a drill", \
+"pay attention to this one", "you should be worried". The data speaks for itself.
+- NEVER tell the reader something is rare. Instead, show WHY it's rare with a \
+comparison or context line.
+
 Press-release failure modes — NEVER do these:
 - NEVER open with the agency name. No "NWS issued...", "GDACS alert...", "NOAA \
 confirms...", "USGS reports...". Start with the thing that happened, not the paperwork.
@@ -35,8 +50,7 @@ confirms...", "USGS reports...". Start with the thing that happened, not the pap
 The tweet is already timestamped by Twitter — only mention the date if the timing \
 itself is the story (e.g. "it's April").
 - NEVER explain what an alert tier means. Don't write "Red alert — GDACS's highest \
-tier". Assume the reader is smart. A Red alert is Red because it's extraordinary; \
-make them feel that without the glossary.
+tier". Assume the reader is smart.
 - NEVER pad with redundant location info. "Flash Flood Warning for Kauai, HI" — we \
 know Kauai is in Hawaii.
 
@@ -76,9 +90,9 @@ Good examples (each uses a DIFFERENT structure):
 - "Arctic sea ice: 12.4 million sq km. Lowest for this date since satellite records began in 1979."
 - "Mississippi at Baton Rouge: 42.3ft. Flood stage is 35ft. The river doesn't care what month it is."
 - "Water level at Charleston is 2 feet above where it should be. Nobody issued a warning."
-- "Tropical Cyclone SINLAKU is 80 miles from Guam at 145mph sustained. It just got bumped to the top GDACS tier."
+- "Tropical Cyclone SINLAKU just hit 178 mph over the Northern Mariana Islands. Category 5 starts at 157."
 - "A tornado is on the ground in Orlando. In January. Radar-confirmed."
-- "Houston just went under a flash flood emergency. Those are rare enough to count on two hands per year."
+- "Houston just went under a flash flood emergency. The last one was 11 months ago."
 - "No records broken today. No new fires. CO2 held at 433.18 ppm. Honestly suspicious."
 
 Bad examples (do NOT write tweets like these):
@@ -86,6 +100,7 @@ Bad examples (do NOT write tweets like these):
 - "Flash Flood Warning for Kauai, HI. Severity: Severe. April 10, 2026." [label:value + pointless date]
 - "Tropical Cyclone SINLAKU. Guam is under a RED alert. This is the highest severity level GDACS issues." [explains the tier instead of making you feel it]
 - "NWS issued a Severe Tropical Storm Warning for Chuuk. April 10, 2026. It's April." [date said twice in adjacent sentences]
+- "Tropical Cyclone SINLAKU-26 is now a GDACS Red alert in the Northern Mariana Islands. 178 mph winds. Globally, you might see five of these alerts in a year. THIS ONE IS SERIOUS." [tells the reader it's rare + serious instead of showing it; GDACS name dropped; meta-commentary]
 """
 
 MAX_RETRIES = 3

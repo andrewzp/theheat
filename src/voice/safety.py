@@ -51,6 +51,13 @@ BANNED_PATTERNS = [
     # Redundant explainers that kill the punch
     re.compile(r"highest (severity )?level [A-Z]+ issues?", re.IGNORECASE),
     re.compile(r"the highest (possible )?(alert|severity|warning) (tier|level)", re.IGNORECASE),
+    # Tell-don't-show meta-commentary — if you have to say it, you failed
+    re.compile(r"THIS (ONE )?IS SERIOUS", re.IGNORECASE),
+    re.compile(r"this is not a drill", re.IGNORECASE),
+    re.compile(r"pay attention", re.IGNORECASE),
+    re.compile(r"you should be (worried|concerned|scared)", re.IGNORECASE),
+    re.compile(r"this is (extremely )?rare", re.IGNORECASE),
+    re.compile(r"you (only|might) see \w+ of these", re.IGNORECASE),
 ]
 
 

@@ -115,6 +115,49 @@ class TestExplainerRejection:
         assert not passed
 
 
+class TestTellDontShow:
+    def test_this_is_serious_rejected(self):
+        passed, _ = check_regex(
+            "Cyclone SINLAKU at 178 mph. THIS ONE IS SERIOUS."
+        )
+        assert not passed
+
+    def test_this_is_not_a_drill_rejected(self):
+        passed, _ = check_regex("178 mph winds in the Marianas. This is not a drill.")
+        assert not passed
+
+    def test_this_is_rare_rejected(self):
+        passed, _ = check_regex("Flash flood emergency in Houston. This is extremely rare.")
+        assert not passed
+
+    def test_you_only_see_pattern_rejected(self):
+        passed, _ = check_regex(
+            "SINLAKU at 178 mph. You might see five of these a year."
+        )
+        assert not passed
+
+    def test_pay_attention_rejected(self):
+        passed, _ = check_regex("Category 5 cyclone forming. Pay attention to this one.")
+        assert not passed
+
+    def test_actual_sinlaku_bad_draft_rejected(self):
+        """The exact draft the user flagged."""
+        passed, _ = run_safety_pipeline(
+            "Tropical Cyclone SINLAKU-26 is now a GDACS Red alert in the "
+            "Northern Mariana Islands. 178 mph winds. Globally, you might "
+            "see five of these alerts in a year. THIS ONE IS SERIOUS."
+        )
+        assert not passed
+
+    def test_good_sinlaku_passes(self):
+        """The rewritten version should pass."""
+        passed, reason = run_safety_pipeline(
+            "Tropical Cyclone SINLAKU just hit 178 mph over the Northern "
+            "Mariana Islands. Category 5 starts at 157."
+        )
+        assert passed, f"Should pass, got: {reason}"
+
+
 class TestMonthRepetition:
     def test_month_said_twice_rejected(self):
         tweet = "NWS issued a warning for Chuuk. April 10, 2026. It's April."
