@@ -38,6 +38,29 @@ class GlobalDisasterEvent:
     population_affected: int = 0
 
 
+# Saffir-Simpson-ish thresholds in km/h for cyclone intensity tiers.
+# When a cyclone crosses a tier, it generates a new event_id so the
+# strengthening storm gets a fresh draft instead of being deduplicated.
+_CYCLONE_TIERS_KMH = [0, 119, 154, 178, 209, 252]  # TS, Cat1, Cat2, Cat3, Cat4, Cat5
+
+
+def _intensity_tier(event_type_code: str, severity_value: float) -> str:
+    """Return a dedup key segment based on event intensity.
+
+    Tropical cyclones: tier changes when wind speed crosses a Saffir-Simpson
+    boundary, so a strengthening storm gets re-drafted.
+    Other events: date-based (one draft per calendar day).
+    """
+    if event_type_code == "TC" and severity_value > 0:
+        tier = 0
+        for i, threshold in enumerate(_CYCLONE_TIERS_KMH):
+            if severity_value >= threshold:
+                tier = i
+        return f"tier{tier}"
+    # Non-evolving events: one per calendar day
+    return date.today().isoformat()
+
+
 def _safe_float(value) -> float:
     try:
         return float(value)
@@ -96,7 +119,11 @@ def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
             alert_score = _safe_float(props.get("alertscore", 0))
             population_affected = _safe_int(props.get("population", 0))
 
-            event_id = f"gdacs_{event_type_code}_{gdacs_id}_{date.today().isoformat()}"
+            # Evolving events (cyclones) get a new event_id when they cross
+            # an intensity tier, so strengthening storms get re-drafted.
+            # Static events (earthquakes) keep date-based dedup.
+            intensity_tier = _intensity_tier(event_type_code, severity_value)
+            event_id = f"gdacs_{event_type_code}_{gdacs_id}_{intensity_tier}"
 
             events.append(GlobalDisasterEvent(
                 disaster_type=event_type,
