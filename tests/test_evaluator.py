@@ -1,7 +1,7 @@
 """Tests for the virality evaluator — second inference pass."""
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 
 from src.editorial.evaluator import (
     EvaluatorVerdict,
@@ -25,12 +25,19 @@ def _make_bundle(text: str, category: str = "record") -> CandidateBundle:
     return CandidateBundle(category=category, candidates=[candidate])
 
 
-def _mock_client(response_json: dict) -> MagicMock:
-    """Helper: build a mock Gemini client that returns the given JSON."""
-    mock_response = MagicMock()
-    mock_response.text = json.dumps(response_json)
+def _mock_anthropic_response(response_json: dict) -> MagicMock:
+    """Helper: build a mock Anthropic response."""
+    content_block = MagicMock()
+    content_block.text = json.dumps(response_json)
+    response = MagicMock()
+    response.content = [content_block]
+    return response
+
+
+def _mock_anthropic_client(response_json: dict) -> MagicMock:
+    """Helper: build a mock Anthropic client."""
     client = MagicMock()
-    client.models.generate_content.return_value = mock_response
+    client.messages.create.return_value = _mock_anthropic_response(response_json)
     return client
 
 
@@ -87,7 +94,7 @@ class TestParseResponse:
     def test_cross_check_overrides_hallucinated_pass(self):
         """Model says passed=true but scores are clearly failing."""
         resp = {
-            "passed": True,  # model hallucinated this
+            "passed": True,
             "scores": {"awe": 3, "comparison": 2, "social_currency": 4, "opener": 3, "show_not_tell": 8},
             "total": 20,
             "failures": [],
@@ -95,7 +102,6 @@ class TestParseResponse:
             "rewrite": None,
         }
         verdict = _parse_evaluator_response(json.dumps(resp))
-        # _verify_pass should override to False because awe=3, comparison=2 are below 5
         assert verdict.passed is False
 
 
@@ -122,125 +128,135 @@ class TestVerifyPass:
 # --- evaluate_candidate ---
 
 class TestEvaluateCandidate:
-    def test_no_client_returns_pass(self):
-        verdict = evaluate_candidate("any tweet", "data", "record", client=None)
+    @patch("src.editorial.evaluator.ANTHROPIC_API_KEY", "")
+    def test_no_api_key_returns_pass(self):
+        verdict = evaluate_candidate("any tweet", "data", "record")
         assert verdict.passed is True
         assert verdict.reasoning == "evaluator skipped"
 
-    def test_passing_candidate(self):
-        client = _mock_client(_passing_response())
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_passing_candidate(self, mock_get_client):
+        mock_get_client.return_value = _mock_anthropic_client(_passing_response())
         verdict = evaluate_candidate(
             "Phoenix just dropped 121F. NEW RECORD. The old one was from last year.",
             "Phoenix forecast high 121F, old record 119F from 2024",
             "record",
-            client=client,
         )
         assert verdict.passed is True
         assert verdict.scores["awe"] == 8
 
-    def test_failing_candidate_returns_rewrite(self):
-        client = _mock_client(_failing_response("Phoenix at 121F. The old record was last year."))
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_failing_candidate_returns_rewrite(self, mock_get_client):
+        mock_get_client.return_value = _mock_anthropic_client(
+            _failing_response("Phoenix at 121F. The old record was last year.")
+        )
         verdict = evaluate_candidate(
             "CO2 is at 435 ppm at Mauna Loa this week.",
             "CO2 data: current 435 ppm",
             "co2_weekly",
-            client=client,
         )
         assert verdict.passed is False
         assert verdict.rewrite is not None
 
-    def test_api_error_returns_pass(self):
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_api_error_returns_pass(self, mock_get_client):
         client = MagicMock()
-        client.models.generate_content.side_effect = Exception("rate limited")
-        verdict = evaluate_candidate("tweet", "data", "record", client=client)
+        client.messages.create.side_effect = Exception("rate limited")
+        mock_get_client.return_value = client
+        verdict = evaluate_candidate("tweet", "data", "record")
         assert verdict.passed is True
         assert verdict.reasoning == "evaluator skipped"
 
-    def test_bad_json_returns_pass(self):
-        mock_response = MagicMock()
-        mock_response.text = "not json at all"
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_bad_json_returns_pass(self, mock_get_client):
+        content_block = MagicMock()
+        content_block.text = "not json at all"
+        response = MagicMock()
+        response.content = [content_block]
         client = MagicMock()
-        client.models.generate_content.return_value = mock_response
-        verdict = evaluate_candidate("tweet", "data", "record", client=client)
+        client.messages.create.return_value = response
+        mock_get_client.return_value = client
+        verdict = evaluate_candidate("tweet", "data", "record")
         assert verdict.passed is True
 
 
 # --- evaluate_and_polish ---
 
 class TestEvaluateAndPolish:
-    def test_no_client_returns_original(self):
+    @patch("src.editorial.evaluator.ANTHROPIC_API_KEY", "")
+    def test_no_api_key_returns_original(self):
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data", client=None)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
 
     def test_empty_bundle_returns_original(self):
         bundle = CandidateBundle(category="record", candidates=[])
-        result = evaluate_and_polish(bundle, "data", client=_mock_client(_passing_response()))
+        result = evaluate_and_polish(bundle, "data")
         assert result.candidates == []
 
-    def test_passing_returns_original(self):
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_passing_returns_original(self, mock_get_client):
+        mock_get_client.return_value = _mock_anthropic_client(_passing_response())
         bundle = _make_bundle("Phoenix just dropped 121F. NEW RECORD. The old one was from last year.")
-        client = _mock_client(_passing_response())
-        result = evaluate_and_polish(bundle, "data", client=client)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == bundle.text
         assert len(result.candidates) == 1
 
-    def test_failing_with_rewrite_replaces_top(self):
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_failing_with_rewrite_replaces_top(self, mock_get_client):
         original = "CO2 is at 435 ppm at Mauna Loa this week."
         rewrite = "CO2 at Mauna Loa: 435 ppm. Pre-industrial was 280. We are 55% above where the atmosphere was for all of human civilization."
+        mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle(original, category="co2_weekly")
-        client = _mock_client(_failing_response(rewrite))
-        result = evaluate_and_polish(bundle, "data", client=client)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == rewrite
         assert result.candidates[0].source == "evaluator_rewrite"
         assert result.candidates[0].rank == 1
-        # Original is still there, shifted down
         assert len(result.candidates) == 2
         assert result.candidates[1].text == original
         assert result.candidates[1].rank == 2
 
-    def test_failing_rewrite_fails_safety_keeps_original(self):
-        # Rewrite contains an exclamation mark — should fail safety
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_failing_rewrite_fails_safety_keeps_original(self, mock_get_client):
         rewrite_with_bang = "Phoenix hit 121F! NEW RECORD!"
+        mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite_with_bang))
         bundle = _make_bundle("Original tweet.")
-        client = _mock_client(_failing_response(rewrite_with_bang))
-        result = evaluate_and_polish(bundle, "data", client=client)
-        # Should keep original because rewrite fails safety (exclamation marks)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
         assert len(result.candidates) == 1
 
-    def test_failing_no_rewrite_keeps_original(self):
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_failing_no_rewrite_keeps_original(self, mock_get_client):
         resp = _failing_response()
         resp["rewrite"] = None
+        mock_get_client.return_value = _mock_anthropic_client(resp)
         bundle = _make_bundle("Original tweet.")
-        client = _mock_client(resp)
-        result = evaluate_and_polish(bundle, "data", client=client)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
 
-    def test_overlong_rewrite_keeps_original(self):
-        """Rewrite over 280 chars should fail safety and keep original."""
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_overlong_rewrite_keeps_original(self, mock_get_client):
         rewrite = "A" * 300
+        mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet.")
-        client = _mock_client(_failing_response(rewrite))
-        result = evaluate_and_polish(bundle, "data", client=client)
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
 
-    def test_score_regression_keeps_original(self):
-        """Rewrite that scores lower than original should be rejected."""
-        # Original has score total=70 (from _make_bundle helper)
-        # A very short rewrite will score much lower on the heuristic
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_score_regression_keeps_original(self, mock_get_client):
         rewrite = "Meh."
+        mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet with good structure and data density 121F record.")
-        client = _mock_client(_failing_response(rewrite))
-        result = evaluate_and_polish(bundle, "data", client=client)
-        # "Meh." scores much lower than the original, so it should be rejected
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet with good structure and data density 121F record."
 
-    def test_api_failure_returns_original(self):
-        bundle = _make_bundle("Original tweet.")
+    @patch("src.editorial.evaluator._get_anthropic_client")
+    def test_api_failure_returns_original(self, mock_get_client):
         client = MagicMock()
-        client.models.generate_content.side_effect = Exception("timeout")
-        result = evaluate_and_polish(bundle, "data", client=client)
+        client.messages.create.side_effect = Exception("timeout")
+        mock_get_client.return_value = client
+        bundle = _make_bundle("Original tweet.")
+        result = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
 
 

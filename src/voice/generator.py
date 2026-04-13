@@ -236,14 +236,13 @@ def generate_tweet_bundle(
     if not bundle or not bundle.candidates:
         return None
 
-    # Second inference pass: virality evaluator (Gemini 2.5 Pro)
-    if client is not None:
-        try:
-            from src.editorial.evaluator import evaluate_and_polish
+    # Second inference pass: virality evaluator (Claude Sonnet 4.6)
+    try:
+        from src.editorial.evaluator import evaluate_and_polish
 
-            bundle = evaluate_and_polish(bundle, data_description, client=client)
-        except Exception as e:
-            print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
+        bundle = evaluate_and_polish(bundle, data_description)
+    except Exception as e:
+        print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
 
     return bundle
 

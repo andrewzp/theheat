@@ -1,4 +1,4 @@
-"""Virality evaluator — second inference pass via Gemini 2.5 Pro.
+"""Virality evaluator — second inference pass via Claude Sonnet 4.6.
 
 Takes the top-ranked tweet candidate, scores it on 5 virality dimensions
 (awe, concrete comparison, social currency, scroll-stopping opener,
@@ -13,6 +13,7 @@ original candidate unchanged.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 
@@ -24,7 +25,8 @@ from src.editorial.candidates import (
 )
 from src.voice.safety import run_safety_pipeline
 
-EVALUATOR_MODEL = "gemini-2.5-pro"
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+EVALUATOR_MODEL = "claude-sonnet-4-6"
 
 EVALUATOR_PROMPT = """\
 You are a virality editor for @theheat, a climate data Twitter account.
@@ -162,18 +164,30 @@ def _parse_evaluator_response(raw_text: str) -> EvaluatorVerdict:
     )
 
 
+def _get_anthropic_client():
+    """Lazy-load the Anthropic client. Returns None if unavailable."""
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        import anthropic
+
+        return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    except Exception as e:
+        print(f"[evaluator] Anthropic client init failed: {e}")
+        return None
+
+
 def evaluate_candidate(
     candidate_text: str,
     data_description: str,
     category: str,
-    *,
-    client=None,
 ) -> EvaluatorVerdict:
     """Run the virality evaluator on a single candidate.
 
-    Uses Gemini 2.5 Pro. On any failure, returns a passing verdict
-    so the original candidate goes through unchanged.
+    Uses Claude Sonnet 4.6 via the Anthropic API. On any failure,
+    returns a passing verdict so the original candidate goes through unchanged.
     """
+    client = _get_anthropic_client()
     if client is None:
         return _passing_verdict()
 
@@ -184,12 +198,15 @@ def evaluate_candidate(
             f'TWEET TO EVALUATE:\n"{candidate_text}"'
         )
 
-        response = client.models.generate_content(
+        response = client.messages.create(
             model=EVALUATOR_MODEL,
-            contents=f"{EVALUATOR_PROMPT}\n\n{user_content}",
+            max_tokens=1024,
+            system=EVALUATOR_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
         )
 
-        verdict = _parse_evaluator_response(response.text)
+        raw_text = response.content[0].text
+        verdict = _parse_evaluator_response(raw_text)
         action = "PASS" if verdict.passed else "FAIL"
         print(f"[evaluator] {action} (total={verdict.total}): {candidate_text[:60]}...")
         if not verdict.passed and verdict.failures:
@@ -204,8 +221,6 @@ def evaluate_candidate(
 def evaluate_and_polish(
     bundle: CandidateBundle,
     data_description: str,
-    *,
-    client=None,
 ) -> CandidateBundle:
     """Evaluate top candidate and return improved bundle.
 
@@ -214,11 +229,11 @@ def evaluate_and_polish(
     top candidate (after safety check). Falls back to original bundle
     on any failure.
     """
-    if client is None or not bundle.candidates:
+    if not bundle.candidates:
         return bundle
 
     top = bundle.candidates[0]
-    verdict = evaluate_candidate(top.text, data_description, bundle.category, client=client)
+    verdict = evaluate_candidate(top.text, data_description, bundle.category)
 
     if verdict.passed or not verdict.rewrite:
         return bundle
