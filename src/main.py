@@ -110,6 +110,24 @@ def _record_source_run(
     )
 
 
+def _previous_drafts_for_event(bot_state: dict, event_base: str) -> list[str]:
+    """Find text of previous drafts for the same base event.
+
+    For evolving events (e.g. cyclones), the event_id changes with each
+    intensity tier but shares a common base like "gdacs_TC_1001270".
+    Returns up to 5 most recent draft texts to avoid repeating comparisons.
+    """
+    drafts = bot_state.get("drafts", [])
+    matches = []
+    for d in drafts:
+        eid = d.get("event_id", "")
+        if event_base and event_base in eid:
+            text = d.get("text", "")
+            if text:
+                matches.append(text)
+    return matches[-5:]
+
+
 def _should_draft(score: EditorialScore, event_id: str = "") -> bool:
     """Decide whether an event is strong enough to enter the draft queue."""
     if score.passes:
@@ -635,6 +653,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, alert.event_id):
                 continue
             source_promoted += 1
+            # Find previous drafts about this event to avoid repeating comparisons
+            event_base = "_".join(alert.event_id.split("_")[:3])  # e.g. "nws_Hurricane_Warning"
+            prev_drafts = _previous_drafts_for_event(bot_state, event_base)
             generated = generator.generate_severe_weather_tweet(
                 event_type=alert.event_type,
                 area=alert.area,
@@ -643,6 +664,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 max_wind_gust=alert.max_wind_gust,
                 max_hail_size=alert.max_hail_size,
                 tornado_detection=alert.tornado_detection,
+                already_drafted=prev_drafts or None,
                 return_bundle=True,
             )
             review_context = _review_context(
@@ -689,6 +711,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, disaster.event_id):
                 continue
             source_promoted += 1
+            # Find previous drafts about this base event to avoid repeating comparisons
+            # e.g. "gdacs_TC_1001270" matches across tiers
+            event_base = "_".join(disaster.event_id.split("_")[:3])
+            prev_drafts = _previous_drafts_for_event(bot_state, event_base)
             generated = generator.generate_global_disaster_tweet(
                 disaster_type=disaster.disaster_type,
                 name=disaster.name,
@@ -699,6 +725,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 severity_unit=disaster.severity_unit,
                 alert_score=disaster.alert_score,
                 population_affected=disaster.population_affected,
+                already_drafted=prev_drafts or None,
                 return_bundle=True,
             )
             review_context = _review_context(

@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import requests
 
 BASE_URL = "https://api.open-meteo.com/v1"
+ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
 
 
 @dataclass
@@ -156,7 +157,7 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
             start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
         resp_hist = requests.get(
-            f"{BASE_URL}/archive",
+            f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
                 "longitude": lon,
@@ -274,7 +275,7 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
             start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
         resp_hist = requests.get(
-            f"{BASE_URL}/archive",
+            f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
                 "longitude": lon,

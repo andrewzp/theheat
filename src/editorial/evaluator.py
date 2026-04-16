@@ -31,32 +31,50 @@ EVALUATOR_MODEL = "claude-sonnet-4-6"
 EVALUATOR_PROMPT = """\
 You are a virality editor for @theheat, a climate data Twitter account.
 You receive a tweet candidate and the raw data it was generated from.
-Your job: evaluate whether this tweet will make someone stop scrolling and share it.
+Your job: evaluate whether this tweet will make someone stop scrolling, SHARE it, \
+and REPLY to it. A tweet that just informs is a failure. A tweet that makes \
+someone tag a friend or add their take is a success.
 
 Score each dimension 0-10:
 
-1. AWE (physical activation)
-   Does this tweet create a gut reaction — not just "huh, interesting" but "wait, WHAT?"
-   10 = jaw drop. 5 = mildly interesting. 0 = boring information dump.
+1. HISTORICAL WEIGHT
+   Does the tweet anchor the number to a record, a timespan, or a human era?
+   10 = "Broke a record from 1929. Last time it was this hot, the Great Depression \
+hadn't started." The reader feels the timescale in their bones.
+   5 = "New record" with a year but no human context.
+   0 = Just a number with no historical anchor at all.
+   BEST PRACTICE: Anchor old years to human events, eras, or inventions \
+("since before the moon landing", "since Eisenhower was president"). \
+The sharer looks cultured, not just informed.
 
-2. CONCRETE COMPARISON
-   Does the tweet anchor the number to something visceral the reader already understands?
-   10 = "Category 5 starts at 157" (makes 178 mph land). "A power plant is 1,000 MW. \
-Except it's a forest." 5 = number stated but no anchor. 0 = abstract statistic.
+2. REPLY BAIT
+   Does the tweet leave a gap that makes people want to add their take?
+   10 = "The old record was from last year." — doesn't say the implication, \
+but EVERYONE thinks it. People reply to finish the thought.
+   5 = Complete statement, nothing to add.
+   0 = So complete or generic that it kills conversation.
+   BEST PRACTICE: Imply, don't state. Leave the "so what" for the reader.
 
 3. SOCIAL CURRENCY
-   Would sharing this make someone look smart and informed, not preachy?
-   10 = "Wait till you hear this" energy. 5 = informative but forgettable. 0 = lecturing.
+   Would retweeting this make someone look smart and in-the-know?
+   10 = A fact you'd repeat at dinner. "That used to take a decade."
+   5 = Informative but forgettable — reads like a weather alert.
+   0 = Reads like a push notification or government press release.
+   KEY QUESTION: Would you text this to a friend? If not, it fails.
 
 4. SCROLL-STOPPING OPENER
    Do the first 5-7 words create surprise or pattern interruption?
-   10 = "Anchorage recorded 82F today." (wait — Anchorage?). 5 = factual but expected \
-opener. 0 = starts with agency name or boilerplate.
+   10 = "Anchorage recorded 82F today." (wait — Anchorage?)
+   5 = Factual but expected opener.
+   0 = Starts with agency name, location boilerplate, or "The temperature..."
 
 5. SHOW NOT TELL
-   Does the tweet let the data speak, or does it add meta-commentary?
-   10 = pure data + framing, no commentary. 0 = "THIS IS SERIOUS", "this is rare", \
-"pay attention", "you should be worried".
+   Does the tweet let the data speak without weather-service language?
+   10 = Pure data + framing, no commentary or boilerplate.
+   5 = Mostly clean but has one filler phrase.
+   0 = Contains "THIS IS SERIOUS", "HURRICANE-FORCE", "EXTREME force", \
+"catastrophic", "life-threatening", "dangerous conditions", "this is rare", \
+or any language that TELLS the reader to be impressed instead of making them feel it.
 
 RULES:
 - A tweet PASSES if it scores 7+ on at least 4 of the 5 dimensions.
@@ -66,7 +84,10 @@ while keeping all facts accurate to the data provided.
 - The rewrite MUST be under 280 characters.
 - The rewrite MUST NOT contain emojis, hashtags, or exclamation points.
 - The rewrite MUST NOT open with an agency name (NWS, NOAA, GDACS, etc.).
-- The rewrite MUST NOT contain meta-commentary ("this is serious", "this is rare", etc.).
+- The rewrite MUST NOT use weather-service boilerplate (HURRICANE-FORCE, catastrophic, \
+life-threatening, EXTREME force, dangerous conditions).
+- The rewrite MUST NOT contain meta-commentary ("this is serious", "this is rare").
+- The rewrite MUST NOT use bureaucratic suffixes (-26, -2026) in event names.
 
 Respond in JSON only, no markdown fences:
 {"passed": true/false, "scores": {"awe": N, "comparison": N, "social_currency": N, \

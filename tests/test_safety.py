@@ -158,6 +158,42 @@ class TestTellDontShow:
         assert passed, f"Should pass, got: {reason}"
 
 
+class TestWeatherServiceBoilerplate:
+    def test_hurricane_force_rejected(self):
+        passed, _ = check_regex("These are HURRICANE-FORCE conditions in Saipan.")
+        assert not passed
+
+    def test_extreme_force_rejected(self):
+        passed, _ = check_regex("Winds will return with EXTREME force.")
+        assert not passed
+
+    def test_catastrophic_rejected(self):
+        passed, _ = check_regex("Catastrophic flooding expected in Houston.")
+        assert not passed
+
+    def test_life_threatening_rejected(self):
+        passed, _ = check_regex("Life-threatening storm surge at Guam.")
+        assert not passed
+
+    def test_dangerous_conditions_rejected(self):
+        passed, _ = check_regex("Dangerous conditions developing along the coast.")
+        assert not passed
+
+    def test_extreme_wind_warning_rejected(self):
+        passed, _ = check_regex("Saipan: Extreme Wind Warning. Winds are 155 mph.")
+        assert not passed
+
+    def test_bureaucratic_suffix_rejected(self):
+        passed, _ = check_regex("Tropical Cyclone SINLAKU-26 is heading for Guam.")
+        assert not passed
+
+    def test_clean_storm_name_passes(self):
+        passed, reason = check_regex(
+            "Tropical Cyclone SINLAKU just hit 178 mph. Strongest in the western Pacific since Haiyan."
+        )
+        assert passed, f"Should pass, got: {reason}"
+
+
 class TestMonthRepetition:
     def test_month_said_twice_rejected(self):
         tweet = "NWS issued a warning for Chuuk. April 10, 2026. It's April."

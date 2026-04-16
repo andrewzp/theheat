@@ -58,6 +58,15 @@ BANNED_PATTERNS = [
     re.compile(r"you should be (worried|concerned|scared)", re.IGNORECASE),
     re.compile(r"this is (extremely )?rare", re.IGNORECASE),
     re.compile(r"you (only|might) see \w+ of these", re.IGNORECASE),
+    # Weather-service boilerplate — numbs instead of activating
+    re.compile(r"HURRICANE.FORCE", re.IGNORECASE),
+    re.compile(r"EXTREME force", re.IGNORECASE),
+    re.compile(r"\bcatastrophic\b", re.IGNORECASE),
+    re.compile(r"life.threatening", re.IGNORECASE),
+    re.compile(r"dangerous conditions", re.IGNORECASE),
+    re.compile(r"\bextreme wind warning\b", re.IGNORECASE),
+    # Bureaucratic noise in event names
+    re.compile(r"-\d{2,4}\b"),  # -26, -2026 suffixes
 ]
 
 
