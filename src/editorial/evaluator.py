@@ -242,13 +242,14 @@ def evaluate_candidate(
 def evaluate_and_polish(
     bundle: CandidateBundle,
     data_description: str,
-) -> CandidateBundle:
-    """Evaluate top candidate and return improved bundle.
+) -> CandidateBundle | None:
+    """Evaluate top candidate and return improved bundle, or None to kill the draft.
 
     If the top candidate passes, returns bundle unchanged.
-    If it fails and a rewrite is provided, the rewrite replaces the
-    top candidate (after safety check). Falls back to original bundle
-    on any failure.
+    If it fails and a rewrite is accepted, the rewrite replaces the top candidate.
+    If it fails and the rewrite can't be used, returns None — the event is
+    not worth tweeting about. A tweet the evaluator explicitly rejects
+    should not become a draft.
     """
     if not bundle.candidates:
         return bundle
@@ -256,22 +257,26 @@ def evaluate_and_polish(
     top = bundle.candidates[0]
     verdict = evaluate_candidate(top.text, data_description, bundle.category)
 
-    if verdict.passed or not verdict.rewrite:
+    if verdict.passed:
         return bundle
+
+    if not verdict.rewrite:
+        print(f"[evaluator] KILLED draft — failed evaluation with no rewrite: {top.text[:60]}...")
+        return None
 
     # Run the rewrite through safety pipeline
     safe, reason = run_safety_pipeline(verdict.rewrite)
     if not safe:
-        print(f"[evaluator] Rewrite failed safety ({reason}), keeping original")
-        return bundle
+        print(f"[evaluator] KILLED draft — rewrite failed safety ({reason}): {top.text[:60]}...")
+        return None
 
     # Build new candidate from the rewrite
     rewrite_score = score_candidate_text(verdict.rewrite, bundle.category)
 
     # Score-regression guard: don't accept a rewrite that scores worse
     if rewrite_score.total < top.score.total:
-        print(f"[evaluator] Rewrite scored lower ({rewrite_score.total} < {top.score.total}), keeping original")
-        return bundle
+        print(f"[evaluator] KILLED draft — rewrite scored lower ({rewrite_score.total} < {top.score.total}): {top.text[:60]}...")
+        return None
 
     rewrite_candidate = DraftCandidate(
         rank=1,

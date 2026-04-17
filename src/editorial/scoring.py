@@ -151,7 +151,7 @@ def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: 
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=58 if official else 62,
+        threshold=58 if official else 72,
         reasons=reasons or ["clear weather record"],
     )
 
@@ -179,7 +179,7 @@ def score_record_low_event(new_temp_c: float, old_record_c: float, old_record_ye
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=60,
+        threshold=72,
         reasons=reasons or ["notable cold record"],
     )
 

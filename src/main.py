@@ -317,9 +317,13 @@ def post_approved(tweet_text: str, bot_state: dict) -> str:
     return "posted"
 
 
+MAX_DRAFTS_PER_CYCLE = 3
+
+
 def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     """Check all alert data sources and save drafts."""
     drafted = 0
+    drafts_before = len(bot_state.get("drafts", []))
     cities_start = time.perf_counter()
     try:
         cities = open_meteo.load_cities()
@@ -1081,6 +1085,22 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             current_run, "river_gauges", river_start,
             status="failed", error=str(e)
         )
+
+    # Prune weakest drafts from this cycle if we exceeded the cap.
+    # Keeps only the top N by signal score from this run.
+    drafts = bot_state.get("drafts", [])
+    new_drafts = drafts[drafts_before:]
+    if len(new_drafts) > MAX_DRAFTS_PER_CYCLE:
+        # Sort by signal score (descending), keep top N
+        scored = [(d, d.get("score", {}).get("total", 0)) for d in new_drafts]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        keep = {id(d) for d, _ in scored[:MAX_DRAFTS_PER_CYCLE]}
+        pruned = [d for d, _ in scored[MAX_DRAFTS_PER_CYCLE:]]
+        bot_state["drafts"] = drafts[:drafts_before] + [d for d in new_drafts if id(d) in keep]
+        drafted = MAX_DRAFTS_PER_CYCLE
+        print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
+        for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
+            print(f"[alerts]   Pruned: score={s} {d.get('text', '')[:50]}...")
 
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state

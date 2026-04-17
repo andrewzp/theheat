@@ -217,38 +217,41 @@ class TestEvaluateAndPolish:
         assert result.candidates[1].rank == 2
 
     @patch("src.editorial.evaluator._get_anthropic_client")
-    def test_failing_rewrite_fails_safety_keeps_original(self, mock_get_client):
+    def test_failing_rewrite_fails_safety_returns_none(self, mock_get_client):
+        """Evaluator rejects + rewrite fails safety = kill the draft."""
         rewrite_with_bang = "Phoenix hit 121F! NEW RECORD!"
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite_with_bang))
         bundle = _make_bundle("Original tweet.")
         result = evaluate_and_polish(bundle, "data")
-        assert result.text == "Original tweet."
-        assert len(result.candidates) == 1
+        assert result is None
 
     @patch("src.editorial.evaluator._get_anthropic_client")
-    def test_failing_no_rewrite_keeps_original(self, mock_get_client):
+    def test_failing_no_rewrite_returns_none(self, mock_get_client):
+        """Evaluator rejects with no rewrite = kill the draft."""
         resp = _failing_response()
         resp["rewrite"] = None
         mock_get_client.return_value = _mock_anthropic_client(resp)
         bundle = _make_bundle("Original tweet.")
         result = evaluate_and_polish(bundle, "data")
-        assert result.text == "Original tweet."
+        assert result is None
 
     @patch("src.editorial.evaluator._get_anthropic_client")
-    def test_overlong_rewrite_keeps_original(self, mock_get_client):
+    def test_overlong_rewrite_returns_none(self, mock_get_client):
+        """Evaluator rejects + rewrite too long = kill the draft."""
         rewrite = "A" * 300
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet.")
         result = evaluate_and_polish(bundle, "data")
-        assert result.text == "Original tweet."
+        assert result is None
 
     @patch("src.editorial.evaluator._get_anthropic_client")
-    def test_score_regression_keeps_original(self, mock_get_client):
+    def test_score_regression_returns_none(self, mock_get_client):
+        """Evaluator rejects + rewrite scores lower = kill the draft."""
         rewrite = "Meh."
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet with good structure and data density 121F record.")
         result = evaluate_and_polish(bundle, "data")
-        assert result.text == "Original tweet with good structure and data density 121F record."
+        assert result is None
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_api_failure_returns_original(self, mock_get_client):

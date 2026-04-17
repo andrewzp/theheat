@@ -249,10 +249,14 @@ def generate_tweet_bundle(
         return None
 
     # Second inference pass: virality evaluator (Claude Sonnet 4.6)
+    # Returns None if the tweet isn't worth posting — evaluator kill = no draft.
     try:
         from src.editorial.evaluator import evaluate_and_polish
 
-        bundle = evaluate_and_polish(bundle, data_description)
+        result = evaluate_and_polish(bundle, data_description)
+        if result is None:
+            return None
+        bundle = result
     except Exception as e:
         print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
 
