@@ -1,6 +1,11 @@
 """Tests for the two-layer safety pipeline."""
 
-from src.voice.safety import check_regex, check_month_repetition, run_safety_pipeline
+from src.voice.safety import (
+    check_regex,
+    check_month_repetition,
+    check_truncated_temperature,
+    run_safety_pipeline,
+)
 
 
 class TestRegexGate:
@@ -192,6 +197,58 @@ class TestWeatherServiceBoilerplate:
             "Tropical Cyclone SINLAKU just hit 178 mph. Strongest in the western Pacific since Haiyan."
         )
         assert passed, f"Should pass, got: {reason}"
+
+
+class TestTruncatedTemperature:
+    def test_truncated_singapore(self):
+        """The exact Singapore bug from the drafts."""
+        passed, reason = check_truncated_temperature(
+            "1F forecast for Singapore today. The old record was 88.3F. From 2023."
+        )
+        assert not passed
+        assert "truncated" in reason.lower()
+
+    def test_truncated_lagos(self):
+        """The exact Lagos bug."""
+        passed, reason = check_truncated_temperature(
+            "9F forecast for Lagos, Nigeria today. The old record was 90.5F. From 2020."
+        )
+        assert not passed
+
+    def test_truncated_sydney(self):
+        """The exact Sydney bug."""
+        passed, reason = check_truncated_temperature(
+            "2F forecast for Sydney. This would set a new record for the date."
+        )
+        assert not passed
+
+    def test_truncated_mid_sentence(self):
+        passed, reason = check_truncated_temperature(
+            "Phoenix forecast to hit 2F today. That would break a record."
+        )
+        assert not passed
+
+    def test_valid_two_digit_passes(self):
+        passed, _ = check_truncated_temperature(
+            "91F forecast for Singapore today. The old record was 88.3F."
+        )
+        assert passed
+
+    def test_valid_three_digit_passes(self):
+        passed, _ = check_truncated_temperature(
+            "121F in Phoenix today. New record."
+        )
+        assert passed
+
+    def test_valid_celsius_passes(self):
+        passed, _ = check_truncated_temperature(
+            "Delhi forecast to hit 48.2C today."
+        )
+        assert passed
+
+    def test_no_temperature_passes(self):
+        passed, _ = check_truncated_temperature("Arctic sea ice at record low extent.")
+        assert passed
 
 
 class TestMonthRepetition:

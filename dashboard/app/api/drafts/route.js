@@ -43,8 +43,32 @@ export async function POST(request) {
   }
   const { action, draftId, editedText, delayMinutes, candidateRank } = await request.json()
 
-  if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve", "select_candidate"].includes(action)) {
+  if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below"].includes(action)) {
     return Response.json({ error: "Invalid action" }, { status: 400 })
+  }
+
+  if (action === "bulk_reject_below") {
+    // Bulk-reject all pending drafts with signal score below the given threshold.
+    // Used to clean up backlogs after raising editorial standards.
+    const threshold = Number(delayMinutes ?? 72) // reuse delayMinutes param for threshold
+    if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+      return Response.json({ error: "Invalid threshold (0-100)" }, { status: 400 })
+    }
+    const state = await readStateStore()
+    const pending = (state.drafts || []).filter((d) => d.status === "pending")
+    const toReject = pending.filter((d) => (d.score?.total || 0) < threshold)
+    let rejected = 0
+    for (const d of toReject) {
+      await updateDraftStore(d.id, async (rec) => {
+        rec.status = "rejected"
+        rec.rejected_reason = `bulk_reject_below_${threshold}`
+        delete rec.auto_approve_at
+        delete rec.auto_approve_requested_at
+        return rec
+      })
+      rejected++
+    }
+    return Response.json({ ok: true, action: "bulk_rejected", count: rejected, threshold })
   }
 
   try {

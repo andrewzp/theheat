@@ -70,6 +70,27 @@ BANNED_PATTERNS = [
 ]
 
 
+def check_truncated_temperature(tweet: str) -> tuple[bool, str | None]:
+    """Flag tweets with suspiciously low temperature readings.
+
+    Gemini sometimes drops the leading digit: "1F forecast for Singapore"
+    when it should be "91F". A real weather record tweet will never have
+    single-digit F or sub-10C temperatures — those aren't records, they're
+    errors. Rejects tweets that start with or prominently feature a
+    standalone 1-digit temperature.
+    """
+    # Standalone 1-digit Fahrenheit near the start of the tweet, not preceded
+    # by another digit (so "91F" passes, "1F" fails).
+    if re.match(r"^\s*\d(?:F\b|C\b)", tweet):
+        return False, "Tweet starts with a 1-digit temperature (likely truncated)"
+    # Also catch "hit 2F" style mid-sentence after a common verb
+    if re.search(r"\b(hit|forecast|forecast to hit|reached|at|record|dropped) \dF\b", tweet):
+        return False, "Truncated temperature (single digit F) after a temperature verb"
+    if re.search(r"\b(hit|forecast|forecast to hit|reached|at|record|dropped) \dC\b", tweet):
+        return False, "Truncated temperature (single digit C) after a temperature verb"
+    return True, None
+
+
 def check_month_repetition(tweet: str) -> tuple[bool, str | None]:
     """Flag tweets that mention the same month twice in close proximity.
 
@@ -142,6 +163,11 @@ def run_safety_pipeline(tweet: str) -> tuple[bool, str | None]:
 
     # Layer 1b: Structural — repeated dates, etc.
     passed, reason = check_month_repetition(tweet)
+    if not passed:
+        return False, reason
+
+    # Layer 1c: Data integrity — truncated temperatures from Gemini
+    passed, reason = check_truncated_temperature(tweet)
     if not passed:
         return False, reason
 
