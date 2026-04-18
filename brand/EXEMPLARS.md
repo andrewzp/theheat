@@ -1,276 +1,222 @@
-# @theheat — Exemplar Library
+# @theheat — Verified Viral Climate Exemplars
 
-The hall of fame. This is what we're reaching for — not "competent bot copy," not "informative," not "on-brand." **Genuinely shareable. Screenshottable. The kind of tweet you'd text to a friend at midnight.**
+**A seed library of tweets that actually went viral in the climate space, with documented engagement.**
 
-If a candidate tweet from the generator doesn't belong in this file, it probably shouldn't ship.
+This file replaces an earlier version that contained speculative examples. Everything below is real — verified text, verified handles, verified engagement signals, with sources. When @theheat produces tweets that earn a human rating of 9+, they will be added as Tier 4 entries and the older seeds pruned over time.
+
+---
+
+## Why This File Exists
+
+The generator needs reference material for what viral looks like in this space. Our prior voice specification (`brand/VOICE_PATTERNS.md`) documents the *patterns* we believe in, based on research. But patterns alone aren't proof. Real exemplars with documented spread are the ground truth.
+
+Crucial caveat: these are seed references from *adjacent voices*, not @theheat's own voice. @theheat has not yet produced a verified viral tweet. This library is our hypothesis about what works, anchored in real data, that we will validate or revise as the account earns its own exemplars.
+
+---
+
+## The Three Tiers
+
+- **Tier 1** — Fully verified. Exact text, handle, date, hard engagement numbers, multiple press sources.
+- **Tier 2** — Verified text, handle, date. Engagement documented through press coverage rather than a hard like/RT count.
+- **Tier 3** — Verified text and handle. Style reference only (engagement signal weaker or harder to pin numerically).
+
+---
+
+## TIER 1 — Fully Verified Viral
+
+### 1. Greta Thunberg → Andrew Tate, "smalldickenergy"
+
+> yes, please do enlighten me. email me at smalldickenergy@getalife.com
+
+- **Handle:** @GretaThunberg
+- **Date:** December 28, 2022
+- **Engagement:** ~3.5M–4M likes, ~678K retweets, 249M–278M views. 6th most-liked tweet of all time at the time.
+- **Source:** [Fortune, Dec 31 2022](https://fortune.com/2022/12/31/gen-z-climate-activist-greta-thunbergs-putdown-of-macho-troll-andrew-tate-has-quickly-become-one-of-the-most-liked-tweets-ever/); [Newsweek, Dec 30 2022](https://www.newsweek.com/greta-thunbergs-andrew-tate-tweet-among-most-liked-all-time-1770422)
+- **Why it went viral:** Register-break (climate activist being cutting), collision with non-climate news (Tate's misogyny feud), surgical brevity. The email burn was punchy enough to escape climate Twitter entirely.
+
+### 2. Greta Thunberg → Pizza Boxes Follow-Up
+
+> this is what happens when you don't recycle your pizza boxes
+
+- **Handle:** @GretaThunberg
+- **Date:** December 30, 2022
+- **Engagement:** ~1.9M–3.2M likes
+- **Source:** [Newsweek](https://www.newsweek.com/greta-thunberg-andrew-tate-pizza-arrest-twitter-romania-1770298)
+- **Why it went viral:** Timing — posted right after Tate's arrest, with the rumor that his pizza box gave away his location. Perfect callback to the original exchange. Zero explanation.
+
+---
+
+## TIER 2 — Verified with Press Coverage
+
+### 3. Zeke Hausfather — "gobsmackingly bananas"
+
+> This month was — in my professional opinion as a climate scientist — absolutely gobsmackingly bananas
+
+- **Handle:** @hausfath
+- **Date:** October 3, 2023
+- **Engagement signal:** Quoted by CNN, NBC News, Common Dreams, Boing Boing, Slashdot, Heatmap, Yahoo News, ecoRI, LinkedIn News (Oct 4–5, 2023). The phrase entered news headlines as a standalone unit.
+- **Source:** [CNN](https://www.cnn.com/2023/10/04/world/september-hottest-record-2023-climate-intl/index.html); [Heatmap](https://heatmap.news/climate/september-2023-hottest-heat-zeke-hauffather)
+- **Why it went viral:** Register-break — technical voice + colloquial slang — applied to a legitimately shocking monthly anomaly. The "in my professional opinion" qualifier makes the absurd language feel authoritative, not unhinged.
+
+### 4. Vanessa Nakate — "erased a continent"
+
+> You didn't just erase a photo. you erased a continent. But I am stronger than ever.
+
+- **Handle:** @vanessa_vash
+- **Date:** January 24, 2020
+- **Engagement signal:** Gained 100K+ followers across platforms within days. AP issued an apology. Covered by HuffPost, NPR, BuzzFeed, Global Citizen, Dazed.
+- **Source:** [HuffPost](https://www.huffingtonpost.co.uk/entry/vanessa-nakate-climate-picture-greta-thunberg-davos_uk_5e2c2a6dc5b6779e9c335a82); [Global Citizen](https://www.globalcitizen.org/en/content/vanessa-nakate-climate-activist-ap-crop/)
+- **Why it went viral:** AP cropped her — the only Black activist — out of a Davos climate photo. One line captured the moment: the escalation (photo → continent) + the pivot (stronger than ever) is the whole move.
+
+### 5. Andrew Dessler — "Hey assholes"
+
+> Hey assholes. We've been telling you for decades that this was going to happen if we didn't reduce greenhouse gas emissions. You didn't listen and now it's all happening. We hope you're happy. Enjoy the heatwaves, intense rainfall, sea level rise, ocean acidification, and many other things, you fucking morons.
+
+- **Handle:** @AndrewDessler
+- **Date:** Around August 2021 (IPCC AR6 WG1 release)
+- **Engagement signal:** Reposted and covered across Climate Depot, Master Resource, Iowa Climate Science Education, and multiple climate-policy blogs (both supporters and skeptics). Framed as "what I wish the IPCC would say."
+- **Source:** [Climate Depot](https://www.climatedepot.com/2021/09/11/hey-aholes-warmist-andrew-dessler-reveals-what-he-wished-un-ipcc-report-said-weve-been-telling-you-for-decades-that-this-was-going-to-happen-you-fcking-morons/)
+- **Why it went viral:** Tenured climate scientist dropping the register that matches what a lot of the field was privately feeling. Forbidden voice × credentialed speaker = register-break virality.
+
+### 6. Peter Kalmus — "coolest summer for the rest of your life"
+
+> Most people STILL don't know what peril they are in. This will be the coolest summer for the rest of your life, and that shouldn't be just a meme - it should be actually terrifying. The ONLY path out of this heat nightmare is to end fossil fuels ASAP
+
+- **Handle:** @ClimateHuman
+- **Date:** July 17, 2023
+- **Engagement signal:** Meme-ified and quoted widely. "Coolest summer of the rest of your life" became a recurring meme template. Covered in NBC News climate-grief feature.
+- **Source:** [NBC News](https://www.nbcnews.com/science/environment/scientist-reckons-climate-grief-rcna129981); [Tweet](https://x.com/ClimateHuman/status/1681267367584645126)
+- **Why it went viral:** Crystallized a reframing — "this is as cool as it gets" — that's more memorable than any specific statistic. The idea outlived the tweet.
+
+### 7. "Series of disasters" — LA fires breakout moment
+
+> Climate change will manifest as a series of disasters viewed through phones with footage that gets closer and closer to where you live until you're the one filming it.
+
+- **Handle that broke it:** @ZackBornstein, January 8, 2025 (original authorship of the quote is contested; it circulated earlier on Twitter under multiple accounts)
+- **Engagement signal:** Covered by IBTimes and Latin Times as "the viral tweet" of the LA fires; reshared across TikTok, Threads, Instagram, Facebook.
+- **Source:** [Latin Times](https://www.latintimes.com/provocative-climate-change-tweet-goes-viral-los-angeles-wildfires-rage-hits-hard-571657); [IBTimes](https://www.ibtimes.com/provocative-climate-change-tweet-goes-viral-los-angeles-wildfires-rage-hits-hard-3758519)
+- **Why it went viral:** A pre-existing prophecy that the LA fires retroactively made literal. "You're the one filming it" was the exact experience millions had that week.
+- **Note:** Treat the phrasing pattern as the exemplar, not Bornstein as the originator.
+
+### 8. Xiye Bastida — "fossil fuel disasters"
+
+> Instead of calling them 'natural disasters' we should call them 'fossil fuel disasters'
+
+- **Handle:** @xiyebastida
+- **Date:** 2022
+- **Engagement signal:** Featured in [Greenpeace's "Favourite Climate Tweets of 2022"](https://www.greenpeace.org/international/story/57710/our-favourite-climate-tweets-of-2022/). Phrase entered activist vocabulary.
+- **Why it went viral:** Short, surgical relabeling. One tweet, one rhetorical move, zero argument. The reader argues it for themselves.
+
+### 9. Greta Thunberg — "A very happy young girl" bio swap
+
+> A very happy young girl looking forward to a bright and wonderful future
+
+- **Handle:** @GretaThunberg
+- **Date:** September 24, 2019 (profile bio, not a tweet, but went viral as one)
+- **Engagement signal:** Covered by [Time](https://time.com/5685186/greta-thunberg-changes-twitter-bio-donald-trump-tweet/), NBC News, CBS News, The Hill, The Daily Beast, BuzzFeed News, SBS, Fox 10. Called one of her most iconic clapbacks.
+- **Why it went viral:** Took Trump's exact mocking words and made them her own with zero added text. Minimalism as clapback.
+
+---
+
+## TIER 3 — Style References
+
+### 10. António Guterres — on "radical" framing
+
+> Climate activists are sometimes depicted as dangerous radicals. But the truly dangerous radicals are the countries that are increasing the production of fossil fuels.
+
+- **Handle:** @antonioguterres
+- **Date:** 2022
+- **Engagement signal:** Featured in Greenpeace's 2022 roundup; quoted across press as a standalone line.
+- **Source:** [Greenpeace](https://www.greenpeace.org/international/story/57710/our-favourite-climate-tweets-of-2022/)
+- **Why it resonates:** UN Secretary-General explicitly flipping the "radical" label onto fossil-fuel producers. Negation flip from the highest-credibility speaker.
+
+### 11. Ed Hawkins — Warming Stripes launch
+
+> Warming stripes for Germany. Each stripe represents average temperature for a year, starting on the left in 1881 and ending in 2017:
+
+- **Handle:** @ed_hawkins
+- **Date:** July 16, 2018
+- **Engagement signal:** Kicked off a visualization now printed on ties, T-shirts, featured by 100+ TV meteorologists. #ShowYourStripes had ~1M downloads in its first week (June 2019). Picked up by MoMA. Hawkins received an MBE in 2020 specifically for this.
+- **Source:** [Fast Company](https://www.fastcompany.com/90405797/the-story-behind-the-viral-graphic-that-electrified-the-climate-movement); [Art UK](https://artuk.org/discover/stories/show-your-stripes-the-artwork-that-made-climate-change-data-go-viral)
+- **Tweet:** [ed_hawkins/status/1018784219055775744](https://x.com/ed_hawkins/status/1018784219055775744)
+- **Why it resonates:** Stripped climate data to pure color. No axes, no numbers, no debate surface. The visual IS the argument.
+
+---
+
+## Patterns That Emerged
+
+These are not hypotheses. They are what *actually-viral-with-documented-engagement* climate content has in common.
+
+### Pattern A — Register-break from the expected speaker
+A climate scientist using "gobsmackingly bananas" or "assholes" or "morons" (Hausfather, Dessler). A teen activist being cutting (Thunberg to Tate). An activist getting personal on a big stage (Nakate). The expected register of the speaker is formal/measured; breaking it generates surprise.
+
+### Pattern B — Naming something people already felt but hadn't labeled
+"Coolest summer of the rest of your life." "Fossil fuel disasters." "You're the one filming it." The reader recognizes the feeling instantly — the tweet just gave them words for it.
+
+### Pattern C — Collision with a non-climate news story
+Tate's arrest. LA fires. Davos photo. Trump tweets. **Climate-only posts rarely break out. Climate × other-news fusion does.** The non-climate story is the distribution vehicle; climate is the payload.
+
+### Pattern D — Short, quotable, no jargon
+Every verified viral tweet above fits on a screenshot. None require a thread, none require a chart to land, none use a scientific term the reader has to parse.
+
+### Pattern E — Minimal explanation
+The virally-successful tweets almost never explain the implication. "Email me at smalldickenergy@getalife.com" doesn't argue. "Fossil fuel disasters" doesn't argue. The reader completes the thought.
+
+---
+
+## The Uncomfortable Truth
+
+**@theheat's current output does not look like any of these.**
+
+Our format: "Washington DC forecast to hit 93.2F today. If it holds, that breaks an 89.8F record from 2002. A 3.4F jump."
+
+Verified viral climate content: "smalldickenergy@getalife.com" / "gobsmackingly bananas" / "you're the one filming it" / "fossil fuel disasters."
+
+These are not the same genre.
+
+The genre of @theheat is **data-ticker** — the @extremetemps model. That's a legitimate genre and @extremetemps has 106K followers with it, but even @extremetemps's individual tweets rarely go viral in the way above. The account succeeds through volume + consistency + occasional breakthroughs, not individual viral posts.
+
+**So when we say we want "12/10 viral tweets," we need to be honest about what we're asking for.** Two possible interpretations:
+
+1. **Viral in the data-ticker genre** — like @extremetemps at its best. Consistent format, occasional breakthrough when the data is genuinely unbelievable. This is achievable with our current architecture.
+
+2. **Viral in the climate-Twitter breakout genre** — like Thunberg, Hausfather, Nakate. Requires register-break, news collision, or minimal explanation of a felt-but-unnamed pattern. **This is largely not achievable via pure automation** — it requires a human-shaped moment to exploit. @theheat could occasionally produce this with human polish and timing, but not as a steady-state output.
+
+We should probably aim for (1) as the baseline and (2) as rare human-curated moments, not try to force every automated tweet to meet the standard of the most viral climate tweets ever.
+
+---
+
+## Implications for the Voice Strategy
+
+1. **The "framing lattice" still makes sense** — ERA / ABSURDITY / SOCIAL CURRENCY / REPLY BAIT / COMEDIC TURN are still useful intents. But we should be honest that they're aimed at data-ticker excellence, not breakout virality.
+
+2. **Our "show don't tell" rule is actually counter-verified** — Dessler's viral tweet is pure telling ("Hey assholes"). The research says high-arousal emotion is what matters, not abstract principles about voice discipline.
+
+3. **We should drop the pretense of being 12/10 on every tweet** — that's a false target. The right target is "consistently well-executed in the data-ticker genre, with occasional human-polished moments that have a shot at breakout."
+
+4. **Humans write most viral content** — the verified exemplars are all human-authored. This suggests @theheat's breakout moments will come from a human editing layer, not from better automation.
+
+---
 
 ## How This File Is Used
 
-At generation time, the pipeline picks 5 exemplars — one from each frame below — and feeds them into the system prompt as few-shot examples. The exemplars shown match the signal type and category.
+### At generation time
+The generator receives these tweets as reference — not because they'll be replicated, but because they anchor the sense of "viral climate content looks like this." The system prompt should include the five patterns (A–E) as rules.
 
-When a posted tweet scores 9+ in human rating, it gets promoted into this library automatically (see `dashboard/` rating system — to be built).
+### At review time
+When a human is rating a posted @theheat tweet, they should ask: "Does this tweet hit any of Patterns A–E?" If yes, it has potential. If no, it may still be a competent data-ticker tweet, but it won't break out.
 
-## The Five Frames
-
-Every viral @theheat tweet sits in exactly one of these intents. The generator produces one candidate per frame, then the evaluator ranks across frames.
-
-1. **ERA ANCHOR** — "Last time this happened, [human-historical moment]." Anchor the number to an era the reader can feel in their body.
-2. **ABSURDITY** — Place + number + deadpan tag. The incongruity IS the joke.
-3. **SOCIAL CURRENCY** — A fact you'd repeat at dinner. The reader shares to look informed.
-4. **REPLY BAIT** — Imply the conclusion. Leave a gap the reader fills in with their own take.
-5. **COMEDIC TURN** — A dry punchline closes the tweet. Max 6 words.
-
-Each frame below has 4-6 exemplars with annotation of the mechanic.
+### Promotion over time
+When an @theheat tweet earns a 9+ rating AND demonstrably goes viral (>10K engagements, or press coverage), it gets added as a Tier 4 entry. The seed references above (Tiers 1–3) will gradually be supplemented or replaced by @theheat's own verified viral moments.
 
 ---
 
-## FRAME 1: ERA ANCHOR
+## What Was Removed
 
-*The sharer looks cultured, not just informed. The reader feels the timespan in their bones.*
+The earlier `EXEMPLARS.md` contained 30 fabricated examples with annotations claiming they were "the hall of fame." They were my speculation about what viral looks like, not documented viral content. That file has been renamed to `brand/VOICE_PATTERNS.md` and repositioned as "voice pattern reference, not verified exemplars."
 
-### Exemplar 1.1
-> Buenos Aires just hit 42.1C. Last time it was this hot there, the Great Depression hadn't started yet.
-
-**Why it works:** Anchors 1929 to an era people can mentally occupy. The reader does the math: "wait, that long?" and the awe lands.
-
-### Exemplar 1.2
-> CO2 at Mauna Loa: 436 ppm. Pre-industrial was 280. The atmosphere had not been this CO2-rich since before modern humans evolved.
-
-**Why it works:** Two anchors in one tweet — pre-industrial as the chemistry reference, pre-human as the scale reference. Social currency on tap.
-
-### Exemplar 1.3
-> Delhi just broke its April 17 record. The old record had stood longer than TikTok has existed.
-
-**Why it works:** Internet-native timeframe. "Longer than TikTok" is both precise (the reader knows TikTok is ~7 years old) and cheeky. Updates an old record's era without saying a year.
-
-### Exemplar 1.4
-> A temperature record from 1929 fell in São Paulo yesterday. That record had outlasted fifteen presidents.
-
-**Why it works:** "Fifteen presidents" translates 97 years into something viscerally long without requiring math. Specific number, not "many."
-
-### Exemplar 1.5
-> The Mississippi at Baton Rouge is 12ft above flood stage. The last river reading this high, Elvis had just signed with Sun Records.
-
-**Why it works:** Unexpected cultural anchor (Elvis, 1954). The juxtaposition of a 1950s icon with a 2026 climate reading is the surprise.
-
-### Exemplar 1.6
-> Tokyo hit 41.8C. The last time Tokyo was this hot, the Berlin Wall was still standing.
-
-**Why it works:** "Berlin Wall standing" = 1989 = 37 years ago. Geopolitically anchored, universally recognized, and the emotional distance of the fall of the Wall makes it feel longer ago than the number suggests.
+Using my made-up examples to anchor the generator would have cemented my taste as the voice, not discovered what actually works. Real data from real viral moments, with documented engagement, is a much more honest starting point — even though we have far fewer entries.
 
 ---
 
-## FRAME 2: ABSURDITY
-
-*Place + number + deadpan tag. The incongruity IS the joke.*
-
-### Exemplar 2.1
-> Anchorage recorded 82F today. The average for this date is 57F. Anchorage.
-
-**Why it works:** The one-word restatement is the entire punchline. Period-for-comedic-timing. This is a legitimate all-timer in the voice.
-
-### Exemplar 2.2
-> It's 54F in Tromsø. That's six degrees above the all-time April record. 200 miles north of the Arctic Circle.
-
-**Why it works:** Three escalating specificities: the temp, the margin, the location. Each line makes the previous one land harder. Ends on the deadpan fact, not a comment on it.
-
-### Exemplar 2.3
-> Siberia is 91F today. Siberia.
-
-**Why it works:** Two words as the whole second sentence. Pure confidence in the reader. No explanation. The repetition is the shock.
-
-### Exemplar 2.4
-> Kuwait City hit 53.2C. In May.
-
-**Why it works:** Two beats. No editorializing. The "in May" is the knife.
-
-### Exemplar 2.5
-> Houston just went under a flash flood emergency. Houston went under literally.
-
-**Why it works:** Double meaning bridges the gap between the alert and the city's geography. Reads like a joke but is also a fact. The reader laughs then realizes they're not supposed to.
-
-### Exemplar 2.6
-> A tornado is on the ground in Orlando. In January. Radar-confirmed.
-
-**Why it works:** Three-word sentence structure amplifies each beat. Orlando (wrong place). January (wrong time). Radar-confirmed (this is real). Unadorned.
-
----
-
-## FRAME 3: SOCIAL CURRENCY
-
-*A fact you'd repeat at dinner. Sharer looks informed, not preachy.*
-
-### Exemplar 3.1
-> Phoenix has broken a daily heat record every April 16 for the last four years running.
-
-**Why it works:** The fact is self-contained and quotable. "Every year for four years" is a pattern the reader can retell exactly without looking it up.
-
-### Exemplar 3.2
-> Last year, Earth added more CO2 to its atmosphere than in any previous year on record. The year before held the same title.
-
-**Why it works:** The second sentence turns the first into a pattern. Reader thinks "oh, so every year is the new worst year." They'll tell someone this.
-
-### Exemplar 3.3
-> The ocean is 3F warmer than it was when Finding Nemo came out. Just the ocean.
-
-**Why it works:** Cultural anchor (2003, universally known film). "Just the ocean" is the understated closer that implies the scale. Peak dinner-party fact.
-
-### Exemplar 3.4
-> More heat records were broken in Europe last week than in the entire decade of the 1990s.
-
-**Why it works:** Comparative fact that reframes "a lot" as a specific, shocking proportion. The reader can't un-hear this.
-
-### Exemplar 3.5
-> Arctic sea ice is 18% smaller than the 1981-2010 average. That missing ice would cover half of Europe.
-
-**Why it works:** The second sentence makes the abstract percentage physically present. "Cover half of Europe" is a mental picture.
-
-### Exemplar 3.6
-> Earth has recorded above-average global temperatures for 14 consecutive months. Fourteen. Straight. Months.
-
-**Why it works:** The period-separated restatement converts a number into a drumbeat. Retelling the tweet preserves the rhythm.
-
----
-
-## FRAME 4: REPLY BAIT
-
-*Imply the conclusion. Leave a gap the reader fills with their own take.*
-
-### Exemplar 4.1
-> Phoenix just hit 121F. NEW RECORD. The old one was from last year.
-
-**Why it works:** Says nothing about climate. But the reader thinks "climate change" before finishing the third sentence. They quote-tweet to complete the thought.
-
-### Exemplar 4.2
-> Record high in Warsaw. Record high in Berlin. Record high in Prague. All on the same day.
-
-**Why it works:** Four sentences, zero analysis. The pattern is obvious, the reader wants to point at it, and every reply completes the implicit argument.
-
-### Exemplar 4.3
-> São Paulo broke its April record today. That record was set in April 2024.
-
-**Why it works:** Two sentences. The reader does the arithmetic: the record lasted one year. Replies will say "accelerating" so the account doesn't have to.
-
-### Exemplar 4.4
-> Mauna Loa: 437 ppm. Pre-industrial: 280 ppm. Human civilization emerged at 280.
-
-**Why it works:** Three facts, no conclusion. The implication ("we have left the conditions civilization evolved in") is too heavy to state. The reader states it instead.
-
-### Exemplar 4.5
-> Every record Phoenix broke this decade has fallen again since.
-
-**Why it works:** A single-sentence tweet that's a recursive statement about records. The reader finishes the thought — "so nothing we call a record stays a record" — which is the whole point.
-
-### Exemplar 4.6
-> The hottest year on record is 2024. The second hottest is 2023. The third hottest is 2022.
-
-**Why it works:** Pure list. No editorializing. The descending sequence IS the argument. Replies will complete the pattern to 2021, 2020, etc.
-
----
-
-## FRAME 5: COMEDIC TURN
-
-*One dry punchline, max 6 words, closes the tweet. Rare and surgical — overuse kills the voice.*
-
-### Exemplar 5.1
-> New wildfire in Northern California. High confidence. 0% contained. **It's April.**
-
-**Why it works:** Two-word closer. Contextualizes everything above. Turns a fire report into an unspoken statement about fire seasons getting longer.
-
-### Exemplar 5.2
-> Satellite picked up a 1,200 MW fire in Siberia. A large power plant is about 1,000 MW. **Except it's a forest.**
-
-**Why it works:** Three-word reversal. Reframes a scale comparison into something visceral. The reader was building a mental image of a power plant; "except it's a forest" replaces that with a physical horror.
-
-### Exemplar 5.3
-> Water level at Charleston is 2ft above where it should be. **Nobody issued a warning.**
-
-**Why it works:** The closer is a policy observation wrapped as a comedic beat. Reader interprets it as "the system isn't keeping up," which the tweet never says.
-
-### Exemplar 5.4
-> Mississippi at Baton Rouge: 42.3ft. Flood stage: 35ft. **The river doesn't care what month it is.**
-
-**Why it works:** Closing sentence personifies the river in a way that lands as both funny and ominous. Six words, high resonance.
-
-### Exemplar 5.5
-> CO2 crossed 433 ppm at Mauna Loa. We added 2.4 ppm in a year. **That used to take a decade.**
-
-**Why it works:** The closer is a compression of decades of climate history into six words. Screenshot bait.
-
-### Exemplar 5.6
-> No records broken today. No new fires. CO2 held at 433.18. **Honestly suspicious.**
-
-**Why it works:** The comedic turn on a quiet day. Voice keeps the account alive on days with no extreme data. Establishes that normalcy itself is now strange.
-
----
-
-## ANTI-PATTERNS (Never ship these)
-
-Each of these failed as a draft. They're here to illustrate the failure modes the generator should never produce.
-
-### ❌ Press-release opener
-> **NWS issued a Severe Thunderstorm Warning for Buchanan, MO.** Today is April 10.
-
-**Why it fails:** Opens with the agency name (nobody cares). Ends with a date that adds nothing. Zero voice.
-
-### ❌ Weather-service boilerplate
-> Saipan: Extreme Wind Warning. **These are HURRICANE-FORCE conditions.**
-
-**Why it fails:** "HURRICANE-FORCE" is the meteorological category, not a fact the reader can feel. The tweet tells the reader to be scared instead of showing them why.
-
-### ❌ Jargon + tier explainer
-> Tropical Cyclone SINLAKU-26. Guam is under a **RED alert**. **This is the highest severity level GDACS issues.**
-
-**Why it fails:** "SINLAKU-26" is bureaucratic noise. Explaining what RED means to the reader is condescending. The agency name (GDACS) should never appear.
-
-### ❌ Label:value format
-> Flash Flood Warning for Kauai, HI. **Severity: Severe.** Not a light shower. April 10, 2026.
-
-**Why it fails:** "Severity: Severe" is press-release syntax. "Not a light shower" is defensive. Date twice (the Twitter timestamp already does this job).
-
-### ❌ Pure information, no frame
-> **CO2 is at 435 ppm at Mauna Loa this week.**
-
-**Why it fails:** A number without a comparison, without a reaction, without a reason to share. Accurate but mute.
-
-### ❌ Meta-commentary ("telling not showing")
-> Tropical Cyclone SINLAKU-26 is now a GDACS Red alert. 178 mph winds. Globally, you might see five of these a year. **THIS ONE IS SERIOUS.**
-
-**Why it fails:** "THIS ONE IS SERIOUS" is the reader's conclusion, not ours to state. The numbers should make them say that themselves. Telling > showing.
-
-### ❌ Truncated numbers (data quality error)
-> **1F forecast for Singapore today.** The old record was 88.3F.
-
-**Why it fails:** Generator truncation bug. A single-digit Fahrenheit reading is physically impossible for Singapore. Safety pipeline should (and now does) reject this.
-
----
-
-## Notes on Use
-
-**Exemplar selection at generation time:**
-- For each generation event, pick one exemplar from each of the 5 frames
-- Prefer exemplars that match the event category (record, fire, CO2, etc.)
-- If no category match, fall back to the universal ones
-
-**Growth strategy:**
-- Every tweet Andrew rates 9+ gets promoted automatically
-- Every tweet rated ≤5 goes to anti-patterns
-- Reviewed quarterly, pruned to keep ~40 total (balance recency with timeless exemplars)
-
-**What counts as "genuinely shareable":**
-- Makes the sharer look informed or cultured (not preachy)
-- Surprise in the first 5-7 words
-- Ends on a punch, not a reservation
-- Can be screenshot and understood without context
-- A smart friend you text it to responds with "wait, what"
-
-**What does NOT qualify:**
-- Anything that requires reading twice to get
-- Anything that explains what an alert tier means
-- Anything with "experts warn" or "according to"
-- Anything that preaches
-- Anything that could run as-is on a local news chyron
-
----
-
-*Compiled April 17, 2026. Living document. Grows as we learn what actually works.*
+*Compiled April 17, 2026. Research by AI agent using WebSearch across press coverage, academic citations, and archived tweet sources. Every engagement claim is backed by a linked source. When sources conflict, the lower number is used. When authorship is contested, that is noted.*
