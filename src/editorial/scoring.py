@@ -461,6 +461,120 @@ def score_river_flood(above_by_ft: float) -> EditorialScore:
     )
 
 
+def score_all_time_record(new_temp_c: float, old_record_c: float, old_record_year: int, years_of_data: int, *, kind: str = "high") -> EditorialScore:
+    """All-time records within the archive window. Inherently elite."""
+    delta = abs(new_temp_c - old_record_c)
+    age = max(date.today().year - old_record_year, 0)
+    # All-time records are inherently top-tier. Even a 0.1C margin on an
+    # all-time record is genuinely astounding.
+    reasons = [
+        f"{kind} temp record in {years_of_data} years of archive data",
+        f"beat prior by {delta:.1f}C" if delta >= 0.2 else "edged prior record",
+    ]
+    if age >= 20:
+        reasons.append(f"{age}-year-old record fell")
+    elif age <= 2:
+        reasons.append("previous record was recent")
+    return _build_score(
+        "all_time_record",
+        severity=88 + delta * 4,
+        novelty=92 + min(age, 50) * 0.2,
+        timeliness=94,
+        confidence=78,  # provisional forecast data
+        shareability=86 + delta * 3,
+        sensitivity=10 if kind == "high" else 8,
+        threshold=80,  # high bar — only elite records pass
+        reasons=reasons,
+    )
+
+
+def score_monthly_record(new_temp_c: float, old_record_c: float, old_record_year: int, month: int, years_of_data: int, *, kind: str = "high") -> EditorialScore:
+    """Hottest/coldest reading ever observed for this month of year."""
+    delta = abs(new_temp_c - old_record_c)
+    age = max(date.today().year - old_record_year, 0)
+    month_name = ["", "January","February","March","April","May","June",
+                  "July","August","September","October","November","December"][month]
+    reasons = [
+        f"{kind} temp ever observed in {month_name}",
+        f"in {years_of_data} years of archive data",
+    ]
+    if delta >= 1.0:
+        reasons.append(f"beat prior by {delta:.1f}C")
+    return _build_score(
+        "monthly_record",
+        severity=78 + delta * 5,
+        novelty=84,
+        timeliness=90,
+        confidence=74,
+        shareability=78 + delta * 3,
+        sensitivity=10,
+        threshold=76,
+        reasons=reasons,
+    )
+
+
+def score_anomaly(today_temp_c: float, historical_mean_c: float, anomaly_c: float, *, kind: str = "hot") -> EditorialScore:
+    """Today's reading vs historical mean for this month. Pure anomaly signal."""
+    abs_anomaly = abs(anomaly_c)
+    reasons = [
+        f"{'+' if kind == 'hot' else '-'}{abs_anomaly:.1f}C from normal for this month",
+        f"historical mean: {historical_mean_c:.1f}C; today: {today_temp_c:.1f}C",
+    ]
+    # Anomaly scoring: 15C = baseline elite, 20C+ = extreme
+    return _build_score(
+        "anomaly",
+        severity=72 + min(abs_anomaly - 15, 10) * 3,
+        novelty=82,
+        timeliness=92,
+        confidence=82,
+        shareability=80 + min(abs_anomaly - 15, 10) * 2,
+        sensitivity=10,
+        threshold=76,
+        reasons=reasons,
+    )
+
+
+def score_record_streak(consecutive_days: int, peak_temp_c: float) -> EditorialScore:
+    """A city has broken its daily record multiple days running."""
+    reasons = [f"{consecutive_days} consecutive days of daily records"]
+    if consecutive_days >= 10:
+        reasons.append("double-digit streak")
+    if consecutive_days >= 5:
+        reasons.append("sustained pattern, not noise")
+    return _build_score(
+        "record_streak",
+        severity=70 + min(consecutive_days, 20) * 1.5,
+        novelty=80 + min(consecutive_days, 20) * 0.8,
+        timeliness=88,
+        confidence=76,
+        shareability=78 + min(consecutive_days, 20) * 1.2,
+        sensitivity=8,
+        threshold=74,  # fires at 3+ days
+        reasons=reasons,
+    )
+
+
+def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> EditorialScore:
+    """Multiple cities broke records on the same day — a pattern signal."""
+    reasons = [
+        f"{city_count} cities broke records today",
+        "pattern signal, not isolated event",
+    ]
+    if city_count >= 10:
+        reasons.append("mass event")
+    return _build_score(
+        "simultaneous_records",
+        severity=74 + min(city_count - 5, 15) * 2,
+        novelty=86,
+        timeliness=94,
+        confidence=84,
+        shareability=82 + min(city_count - 5, 15) * 1.5,
+        sensitivity=6,
+        threshold=78,
+        reasons=reasons,
+    )
+
+
 def score_hot10(top_anomaly_c: float, city_count: int, change_count: int) -> EditorialScore:
     reasons = [f"top anomaly +{top_anomaly_c:.1f}C"]
     if change_count:

@@ -186,7 +186,7 @@ class TestRunAlerts:
         self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
-        mock_om.check_records_for_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = []
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
@@ -196,7 +196,7 @@ class TestRunAlerts:
         run_alerts(state)
 
         mock_om.load_cities.assert_called_once()
-        mock_om.check_records_for_cities.assert_called_once()
+        mock_om.check_extreme_signals_for_cities.assert_called_once()
         mock_firms.fetch_fires.assert_called_once()
         mock_co2.fetch_co2_data.assert_called_once()
 

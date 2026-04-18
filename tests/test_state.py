@@ -18,6 +18,9 @@ from src.state import (
     init_run,
     check_daily_cap,
     update_streaks,
+    update_record_streak,
+    get_record_streak,
+    prune_stale_record_streaks,
     log_error,
     DEFAULT_STATE,
     write_state,
@@ -94,6 +97,45 @@ class TestStreaks:
         update_streaks(state, ["Phoenix"])
         assert "Miami" not in state["streaks"]
         assert "Phoenix" in state["streaks"]
+
+
+class TestRecordStreaks:
+    @patch("src.state.date")
+    def test_new_city_starts_streak_at_1(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 4, 18)
+        mock_date.fromisoformat = date.fromisoformat
+        update_record_streak(fresh_state, "Phoenix", 42.5)
+        assert get_record_streak(fresh_state, "Phoenix")["days"] == 1
+
+    @patch("src.state.date")
+    def test_consecutive_days_extend_streak(self, mock_date, fresh_state):
+        mock_date.fromisoformat = date.fromisoformat
+        mock_date.today.return_value = date(2026, 4, 17)
+        update_record_streak(fresh_state, "Phoenix", 42.0)
+        mock_date.today.return_value = date(2026, 4, 18)
+        update_record_streak(fresh_state, "Phoenix", 43.5)
+        entry = get_record_streak(fresh_state, "Phoenix")
+        assert entry["days"] == 2
+        assert entry["peak_temp_c"] == 43.5
+
+    @patch("src.state.date")
+    def test_gap_resets_streak(self, mock_date, fresh_state):
+        mock_date.fromisoformat = date.fromisoformat
+        mock_date.today.return_value = date(2026, 4, 10)
+        update_record_streak(fresh_state, "Phoenix", 42.0)
+        mock_date.today.return_value = date(2026, 4, 18)  # 8-day gap
+        update_record_streak(fresh_state, "Phoenix", 41.0)
+        entry = get_record_streak(fresh_state, "Phoenix")
+        assert entry["days"] == 1
+
+    @patch("src.state.date")
+    def test_prune_stale_removes_old_streaks(self, mock_date, fresh_state):
+        mock_date.fromisoformat = date.fromisoformat
+        mock_date.today.return_value = date(2026, 4, 1)
+        update_record_streak(fresh_state, "Phoenix", 42.0)
+        mock_date.today.return_value = date(2026, 4, 18)  # 17 days later
+        prune_stale_record_streaks(fresh_state, max_gap_days=2)
+        assert get_record_streak(fresh_state, "Phoenix") is None
 
 
 class TestErrorLog:

@@ -24,6 +24,16 @@ DEFAULT_STATE = {
     "drafts": [],
     "run_history": [],
     "errors": [],
+    # Tracks the hottest/coldest reading we've seen for each city across
+    # the full history we have access to (Open-Meteo archive, ~1940 onward).
+    # Used for "hottest since X year" detection.
+    "city_all_time_max": {},  # {city: {"temp_c": float, "year": int}}
+    "city_all_time_min": {},  # {city: {"temp_c": float, "year": int}}
+    # Monthly extremes. Structure: {city: {"1": {...}, "2": {...}, ...}}
+    "city_monthly_max": {},
+    "city_monthly_min": {},
+    # Record-breaking streaks: consecutive days a city has broken its daily record.
+    "record_streaks": {},  # {city: {"days": int, "last_date": "YYYY-MM-DD", "start_date": "YYYY-MM-DD"}}
 }
 
 
@@ -191,6 +201,13 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
+    # Extreme record tracking — always take the incoming (most recent) dict
+    # since detection functions only write when a new record is set.
+    merged["city_all_time_max"] = deepcopy(next_state.get("city_all_time_max", base.get("city_all_time_max", {})))
+    merged["city_all_time_min"] = deepcopy(next_state.get("city_all_time_min", base.get("city_all_time_min", {})))
+    merged["city_monthly_max"] = deepcopy(next_state.get("city_monthly_max", base.get("city_monthly_max", {})))
+    merged["city_monthly_min"] = deepcopy(next_state.get("city_monthly_min", base.get("city_monthly_min", {})))
+    merged["record_streaks"] = deepcopy(next_state.get("record_streaks", base.get("record_streaks", {})))
     return merged
 
 
@@ -304,6 +321,75 @@ def increment_daily_count(state: dict) -> dict:
 
 def check_daily_cap(state: dict, cap: int = 10) -> bool:
     return get_daily_count(state) < cap
+
+
+def update_record_streak(state: dict, city: str, today_temp_c: float) -> dict:
+    """Update the record-breaking streak for a city.
+
+    Called when a city has broken its daily calendar-date record.
+    If the city already has a streak AND yesterday was also a record day,
+    extend it. Otherwise start a new streak.
+    """
+    from datetime import datetime as _dt
+    today = date.today()
+    streaks = state.setdefault("record_streaks", {})
+    entry = streaks.get(city)
+
+    if entry:
+        try:
+            last = date.fromisoformat(entry.get("last_date", ""))
+            gap = (today - last).days
+        except (ValueError, TypeError):
+            gap = None
+        if gap == 1:
+            entry["days"] = int(entry.get("days", 0)) + 1
+            entry["last_date"] = today.isoformat()
+            entry["peak_temp_c"] = max(float(entry.get("peak_temp_c", -273.15)), today_temp_c)
+        elif gap == 0:
+            # Same day re-entry (multi-run day) — no change
+            entry["peak_temp_c"] = max(float(entry.get("peak_temp_c", -273.15)), today_temp_c)
+        else:
+            # Gap > 1 day → streak broken, reset
+            entry["days"] = 1
+            entry["start_date"] = today.isoformat()
+            entry["last_date"] = today.isoformat()
+            entry["peak_temp_c"] = today_temp_c
+    else:
+        streaks[city] = {
+            "days": 1,
+            "start_date": today.isoformat(),
+            "last_date": today.isoformat(),
+            "peak_temp_c": today_temp_c,
+        }
+
+    return state
+
+
+def get_record_streak(state: dict, city: str) -> dict | None:
+    """Return current streak info for a city, or None if no active streak."""
+    streaks = state.get("record_streaks", {})
+    return streaks.get(city)
+
+
+def prune_stale_record_streaks(state: dict, max_gap_days: int = 2) -> dict:
+    """Remove streaks that haven't been updated in more than max_gap_days.
+
+    Called at the end of each alert cycle to prevent unbounded growth
+    and to reset streaks that have silently lapsed.
+    """
+    today = date.today()
+    streaks = state.setdefault("record_streaks", {})
+    stale = []
+    for city, entry in streaks.items():
+        try:
+            last = date.fromisoformat(entry.get("last_date", ""))
+            if (today - last).days > max_gap_days:
+                stale.append(city)
+        except (ValueError, TypeError):
+            stale.append(city)
+    for city in stale:
+        del streaks[city]
+    return state
 
 
 def update_streaks(state: dict, hot10_cities: list[str]) -> dict:

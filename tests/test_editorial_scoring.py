@@ -1,9 +1,14 @@
 from src.editorial.scoring import (
+    score_all_time_record,
+    score_anomaly,
     score_co2_milestone,
     score_fire_event,
     score_global_disaster,
     score_hot10,
+    score_monthly_record,
     score_record_event,
+    score_record_streak,
+    score_simultaneous_records,
 )
 
 
@@ -37,3 +42,31 @@ class TestEditorialScoring:
         strong = score_hot10(9.7, 10, 3)
         weak = score_hot10(3.1, 10, 0)
         assert strong.total > weak.total
+
+    def test_all_time_record_scores_elite(self):
+        score = score_all_time_record(45.8, 45.2, 1998, years_of_data=30, kind="high")
+        assert score.passes
+        assert score.label in {"strong", "elite"}
+        assert score.threshold >= 78
+
+    def test_monthly_record_scores_above_calendar(self):
+        monthly = score_monthly_record(44.0, 42.3, 2015, month=4, years_of_data=30, kind="high")
+        calendar = score_record_event(44.0, 42.3, 2015)
+        assert monthly.total > calendar.total
+        assert monthly.passes
+
+    def test_anomaly_above_threshold_passes(self):
+        score = score_anomaly(today_temp_c=40.0, historical_mean_c=22.0, anomaly_c=18.0, kind="hot")
+        assert score.passes
+
+    def test_record_streak_escalates_with_days(self):
+        short = score_record_streak(consecutive_days=3, peak_temp_c=42.0)
+        long = score_record_streak(consecutive_days=15, peak_temp_c=45.0)
+        assert long.total > short.total
+        assert short.passes  # 3+ days should fire
+
+    def test_simultaneous_records_requires_multiple_cities(self):
+        small = score_simultaneous_records(city_count=5, sample_cities=["A","B","C","D","E"])
+        large = score_simultaneous_records(city_count=15, sample_cities=["A","B","C","D","E"])
+        assert large.total > small.total
+        assert large.passes

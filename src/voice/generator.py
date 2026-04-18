@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import date
 
 from src.editorial.candidates import CandidateBundle, rank_candidates
 from src.voice.safety import run_safety_pipeline
@@ -296,6 +297,176 @@ def generate_tweet(
     if return_bundle:
         return bundle
     return bundle.text if bundle else None
+
+
+def generate_all_time_record_tweet(
+    city: str,
+    country: str,
+    kind: str,
+    new_temp_c: float,
+    old_record_c: float,
+    old_record_year: int,
+    years_of_data: int,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about an all-time (within-archive) record.
+
+    Honest framing: the archive is ~30 years, not "all time." Voice must
+    reflect this. "Hottest in 30 years of data" not "hottest ever."
+    """
+    temp_f = round(new_temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_record_c * 9 / 5 + 32, 1)
+    direction = "hottest" if kind == "high" else "coldest"
+    data = (
+        f"Open-Meteo forecast {direction} reading for {city}, {country} today: "
+        f"{temp_f}F ({new_temp_c}C). "
+        f"If that holds, it would be the {direction} reading in "
+        f"{years_of_data} years of archive data (since ~{date.today().year - years_of_data}). "
+        f"Previous {direction} in that window: {old_f}F ({old_record_c}C), set in {old_record_year}. "
+        f"Note: do NOT claim 'hottest ever' or 'all-time' — the archive only goes back "
+        f"{years_of_data} years reliably. Frame honestly: 'hottest in {years_of_data} years of records' "
+        f"or 'hottest since {old_record_year}'."
+    )
+    return generate_tweet(
+        data,
+        category="all_time_record",
+        return_bundle=return_bundle,
+        fallback_fn=templates.record_template,
+        fallback_args={
+            "city": city, "country": country,
+            "temp_c": new_temp_c, "old_temp_c": old_record_c, "old_year": old_record_year,
+        },
+    )
+
+
+def generate_monthly_record_tweet(
+    city: str,
+    country: str,
+    kind: str,
+    month: int,
+    new_temp_c: float,
+    old_record_c: float,
+    old_record_year: int,
+    years_of_data: int,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a monthly-ever record.
+
+    'Hottest April ever in Delhi' style — more specific than calendar-date,
+    broader than all-time.
+    """
+    temp_f = round(new_temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_record_c * 9 / 5 + 32, 1)
+    month_name = ["", "January","February","March","April","May","June",
+                  "July","August","September","October","November","December"][month]
+    direction = "hottest" if kind == "high" else "coldest"
+    data = (
+        f"Open-Meteo forecast {direction} reading for {city}, {country} today: "
+        f"{temp_f}F ({new_temp_c}C). "
+        f"If that holds, it would be the {direction} {month_name} reading in "
+        f"{years_of_data} years of archive data. "
+        f"Previous {direction} {month_name} in that window: {old_f}F ({old_record_c}C) in {old_record_year}. "
+        f"Frame honestly: 'hottest {month_name} since {old_record_year}' or "
+        f"'hottest {month_name} in {years_of_data} years of records'."
+    )
+    return generate_tweet(
+        data,
+        category="monthly_record",
+        return_bundle=return_bundle,
+        fallback_fn=templates.record_template,
+        fallback_args={
+            "city": city, "country": country,
+            "temp_c": new_temp_c, "old_temp_c": old_record_c, "old_year": old_record_year,
+        },
+    )
+
+
+def generate_anomaly_tweet(
+    city: str,
+    country: str,
+    today_temp_c: float,
+    historical_mean_c: float,
+    anomaly_c: float,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a large temperature anomaly vs historical mean."""
+    today_f = round(today_temp_c * 9 / 5 + 32, 1)
+    mean_f = round(historical_mean_c * 9 / 5 + 32, 1)
+    abs_anomaly = abs(anomaly_c)
+    direction = "above" if anomaly_c >= 0 else "below"
+    month_name = ["", "January","February","March","April","May","June",
+                  "July","August","September","October","November","December"][date.today().month]
+    data = (
+        f"{city}, {country} today: {today_f}F ({today_temp_c}C). "
+        f"Historical mean for {month_name}: {mean_f}F ({historical_mean_c}C). "
+        f"That's {abs_anomaly:.1f}C {direction} normal. "
+        f"A departure this large is inherently unusual — make the reader feel it."
+    )
+    return generate_tweet(
+        data,
+        category="anomaly",
+        return_bundle=return_bundle,
+        fallback_fn=templates.record_template,
+        fallback_args={
+            "city": city, "country": country,
+            "temp_c": today_temp_c, "old_temp_c": historical_mean_c,
+            "old_year": date.today().year,  # placeholder
+        },
+    )
+
+
+def generate_record_streak_tweet(
+    city: str,
+    country: str,
+    consecutive_days: int,
+    peak_temp_c: float,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a multi-day record-breaking streak."""
+    peak_f = round(peak_temp_c * 9 / 5 + 32, 1)
+    data = (
+        f"{city}, {country} has now broken its daily temperature record for "
+        f"{consecutive_days} consecutive days. "
+        f"Peak reading during the streak: {peak_f}F ({peak_temp_c}C). "
+        f"This is a story arc — the streak itself is the headline, not the number. "
+        f"Spell out the count for emphasis if appropriate."
+    )
+    return generate_tweet(
+        data,
+        category="record_streak",
+        return_bundle=return_bundle,
+        fallback_fn=None,
+        fallback_args={},
+    )
+
+
+def generate_simultaneous_records_tweet(
+    city_names: list[str],
+    countries: list[str],
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate ONE summary tweet when many cities broke records same day."""
+    count = len(city_names)
+    sample = city_names[:8]  # cap at 8 names for tweet length
+    sample_str = ". ".join(sample) + "."
+    data = (
+        f"On this date, {count} cities broke their daily temperature records. "
+        f"Sample: {sample_str} "
+        f"This is a pattern signal — multiple simultaneous records tell a bigger story "
+        f"than any single city. Lead with the count and the pattern, not any single city."
+    )
+    return generate_tweet(
+        data,
+        category="simultaneous_records",
+        return_bundle=return_bundle,
+        fallback_fn=None,
+        fallback_args={},
+    )
 
 
 def generate_record_tweet(

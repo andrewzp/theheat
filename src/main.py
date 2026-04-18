@@ -19,6 +19,8 @@ from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
     EditorialScore,
+    score_all_time_record,
+    score_anomaly,
     score_co2_milestone,
     score_co2_weekly,
     score_drought,
@@ -27,12 +29,15 @@ from src.editorial.scoring import (
     score_fire_event,
     score_global_disaster,
     score_hot10,
+    score_monthly_record,
     score_noaa_confirmation_event,
     score_record_event,
     score_record_low_event,
+    score_record_streak,
     score_river_flood,
     score_sea_ice_record,
     score_severe_weather,
+    score_simultaneous_records,
     score_storm_surge,
 )
 from src.voice import generator
@@ -340,117 +345,274 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             status="failed", error=str(e)
         )
 
-    # 1. Heat records via Open-Meteo historical
-    print("[alerts] Checking heat records...")
-    records_start = time.perf_counter()
+    # 1. Extreme climate signals via Open-Meteo (unified fetch).
+    # One archive call per city yields: all-time, monthly, calendar-date, anomaly.
+    # Replaces separate records + record_lows sections.
+    print("[alerts] Checking extreme climate signals...")
+    signals_start = time.perf_counter()
+    signal_counts = {"all_time": 0, "monthly": 0, "anomaly": 0, "calendar": 0, "streak": 0}
+    simultaneous_record_cities: list[tuple[str, str]] = []  # (city, country) tuples
     try:
-        records = open_meteo.check_records_for_cities(cities)
+        bundles = open_meteo.check_extreme_signals_for_cities(cities)
         source_promoted = 0
         source_drafted = 0
-        for record in records:
-            if state.is_duplicate(bot_state, record.event_id):
-                continue
-            score = score_record_event(record.new_temp_c, record.old_record_c, record.old_record_year)
-            if not _should_draft(score, record.event_id):
-                continue
-            source_promoted += 1
-            generated = generator.generate_record_tweet(
-                city=record.city,
-                country=record.country,
-                new_temp_c=record.new_temp_c,
-                old_record_c=record.old_record_c,
-                old_record_year=record.old_record_year,
-                return_bundle=True,
-            )
-            review_context = _review_context(
-                source="Open-Meteo forecast + archive",
-                source_key="open_meteo_records",
-                headline=f"{record.city} is forecast to challenge a heat record",
-                current_run=current_run,
-                facts=[
-                    _fact("Forecast high", _temp_pair_c(record.new_temp_c)),
-                    _fact("Previous record", _temp_pair_c(record.old_record_c)),
-                    _fact("Old record year", record.old_record_year),
-                    _fact("Record gap", f"+{record.new_temp_c - record.old_record_c:.1f}C"),
-                    _fact("Country", record.country),
-                ],
-            )
-            if _save_generated_draft(generated, bot_state, "record", record.event_id, score, review_context=review_context):
-                state.record_event(bot_state, record.event_id)
-                drafted += 1
-                source_drafted += 1
+        for bundle in bundles:
+            # Process signals in descending order of priority:
+            # all-time > monthly > anomaly > calendar-date.
+            # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            # Queue US records for later NOAA confirmation
-            if record.country == "US":
-                state.add_pending_confirmation(bot_state, {
-                    "event_id": record.event_id,
-                    "detected": date.today().isoformat(),
-                    "source": "open-meteo",
-                    "city": record.city,
-                    "state_code": noaa_acis.get_state_code(record.city),
-                    "country": record.country,
-                })
+            strongest_signal = None
+            strongest_score = None
+            strongest_event_id = None
+            strongest_headline = ""
+            strongest_facts = []
+            strongest_type = ""
+            strongest_generator = None
+            strongest_country = ""
+            strongest_city = ""
+
+            if bundle.all_time_high:
+                ev = bundle.all_time_high
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_all_time_record(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev.years_of_data, kind="high",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "all_time_high"
+                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
+                        strongest_facts = [
+                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                            _fact("Prior archive max", _temp_pair_c(ev.old_record_c)),
+                            _fact("Prior max year", ev.old_record_year),
+                            _fact("Archive span", f"{ev.years_of_data} years"),
+                            _fact("Country", ev.country),
+                        ]
+                        def _gen_at(ev=ev):
+                            return generator.generate_all_time_record_tweet(
+                                city=ev.city, country=ev.country, kind="high",
+                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
+                                old_record_year=ev.old_record_year,
+                                years_of_data=ev.years_of_data,
+                                return_bundle=True,
+                            )
+                        strongest_generator = _gen_at
+                        signal_counts["all_time"] += 1
+
+            if strongest_signal is None and bundle.monthly_high:
+                ev = bundle.monthly_high
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_monthly_record(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev.month, ev.years_of_data, kind="high",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        month_name = ["", "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][ev.month]
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "monthly_high"
+                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_headline = f"{ev.city} on pace for hottest {month_name} on record"
+                        strongest_facts = [
+                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                            _fact(f"Prior {month_name} max", _temp_pair_c(ev.old_record_c)),
+                            _fact("Prior year", ev.old_record_year),
+                            _fact("Archive span", f"{ev.years_of_data} years"),
+                        ]
+                        def _gen_m(ev=ev):
+                            return generator.generate_monthly_record_tweet(
+                                city=ev.city, country=ev.country, kind="high",
+                                month=ev.month,
+                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
+                                old_record_year=ev.old_record_year,
+                                years_of_data=ev.years_of_data,
+                                return_bundle=True,
+                            )
+                        strongest_generator = _gen_m
+                        signal_counts["monthly"] += 1
+
+            if strongest_signal is None and bundle.anomaly_hot:
+                ev = bundle.anomaly_hot
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_anomaly(
+                        ev.today_temp_c, ev.historical_mean_c, ev.anomaly_c,
+                        kind="hot",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "anomaly_hot"
+                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_headline = f"{ev.city}: +{ev.anomaly_c:.1f}C above normal"
+                        strongest_facts = [
+                            _fact("Today", _temp_pair_c(ev.today_temp_c)),
+                            _fact("Historical mean", _temp_pair_c(ev.historical_mean_c)),
+                            _fact("Anomaly", f"+{ev.anomaly_c:.1f}C"),
+                        ]
+                        def _gen_a(ev=ev):
+                            return generator.generate_anomaly_tweet(
+                                city=ev.city, country=ev.country,
+                                today_temp_c=ev.today_temp_c,
+                                historical_mean_c=ev.historical_mean_c,
+                                anomaly_c=ev.anomaly_c,
+                                return_bundle=True,
+                            )
+                        strongest_generator = _gen_a
+                        signal_counts["anomaly"] += 1
+
+            if strongest_signal is None and bundle.calendar_date_high:
+                ev = bundle.calendar_date_high
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_record_event(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "record"
+                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_headline = f"{ev.city} is forecast to challenge a heat record"
+                        strongest_facts = [
+                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
+                            _fact("Previous record", _temp_pair_c(ev.old_record_c)),
+                            _fact("Old record year", ev.old_record_year),
+                            _fact("Record gap", f"+{ev.new_temp_c - ev.old_record_c:.1f}C"),
+                            _fact("Country", ev.country),
+                        ]
+                        def _gen_c(ev=ev):
+                            return generator.generate_record_tweet(
+                                city=ev.city, country=ev.country,
+                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
+                                old_record_year=ev.old_record_year,
+                                return_bundle=True,
+                            )
+                        strongest_generator = _gen_c
+                        signal_counts["calendar"] += 1
+                        # Track for simultaneous records detection
+                        simultaneous_record_cities.append((ev.city, ev.country))
+
+            if strongest_signal and strongest_generator:
+                source_promoted += 1
+                generated = strongest_generator()
+                review_context = _review_context(
+                    source="Open-Meteo forecast + archive",
+                    source_key="open_meteo_extreme_signals",
+                    headline=strongest_headline,
+                    current_run=current_run,
+                    facts=strongest_facts,
+                )
+                if _save_generated_draft(
+                    generated, bot_state, strongest_type,
+                    strongest_event_id, strongest_score,
+                    review_context=review_context,
+                ):
+                    state.record_event(bot_state, strongest_event_id)
+                    drafted += 1
+                    source_drafted += 1
+
+                    # Streak tracking — update on any calendar-date high record
+                    if strongest_type == "record" and bundle.calendar_date_high:
+                        ev_cd = bundle.calendar_date_high
+                        state.update_record_streak(bot_state, ev_cd.city, ev_cd.new_temp_c)
+                        streak = state.get_record_streak(bot_state, ev_cd.city)
+                        if streak and streak.get("days", 0) >= 3:
+                            streak_event_id = f"streak_{ev_cd.city.replace(' ', '_')}_{streak['last_date']}"
+                            if not state.is_duplicate(bot_state, streak_event_id):
+                                streak_score = score_record_streak(
+                                    streak["days"], streak.get("peak_temp_c", ev_cd.new_temp_c),
+                                )
+                                if _should_draft(streak_score, streak_event_id):
+                                    streak_gen = generator.generate_record_streak_tweet(
+                                        city=ev_cd.city, country=ev_cd.country,
+                                        consecutive_days=streak["days"],
+                                        peak_temp_c=streak.get("peak_temp_c", ev_cd.new_temp_c),
+                                        return_bundle=True,
+                                    )
+                                    streak_ctx = _review_context(
+                                        source="state.record_streaks",
+                                        source_key="record_streak",
+                                        headline=f"{ev_cd.city}: {streak['days']} consecutive daily records",
+                                        current_run=current_run,
+                                        facts=[
+                                            _fact("Consecutive days", streak["days"]),
+                                            _fact("Streak start", streak["start_date"]),
+                                            _fact("Peak temp", _temp_pair_c(streak.get("peak_temp_c", ev_cd.new_temp_c))),
+                                        ],
+                                    )
+                                    if _save_generated_draft(
+                                        streak_gen, bot_state, "record_streak",
+                                        streak_event_id, streak_score, review_context=streak_ctx,
+                                    ):
+                                        state.record_event(bot_state, streak_event_id)
+                                        drafted += 1
+                                        signal_counts["streak"] += 1
+
+                    # Queue US records for NOAA confirmation
+                    if strongest_country == "US" and bundle.calendar_date_high:
+                        cd = bundle.calendar_date_high
+                        state.add_pending_confirmation(bot_state, {
+                            "event_id": cd.event_id,
+                            "detected": date.today().isoformat(),
+                            "source": "open-meteo",
+                            "city": cd.city,
+                            "state_code": noaa_acis.get_state_code(cd.city),
+                            "country": cd.country,
+                        })
+
+        # Simultaneous records detection — fire one summary signal if many cities broke records
+        if len(simultaneous_record_cities) >= 5:
+            today_iso = date.today().isoformat()
+            sim_event_id = f"simultaneous_records_{today_iso}"
+            if not state.is_duplicate(bot_state, sim_event_id):
+                city_names = [c for c, _ in simultaneous_record_cities]
+                countries_list = [co for _, co in simultaneous_record_cities]
+                sim_score = score_simultaneous_records(len(city_names), city_names)
+                if _should_draft(sim_score, sim_event_id):
+                    sim_gen = generator.generate_simultaneous_records_tweet(
+                        city_names=city_names,
+                        countries=countries_list,
+                        return_bundle=True,
+                    )
+                    sim_ctx = _review_context(
+                        source="open_meteo_extreme_signals",
+                        source_key="simultaneous_records",
+                        headline=f"{len(city_names)} cities broke records on same day",
+                        current_run=current_run,
+                        facts=[
+                            _fact("City count", len(city_names)),
+                            _fact("Sample cities", ", ".join(city_names[:5])),
+                        ],
+                    )
+                    if _save_generated_draft(
+                        sim_gen, bot_state, "simultaneous_records",
+                        sim_event_id, sim_score, review_context=sim_ctx,
+                    ):
+                        state.record_event(bot_state, sim_event_id)
+                        drafted += 1
+
+        # Prune stale streaks at cycle end
+        state.prune_stale_record_streaks(bot_state)
+
+        total_observed = sum(signal_counts.values())
         _record_source_run(
-            current_run, "open_meteo_records", records_start,
-            status="success", observed=len(records), promoted=source_promoted, drafted=source_drafted
+            current_run, "open_meteo_extreme_signals", signals_start,
+            status="success", observed=total_observed,
+            promoted=source_promoted, drafted=source_drafted,
+            note=f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']}",
         )
     except Exception as e:
-        print(f"[alerts] Heat records error: {e}")
-        state.log_error(bot_state, "open_meteo_records", str(e))
+        print(f"[alerts] Extreme signals error: {e}")
+        state.log_error(bot_state, "open_meteo_extreme_signals", str(e))
         _record_source_run(
-            current_run, "open_meteo_records", records_start,
-            status="failed", error=str(e)
-        )
-
-    # 1a. Record lows via Open-Meteo historical
-    print("[alerts] Checking record lows...")
-    record_lows_start = time.perf_counter()
-    try:
-        record_lows = open_meteo.check_record_lows_for_cities(cities)
-        source_promoted = 0
-        source_drafted = 0
-        for record in record_lows:
-            if state.is_duplicate(bot_state, record.event_id):
-                continue
-            score = score_record_low_event(record.new_temp_c, record.old_record_c, record.old_record_year)
-            if not _should_draft(score, record.event_id):
-                continue
-            source_promoted += 1
-            generated = generator.generate_record_low_tweet(
-                city=record.city,
-                country=record.country,
-                new_temp_c=record.new_temp_c,
-                old_record_c=record.old_record_c,
-                old_record_year=record.old_record_year,
-                return_bundle=True,
-            )
-            review_context = _review_context(
-                source="Open-Meteo forecast + archive",
-                source_key="open_meteo_record_lows",
-                headline=f"{record.city} is forecast to challenge a cold record",
-                current_run=current_run,
-                facts=[
-                    _fact("Forecast low", _temp_pair_c(record.new_temp_c)),
-                    _fact("Previous low", _temp_pair_c(record.old_record_c)),
-                    _fact("Old record year", record.old_record_year),
-                    _fact("Record gap", f"-{record.old_record_c - record.new_temp_c:.1f}C"),
-                    _fact("Country", record.country),
-                ],
-            )
-            if _save_generated_draft(generated, bot_state, "record_low", record.event_id, score, review_context=review_context):
-                state.record_event(bot_state, record.event_id)
-                drafted += 1
-                source_drafted += 1
-        _record_source_run(
-            current_run, "open_meteo_record_lows", record_lows_start,
-            status="success", observed=len(record_lows), promoted=source_promoted, drafted=source_drafted
-        )
-    except Exception as e:
-        print(f"[alerts] Record lows error: {e}")
-        state.log_error(bot_state, "open_meteo_record_lows", str(e))
-        _record_source_run(
-            current_run, "open_meteo_record_lows", record_lows_start,
-            status="failed", error=str(e)
+            current_run, "open_meteo_extreme_signals", signals_start,
+            status="failed", error=str(e),
         )
 
     # 1b. NOAA record confirmations
