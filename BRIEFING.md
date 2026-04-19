@@ -1,19 +1,25 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 9, 2026
-**Status:** Live on GitHub Actions. Drafts generating. Gist auth working. 200 tests green.
-**Latest commit:** `7994d4b` on `main`
-**Cost:** $0/month (all free tiers)
+**Last updated:** April 18, 2026
+**Status:** Live on GitHub Actions. Extreme signals detection shipped. Producing genuinely-better drafts (monthly records + era anchors + honest framing).
+**Latest commit:** `77ae1f0` on `main`
+**Tests:** 310 passing
+**Cost:** ~$60–90/month (Anthropic API for Sonnet evaluator). Everything else free tier.
 
 ---
 
 ## What is this?
 
-@theheat is an automated climate data bot for X (Twitter). It monitors 13 free public data sources for extreme weather events — record temperatures, wildfires, floods, storm surge, CO2 milestones, sea ice loss, drought, ocean waves, ENSO shifts, and severe weather alerts — then generates tweets with personality and queues them for human review.
+@theheat is an automated climate data bot for X (Twitter). It monitors free public data sources for extreme climate signals — all-time heat records, monthly records, temperature anomalies, record-breaking streaks, simultaneous events across cities, wildfires, floods, storm surge, CO2 milestones, sea ice loss, drought, ocean waves, ENSO shifts, severe weather — then generates tweets and queues them for review.
 
-The differentiator is not the data (it's all public). It's the voice: a cynical weatherman who's seen too much. Dry wit, deadpan context, zero preaching. The data is already extraordinary; the bot just frames it so people feel the weight of the numbers.
+**Core principle (session-hardened):** It's a utility that surfaces astounding climate facts. Not a growth startup. Astounding data → clean presentation. The DATA is the product. If the facts are lame, no voice trick, visual, or meme template saves it.
 
-**Target audience:** Data people. The FlightRadar24 crowd. Weather nerds. People who want to be informed but unfollow anyone who lectures them.
+**What the account is NOT:**
+- Not a "cynical weatherman" voice account (this framing was killed in April 2026 — it was too mannered)
+- Not a breakout-viral content machine (research confirms breakout climate viral requires human timing/register-break)
+- Not a competitor to @extremetemps (it's a utility, not a business)
+
+**Target audience:** Data people. Weather nerds. Climate-aware people who want the signal without the preaching.
 
 ---
 
@@ -22,39 +28,72 @@ The differentiator is not the data (it's all public). It's the voice: a cynical 
 ```
 CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │
-├── Fetch from 13 free data sources
-│   ├── Open-Meteo ──────── record highs, record lows, city temps
+├── Fetch from data sources
+│   ├── Open-Meteo ──────── city temps + archive (257 cities, all records)
 │   ├── NOAA ACIS ────────── US record confirmations (24-72h delayed)
 │   ├── NASA FIRMS ────────── satellite wildfire detections
 │   ├── NOAA GML ──────────── Mauna Loa CO2 (daily PPM)
-│   ├── NWS Alerts ────────── US severe weather (tornado, flood, winter)
-│   ├── GDACS ──────────────── global disasters (cyclones, quakes, floods)
-│   ├── NSIDC ──────────────── Arctic/Antarctic sea ice extent
-│   ├── US Drought Monitor ── state-level drought severity
-│   ├── NOAA CPC ──────────── ENSO (El Nino / La Nina) status
-│   ├── Open-Meteo Marine ── ocean wave heights (16 points)
-│   ├── NOAA CO-OPS ────────── coastal tide gauge anomalies (12 stations)
+│   ├── NWS Alerts ────────── Emergency-tier severe weather (Tornado Emergency,
+│   │                          Flash Flood Emergency, Hurricane, Storm Surge,
+│   │                          Extreme Wind). Routine warnings filtered out.
+│   ├── GDACS ──────────────── Red-tier global disasters only
+│   ├── NSIDC ──────────────── Arctic/Antarctic sea ice (Mondays)
+│   ├── US Drought Monitor ── state drought (Fridays)
+│   ├── NOAA CPC ──────────── ENSO transitions (1st of month)
+│   ├── Open-Meteo Marine ── ocean wave heights (16 points, location-aware thresholds)
+│   ├── NOAA CO-OPS ────────── coastal tide gauge storm surge (12 stations)
 │   └── USGS Water ────────── river flood stages (12 gauges)
 │
-├── Score events (editorial scoring: severity, novelty, timeliness, confidence, shareability, sensitivity)
+├── Detect extreme signals per city (NEW: unified bundle)
+│   ├── All-time records (hottest/coldest in ~30yr archive) — elite
+│   ├── Monthly records (hottest April ever, etc.) — strong
+│   ├── Anomaly records (15°C+ above/below monthly mean) — strong
+│   ├── Calendar-date records (legacy) — strong if big margin/old record
+│   ├── Record streaks (3+ consecutive daily records per city)
+│   └── Simultaneous events (5+ cities same day → one summary signal)
+│   Picks strongest signal per city; one tweet per bundle max.
+│
+├── Score events (editorial scoring — 19 scoring functions, thresholds 62-80)
 │
 ├── Deduplicate against state (last 500 event IDs)
 │
-├── Generate tweets via Gemini 2.5 Flash (4 candidates ranked per event)
-│   ├── System prompt enforces voice rules + structure variety
-│   ├── Safety pipeline: 38 regex patterns + LLM semantic check
-│   └── Fallback: template-based tweets if Gemini fails
+├── Generate tweet candidates (Gemini 2.5 Flash, 4 per event)
 │
-├── Assign approval policy (armed_auto / suggested_auto / manual_only)
+├── Safety pipeline (40+ regex + LLM check)
+│   ├── Press-release opener ban (NWS/NOAA/GDACS...)
+│   ├── Weather-service boilerplate ban (HURRICANE-FORCE, catastrophic,
+│   │   life-threatening, EXTREME force, dangerous conditions)
+│   ├── Tell-don't-show ban (THIS IS SERIOUS, pay attention, you should
+│   │   be worried, this is rare)
+│   ├── Label:value ban (Severity: Severe, Alert level: Red)
+│   ├── Explainer ban (highest severity level GDACS issues)
+│   ├── Tier explainer ban (the highest alert tier)
+│   ├── Month-repetition check (catches "April 10. It's April.")
+│   ├── Truncated temp check (rejects "1F forecast" bugs)
+│   ├── Bureaucratic suffix ban (-26, -2026)
+│   └── LLM harm check (Gemini)
+│
+├── Heuristic ranking (clarity/context/voice/punch)
+│
+├── Virality evaluator — Claude Sonnet 4.6
+│   ├── Scores 5 dimensions: awe, comparison, social currency, opener, show-not-tell
+│   ├── Passes if 7+ on 4 of 5
+│   ├── Fails → provides rewrite
+│   ├── Rewrite runs through safety + score-regression check
+│   └── Evaluator FAIL with no usable rewrite = kills the draft entirely
+│
+├── Per-cycle cap (max 3 drafts, top by signal score)
 │
 ├── Save drafts to GitHub Gist (state.json)
 │
 ├── AUTO-APPROVAL QUEUE (hourly cron)
 │   ├── Low-sensitivity + high-scoring drafts auto-post after timed delay
-│   └── Safety pipeline re-runs before every auto-post
+│   └── Safety pipeline re-runs before every auto-post (double-gate)
 │
-└── DASHBOARD (Next.js 15 on Vercel) ── human reviews remaining drafts
-    └── Posts to X via Tweepy + cross-posts to Bluesky
+└── DASHBOARD (Next.js 15 on Vercel, auth-protected)
+    ├── Human reviews pending drafts
+    ├── Posts to X via Tweepy + cross-posts to Bluesky
+    └── Bulk-reject below threshold API (for cleaning backlogs)
 ```
 
 ---
@@ -63,119 +102,114 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 
 ```
 theheat/
-├── src/                              ~5,575 lines Python
-│   ├── main.py                       Orchestrator (1,386 lines)
-│   ├── state.py                      GitHub Gist state management
-│   ├── data/                         12 data source modules
-│   │   ├── open_meteo.py             Temperature records + leaderboard + anomalies
+├── src/                              ~7,179 lines Python
+│   ├── main.py                       Orchestrator (1,610 lines)
+│   ├── state.py                      GitHub Gist state + record-streak helpers (540 lines)
+│   ├── data/                         Data source modules
+│   │   ├── open_meteo.py             Unified extreme signal detection (673 lines)
 │   │   ├── firms.py                  NASA FIRMS wildfires
-│   │   ├── co2.py                    Mauna Loa CO2 daily + weekly comparison
-│   │   ├── noaa_acis.py              NOAA record confirmation (US, 24-72h delayed)
-│   │   ├── nws_alerts.py             NWS severe weather alerts
-│   │   ├── gdacs.py                  Global disasters (cyclones, quakes, floods)
-│   │   ├── sea_ice.py                Arctic/Antarctic ice extent vs records
-│   │   ├── drought.py                US Drought Monitor state-level
-│   │   ├── enso.py                   El Nino / La Nina transitions
-│   │   ├── ocean.py                  Extreme ocean waves (16 monitoring points)
-│   │   ├── water_levels.py           NOAA CO-OPS tide gauge storm surge
+│   │   ├── co2.py                    Mauna Loa CO2
+│   │   ├── noaa_acis.py              NOAA record confirmations (US)
+│   │   ├── nws_alerts.py             NWS — emergency-tier only (5 event types)
+│   │   ├── gdacs.py                  GDACS — Red-tier only, intensity-tier dedup
+│   │   ├── sea_ice.py                Arctic/Antarctic sea ice
+│   │   ├── drought.py                US Drought Monitor
+│   │   ├── enso.py                   ENSO transitions
+│   │   ├── ocean.py                  Extreme waves (location-aware thresholds)
+│   │   ├── water_levels.py           NOAA CO-OPS storm surge
 │   │   └── river_gauges.py           USGS river flood stages
-│   ├── editorial/                    Scoring + ranking + approval policies
-│   │   ├── scoring.py                14 hand-tuned scoring functions (signal score)
-│   │   ├── candidates.py             Multi-candidate ranking (copy score)
-│   │   ├── approval.py               3-tier approval policy engine
+│   ├── editorial/
+│   │   ├── scoring.py                19 signal-scoring functions (593 lines)
+│   │   ├── candidates.py             Heuristic ranking (clarity/context/voice/punch)
+│   │   ├── approval.py               3-tier approval policy
+│   │   ├── evaluator.py              Claude Sonnet 4.6 virality evaluator (298 lines)
 │   │   └── _util.py                  Shared clamp utility
 │   ├── voice/
-│   │   ├── generator.py              Gemini Flash + 14 generator functions + 4-candidate ranking
+│   │   ├── generator.py              Gemini Flash generation + 19 generator fns (880 lines)
 │   │   ├── templates.py              Fallback templates (no AI needed)
-│   │   └── safety.py                 Two-layer safety pipeline (38 regex + LLM)
+│   │   └── safety.py                 Two-layer safety pipeline (179 lines)
 │   ├── posting/
-│   │   ├── twitter.py                X API via Tweepy (rate-limit aware)
+│   │   ├── twitter.py                Tweepy (rate-limit aware)
 │   │   └── bluesky.py                AT Protocol cross-posting
 │   └── storage/
-│       └── sqlite_store.py           SQLite backend (exists but unused — ephemeral CI)
+│       └── sqlite_store.py           SQLite backend (exists but unused in prod)
 │
-├── tests/                            20 test files, 200 tests
-│   ├── test_main.py                  Orchestrator: alerts, leaderboard, manual post, auto-approval, save_draft
-│   ├── test_posting.py               Twitter posting, rate limit handling
-│   ├── test_safety.py                Regex patterns + LLM safety fallback
-│   ├── test_open_meteo.py            Record detection, anomaly calculation
-│   ├── test_co2.py                   CO2 milestone + weekly comparison
-│   ├── test_firms.py                 Fire detection parsing
-│   ├── test_nws_alerts.py            Severe weather alert parsing
-│   ├── test_gdacs.py                 Global disaster detection
-│   ├── test_sea_ice.py               Sea ice record detection
-│   ├── test_drought.py               Drought severity parsing
-│   ├── test_enso.py                  ENSO transition detection
-│   ├── test_ocean.py                 Wave height detection
-│   ├── test_water_levels.py          Storm surge detection
-│   └── test_river_gauges.py          River flood stage detection
+├── tests/                            22 test files, 310 tests
 │
-├── dashboard/                        Next.js 15 + React 19 (Vercel free tier)
+├── dashboard/                        Next.js 15 + React 19 on Vercel
 │   └── app/
-│       ├── page.js                   Full control panel UI
-│       ├── layout.js                 Dark terminal theme
+│       ├── page.js                   Control panel UI (dark terminal theme)
+│       ├── layout.js                 
 │       └── api/
 │           ├── state/route.js        Read Gist state
-│           ├── drafts/route.js       Draft management
-│           ├── generate/route.js     Trigger GitHub Actions workflow_dispatch
-│           ├── post/route.js         Post approved tweet via workflow_dispatch
+│           ├── drafts/route.js       Draft management + bulk-reject-below
+│           ├── generate/route.js     Trigger GitHub Actions
+│           ├── post/route.js         Post approved tweet
 │           └── trigger/route.js      Trigger specific run modes
 │
-├── data/
-│   ├── cities.csv                    257 cities with lat/lon
-│   └── normals.csv                   Climatological normals by city/month
-│
 ├── brand/
-│   └── MESSAGING_ARCHITECTURE.md     Positioning, voice spec, messaging framework
+│   ├── VOICE.md                      Voice spec (moved from root in April 2026)
+│   ├── MESSAGING_ARCHITECTURE.md     Positioning
+│   ├── VIRALITY_RESEARCH.md          Research reference (Part 1 content-first, Part 2 platform mechanics)
+│   ├── EXEMPLARS.md                  Verified viral climate tweets with real engagement data
+│   └── VOICE_PATTERNS.md             Voice pattern reference (labeled honestly: not proven-viral)
 │
-├── .github/workflows/bot.yml        CI (pytest gates deployment) + cron automation
-├── DESIGN.md                         Architecture decisions
-├── VOICE.md                          Brand voice spec
-├── BUILD_BRIEF.md                    Product scope
-└── requirements.txt                  7 deps (tweepy, atproto, google-genai, requests, pytest, pytest-mock, responses)
+├── data/
+│   ├── cities.csv                    257 cities
+│   └── normals.csv                   Climatological normals
+│
+├── BRIEFING.md                       This file — session entry point
+├── PIPELINE.md                       Manufacturing-style flow diagram
+├── docs/
+│   ├── DESIGN.md                     Architecture decisions
+│   ├── BUILD_BRIEF.md                Product scope
+│   ├── FUTURE_STATE.md               Aspirational future
+│   ├── SESSION_BRIEF.md              Latest session context (see for current thinking)
+│   └── mockups/                      Dashboard mockups (HTML)
+└── requirements.txt                  tweepy, atproto, google-genai, anthropic, requests, pytest, pytest-mock, responses
 ```
 
 ---
 
-## Data Flow: Alert Cycle
+## Data Flow: Alert Cycle (updated)
 
 Every 4 hours, GitHub Actions runs `python -m src.main alerts`:
 
-1. **Read state** from GitHub Gist (event IDs, drafts, daily counts, errors, run history)
-2. **Fetch data** from all 13 sources (each wrapped in try/catch — failures don't block others)
-3. **Score events** — editorial scoring evaluates severity, novelty, timeliness, confidence, shareability, and sensitivity. Events below threshold are suppressed.
-4. **Deduplicate** — skip any event already in `posted_events` (last 500)
-5. **Generate 4 candidates** — call the source-specific generator which sends structured data + system prompt to Gemini 2.5 Flash, then rank by copy score
-6. **Safety check** — regex gate (38 patterns: emojis, hashtags, exclamation marks, policy language, killed phrases), then LLM check ("does this mock human suffering?")
-7. **Assign approval policy** — `armed_auto` (will auto-post after delay), `suggested_auto` (suggests auto but requires human), or `manual_only` (human required)
-8. **Save draft** — append to `state.drafts[]` with status "pending", editorial metadata, and auto-approve timestamp if armed_auto
-9. **Write state** back to Gist (with retry on failure)
-10. **Record run telemetry** — per-source timing, observed/promoted/drafted counts, errors
+1. **Read state** from GitHub Gist
+2. **Fetch data** from all sources (each wrapped in try/catch)
+3. **Detect extreme signals per city** (NEW unified handler):
+   - One archive fetch per city (257 priority-ordered) yields ALL signal types
+   - Bundle includes: all_time_high/low, monthly_high/low, anomaly_hot/cold, calendar_date_high/low
+   - Handler picks strongest signal per city (all-time > monthly > anomaly > calendar-date)
+4. **Score events** — editorial scoring with per-category thresholds (62-80). Elite events pass.
+5. **Deduplicate** against posted_events (last 500)
+6. **Generate 4 candidates** via Gemini 2.5 Flash, ranked by copy score
+7. **Safety check** — regex gate (40+ patterns), then LLM ("mocks suffering?")
+8. **Virality evaluator** — Sonnet scores 5 dimensions, rewrites on fail. Rewrite must pass safety AND score higher than original on heuristic. Otherwise draft dies.
+9. **Streak tracking** — if a city broke a daily record, update `record_streaks`. If 3+ consecutive days, emit a streak signal as a bonus draft.
+10. **Simultaneous detection** — if 5+ cities broke records today, emit ONE summary signal
+11. **Per-cycle cap** — max 3 drafts, keep top by signal score, reject the rest
+12. **Assign approval policy** (armed_auto / suggested_auto / manual_only)
+13. **Save drafts** to Gist with full metadata
 
 ## Data Flow: Auto-Approval (hourly)
 
-Every hour, GitHub Actions runs `python -m src.main auto_publish_due`:
-
-1. Scan drafts for `auto_approve_at` timestamps that have elapsed
-2. Verify `armed_auto` mode — block if policy isn't actually armed
-3. Re-run safety pipeline — catch anything the initial check missed
-4. Post to X via Tweepy, cross-post to Bluesky
-5. On rate-limit (429): keep draft pending for retry next hour
+Every hour, `python -m src.main auto_publish_due`:
+1. Scan for drafts with elapsed `auto_approve_at`
+2. Verify `armed_auto` mode — block if policy not armed
+3. **Re-run safety pipeline** (double-gate)
+4. Post to X (Tweepy) + cross-post to Bluesky
+5. On rate-limit (429): keep draft pending for retry
 
 ## Data Flow: Manual Posting
-
-Human opens dashboard -> sees pending drafts -> approves -> dashboard triggers `workflow_dispatch` with `mode=manual_tweet`, `DRAFT_ID`, and `PUBLISH_INTENT_ID` -> GitHub Actions posts via Tweepy -> draft marked as "posted" -> cross-posts to Bluesky.
+Dashboard → approve → workflow_dispatch with DRAFT_ID → Actions posts via Tweepy → marked "posted" → Bluesky cross-post.
 
 ## Data Flow: Leaderboard
-
 Daily at 12:00 UTC, `python -m src.main both`:
-
-1. Fetch temps for 257 cities from Open-Meteo
-2. Compute anomalies vs historical normals (climatological averages by city/month)
-3. Rank top 10 by anomaly (how far above normal)
-4. Track position changes from yesterday, update streaks
-5. Generate Hot 10 tweet via Gemini (with template fallback)
-6. Save as draft with hot10 editorial score
+1. Fetch temps for 257 cities
+2. Compute anomalies vs climatological normals
+3. Rank top 10 by anomaly
+4. Generate Hot 10 tweet
 
 ---
 
@@ -183,107 +217,94 @@ Daily at 12:00 UTC, `python -m src.main both`:
 
 | UTC   | Cron             | Mode              | What runs                                  |
 |-------|------------------|-------------------|--------------------------------------------|
-| :30   | `30 * * * *`     | auto_publish_due  | Process auto-approval queue (hourly)       |
-| 00:00 | `0 0 * * *`      | alerts            | All 13 sources                             |
-| 04:00 | `0 4 * * *`      | alerts            | All 13 sources                             |
-| 08:00 | `0 8 * * *`      | alerts            | All 13 sources                             |
-| 12:00 | `0 12 * * *`     | both              | Leaderboard + all 13 sources               |
-| 16:00 | `0 16 * * *`     | alerts            | All 13 sources                             |
-| 20:00 | `0 20 * * *`     | alerts            | All 13 sources                             |
+| :30   | `30 * * * *`     | auto_publish_due  | Hourly auto-approval queue                 |
+| 00:00 | `0 0 * * *`      | alerts            | All sources                                |
+| 04:00 | `0 4 * * *`      | alerts            | All sources                                |
+| 08:00 | `0 8 * * *`      | alerts            | All sources                                |
+| 12:00 | `0 12 * * *`     | both              | Leaderboard + all sources                  |
+| 16:00 | `0 16 * * *`     | alerts            | All sources                                |
+| 20:00 | `0 20 * * *`     | alerts            | All sources                                |
 
-**Source-specific gates:**
-- Sea ice: Mondays only
-- Drought: Fridays only
-- ENSO: 1st of month only
-- CO2 milestone: Max once per day
-- CO2 weekly comparison: Sundays only
+Source-specific gates: sea ice (Mondays), drought (Fridays), ENSO (1st of month), CO2 milestones (max 1/day), CO2 weekly (Sundays).
 
 ---
 
 ## Editorial System
 
-### Signal Scoring (`src/editorial/scoring.py`)
+### Signal Scoring (`src/editorial/scoring.py`) — 19 scoring functions
 
-Every event gets a signal score (0-100) based on weighted factors:
-- **Severity** (28%) — how extreme is the reading
-- **Novelty** (24%) — how rare / record-breaking
-- **Timeliness** (16%) — how fresh
-- **Confidence** (16%) — data source reliability
-- **Shareability** (16%) — viral potential
-- **Sensitivity** (-20% penalty) — human-harm risk
+Signal types and thresholds:
+- **all_time_record** — threshold 80 (elite by default)
+- **monthly_record** — 76
+- **anomaly** — 76
+- **record_streak** — 74 (fires at 3+ days)
+- **simultaneous_records** — 78
+- **record_confirmation** (NOAA) — 58
+- **record** (calendar-date) — 72
+- **record_low** — 72
+- **fire** — 64
+- **co2_milestone** — 58
+- **co2_weekly** — 62
+- **severe_weather** — 58
+- **global_disaster** — 62
+- **sea_ice_record** — 60
+- **drought** — 62
+- **enso** — 56
+- **extreme_wave** — 62
+- **storm_surge** — 60
+- **river_flood** — 62
+- **hot10** — 56
 
-Labels: `elite` (85+), `strong` (72+), `borderline` (60+), `weak` (<60).
-Events below threshold are suppressed before generation.
+### Copy Ranking (`candidates.py`)
+Gemini produces 4 candidates. Each scored on clarity/context/voice/punch. Best selected.
 
-14 scoring functions cover every event type: records, fires, CO2, severe weather, disasters, sea ice, drought, ENSO, waves, storm surge, river floods, NOAA confirmations, Hot 10.
+### Virality Evaluator (`evaluator.py`) — Claude Sonnet 4.6
+5 dimensions: awe, concrete comparison, social currency, scroll-stopping opener, show-not-tell.
+Passes if 7+ on 4 of 5. Fails → rewrite provided. Rewrite must pass safety AND beat original heuristic score. If no viable rewrite → draft dies.
 
-### Copy Scoring (`src/editorial/candidates.py`)
-
-Gemini generates 4 candidate tweets per event. Each is scored on:
-- Data density (numbers, units, years)
-- Voice compliance (caps usage, structure patterns)
-- Category-specific keyword presence
-- Length optimization
-
-Best candidate is selected automatically.
-
-### Approval Policies (`src/editorial/approval.py`)
-
-Three tiers based on event type + score quality:
-
-| Mode | Behavior | Used for |
-|------|----------|----------|
-| `armed_auto` | Auto-posts after timed delay (20-90 min) | Hot 10, CO2, NOAA confirmations — only if both signal and copy scores are strong |
-| `suggested_auto` | Suggests auto-post but won't actually do it | Records, sea ice, ENSO, extreme waves |
-| `manual_only` | Requires human approval | Fires, severe weather, disasters, storm surge, river floods, drought |
-
----
-
-## Voice
-
-**Character:** A cynical weatherman who's seen too much.
-**Tone:** 70% dry observation, 20% dark humor, 10% genuine awe.
-
-Example tweets (from the system prompt — each uses a different structure):
-
-> Phoenix just dropped 121F. NEW RECORD. The old one was from last year.
-
-> Buenos Aires hit 42.1C. That broke a 97-year record set in 1929.
-
-> 36-foot waves in Drake Passage today. 11 meters. That's a three-story building made of ocean.
-
-> CO2 this week at Mauna Loa: 436.2 ppm. Same week last year: 433.8. We added 2.4 ppm in a year. That used to take a decade.
-
-> Mississippi at Baton Rouge: 42.3ft. Flood stage is 35ft. The river doesn't care what month it is.
-
-> New wildfire in Northern California. Satellite confidence: HIGH. 0% contained. It's April.
-
-> Satellite picked up a 1,200 MW fire in Siberia. For reference, a large power plant is about 1,000 MW. Except it's a forest.
-
-**Voice rules enforced by safety pipeline:**
-- Under 280 chars, no exceptions
-- No emojis, hashtags, or exclamation marks
-- CAPS for emphasis, sparingly
-- Vary structure — the "Word. Word. Word." pattern is ONE tool, not the default (max once per 10 tweets)
-- Never preach, never political, never moralize
-- Never mock human suffering
-- No sports metaphors, gaming slang, or forced catchphrases
-- Personality comes from *framing*, not vocabulary
+### Approval Policies (`approval.py`)
+- **armed_auto** — Auto-posts after timed delay (Hot 10, CO2 milestones, NOAA confirmations)
+- **suggested_auto** — Dashboard suggests auto, requires human (records, ice, ENSO)
+- **manual_only** — Human required (fires, severe weather, disasters, storm surge, floods, drought)
 
 ---
 
-## Safety Pipeline
+## Voice Rules (current)
 
-**Layer 1 — Regex (deterministic, always runs):**
-- Length check (280 chars)
-- 38 banned patterns: emoji Unicode ranges, `#hashtags`, `BREAKING:`, `!`, policy language ("we need to", "governments must"), killed voice patterns ("career high", "cooked", "rekt", "nobody asked")
+**Prompt orientation:** astounding data + clean presentation. NOT "cynical weatherman" (killed in session). NOT "personified heat character" (rejected after Karl the Fog research). The bot reports, doesn't narrate.
+
+**Hard bans (safety pipeline):**
+- Emojis, hashtags, exclamation marks
+- Press-release openers (NWS, NOAA, GDACS, etc. at start of tweet)
+- Weather-service boilerplate (HURRICANE-FORCE, catastrophic, life-threatening, EXTREME force, dangerous conditions)
+- Tell-don't-show meta-commentary (THIS IS SERIOUS, this is rare, pay attention, you should be worried)
+- Label:value format (Severity: Severe, Alert level: Red)
+- Tier explainers (the highest alert tier)
+- Month repetition (same month twice in adjacent sentences)
+- Truncated temperatures (bugs like "1F forecast")
+- Bureaucratic suffixes (-26, -2026 in storm names)
+
+**Positive principles (from evaluator + virality research):**
+- First 5-7 words must surprise or pattern-break
+- Historical-human anchors beat physical metaphors ("last time Buenos Aires was this hot, the Great Depression hadn't started")
+- Leave gaps for the reader to complete
+- Specific numbers beat round numbers
+- One idea per tweet
+
+**Framing honesty (key rule from session):**
+- Archive goes back ~30 years, not "all time"
+- All-time record tweets must say "hottest in 30 years of archive data" or "hottest since 1995" — NEVER "hottest ever"
+
+---
+
+## Safety Pipeline (40+ regex + LLM)
+
+**Layer 1 — Regex (deterministic):** 40+ patterns covering all the bans above, plus length check (280 chars), month-repetition structural check, and truncated-temperature check.
 
 **Layer 2 — LLM (Gemini Flash):**
-- Asks: "Does this tweet mock human suffering, trivialize death, or cross from dark humor into cruelty?"
-- If Gemini unavailable, tweet passes (regex already caught the mechanical stuff)
-- Failures logged: `[safety] LLM safety check failed, falling back to regex only: {e}`
+Asks: "Does this tweet mock human suffering, trivialize death, or cross from dark humor into cruelty?" Fails logged; tweet passes on LLM unavailability (regex already caught the mechanical stuff).
 
-**Fallback chain:** Gemini generation (4 candidates) -> 3 retries on safety rejection -> template-based fallback -> None (skip event)
+**Fallback chain:** Gemini generation (4 candidates) → 3 retries on safety rejection → template-based fallback → None (skip event).
 
 **Double-gate on auto-publish:** Safety pipeline runs at generation time AND again before every auto-post.
 
@@ -291,71 +312,43 @@ Example tweets (from the system prompt — each uses a different structure):
 
 ## State Management
 
-Single JSON file stored in a GitHub Gist, read/written via GitHub API each run.
+Single JSON file in GitHub Gist, read/written via GitHub API each run.
 
 ```json
 {
   "last_hot10":    { "date": "...", "cities": [...] },
   "streaks":       { "Miami": { "consecutive_days": 14, "last_seen": "..." } },
-  "posted_events": [ "record_PHX_20260407", "firms_fire_12345", ... ],
-  "daily_tweet_count": { "2026-04-09": 3 },
-  "pending_confirmations": [ { "event_id": "...", "detected": "...", "city": "..." } ],
-  "drafts": [
-    {
-      "id": "draft_20260409_120000_0",
-      "text": "Phoenix just dropped 121F...",
-      "type": "record",
-      "event_id": "record_PHX_20260409",
-      "status": "pending",
-      "score": { "total": 82, "category": "strong", ... },
-      "candidates": [ ... ],
-      "candidate_score": { "total": 78, ... },
-      "approval_policy": { "mode": "suggested_auto", "can_auto_approve": true, ... },
-      "review_context": { "source": "Open-Meteo", "headline": "...", "facts": [...] },
-      "auto_approve_at": "2026-04-09T12:20:00Z",
-      "created_at": "2026-04-09T12:00:00Z",
-      "updated_at": "2026-04-09T12:00:00Z"
-    }
-  ],
-  "run_history": [ { "id": "...", "mode": "alerts", "started_at": "...", "sources": [...] } ],
-  "errors": [ { "source": "...", "ts": "...", "msg": "..." } ]
+  "posted_events": [ "record_PHX_20260407", ... ],
+  "daily_tweet_count": { "2026-04-18": 3 },
+  "pending_confirmations": [ ... ],
+  "drafts": [ ... full draft records with score, candidates, approval_policy, review_context, evaluator_pass ... ],
+  "run_history": [ { "id": "...", "mode": "alerts", "sources": [...] } ],
+  "errors": [ ... ],
+  "city_all_time_max": { "Phoenix": {"temp_c": 48.2, "year": 2018} },
+  "city_all_time_min": { ... },
+  "city_monthly_max": { "Phoenix": { "4": {"temp_c": 44.0, "year": 2024} } },
+  "city_monthly_min": { ... },
+  "record_streaks":   { "Phoenix": { "days": 11, "start_date": "...", "last_date": "...", "peak_temp_c": 45.0 } }
 }
 ```
 
-**Caps:** 500 event IDs, 200 drafts (pruned oldest non-pending), 50 errors, 10 tweets/day.
-**State write:** Retries once on failure. Logs error if both writes fail.
+**Caps:** 500 event IDs, 200 drafts (pruned oldest non-pending), 50 errors, 10 tweets/day, 3 drafts/cycle.
 
 ---
 
 ## Dashboard
 
-Next.js 15 + React 19 app on Vercel free tier. Dark terminal aesthetic.
+Next.js 15 + React 19 on Vercel. Auth-protected. Dark terminal aesthetic.
 
-**Sections:**
+Sections:
 - **Drafts to Review** — pending tweets with approve/edit/delete, editorial scores, approval policy, review context
 - **Generate Drafts** — trigger alerts, leaderboard, or both via workflow_dispatch
 - **Compose Tweet** — manual composition with Gemini generation
-- **Stats** — tweets today (of 10 cap), last Hot 10 date
-- **Hot 10 Leaderboard** — last ranking with anomaly values
-- **Streaks** — consecutive days in Hot 10
-- **Recent Runs** — GitHub Actions history with status, timing, per-source results
-- **Recent Errors** — last 10 errors from state
+- **Stats, Hot 10, Streaks, Recent Runs, Recent Errors**
 
-**API routes:** All proxy through Vercel to the GitHub Gist API and GitHub Actions workflow_dispatch.
+API routes: bulk_reject_below (for threshold cleanups), approve, reject, edit, auto_approve, select_candidate.
 
----
-
-## Test Coverage
-
-200 tests across 20 files. Every data source module, the generator, safety pipeline, state management, editorial scoring, candidate ranking, approval policies, auto-publish flow, and main orchestrator have unit tests. Mocks use `responses` for HTTP and `pytest-mock` for dependency injection.
-
-CI runs `pytest` before every bot job (except hourly auto-approval cron) — broken tests block deployment.
-
-Key test areas:
-- `test_main.py` — orchestrator flows, draft saving with score/candidate/policy metadata, auto-approval safety gates, rate-limit retry, manual posting validation
-- `test_posting.py` — rate-limit sentinel detection, auth failure handling
-- `test_safety.py` — all 38 regex patterns, LLM fallback behavior
-- Data source tests — response parsing, edge cases, deduplication
+**URL:** https://dashboard-phi-beryl-65.vercel.app
 
 ---
 
@@ -365,13 +358,12 @@ Key test areas:
 tweepy>=4.14,<5       # X API posting
 atproto>=0.0.61       # Bluesky cross-posting
 google-genai>=1.0     # Gemini 2.5 Flash (generation + safety LLM)
-requests>=2.31        # HTTP for all data sources
-pytest>=8.0           # Tests
-pytest-mock>=3.12     # Mocking
-responses>=0.25       # HTTP response mocking
+anthropic>=0.42       # Claude Sonnet 4.6 (virality evaluator)
+requests>=2.31        # HTTP for data sources
+pytest>=8.0
+pytest-mock>=3.12
+responses>=0.25
 ```
-
-No heavyweight ML libraries. No databases in production. No servers beyond Vercel free tier.
 
 ---
 
@@ -379,36 +371,39 @@ No heavyweight ML libraries. No databases in production. No servers beyond Verce
 
 | Secret | Purpose |
 |--------|---------|
-| `TWITTER_API_KEY`, `TWITTER_API_SECRET` | X API app credentials |
-| `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET` | X API user credentials |
-| `GEMINI_API_KEY` | Google Gemini 2.5 Flash |
+| `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET` | X API |
+| `GEMINI_API_KEY` | Gemini 2.5 Flash |
+| `ANTHROPIC_API_KEY` | Claude Sonnet 4.6 evaluator |
 | `GIST_ID` | State storage (`06c02c97ffc0d11458687f1ed998d9e5`) |
-| `GH_GIST_TOKEN` | PAT with `gist` scope for Gist read/write |
+| `GH_GIST_TOKEN` | PAT with `gist` scope for state writes |
 | `NASA_FIRMS_API_KEY` | NASA fire satellite detection |
-| `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Bluesky cross-posting |
-
-**Note:** The default `GITHUB_TOKEN` in Actions only has read permissions. A separate PAT (`GH_GIST_TOKEN`) with `gist` scope is required for state writes.
+| `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Bluesky cross-post |
 
 ---
 
-## Known Issues & Next Steps
+## Known Issues & Growth Levers
 
 ### Issues
-1. **Sequential API calls** — Ocean monitoring hits 16 endpoints one at a time (up to 160s). City temps fetch 257 cities sequentially. Total alert cycle ~13 minutes. Not a blocker (Actions has 6-hour limit) but slow.
-2. **Dashboard behind** — Vercel deployment is from an older commit. Needs redeploy to pick up Codex's dashboard overhaul and latest changes.
-3. **SQLite store unused** — `src/storage/sqlite_store.py` exists (356 lines) but is dormant. Ephemeral GitHub Actions runners mean the DB is lost each run, and the write path never syncs back to Gist. Could be removed or repurposed for local dev.
+1. **Sequential API calls** — 257 cities checked sequentially. Alert cycle ~13 min. Not blocking.
+2. **Dashboard deployment** — may be behind latest main.
+3. **Archive span** — Open-Meteo only goes back ~30 years reliably. "All-time" framing must say "in 30 years of records."
+4. **SQLite store dormant** — exists but unused in prod. Ephemeral CI runners mean data is lost each run.
 
-### Biggest growth levers (not yet built)
-1. **Image generation** — Text-only tweets right now. @extremetemps (100K followers) posts maps and visual cards. Hot 10 cards, record cards, fire maps are the single biggest engagement unlock.
-2. **X profile** — Bio, banner, and icon need finalization for @theheat.
-3. **Thread support** — Multi-tweet threads for complex events (e.g. weekly CO2 + context).
+### Growth levers (deferred by session owner)
+1. **Visual cards** — research says images 28× engagement. User rejected: "not if the facts are lame." Revisit once fact quality is proven.
+2. **Country-level records** — requires national-level aggregation we don't have.
+3. **Ocean SST / marine heatwaves** — NOAA OISST integration.
+4. **Ice events** — GLIMS, GRACE integration.
+5. **Fire footprint (acreage)** — GWIS integration.
+6. **Cross-source story synthesis** — drought + fire + heat as one narrative.
+7. **RSS enrichment** — Carbon Brief, Climate Central feeds.
 
 ---
 
 ## Repo
 
 - **GitHub:** `github.com/andrewzp/theheat`
-- **Branch:** `main` (all code merged, latest: `7994d4b`)
+- **Branch:** `main` (latest: `77ae1f0`)
 - **Gist ID:** `06c02c97ffc0d11458687f1ed998d9e5`
-- **Dashboard:** Vercel (theheat dashboard project)
-- **X:** @theheat
+- **Dashboard:** https://dashboard-phi-beryl-65.vercel.app
+- **X:** @theheat (Premium tier — 4x/2x algo boost already active)

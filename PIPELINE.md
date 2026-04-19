@@ -33,13 +33,15 @@ flowchart TD
         USGS["USGS Water<br/>river floods"]:::source
     end
 
-    RAW --> DEDUP{"Deduplicate<br/>against last 500 events"}:::gate
+    RAW --> EXTRACT["Extreme Signals Extraction<br/>(per-city unified bundle)<br/>• all-time records<br/>• monthly records<br/>• anomaly (15°C+ above/below mean)<br/>• calendar-date records<br/>• record streaks (3+ consecutive days)<br/>• simultaneous events (5+ cities/day)<br/>Picks strongest signal per city"]:::gen
+
+    EXTRACT --> DEDUP{"Deduplicate<br/>against last 500 events"}:::gate
 
     DEDUP -->|new event| SCORE["Editorial Signal Scoring<br/>severity × 0.28<br/>novelty × 0.24<br/>timeliness × 0.16<br/>confidence × 0.16<br/>shareability × 0.16<br/>minus sensitivity × 0.20"]:::gen
 
     DEDUP -.->|seen| SKIP1[/"Skip — already drafted"/]:::kill
 
-    SCORE --> GATE1{"Signal score<br/>passes threshold?<br/>records: 72<br/>fires: 64<br/>disasters: 62<br/>etc"}:::gate
+    SCORE --> GATE1{"Signal score<br/>passes threshold?<br/>all-time: 80<br/>monthly: 76<br/>anomaly: 76<br/>streak: 74<br/>simultaneous: 78<br/>calendar-date: 72<br/>fires: 64<br/>disasters: 62"}:::gate
 
     GATE1 -.->|no| SKIP2[/"Suppress —<br/>not extraordinary enough"/]:::kill
 
@@ -47,7 +49,7 @@ flowchart TD
 
     CTX --> FLASH["Gemini 2.5 Flash<br/>Generate 4 candidates"]:::gen
 
-    FLASH --> SAFETY1{"Safety Pipeline<br/>38 regex patterns<br/>+ LLM harm check"}:::gate
+    FLASH --> SAFETY1{"Safety Pipeline<br/>40+ regex patterns<br/>+ LLM harm check"}:::gate
 
     SAFETY1 -.->|fails 3×| FBACK["Template fallback<br/>hand-written per type"]:::gen
 
