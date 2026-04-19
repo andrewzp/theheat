@@ -214,6 +214,7 @@ def _touch_draft(draft: dict) -> None:
 
 
 CITY_COOLDOWN_DAYS = 3
+ELITE_COPY_SCORE = 95
 
 
 def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
@@ -289,7 +290,8 @@ def save_draft(
     * **City cooldown.** If the city had a tweet posted within the last
       ``CITY_COOLDOWN_DAYS`` days, new drafts for that city are dropped
       unless ``cooldown_exempt=True`` (elite signals — all-time records,
-      extreme anomalies, streaks, NOAA confirmations).
+      extreme anomalies, streaks, NOAA confirmations) OR the copy itself
+      is exceptional (``candidate_score.total >= ELITE_COPY_SCORE``).
 
     These gates are scoped to city-based extreme-temperature signals; other
     event types (fires, disasters, CO2, sea ice, etc.) omit ``city`` and
@@ -325,9 +327,19 @@ def save_draft(
                 f"({other_total} → {new_total})"
             )
 
-    # City cooldown — skip if we posted about this city in the last N days
-    if city and not cooldown_exempt and _posted_city_within_days(
-        drafts, city, CITY_COOLDOWN_DAYS
+    # City cooldown — skip if we posted about this city in the last N days.
+    # Exceptional copy (candidate_score.total >= ELITE_COPY_SCORE) bypasses,
+    # even if the underlying signal wasn't flagged elite by the caller.
+    copy_is_elite = bool(
+        candidate_score
+        and isinstance(candidate_score, dict)
+        and candidate_score.get("total", 0) >= ELITE_COPY_SCORE
+    )
+    if (
+        city
+        and not cooldown_exempt
+        and not copy_is_elite
+        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS)
     ):
         print(f"[draft] {city} in {CITY_COOLDOWN_DAYS}-day cooldown, skipping")
         return False

@@ -190,7 +190,7 @@ Every 4 hours, GitHub Actions runs `python -m src.main alerts`:
 10. **Simultaneous detection** — if 5+ cities broke records today, emit ONE summary signal
 11. **Per-cycle cap** — max 3 drafts, keep top by signal score, reject the rest
 12. **Same-city-same-day dedup** — highest signal score wins per `(city, YYYY-MM-DD)`. A stronger signal that arrives later supersedes a still-pending weaker draft; a weaker one is dropped. If a tweet for that `(city, date)` is already posted, the new one is skipped.
-13. **City cooldown (3 days)** — after we post about a city, drafts for that city are skipped for 3 days unless the signal is *elite*: all-time record, anomaly ≥18°C, record streak, or NOAA confirmation. Scoped to Open-Meteo extreme-temperature signals; fires/disasters/CO2/etc. bypass.
+13. **City cooldown (3 days)** — after we post about a city, drafts for that city are skipped for 3 days unless the signal is *elite* (all-time record, anomaly ≥18°C, record streak, NOAA confirmation) OR the copy itself is exceptional (`candidate_score.total ≥ 95`). Scoped to Open-Meteo extreme-temperature signals; fires/disasters/CO2/etc. bypass.
 14. **Assign approval policy** (armed_auto / suggested_auto / manual_only)
 15. **Save drafts** to Gist with full metadata
 

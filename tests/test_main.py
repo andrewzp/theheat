@@ -387,6 +387,42 @@ class TestCityCooldown:
         )
         assert result is True
 
+    def test_exceptional_copy_bypasses_cooldown(self):
+        """candidate_score.total >= 95 lets an otherwise-blocked draft through."""
+        state = _fresh_state()
+        self._seed_recent_posted_draft(state, "Phoenix", hours_ago=24)
+        result = save_draft(
+            "Phoenix with stunning copy",
+            state,
+            "record",
+            "record_Phoenix_2026-04-19",
+            score=self._score_with_total(74),
+            city="Phoenix",
+            tweet_date="2026-04-19",
+            cooldown_exempt=False,
+            candidate_score={"total": 96},
+        )
+        assert result is True
+        assert len(state["drafts"]) == 2
+
+    def test_merely_good_copy_does_not_bypass_cooldown(self):
+        """Copy at 94 still respects cooldown — only >=95 counts as elite."""
+        state = _fresh_state()
+        self._seed_recent_posted_draft(state, "Phoenix", hours_ago=24)
+        result = save_draft(
+            "Phoenix good but not great",
+            state,
+            "record",
+            "record_Phoenix_2026-04-19",
+            score=self._score_with_total(74),
+            city="Phoenix",
+            tweet_date="2026-04-19",
+            cooldown_exempt=False,
+            candidate_score={"total": 94},
+        )
+        assert result is False
+        assert len(state["drafts"]) == 1
+
     def test_pending_drafts_do_not_trigger_cooldown(self):
         """Cooldown only triggers on posted tweets, not pending drafts."""
         state = _fresh_state()
