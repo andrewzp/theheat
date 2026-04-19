@@ -181,6 +181,7 @@ Every 4 hours, GitHub Actions runs `python -m src.main alerts`:
    - One archive fetch per city (257 priority-ordered) yields ALL signal types
    - Bundle includes: all_time_high/low, monthly_high/low, anomaly_hot/cold, calendar_date_high/low
    - Handler picks strongest signal per city (all-time > monthly > anomaly > calendar-date)
+   - Monthly records whose prior record was set in the current calendar year are suppressed (confusing framing — "hottest April, old record set in 2026" reads as nonsense)
 4. **Score events** — editorial scoring with per-category thresholds (62-80). Elite events pass.
 5. **Deduplicate** against posted_events (last 500)
 6. **Generate 4 candidates** via Gemini 2.5 Flash, ranked by copy score
@@ -245,8 +246,7 @@ Signal types and thresholds:
 - **record** (calendar-date) — 72
 - **record_low** — 72
 - **fire** — 64
-- **co2_milestone** — 58
-- **co2_weekly** — 62
+- **co2_milestone** — 58 (capped at 12 tweets/year via `co2_annual_count` state; weekly comparison pathway removed — CO2 only tweeted in the extreme)
 - **severe_weather** — 58
 - **global_disaster** — 62
 - **sea_ice_record** — 60

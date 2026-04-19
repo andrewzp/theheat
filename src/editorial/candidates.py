@@ -23,7 +23,6 @@ CATEGORY_HINTS = {
     "record_confirmation": ("official", "record", "NOAA"),
     "fire": ("satellite", "confidence", "MW"),
     "co2_milestone": ("Mauna Loa", "280", "ppm"),
-    "co2_weekly": ("Mauna Loa", "year", "ppm"),
     "severe_weather": ("warning", "issued", "for"),
     "global_disaster": ("GDACS", "alert", "severity"),
     "sea_ice_record": ("sea ice", "satellite", "record"),

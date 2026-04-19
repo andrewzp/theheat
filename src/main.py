@@ -22,7 +22,6 @@ from src.editorial.scoring import (
     score_all_time_record,
     score_anomaly,
     score_co2_milestone,
-    score_co2_weekly,
     score_drought,
     score_enso_transition,
     score_extreme_wave,
@@ -215,6 +214,23 @@ def _touch_draft(draft: dict) -> None:
 
 CITY_COOLDOWN_DAYS = 3
 ELITE_COPY_SCORE = 95
+CO2_ANNUAL_CAP = 12
+
+
+def _co2_annual_cap_reached(bot_state: dict, cap: int = CO2_ANNUAL_CAP) -> bool:
+    """True if we've already drafted CO2_ANNUAL_CAP CO2 tweets this calendar year."""
+    year_key = str(date.today().year)
+    count = bot_state.get("co2_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[co2] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
+
+
+def _increment_co2_annual_count(bot_state: dict) -> None:
+    year_key = str(date.today().year)
+    counts = bot_state.setdefault("co2_annual_count", {})
+    counts[year_key] = counts.get(year_key, 0) + 1
 
 
 def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
@@ -528,7 +544,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
 
             if strongest_signal is None and bundle.monthly_high:
                 ev = bundle.monthly_high
-                if not state.is_duplicate(bot_state, ev.event_id):
+                # Suppress "hottest April ever — old record set in 2026"
+                # tweets. When the prior record was set this calendar year,
+                # the "hottest ever" framing reads as nonsense to a reader
+                # because the record being broken was set weeks ago.
+                if (
+                    not state.is_duplicate(bot_state, ev.event_id)
+                    and ev.old_record_year != date.today().year
+                ):
                     score = score_monthly_record(
                         ev.new_temp_c, ev.old_record_c, ev.old_record_year,
                         ev.month, ev.years_of_data, kind="high",
@@ -871,7 +894,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             status="failed", error=str(e)
         )
 
-    # 3. CO2 milestones (max one CO2 draft per day)
+    # 3. CO2 milestones.
+    # Annual cap: at most CO2_ANNUAL_CAP tweets/year. Milestone crossings are
+    # the only CO2 signal type we tweet — weekly telemetry was deemed too
+    # routine ("we should only talk about CO2 in the extreme"). Growth rate is
+    # ~2-3 ppm/year so natural milestone rate is well under cap; the guardrail
+    # covers future signal types and pathological multi-crossing weeks.
     print("[alerts] Checking CO2...")
     co2_drafted_today = any(
         d.get("type", "").startswith("co2")
@@ -884,7 +912,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         milestone = co2.detect_milestone(readings)
         source_promoted = 0
         source_drafted = 0
-        if milestone and not co2_drafted_today and not state.is_duplicate(bot_state, milestone.event_id):
+        if (
+            milestone
+            and not co2_drafted_today
+            and not state.is_duplicate(bot_state, milestone.event_id)
+            and not _co2_annual_cap_reached(bot_state)
+        ):
             score = score_co2_milestone(milestone.ppm_crossed, milestone.actual_ppm)
             if _should_draft(score, milestone.event_id):
                 source_promoted += 1
@@ -906,38 +939,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 )
                 if _save_generated_draft(generated, bot_state, "co2_milestone", milestone.event_id, score, review_context=review_context):
                     state.record_event(bot_state, milestone.event_id)
+                    _increment_co2_annual_count(bot_state)
                     drafted += 1
                     co2_drafted_today = True
                     source_drafted += 1
-
-        # Weekly comparison (Sundays, skip if milestone already drafted today)
-        if date.today().weekday() == 6 and not co2_drafted_today:
-            comparison = co2.compute_weekly_comparison(readings)
-            if comparison and not state.is_duplicate(bot_state, comparison.event_id):
-                score = score_co2_weekly(comparison.difference)
-                if _should_draft(score, comparison.event_id):
-                    source_promoted += 1
-                    generated = generator.generate_co2_weekly_tweet(
-                        current=comparison.current_avg,
-                        last_year=comparison.last_year_avg,
-                        diff=comparison.difference,
-                        return_bundle=True,
-                    )
-                    review_context = _review_context(
-                        source="NOAA GML",
-                        source_key="co2",
-                        headline="Weekly Mauna Loa CO2 comparison",
-                        current_run=current_run,
-                        facts=[
-                            _fact("This week", f"{comparison.current_avg:.2f} ppm"),
-                            _fact("Same week last year", f"{comparison.last_year_avg:.2f} ppm"),
-                            _fact("Year-over-year change", f"{comparison.difference:+.2f} ppm"),
-                        ],
-                    )
-                    if _save_generated_draft(generated, bot_state, "co2_weekly", comparison.event_id, score, review_context=review_context):
-                        state.record_event(bot_state, comparison.event_id)
-                        drafted += 1
-                        source_drafted += 1
         _record_source_run(
             current_run, "co2", co2_start,
             status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted

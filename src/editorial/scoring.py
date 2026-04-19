@@ -256,30 +256,6 @@ def score_co2_milestone(ppm_crossed: int, actual_ppm: float) -> EditorialScore:
     )
 
 
-def score_co2_weekly(diff: float) -> EditorialScore:
-    severity = 56 + max(diff, 0) * 12
-    novelty = 72 + max(diff - 2.0, 0) * 8
-    timeliness = 72
-    confidence = 96
-    shareability = 68 + max(diff, 0) * 8
-    reasons = [
-        f"{diff:+.1f} ppm year-over-year",
-        "easy same-week comparison",
-        "climate trend signal, not weather noise",
-    ]
-    return _build_score(
-        "co2_weekly",
-        severity=severity,
-        novelty=novelty,
-        timeliness=timeliness,
-        confidence=confidence,
-        shareability=shareability,
-        sensitivity=3,
-        threshold=62,
-        reasons=reasons,
-    )
-
-
 def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
     event_weight = {
         "Tornado Warning": 92,

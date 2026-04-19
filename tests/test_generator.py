@@ -9,7 +9,6 @@ from src.voice.generator import (
     generate_record_low_tweet,
     generate_fire_tweet,
     generate_co2_milestone_tweet,
-    generate_co2_weekly_tweet,
 )
 
 
@@ -235,26 +234,3 @@ class TestGenerateCO2MilestoneTweet:
         result = generate_co2_milestone_tweet(ppm_crossed=429, actual_ppm=429.5)
         assert result is not None
         assert "429.5" in result
-
-
-class TestGenerateCO2WeeklyTweet:
-    @patch("src.voice.generator.GEMINI_API_KEY", "")
-    def test_produces_output_via_fallback(self):
-        result = generate_co2_weekly_tweet(
-            current=429.0,
-            last_year=426.0,
-            diff=3.0,
-        )
-        assert result is not None
-        assert "429" in result
-        assert "426" in result
-
-    @patch("src.voice.generator.GEMINI_API_KEY", "")
-    def test_contains_diff(self):
-        result = generate_co2_weekly_tweet(
-            current=430.5,
-            last_year=427.5,
-            diff=3.0,
-        )
-        assert result is not None
-        assert "3.0" in result

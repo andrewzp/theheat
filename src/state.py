@@ -20,6 +20,9 @@ DEFAULT_STATE = {
     "streaks": {},
     "posted_events": [],
     "daily_tweet_count": {},
+    # Running count of CO2 tweets per calendar year, keyed by "YYYY".
+    # Enforced by _co2_annual_cap_reached() in main.py (cap: 12/year).
+    "co2_annual_count": {},
     "pending_confirmations": [],
     "drafts": [],
     "run_history": [],
@@ -197,6 +200,17 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
         **deepcopy(base.get("daily_tweet_count", {})),
         **deepcopy(next_state.get("daily_tweet_count", {})),
     }
+    # For co2_annual_count, prefer max per year so concurrent runs don't
+    # lose increments (last-writer-wins would drop a concurrent draft).
+    merged["co2_annual_count"] = {}
+    for year in set(
+        list(base.get("co2_annual_count", {}).keys())
+        + list(next_state.get("co2_annual_count", {}).keys())
+    ):
+        merged["co2_annual_count"][year] = max(
+            base.get("co2_annual_count", {}).get(year, 0),
+            next_state.get("co2_annual_count", {}).get(year, 0),
+        )
     merged["pending_confirmations"] = deepcopy(next_state.get("pending_confirmations", []))
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))

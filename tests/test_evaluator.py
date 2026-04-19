@@ -153,7 +153,7 @@ class TestEvaluateCandidate:
         verdict = evaluate_candidate(
             "CO2 is at 435 ppm at Mauna Loa this week.",
             "CO2 data: current 435 ppm",
-            "co2_weekly",
+            "co2_milestone",
         )
         assert verdict.passed is False
         assert verdict.rewrite is not None
@@ -207,7 +207,7 @@ class TestEvaluateAndPolish:
         original = "CO2 is at 435 ppm at Mauna Loa this week."
         rewrite = "CO2 at Mauna Loa: 435 ppm. Pre-industrial was 280. We are 55% above where the atmosphere was for all of human civilization."
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
-        bundle = _make_bundle(original, category="co2_weekly")
+        bundle = _make_bundle(original, category="co2_milestone")
         result = evaluate_and_polish(bundle, "data")
         assert result.text == rewrite
         assert result.candidates[0].source == "evaluator_rewrite"

@@ -8,7 +8,7 @@ from src.state import DEFAULT_STATE
 from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet, process_due_drafts
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
-from src.data.co2 import CO2Reading, CO2Milestone, CO2WeeklyComparison
+from src.data.co2 import CO2Reading, CO2Milestone
 
 
 def _fresh_state():
@@ -446,6 +446,170 @@ class TestCityCooldown:
             tweet_date="2026-04-19",
         )
         assert result is True
+
+
+class TestMonthlyRecordSameYearSuppression:
+    """Monthly records where the prior record was set in the current calendar
+    year read as nonsense ('hottest April — previous record set in 2026').
+    Suppress them at detection."""
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_suppresses_monthly_when_old_record_this_year(
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        from src.data.open_meteo import ExtremeSignalBundle, MonthlyRecord
+        from datetime import date
+
+        current_year = date.today().year
+        # Bundle where the only detected signal is a monthly_high whose
+        # prior record was set this calendar year — should be skipped.
+        bundle = ExtremeSignalBundle(
+            monthly_high=MonthlyRecord(
+                city="Svalbard",
+                country="NO",
+                kind="high",
+                month=4,
+                new_temp_c=5.3,
+                old_record_c=3.7,
+                old_record_year=current_year,
+                years_of_data=30,
+                event_id=f"monthly_high_Svalbard_{current_year}_04",
+            ),
+        )
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = [bundle]
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = []
+        mock_co2.detect_milestone.return_value = None
+        mock_state.is_duplicate.return_value = False
+
+        state = _fresh_state()
+        run_alerts(state)
+
+        mock_gen.generate_monthly_record_tweet.assert_not_called()
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_allows_monthly_when_old_record_prior_year(
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        from src.data.open_meteo import ExtremeSignalBundle, MonthlyRecord
+        from datetime import date
+
+        bundle = ExtremeSignalBundle(
+            monthly_high=MonthlyRecord(
+                city="Svalbard",
+                country="NO",
+                kind="high",
+                month=4,
+                new_temp_c=5.3,
+                old_record_c=3.7,
+                old_record_year=date.today().year - 5,
+                years_of_data=30,
+                event_id="monthly_high_Svalbard_2021_04",
+            ),
+        )
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = [bundle]
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = []
+        mock_co2.detect_milestone.return_value = None
+        mock_state.is_duplicate.return_value = False
+        mock_gen.generate_monthly_record_tweet.return_value = "mock tweet"
+        mock_draft.return_value = True
+
+        state = _fresh_state()
+        run_alerts(state)
+
+        mock_gen.generate_monthly_record_tweet.assert_called_once()
+
+
+class TestCO2AnnualCap:
+    """At most 12 CO2 tweets per calendar year — prevents feed spam from
+    multiple milestones clustering in a noisy week."""
+
+    def test_cap_helpers_increment_and_detect(self):
+        from src.main import (
+            CO2_ANNUAL_CAP,
+            _co2_annual_cap_reached,
+            _increment_co2_annual_count,
+        )
+        from datetime import date
+
+        state = _fresh_state()
+        assert _co2_annual_cap_reached(state) is False
+        for _ in range(CO2_ANNUAL_CAP):
+            _increment_co2_annual_count(state)
+        assert _co2_annual_cap_reached(state) is True
+        assert state["co2_annual_count"][str(date.today().year)] == CO2_ANNUAL_CAP
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.open_meteo")
+    def test_skips_milestone_when_cap_reached(
+        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        from src.main import CO2_ANNUAL_CAP
+        from datetime import date
+
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = []
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = [MagicMock()]
+        mock_co2.detect_milestone.return_value = CO2Milestone(
+            ppm_crossed=436,
+            actual_ppm=436.1,
+            date="2026-04-19",
+            event_id="co2_milestone_436ppm",
+        )
+
+        state = _fresh_state()
+        state["co2_annual_count"] = {str(date.today().year): CO2_ANNUAL_CAP}
+
+        run_alerts(state)
+        # CO2 milestone draft should not have been generated
+        mock_gen.generate_co2_milestone_tweet.assert_not_called()
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.open_meteo")
+    def test_allows_milestone_below_cap(
+        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = []
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = [MagicMock()]
+        mock_co2.detect_milestone.return_value = CO2Milestone(
+            ppm_crossed=436,
+            actual_ppm=436.1,
+            date="2026-04-19",
+            event_id="co2_milestone_436ppm",
+        )
+        mock_gen.generate_co2_milestone_tweet.return_value = "mock tweet"
+        mock_draft.return_value = True
+
+        state = _fresh_state()
+        # 3 tweets this year is well under cap — milestone should draft
+        from datetime import date
+
+        state["co2_annual_count"] = {str(date.today().year): 3}
+
+        run_alerts(state)
+        mock_gen.generate_co2_milestone_tweet.assert_called_once()
 
 
 class TestPostApproved:

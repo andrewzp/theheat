@@ -543,27 +543,6 @@ def generate_co2_milestone_tweet(
     )
 
 
-def generate_co2_weekly_tweet(
-    current: float,
-    last_year: float,
-    diff: float,
-    *,
-    return_bundle: bool = False,
-) -> str | CandidateBundle | None:
-    data = (
-        f"Average CO2 this week: {current} ppm. "
-        f"Same week last year: {last_year} ppm. "
-        f"Year-over-year increase: +{diff} ppm."
-    )
-    return generate_tweet(
-        data,
-        category="co2_weekly",
-        return_bundle=return_bundle,
-        fallback_fn=templates.co2_weekly_template,
-        fallback_args={"current": current, "last_year": last_year, "diff": diff},
-    )
-
-
 def generate_noaa_confirmation_tweet(
     city: str,
     state: str,

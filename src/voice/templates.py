@@ -41,14 +41,6 @@ def co2_milestone_template(ppm: int, actual: float) -> str:
     return random.choice(variants)
 
 
-def co2_weekly_template(current: float, last_year: float, diff: float) -> str:
-    variants = [
-        f"CO2 this week at Mauna Loa: {current} ppm. Same week last year: {last_year}. +{diff} ppm. That used to take a decade.",
-        f"Weekly CO2 at Mauna Loa: {current} ppm. Last year same week: {last_year} ppm. +{diff} ppm year over year.",
-    ]
-    return random.choice(variants)
-
-
 def hot10_template(cities: list[dict]) -> str:
     """Format Hot 10 as a compact single tweet. cities: [{city, anomaly_c}, ...]"""
     top3 = cities[:3]

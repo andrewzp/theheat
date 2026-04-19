@@ -58,12 +58,12 @@ def recommend_approval_policy(
             reason="Hot 10 is usually safe to queue, but weaker copy should get a quick look first.",
         )
 
-    if tweet_type in {"co2_milestone", "co2_weekly"}:
+    if tweet_type == "co2_milestone":
         if is_strong:
             return ApprovalPolicy(
                 key="co2_auto_window",
                 mode="armed_auto",
-                recommended_delay_minutes=45 if tweet_type == "co2_milestone" else 90,
+                recommended_delay_minutes=45,
                 can_auto_approve=True,
                 reason="High-confidence atmospheric signal with low human-harm risk.",
             )
