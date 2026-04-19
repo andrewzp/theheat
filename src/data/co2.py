@@ -95,8 +95,21 @@ def detect_milestone(readings: list[CO2Reading]) -> CO2Milestone | None:
     )
 
 
+# Minimum year-over-year PPM rise we'll tweet about. Below this we're in
+# seasonal-noise territory — and a negative weekly diff framed as "the
+# direction" is factually misleading against the 67-year monotonic rise.
+CO2_WEEKLY_MIN_DIFF_PPM = 1.0
+
+
 def compute_weekly_comparison(readings: list[CO2Reading]) -> CO2WeeklyComparison | None:
-    """Compare this week's average CO2 to same week last year."""
+    """Compare this week's average CO2 to same week last year.
+
+    Returns ``None`` when the year-over-year difference is below
+    ``CO2_WEEKLY_MIN_DIFF_PPM``, including any negative delta — a single
+    week reading lower than same-week-last-year is noise in a signal that
+    has risen every year since continuous Mauna Loa measurement began in
+    1958. Framing noise as a "dip" or "the direction" would be misleading.
+    """
     if not readings:
         return None
 
@@ -119,10 +132,14 @@ def compute_weekly_comparison(readings: list[CO2Reading]) -> CO2WeeklyComparison
 
     current_avg = sum(r.ppm for r in current_week) / len(current_week)
     last_year_avg = sum(r.ppm for r in last_year_week) / len(last_year_week)
+    difference = current_avg - last_year_avg
+
+    if difference < CO2_WEEKLY_MIN_DIFF_PPM:
+        return None
 
     return CO2WeeklyComparison(
         current_avg=round(current_avg, 1),
         last_year_avg=round(last_year_avg, 1),
-        difference=round(current_avg - last_year_avg, 1),
+        difference=round(difference, 1),
         event_id=f"co2_weekly_{today.isoformat()}",
     )
