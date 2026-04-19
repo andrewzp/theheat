@@ -133,6 +133,285 @@ class TestSaveDraft:
         assert "auto_approve_at" not in state["drafts"][0]
 
 
+class TestSameCityDayDedup:
+    """One tweet per (city, date). Highest signal score wins."""
+
+    def _score_with_total(self, total: int):
+        from src.editorial.scoring import EditorialScore
+
+        return EditorialScore(
+            category="record",
+            severity=0,
+            novelty=0,
+            timeliness=0,
+            confidence=0,
+            shareability=0,
+            sensitivity=0,
+            total=total,
+            threshold=72,
+            reasons=[],
+        )
+
+    def test_stronger_signal_supersedes_pending(self):
+        state = _fresh_state()
+        save_draft(
+            "weak Bujumbura tweet",
+            state,
+            "record",
+            "record_Bujumbura_2026-04-18",
+            score=self._score_with_total(72),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        result = save_draft(
+            "strong Bujumbura tweet",
+            state,
+            "monthly_high",
+            "monthly_high_Bujumbura_2026_04",
+            score=self._score_with_total(82),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        assert result is True
+        assert len(state["drafts"]) == 1
+        assert state["drafts"][0]["text"] == "strong Bujumbura tweet"
+        assert state["drafts"][0]["score"]["total"] == 82
+
+    def test_weaker_signal_dropped(self):
+        state = _fresh_state()
+        save_draft(
+            "strong tweet",
+            state,
+            "monthly_high",
+            "monthly_high_Bujumbura_2026_04",
+            score=self._score_with_total(82),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        result = save_draft(
+            "weak tweet",
+            state,
+            "record",
+            "record_Bujumbura_2026-04-18",
+            score=self._score_with_total(72),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        assert result is False
+        assert len(state["drafts"]) == 1
+        assert state["drafts"][0]["text"] == "strong tweet"
+
+    def test_different_cities_both_saved(self):
+        state = _fresh_state()
+        save_draft(
+            "Bujumbura",
+            state,
+            "record",
+            "record_Bujumbura_2026-04-18",
+            score=self._score_with_total(72),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        save_draft(
+            "Medan",
+            state,
+            "record",
+            "record_Medan_2026-04-18",
+            score=self._score_with_total(72),
+            city="Medan",
+            tweet_date="2026-04-18",
+        )
+        assert len(state["drafts"]) == 2
+
+    def test_same_city_different_dates_both_saved(self):
+        state = _fresh_state()
+        save_draft(
+            "day one",
+            state,
+            "record",
+            "record_Bujumbura_2026-04-18",
+            score=self._score_with_total(72),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        save_draft(
+            "day two",
+            state,
+            "all_time_high",
+            "all_time_high_Bujumbura_2026-04-19",
+            score=self._score_with_total(80),
+            city="Bujumbura",
+            tweet_date="2026-04-19",
+            cooldown_exempt=True,
+        )
+        assert len(state["drafts"]) == 2
+
+    def test_already_posted_same_day_skipped(self):
+        state = _fresh_state()
+        state["drafts"].append(
+            {
+                "id": "draft_1",
+                "text": "posted already",
+                "type": "record",
+                "event_id": "record_Bujumbura_2026-04-18",
+                "status": "posted",
+                "city": "Bujumbura",
+                "tweet_date": "2026-04-18",
+                "posted_at": "2026-04-18T10:00:00Z",
+                "score": {"total": 72},
+            }
+        )
+        result = save_draft(
+            "stronger too late",
+            state,
+            "monthly_high",
+            "monthly_high_Bujumbura_2026_04",
+            score=self._score_with_total(85),
+            city="Bujumbura",
+            tweet_date="2026-04-18",
+        )
+        assert result is False
+        assert len(state["drafts"]) == 1
+
+
+class TestCityCooldown:
+    """After we post about a city, suppress that city for N days unless elite."""
+
+    def _score_with_total(self, total: int):
+        from src.editorial.scoring import EditorialScore
+
+        return EditorialScore(
+            category="record",
+            severity=0,
+            novelty=0,
+            timeliness=0,
+            confidence=0,
+            shareability=0,
+            sensitivity=0,
+            total=total,
+            threshold=72,
+            reasons=[],
+        )
+
+    def _seed_recent_posted_draft(self, state: dict, city: str, hours_ago: int):
+        from datetime import timedelta
+
+        from src.main import _utc_now
+
+        posted_at = (_utc_now() - timedelta(hours=hours_ago)).isoformat().replace(
+            "+00:00", "Z"
+        )
+        state["drafts"].append(
+            {
+                "id": f"draft_old_{city}",
+                "text": f"old {city} tweet",
+                "type": "record",
+                "event_id": f"record_{city}_old",
+                "status": "posted",
+                "city": city,
+                "tweet_date": "2026-04-15",
+                "posted_at": posted_at,
+                "score": {"total": 72},
+            }
+        )
+
+    def test_blocks_non_elite_within_cooldown(self):
+        state = _fresh_state()
+        self._seed_recent_posted_draft(state, "Phoenix", hours_ago=24)
+        result = save_draft(
+            "Phoenix again",
+            state,
+            "record",
+            "record_Phoenix_2026-04-19",
+            score=self._score_with_total(74),
+            city="Phoenix",
+            tweet_date="2026-04-19",
+            cooldown_exempt=False,
+        )
+        assert result is False
+        assert len(state["drafts"]) == 1
+
+    def test_allows_elite_during_cooldown(self):
+        state = _fresh_state()
+        self._seed_recent_posted_draft(state, "Phoenix", hours_ago=24)
+        result = save_draft(
+            "Phoenix all-time record",
+            state,
+            "all_time_high",
+            "all_time_high_Phoenix_2026-04-19",
+            score=self._score_with_total(85),
+            city="Phoenix",
+            tweet_date="2026-04-19",
+            cooldown_exempt=True,
+        )
+        assert result is True
+        assert len(state["drafts"]) == 2
+
+    def test_allows_non_elite_after_cooldown_expires(self):
+        state = _fresh_state()
+        # 4 days ago — past the 3-day cooldown
+        self._seed_recent_posted_draft(state, "Phoenix", hours_ago=4 * 24)
+        result = save_draft(
+            "Phoenix after cooldown",
+            state,
+            "record",
+            "record_Phoenix_2026-04-19",
+            score=self._score_with_total(74),
+            city="Phoenix",
+            tweet_date="2026-04-19",
+            cooldown_exempt=False,
+        )
+        assert result is True
+        assert len(state["drafts"]) == 2
+
+    def test_no_city_no_cooldown(self):
+        """Events without a city (CO2 milestone, simultaneous, etc.) are unaffected."""
+        state = _fresh_state()
+        # Seed a recent posted draft with no city attached
+        state["drafts"].append(
+            {
+                "id": "co2_old",
+                "text": "old CO2",
+                "type": "co2_milestone",
+                "event_id": "co2_434",
+                "status": "posted",
+                "posted_at": "2026-04-18T10:00:00Z",
+            }
+        )
+        result = save_draft(
+            "new CO2",
+            state,
+            "co2_milestone",
+            "co2_435",
+            score=self._score_with_total(65),
+        )
+        assert result is True
+
+    def test_pending_drafts_do_not_trigger_cooldown(self):
+        """Cooldown only triggers on posted tweets, not pending drafts."""
+        state = _fresh_state()
+        save_draft(
+            "first Phoenix draft",
+            state,
+            "record",
+            "record_Phoenix_2026-04-18",
+            score=self._score_with_total(72),
+            city="Phoenix",
+            tweet_date="2026-04-18",
+        )
+        # Different day, different city — no cooldown because the prior is pending
+        result = save_draft(
+            "Bujumbura new day",
+            state,
+            "record",
+            "record_Bujumbura_2026-04-19",
+            score=self._score_with_total(72),
+            city="Bujumbura",
+            tweet_date="2026-04-19",
+        )
+        assert result is True
+
+
 class TestPostApproved:
     @patch("src.main.state")
     @patch("src.main.post_tweet")

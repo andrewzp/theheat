@@ -213,6 +213,57 @@ def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
 
 
+CITY_COOLDOWN_DAYS = 3
+
+
+def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
+    """True if a posted draft exists for this (city, tweet_date) tuple."""
+    if not city or not tweet_date:
+        return False
+    for d in drafts:
+        if (
+            d.get("city") == city
+            and d.get("tweet_date") == tweet_date
+            and d.get("status") == "posted"
+        ):
+            return True
+    return False
+
+
+def _same_day_pending_collision(
+    drafts: list[dict], city: str, tweet_date: str
+) -> tuple[int, dict] | None:
+    """Return (index, draft) of a pending draft matching (city, tweet_date), if any."""
+    if not city or not tweet_date:
+        return None
+    for i, d in enumerate(drafts):
+        if (
+            d.get("city") == city
+            and d.get("tweet_date") == tweet_date
+            and d.get("status") == "pending"
+        ):
+            return i, d
+    return None
+
+
+def _posted_city_within_days(drafts: list[dict], city: str, days: int) -> bool:
+    """True if any posted draft for this city exists within the last N days."""
+    if not city:
+        return False
+    cutoff = _utc_now() - timedelta(days=days)
+    for d in drafts:
+        if d.get("city") != city:
+            continue
+        if d.get("status") != "posted":
+            continue
+        ts = _parse_iso_utc(
+            d.get("posted_at") or d.get("updated_at") or d.get("created_at")
+        )
+        if ts and ts >= cutoff:
+            return True
+    return False
+
+
 def save_draft(
     tweet_text: str,
     bot_state: dict,
@@ -222,13 +273,63 @@ def save_draft(
     candidates: list[dict] | None = None,
     candidate_score: dict | None = None,
     review_context: dict | None = None,
+    city: str = "",
+    tweet_date: str = "",
+    cooldown_exempt: bool = False,
 ) -> bool:
-    """Save a generated tweet as a draft for review."""
+    """Save a generated tweet as a draft for review.
+
+    When ``city`` and ``tweet_date`` are provided, two extra gates apply:
+
+    * **Same (city, date) dedup.** Only the highest-scoring draft per city
+      per day survives. A stronger signal arriving later supersedes a still-
+      pending weaker draft; a weaker signal is dropped. If a draft for that
+      (city, date) has already been posted, the new one is skipped.
+
+    * **City cooldown.** If the city had a tweet posted within the last
+      ``CITY_COOLDOWN_DAYS`` days, new drafts for that city are dropped
+      unless ``cooldown_exempt=True`` (elite signals — all-time records,
+      extreme anomalies, streaks, NOAA confirmations).
+
+    These gates are scoped to city-based extreme-temperature signals; other
+    event types (fires, disasters, CO2, sea ice, etc.) omit ``city`` and
+    pass through unchanged.
+    """
     drafts = bot_state.setdefault("drafts", [])
 
     # Don't duplicate drafts for the same event
     if event_id and any(d.get("event_id") == event_id for d in drafts):
         print(f"[draft] Already drafted: {event_id}")
+        return False
+
+    # (city, date) dedup — highest signal wins
+    if city and tweet_date:
+        if _same_day_already_posted(drafts, city, tweet_date):
+            print(f"[draft] Already posted for {city} on {tweet_date}, skipping")
+            return False
+
+        collision = _same_day_pending_collision(drafts, city, tweet_date)
+        if collision:
+            idx, other = collision
+            other_total = (other.get("score") or {}).get("total", 0)
+            new_total = score.total if score else 0
+            if new_total <= other_total:
+                print(
+                    f"[draft] Weaker signal for {city} on {tweet_date} "
+                    f"({new_total} ≤ {other_total}), skipping"
+                )
+                return False
+            drafts.pop(idx)
+            print(
+                f"[draft] Superseded pending {city} draft "
+                f"({other_total} → {new_total})"
+            )
+
+    # City cooldown — skip if we posted about this city in the last N days
+    if city and not cooldown_exempt and _posted_city_within_days(
+        drafts, city, CITY_COOLDOWN_DAYS
+    ):
+        print(f"[draft] {city} in {CITY_COOLDOWN_DAYS}-day cooldown, skipping")
         return False
 
     # Prune oldest non-pending drafts to prevent unbounded growth
@@ -249,6 +350,10 @@ def save_draft(
         "updated_at": _utc_now_iso(),
         "status": "pending",
     }
+    if city:
+        draft["city"] = city
+    if tweet_date:
+        draft["tweet_date"] = tweet_date
     if score is not None:
         draft["score"] = score.as_dict()
     if candidates:
@@ -283,6 +388,9 @@ def _save_generated_draft(
     event_id: str,
     score: EditorialScore,
     review_context: dict | None = None,
+    city: str = "",
+    tweet_date: str = "",
+    cooldown_exempt: bool = False,
 ) -> bool:
     tweet_text, candidates, candidate_score = _unwrap_generated_result(generated)
     if not tweet_text:
@@ -296,6 +404,9 @@ def _save_generated_draft(
         candidates=candidates,
         candidate_score=candidate_score,
         review_context=review_context,
+        city=city,
+        tweet_date=tweet_date,
+        cooldown_exempt=cooldown_exempt,
     )
 
 
@@ -508,10 +619,23 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     current_run=current_run,
                     facts=strongest_facts,
                 )
+                # Elite signals bypass the city cooldown. Non-elite signals
+                # (calendar-date, monthly, modest anomalies) apply it so a
+                # single city heatwave doesn't monopolize the feed.
+                elite = strongest_type in ("all_time_high", "all_time_low")
+                if strongest_type in ("anomaly_hot", "anomaly_cold"):
+                    anomaly_magnitude = abs(
+                        getattr(strongest_signal, "anomaly_c", 0) or 0
+                    )
+                    if anomaly_magnitude >= 18:
+                        elite = True
                 if _save_generated_draft(
                     generated, bot_state, strongest_type,
                     strongest_event_id, strongest_score,
                     review_context=review_context,
+                    city=strongest_city,
+                    tweet_date=date.today().isoformat(),
+                    cooldown_exempt=elite,
                 ):
                     state.record_event(bot_state, strongest_event_id)
                     drafted += 1
@@ -549,6 +673,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                     if _save_generated_draft(
                                         streak_gen, bot_state, "record_streak",
                                         streak_event_id, streak_score, review_context=streak_ctx,
+                                        city=ev_cd.city,
+                                        tweet_date=date.today().isoformat(),
+                                        cooldown_exempt=True,
                                     ):
                                         state.record_event(bot_state, streak_event_id)
                                         drafted += 1
@@ -660,7 +787,13 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         _fact("State", confirmation.state),
                     ],
                 )
-                if _save_generated_draft(generated, bot_state, "noaa_confirmation", confirm_event_id, score, review_context=review_context):
+                if _save_generated_draft(
+                    generated, bot_state, "noaa_confirmation", confirm_event_id, score,
+                    review_context=review_context,
+                    city=confirmation.city,
+                    tweet_date=confirmation.date,
+                    cooldown_exempt=True,
+                ):
                     state.record_event(bot_state, confirm_event_id)
                     drafted += 1
                     source_drafted += 1
