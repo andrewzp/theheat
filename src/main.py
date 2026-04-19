@@ -14,7 +14,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, firms, co2, noaa_acis, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
+from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
@@ -29,7 +29,6 @@ from src.editorial.scoring import (
     score_global_disaster,
     score_hot10,
     score_monthly_record,
-    score_noaa_confirmation_event,
     score_record_event,
     score_record_low_event,
     score_record_streak,
@@ -716,18 +715,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                         drafted += 1
                                         signal_counts["streak"] += 1
 
-                    # Queue US records for NOAA confirmation
-                    if strongest_country == "US" and bundle.calendar_date_high:
-                        cd = bundle.calendar_date_high
-                        state.add_pending_confirmation(bot_state, {
-                            "event_id": cd.event_id,
-                            "detected": date.today().isoformat(),
-                            "source": "open-meteo",
-                            "city": cd.city,
-                            "state_code": noaa_acis.get_state_code(cd.city),
-                            "country": cd.country,
-                        })
-
         # Simultaneous records detection — fire one summary signal if many cities broke records
         if len(simultaneous_record_cities) >= 5:
             today_iso = date.today().isoformat()
@@ -775,74 +762,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
             status="failed", error=str(e),
-        )
-
-    # 1b. NOAA record confirmations
-    print("[alerts] Checking NOAA confirmations...")
-    noaa_start = time.perf_counter()
-    try:
-        expired = state.get_expired_confirmations(bot_state, min_hours=24)
-        source_drafted = 0
-        for pending in expired:
-            if pending.get("country") != "US":
-                state.remove_pending_confirmation(bot_state, pending["event_id"])
-                continue
-
-            confirm_event_id = f"noaa_confirm_{pending['city'].replace(' ', '_')}_{pending['detected']}"
-            if state.is_duplicate(bot_state, confirm_event_id):
-                state.remove_pending_confirmation(bot_state, pending["event_id"])
-                continue
-
-            confirmation = noaa_acis.check_record_confirmation(
-                city=pending["city"],
-                state_code=pending.get("state_code"),
-                record_date=pending["detected"],
-            )
-            if confirmation:
-                score = score_noaa_confirmation_event(confirmation.new_temp_f)
-                if not _should_draft(score, confirm_event_id):
-                    state.remove_pending_confirmation(bot_state, pending["event_id"])
-                    continue
-                generated = generator.generate_noaa_confirmation_tweet(
-                    city=confirmation.city,
-                    state=confirmation.state,
-                    temp_f=confirmation.new_temp_f,
-                    record_date=confirmation.date,
-                    return_bundle=True,
-                )
-                review_context = _review_context(
-                    source="NOAA ACIS",
-                    source_key="noaa_confirmation",
-                    headline=f"NOAA confirmed {confirmation.city}'s record",
-                    current_run=current_run,
-                    facts=[
-                        _fact("Official high", f"{confirmation.new_temp_f:.0f}F"),
-                        _fact("Record date", confirmation.date),
-                        _fact("City", confirmation.city),
-                        _fact("State", confirmation.state),
-                    ],
-                )
-                if _save_generated_draft(
-                    generated, bot_state, "noaa_confirmation", confirm_event_id, score,
-                    review_context=review_context,
-                    city=confirmation.city,
-                    tweet_date=confirmation.date,
-                    cooldown_exempt=True,
-                ):
-                    state.record_event(bot_state, confirm_event_id)
-                    drafted += 1
-                    source_drafted += 1
-                state.remove_pending_confirmation(bot_state, pending["event_id"])
-        _record_source_run(
-            current_run, "noaa_confirmation", noaa_start,
-            status="success", observed=len(expired), promoted=len(expired), drafted=source_drafted
-        )
-    except Exception as e:
-        print(f"[alerts] NOAA confirmation error: {e}")
-        state.log_error(bot_state, "noaa_confirmation", str(e))
-        _record_source_run(
-            current_run, "noaa_confirmation", noaa_start,
-            status="failed", error=str(e)
         )
 
     # 2. Wildfire alerts via NASA FIRMS

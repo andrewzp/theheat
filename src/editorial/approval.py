@@ -75,23 +75,6 @@ def recommend_approval_policy(
             reason="CO2 drafts are safe to auto-queue, but middling copy should wait for review.",
         )
 
-    if tweet_type == "noaa_confirmation":
-        if is_strong:
-            return ApprovalPolicy(
-                key="official_record_auto",
-                mode="armed_auto",
-                recommended_delay_minutes=60,
-                can_auto_approve=True,
-                reason="Official confirmation reduces factual risk and supports a timed auto-post.",
-            )
-        return ApprovalPolicy(
-            key="official_record_review",
-            mode="suggested_auto",
-            recommended_delay_minutes=90,
-            can_auto_approve=True,
-            reason="Official record confirmations can auto-post later, but weaker copy should rest longer.",
-        )
-
     if tweet_type in {"record", "record_low", "sea_ice_record", "enso", "extreme_wave"}:
         return ApprovalPolicy(
             key="editorial_hold",

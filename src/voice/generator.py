@@ -543,31 +543,6 @@ def generate_co2_milestone_tweet(
     )
 
 
-def generate_noaa_confirmation_tweet(
-    city: str,
-    state: str,
-    temp_f: float,
-    record_date: str,
-    *,
-    return_bundle: bool = False,
-) -> str | CandidateBundle | None:
-    """Generate a tweet about NOAA confirming a temperature record."""
-    data = (
-        f"NOAA ACIS has officially confirmed: {city}, {state} broke the temperature "
-        f"record on {record_date}. The recorded high was {temp_f}F."
-    )
-    return generate_tweet(
-        data,
-        category="record_confirmation",
-        return_bundle=return_bundle,
-        fallback_fn=templates.noaa_confirmation_template,
-        fallback_args={
-            "city": city, "state": state,
-            "temp_f": temp_f, "date": record_date,
-        },
-    )
-
-
 def generate_severe_weather_tweet(
     event_type: str,
     area: str,

@@ -30,7 +30,6 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │
 ├── Fetch from data sources
 │   ├── Open-Meteo ──────── city temps + archive (257 cities, all records)
-│   ├── NOAA ACIS ────────── US record confirmations (24-72h delayed)
 │   ├── NASA FIRMS ────────── satellite wildfire detections
 │   ├── NOAA GML ──────────── Mauna Loa CO2 (daily PPM)
 │   ├── NWS Alerts ────────── Emergency-tier severe weather (Tornado Emergency,
@@ -109,7 +108,6 @@ theheat/
 │   │   ├── open_meteo.py             Unified extreme signal detection (673 lines)
 │   │   ├── firms.py                  NASA FIRMS wildfires
 │   │   ├── co2.py                    Mauna Loa CO2
-│   │   ├── noaa_acis.py              NOAA record confirmations (US)
 │   │   ├── nws_alerts.py             NWS — emergency-tier only (5 event types)
 │   │   ├── gdacs.py                  GDACS — Red-tier only, intensity-tier dedup
 │   │   ├── sea_ice.py                Arctic/Antarctic sea ice
@@ -191,7 +189,7 @@ Every 4 hours, GitHub Actions runs `python -m src.main alerts`:
 10. **Simultaneous detection** — if 5+ cities broke records today, emit ONE summary signal
 11. **Per-cycle cap** — max 3 drafts, keep top by signal score, reject the rest
 12. **Same-city-same-day dedup** — highest signal score wins per `(city, YYYY-MM-DD)`. A stronger signal that arrives later supersedes a still-pending weaker draft; a weaker one is dropped. If a tweet for that `(city, date)` is already posted, the new one is skipped.
-13. **City cooldown (3 days)** — after we post about a city, drafts for that city are skipped for 3 days unless the signal is *elite* (all-time record, anomaly ≥18°C, record streak, NOAA confirmation) OR the copy itself is exceptional (`candidate_score.total ≥ 95`). Scoped to Open-Meteo extreme-temperature signals; fires/disasters/CO2/etc. bypass.
+13. **City cooldown (3 days)** — after we post about a city, drafts for that city are skipped for 3 days unless the signal is *elite* (all-time record, anomaly ≥18°C, record streak) OR the copy itself is exceptional (`candidate_score.total ≥ 95`). Scoped to Open-Meteo extreme-temperature signals; fires/disasters/CO2/etc. bypass.
 14. **Assign approval policy** (armed_auto / suggested_auto / manual_only)
 15. **Save drafts** to Gist with full metadata
 
@@ -242,7 +240,6 @@ Signal types and thresholds:
 - **anomaly** — 76
 - **record_streak** — 74 (fires at 3+ days)
 - **simultaneous_records** — 78
-- **record_confirmation** (NOAA) — 58
 - **record** (calendar-date) — 72
 - **record_low** — 72
 - **fire** — 64
@@ -265,7 +262,7 @@ Gemini produces 4 candidates. Each scored on clarity/context/voice/punch. Best s
 Passes if 7+ on 4 of 5. Fails → rewrite provided. Rewrite must pass safety AND beat original heuristic score. If no viable rewrite → draft dies.
 
 ### Approval Policies (`approval.py`)
-- **armed_auto** — Auto-posts after timed delay (Hot 10, CO2 milestones, NOAA confirmations)
+- **armed_auto** — Auto-posts after timed delay (Hot 10, CO2 milestones)
 - **suggested_auto** — Dashboard suggests auto, requires human (records, ice, ENSO)
 - **manual_only** — Human required (fires, severe weather, disasters, storm surge, floods, drought)
 
@@ -322,7 +319,7 @@ Single JSON file in GitHub Gist, read/written via GitHub API each run.
   "streaks":       { "Miami": { "consecutive_days": 14, "last_seen": "..." } },
   "posted_events": [ "record_PHX_20260407", ... ],
   "daily_tweet_count": { "2026-04-18": 3 },
-  "pending_confirmations": [ ... ],
+  "co2_annual_count": { "2026": 2 },
   "drafts": [ ... full draft records with score, candidates, approval_policy, review_context, evaluator_pass ... ],
   "run_history": [ { "id": "...", "mode": "alerts", "sources": [...] } ],
   "errors": [ ... ],

@@ -124,13 +124,13 @@ def _build_score(
     )
 
 
-def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: int, *, official: bool = False) -> EditorialScore:
+def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: int) -> EditorialScore:
     delta = max(new_temp_c - old_record_c, 0.0)
     record_age = max(date.today().year - old_record_year, 0)
     severity = 56 + delta * 22 + max(new_temp_c - 40, 0) * 2.5
     novelty = 45 + min(record_age, 100) * 0.45
-    timeliness = 72 if official else 94
-    confidence = 98 if official else 72
+    timeliness = 94
+    confidence = 72
     shareability = 52 + min(record_age, 80) * 0.30 + max(new_temp_c - 42, 0) * 1.5
     reasons = []
     if record_age >= 25:
@@ -141,17 +141,15 @@ def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: 
         reasons.append(f"beat prior record by {delta:.1f}C")
     if new_temp_c >= 45:
         reasons.append("extreme absolute temperature")
-    if official:
-        reasons.append("official NOAA confirmation")
     return _build_score(
-        "record_confirmation" if official else "record",
+        "record",
         severity=severity,
         novelty=novelty,
         timeliness=timeliness,
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=58 if official else 72,
+        threshold=72,
         reasons=reasons or ["clear weather record"],
     )
 
@@ -181,25 +179,6 @@ def score_record_low_event(new_temp_c: float, old_record_c: float, old_record_ye
         sensitivity=8,
         threshold=72,
         reasons=reasons or ["notable cold record"],
-    )
-
-
-def score_noaa_confirmation_event(temp_f: float) -> EditorialScore:
-    reasons = [
-        "official NOAA confirmation",
-        f"confirmed high of {temp_f:.0f}F",
-        "authoritative follow-up to earlier detection",
-    ]
-    return _build_score(
-        "record_confirmation",
-        severity=72 + max(temp_f - 100, 0) * 0.5,
-        novelty=74,
-        timeliness=68,
-        confidence=99,
-        shareability=70 + max(temp_f - 100, 0) * 0.2,
-        sensitivity=8,
-        threshold=58,
-        reasons=reasons,
     )
 
 

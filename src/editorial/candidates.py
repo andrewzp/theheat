@@ -20,7 +20,6 @@ MONTH_RE = re.compile(
 CATEGORY_HINTS = {
     "record": ("record", "since", "today"),
     "record_low": ("record", "since", "low"),
-    "record_confirmation": ("official", "record", "NOAA"),
     "fire": ("satellite", "confidence", "MW"),
     "co2_milestone": ("Mauna Loa", "280", "ppm"),
     "severe_weather": ("warning", "issued", "for"),

@@ -17,12 +17,11 @@ flowchart TD
     classDef out fill:#3a1a5c,stroke:#6a2fa8,color:#fff
     classDef state fill:#2a2a2a,stroke:#888,color:#fff
 
-    subgraph RAW["RAW MATERIALS — 13 free public data sources"]
+    subgraph RAW["RAW MATERIALS — 12 free public data sources"]
         direction TB
         OM["Open-Meteo<br/>temperature records<br/>257 cities"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
         NOAACO2["NOAA GML<br/>Mauna Loa CO2"]:::source
-        ACIS["NOAA ACIS<br/>US confirmations"]:::source
         NWS["NWS Alerts<br/>severe weather<br/>emergency-tier only"]:::source
         GDACS["GDACS<br/>Red-tier disasters"]:::source
         NSIDC["NSIDC<br/>sea ice<br/>Mondays"]:::source
@@ -98,7 +97,7 @@ flowchart TD
 
 ## Stage Glossary
 
-### Raw Materials (13 Sources)
+### Raw Materials (12 Sources)
 Each source is fetched on a schedule (alerts every 4 hours, Hot 10 daily at 12:00 UTC). Each is wrapped in try/catch so one failure doesn't block the others.
 
 ### Deduplicate
@@ -147,7 +146,7 @@ All state lives in a single JSON file in a GitHub Gist. Read/written each run vi
 
 ### Approval Policy
 Three tiers determine what happens next:
-- **armed_auto** — will auto-post after timed delay (Hot 10, CO2 milestones, NOAA confirmations with strong scores)
+- **armed_auto** — will auto-post after timed delay (Hot 10, CO2 milestones with strong scores)
 - **suggested_auto** — dashboard suggests auto, but requires human (records, ice, ENSO)
 - **manual_only** — human approval required (fires, severe weather, disasters, storm surge, river floods, drought)
 

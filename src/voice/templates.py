@@ -51,14 +51,6 @@ def hot10_template(cities: list[dict]) -> str:
     return f"Hottest cities by anomaly today: {', '.join(entries)}."
 
 
-def noaa_confirmation_template(city: str, state: str, temp_f: float, date: str) -> str:
-    variants = [
-        f"NOAA confirms: {city}, {state} broke the record on {date}. Official reading: {temp_f}F.",
-        f"It's official. NOAA says {city}, {state} broke the record on {date}. {temp_f}F. The paperwork is in.",
-    ]
-    return random.choice(variants)
-
-
 def severe_weather_template(event_type: str, area: str) -> str:
     month = datetime.date.today().strftime("%B")
     variants = [

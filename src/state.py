@@ -23,7 +23,6 @@ DEFAULT_STATE = {
     # Running count of CO2 tweets per calendar year, keyed by "YYYY".
     # Enforced by _co2_annual_cap_reached() in main.py (cap: 12/year).
     "co2_annual_count": {},
-    "pending_confirmations": [],
     "drafts": [],
     "run_history": [],
     "errors": [],
@@ -211,7 +210,6 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
             base.get("co2_annual_count", {}).get(year, 0),
             next_state.get("co2_annual_count", {}).get(year, 0),
         )
-    merged["pending_confirmations"] = deepcopy(next_state.get("pending_confirmations", []))
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
@@ -431,53 +429,6 @@ def update_streaks(state: dict, hot10_cities: list[str]) -> dict:
             if (date.today() - prev).days > 1:
                 del streaks[city]
 
-    return state
-
-
-def add_pending_confirmation(state: dict, event: dict) -> dict:
-    """Add a record detection to *pending_confirmations* for later NOAA check.
-
-    *event* should contain at minimum ``event_id``, ``detected``, ``city``,
-    and ``country``.  Duplicate ``event_id`` values are silently ignored.
-    """
-    pending = state.setdefault("pending_confirmations", [])
-    if any(p.get("event_id") == event.get("event_id") for p in pending):
-        return state
-    pending.append(event)
-    return state
-
-
-def get_expired_confirmations(state: dict, min_hours: int = 24) -> list[dict]:
-    """Return pending confirmations whose ``detected`` date is at least
-    *min_hours* ago.
-
-    Because Open-Meteo records are detected once per daily run the smallest
-    resolution we track is full days (``detected`` stores an ISO date, not a
-    timestamp).  We treat each confirmation as ready once at least
-    ``min_hours // 24`` full calendar days have elapsed since detection.
-    """
-    min_days = max(min_hours // 24, 1)
-    today = date.today()
-    expired = []
-    for pending in state.get("pending_confirmations", []):
-        detected_str = pending.get("detected")
-        if not detected_str:
-            continue
-        try:
-            detected_date = date.fromisoformat(detected_str)
-        except (ValueError, TypeError):
-            continue
-        if (today - detected_date).days >= min_days:
-            expired.append(pending)
-    return expired
-
-
-def remove_pending_confirmation(state: dict, event_id: str) -> dict:
-    """Remove a confirmation from *pending_confirmations* by ``event_id``."""
-    state["pending_confirmations"] = [
-        p for p in state.get("pending_confirmations", [])
-        if p.get("event_id") != event_id
-    ]
     return state
 
 

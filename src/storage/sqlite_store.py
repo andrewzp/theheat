@@ -20,17 +20,6 @@ CREATE TABLE IF NOT EXISTS posted_events (
     event_id TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE IF NOT EXISTS pending_confirmations (
-    seq INTEGER PRIMARY KEY,
-    event_id TEXT NOT NULL UNIQUE,
-    detected TEXT,
-    source TEXT,
-    city TEXT,
-    state_code TEXT,
-    country TEXT,
-    payload_json TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS daily_tweet_count (
     day TEXT PRIMARY KEY,
     count INTEGER NOT NULL
@@ -116,7 +105,6 @@ def is_empty(db_path: str) -> bool:
             for table in (
                 "metadata",
                 "posted_events",
-                "pending_confirmations",
                 "daily_tweet_count",
                 "streaks",
                 "drafts",
@@ -140,13 +128,6 @@ def read_state(db_path: str, default_state: dict) -> dict:
             row["event_id"]
             for row in conn.execute(
                 "SELECT event_id FROM posted_events ORDER BY seq ASC"
-            ).fetchall()
-        ]
-
-        state["pending_confirmations"] = [
-            json.loads(row["payload_json"])
-            for row in conn.execute(
-                "SELECT payload_json FROM pending_confirmations ORDER BY seq ASC"
             ).fetchall()
         ]
 
@@ -217,28 +198,6 @@ def write_state(db_path: str, state: dict) -> bool:
                 [
                     (index, event_id)
                     for index, event_id in enumerate(state.get("posted_events", []))
-                ],
-            )
-
-            conn.execute("DELETE FROM pending_confirmations")
-            conn.executemany(
-                """
-                INSERT INTO pending_confirmations
-                (seq, event_id, detected, source, city, state_code, country, payload_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        index,
-                        pending.get("event_id"),
-                        pending.get("detected"),
-                        pending.get("source"),
-                        pending.get("city"),
-                        pending.get("state_code"),
-                        pending.get("country"),
-                        _json(pending),
-                    )
-                    for index, pending in enumerate(state.get("pending_confirmations", []))
                 ],
             )
 
