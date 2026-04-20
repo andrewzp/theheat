@@ -16,14 +16,22 @@ import requests
 
 NWS_URL = "https://api.weather.gov/alerts/active"
 
-# ONLY truly rare, always-newsworthy events. Emergency-tier + hurricane only.
-# If it happens every week in some part of the US, it's not in this list.
+# ONLY truly rare, always-newsworthy events. If it happens every week in
+# some part of the US, it's not in this list. Tornado Warnings in tornado
+# alley in April are routine — we skip them and only keep Tornado Emergency.
 TRACKED_EVENTS = {
     "Tornado Emergency",      # Extremely rare, catastrophic tornado confirmed
     "Flash Flood Emergency",  # Extremely rare, catastrophic flooding
     "Hurricane Warning",      # Hurricanes themselves are rare, each one is news
     "Extreme Wind Warning",   # Only issued for major hurricane eyewalls (115+ mph)
     "Storm Surge Warning",    # Hurricane-specific, rare
+    # Winter-tier extremes (rare, high-impact, not the routine Winter Storm Warning):
+    "Blizzard Warning",       # Sustained 35+ mph winds + <1/4 mi visibility for 3+ hrs
+    "Ice Storm Warning",      # 1/4+ inch ice accumulation — regional havoc
+    "Extreme Cold Warning",   # NWS' upper-tier dangerous-cold designation
+    # Heat-tier extreme. Overlaps Open-Meteo detection somewhat, but NWS
+    # issues this only at genuinely dangerous levels (heat index 115F+).
+    "Extreme Heat Warning",
 }
 
 

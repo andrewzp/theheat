@@ -23,6 +23,38 @@ class FireEvent:
     event_id: str
 
 
+# VIIRS confidence is categorical (l/n/h), MODIS is 0-100 percentage.
+# We normalize both to a 0-100 scale so the same filter threshold works.
+# VIIRS mapping mirrors NASA's own typical interpretation.
+_VIIRS_CONFIDENCE = {
+    "l": 30,
+    "n": 70,
+    "h": 95,
+}
+
+
+def _parse_confidence(raw: str) -> int | None:
+    """Return a 0-100 confidence score, or None if unparseable.
+
+    Handles both numeric percentages (MODIS, "90" or "90%") and VIIRS
+    categorical letters ("l", "n", "h"). Unknown values return None so the
+    caller can skip the row instead of silently scoring it 0 (which was the
+    prior bug — VIIRS rows all fell through ``int()`` and were dropped).
+    """
+    if raw is None:
+        return None
+    value = str(raw).strip().rstrip("%").strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered in _VIIRS_CONFIDENCE:
+        return _VIIRS_CONFIDENCE[lowered]
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return None
+
+
 def fetch_fires(
     confidence_min: int = 80,
     frp_min: float = 100.0,
@@ -43,15 +75,20 @@ def fetch_fires(
         reader = csv.DictReader(io.StringIO(resp.text))
         fires = []
         for row in reader:
+            conf = _parse_confidence(row.get("confidence"))
+            if conf is None:
+                continue
             try:
-                conf = int(row.get("confidence", "0").rstrip("%").strip() or "0")
                 frp = float(row.get("frp", "0") or "0")
             except (ValueError, TypeError):
                 continue
 
             if conf >= confidence_min and frp >= frp_min:
-                lat = float(row["latitude"])
-                lon = float(row["longitude"])
+                try:
+                    lat = float(row["latitude"])
+                    lon = float(row["longitude"])
+                except (ValueError, KeyError, TypeError):
+                    continue
                 city, country = reverse_geocode_simple(lat, lon)
                 event_id = f"fire_{lat:.2f}_{lon:.2f}_{date.today().isoformat()}"
                 fires.append(FireEvent(

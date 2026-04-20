@@ -86,12 +86,19 @@ class TestTrackedEvents:
         assert "Hurricane Warning" in TRACKED_EVENTS
         assert "Extreme Wind Warning" in TRACKED_EVENTS
         assert "Storm Surge Warning" in TRACKED_EVENTS
+        # Rare winter/heat extremes added April 2026
+        assert "Blizzard Warning" in TRACKED_EVENTS
+        assert "Ice Storm Warning" in TRACKED_EVENTS
+        assert "Extreme Cold Warning" in TRACKED_EVENTS
+        assert "Extreme Heat Warning" in TRACKED_EVENTS
 
         # Routine stuff NOT tracked
         assert "Tornado Warning" not in TRACKED_EVENTS
         assert "Severe Thunderstorm Warning" not in TRACKED_EVENTS
         assert "Flash Flood Warning" not in TRACKED_EVENTS
         assert "Tropical Storm Warning" not in TRACKED_EVENTS
+        assert "Winter Storm Warning" not in TRACKED_EVENTS
+        assert "Heat Advisory" not in TRACKED_EVENTS
 
 
 class TestFetchAlerts:

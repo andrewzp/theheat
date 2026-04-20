@@ -87,6 +87,31 @@ class TestFetchFires:
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_viirs_letter_confidence_parsed(self):
+        """VIIRS_SNPP_NRT uses categorical l/n/h confidence, not percentages.
+
+        The old parser did int("h") and silently dropped every VIIRS row,
+        which is why production fire detection returned 0 all day. Regression
+        guard: make sure 'h' survives the confidence gate and 'l' does not.
+        """
+        csv_body = (
+            FIRMS_CSV_HEADER
+            + "34.05,-118.25,h,200.0\n"   # high confidence → maps to 95
+            + "40.71,-74.01,n,150.0\n"    # nominal → 70, below 80 default
+            + "1.0,1.0,l,300.0\n"          # low → 30
+        )
+        responses.add(
+            responses.GET,
+            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+            body=csv_body,
+            status=200,
+        )
+        fires = fetch_fires()
+        assert len(fires) == 1
+        assert fires[0].confidence == 95
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_malformed_csv_rows_skipped(self):
         csv_body = (
             FIRMS_CSV_HEADER
