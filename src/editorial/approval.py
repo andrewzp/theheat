@@ -75,6 +75,17 @@ def recommend_approval_policy(
             reason="CO2 drafts are safe to auto-queue, but middling copy should wait for review.",
         )
 
+    if tweet_type in {"country_high", "country_low"}:
+        # The biggest story the pipeline produces — but rare enough to keep
+        # a human-aware review window. Suggested-auto, longer delay.
+        return ApprovalPolicy(
+            key="country_record_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=120,
+            can_auto_approve=True,
+            reason="Country-level archive record — rare, elite signal. Review window gives the human a chance to polish the framing.",
+        )
+
     if tweet_type in {"record", "record_low", "sea_ice_record", "enso", "extreme_wave"}:
         return ApprovalPolicy(
             key="editorial_hold",

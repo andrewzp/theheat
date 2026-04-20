@@ -340,6 +340,55 @@ def generate_all_time_record_tweet(
     )
 
 
+def generate_country_record_tweet(
+    country: str,
+    kind: str,
+    new_temp_c: float,
+    peak_city: str,
+    old_temp_c: float,
+    old_record_year: int,
+    old_record_city: str,
+    years_of_data: int,
+    cities_sampled: int,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a country-level archive-wide record.
+
+    This is the biggest story our pipeline produces: one country hit its
+    hottest-or-coldest reading across every city we sample. Lead with the
+    country and the stake. Honest framing — ``years_of_data`` (~30) is the
+    archive window, not "all time."
+    """
+    temp_f = round(new_temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_temp_c * 9 / 5 + 32, 1)
+    descriptor = "hottest" if kind == "high" else "coldest"
+    data = (
+        f"Aggregating {cities_sampled} Open-Meteo monitored cities in {country}: "
+        f"today's peak {descriptor} reading is {temp_f}F ({new_temp_c}C) at {peak_city}. "
+        f"That exceeds the country-wide {descriptor} across {years_of_data} years of archive data. "
+        f"Previous top: {old_f}F ({old_temp_c}C) in {old_record_city}, {old_record_year}. "
+        f"Frame as a national record across the archive window. Honest voice: "
+        f"'{country}'s {descriptor} reading in {years_of_data} years of records' or "
+        f"'{country}'s {descriptor} since {old_record_year}'. "
+        f"Do NOT claim 'hottest ever' — the archive is {years_of_data} years. "
+        f"Lead with the country and the stake, not {peak_city}."
+    )
+    return generate_tweet(
+        data,
+        category=f"country_{kind}",
+        return_bundle=return_bundle,
+        fallback_fn=templates.country_record_template,
+        fallback_args={
+            "country": country, "kind": kind,
+            "new_temp_c": new_temp_c, "peak_city": peak_city,
+            "old_temp_c": old_temp_c, "old_record_year": old_record_year,
+            "old_record_city": old_record_city,
+            "years_of_data": years_of_data,
+        },
+    )
+
+
 def generate_monthly_record_tweet(
     city: str,
     country: str,

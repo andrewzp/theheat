@@ -29,6 +29,7 @@ from src.editorial.scoring import (
     score_global_disaster,
     score_hot10,
     score_monthly_record,
+    score_country_record,
     score_record_event,
     score_record_low_event,
     score_record_streak,
@@ -491,7 +492,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     signal_counts = {"all_time": 0, "monthly": 0, "anomaly": 0, "calendar": 0, "streak": 0}
     simultaneous_record_cities: list[tuple[str, str]] = []  # (city, country) tuples
     try:
-        bundles = open_meteo.check_extreme_signals_for_cities(cities)
+        bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
         source_promoted = 0
         source_drafted = 0
         for bundle in bundles:
@@ -746,15 +747,66 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         state.record_event(bot_state, sim_event_id)
                         drafted += 1
 
+        # Country-level records — the biggest story our pipeline produces.
+        # Aggregates across every sampled city in a country; fires when
+        # today's peak beats the archive-wide peak anywhere in the country.
+        country_count = 0
+        for cr in country_records:
+            if state.is_duplicate(bot_state, cr.event_id):
+                continue
+            score = score_country_record(
+                cr.new_temp_c, cr.old_record_c, cr.old_record_year,
+                kind=cr.kind, cities_sampled=cr.cities_sampled,
+                years_of_data=cr.years_of_data,
+            )
+            if not _should_draft(score, cr.event_id):
+                continue
+            source_promoted += 1
+            cr_gen = generator.generate_country_record_tweet(
+                country=cr.country, kind=cr.kind,
+                new_temp_c=cr.new_temp_c, peak_city=cr.peak_city,
+                old_temp_c=cr.old_record_c, old_record_year=cr.old_record_year,
+                old_record_city=cr.old_record_city,
+                years_of_data=cr.years_of_data,
+                cities_sampled=cr.cities_sampled,
+                return_bundle=True,
+            )
+            descriptor = "hottest" if cr.kind == "high" else "coldest"
+            cr_ctx = _review_context(
+                source="Open-Meteo archive (country-wide aggregate)",
+                source_key="country_record",
+                headline=f"{cr.country}: {descriptor} reading in {cr.years_of_data}-yr archive",
+                current_run=current_run,
+                facts=[
+                    _fact("Country", cr.country),
+                    _fact("Peak city today", cr.peak_city),
+                    _fact("Peak temp today", _temp_pair_c(cr.new_temp_c)),
+                    _fact("Prior archive peak", _temp_pair_c(cr.old_record_c)),
+                    _fact("Prior peak city", cr.old_record_city),
+                    _fact("Prior peak year", cr.old_record_year),
+                    _fact("Cities aggregated", cr.cities_sampled),
+                ],
+            )
+            # Country records are the biggest story — not subject to
+            # per-city cooldown (no single city "owns" this).
+            if _save_generated_draft(
+                cr_gen, bot_state, f"country_{cr.kind}",
+                cr.event_id, score, review_context=cr_ctx,
+            ):
+                state.record_event(bot_state, cr.event_id)
+                drafted += 1
+                source_drafted += 1
+                country_count += 1
+
         # Prune stale streaks at cycle end
         state.prune_stale_record_streaks(bot_state)
 
-        total_observed = sum(signal_counts.values())
+        total_observed = sum(signal_counts.values()) + country_count
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
             status="success", observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
-            note=f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']}",
+            note=f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']} country:{country_count}",
         )
     except Exception as e:
         print(f"[alerts] Extreme signals error: {e}")

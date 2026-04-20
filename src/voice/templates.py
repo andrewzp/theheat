@@ -10,6 +10,26 @@ import datetime
 import random
 
 
+def country_record_template(
+    country: str,
+    kind: str,
+    new_temp_c: float,
+    peak_city: str,
+    old_temp_c: float,
+    old_record_year: int,
+    old_record_city: str,
+    years_of_data: int,
+) -> str:
+    new_f = round(new_temp_c * 9 / 5 + 32, 1)
+    old_f = round(old_temp_c * 9 / 5 + 32, 1)
+    descriptor = "warmest" if kind == "high" else "coldest"
+    variants = [
+        f"{country}'s {descriptor} reading in {years_of_data} years of records. {peak_city}: {new_f}F. Previous: {old_f}F in {old_record_city}, {old_record_year}.",
+        f"{peak_city}, {country}: {new_f}F. That's the {descriptor} reading anywhere in the country in {years_of_data} years of archive data. Last top was {old_f}F in {old_record_year}.",
+    ]
+    return random.choice(variants)
+
+
 def record_template(city: str, country: str, temp_c: float, old_temp_c: float, old_year: int) -> str:
     temp_f = round(temp_c * 9 / 5 + 32, 1)
     old_f = round(old_temp_c * 9 / 5 + 32, 1)

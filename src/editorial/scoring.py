@@ -154,6 +154,49 @@ def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: 
     )
 
 
+def score_country_record(
+    new_temp_c: float,
+    old_record_c: float,
+    old_record_year: int,
+    *,
+    kind: str = "high",
+    cities_sampled: int = 2,
+    years_of_data: int = 30,
+) -> EditorialScore:
+    """Score a country-level all-time record.
+
+    Country records are a bigger story than per-city records — "France's
+    hottest day ever recorded" beats "Marseille's hottest day ever." So
+    the bar is higher (threshold 82) and a pass tends to be elite.
+    """
+    delta = abs(new_temp_c - old_record_c)
+    record_age = max(date.today().year - old_record_year, 0)
+    severity = 70 + delta * 6 + (6 if kind == "high" and new_temp_c >= 45 else 0)
+    novelty = 80 + min(record_age, 80) * 0.20
+    timeliness = 96
+    confidence = 70 + min(cities_sampled, 10) * 2  # more cities → more trustworthy aggregate
+    shareability = 76 + min(record_age, 80) * 0.25 + min(cities_sampled, 12) * 0.5
+    reasons = [
+        f"country-wide {kind} across {cities_sampled} sampled cities",
+        f"breaks {years_of_data}-year archive peak",
+    ]
+    if record_age >= 10:
+        reasons.append(f"{record_age}-year-old national record")
+    if delta >= 1.0:
+        reasons.append(f"{delta:.1f}C over prior national peak")
+    return _build_score(
+        f"country_{kind}",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence,
+        shareability=shareability,
+        sensitivity=8,
+        threshold=82,
+        reasons=reasons[:3],
+    )
+
+
 def score_record_low_event(new_temp_c: float, old_record_c: float, old_record_year: int) -> EditorialScore:
     delta = max(old_record_c - new_temp_c, 0.0)
     record_age = max(date.today().year - old_record_year, 0)

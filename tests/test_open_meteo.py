@@ -12,6 +12,7 @@ from src.data.open_meteo import (
     PRIORITY_HEAT_CITIES,
     PRIORITY_COLD_CITIES,
     detect_extreme_signals,
+    detect_country_records,
     ExtremeSignalBundle,
     ANOMALY_HOT_THRESHOLD_C,
 )
@@ -230,6 +231,66 @@ class TestDetectExtremeSignals:
         assert bundle.all_time_high is None
         assert bundle.monthly_high is None
         assert bundle.calendar_date_high is None
+
+
+class TestDetectCountryRecords:
+    """Country-level aggregation — peak across country's cities vs archive peak."""
+
+    def _bundle(self, city: str, country: str, today_max: float, archive_max: float, archive_year: int = 2018):
+        return ExtremeSignalBundle(
+            city=city,
+            country=country,
+            today_max_c=today_max,
+            archive_max_c=archive_max,
+            archive_max_year=archive_year,
+            today_min_c=0.0,
+            archive_min_c=-10.0,
+            archive_min_year=2010,
+        )
+
+    def test_country_record_when_today_exceeds_archive_peak(self):
+        readings = [
+            self._bundle("Marseille", "France", today_max=44.5, archive_max=42.0, archive_year=2019),
+            self._bundle("Paris", "France", today_max=38.0, archive_max=40.0, archive_year=2022),
+            self._bundle("Lyon", "France", today_max=41.0, archive_max=41.8, archive_year=2023),
+        ]
+        records = detect_country_records(readings)
+        highs = [r for r in records if r.kind == "high"]
+        assert len(highs) == 1
+        r = highs[0]
+        assert r.country == "France"
+        assert r.peak_city == "Marseille"
+        assert r.new_temp_c == 44.5
+        assert r.old_record_c == 42.0
+        assert r.old_record_city == "Marseille"  # Marseille also held the prior archive peak
+        assert r.cities_sampled == 3
+
+    def test_no_country_record_when_today_below_archive(self):
+        readings = [
+            self._bundle("Berlin", "Germany", today_max=30.0, archive_max=40.0),
+            self._bundle("Munich", "Germany", today_max=28.0, archive_max=39.0),
+        ]
+        records = detect_country_records(readings)
+        assert [r for r in records if r.kind == "high"] == []
+
+    def test_single_city_country_skipped(self):
+        """Need ≥ min_cities_per_country to emit an aggregate."""
+        readings = [
+            self._bundle("Bujumbura", "Burundi", today_max=40.0, archive_max=35.0),
+        ]
+        records = detect_country_records(readings)
+        assert records == []
+
+    def test_different_countries_independent(self):
+        readings = [
+            self._bundle("A1", "Alpha", today_max=45.0, archive_max=40.0, archive_year=2020),
+            self._bundle("A2", "Alpha", today_max=44.0, archive_max=39.0),
+            self._bundle("B1", "Beta", today_max=30.0, archive_max=35.0),
+            self._bundle("B2", "Beta", today_max=28.0, archive_max=34.0),
+        ]
+        records = detect_country_records(readings)
+        highs = sorted([r.country for r in records if r.kind == "high"])
+        assert highs == ["Alpha"]
 
 
 class TestFetchCityTemp:

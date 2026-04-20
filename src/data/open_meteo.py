@@ -89,10 +89,16 @@ class RecordStreakEvent:
 class ExtremeSignalBundle:
     """All extreme signals detected from a single city's archive fetch.
 
-    Each field is optional. A city might break ONLY its calendar-date
+    Each event field is optional. A city might break ONLY its calendar-date
     record; another might break all-time + monthly + calendar-date
     simultaneously. We emit whichever are true.
+
+    The ``today_*`` and ``archive_*`` fields are populated regardless of
+    whether any record broke — downstream country-level aggregation needs
+    every city's raw numbers, not just the ones that set records.
     """
+    city: str = ""
+    country: str = ""
     calendar_date_high: RecordEvent | None = None
     calendar_date_low: RecordEvent | None = None
     all_time_high: AllTimeRecord | None = None
@@ -101,6 +107,33 @@ class ExtremeSignalBundle:
     monthly_low: MonthlyRecord | None = None
     anomaly_hot: AnomalyEvent | None = None
     anomaly_cold: AnomalyEvent | None = None
+    today_max_c: float | None = None
+    today_min_c: float | None = None
+    archive_max_c: float | None = None
+    archive_max_year: int | None = None
+    archive_min_c: float | None = None
+    archive_min_year: int | None = None
+
+
+@dataclass
+class CountryRecord:
+    """A country's peak reading today exceeds its archive-wide peak.
+
+    Unlike per-city records, this aggregates across every city we monitor
+    in the country. The ``peak_city`` is the city that posted today's
+    country-peak reading; the ``old_record_city`` is the historical holder
+    across our archive (may be different city).
+    """
+    country: str
+    kind: str  # "high" or "low"
+    new_temp_c: float
+    peak_city: str
+    old_record_c: float
+    old_record_year: int
+    old_record_city: str
+    years_of_data: int
+    cities_sampled: int
+    event_id: str
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
@@ -369,7 +402,12 @@ def detect_extreme_signals(
     except (requests.RequestException, KeyError, IndexError, ValueError):
         return None
 
-    bundle = ExtremeSignalBundle()
+    bundle = ExtremeSignalBundle(
+        city=city,
+        country=country,
+        today_max_c=today_max,
+        today_min_c=today_min,
+    )
     target_month = today.month
     target_day = today.day
 
@@ -422,6 +460,13 @@ def detect_extreme_signals(
                     if hist_min_calendar is None or lo < hist_min_calendar:
                         hist_min_calendar = lo
                         hist_min_calendar_year = d.year
+
+    # Expose archive extremes on the bundle so country-level aggregation
+    # downstream can compare today's national peak vs the archive's.
+    bundle.archive_max_c = hist_max_overall
+    bundle.archive_max_year = hist_max_overall_year
+    bundle.archive_min_c = hist_min_overall
+    bundle.archive_min_year = hist_min_overall_year
 
     today_iso = today.isoformat()
     city_key = city.replace(" ", "_")
@@ -514,13 +559,19 @@ def check_extreme_signals_for_cities(
     max_checks: int | None = None,
     *,
     archive_years: int = 30,
-) -> list[ExtremeSignalBundle]:
-    """Check cities for extreme signals. Returns list of bundles with at
-    least one signal fired; cities with no signals are excluded.
+) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
+    """Check cities for extreme signals. Returns ``(bundles, country_records)``.
+
+    ``bundles`` contains only cities that tripped at least one signal.
+    ``country_records`` is aggregated across ALL cities in the sample: when
+    a country's peak today exceeds its archive-wide peak across every city
+    we've sampled in that country, a CountryRecord fires. Requires at least
+    2 cities in a country for the aggregate to be meaningful.
     """
     ordered = prioritize_cities(cities)
     to_check = ordered if max_checks is None else ordered[:max_checks]
     bundles = []
+    all_readings: list[ExtremeSignalBundle] = []
     for city in to_check:
         bundle = detect_extreme_signals(
             lat=float(city["lat"]),
@@ -531,7 +582,8 @@ def check_extreme_signals_for_cities(
         )
         if bundle is None:
             continue
-        # Only include bundles with at least one signal
+        all_readings.append(bundle)
+        # Only include bundles with at least one per-city signal
         if any([
             bundle.calendar_date_high, bundle.calendar_date_low,
             bundle.all_time_high, bundle.all_time_low,
@@ -539,7 +591,91 @@ def check_extreme_signals_for_cities(
             bundle.anomaly_hot, bundle.anomaly_cold,
         ]):
             bundles.append(bundle)
-    return bundles
+
+    country_records = detect_country_records(all_readings, archive_years=archive_years)
+    return bundles, country_records
+
+
+def detect_country_records(
+    readings: list[ExtremeSignalBundle],
+    *,
+    archive_years: int = 30,
+    min_cities_per_country: int = 2,
+) -> list[CountryRecord]:
+    """Aggregate per-city readings into country-level records.
+
+    For each country with at least ``min_cities_per_country`` sampled
+    cities, compare today's peak temperature (across all that country's
+    cities) against the highest historical reading we've seen (across the
+    same set of cities). When today exceeds it, the country has hit a new
+    archive-wide high.
+
+    Same logic for lows with the sign flipped.
+    """
+    today = date.today()
+    today_iso = today.isoformat()
+
+    by_country: dict[str, list[ExtremeSignalBundle]] = {}
+    for r in readings:
+        if r.country:
+            by_country.setdefault(r.country, []).append(r)
+
+    records: list[CountryRecord] = []
+    for country, group in by_country.items():
+        if len(group) < min_cities_per_country:
+            continue
+
+        # Highs
+        today_highs = [(r.today_max_c, r.city) for r in group if r.today_max_c is not None]
+        hist_highs = [
+            (r.archive_max_c, r.city, r.archive_max_year)
+            for r in group
+            if r.archive_max_c is not None and r.archive_max_year is not None
+        ]
+        if today_highs and hist_highs:
+            peak_today, peak_today_city = max(today_highs, key=lambda x: x[0])
+            peak_hist_temp, peak_hist_city, peak_hist_year = max(hist_highs, key=lambda x: x[0])
+            if peak_today > peak_hist_temp:
+                country_key = country.replace(" ", "_")
+                records.append(CountryRecord(
+                    country=country,
+                    kind="high",
+                    new_temp_c=peak_today,
+                    peak_city=peak_today_city,
+                    old_record_c=peak_hist_temp,
+                    old_record_year=peak_hist_year,
+                    old_record_city=peak_hist_city,
+                    years_of_data=archive_years,
+                    cities_sampled=len(group),
+                    event_id=f"country_high_{country_key}_{today_iso}",
+                ))
+
+        # Lows
+        today_lows = [(r.today_min_c, r.city) for r in group if r.today_min_c is not None]
+        hist_lows = [
+            (r.archive_min_c, r.city, r.archive_min_year)
+            for r in group
+            if r.archive_min_c is not None and r.archive_min_year is not None
+        ]
+        if today_lows and hist_lows:
+            trough_today, trough_today_city = min(today_lows, key=lambda x: x[0])
+            trough_hist_temp, trough_hist_city, trough_hist_year = min(hist_lows, key=lambda x: x[0])
+            if trough_today < trough_hist_temp:
+                country_key = country.replace(" ", "_")
+                records.append(CountryRecord(
+                    country=country,
+                    kind="low",
+                    new_temp_c=trough_today,
+                    peak_city=trough_today_city,
+                    old_record_c=trough_hist_temp,
+                    old_record_year=trough_hist_year,
+                    old_record_city=trough_hist_city,
+                    years_of_data=archive_years,
+                    cities_sampled=len(group),
+                    event_id=f"country_low_{country_key}_{today_iso}",
+                ))
+
+    return records
 
 
 def check_records_for_cities(cities: list[dict], max_checks: int | None = None) -> list[RecordEvent]:

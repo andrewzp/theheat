@@ -180,6 +180,7 @@ Every 4 hours, GitHub Actions runs `python -m src.main alerts`:
    - Bundle includes: all_time_high/low, monthly_high/low, anomaly_hot/cold, calendar_date_high/low
    - Handler picks strongest signal per city (all-time > monthly > anomaly > calendar-date)
    - Monthly records whose prior record was set in the current calendar year are suppressed (confusing framing — "hottest April, old record set in 2026" reads as nonsense)
+   - Country-level aggregation runs after the per-city loop: for each country with ≥2 sampled cities, compare today's peak vs the archive-wide peak across the same cities. Emits a `country_high` / `country_low` signal when today exceeds the archive. Threshold 82, elite by default.
 4. **Score events** — editorial scoring with per-category thresholds (62-80). Elite events pass.
 5. **Deduplicate** against posted_events (last 500)
 6. **Generate 4 candidates** via Gemini 2.5 Flash, ranked by copy score
@@ -236,6 +237,7 @@ Source-specific gates: sea ice (Mondays), drought (Fridays), ENSO (1st of month)
 
 Signal types and thresholds:
 - **all_time_record** — threshold 80 (elite by default)
+- **country_record** (hottest/coldest across all sampled cities in a country) — 82 (elite by default; the biggest story the pipeline produces)
 - **monthly_record** — 76
 - **anomaly** — 76
 - **record_streak** — 74 (fires at 3+ days)

@@ -482,7 +482,7 @@ class TestMonthlyRecordSameYearSuppression:
             ),
         )
         mock_om.load_cities.return_value = []
-        mock_om.check_extreme_signals_for_cities.return_value = [bundle]
+        mock_om.check_extreme_signals_for_cities.return_value = ([bundle], [])
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
@@ -519,7 +519,7 @@ class TestMonthlyRecordSameYearSuppression:
             ),
         )
         mock_om.load_cities.return_value = []
-        mock_om.check_extreme_signals_for_cities.return_value = [bundle]
+        mock_om.check_extreme_signals_for_cities.return_value = ([bundle], [])
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
@@ -564,7 +564,7 @@ class TestCO2AnnualCap:
         from datetime import date
 
         mock_om.load_cities.return_value = []
-        mock_om.check_extreme_signals_for_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = [MagicMock()]
         mock_co2.detect_milestone.return_value = CO2Milestone(
@@ -590,7 +590,7 @@ class TestCO2AnnualCap:
         self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
-        mock_om.check_extreme_signals_for_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = [MagicMock()]
         mock_co2.detect_milestone.return_value = CO2Milestone(
@@ -665,7 +665,7 @@ class TestRunAlerts:
         self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
-        mock_om.check_extreme_signals_for_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_firms.fetch_fires.return_value = []
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
