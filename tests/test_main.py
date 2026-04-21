@@ -1339,6 +1339,108 @@ class TestFireFootprintIntegration:
         mock_state.log_error.assert_any_call(state_dict, "fire_footprint", "boom")
 
 
+class TestPerCycleCapCleanup:
+    """Regression: when the per-cycle cap prunes weaker drafts, the
+    pruned drafts' event_ids used to remain in posted_events, so later
+    cycles skipped those events as "already drafted" even though no
+    tweet ever shipped. The per-source drafted telemetry was also left
+    overstated."""
+
+    def _seed_drafts_after_mark(self, n: int):
+        """Return (bot_state, drafts_before) with n pre-existing drafts
+        representing 'this cycle produced n drafts' — each with a
+        matching posted_events entry just like run_alerts' per-section
+        record_event() does."""
+        from src.main import MAX_DRAFTS_PER_CYCLE  # noqa: F401 (import side effect)
+        state_dict = _fresh_state()
+        drafts_before = 0
+        for i in range(n):
+            state_dict["drafts"].append({
+                "id": f"d{i}",
+                "event_id": f"evt_{i}",
+                "type": "record",
+                "text": f"tweet {i}",
+                "status": "pending",
+                "score": {"total": 80 - i},  # d0 is strongest, last is weakest
+            })
+            state_dict["posted_events"].append(f"evt_{i}")
+        return state_dict, drafts_before
+
+    def test_pruned_event_ids_removed_from_posted_events(self):
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict, drafts_before = self._seed_drafts_after_mark(MAX_DRAFTS_PER_CYCLE + 2)
+        assert len(state_dict["posted_events"]) == MAX_DRAFTS_PER_CYCLE + 2
+
+        drafted = _prune_weakest_cycle_drafts(state_dict, drafts_before, None, MAX_DRAFTS_PER_CYCLE + 2)
+
+        assert drafted == MAX_DRAFTS_PER_CYCLE
+        kept_event_ids = {d["event_id"] for d in state_dict["drafts"]}
+        # Weakest two should have been dropped — those are the highest-
+        # numbered event_ids (evt_3, evt_4 if cap is 3).
+        assert len(kept_event_ids) == MAX_DRAFTS_PER_CYCLE
+        # Critical: pruned events MUST NOT remain in posted_events.
+        for e in state_dict["posted_events"]:
+            assert e in kept_event_ids, (
+                f"Pruned event {e} lingered in posted_events — will block future drafting"
+            )
+
+    def test_no_prune_when_under_cap(self):
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict, drafts_before = self._seed_drafts_after_mark(MAX_DRAFTS_PER_CYCLE - 1)
+        before_posted = list(state_dict["posted_events"])
+        drafted = _prune_weakest_cycle_drafts(state_dict, drafts_before, None, MAX_DRAFTS_PER_CYCLE - 1)
+        assert drafted == MAX_DRAFTS_PER_CYCLE - 1
+        assert state_dict["posted_events"] == before_posted
+
+    def test_rolls_back_source_drafted_telemetry(self):
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict, drafts_before = self._seed_drafts_after_mark(MAX_DRAFTS_PER_CYCLE + 2)
+        # Simulate a run record where the two pruned drafts came from
+        # the open_meteo source.
+        current_run = {
+            "sources": [
+                {"source": "open_meteo_extreme_signals", "drafted": MAX_DRAFTS_PER_CYCLE + 2},
+            ],
+        }
+        _prune_weakest_cycle_drafts(state_dict, drafts_before, current_run, MAX_DRAFTS_PER_CYCLE + 2)
+
+        # Two drafts were pruned; drafted count should drop by 2.
+        src = current_run["sources"][0]
+        assert src["drafted"] == MAX_DRAFTS_PER_CYCLE, (
+            f"Expected drafted to roll back to {MAX_DRAFTS_PER_CYCLE}, got {src['drafted']}"
+        )
+
+    def test_ice_mass_subsource_telemetry_rollback(self):
+        """ice_mass logs as ``ice_mass_greenland`` / ``ice_mass_antarctica``
+        rather than plain ``ice_mass``. Prune should match the prefix."""
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict = _fresh_state()
+        for i in range(MAX_DRAFTS_PER_CYCLE + 1):
+            state_dict["drafts"].append({
+                "id": f"d{i}",
+                "event_id": f"evt_{i}",
+                "type": "ice_mass_record" if i == MAX_DRAFTS_PER_CYCLE else "record",
+                "status": "pending",
+                "score": {"total": 80 if i < MAX_DRAFTS_PER_CYCLE else 75},
+            })
+            state_dict["posted_events"].append(f"evt_{i}")
+        current_run = {
+            "sources": [
+                {"source": "ice_mass_greenland", "drafted": 1},
+                {"source": "open_meteo_extreme_signals", "drafted": MAX_DRAFTS_PER_CYCLE},
+            ],
+        }
+        _prune_weakest_cycle_drafts(state_dict, 0, current_run, MAX_DRAFTS_PER_CYCLE + 1)
+
+        # The ice_mass_record draft (weakest) was pruned → greenland telemetry rolls back.
+        greenland = next(s for s in current_run["sources"] if s["source"] == "ice_mass_greenland")
+        assert greenland["drafted"] == 0
+
+
 class TestSynthesisRecording:
     def test_fire_in_us_records_component(self, monkeypatch):
         from unittest.mock import MagicMock

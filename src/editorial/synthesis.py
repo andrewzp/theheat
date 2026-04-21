@@ -80,7 +80,18 @@ def detect_fire_drought_heat(bot_state: dict) -> list[SynthesisSignal]:
             continue
 
         peak_fire = max(fires, key=lambda f: float(f.get("frp") or 0))
-        peak_heat = max(heats, key=lambda h: abs(float(h.get("value_c") or 0)))
+        # Rank heats by anomaly when present (it's the story-relevant
+        # number); fall back to absolute value for legacy entries missing
+        # an anomaly field.
+        def _heat_rank(h: dict) -> float:
+            a = h.get("anomaly_c")
+            if a is not None:
+                return abs(float(a))
+            return abs(float(h.get("value_c") or 0))
+        peak_heat = max(heats, key=_heat_rank)
+
+        peak_heat_anomaly = peak_heat.get("anomaly_c")
+        peak_heat_anomaly = float(peak_heat_anomaly) if peak_heat_anomaly is not None else 0.0
 
         event_id = f"synthesis_fdh_{_state_key(state_name)}_{_iso_week()}"
         headline = (
@@ -96,6 +107,7 @@ def detect_fire_drought_heat(bot_state: dict) -> list[SynthesisSignal]:
             "heat_peak_kind": peak_heat.get("kind") or "record",
             "heat_peak_city": peak_heat.get("city") or "",
             "heat_peak_value_c": float(peak_heat.get("value_c") or 0),
+            "heat_peak_anomaly_c": peak_heat_anomaly,
             "heat_count": len(heats),
             "window_days": WINDOW_DAYS,
         }

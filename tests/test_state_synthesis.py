@@ -121,3 +121,101 @@ class TestDroughtSnapshot:
 
     def test_missing_returns_none(self, fresh_state):
         assert get_synthesis_drought_snapshot(fresh_state) is None
+
+
+class TestSynthesisMergePreservesState:
+    """Regression: _merge_state used to drop synthesis_components and
+    synthesis_cooldown, which meant every persisted write reset the
+    14-day window and cooldown map to defaults. Keep the evidence."""
+
+    def test_merge_preserves_synthesis_components_across_states(self):
+        from src.state import _merge_state
+
+        base = {
+            "synthesis_components": {
+                "fires": {
+                    "California": [
+                        {"event_id": "fire_1", "frp": 900.0, "at": "2026-04-18T10:00:00Z"},
+                    ],
+                },
+                "heats": {},
+                "drought_snapshot": {
+                    "updated_at": "2026-04-15T12:00:00Z",
+                    "entries": [{"state": "California", "d4_pct": 10.0}],
+                },
+            },
+        }
+        incoming = {
+            "synthesis_components": {
+                "fires": {
+                    "California": [
+                        {"event_id": "fire_1", "frp": 900.0, "at": "2026-04-18T10:00:00Z"},
+                        {"event_id": "fire_2", "frp": 1500.0, "at": "2026-04-20T09:00:00Z"},
+                    ],
+                    "Arizona": [
+                        {"event_id": "fire_3", "frp": 400.0, "at": "2026-04-20T11:00:00Z"},
+                    ],
+                },
+                "heats": {
+                    "California": [
+                        {"event_id": "heat_1", "value_c": 42.1, "anomaly_c": 9.0,
+                         "at": "2026-04-20T14:00:00Z"},
+                    ],
+                },
+                "drought_snapshot": {
+                    "updated_at": "2026-04-19T12:00:00Z",  # newer
+                    "entries": [{"state": "California", "d4_pct": 12.0}],
+                },
+            },
+        }
+        merged = _merge_state(base, incoming)
+        fires = merged["synthesis_components"]["fires"]
+        assert len(fires["California"]) == 2
+        assert {f["event_id"] for f in fires["California"]} == {"fire_1", "fire_2"}
+        assert fires["Arizona"][0]["event_id"] == "fire_3"
+        heats = merged["synthesis_components"]["heats"]
+        assert heats["California"][0]["anomaly_c"] == 9.0
+        # Drought snapshot takes the newer updated_at.
+        assert merged["synthesis_components"]["drought_snapshot"]["updated_at"] == "2026-04-19T12:00:00Z"
+        assert merged["synthesis_components"]["drought_snapshot"]["entries"][0]["d4_pct"] == 12.0
+
+    def test_merge_preserves_cooldown_keeping_most_recent(self):
+        from src.state import _merge_state
+
+        base = {
+            "synthesis_cooldown": {
+                "synthesis_fire_drought_heat": {
+                    "California": "2026-04-15T12:00:00Z",
+                    "Arizona": "2026-04-10T12:00:00Z",
+                },
+            },
+        }
+        incoming = {
+            "synthesis_cooldown": {
+                "synthesis_fire_drought_heat": {
+                    "California": "2026-04-20T12:00:00Z",  # newer, wins
+                    "Arizona": "2026-04-08T12:00:00Z",     # older, loses
+                },
+            },
+        }
+        merged = _merge_state(base, incoming)
+        ca = merged["synthesis_cooldown"]["synthesis_fire_drought_heat"]
+        assert ca["California"] == "2026-04-20T12:00:00Z"
+        assert ca["Arizona"] == "2026-04-10T12:00:00Z"
+
+    def test_empty_base_accepts_incoming_synthesis(self):
+        from src.state import _merge_state
+
+        merged = _merge_state(
+            {},
+            {
+                "synthesis_components": {
+                    "fires": {"Oregon": [{"event_id": "f1", "at": "2026-04-20T00:00:00Z"}]},
+                    "heats": {},
+                    "drought_snapshot": None,
+                },
+                "synthesis_cooldown": {"rule_x": {"Oregon": "2026-04-20T00:00:00Z"}},
+            },
+        )
+        assert merged["synthesis_components"]["fires"]["Oregon"][0]["event_id"] == "f1"
+        assert merged["synthesis_cooldown"]["rule_x"]["Oregon"] == "2026-04-20T00:00:00Z"

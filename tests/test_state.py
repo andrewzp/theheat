@@ -436,3 +436,82 @@ class TestFireFootprintLastRunMerge:
         incoming = {"fire_footprint_last_run": None}
         merged = _merge_state(base, incoming)
         assert merged["fire_footprint_last_run"] is None
+
+
+class TestSqliteRoundTripLaneKeys:
+    """Regression: sqlite_store used to persist only the legacy subset
+    (last_hot10, posted_events, daily_tweet_count, streaks, drafts,
+    run_history, errors). Lane-added keys (ocean/ice/fire/synthesis
+    + city_monthly_* + co2/ice_annual_count + record_streaks) read back
+    as defaults on any sqlite-backed deployment. That broke daily gates,
+    weekly short-circuits, annual caps, and marine-heatwave continuity.
+    """
+
+    def _sqlite_round_trip(self, state_in: dict) -> dict:
+        from src.storage import sqlite_store
+        from src.state import DEFAULT_STATE
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "theheat.sqlite")
+            assert sqlite_store.write_state(db_path, state_in)
+            return sqlite_store.read_state(db_path, DEFAULT_STATE)
+
+    def test_round_trip_preserves_ocean_sst_streak(self):
+        state_in = {
+            "ocean_sst_streak": {"seeded": True, "last_milestone_fired": 100},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": 100}
+
+    def test_round_trip_preserves_ice_mass_state(self):
+        state_in = {
+            "ice_mass_max_loss": {"greenland": {"gt": -500.0, "month": "2026-03"}},
+            "ice_mass_last_milestone": {"greenland": -6000.0},
+            "ice_mass_last_seen": {"greenland": "2026-03"},
+            "ice_annual_count": {"2026": 3},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["ice_mass_max_loss"]["greenland"]["gt"] == -500.0
+        assert out["ice_mass_last_milestone"]["greenland"] == -6000.0
+        assert out["ice_mass_last_seen"]["greenland"] == "2026-03"
+        assert out["ice_annual_count"]["2026"] == 3
+
+    def test_round_trip_preserves_fire_footprint_state(self):
+        state_in = {
+            "fire_complex_tiers": {"GWIS_AAA": 3, "NIFC_BBB": 1},
+            "fire_footprint_last_run": "2026-04-21",
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["fire_complex_tiers"] == {"GWIS_AAA": 3, "NIFC_BBB": 1}
+        assert out["fire_footprint_last_run"] == "2026-04-21"
+
+    def test_round_trip_preserves_synthesis_state(self):
+        state_in = {
+            "synthesis_components": {
+                "fires": {"California": [{"event_id": "f1", "frp": 1500.0, "at": "2026-04-20T10:00:00Z"}]},
+                "heats": {"California": [{"event_id": "h1", "anomaly_c": 8.0, "at": "2026-04-20T11:00:00Z"}]},
+                "drought_snapshot": {"updated_at": "2026-04-19T12:00:00Z", "entries": []},
+            },
+            "synthesis_cooldown": {
+                "synthesis_fire_drought_heat": {"California": "2026-04-20T12:00:00Z"},
+            },
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["synthesis_components"]["fires"]["California"][0]["event_id"] == "f1"
+        assert out["synthesis_components"]["heats"]["California"][0]["anomaly_c"] == 8.0
+        assert out["synthesis_components"]["drought_snapshot"]["updated_at"] == "2026-04-19T12:00:00Z"
+        assert out["synthesis_cooldown"]["synthesis_fire_drought_heat"]["California"] == "2026-04-20T12:00:00Z"
+
+    def test_round_trip_preserves_co2_annual_count(self):
+        state_in = {"co2_annual_count": {"2026": 5, "2025": 11}}
+        out = self._sqlite_round_trip(state_in)
+        assert out["co2_annual_count"] == {"2026": 5, "2025": 11}
+
+    def test_round_trip_preserves_city_extreme_trackers(self):
+        state_in = {
+            "city_all_time_max": {"Phoenix": {"temp_c": 48.2, "year": 2018}},
+            "record_streaks": {"Phoenix": {"days": 4, "last_date": "2026-04-20"}},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["city_all_time_max"]["Phoenix"]["temp_c"] == 48.2
+        assert out["record_streaks"]["Phoenix"]["days"] == 4

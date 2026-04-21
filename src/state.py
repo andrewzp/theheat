@@ -320,6 +320,103 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
         base.get("fire_footprint_last_run") or "",
         next_state.get("fire_footprint_last_run") or "",
     ) or None
+    merged["synthesis_components"] = _merge_synthesis_components(
+        base.get("synthesis_components"),
+        next_state.get("synthesis_components"),
+    )
+    merged["synthesis_cooldown"] = _merge_synthesis_cooldown(
+        base.get("synthesis_cooldown"),
+        next_state.get("synthesis_cooldown"),
+    )
+    return merged
+
+
+def _merge_synthesis_event_list(
+    a: list[dict] | None, b: list[dict] | None
+) -> list[dict]:
+    """Union of two synthesis event lists, deduped by event_id.
+
+    When both sides have the same event_id, keep the one with the later
+    ``at`` timestamp so a stale concurrent writer doesn't roll back
+    progress. Entries without an event_id are kept as-is (anonymous
+    components still contribute evidence to the rule).
+    """
+    merged: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for entry in [*(a or []), *(b or [])]:
+        eid = entry.get("event_id") if isinstance(entry, dict) else None
+        if not eid:
+            anonymous.append(deepcopy(entry))
+            continue
+        existing = merged.get(eid)
+        if existing is None:
+            merged[eid] = deepcopy(entry)
+            continue
+        existing_at = _parse_state_timestamp(existing.get("at"))
+        new_at = _parse_state_timestamp(entry.get("at"))
+        if new_at >= existing_at:
+            merged[eid] = deepcopy(entry)
+    return list(merged.values()) + anonymous
+
+
+def _merge_synthesis_components(
+    base: dict | None, incoming: dict | None
+) -> dict:
+    """Merge synthesis_components preserving cross-run evidence.
+
+    - ``fires`` and ``heats`` are per-state lists of events. Dedup by
+      event_id and union; keep the later ``at`` on collision so a stale
+      concurrent run doesn't clobber a newer one.
+    - ``drought_snapshot`` is a single dict refreshed on each USDM poll.
+      Take the one with the later ``updated_at``.
+    """
+    b = base or {}
+    n = incoming or {}
+    merged: dict = {"fires": {}, "heats": {}, "drought_snapshot": None}
+
+    for bucket in ("fires", "heats"):
+        b_bucket = b.get(bucket) or {}
+        n_bucket = n.get(bucket) or {}
+        merged_bucket: dict[str, list[dict]] = {}
+        for key in set(list(b_bucket.keys()) + list(n_bucket.keys())):
+            merged_bucket[key] = _merge_synthesis_event_list(
+                b_bucket.get(key), n_bucket.get(key)
+            )
+        merged[bucket] = merged_bucket
+
+    b_snap = b.get("drought_snapshot")
+    n_snap = n.get("drought_snapshot")
+    if b_snap is None and n_snap is None:
+        merged["drought_snapshot"] = None
+    elif b_snap is None:
+        merged["drought_snapshot"] = deepcopy(n_snap)
+    elif n_snap is None:
+        merged["drought_snapshot"] = deepcopy(b_snap)
+    else:
+        b_at = _parse_state_timestamp(b_snap.get("updated_at"))
+        n_at = _parse_state_timestamp(n_snap.get("updated_at"))
+        merged["drought_snapshot"] = deepcopy(
+            n_snap if n_at >= b_at else b_snap
+        )
+    return merged
+
+
+def _merge_synthesis_cooldown(
+    base: dict | None, incoming: dict | None
+) -> dict:
+    """Per-rule per-region cooldown. Keep the later fired-at timestamp."""
+    b = base or {}
+    n = incoming or {}
+    merged: dict[str, dict[str, str]] = {}
+    for rule in set(list(b.keys()) + list(n.keys())):
+        b_rule = b.get(rule) or {}
+        n_rule = n.get(rule) or {}
+        rule_merged: dict[str, str] = {}
+        for region in set(list(b_rule.keys()) + list(n_rule.keys())):
+            a_ts = b_rule.get(region, "")
+            c_ts = n_rule.get(region, "")
+            rule_merged[region] = a_ts if a_ts >= c_ts else c_ts
+        merged[rule] = rule_merged
     return merged
 
 

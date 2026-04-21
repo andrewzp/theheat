@@ -125,3 +125,67 @@ class TestSynthesisEnabledToggle:
         # No synthesis_enabled key → default to enabled.
         assert "synthesis_enabled" not in state_ca_all_three
         assert len(detect_fire_drought_heat(state_ca_all_three)) == 1
+
+
+class TestSynthesisHeatAnomalyField:
+    """Regression: synthesis scorer expects heat anomaly (degrees above
+    normal), but writers stored absolute temperature in value_c. Components
+    must now carry heat_peak_anomaly_c, and the peak ranker must prefer
+    anomaly when present."""
+
+    def _state_with_heat(self, heats):
+        from copy import deepcopy
+        from src.state import (
+            DEFAULT_STATE,
+            record_synthesis_component,
+            record_synthesis_drought_snapshot,
+        )
+        s = deepcopy(DEFAULT_STATE)
+        record_synthesis_drought_snapshot(s, [
+            {"state": "California", "d3_pct": 5.0, "d4_pct": 3.0, "total_drought_pct": 40.0},
+        ])
+        record_synthesis_component(
+            s, kind="fire", region="California",
+            event_id="fire_1",
+            metadata={"frp": 1000.0, "region": "Sacramento County"},
+            timestamp=_iso(offset_days=1),
+        )
+        for i, h in enumerate(heats):
+            record_synthesis_component(
+                s, kind="heat", region="California",
+                event_id=f"heat_{i}",
+                metadata=h,
+                timestamp=_iso(offset_days=1),
+            )
+        return s
+
+    def test_components_carry_heat_peak_anomaly_c(self):
+        s = self._state_with_heat([
+            {"kind": "calendar", "city": "Sacramento", "value_c": 40.0, "anomaly_c": 9.0},
+        ])
+        signals = detect_fire_drought_heat(s)
+        assert len(signals) == 1
+        comps = signals[0].components
+        assert comps["heat_peak_anomaly_c"] == 9.0
+        # value_c is still carried for context, but anomaly is separate.
+        assert comps["heat_peak_value_c"] == 40.0
+
+    def test_peak_heat_ranked_by_anomaly_not_value(self):
+        # Two heats: one with bigger absolute temp, one with bigger anomaly.
+        # The anomaly one should win the peak.
+        s = self._state_with_heat([
+            {"kind": "calendar", "city": "HotCity",   "value_c": 45.0, "anomaly_c": 4.0},
+            {"kind": "anomaly",  "city": "Anomalous", "value_c": 32.0, "anomaly_c": 14.0},
+        ])
+        signals = detect_fire_drought_heat(s)
+        comps = signals[0].components
+        assert comps["heat_peak_city"] == "Anomalous"
+        assert comps["heat_peak_anomaly_c"] == 14.0
+
+    def test_legacy_missing_anomaly_falls_back_to_zero(self):
+        s = self._state_with_heat([
+            {"kind": "calendar", "city": "Old", "value_c": 40.0},  # no anomaly_c
+        ])
+        signals = detect_fire_drought_heat(s)
+        comps = signals[0].components
+        assert comps["heat_peak_anomaly_c"] == 0.0

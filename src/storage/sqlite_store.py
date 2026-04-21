@@ -98,6 +98,30 @@ def _json(value) -> str:
     return json.dumps(value, separators=(",", ":"))
 
 
+# Lane-added state keys that weren't in the original sqlite schema.
+# Rather than growing the schema once per new key, these round-trip via
+# the ``metadata`` key-value table as JSON blobs. Order-sensitive: the
+# first seven are the Apr 18 extreme-signals state, then lanes 1-4 in
+# merge order.
+_METADATA_JSON_KEYS = (
+    "co2_annual_count",
+    "city_all_time_max",
+    "city_all_time_min",
+    "city_monthly_max",
+    "city_monthly_min",
+    "record_streaks",
+    "ocean_sst_streak",
+    "ice_mass_max_loss",
+    "ice_mass_last_milestone",
+    "ice_mass_last_seen",
+    "ice_annual_count",
+    "fire_complex_tiers",
+    "fire_footprint_last_run",
+    "synthesis_components",
+    "synthesis_cooldown",
+)
+
+
 def is_empty(db_path: str) -> bool:
     with _connect(db_path) as conn:
         counts = [
@@ -123,6 +147,15 @@ def read_state(db_path: str, default_state: dict) -> dict:
         ).fetchone()
         if last_hot10_row:
             state["last_hot10"] = json.loads(last_hot10_row["value_json"])
+
+        # Lane-added JSON blobs — persisted via the metadata table so the
+        # schema stays additive. Missing rows fall back to default_state.
+        for key in _METADATA_JSON_KEYS:
+            row = conn.execute(
+                "SELECT value_json FROM metadata WHERE key = ?", (key,)
+            ).fetchone()
+            if row:
+                state[key] = json.loads(row["value_json"])
 
         state["posted_events"] = [
             row["event_id"]
@@ -191,6 +224,12 @@ def write_state(db_path: str, state: dict) -> bool:
                 "INSERT INTO metadata (key, value_json) VALUES (?, ?)",
                 ("last_hot10", _json(state.get("last_hot10", {"date": None, "cities": []}))),
             )
+            for key in _METADATA_JSON_KEYS:
+                if key in state:
+                    conn.execute(
+                        "INSERT INTO metadata (key, value_json) VALUES (?, ?)",
+                        (key, _json(state[key])),
+                    )
 
             conn.execute("DELETE FROM posted_events")
             conn.executemany(

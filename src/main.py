@@ -679,6 +679,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     value_c = getattr(strongest_signal, "new_temp_c", None)
                     if value_c is None:
                         value_c = getattr(strongest_signal, "today_temp_c", 0.0)
+                    # Compute an anomaly figure the synthesis scorer can use.
+                    # anomaly_hot events expose a true anomaly; record events
+                    # carry an implicit margin over their prior archive-high,
+                    # which is a reasonable proxy. Unknown → 0 (scorer clamps
+                    # with abs()+min() so zero contributes nothing).
+                    anomaly_c = getattr(strongest_signal, "anomaly_c", None)
+                    if anomaly_c is None:
+                        old_record_c = getattr(strongest_signal, "old_record_c", None)
+                        if old_record_c is not None and value_c is not None:
+                            anomaly_c = max(float(value_c) - float(old_record_c), 0.0)
                     kind_map = {
                         "all_time_high": "all_time",
                         "monthly_high": "monthly",
@@ -694,6 +704,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             "kind": kind_map.get(strongest_type, "record"),
                             "city": strongest_city,
                             "value_c": float(value_c or 0),
+                            "anomaly_c": (
+                                float(anomaly_c) if anomaly_c is not None else None
+                            ),
                         },
                     )
                 generated = strongest_generator()
@@ -1746,7 +1759,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             score = score_synthesis_fire_drought_heat(
                 drought_d4_pct=comps["drought_d4_pct"],
                 fire_peak_frp=comps["fire_peak_frp"],
-                heat_peak_anomaly_c=comps["heat_peak_value_c"],
+                heat_peak_anomaly_c=comps.get(
+                    "heat_peak_anomaly_c",
+                    # Fallback for any legacy (pre-fix) components: treat
+                    # absolute as zero-anomaly to avoid absurd severity.
+                    0.0,
+                ),
                 component_count={
                     "fires": comps["fire_count"],
                     "heats": comps["heat_count"],
@@ -1806,23 +1824,99 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         )
 
     # Prune weakest drafts from this cycle if we exceeded the cap.
-    # Keeps only the top N by signal score from this run.
-    drafts = bot_state.get("drafts", [])
-    new_drafts = drafts[drafts_before:]
-    if len(new_drafts) > MAX_DRAFTS_PER_CYCLE:
-        # Sort by signal score (descending), keep top N
-        scored = [(d, d.get("score", {}).get("total", 0)) for d in new_drafts]
-        scored.sort(key=lambda x: x[1], reverse=True)
-        keep = {id(d) for d, _ in scored[:MAX_DRAFTS_PER_CYCLE]}
-        pruned = [d for d, _ in scored[MAX_DRAFTS_PER_CYCLE:]]
-        bot_state["drafts"] = drafts[:drafts_before] + [d for d in new_drafts if id(d) in keep]
-        drafted = MAX_DRAFTS_PER_CYCLE
-        print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
-        for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
-            print(f"[alerts]   Pruned: score={s} {d.get('text', '')[:50]}...")
-
+    drafted = _prune_weakest_cycle_drafts(
+        bot_state, drafts_before, current_run, drafted,
+    )
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state
+
+
+# Source-key lookup used during per-cycle pruning to roll back
+# overstated drafted telemetry. Ice mass logs per-region sub-sources
+# (e.g. ``ice_mass_greenland``); the prune helper handles that with
+# prefix-matching rather than enumerating every sub-source here.
+_PRUNE_SOURCE_KEY_BY_TYPE = {
+    "all_time_high": "open_meteo_extreme_signals",
+    "all_time_low": "open_meteo_extreme_signals",
+    "monthly_high": "open_meteo_extreme_signals",
+    "monthly_low": "open_meteo_extreme_signals",
+    "anomaly_hot": "open_meteo_extreme_signals",
+    "anomaly_cold": "open_meteo_extreme_signals",
+    "record": "open_meteo_extreme_signals",
+    "record_low": "open_meteo_extreme_signals",
+    "record_streak": "open_meteo_extreme_signals",
+    "simultaneous_records": "open_meteo_extreme_signals",
+    "country_high": "open_meteo_extreme_signals",
+    "country_low": "open_meteo_extreme_signals",
+    "fire": "firms",
+    "fire_footprint": "fire_footprint",
+    "co2_milestone": "co2",
+    "severe_weather": "nws_alerts",
+    "global_disaster": "gdacs",
+    "sea_ice_record": "sea_ice",
+    "drought": "drought",
+    "enso": "enso",
+    "extreme_wave": "ocean",
+    "storm_surge": "water_levels",
+    "river_flood": "river_gauges",
+    "marine_heatwave": "ocean_sst",
+    "ice_mass_record": "ice_mass",
+    "synthesis_fire_drought_heat": "synthesis_fire_drought_heat",
+}
+
+
+def _prune_weakest_cycle_drafts(
+    bot_state: dict,
+    drafts_before: int,
+    current_run: dict | None,
+    drafted: int,
+) -> int:
+    """Enforce MAX_DRAFTS_PER_CYCLE by dropping the weakest drafts added
+    this cycle.
+
+    When a draft is pruned, its ``event_id`` must also be removed from
+    ``posted_events`` — each source block records the event as "seen"
+    as soon as it saves a draft, so leaving pruned IDs in the list
+    permanently blocks future cycles from re-drafting that event even
+    though no tweet ever shipped. Also rolls back overstated
+    source-level ``drafted`` telemetry in the run record.
+
+    Returns the post-prune drafted count the caller should report.
+    """
+    drafts = bot_state.get("drafts", [])
+    new_drafts = drafts[drafts_before:]
+    if len(new_drafts) <= MAX_DRAFTS_PER_CYCLE:
+        return drafted
+
+    scored = [(d, d.get("score", {}).get("total", 0)) for d in new_drafts]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    keep = {id(d) for d, _ in scored[:MAX_DRAFTS_PER_CYCLE]}
+    pruned = [d for d, _ in scored[MAX_DRAFTS_PER_CYCLE:]]
+    bot_state["drafts"] = drafts[:drafts_before] + [d for d in new_drafts if id(d) in keep]
+
+    pruned_event_ids = {d.get("event_id") for d in pruned if d.get("event_id")}
+    if pruned_event_ids:
+        bot_state["posted_events"] = [
+            e for e in bot_state.get("posted_events", [])
+            if e not in pruned_event_ids
+        ]
+        if current_run is not None:
+            for d in pruned:
+                src = _PRUNE_SOURCE_KEY_BY_TYPE.get(d.get("type"))
+                if not src:
+                    continue
+                for s_run in current_run.get("sources", []):
+                    if (
+                        s_run.get("source") == src
+                        or s_run.get("source", "").startswith(f"{src}_")
+                    ) and s_run.get("drafted", 0) > 0:
+                        s_run["drafted"] -= 1
+                        break
+
+    print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
+    for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
+        print(f"[alerts]   Pruned: score={s} {d.get('text', '')[:50]}...")
+    return MAX_DRAFTS_PER_CYCLE
 
 
 def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
