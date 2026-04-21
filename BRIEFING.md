@@ -275,6 +275,21 @@ Passes if 7+ on 4 of 5. Fails → rewrite provided. Rewrite must pass safety AND
 - **suggested_auto** — Dashboard suggests auto, requires human (records, ice, ENSO)
 - **manual_only** — Human required (fires, fire footprints, severe weather, disasters, storm surge, floods, drought)
 
+### Cross-source synthesis
+
+A meta-detection layer fires a single high-confidence tweet when three
+independent signals converge on the same US state within 14 days:
+exceptional (D4) drought from USDM, a qualifying wildfire from NASA
+FIRMS, and a qualifying heat record from Open-Meteo. The first rule is
+`fire_drought_heat`; additional rules (marine heatwave × coastal heat
+dome; hurricane × storm surge × river flood) plug into the same
+scaffolding.
+
+Synthesis tweets use `suggested_auto` approval with a 120-minute review
+window because compound claims are factually more brittle. The
+synthesis layer never replaces the per-source tweets — it adds a
+compound story on top.
+
 ---
 
 ## Voice Rules (current)

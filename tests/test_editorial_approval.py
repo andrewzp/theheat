@@ -63,3 +63,17 @@ class TestIceMassApproval:
         assert policy.mode == "suggested_auto"
         assert policy.recommended_delay_minutes == 105
         assert policy.can_auto_approve is True
+
+
+class TestSynthesisPolicy:
+    def test_fire_drought_heat_suggested_auto_120min(self):
+        from src.editorial.approval import recommend_approval_policy
+        policy = recommend_approval_policy(
+            "synthesis_fire_drought_heat",
+            signal_total=88,
+            candidate_score={"total": 78},
+        )
+        assert policy.mode == "suggested_auto"
+        assert policy.recommended_delay_minutes == 120
+        assert policy.can_auto_approve is True
+        assert policy.key == "synthesis_review"

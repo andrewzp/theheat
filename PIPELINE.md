@@ -74,7 +74,9 @@ flowchart TD
 
     CAP["Per-cycle cap<br/>max 3 drafts<br/>keep top by signal score"]:::gate
 
-    CAP --> POLICY["Assign Approval Policy<br/>based on category + score"]:::gen
+    CAP --> SYNTHESIS["Cross-Source Synthesis<br/>rules fire when multiple<br/>sources converge<br/>• fire×drought×heat (US state)<br/>• 14-day window + cooldown<br/>• threshold 82"]:::gen
+
+    SYNTHESIS --> POLICY["Assign Approval Policy<br/>based on category + score"]:::gen
 
     POLICY --> STATE[("GitHub Gist<br/>state.json<br/>• drafts<br/>• posted_events<br/>• run_history")]:::state
 
@@ -175,6 +177,16 @@ Three tiers determine what happens next:
 - **armed_auto** — will auto-post after timed delay (Hot 10, CO2 milestones with strong scores)
 - **suggested_auto** — dashboard suggests auto, but requires human (records, ice, ENSO)
 - **manual_only** — human approval required (fires, severe weather, disasters, storm surge, river floods, drought)
+
+### Cross-Source Synthesis
+
+Runs once per alerts cycle after all per-source sections. Each rule
+reads from the 14-day rolling buffer in `bot_state["synthesis_components"]`
+and the cached USDM snapshot. When a rule's convergence conditions are
+met and the per-(rule, state) cooldown is not active, a compound-framing
+draft is generated through the full pipeline (candidates → safety →
+ranking → evaluator → rewrite validation) and stored with
+`suggested_auto` approval and a 120-minute delay.
 
 ### Dashboard
 Next.js 15 + React 19 on Vercel free tier. Dark terminal aesthetic. Shows pending drafts sorted by signal + candidate score. Human approves, edits, or rejects.

@@ -262,3 +262,38 @@ def fire_footprint_template(
         f"Fire footprint update. {subject} in {country} is now at {hectares_str} hectares.",
     ]
     return random.choice(variants)
+
+
+SYNTHESIS_FIRE_DROUGHT_HEAT_EXTRA = """\
+This is a CROSS-SOURCE SYNTHESIS tweet. Three independent data sources \
+have converged on a single US state within the last 14 days: the US \
+Drought Monitor flagged exceptional (D4) drought, NASA FIRMS flagged a \
+qualifying wildfire, and Open-Meteo flagged a qualifying heat record.
+
+Rules for synthesis tweets:
+- Anchor the tweet to the state. Name it. The state is the subject.
+- Use period-separated short beats. "Drought. Fire. Record heat. All in \
+{state}. All this month." NOT commas-and-ands chaining.
+- Do NOT invent causality. Do not say the heat caused the fire or the \
+drought caused the fire. Report co-occurrence, not causation.
+- Use honest time ranges: "in the last 14 days" or specific dates. \
+Never "recently" or "now."
+- Do not lecture about climate change. Show the three signals. Let the \
+reader connect them.
+"""
+
+
+def synthesis_fire_drought_heat_template(
+    *, state: str, drought_d4_pct: float,
+    fire_peak_frp: float, fire_peak_region: str,
+    heat_peak_city: str, heat_peak_kind: str, heat_peak_value_c: float,
+    window_days: int = 14,
+) -> str:
+    d4_round = round(drought_d4_pct)
+    frp_round = round(fire_peak_frp)
+    return (
+        f"{state} in the last {window_days} days: "
+        f"{d4_round}% in exceptional drought. "
+        f"A {frp_round} MW wildfire flagged near {fire_peak_region or state}. "
+        f"{heat_peak_city} on pace for a heat record at {heat_peak_value_c:.1f}C."
+    )

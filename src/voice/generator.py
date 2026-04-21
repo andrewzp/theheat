@@ -1011,3 +1011,53 @@ def generate_fire_footprint_tweet(
             "hectares": hectares,
         },
     )
+
+
+def generate_synthesis_fire_drought_heat_tweet(
+    *,
+    state: str,
+    drought_d4_pct: float,
+    fire_peak_frp: float,
+    fire_peak_region: str,
+    heat_peak_city: str,
+    heat_peak_kind: str,
+    heat_peak_value_c: float,
+    window_days: int = 14,
+    return_bundle: bool = True,
+) -> str | CandidateBundle | None:
+    """Generate a Fire×Drought×Heat synthesis tweet through the full pipeline."""
+    data_description = (
+        f"State: {state}\n"
+        f"Drought (US Drought Monitor): {drought_d4_pct:.1f}% of the state in "
+        f"exceptional (D4) drought.\n"
+        f"Wildfire (NASA FIRMS, last {window_days} days): peak radiative power "
+        f"{fire_peak_frp:.0f} MW, nearest region {fire_peak_region or state}.\n"
+        f"Heat (Open-Meteo, last {window_days} days): {heat_peak_kind} record at "
+        f"{heat_peak_city}, value {heat_peak_value_c:.1f}C.\n"
+        f"{templates.SYNTHESIS_FIRE_DROUGHT_HEAT_EXTRA}"
+    )
+
+    def fallback(**_kwargs):
+        return templates.synthesis_fire_drought_heat_template(
+            state=state,
+            drought_d4_pct=drought_d4_pct,
+            fire_peak_frp=fire_peak_frp,
+            fire_peak_region=fire_peak_region,
+            heat_peak_city=heat_peak_city,
+            heat_peak_kind=heat_peak_kind,
+            heat_peak_value_c=heat_peak_value_c,
+            window_days=window_days,
+        )
+
+    if return_bundle:
+        return generate_tweet_bundle(
+            data_description,
+            category="synthesis_fire_drought_heat",
+            fallback_fn=fallback,
+            fallback_args={},
+        )
+    return generate_tweet(
+        data_description,
+        fallback_fn=fallback,
+        fallback_args={},
+    )
