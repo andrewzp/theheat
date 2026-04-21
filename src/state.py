@@ -244,6 +244,52 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["ocean_sst_streak"] = deepcopy(
         next_state.get("ocean_sst_streak", base.get("ocean_sst_streak", {}))
     )
+    # ice_mass: per-region keep the extreme to survive concurrent writers.
+    merged["ice_mass_max_loss"] = {}
+    for region in set(
+        list(base.get("ice_mass_max_loss", {}).keys())
+        + list(next_state.get("ice_mass_max_loss", {}).keys())
+    ):
+        a = base.get("ice_mass_max_loss", {}).get(region)
+        b = next_state.get("ice_mass_max_loss", {}).get(region)
+        if a is None:
+            merged["ice_mass_max_loss"][region] = deepcopy(b)
+        elif b is None:
+            merged["ice_mass_max_loss"][region] = deepcopy(a)
+        else:
+            merged["ice_mass_max_loss"][region] = deepcopy(
+                a if a.get("gt", 0.0) <= b.get("gt", 0.0) else b
+            )
+    merged["ice_mass_last_milestone"] = {}
+    for region in set(
+        list(base.get("ice_mass_last_milestone", {}).keys())
+        + list(next_state.get("ice_mass_last_milestone", {}).keys())
+    ):
+        a = base.get("ice_mass_last_milestone", {}).get(region)
+        b = next_state.get("ice_mass_last_milestone", {}).get(region)
+        if a is None:
+            merged["ice_mass_last_milestone"][region] = b
+        elif b is None:
+            merged["ice_mass_last_milestone"][region] = a
+        else:
+            merged["ice_mass_last_milestone"][region] = min(a, b)
+    merged["ice_mass_last_seen"] = {}
+    for region in set(
+        list(base.get("ice_mass_last_seen", {}).keys())
+        + list(next_state.get("ice_mass_last_seen", {}).keys())
+    ):
+        a = base.get("ice_mass_last_seen", {}).get(region, "")
+        b = next_state.get("ice_mass_last_seen", {}).get(region, "")
+        merged["ice_mass_last_seen"][region] = a if a >= b else b
+    merged["ice_annual_count"] = {}
+    for year in set(
+        list(base.get("ice_annual_count", {}).keys())
+        + list(next_state.get("ice_annual_count", {}).keys())
+    ):
+        merged["ice_annual_count"][year] = max(
+            base.get("ice_annual_count", {}).get(year, 0),
+            next_state.get("ice_annual_count", {}).get(year, 0),
+        )
     return merged
 
 
