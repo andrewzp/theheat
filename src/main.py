@@ -671,6 +671,29 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
 
             if strongest_signal and strongest_generator:
                 source_promoted += 1
+                # Record synthesis component as soon as editorial gate passes:
+                syn_state = us_city_state_map.get(strongest_city)
+                if syn_state:
+                    value_c = getattr(strongest_signal, "new_temp_c", None)
+                    if value_c is None:
+                        value_c = getattr(strongest_signal, "today_temp_c", 0.0)
+                    kind_map = {
+                        "all_time_high": "all_time",
+                        "monthly_high": "monthly",
+                        "anomaly_hot": "anomaly",
+                        "record": "calendar",
+                    }
+                    state.record_synthesis_component(
+                        bot_state,
+                        kind="heat",
+                        region=syn_state,
+                        event_id=strongest_event_id,
+                        metadata={
+                            "kind": kind_map.get(strongest_type, "record"),
+                            "city": strongest_city,
+                            "value_c": float(value_c or 0),
+                        },
+                    )
                 generated = strongest_generator()
                 review_context = _review_context(
                     source="Open-Meteo forecast + archive",
@@ -700,28 +723,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     state.record_event(bot_state, strongest_event_id)
                     drafted += 1
                     source_drafted += 1
-                    syn_state = us_city_state_map.get(strongest_city)
-                    if syn_state:
-                        value_c = getattr(strongest_signal, "new_temp_c", None)
-                        if value_c is None:
-                            value_c = getattr(strongest_signal, "today_temp_c", 0.0)
-                        kind_map = {
-                            "all_time_high": "all_time",
-                            "monthly_high": "monthly",
-                            "anomaly_hot": "anomaly",
-                            "record": "calendar",
-                        }
-                        state.record_synthesis_component(
-                            bot_state,
-                            kind="heat",
-                            region=syn_state,
-                            event_id=strongest_event_id,
-                            metadata={
-                                "kind": kind_map.get(strongest_type, "record"),
-                                "city": strongest_city,
-                                "value_c": float(value_c or 0),
-                            },
-                        )
 
                     # Streak tracking — update on any calendar-date high record
                     if strongest_type == "record" and bundle.calendar_date_high:
@@ -890,6 +891,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, fire.event_id):
                 continue
             source_promoted += 1
+            # Record synthesis component as soon as editorial gate passes:
+            syn_state = lat_lon_to_state(fire.lat, fire.lon)
+            if syn_state:
+                state.record_synthesis_component(
+                    bot_state,
+                    kind="fire",
+                    region=syn_state,
+                    event_id=fire.event_id,
+                    metadata={
+                        "frp": float(fire.frp or 0),
+                        "region": fire.nearest_city or "",
+                    },
+                )
             generated = generator.generate_fire_tweet(
                 region=fire.nearest_city,
                 country=fire.country,
@@ -913,18 +927,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 state.record_event(bot_state, fire.event_id)
                 drafted += 1
                 source_drafted += 1
-                syn_state = lat_lon_to_state(fire.lat, fire.lon)
-                if syn_state:
-                    state.record_synthesis_component(
-                        bot_state,
-                        kind="fire",
-                        region=syn_state,
-                        event_id=fire.event_id,
-                        metadata={
-                            "frp": float(fire.frp or 0),
-                            "region": fire.nearest_city or "",
-                        },
-                    )
         _record_source_run(
             current_run, "firms", firms_start,
             status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted
