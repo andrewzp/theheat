@@ -162,3 +162,30 @@ def lat_lon_to_state(lat: float, lon: float) -> str | None:
     if best_dist > MAX_CENTROID_KM:
         return None
     return best_name
+
+
+def cities_to_state_map(cities: list[dict]) -> dict[str, str]:
+    """Pre-compute city_name → US state for each US city with coords.
+
+    Non-US cities and cities without coords are omitted from the result.
+    The caller looks up `state = mapping.get(city_name)` and short-circuits
+    recording when the lookup returns None.
+    """
+    mapping: dict[str, str] = {}
+    for c in cities:
+        if not isinstance(c, dict):
+            continue
+        name = c.get("city") or c.get("name")
+        lat = c.get("latitude")
+        lon = c.get("longitude")
+        if not name or lat is None or lon is None:
+            continue
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+        except (TypeError, ValueError):
+            continue
+        state = lat_lon_to_state(lat_f, lon_f)
+        if state is not None:
+            mapping[name] = state
+    return mapping

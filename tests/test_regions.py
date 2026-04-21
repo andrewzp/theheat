@@ -38,3 +38,29 @@ class TestLatLonToState:
         # Lake Tahoe is on the CA/NV border; disambiguation must pick one.
         result = lat_lon_to_state(39.10, -120.04)
         assert result in {"California", "Nevada"}
+
+
+class TestCitiesToStateMap:
+    def test_us_cities_mapped(self):
+        from src.editorial._regions import cities_to_state_map
+        cities = [
+            {"city": "Sacramento", "latitude": 38.58, "longitude": -121.49, "country": "United States"},
+            {"city": "Austin",     "latitude": 30.27, "longitude": -97.74,  "country": "United States"},
+        ]
+        assert cities_to_state_map(cities) == {
+            "Sacramento": "California",
+            "Austin": "Texas",
+        }
+
+    def test_non_us_cities_skipped(self):
+        from src.editorial._regions import cities_to_state_map
+        cities = [
+            {"city": "Sacramento", "latitude": 38.58, "longitude": -121.49, "country": "United States"},
+            {"city": "London",     "latitude": 51.51, "longitude": -0.13,   "country": "United Kingdom"},
+        ]
+        assert cities_to_state_map(cities) == {"Sacramento": "California"}
+
+    def test_missing_coords_skipped(self):
+        from src.editorial._regions import cities_to_state_map
+        cities = [{"city": "Broken", "latitude": None, "longitude": None, "country": "United States"}]
+        assert cities_to_state_map(cities) == {}
