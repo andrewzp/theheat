@@ -40,3 +40,7 @@ def test_milestones_up_to_past_400():
     assert _milestones_up_to(449) == (
         5, 10, 25, 50, 100, 150, 200, 250, 300, 365, 400,
     )
+    # Dead zone 401-449: no new milestone fires, same result as 400.
+    assert _milestones_up_to(425) == (
+        5, 10, 25, 50, 100, 150, 200, 250, 300, 365, 400,
+    )
