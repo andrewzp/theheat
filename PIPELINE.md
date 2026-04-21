@@ -74,11 +74,11 @@ flowchart TD
 
     CAP["Per-cycle cap<br/>max 3 drafts<br/>keep top by signal score"]:::gate
 
-    CAP --> POLICY["Assign Approval Policy<br/>based on category + score"]:::gen
+    CAP --> SYNTHESIS["Cross-Source Synthesis<br/>rules fire when multiple<br/>sources converge<br/>• fire×drought×heat (US state)<br/>• 14-day window + cooldown<br/>• threshold 82"]:::gen
 
-    POLICY --> SYNTHESIS["Cross-Source Synthesis<br/>rules fire when multiple<br/>sources converge<br/>• fire×drought×heat (US state)<br/>• 14-day window + cooldown<br/>• threshold 82"]:::gen
+    SYNTHESIS --> POLICY["Assign Approval Policy<br/>based on category + score"]:::gen
 
-    SYNTHESIS --> STATE[("GitHub Gist<br/>state.json<br/>• drafts<br/>• posted_events<br/>• run_history")]:::state
+    POLICY --> STATE[("GitHub Gist<br/>state.json<br/>• drafts<br/>• posted_events<br/>• run_history")]:::state
 
     STATE --> BRANCH{"Approval mode"}:::gate
 
