@@ -157,7 +157,7 @@ class TestScoreFireFootprint:
         unnamed = score_fire_footprint(hectares=150_000, tier=2, has_name=False)
         assert named.total >= unnamed.total
 
-    def test_top_tier_mega_fire_is_elite(self):
+    def test_top_tier_mega_fire_scores_strong(self):
         score = score_fire_footprint(
             hectares=2_500_000,
             tier=5,
@@ -165,9 +165,13 @@ class TestScoreFireFootprint:
             has_name=False,
         )
         assert score.passes
-        assert score.label in {"strong", "elite"}
+        # "strong" is the ceiling at this formula — elite is reserved for
+        # unprecedented events (Black Summer 2019 ≈ 19M ha scale).
+        assert score.label == "strong"
 
     def test_region_hook_surfaces_in_reasons(self):
+        # tier=2 + no name keeps the reasons list short enough that the
+        # region hook survives the reasons[:3] cap in any season.
         score = score_fire_footprint(
             hectares=200_000,
             tier=2,

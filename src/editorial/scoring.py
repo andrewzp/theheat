@@ -120,7 +120,7 @@ def _build_score(
             sensitivity=_clamp(sensitivity),
         ),
         threshold=threshold,
-        reasons=reasons[:3],
+        reasons=reasons,
     )
 
 
