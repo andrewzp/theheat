@@ -118,7 +118,43 @@ def fetch_grace_mass(region: str) -> list[IceMassReading]:
 
 
 def detect_monthly_record(readings: list[IceMassReading], state: dict) -> IceMassRecord | None:
-    raise NotImplementedError
+    """Fire when the latest month-over-month mass delta beats the stored record.
+
+    `state["ice_mass_max_loss"][region]` holds the worst (most-negative)
+    month-over-month delta we've ever seen, keyed by region.
+    On the first run for a region the entry is absent; we still fire
+    (the first observed loss is, by definition, a record) but report
+    `previous_worst_gt=None` so the template can say "first on record".
+    """
+    if len(readings) < 2:
+        return None
+
+    latest = readings[-1]
+    prior = readings[-2]
+    region = latest.region
+    delta = latest.mass_gt - prior.mass_gt
+    if delta >= 0:
+        return None  # net gain or unchanged — never a loss record
+
+    stored = state.get("ice_mass_max_loss", {}).get(region)
+    prev_gt = stored.get("gt") if isinstance(stored, dict) else None
+    prev_month = stored.get("month") if isinstance(stored, dict) else None
+
+    is_record = prev_gt is None or delta < prev_gt
+    if not is_record:
+        return None
+
+    return IceMassRecord(
+        region=region,
+        kind="monthly_loss_record",
+        month=latest.month,
+        monthly_delta_gt=delta,
+        previous_worst_gt=prev_gt,
+        previous_worst_month=prev_month,
+        threshold_gt=None,
+        current_mass_gt=None,
+        event_id=f"ice_mass_record_{region}_monthly_{latest.month}",
+    )
 
 
 def detect_cumulative_milestone(readings: list[IceMassReading], state: dict) -> IceMassRecord | None:

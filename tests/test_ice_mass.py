@@ -153,3 +153,79 @@ class TestFetchGraceMass:
 
     def test_unknown_region_returns_empty(self):
         assert fetch_grace_mass(region="mars") == []
+
+
+def _reading(region: str, month: str, mass_gt: float) -> IceMassReading:
+    return IceMassReading(
+        region=region,
+        month=month,
+        mass_gt=mass_gt,
+        uncertainty_gt=100.0,
+        event_id=f"ice_mass_{region}_{month}",
+    )
+
+
+class TestDetectMonthlyRecord:
+    def test_fires_new_record(self):
+        readings = [
+            _reading("greenland", "2024-07", -3200.0),
+            _reading("greenland", "2024-08", -3550.0),   # delta -350 (old record)
+            _reading("greenland", "2026-07", -5000.0),
+            _reading("greenland", "2026-08", -5423.0),   # delta -423 → new record
+        ]
+        state = {
+            "ice_mass_max_loss": {
+                "greenland": {"gt": -350.0, "month": "2024-08"},
+            }
+        }
+        rec = detect_monthly_record(readings, state)
+        assert rec is not None
+        assert rec.kind == "monthly_loss_record"
+        assert rec.region == "greenland"
+        assert rec.month == "2026-08"
+        assert rec.monthly_delta_gt == -423.0
+        assert rec.previous_worst_gt == -350.0
+        assert rec.previous_worst_month == "2024-08"
+        assert rec.event_id == "ice_mass_record_greenland_monthly_2026-08"
+
+    def test_no_fire_when_not_record(self):
+        readings = [
+            _reading("greenland", "2024-08", -3550.0),
+            _reading("greenland", "2026-07", -5000.0),
+            _reading("greenland", "2026-08", -5200.0),   # delta -200, weaker than stored -350
+        ]
+        state = {
+            "ice_mass_max_loss": {
+                "greenland": {"gt": -350.0, "month": "2024-08"},
+            }
+        }
+        assert detect_monthly_record(readings, state) is None
+
+    def test_seeds_state_on_first_run(self):
+        # No prior record in state; first positive loss seeds the floor.
+        readings = [
+            _reading("greenland", "2026-07", -5000.0),
+            _reading("greenland", "2026-08", -5423.0),
+        ]
+        state = {"ice_mass_max_loss": {}}
+        rec = detect_monthly_record(readings, state)
+        assert rec is not None
+        assert rec.previous_worst_gt is None
+        assert rec.previous_worst_month is None
+        assert rec.monthly_delta_gt == -423.0
+
+    def test_single_reading_returns_none(self):
+        readings = [_reading("greenland", "2026-08", -5423.0)]
+        assert detect_monthly_record(readings, {"ice_mass_max_loss": {}}) is None
+
+    def test_positive_delta_no_fire(self):
+        # Month-over-month gain (unusual but possible) must never fire.
+        readings = [
+            _reading("greenland", "2026-03", -5500.0),
+            _reading("greenland", "2026-04", -5400.0),  # +100 gain
+        ]
+        state = {"ice_mass_max_loss": {}}
+        assert detect_monthly_record(readings, state) is None
+
+    def test_empty_readings_returns_none(self):
+        assert detect_monthly_record([], {"ice_mass_max_loss": {}}) is None
