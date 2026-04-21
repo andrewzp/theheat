@@ -1,7 +1,5 @@
 """Tests for fire footprint (GWIS) data."""
 
-import pytest
-
 from src.data.fire_footprint import (
     FireComplex,
     TIERS_HECTARES,
@@ -46,9 +44,11 @@ class TestFireComplexDataclass:
             region="California",
             hectares=213_000,
             start_date=None,
-            tier=3,
-            event_id="fire_footprint_GWIS_123_tier3",
+            tier=2,
+            event_id="fire_footprint_GWIS_123_tier2",
         )
         assert fc.complex_id == "GWIS_123"
         assert fc.name == "Dixie Complex"
-        assert fc.tier == 3
+        assert fc.hectares == 213_000
+        assert fc.tier == 2
+        assert fc.event_id == "fire_footprint_GWIS_123_tier2"
