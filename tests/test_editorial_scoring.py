@@ -179,3 +179,44 @@ class TestScoreFireFootprint:
             has_name=False,
         )
         assert any("Yakutia" in r for r in score.reasons)
+
+
+class TestScoreSynthesisFireDroughtHeat:
+    def test_min_viable_passes_threshold(self):
+        from src.editorial.scoring import score_synthesis_fire_drought_heat
+        score = score_synthesis_fire_drought_heat(
+            drought_d4_pct=1.0,
+            fire_peak_frp=250.0,
+            heat_peak_anomaly_c=4.0,
+            component_count={"fires": 1, "heats": 1},
+            heat_kind="calendar",
+        )
+        assert score.threshold == 82
+        assert score.category == "synthesis_fire_drought_heat"
+        # Elite by definition — even min-viable should clear 82.
+        assert score.total >= 82
+
+    def test_elite_hits_mid_90s(self):
+        from src.editorial.scoring import score_synthesis_fire_drought_heat
+        score = score_synthesis_fire_drought_heat(
+            drought_d4_pct=40.0,
+            fire_peak_frp=1500.0,
+            heat_peak_anomaly_c=14.0,
+            component_count={"fires": 3, "heats": 4},
+            heat_kind="all_time",
+        )
+        assert score.total >= 90
+        assert score.passes is True
+
+    def test_reasons_mention_state_of_story(self):
+        from src.editorial.scoring import score_synthesis_fire_drought_heat
+        score = score_synthesis_fire_drought_heat(
+            drought_d4_pct=12.0,
+            fire_peak_frp=900.0,
+            heat_peak_anomaly_c=8.0,
+            component_count={"fires": 2, "heats": 2},
+            heat_kind="monthly",
+        )
+        joined = " ".join(score.reasons).lower()
+        assert "drought" in joined or "d4" in joined
+        assert "fire" in joined
