@@ -265,7 +265,7 @@ def detect_streak_milestone(
         )
 
     # 4. Find the largest milestone not yet fired this streak.
-    already = last_fired or 0
+    already = last_fired if last_fired is not None else 0
     candidates = [m for m in _milestones_up_to(obs.streak_days) if m > already]
     if not candidates:
         return (
