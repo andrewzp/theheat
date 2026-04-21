@@ -72,7 +72,7 @@ def _today_year_doy() -> tuple[int, int]:
     return today.year, today.timetuple().tm_yday
 
 
-def _valid_sst(v) -> bool:
+def _valid_sst(v: object) -> bool:
     """Accept realistic global-mean SST values in Celsius."""
     return isinstance(v, (int, float)) and -2.0 <= v <= 40.0
 
@@ -109,6 +109,12 @@ def _walk_streak_backward(
 
     Returns (streak_days, streak_start_year, streak_start_doy, peak_anomaly).
     If the streak reaches doy 1 of current_year, continues into current_year-1.
+
+    Limitation: only crosses one calendar year boundary. A streak exceeding
+    365 continuous days (e.g., from Dec into a full current year) would
+    underreport once the prior-year array is exhausted. Milestones past day
+    365 are theoretically reachable; treat as a known constraint for future
+    hardening if such streaks occur.
     """
     streak_days = 0
     streak_start_year: int | None = None
@@ -222,7 +228,7 @@ def fetch_global_sst() -> GlobalSSTObservation | None:
         today_c=today_c,
         archive_max_c=archive_max_c,
         archive_max_year=archive_max_year,
-        years_of_data=current_year - 1982,
+        years_of_data=current_year - 1982,  # formula-based; OISST is a continuous series
         streak_days=streak_days,
         streak_start_date=streak_start_date,
         streak_peak_anomaly_c=peak,

@@ -174,7 +174,7 @@ def test_fetch_global_sst_streak_crosses_new_year():
     assert obs.streak_days == 5
 
 
-def test_fetch_global_sst_returns_none_on_empty_current_year():
+def test_fetch_global_sst_returns_none_when_all_current_year_values_null():
     from src.data import ocean_sst
     today_doy = 100
     cur = [None] * 365  # all nulls
