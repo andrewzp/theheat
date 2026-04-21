@@ -387,3 +387,26 @@ class TestGenerateFireFootprintTweet:
             assert "Russia" in data_description
             assert "300,000" in data_description
             assert "250,000" in data_description  # the crossed threshold
+
+
+class TestSynthesisGenerator:
+    def test_template_fallback_no_api_key(self):
+        from unittest.mock import patch
+        from src.voice.generator import generate_synthesis_fire_drought_heat_tweet
+        with patch("src.voice.generator.GEMINI_API_KEY", ""):
+            tweet = generate_synthesis_fire_drought_heat_tweet(
+                state="California",
+                drought_d4_pct=10.0,
+                fire_peak_frp=1200.0,
+                fire_peak_region="Sacramento County",
+                heat_peak_city="Sacramento",
+                heat_peak_kind="calendar",
+                heat_peak_value_c=40.1,
+                window_days=14,
+                return_bundle=False,
+            )
+            assert tweet is not None
+            assert "California" in tweet
+            # Period-separated cadence, no emojis, no hashtags.
+            assert "#" not in tweet
+            assert "🔥" not in tweet
