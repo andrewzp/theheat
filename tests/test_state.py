@@ -200,10 +200,10 @@ class TestOceanSSTStreak:
         current = {"ocean_sst_streak": {"seeded": True, "last_milestone_fired": 10}}
         incoming = {}
         merged = _merge_state(current, incoming)
-        # _normalize_state fills incoming with DEFAULT_STATE's ocean_sst_streak,
-        # which would clobber current. So we must take current when incoming is default.
-        # The contract: if incoming differs from default, prefer it; otherwise keep current.
-        # Simpler: always take incoming (matches record_streaks behavior). Document this.
+        # _normalize_state backfills `incoming` with DEFAULT_STATE values, so an
+        # empty incoming dict becomes the default. Always-take-incoming semantics
+        # (matching record_streaks) means current's seeded=True is clobbered — this
+        # test documents and pins that known behaviour.
         assert merged["ocean_sst_streak"] == {"seeded": False, "last_milestone_fired": None}
 
     def test_update_ocean_sst_streak_replaces_dict(self):

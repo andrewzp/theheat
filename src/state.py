@@ -228,6 +228,7 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["city_monthly_max"] = deepcopy(next_state.get("city_monthly_max", base.get("city_monthly_max", {})))
     merged["city_monthly_min"] = deepcopy(next_state.get("city_monthly_min", base.get("city_monthly_min", {})))
     merged["record_streaks"] = deepcopy(next_state.get("record_streaks", base.get("record_streaks", {})))
+    # ocean_sst_streak — always-take-incoming, same semantics as record_streaks above.
     merged["ocean_sst_streak"] = deepcopy(
         next_state.get("ocean_sst_streak", base.get("ocean_sst_streak", {}))
     )
