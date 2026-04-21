@@ -1366,3 +1366,54 @@ class TestSynthesisRecording:
 
         fires = bot_state["synthesis_components"]["fires"].get("California", [])
         assert any(f["event_id"] == fake_fire.event_id for f in fires)
+
+
+class TestSynthesisStage:
+    def test_synthesis_stage_creates_draft(self, monkeypatch):
+        from copy import deepcopy
+        from datetime import datetime, timedelta, UTC
+        from src.state import (
+            DEFAULT_STATE,
+            record_synthesis_component,
+            record_synthesis_drought_snapshot,
+        )
+        from src import main
+
+        bot_state = deepcopy(DEFAULT_STATE)
+        now = datetime.now(UTC)
+        iso = lambda d: (now - timedelta(days=d)).isoformat().replace("+00:00", "Z")
+
+        record_synthesis_drought_snapshot(bot_state, [
+            {"state": "California", "d3_pct": 25.0, "d4_pct": 10.0, "total_drought_pct": 85.0},
+        ])
+        record_synthesis_component(bot_state, kind="fire", region="California",
+            event_id="pre_fire", metadata={"frp": 1400.0, "region": "Sacramento"},
+            timestamp=iso(2))
+        record_synthesis_component(bot_state, kind="heat", region="California",
+            event_id="pre_heat",
+            metadata={"kind": "calendar", "city": "Sacramento", "value_c": 40.0},
+            timestamp=iso(1))
+
+        # Short-circuit every per-source fetch so only the synthesis stage runs.
+        monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
+        monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities",
+                            lambda cities: ([], []))
+        monkeypatch.setattr(main.firms, "fetch_fires", lambda: [])
+        # Force _save_generated_draft to return True so we see the synthesis call.
+        captured = {}
+        def fake_save(generated, state_, tweet_type, event_id, score, **kw):
+            captured["tweet_type"] = tweet_type
+            captured["event_id"] = event_id
+            return True
+        monkeypatch.setattr(main, "_save_generated_draft", fake_save)
+        # Avoid real Gemini calls.
+        monkeypatch.setattr(main.generator, "generate_synthesis_fire_drought_heat_tweet",
+                            lambda **kwargs: "fake synthesis tweet")
+
+        main.run_alerts(bot_state)
+
+        assert captured.get("tweet_type") == "synthesis_fire_drought_heat"
+        assert "california" in captured["event_id"]
+        # Cooldown must have been recorded so a second cycle is suppressed.
+        cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
+        assert "California" in cooldown
