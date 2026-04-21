@@ -95,15 +95,6 @@ def recommend_approval_policy(
             reason="Low-sensitivity climate/weather signal that benefits from a slower editorial timer.",
         )
 
-    if tweet_type in {"fire", "severe_weather", "global_disaster", "storm_surge", "river_flood", "drought"}:
-        return ApprovalPolicy(
-            key="manual_only",
-            mode="manual_only",
-            recommended_delay_minutes=None,
-            can_auto_approve=False,
-            reason="Potential human-impact event. Keep explicit human approval in the loop.",
-        )
-
     if tweet_type == "marine_heatwave":
         return ApprovalPolicy(
             key="marine_heatwave_review",
@@ -115,6 +106,15 @@ def recommend_approval_policy(
                 "from a single well-known dataset. Short review window lets a "
                 "human polish framing before auto-post."
             ),
+        )
+
+    if tweet_type in {"fire", "severe_weather", "global_disaster", "storm_surge", "river_flood", "drought"}:
+        return ApprovalPolicy(
+            key="manual_only",
+            mode="manual_only",
+            recommended_delay_minutes=None,
+            can_auto_approve=False,
+            reason="Potential human-impact event. Keep explicit human approval in the loop.",
         )
 
     return ApprovalPolicy(
