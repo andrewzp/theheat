@@ -1283,6 +1283,11 @@ class TestFireFootprintIntegration:
         run_alerts(state_dict)
 
         mock_gen.generate_fire_footprint_tweet.assert_called_once()
+        call_kwargs = mock_gen.generate_fire_footprint_tweet.call_args.kwargs
+        assert call_kwargs["hectares"] == 213_000
+        assert call_kwargs["tier_hectares"] == 250_000  # mock TIERS_HECTARES[3]
+
+        mock_state.update_fire_complex_tier.assert_called_once_with(state_dict, "GWIS_AAA", 3)
         # State updated with tier
         assert state_dict.get("fire_complex_tiers", {}).get("GWIS_AAA") == 3
 

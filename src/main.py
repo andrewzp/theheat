@@ -937,6 +937,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     state.update_fire_complex_tier(bot_state, fc.complex_id, fc.tier)
                     drafted += 1
                     source_drafted += 1
+            # Only mark as run-today on success — failed fetches retry on next cron tick.
             bot_state["fire_footprint_last_run"] = today_iso
             _record_source_run(
                 current_run, "fire_footprint", ff_start,
