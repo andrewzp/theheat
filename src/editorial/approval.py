@@ -104,6 +104,19 @@ def recommend_approval_policy(
             reason="Potential human-impact event. Keep explicit human approval in the loop.",
         )
 
+    if tweet_type == "marine_heatwave":
+        return ApprovalPolicy(
+            key="marine_heatwave_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=90,
+            can_auto_approve=True,
+            reason=(
+                "Ocean-SST streak signal — low human-harm risk, high accuracy "
+                "from a single well-known dataset. Short review window lets a "
+                "human polish framing before auto-post."
+            ),
+        )
+
     return ApprovalPolicy(
         key="default_review",
         mode="suggested_auto",

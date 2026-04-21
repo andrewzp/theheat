@@ -31,3 +31,12 @@ class TestApprovalPolicy:
 
         assert policy.mode == "suggested_auto"
         assert policy.recommended_delay_minutes == 90
+
+    def test_marine_heatwave_suggested_auto_90min(self):
+        policy = recommend_approval_policy(
+            "marine_heatwave", signal_total=82, candidate_score={"total": 80},
+        )
+        assert policy.mode == "suggested_auto"
+        assert policy.recommended_delay_minutes == 90
+        assert policy.can_auto_approve is True
+        assert policy.key == "marine_heatwave_review"
