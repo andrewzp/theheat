@@ -17,7 +17,7 @@ flowchart TD
     classDef out fill:#3a1a5c,stroke:#6a2fa8,color:#fff
     classDef state fill:#2a2a2a,stroke:#888,color:#fff
 
-    subgraph RAW["RAW MATERIALS — 12 free public data sources"]
+    subgraph RAW["RAW MATERIALS — 13 free public data sources"]
         direction TB
         OM["Open-Meteo<br/>temperature records<br/>257 cities"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
@@ -30,7 +30,10 @@ flowchart TD
         MARINE["Open-Meteo Marine<br/>wave heights"]:::source
         COOPS["NOAA CO-OPS<br/>tide gauges"]:::source
         USGS["USGS Water<br/>river floods"]:::source
+        OISST["NOAA OISST v2.1<br/>global-mean SST"]:::source
     end
+
+    OISST --> SCORE
 
     RAW --> EXTRACT["Extreme Signals Extraction<br/>(per-city unified bundle)<br/>• all-time records<br/>• monthly records<br/>• anomaly (15°C+ above/below mean)<br/>• calendar-date records<br/>• record streaks (3+ consecutive days)<br/>• simultaneous events (5+ cities/day)<br/>Picks strongest signal per city"]:::gen
 
