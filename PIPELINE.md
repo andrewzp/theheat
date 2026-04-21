@@ -98,6 +98,25 @@ flowchart TD
 
 ---
 
+## Weekly Schedule (Source-Specific Gates)
+
+Sources run on a schedule; most run with every alert cycle, but some are gated by day:
+
+**Mondays:**
+- **NSIDC sea ice** — Arctic/Antarctic extent + anomaly from reference period. Detects record lows. Capped at 8 tweets/year.
+- **GRACE-FO ice mass (Lane 2)** — JPL PODAAC Level-4 mascon time series for Greenland + Antarctica. Two detectors: *monthly loss record* (largest single-month mass delta in the GRACE record) and *cumulative milestone* (each -1000 Gt floor crossed). Capped at 8 tweets/year across both regions. Requires `EARTHDATA_TOKEN`.
+
+**Fridays:**
+- **US Drought Monitor** — State-level drought intensity. Detects intensity tier changes.
+
+**1st of month:**
+- **NOAA CPC ENSO** — El Niño / La Niña transitions (Oceanic Niño Index).
+
+**Sundays & Daily Limits:**
+- **CO2 milestones** — Mauna Loa daily PPM. Capped at 12 tweets/year via `co2_annual_count` state.
+
+---
+
 ## Stage Glossary
 
 ### Raw Materials (12 Sources)

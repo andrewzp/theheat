@@ -14,7 +14,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges
+from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
@@ -36,6 +36,7 @@ from src.editorial.scoring import (
     score_record_streak,
     score_river_flood,
     score_sea_ice_record,
+    score_ice_mass_event,
     score_severe_weather,
     score_simultaneous_records,
     score_storm_surge,
@@ -231,6 +232,25 @@ def _co2_annual_cap_reached(bot_state: dict, cap: int = CO2_ANNUAL_CAP) -> bool:
 def _increment_co2_annual_count(bot_state: dict) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("co2_annual_count", {})
+    counts[year_key] = counts.get(year_key, 0) + 1
+
+
+ICE_ANNUAL_CAP = 8
+
+
+def _ice_annual_cap_reached(bot_state: dict, cap: int = ICE_ANNUAL_CAP) -> bool:
+    """True if we've already drafted ICE_ANNUAL_CAP ice-mass tweets this year."""
+    year_key = str(date.today().year)
+    count = bot_state.get("ice_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[ice_mass] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
+
+
+def _increment_ice_annual_count(bot_state: dict) -> None:
+    year_key = str(date.today().year)
+    counts = bot_state.setdefault("ice_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
 
 
@@ -1435,6 +1455,145 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             current_run, "river_gauges", river_start,
             status="failed", error=str(e)
         )
+
+    # 12. GRACE-FO ice mass (Greenland + Antarctica).
+    # Monthly-cadence source with 1-2 month lag. Run once per week on
+    # Mondays. Per-region short-circuit via ice_mass_last_seen prevents
+    # re-processing the same published month. Annual cap: 8 tweets/year.
+    if date.today().weekday() == 0:
+        print("[alerts] Checking GRACE ice mass...")
+        for region in ("greenland", "antarctica"):
+            region_key = f"ice_mass_{region}"
+            im_start = time.perf_counter()
+            try:
+                if _ice_annual_cap_reached(bot_state):
+                    _record_source_run(
+                        current_run, region_key, im_start,
+                        status="skipped", note="annual cap reached",
+                    )
+                    continue
+                readings = ice_mass.fetch_grace_mass(region=region)
+                if not readings:
+                    _record_source_run(
+                        current_run, region_key, im_start,
+                        status="success", observed=0,
+                    )
+                    continue
+                latest_month = readings[-1].month
+                last_seen = bot_state.get("ice_mass_last_seen", {}).get(region)
+                if last_seen == latest_month:
+                    _record_source_run(
+                        current_run, region_key, im_start,
+                        status="skipped",
+                        note=f"already processed {latest_month}",
+                    )
+                    continue
+
+                record = ice_mass.detect_monthly_record(readings, bot_state)
+                if record is None:
+                    record = ice_mass.detect_cumulative_milestone(readings, bot_state)
+
+                source_promoted = 0
+                source_drafted = 0
+                if record and not state.is_duplicate(bot_state, record.event_id):
+                    score = score_ice_mass_event(
+                        region=record.region,
+                        kind=record.kind,
+                        monthly_delta_gt=record.monthly_delta_gt,
+                        previous_worst_gt=record.previous_worst_gt,
+                        threshold_gt=record.threshold_gt,
+                    )
+                    if _should_draft(score, record.event_id):
+                        source_promoted = 1
+                        earliest = readings[0].month
+                        earliest_year = int(earliest.split("-")[0])
+                        years_of_record = date.today().year - earliest_year
+                        generated = generator.generate_ice_mass_tweet(
+                            region=record.region,
+                            kind=record.kind,
+                            month=record.month,
+                            monthly_delta_gt=record.monthly_delta_gt,
+                            previous_worst_gt=record.previous_worst_gt,
+                            previous_worst_month=record.previous_worst_month,
+                            threshold_gt=record.threshold_gt,
+                            current_mass_gt=record.current_mass_gt,
+                            years_of_record=years_of_record,
+                            return_bundle=True,
+                        )
+                        headline = (
+                            f"{record.region.title()}: largest monthly ice loss on record"
+                            if record.kind == "monthly_loss_record"
+                            else f"{record.region.title()}: cumulative loss crosses {abs(int(record.threshold_gt))} Gt"
+                        )
+                        facts = [
+                            _fact("Region", record.region.title()),
+                            _fact("Latest month", record.month or latest_month),
+                        ]
+                        if record.kind == "monthly_loss_record":
+                            facts.append(_fact(
+                                "Monthly loss",
+                                f"{abs(record.monthly_delta_gt):.0f} Gt",
+                            ))
+                            if record.previous_worst_gt is not None:
+                                facts.append(_fact(
+                                    "Previous worst",
+                                    f"{abs(record.previous_worst_gt):.0f} Gt "
+                                    f"({record.previous_worst_month})",
+                                ))
+                        else:
+                            facts.append(_fact(
+                                "Cumulative threshold",
+                                f"{abs(int(record.threshold_gt))} Gt",
+                            ))
+                            facts.append(_fact(
+                                "Current anomaly",
+                                f"{abs(record.current_mass_gt):.0f} Gt below 2002 baseline",
+                            ))
+                        review_context = _review_context(
+                            source="NASA GRACE-FO / JPL PODAAC",
+                            source_key=region_key,
+                            headline=headline,
+                            current_run=current_run,
+                            facts=facts,
+                        )
+                        if _save_generated_draft(
+                            generated, bot_state, "ice_mass_record",
+                            record.event_id, score, review_context=review_context,
+                        ):
+                            state.record_event(bot_state, record.event_id)
+                            _increment_ice_annual_count(bot_state)
+                            drafted += 1
+                            source_drafted = 1
+                            # Update the extreme trackers on success.
+                            if record.kind == "monthly_loss_record":
+                                bot_state.setdefault("ice_mass_max_loss", {})[record.region] = {
+                                    "gt": record.monthly_delta_gt,
+                                    "month": record.month,
+                                }
+                            else:
+                                bot_state.setdefault("ice_mass_last_milestone", {})[record.region] = record.threshold_gt
+
+                # Always mark the month as seen so we don't reprocess until data updates.
+                bot_state.setdefault("ice_mass_last_seen", {})[region] = latest_month
+                _record_source_run(
+                    current_run, region_key, im_start,
+                    status="success", observed=len(readings),
+                    promoted=source_promoted, drafted=source_drafted,
+                )
+            except Exception as e:
+                print(f"[alerts] ice_mass {region} error: {e}")
+                state.log_error(bot_state, region_key, str(e))
+                _record_source_run(
+                    current_run, region_key, im_start,
+                    status="failed", error=str(e),
+                )
+    else:
+        for region in ("greenland", "antarctica"):
+            skipped_start = time.perf_counter()
+            _record_source_run(
+                current_run, f"ice_mass_{region}", skipped_start,
+                status="skipped", note="Runs Mondays only",
+            )
 
     # Prune weakest drafts from this cycle if we exceeded the cap.
     # Keeps only the top N by signal score from this run.

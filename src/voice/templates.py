@@ -196,3 +196,47 @@ def marine_heatwave_template(
             ),
         ]
     return random.choice(variants)
+
+
+def _month_label(month: str) -> str:
+    """Render YYYY-MM as 'Month YYYY'."""
+    try:
+        year_str, mon_str = month.split("-")
+        mon_idx = int(mon_str)
+        names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ]
+        return f"{names[mon_idx - 1]} {year_str}"
+    except (ValueError, IndexError):
+        return month
+
+
+def ice_mass_template(
+    region: str,
+    kind: str,
+    *,
+    month: str | None = None,
+    monthly_delta_gt: float | None = None,
+    years_of_record: int | None = None,
+    threshold_gt: float | None = None,
+) -> str:
+    region_name = {"greenland": "Greenland", "antarctica": "Antarctica"}.get(
+        region, region.title()
+    )
+    if kind == "monthly_loss_record":
+        loss = abs(monthly_delta_gt or 0.0)
+        month_name = _month_label(month or "")
+        yrs = years_of_record or 0
+        variants = [
+            f"{region_name} lost {loss:.0f} gigatons in {month_name}. The largest monthly loss in {yrs} years of GRACE observations.",
+            f"{region_name}: {loss:.0f} Gt of ice gone in {month_name} alone. That's the worst single-month loss in the {yrs}-year GRACE record.",
+        ]
+        return random.choice(variants)
+    # cumulative_milestone
+    threshold_abs = abs(int(threshold_gt or 0))
+    variants = [
+        f"{region_name} has now lost more than {threshold_abs:,} gigatons of ice since 2002, per GRACE. A threshold first crossed this month.",
+        f"Cumulative ice loss from {region_name} passes {threshold_abs:,} Gt. GRACE has been watching since 2002.",
+    ]
+    return random.choice(variants)

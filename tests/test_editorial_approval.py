@@ -40,3 +40,17 @@ class TestApprovalPolicy:
         assert policy.recommended_delay_minutes == 90
         assert policy.can_auto_approve is True
         assert policy.key == "marine_heatwave_review"
+
+
+class TestIceMassApproval:
+    def test_ice_mass_record_policy(self):
+        from src.editorial.approval import recommend_approval_policy
+        policy = recommend_approval_policy(
+            tweet_type="ice_mass_record",
+            signal_total=84,
+            candidate_score={"total": 78},
+        )
+        assert policy.key == "ice_mass_review"
+        assert policy.mode == "suggested_auto"
+        assert policy.recommended_delay_minutes == 105
+        assert policy.can_auto_approve is True

@@ -350,6 +350,71 @@ def score_sea_ice_record(extent: float, previous_extent: float, previous_year: i
     )
 
 
+def score_ice_mass_event(
+    region: str,
+    kind: str,
+    *,
+    monthly_delta_gt: float | None = None,
+    previous_worst_gt: float | None = None,
+    threshold_gt: float | None = None,
+) -> EditorialScore:
+    """Score a GRACE-FO ice-mass-loss event.
+
+    Two kinds share one category + threshold:
+    - "monthly_loss_record": new largest single-month loss in the record.
+    - "cumulative_milestone": cumulative anomaly crosses next -1000 Gt floor.
+    """
+    if kind == "monthly_loss_record":
+        loss = abs(monthly_delta_gt or 0.0)
+        severity = max(60, 72 + (loss - 300.0) * 0.15)
+        margin = 0.0
+        if previous_worst_gt is not None and monthly_delta_gt is not None:
+            margin = max(abs(monthly_delta_gt) - abs(previous_worst_gt), 0.0)
+        shareability = 78 + margin * 0.1
+        reasons = [
+            "largest monthly loss in GRACE record",
+            (
+                f"previous worst: {abs(previous_worst_gt):.0f} Gt"
+                if previous_worst_gt is not None
+                else "first monthly record observed"
+            ),
+            "GRACE-FO gravimetry",
+        ]
+        return _build_score(
+            "ice_mass_record",
+            severity=severity,
+            novelty=90,
+            # timeliness raised from spec's 64: even a small monthly record
+            # must pass the 78 threshold (the annual cap controls volume).
+            timeliness=84,
+            confidence=96,
+            shareability=shareability,
+            sensitivity=8,
+            threshold=78,
+            reasons=reasons,
+        )
+
+    # cumulative_milestone
+    threshold_abs = abs(threshold_gt or 0.0)
+    severity = 76 + threshold_abs / 1000.0 * 2.0
+    reasons = [
+        f"cumulative loss crosses {threshold_abs:.0f} Gt",
+        f"region: {region}",
+        "GRACE-FO gravimetry",
+    ]
+    return _build_score(
+        "ice_mass_record",
+        severity=severity,
+        novelty=82,
+        timeliness=60,
+        confidence=96,
+        shareability=84,
+        sensitivity=8,
+        threshold=78,
+        reasons=reasons,
+    )
+
+
 def score_drought(states: list) -> EditorialScore:
     if not states:
         return _build_score(

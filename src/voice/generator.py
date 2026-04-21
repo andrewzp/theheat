@@ -719,6 +719,62 @@ def generate_sea_ice_record_tweet(
     )
 
 
+def generate_ice_mass_tweet(
+    region: str,
+    kind: str,
+    *,
+    month: str | None = None,
+    monthly_delta_gt: float | None = None,
+    previous_worst_gt: float | None = None,
+    previous_worst_month: str | None = None,
+    threshold_gt: float | None = None,
+    current_mass_gt: float | None = None,
+    years_of_record: int | None = None,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    region_name = {"greenland": "Greenland", "antarctica": "Antarctica"}.get(
+        region, region.title()
+    )
+    yrs = years_of_record or 0
+
+    if kind == "monthly_loss_record":
+        loss = abs(monthly_delta_gt or 0.0)
+        prev_line = (
+            f"Previous worst: {abs(previous_worst_gt):.0f} Gt in {previous_worst_month}."
+            if previous_worst_gt is not None and previous_worst_month
+            else "This is the first monthly record observed for this region."
+        )
+        data = (
+            f"{region_name} lost {loss:.0f} gigatons of ice in {month}. "
+            f"That is the largest single-month mass loss in {yrs} years of GRACE/GRACE-FO satellite gravimetry (records start 2002). "
+            f"{prev_line} "
+            f"Do not personify the ice ('dying', 'suffering'). Do not conflate with sea-level rise."
+        )
+    else:  # cumulative_milestone
+        threshold_abs = abs(int(threshold_gt or 0))
+        current_abs = abs(current_mass_gt or 0.0)
+        data = (
+            f"Cumulative ice mass loss from {region_name} has now crossed {threshold_abs:,} gigatons "
+            f"since GRACE observations began in 2002. Current cumulative anomaly: {current_abs:,.0f} Gt below the 2002 baseline. "
+            f"Do not personify the ice. Do not conflate with sea-level rise."
+        )
+
+    return generate_tweet(
+        data,
+        category="ice_mass_record",
+        return_bundle=return_bundle,
+        fallback_fn=templates.ice_mass_template,
+        fallback_args={
+            "region": region,
+            "kind": kind,
+            "month": month,
+            "monthly_delta_gt": monthly_delta_gt,
+            "years_of_record": years_of_record,
+            "threshold_gt": threshold_gt,
+        },
+    )
+
+
 def generate_drought_tweet(
     states: list,
     *,

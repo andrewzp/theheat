@@ -384,6 +384,7 @@ responses>=0.25
 | `GH_GIST_TOKEN` | PAT with `gist` scope for state writes |
 | `NASA_FIRMS_API_KEY` | NASA fire satellite detection |
 | `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Bluesky cross-post |
+| `EARTHDATA_TOKEN` | NASA Earthdata Login bearer token, used by the GRACE-FO ice-mass lane. Generate at https://urs.earthdata.nasa.gov/ (profile → "Generate Token"). Optional: if unset the ice_mass lane short-circuits to skipped and the rest of the pipeline runs normally. |
 
 ---
 

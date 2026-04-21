@@ -324,3 +324,58 @@ class TestSqliteBackend:
                 assert False, "Expected StateReadError"
             except StateReadError as exc:
                 assert "Failed to read gist state" in str(exc)
+
+
+class TestIceMassDefaultState:
+    def test_ice_mass_keys_in_default_state(self):
+        from src.state import _fresh_state
+        s = _fresh_state()
+        assert s["ice_mass_max_loss"] == {}
+        assert s["ice_mass_last_milestone"] == {}
+        assert s["ice_mass_last_seen"] == {}
+        assert s["ice_annual_count"] == {}
+
+
+class TestIceMassMerge:
+    def test_max_loss_keeps_most_negative_per_region(self):
+        from src.state import _merge_state
+        base = {
+            "ice_mass_max_loss": {
+                "greenland": {"gt": -400.0, "month": "2024-08"},
+                "antarctica": {"gt": -200.0, "month": "2020-01"},
+            }
+        }
+        incoming = {
+            "ice_mass_max_loss": {
+                "greenland": {"gt": -350.0, "month": "2025-08"},  # weaker
+                "antarctica": {"gt": -250.0, "month": "2026-01"}, # stronger
+            }
+        }
+        merged = _merge_state(base, incoming)
+        assert merged["ice_mass_max_loss"]["greenland"] == {"gt": -400.0, "month": "2024-08"}
+        assert merged["ice_mass_max_loss"]["antarctica"] == {"gt": -250.0, "month": "2026-01"}
+
+    def test_last_milestone_keeps_most_negative_per_region(self):
+        from src.state import _merge_state
+        base = {"ice_mass_last_milestone": {"greenland": -5000.0, "antarctica": -2000.0}}
+        incoming = {"ice_mass_last_milestone": {"greenland": -6000.0, "antarctica": -1000.0}}
+        merged = _merge_state(base, incoming)
+        assert merged["ice_mass_last_milestone"]["greenland"] == -6000.0
+        assert merged["ice_mass_last_milestone"]["antarctica"] == -2000.0
+
+    def test_last_seen_takes_lexicographic_max_per_region(self):
+        from src.state import _merge_state
+        base = {"ice_mass_last_seen": {"greenland": "2026-02", "antarctica": "2026-04"}}
+        incoming = {"ice_mass_last_seen": {"greenland": "2026-03", "antarctica": "2026-01"}}
+        merged = _merge_state(base, incoming)
+        assert merged["ice_mass_last_seen"]["greenland"] == "2026-03"
+        assert merged["ice_mass_last_seen"]["antarctica"] == "2026-04"
+
+    def test_ice_annual_count_takes_max_per_year(self):
+        from src.state import _merge_state
+        base = {"ice_annual_count": {"2026": 3, "2025": 7}}
+        incoming = {"ice_annual_count": {"2026": 5, "2024": 2}}
+        merged = _merge_state(base, incoming)
+        assert merged["ice_annual_count"]["2026"] == 5
+        assert merged["ice_annual_count"]["2025"] == 7
+        assert merged["ice_annual_count"]["2024"] == 2

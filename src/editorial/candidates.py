@@ -34,6 +34,7 @@ CATEGORY_HINTS = {
     "river_flood": ("flood stage", "gauge", "above"),
     "hot10": ("today", "anomaly", "normal"),
     "marine_heatwave": ("ocean", "record", "consecutive"),
+    "ice_mass_record": ("GRACE", "gigatons", "ice"),
 }
 
 

@@ -82,3 +82,42 @@ class TestEditorialScoring:
         from src.editorial.scoring import score_marine_heatwave
         score = score_marine_heatwave(days=100, peak_anomaly_c=0.4, years_of_data=44)
         assert score.total >= 85, f"day-100 should be elite, got {score.total}"
+
+
+class TestScoreIceMassEvent:
+    def test_monthly_record_passes_threshold(self):
+        from src.editorial.scoring import score_ice_mass_event
+        score = score_ice_mass_event(
+            region="greenland",
+            kind="monthly_loss_record",
+            monthly_delta_gt=-423.0,
+            previous_worst_gt=-350.0,
+        )
+        assert score.category == "ice_mass_record"
+        assert score.threshold == 78
+        assert score.passes is True
+        assert score.confidence >= 95
+        assert score.sensitivity <= 10
+        assert any("GRACE" in r for r in score.reasons)
+
+    def test_cumulative_milestone_passes_threshold(self):
+        from src.editorial.scoring import score_ice_mass_event
+        score = score_ice_mass_event(
+            region="greenland",
+            kind="cumulative_milestone",
+            threshold_gt=-6000.0,
+        )
+        assert score.category == "ice_mass_record"
+        assert score.threshold == 78
+        assert score.passes is True
+        assert any("6000" in r or "cumulative" in r.lower() for r in score.reasons)
+
+    def test_tiny_monthly_margin_still_passes_by_design(self):
+        from src.editorial.scoring import score_ice_mass_event
+        score = score_ice_mass_event(
+            region="antarctica",
+            kind="monthly_loss_record",
+            monthly_delta_gt=-120.0,
+            previous_worst_gt=-115.0,
+        )
+        assert score.passes is True
