@@ -44,6 +44,18 @@ DEFAULT_STATE = {
         "seeded": False,
         "last_milestone_fired": None,
     },
+    # GRACE-FO ice mass loss (Lane 2). See docs/conductor-lanes/02-ice-events.md.
+    # Worst single-month mass-delta per region. `gt` is month-over-month
+    # change in gigatons (negative = loss). More-negative = new record.
+    "ice_mass_max_loss": {},  # {region: {"gt": float, "month": "YYYY-MM"}}
+    # Last fired cumulative-loss milestone per region (negative threshold).
+    # Next milestone fires at this value minus MILESTONE_STEP_GT.
+    "ice_mass_last_milestone": {},  # {region: float}
+    # Latest month we've successfully processed per region. Prevents re-eval
+    # of the same month within a publication cycle.
+    "ice_mass_last_seen": {},  # {region: "YYYY-MM"}
+    # Running count of ice_mass tweets per calendar year (cap: 8/year).
+    "ice_annual_count": {},  # {year_str: int}
 }
 
 

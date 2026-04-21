@@ -324,3 +324,13 @@ class TestSqliteBackend:
                 assert False, "Expected StateReadError"
             except StateReadError as exc:
                 assert "Failed to read gist state" in str(exc)
+
+
+class TestIceMassDefaultState:
+    def test_ice_mass_keys_in_default_state(self):
+        from src.state import _fresh_state
+        s = _fresh_state()
+        assert s["ice_mass_max_loss"] == {}
+        assert s["ice_mass_last_milestone"] == {}
+        assert s["ice_mass_last_seen"] == {}
+        assert s["ice_annual_count"] == {}
