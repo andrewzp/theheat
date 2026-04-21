@@ -344,3 +344,46 @@ class TestFireFootprintTemplate:
             for _ in range(50)
         }
         assert any("acres" in t for t in produced)
+
+
+class TestGenerateFireFootprintTweet:
+    def test_uses_fire_footprint_category(self):
+        from unittest.mock import patch, MagicMock
+        from src.voice import generator
+
+        with patch.object(generator, "generate_tweet") as mock_gen:
+            mock_gen.return_value = "mocked tweet"
+            generator.generate_fire_footprint_tweet(
+                name="Dixie Complex",
+                country="US",
+                region="California",
+                hectares=213_000,
+                tier_hectares=100_000,
+            )
+            args, kwargs = mock_gen.call_args
+            assert kwargs["category"] == "fire_footprint"
+            # fallback args must carry all four fields
+            assert kwargs["fallback_args"]["name"] == "Dixie Complex"
+            assert kwargs["fallback_args"]["country"] == "US"
+            assert kwargs["fallback_args"]["region"] == "California"
+            assert kwargs["fallback_args"]["hectares"] == 213_000
+
+    def test_data_description_contains_key_facts(self):
+        from unittest.mock import patch
+        from src.voice import generator
+
+        with patch.object(generator, "generate_tweet") as mock_gen:
+            mock_gen.return_value = "mocked tweet"
+            generator.generate_fire_footprint_tweet(
+                name=None,
+                country="Russia",
+                region="Yakutia",
+                hectares=300_000,
+                tier_hectares=250_000,
+            )
+            args, kwargs = mock_gen.call_args
+            data_description = args[0]
+            assert "Yakutia" in data_description
+            assert "Russia" in data_description
+            assert "300,000" in data_description
+            assert "250,000" in data_description  # the crossed threshold
