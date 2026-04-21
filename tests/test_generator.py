@@ -257,3 +257,17 @@ def test_marine_heatwave_template_milestone_kind_uses_streak_day():
     )
     assert "100" in text
     assert "consecutive" in text.lower() or "th" in text
+
+
+@patch("src.voice.generator.GEMINI_API_KEY", "")
+def test_generate_marine_heatwave_tweet_falls_back_to_template():
+    """When Gemini has no API key, the fallback template is used."""
+    from src.voice.generator import generate_marine_heatwave_tweet
+    result = generate_marine_heatwave_tweet(
+        kind="first", days=5,
+        today_c=20.52, archive_max_c=20.31,
+        archive_max_year=2023, years_of_data=44,
+    )
+    assert isinstance(result, str)
+    assert "5" in result
+    assert "20.52" in result or "20.5" in result
