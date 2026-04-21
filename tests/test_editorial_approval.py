@@ -41,6 +41,15 @@ class TestApprovalPolicy:
         assert policy.can_auto_approve is True
         assert policy.key == "marine_heatwave_review"
 
+    def test_fire_footprint_requires_manual_review(self):
+        policy = recommend_approval_policy(
+            "fire_footprint",
+            signal_total=88,
+            candidate_score={"total": 82},
+        )
+        assert policy.mode == "manual_only"
+        assert policy.can_auto_approve is False
+
 
 class TestIceMassApproval:
     def test_ice_mass_record_policy(self):
