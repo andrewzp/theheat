@@ -11,6 +11,7 @@ Records start 2002.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 import requests
 
@@ -28,6 +29,17 @@ REGION_URLS = {"greenland": GREENLAND_URL, "antarctica": ANTARCTICA_URL}
 
 GRACE_START_YEAR = 2002
 MILESTONE_STEP_GT = 1000.0
+
+
+def _decimal_year_to_month(decimal_year: float) -> str:
+    year = int(math.floor(decimal_year))
+    frac = decimal_year - year
+    month_idx = int(frac * 12)
+    if month_idx < 0:
+        month_idx = 0
+    if month_idx > 11:
+        month_idx = 11
+    return f"{year}-{month_idx + 1:02d}"
 
 
 @dataclass

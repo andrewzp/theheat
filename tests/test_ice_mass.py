@@ -45,3 +45,21 @@ class TestModuleSurface:
         assert rec.threshold_gt is None
         assert rec.current_mass_gt is None
         assert rec.event_id == "ice_mass_record_greenland_monthly_2026-08"
+
+
+from src.data.ice_mass import _decimal_year_to_month
+
+
+class TestDecimalYearToMonth:
+    def test_january(self):
+        assert _decimal_year_to_month(2026.04) == "2026-01"
+
+    def test_august(self):
+        # Aug = month index 7 (0-based). (7 + 0.5) / 12 ≈ 0.625
+        assert _decimal_year_to_month(2026.625) == "2026-08"
+
+    def test_december(self):
+        assert _decimal_year_to_month(2026.96) == "2026-12"
+
+    def test_exact_year_boundary(self):
+        assert _decimal_year_to_month(2002.0) == "2002-01"
