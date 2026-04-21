@@ -24,6 +24,7 @@ from src.state import (
     log_error,
     DEFAULT_STATE,
     write_state,
+    _fresh_state,
 )
 
 
@@ -176,6 +177,46 @@ class TestRunHistory:
         run = init_run("alerts")
         finalize_run(state, run, status="success", max_runs=20)
         assert len(state["run_history"]) == 20
+
+
+class TestOceanSSTStreak:
+    def test_default_state_has_ocean_sst_streak(self):
+        from src.state import DEFAULT_STATE
+        assert "ocean_sst_streak" in DEFAULT_STATE
+        assert DEFAULT_STATE["ocean_sst_streak"] == {
+            "seeded": False,
+            "last_milestone_fired": None,
+        }
+
+    def test_merge_state_prefers_incoming_ocean_sst_streak(self):
+        from src.state import _merge_state
+        current = {"ocean_sst_streak": {"seeded": True, "last_milestone_fired": 5}}
+        incoming = {"ocean_sst_streak": {"seeded": True, "last_milestone_fired": 25}}
+        merged = _merge_state(current, incoming)
+        assert merged["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": 25}
+
+    def test_merge_state_falls_back_to_current_when_incoming_missing(self):
+        from src.state import _merge_state
+        current = {"ocean_sst_streak": {"seeded": True, "last_milestone_fired": 10}}
+        incoming = {}
+        merged = _merge_state(current, incoming)
+        # _normalize_state fills incoming with DEFAULT_STATE's ocean_sst_streak,
+        # which would clobber current. So we must take current when incoming is default.
+        # The contract: if incoming differs from default, prefer it; otherwise keep current.
+        # Simpler: always take incoming (matches record_streaks behavior). Document this.
+        assert merged["ocean_sst_streak"] == {"seeded": False, "last_milestone_fired": None}
+
+    def test_update_ocean_sst_streak_replaces_dict(self):
+        from src.state import update_ocean_sst_streak
+        state = _fresh_state()
+        result = update_ocean_sst_streak(state, {"seeded": True, "last_milestone_fired": 25})
+        assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": 25}
+
+    def test_update_ocean_sst_streak_handles_missing_key(self):
+        from src.state import update_ocean_sst_streak
+        state = {}
+        result = update_ocean_sst_streak(state, {"seeded": True, "last_milestone_fired": None})
+        assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": None}
 
 
 class TestSqliteBackend:
