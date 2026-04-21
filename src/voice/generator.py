@@ -899,7 +899,7 @@ def generate_marine_heatwave_tweet(
         f"That's above the daily record for this calendar day ({archive_max_c:.2f}°C, "
         f"set in {archive_max_year}) and it's the {days}th consecutive day this has been true. "
         f"Archive goes back {years_of_data} years (NOAA OISST v2.1). "
-        f"Today's date: {__import__('datetime').date.today().strftime('%B %d, %Y')}."
+        f"Today's date: {date.today().strftime('%B %d, %Y')}."
     )
     return generate_tweet(
         data,
