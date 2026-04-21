@@ -240,3 +240,25 @@ def ice_mass_template(
         f"Cumulative ice loss from {region_name} passes {threshold_abs:,} Gt. GRACE has been watching since 2002.",
     ]
     return random.choice(variants)
+
+
+def fire_footprint_template(
+    name: str | None,
+    country: str,
+    region: str,
+    hectares: float,
+) -> str:
+    """Safety-net fallback when Gemini fails.
+
+    Named complexes lead with the name. Unnamed complexes use a regional
+    descriptor. Every variant leads with acreage — the scale IS the story.
+    """
+    subject = name if name else f"A fire complex in {region}"
+    hectares_str = f"{int(hectares):,}"
+    acres_str = f"{int(round(hectares * 2.47105, 0)):,}"
+    variants = [
+        f"{subject}, {country} has burned {hectares_str} hectares. That's {acres_str} acres.",
+        f"{subject}: {hectares_str} hectares burned. {country}.",
+        f"Fire footprint update. {subject} in {country} is now at {hectares_str} hectares.",
+    ]
+    return random.choice(variants)

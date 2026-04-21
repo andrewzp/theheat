@@ -304,3 +304,43 @@ class TestGenerateIceMassTweet:
         assert result is not None
         assert "Antarctica" in result
         assert "3,000" in result or "3000" in result
+
+
+class TestFireFootprintTemplate:
+    def test_named_fire_leads_with_name(self):
+        from src.voice.templates import fire_footprint_template
+        text = fire_footprint_template(
+            name="Dixie Complex",
+            country="US",
+            region="California",
+            hectares=213_000,
+        )
+        assert "Dixie Complex" in text
+        assert "213,000" in text
+        assert "hectares" in text
+
+    def test_unnamed_fire_uses_region_fallback(self):
+        from src.voice.templates import fire_footprint_template
+        text = fire_footprint_template(
+            name=None,
+            country="Russia",
+            region="Yakutia",
+            hectares=300_000,
+        )
+        assert "Yakutia" in text
+        assert "Russia" in text
+        assert "300,000" in text
+
+    def test_includes_acre_conversion(self):
+        from src.voice.templates import fire_footprint_template
+        # Run many times so at least one acre-bearing variant appears.
+        produced = {
+            fire_footprint_template(
+                name="Test Fire",
+                country="US",
+                region="California",
+                hectares=100_000,
+            )
+            for _ in range(50)
+        }
+        assert any("acres" in t for t in produced)
