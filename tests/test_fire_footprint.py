@@ -8,9 +8,10 @@ from src.data.fire_footprint import (
     FireComplex,
     TIERS_HECTARES,
     _classify_tier,
+    detect_tier_crossings,
+    fetch_active_fire_perimeters,
+    GWIS_URL,
 )
-from src.data.fire_footprint import detect_tier_crossings
-from src.data.fire_footprint import fetch_active_fire_perimeters, GWIS_URL
 
 
 # NIFC ArcGIS-shape payload. IncidentSize is in acres; we convert to hectares
@@ -19,6 +20,7 @@ from src.data.fire_footprint import fetch_active_fire_perimeters, GWIS_URL
 # Acre values chosen so resulting hectares are:
 #   526_321 acres / 2.47105 ≈ 213,032 ha → tier 2 (100k–249k range)
 #   148_264 acres / 2.47105 ≈  59,995 ha → tier 1  (50k–99k range)
+#   148_264 acres / 2.47105 ≈  59,995 ha → tier 1  (50k–99k range, second good row)
 #    12_355 acres / 2.47105 ≈   4,999 ha → below floor, filtered
 SAMPLE_PAYLOAD = {
     "features": [
@@ -48,6 +50,18 @@ SAMPLE_PAYLOAD = {
         },
         {
             "attributes": {
+                "UniqueFireIdentifier": "2026-AK-000987",
+                "IrwinID": "{DDD-444}",
+                "IncidentName": "Tanana Fire",
+                "CpxName": None,
+                "IsCpxChild": None,
+                "IncidentSize": 148_264.0,  # ~60k ha, tier 1 — used as "good row" in exception test
+                "POOState": "US-AK",
+                "FireDiscoveryDateTime": 1625616000000,
+            }
+        },
+        {
+            "attributes": {
                 "UniqueFireIdentifier": "2026-ORMDF-000789",
                 "IrwinID": "{CCC-333}",
                 "IncidentName": "Small Fire",
@@ -69,9 +83,9 @@ class TestFetchActiveFirePerimeters:
 
         complexes = fetch_active_fire_perimeters()
 
-        assert len(complexes) == 2  # small OR fire below floor filtered
+        assert len(complexes) == 3  # small OR fire below floor filtered
         ids = {c.complex_id for c in complexes}
-        assert ids == {"2026-CACND-000123", "2026-AKFAS-000456"}
+        assert ids == {"2026-CACND-000123", "2026-AKFAS-000456", "2026-AK-000987"}
 
     @responses.activate
     def test_complex_tier_classified_correctly(self):
@@ -88,7 +102,7 @@ class TestFetchActiveFirePerimeters:
         responses.add(responses.GET, GWIS_URL, json=SAMPLE_PAYLOAD, status=200)
         complexes = fetch_active_fire_perimeters()
         dixie = next(c for c in complexes if c.complex_id == "2026-CACND-000123")
-        assert dixie.event_id == f"fire_footprint_2026-CACND-000123_tier{dixie.tier}"
+        assert dixie.event_id == "fire_footprint_2026-CACND-000123_tier2"
 
     @responses.activate
     def test_http_error_returns_empty(self):
@@ -96,8 +110,8 @@ class TestFetchActiveFirePerimeters:
         assert fetch_active_fire_perimeters() == []
 
     @responses.activate
-    def test_malformed_rows_skipped_not_raised(self):
-        # Missing IncidentSize — should be treated as 0 ha and filtered (below floor)
+    def test_row_missing_size_filtered_below_floor(self):
+        # Verifies the below-floor filter: missing IncidentSize → 0 ha → filtered out.
         bad_payload = {
             "features": [
                 {"attributes": {"UniqueFireIdentifier": "X", "IncidentName": "Bad"}}
@@ -105,6 +119,53 @@ class TestFetchActiveFirePerimeters:
         }
         responses.add(responses.GET, GWIS_URL, json=bad_payload, status=200)
         assert fetch_active_fire_perimeters() == []
+
+    @responses.activate
+    def test_row_raising_exception_skipped_continues_loop(self):
+        """Per-row try/except prevents one poison row from killing the whole fetch."""
+        responses.add(responses.GET, GWIS_URL, json=SAMPLE_PAYLOAD, status=200)
+
+        real_classify = _classify_tier
+
+        def flaky_classify(hectares):
+            if 200_000 < hectares < 220_000:  # the 213k Dixie row
+                raise RuntimeError("simulated per-row failure")
+            return real_classify(hectares)
+
+        with patch("src.data.fire_footprint._classify_tier", side_effect=flaky_classify):
+            complexes = fetch_active_fire_perimeters()
+
+        # The 213k row blew up during processing; the 60k row survived.
+        ids = {c.complex_id for c in complexes}
+        assert "2026-CACND-000123" not in ids  # poison row skipped
+        assert "2026-AK-000987" in ids  # good row still returned
+
+    @responses.activate
+    def test_irwin_id_fallback_used_when_unique_identifier_missing(self):
+        """When UniqueFireIdentifier is absent, IrwinID is used as complex_id."""
+        irwin_id = "aabbccdd-0000-1111-2222-333344445555"
+        payload = {
+            "features": [
+                {
+                    "attributes": {
+                        "UniqueFireIdentifier": None,
+                        "IrwinID": irwin_id,
+                        "IncidentName": "Fallback Fire",
+                        "CpxName": None,
+                        "IsCpxChild": None,
+                        "IncidentSize": 148_264.0,  # ~60k ha, above floor
+                        "POOState": "US-NV",
+                        "FireDiscoveryDateTime": 1625616000000,
+                    }
+                }
+            ]
+        }
+        responses.add(responses.GET, GWIS_URL, json=payload, status=200)
+
+        complexes = fetch_active_fire_perimeters()
+
+        assert len(complexes) == 1
+        assert complexes[0].complex_id == irwin_id
 
     def test_network_exception_returns_empty(self):
         with patch("src.data.fire_footprint.requests.get", side_effect=Exception("boom")):

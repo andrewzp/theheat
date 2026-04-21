@@ -88,7 +88,7 @@ def _parse_start_date(raw) -> date | None:
         if ms <= 0:
             return None
         return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).date()
-    except (TypeError, ValueError, OSError):
+    except (TypeError, ValueError, OSError, OverflowError):
         return None
 
 
@@ -141,7 +141,7 @@ def fetch_active_fire_perimeters() -> list["FireComplex"]:
                 complex_id=complex_id,
                 name=name,
                 country="US",
-                region=region if region else "Unknown",
+                region=region,
                 hectares=hectares,
                 start_date=start_date,
                 tier=tier,
