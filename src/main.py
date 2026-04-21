@@ -14,7 +14,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges
+from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
@@ -36,6 +36,7 @@ from src.editorial.scoring import (
     score_record_streak,
     score_river_flood,
     score_sea_ice_record,
+    score_ice_mass_event,
     score_severe_weather,
     score_simultaneous_records,
     score_storm_surge,
@@ -231,6 +232,25 @@ def _co2_annual_cap_reached(bot_state: dict, cap: int = CO2_ANNUAL_CAP) -> bool:
 def _increment_co2_annual_count(bot_state: dict) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("co2_annual_count", {})
+    counts[year_key] = counts.get(year_key, 0) + 1
+
+
+ICE_ANNUAL_CAP = 8
+
+
+def _ice_annual_cap_reached(bot_state: dict, cap: int = ICE_ANNUAL_CAP) -> bool:
+    """True if we've already drafted ICE_ANNUAL_CAP ice-mass tweets this year."""
+    year_key = str(date.today().year)
+    count = bot_state.get("ice_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[ice_mass] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
+
+
+def _increment_ice_annual_count(bot_state: dict) -> None:
+    year_key = str(date.today().year)
+    counts = bot_state.setdefault("ice_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
 
 
