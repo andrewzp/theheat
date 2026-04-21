@@ -254,6 +254,48 @@ def score_fire_event(confidence: int, frp: float, *, region: str = "") -> Editor
     )
 
 
+def score_fire_footprint(
+    hectares: float,
+    tier: int,
+    *,
+    region: str = "",
+    has_name: bool = False,
+) -> EditorialScore:
+    """Score a fire-complex tier crossing.
+
+    Signal is the cumulative burn area (hectares) and which tier we've
+    just crossed. Named complexes score slightly higher because the name
+    itself is a shareability hook. Out-of-season fires score higher on
+    novelty, matching the existing FIRMS pattern.
+    """
+    shoulder_season = date.today().month in {1, 2, 3, 4, 11, 12}
+    severity = 58 + tier * 6 + min(hectares, 1_500_000) / 30_000
+    novelty = 52 + tier * 4 + (12 if shoulder_season else 0)
+    timeliness = 88
+    confidence_score = 82  # GWIS is authoritative
+    shareability = 58 + tier * 5 + (10 if has_name else 0)
+    reasons = [f"{int(hectares):,} ha cumulative burn area"]
+    if has_name:
+        reasons.append("named fire complex")
+    if shoulder_season:
+        reasons.append("out-of-season fire signal")
+    if tier >= 3:
+        reasons.append("top-tier historical scale")
+    if region and region != "Unknown":
+        reasons.append(f"location hook: {region}")
+    return _build_score(
+        "fire_footprint",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence_score,
+        shareability=shareability,
+        sensitivity=34,
+        threshold=72,
+        reasons=reasons[:3],
+    )
+
+
 def score_co2_milestone(ppm_crossed: int, actual_ppm: float) -> EditorialScore:
     severity = 62 + max(ppm_crossed - 420, 0) * 1.2
     novelty = 92
