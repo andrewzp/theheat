@@ -199,6 +199,9 @@ def fetch_global_sst() -> GlobalSSTObservation | None:
     if not prior_arrs:
         return None
 
+    if len(prior_arrs) < 30:
+        return None
+
     amax = _archive_max_for_doy(prior_arrs, today_doy)
     if amax is None:
         return None

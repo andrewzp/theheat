@@ -64,17 +64,18 @@ def test_fetch_global_sst_happy_path():
 
     # Scenario: today is doy 100 of year 2026.
     # Current year value at doy 100 = 20.5.
-    # Three prior years (1982, 1983, 2025): their doy 100 values are 19.5, 20.0, 20.3.
+    # 44 prior years (1982-2025): doy 100 values are 19.5 for 1982,
+    # 20.0 for all middle years (1983-2024), and 20.3 for 2025.
     # Archive max for doy 100 = 20.3, set 2025.
     # Streak: check only doy 100. Value 20.5 > 20.3 → streak = 1.
     today_doy = 100
     cur_values = [None] * 365
     cur_values[today_doy - 1] = 20.5
-    prior = {
-        1982: [19.5] * 365,
-        1983: [20.0] * 365,
-        2025: [20.3] * 365,
-    }
+    prior = {}
+    for y in range(1982, 2026):
+        arr = [18.0] * 365  # baseline for all days
+        arr[today_doy - 1] = 20.3 if y == 2025 else (19.5 if y == 1982 else 20.0)
+        prior[y] = arr
     payload = _fake_payload(2026, today_doy, cur_values, prior)
 
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
@@ -91,6 +92,23 @@ def test_fetch_global_sst_happy_path():
     assert obs.years_of_data == 2026 - 1982  # 44
     assert obs.streak_days == 1
     assert obs.streak_peak_anomaly_c == pytest.approx(0.2)
+
+
+def test_fetch_global_sst_returns_none_on_too_few_prior_years():
+    """Fewer than 30 prior years → return None (can't claim a record)."""
+    from src.data import ocean_sst
+    today_doy = 100
+    cur = [None] * 365
+    cur[today_doy - 1] = 20.5
+    # Only 3 prior years — not enough to claim a record
+    prior = {y: [18.0] * 365 for y in range(1982, 1985)}
+    payload = _fake_payload(2026, today_doy, cur, prior)
+    with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
+        with patch("src.data.ocean_sst.requests.get") as mock_get:
+            mock_get.return_value.raise_for_status = lambda: None
+            mock_get.return_value.json = lambda: payload
+            obs = ocean_sst.fetch_global_sst()
+    assert obs is None
 
 
 def test_fetch_global_sst_streak_stops_at_first_non_exceedance():
