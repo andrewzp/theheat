@@ -18,7 +18,7 @@ from src.data.fire_footprint import (
 # before tier classification.
 #
 # Acre values chosen so resulting hectares are:
-#   526_321 acres / 2.47105 ≈ 213,032 ha → tier 2 (100k–249k range)
+#   526_321 acres / 2.47105 ≈ 213,032 ha → tier 2 (100k–249k range)  [parent row]
 #   148_264 acres / 2.47105 ≈  59,995 ha → tier 1  (50k–99k range)
 #   148_264 acres / 2.47105 ≈  59,995 ha → tier 1  (50k–99k range, second good row)
 #    12_355 acres / 2.47105 ≈   4,999 ha → below floor, filtered
@@ -30,7 +30,7 @@ SAMPLE_PAYLOAD = {
                 "IrwinID": "{AAA-111}",
                 "IncidentName": "Dixie",
                 "CpxName": "Dixie Complex",
-                "IsCpxChild": 1,
+                "IsCpxChild": 0,
                 "IncidentSize": 526_321.0,
                 "POOState": "US-CA",
                 "FireDiscoveryDateTime": 1626220800000,
@@ -166,6 +166,43 @@ class TestFetchActiveFirePerimeters:
 
         assert len(complexes) == 1
         assert complexes[0].complex_id == irwin_id
+
+    @responses.activate
+    def test_child_rows_filtered(self):
+        """IsCpxChild == 1 rows are skipped; only parent complex rows are returned."""
+        payload = {
+            "features": [
+                {
+                    "attributes": {
+                        "UniqueFireIdentifier": "PARENT-001",
+                        "IrwinID": None,
+                        "IncidentName": "Parent Complex",
+                        "CpxName": "Parent Complex",
+                        "IsCpxChild": 0,
+                        "IncidentSize": 526_321.0,
+                        "POOState": "US-CA",
+                        "FireDiscoveryDateTime": 1626220800000,
+                    }
+                },
+                {
+                    "attributes": {
+                        "UniqueFireIdentifier": "CHILD-001",
+                        "IrwinID": None,
+                        "IncidentName": "Child Fire A",
+                        "CpxName": "Parent Complex",
+                        "IsCpxChild": 1,
+                        "IncidentSize": 300_000.0,
+                        "POOState": "US-CA",
+                        "FireDiscoveryDateTime": 1626220800000,
+                    }
+                },
+            ]
+        }
+        responses.add(responses.GET, GWIS_URL, json=payload, status=200)
+        complexes = fetch_active_fire_perimeters()
+        ids = {c.complex_id for c in complexes}
+        assert "PARENT-001" in ids
+        assert "CHILD-001" not in ids
 
     def test_network_exception_returns_empty(self):
         with patch("src.data.fire_footprint.requests.get", side_effect=Exception("boom")):
