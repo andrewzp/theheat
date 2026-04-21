@@ -31,6 +31,7 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 ├── Fetch from data sources
 │   ├── Open-Meteo ──────── city temps + archive (257 cities, all records)
 │   ├── NASA FIRMS ────────── satellite wildfire detections
+│   ├── GWIS/NIFC ──────────── fire-complex cumulative burn area (daily, tier-crossing only)
 │   ├── NOAA GML ──────────── Mauna Loa CO2 (daily PPM)
 │   ├── NWS Alerts ────────── Emergency-tier severe weather (Tornado Emergency,
 │   │                          Flash Flood Emergency, Hurricane, Storm Surge,
@@ -250,6 +251,7 @@ Signal types and thresholds:
 - **record** (calendar-date) — 72
 - **record_low** — 72
 - **fire** — 64
+- **fire_footprint** — threshold 72 (fire-complex cumulative burn area, manual_only approval)
 - **co2_milestone** — 58 (capped at 12 tweets/year via `co2_annual_count` state; weekly comparison pathway removed — CO2 only tweeted in the extreme)
 - **severe_weather** — 58
 - **global_disaster** — 62
@@ -271,7 +273,7 @@ Passes if 7+ on 4 of 5. Fails → rewrite provided. Rewrite must pass safety AND
 ### Approval Policies (`approval.py`)
 - **armed_auto** — Auto-posts after timed delay (Hot 10, CO2 milestones)
 - **suggested_auto** — Dashboard suggests auto, requires human (records, ice, ENSO)
-- **manual_only** — Human required (fires, severe weather, disasters, storm surge, floods, drought)
+- **manual_only** — Human required (fires, fire footprints, severe weather, disasters, storm surge, floods, drought)
 
 ---
 
@@ -386,6 +388,14 @@ responses>=0.25
 | `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Bluesky cross-post |
 | `EARTHDATA_TOKEN` | NASA Earthdata Login bearer token, used by the GRACE-FO ice-mass lane. Generate at https://urs.earthdata.nasa.gov/ (profile → "Generate Token"). Optional: if unset the ice_mass lane short-circuits to skipped and the rest of the pipeline runs normally. |
 
+### Fire footprint source (no secret required)
+
+- **Source:** NIFC WFIGS (Wildland Fire Interagency Geospatial Services) — `services3.arcgis.com/T4QMspbfLg3qTGWY/.../WFIGS_Incident_Locations_Current`
+- **Auth:** None (public ArcGIS FeatureServer).
+- **Coverage:** US only.
+- **Rationale for NIFC over GWIS:** GWIS (EU Joint Research Centre) was the original target — it provides global coverage — but as of 2026-04-20 GWIS publishes only WMS map layers, no JSON/GeoJSON API. Pivoted to NIFC per the plan's explicit fallback. Revisit GWIS if they publish a JSON endpoint.
+- **Fallback if NIFC degrades:** no secondary source implemented; the orchestrator catches fetch failures and logs them without blocking other sources.
+
 ---
 
 ## Known Issues & Growth Levers
@@ -401,9 +411,8 @@ responses>=0.25
 2. **Country-level records** — requires national-level aggregation we don't have.
 3. **Ocean SST / marine heatwaves** — NOAA OISST integration.
 4. **Ice events** — GLIMS, GRACE integration.
-5. **Fire footprint (acreage)** — GWIS integration.
-6. **Cross-source story synthesis** — drought + fire + heat as one narrative.
-7. **RSS enrichment** — Carbon Brief, Climate Central feeds.
+5. **Cross-source story synthesis** — drought + fire + heat as one narrative.
+6. **RSS enrichment** — Carbon Brief, Climate Central feeds.
 
 ---
 
