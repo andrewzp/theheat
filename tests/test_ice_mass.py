@@ -229,3 +229,46 @@ class TestDetectMonthlyRecord:
 
     def test_empty_readings_returns_none(self):
         assert detect_monthly_record([], {"ice_mass_max_loss": {}}) is None
+
+
+class TestDetectCumulativeMilestone:
+    def test_fires_on_first_crossing(self):
+        readings = [
+            _reading("greenland", "2026-03", -4900.0),
+            _reading("greenland", "2026-04", -5050.0),   # crosses -5000
+        ]
+        state = {"ice_mass_last_milestone": {}}
+        rec = detect_cumulative_milestone(readings, state)
+        assert rec is not None
+        assert rec.kind == "cumulative_milestone"
+        assert rec.threshold_gt == -5000.0
+        assert rec.current_mass_gt == -5050.0
+        assert rec.event_id == "ice_mass_record_greenland_cumulative_-5000"
+
+    def test_no_refire_once_fired(self):
+        readings = [_reading("greenland", "2026-04", -5100.0)]
+        state = {"ice_mass_last_milestone": {"greenland": -5000.0}}
+        assert detect_cumulative_milestone(readings, state) is None
+
+    def test_subsequent_milestone_fires(self):
+        readings = [_reading("greenland", "2028-07", -6042.0)]
+        state = {"ice_mass_last_milestone": {"greenland": -5000.0}}
+        rec = detect_cumulative_milestone(readings, state)
+        assert rec is not None
+        assert rec.threshold_gt == -6000.0
+        assert rec.current_mass_gt == -6042.0
+
+    def test_no_fire_if_not_yet_crossed(self):
+        readings = [_reading("greenland", "2026-04", -4850.0)]
+        state = {"ice_mass_last_milestone": {}}
+        assert detect_cumulative_milestone(readings, state) is None
+
+    def test_empty_readings_returns_none(self):
+        assert detect_cumulative_milestone([], {"ice_mass_last_milestone": {}}) is None
+
+    def test_positive_mass_no_fire(self):
+        # At mission start mass is near the baseline (≈0). No negative
+        # threshold to report.
+        readings = [_reading("greenland", "2002-04", 12.0)]
+        state = {"ice_mass_last_milestone": {}}
+        assert detect_cumulative_milestone(readings, state) is None

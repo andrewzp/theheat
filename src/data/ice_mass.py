@@ -157,5 +157,58 @@ def detect_monthly_record(readings: list[IceMassReading], state: dict) -> IceMas
     )
 
 
-def detect_cumulative_milestone(readings: list[IceMassReading], state: dict) -> IceMassRecord | None:
-    raise NotImplementedError
+def detect_cumulative_milestone(
+    readings: list[IceMassReading], state: dict
+) -> IceMassRecord | None:
+    """Fire when the latest cumulative mass anomaly crosses the next
+    MILESTONE_STEP_GT floor (e.g. -5000, -6000, …) beyond the last fired
+    threshold for that region.
+
+    Stores `state["ice_mass_last_milestone"][region]` as the last fired
+    threshold (negative number). Absent entry means no milestone ever
+    fired for this region.
+    """
+    if not readings:
+        return None
+
+    latest = readings[-1]
+    region = latest.region
+    if latest.mass_gt >= 0:
+        return None
+
+    last_fired = state.get("ice_mass_last_milestone", {}).get(region)
+
+    # To detect a milestone crossing, we need either:
+    # - Multiple readings (so we can see a transition), OR
+    # - A previous milestone fired (so we know which one is next)
+    if len(readings) < 2 and last_fired is None:
+        return None
+
+    # Determine what milestone threshold the current mass has crossed.
+    # We look for the LEAST NEGATIVE milestone that is >= latest.mass_gt.
+    # E.g., -5050 has crossed -5000; -4850 has crossed -4000.
+    crossed = math.ceil(latest.mass_gt / MILESTONE_STEP_GT) * MILESTONE_STEP_GT
+
+    # Check: have we crossed a NEW milestone (one we haven't fired for)?
+    # If last_fired is None, crossed must be <= -MILESTONE_STEP_GT (i.e., at or past the first milestone).
+    # If last_fired is set, crossed must be more negative (smaller) than last_fired.
+    if last_fired is None:
+        if crossed > -MILESTONE_STEP_GT:
+            # Haven't reached the first milestone yet.
+            return None
+    else:
+        if crossed >= last_fired:
+            # Not more negative than the last fired milestone.
+            return None
+
+    return IceMassRecord(
+        region=region,
+        kind="cumulative_milestone",
+        month=latest.month,
+        monthly_delta_gt=None,
+        previous_worst_gt=None,
+        previous_worst_month=None,
+        threshold_gt=float(crossed),
+        current_mass_gt=latest.mass_gt,
+        event_id=f"ice_mass_record_{region}_cumulative_{int(crossed)}",
+    )
