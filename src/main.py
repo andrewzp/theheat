@@ -1289,7 +1289,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 event.days, event.peak_anomaly_c, event.years_of_data,
             )
             if _should_draft(score, event.event_id):
-                source_promoted = 1
+                source_promoted += 1
                 generated = generator.generate_marine_heatwave_tweet(
                     kind=event.kind,
                     days=event.days,
@@ -1318,7 +1318,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 ):
                     state.record_event(bot_state, event.event_id)
                     drafted += 1
-                    source_drafted = 1
+                    source_drafted += 1
         _record_source_run(
             current_run, "ocean_sst", sst_start,
             status="success",
