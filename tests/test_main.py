@@ -1118,3 +1118,121 @@ class TestProcessDueDrafts:
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "pending"
         assert result["drafts"][0]["post_error"] == "Auto-approval blocked by policy"
+
+
+class TestRunAlertsIceMass:
+    def test_monday_with_record_drafts(self, monkeypatch):
+        """On a Monday, a fresh monthly record for Greenland drafts a tweet
+        and updates state (ice_mass_max_loss + ice_mass_last_seen + count)."""
+        from src import main
+        import datetime as _dt
+
+        class FakeDate(_dt.date):
+            @classmethod
+            def today(cls):
+                return _dt.date(2026, 4, 20)  # a Monday
+
+        monkeypatch.setattr(main, "date", FakeDate)
+
+        # Monkeypatch ice_mass module: happy readings, fire a record
+        from src.data import ice_mass as ice_mass_mod
+        readings = [
+            ice_mass_mod.IceMassReading("greenland", "2026-02", -5000.0, 100, "ice_mass_greenland_2026-02"),
+            ice_mass_mod.IceMassReading("greenland", "2026-03", -5500.0, 100, "ice_mass_greenland_2026-03"),
+        ]
+        monkeypatch.setattr(ice_mass_mod, "fetch_grace_mass",
+                            lambda region: readings if region == "greenland" else [])
+        # Short-circuit all other fetchers
+        for mod_name in (
+            "firms", "co2", "nws_alerts", "gdacs", "sea_ice", "drought", "enso",
+            "ocean", "water_levels", "river_gauges",
+        ):
+            mod = getattr(main, mod_name, None)
+            if mod is None:
+                continue
+            for fn in dir(mod):
+                if fn.startswith("fetch_"):
+                    monkeypatch.setattr(mod, fn, lambda *a, **k: [])
+        # Stub open_meteo to avoid HTTP calls for all ~600 cities
+        monkeypatch.setattr(main.open_meteo, "load_cities", lambda *a, **k: [])
+        monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities", lambda *a, **k: ([], []))
+
+        # Stub the generator — return a string (not a bundle) to avoid Gemini calls
+        monkeypatch.setattr(
+            main.generator, "generate_ice_mass_tweet",
+            lambda *a, **k: "Greenland lost 500 Gt. Largest monthly loss in GRACE record.",
+        )
+
+        bot_state = {
+            "last_hot10": {"date": None, "cities": []},
+            "streaks": {},
+            "posted_events": [],
+            "daily_tweet_count": {},
+            "co2_annual_count": {},
+            "drafts": [],
+            "run_history": [],
+            "errors": [],
+            "city_all_time_max": {},
+            "city_all_time_min": {},
+            "city_monthly_max": {},
+            "city_monthly_min": {},
+            "record_streaks": {},
+            "ice_mass_max_loss": {},
+            "ice_mass_last_milestone": {},
+            "ice_mass_last_seen": {},
+            "ice_annual_count": {},
+        }
+        main.run_alerts(bot_state)
+
+        assert bot_state["ice_mass_last_seen"].get("greenland") == "2026-03"
+        assert bot_state["ice_mass_max_loss"].get("greenland", {}).get("gt") == -500.0
+        assert bot_state["ice_annual_count"].get("2026", 0) >= 1
+        # The event must be recorded
+        assert any("ice_mass_record_greenland_monthly_2026-03" == e
+                   for e in bot_state["posted_events"])
+
+    def test_non_monday_skips(self, monkeypatch):
+        from src import main
+        import datetime as _dt
+
+        class FakeDate(_dt.date):
+            @classmethod
+            def today(cls):
+                return _dt.date(2026, 4, 21)  # a Tuesday
+
+        monkeypatch.setattr(main, "date", FakeDate)
+
+        from src.data import ice_mass as ice_mass_mod
+        called = {"n": 0}
+
+        def spy(region):
+            called["n"] += 1
+            return []
+
+        monkeypatch.setattr(ice_mass_mod, "fetch_grace_mass", spy)
+        for mod_name in (
+            "firms", "co2", "nws_alerts", "gdacs", "sea_ice", "drought", "enso",
+            "ocean", "water_levels", "river_gauges",
+        ):
+            mod = getattr(main, mod_name, None)
+            if mod is None:
+                continue
+            for fn in dir(mod):
+                if fn.startswith("fetch_"):
+                    monkeypatch.setattr(mod, fn, lambda *a, **k: [])
+        # Stub open_meteo to avoid HTTP calls for all ~600 cities
+        monkeypatch.setattr(main.open_meteo, "load_cities", lambda *a, **k: [])
+        monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities", lambda *a, **k: ([], []))
+
+        bot_state = {
+            "last_hot10": {"date": None, "cities": []}, "streaks": {},
+            "posted_events": [], "daily_tweet_count": {}, "co2_annual_count": {},
+            "drafts": [], "run_history": [], "errors": [],
+            "city_all_time_max": {}, "city_all_time_min": {},
+            "city_monthly_max": {}, "city_monthly_min": {},
+            "record_streaks": {}, "ice_mass_max_loss": {},
+            "ice_mass_last_milestone": {}, "ice_mass_last_seen": {},
+            "ice_annual_count": {},
+        }
+        main.run_alerts(bot_state)
+        assert called["n"] == 0
