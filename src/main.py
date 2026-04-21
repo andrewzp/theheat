@@ -17,6 +17,7 @@ from src import state
 from src.data import open_meteo, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
+from src.editorial._regions import cities_to_state_map, lat_lon_to_state
 from src.editorial.scoring import (
     EditorialScore,
     score_all_time_record,
@@ -490,9 +491,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     """Check all alert data sources and save drafts."""
     drafted = 0
     drafts_before = len(bot_state.get("drafts", []))
+    us_city_state_map: dict[str, str] = {}
     cities_start = time.perf_counter()
     try:
         cities = open_meteo.load_cities()
+        us_city_state_map = cities_to_state_map(cities)
         _record_source_run(
             current_run, "load_cities", cities_start,
             status="success", observed=len(cities), promoted=len(cities)
@@ -697,6 +700,28 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     state.record_event(bot_state, strongest_event_id)
                     drafted += 1
                     source_drafted += 1
+                    syn_state = us_city_state_map.get(strongest_city)
+                    if syn_state:
+                        value_c = getattr(strongest_signal, "new_temp_c", None)
+                        if value_c is None:
+                            value_c = getattr(strongest_signal, "today_temp_c", 0.0)
+                        kind_map = {
+                            "all_time_high": "all_time",
+                            "monthly_high": "monthly",
+                            "anomaly_hot": "anomaly",
+                            "record": "calendar",
+                        }
+                        state.record_synthesis_component(
+                            bot_state,
+                            kind="heat",
+                            region=syn_state,
+                            event_id=strongest_event_id,
+                            metadata={
+                                "kind": kind_map.get(strongest_type, "record"),
+                                "city": strongest_city,
+                                "value_c": float(value_c or 0),
+                            },
+                        )
 
                     # Streak tracking — update on any calendar-date high record
                     if strongest_type == "record" and bundle.calendar_date_high:
@@ -819,6 +844,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 drafted += 1
                 source_drafted += 1
                 country_count += 1
+                syn_state = us_city_state_map.get(cr.peak_city)
+                if syn_state:
+                    state.record_synthesis_component(
+                        bot_state,
+                        kind="heat",
+                        region=syn_state,
+                        event_id=cr.event_id,
+                        metadata={
+                            "kind": "all_time",
+                            "city": cr.peak_city,
+                            "value_c": float(cr.new_temp_c or 0),
+                        },
+                    )
 
         # Prune stale streaks at cycle end
         state.prune_stale_record_streaks(bot_state)
@@ -875,6 +913,18 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 state.record_event(bot_state, fire.event_id)
                 drafted += 1
                 source_drafted += 1
+                syn_state = lat_lon_to_state(fire.lat, fire.lon)
+                if syn_state:
+                    state.record_synthesis_component(
+                        bot_state,
+                        kind="fire",
+                        region=syn_state,
+                        event_id=fire.event_id,
+                        metadata={
+                            "frp": float(fire.frp or 0),
+                            "region": fire.nearest_city or "",
+                        },
+                    )
         _record_source_run(
             current_run, "firms", firms_start,
             status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted
@@ -1243,6 +1293,8 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             state.record_event(bot_state, event_id)
                             drafted += 1
                             source_drafted = 1
+            if drought_updates:
+                state.record_synthesis_drought_snapshot(bot_state, drought_updates)
             _record_source_run(
                 current_run, "drought", drought_start,
                 status="success", observed=len(drought_updates), promoted=source_promoted, drafted=source_drafted

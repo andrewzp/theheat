@@ -1337,3 +1337,32 @@ class TestFireFootprintIntegration:
         # Must not raise
         run_alerts(state_dict)
         mock_state.log_error.assert_any_call(state_dict, "fire_footprint", "boom")
+
+
+class TestSynthesisRecording:
+    def test_fire_in_us_records_component(self, monkeypatch):
+        from unittest.mock import MagicMock
+        from copy import deepcopy
+        from src.state import DEFAULT_STATE
+        from src import main
+        from src.data import firms
+
+        bot_state = deepcopy(DEFAULT_STATE)
+
+        fake_fire = MagicMock(
+            event_id="fire_38.58_-121.49_2026-04-20",
+            lat=38.58, lon=-121.49,
+            nearest_city="Sacramento", country="United States",
+            confidence=95, frp=1500.0,
+        )
+        monkeypatch.setattr(firms, "fetch_fires", lambda: [fake_fire])
+        monkeypatch.setattr(main, "_save_generated_draft", lambda *a, **kw: True)
+        # Short-circuit open-meteo + others.
+        monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
+        monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities",
+                            lambda cities: ([], []))
+
+        main.run_alerts(bot_state)
+
+        fires = bot_state["synthesis_components"]["fires"].get("California", [])
+        assert any(f["event_id"] == fake_fire.event_id for f in fires)
