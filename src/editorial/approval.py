@@ -126,6 +126,15 @@ def recommend_approval_policy(
             reason="Potential human-impact event. Keep explicit human approval in the loop.",
         )
 
+    if tweet_type.startswith("synthesis_"):
+        return ApprovalPolicy(
+            key="synthesis_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=120,
+            can_auto_approve=True,
+            reason="Cross-source synthesis claim — factually brittle by nature. Keep a 120-minute review window so a human can verify the framing before auto-post.",
+        )
+
     return ApprovalPolicy(
         key="default_review",
         mode="suggested_auto",
