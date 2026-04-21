@@ -271,3 +271,36 @@ def test_generate_marine_heatwave_tweet_falls_back_to_template():
     assert isinstance(result, str)
     assert "5" in result
     assert "20.52" in result or "20.5" in result
+
+
+class TestGenerateIceMassTweet:
+    @patch("src.voice.generator.GEMINI_API_KEY", "")
+    def test_monthly_record_falls_back_to_template(self):
+        from src.voice.generator import generate_ice_mass_tweet
+        result = generate_ice_mass_tweet(
+            region="greenland",
+            kind="monthly_loss_record",
+            month="2026-08",
+            monthly_delta_gt=-423.0,
+            previous_worst_gt=-350.0,
+            previous_worst_month="2019-07",
+            years_of_record=24,
+        )
+        assert result is not None
+        assert "Greenland" in result
+        assert "423" in result
+        assert "GRACE" in result
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "")
+    def test_cumulative_milestone_falls_back_to_template(self):
+        from src.voice.generator import generate_ice_mass_tweet
+        result = generate_ice_mass_tweet(
+            region="antarctica",
+            kind="cumulative_milestone",
+            threshold_gt=-3000.0,
+            current_mass_gt=-3042.0,
+            years_of_record=24,
+        )
+        assert result is not None
+        assert "Antarctica" in result
+        assert "3,000" in result or "3000" in result
