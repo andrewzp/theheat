@@ -150,3 +150,49 @@ def river_flood_template(river: str, location: str, gauge_ft: float, flood_stage
         f"{river} at {location}: {gauge_ft:.1f}ft and rising. Flood stage is {flood_stage_ft:.0f}ft. That's {above_ft:.1f}ft of overflow.",
     ]
     return random.choice(variants)
+
+
+def _ordinal(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}{['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]}"
+
+
+def marine_heatwave_template(
+    kind: str,
+    days: int,
+    today_c: float,
+    archive_max_c: float,
+    archive_max_year: int,
+    years_of_data: int,
+) -> str:
+    if kind == "first":
+        variants = [
+            (
+                f"The global ocean has now been above the daily record for "
+                f"{days} straight days in {years_of_data} years of satellite "
+                f"data. Today: {today_c:.2f}°C. Prior daily max: "
+                f"{archive_max_c:.2f}°C, set {archive_max_year}."
+            ),
+            (
+                f"{days} consecutive days of record-breaking global ocean "
+                f"surface temps. Today's mean: {today_c:.2f}°C. The previous "
+                f"record for this date was {archive_max_c:.2f}°C in "
+                f"{archive_max_year}. Archive goes back {years_of_data} years."
+            ),
+        ]
+    else:
+        variants = [
+            (
+                f"The global ocean just posted its {_ordinal(days)} consecutive day "
+                f"above the daily record in {years_of_data} years of "
+                f"satellite data. Today: {today_c:.2f}°C."
+            ),
+            (
+                f"{days} consecutive days and counting. Global mean SST "
+                f"today: {today_c:.2f}°C. Old record for this date: "
+                f"{archive_max_c:.2f}°C ({archive_max_year}). "
+                f"{years_of_data}-year archive."
+            ),
+        ]
+    return random.choice(variants)

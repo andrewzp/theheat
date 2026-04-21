@@ -70,3 +70,15 @@ class TestEditorialScoring:
         large = score_simultaneous_records(city_count=15, sample_cities=["A","B","C","D","E"])
         assert large.total > small.total
         assert large.passes
+
+    def test_score_marine_heatwave_day_5_passes_threshold(self):
+        from src.editorial.scoring import score_marine_heatwave
+        score = score_marine_heatwave(days=5, peak_anomaly_c=0.25, years_of_data=44)
+        assert score.category == "marine_heatwave"
+        assert score.threshold == 78
+        assert score.passes, f"day-5 streak should pass, got {score.total}"
+
+    def test_score_marine_heatwave_day_100_is_elite(self):
+        from src.editorial.scoring import score_marine_heatwave
+        score = score_marine_heatwave(days=100, peak_anomaly_c=0.4, years_of_data=44)
+        assert score.total >= 85, f"day-100 should be elite, got {score.total}"

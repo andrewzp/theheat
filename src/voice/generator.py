@@ -881,3 +881,37 @@ def generate_river_flood_tweet(
             "above_ft": above_by_ft,
         },
     )
+
+
+def generate_marine_heatwave_tweet(
+    kind: str,
+    days: int,
+    today_c: float,
+    archive_max_c: float,
+    archive_max_year: int,
+    years_of_data: int,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a marine-heatwave archive-record streak."""
+    data = (
+        f"Global-mean sea surface temperature is at {today_c:.2f}°C today. "
+        f"That's above the daily record for this calendar day ({archive_max_c:.2f}°C, "
+        f"set in {archive_max_year}) and it's the {days}th consecutive day this has been true. "
+        f"Archive goes back {years_of_data} years (NOAA OISST v2.1). "
+        f"Today's date: {date.today().strftime('%B %d, %Y')}."
+    )
+    return generate_tweet(
+        data,
+        category="marine_heatwave",
+        return_bundle=return_bundle,
+        fallback_fn=templates.marine_heatwave_template,
+        fallback_args={
+            "kind": kind,
+            "days": days,
+            "today_c": today_c,
+            "archive_max_c": archive_max_c,
+            "archive_max_year": archive_max_year,
+            "years_of_data": years_of_data,
+        },
+    )

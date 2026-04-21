@@ -41,7 +41,12 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │   ├── NOAA CPC ──────────── ENSO transitions (1st of month)
 │   ├── Open-Meteo Marine ── ocean wave heights (16 points, location-aware thresholds)
 │   ├── NOAA CO-OPS ────────── coastal tide gauge storm surge (12 stations)
-│   └── USGS Water ────────── river flood stages (12 gauges)
+│   ├── USGS Water ────────── river flood stages (12 gauges)
+│   └── NOAA OISST v2.1 ──── global-mean sea surface temperature via ClimateReanalyzer.
+│                              Fires on archive-record streaks of 5+ days (day-5 first-fire,
+│                              then milestones at 10, 25, 50, 100, 150, 200, 250, 300, 365,
+│                              400, +50 thereafter). Threshold: 78. Approval: suggested_auto,
+│                              90-min delay.
 │
 ├── Detect extreme signals per city (NEW: unified bundle)
 │   ├── All-time records (hottest/coldest in ~30yr archive) — elite

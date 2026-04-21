@@ -14,7 +14,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, water_levels, river_gauges
+from src.data import open_meteo, firms, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import (
@@ -25,6 +25,7 @@ from src.editorial.scoring import (
     score_drought,
     score_enso_transition,
     score_extreme_wave,
+    score_marine_heatwave,
     score_fire_event,
     score_global_disaster,
     score_hot10,
@@ -1265,6 +1266,72 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         _record_source_run(
             current_run, "ocean", ocean_start,
             status="failed", error=str(e)
+        )
+
+    # 9b. Global ocean SST marine-heatwave streak (every run)
+    print("[alerts] Checking global ocean SST...")
+    sst_start = time.perf_counter()
+    try:
+        obs = ocean_sst.fetch_global_sst()
+        source_promoted = 0
+        source_drafted = 0
+        event = None
+        if obs is not None:
+            prior_streak = bot_state.get(
+                "ocean_sst_streak",
+                state.DEFAULT_STATE["ocean_sst_streak"],
+            )
+            new_streak, event = ocean_sst.detect_streak_milestone(obs, prior_streak)
+            state.update_ocean_sst_streak(bot_state, new_streak)
+
+        if event and not state.is_duplicate(bot_state, event.event_id):
+            score = score_marine_heatwave(
+                event.days, event.peak_anomaly_c, event.years_of_data,
+            )
+            if _should_draft(score, event.event_id):
+                source_promoted += 1
+                generated = generator.generate_marine_heatwave_tweet(
+                    kind=event.kind,
+                    days=event.days,
+                    today_c=event.today_c,
+                    archive_max_c=event.archive_max_c,
+                    archive_max_year=event.archive_max_year,
+                    years_of_data=event.years_of_data,
+                    return_bundle=True,
+                )
+                review_context = _review_context(
+                    source="NOAA OISST v2.1 (ClimateReanalyzer)",
+                    source_key="ocean_sst",
+                    headline=f"Global ocean SST streak: day {event.days}",
+                    current_run=current_run,
+                    facts=[
+                        _fact("Streak length", f"{event.days} consecutive days above record"),
+                        _fact("Today's global-mean SST", f"{event.today_c:.2f}°C"),
+                        _fact("Prior daily max", f"{event.archive_max_c:.2f}°C ({event.archive_max_year})"),
+                        _fact("Peak anomaly during streak", f"{event.peak_anomaly_c:+.2f}°C"),
+                        _fact("Archive span", f"{event.years_of_data} years"),
+                    ],
+                )
+                if _save_generated_draft(
+                    generated, bot_state, "marine_heatwave",
+                    event.event_id, score, review_context=review_context,
+                ):
+                    state.record_event(bot_state, event.event_id)
+                    drafted += 1
+                    source_drafted += 1
+        _record_source_run(
+            current_run, "ocean_sst", sst_start,
+            status="success",
+            observed=1 if obs is not None else 0,
+            promoted=source_promoted,
+            drafted=source_drafted,
+        )
+    except Exception as e:
+        print(f"[alerts] Ocean SST error: {e}")
+        state.log_error(bot_state, "ocean_sst", str(e))
+        _record_source_run(
+            current_run, "ocean_sst", sst_start,
+            status="failed", error=str(e),
         )
 
     # 10. Storm surge / abnormal water levels (every run)

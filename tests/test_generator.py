@@ -234,3 +234,40 @@ class TestGenerateCO2MilestoneTweet:
         result = generate_co2_milestone_tweet(ppm_crossed=429, actual_ppm=429.5)
         assert result is not None
         assert "429.5" in result
+
+
+def test_marine_heatwave_template_first_kind_contains_required_facts():
+    from src.voice.templates import marine_heatwave_template
+    text = marine_heatwave_template(
+        kind="first", days=5, today_c=20.52, archive_max_c=20.31,
+        archive_max_year=2023, years_of_data=44,
+    )
+    assert "5" in text
+    assert "20.52" in text or "20.5" in text
+    assert "20.31" in text or "20.3" in text
+    assert "2023" in text
+    assert "44 years" in text or "44-year" in text
+
+
+def test_marine_heatwave_template_milestone_kind_uses_streak_day():
+    from src.voice.templates import marine_heatwave_template
+    text = marine_heatwave_template(
+        kind="milestone", days=100, today_c=20.52, archive_max_c=20.31,
+        archive_max_year=2023, years_of_data=44,
+    )
+    assert "100" in text
+    assert "consecutive" in text.lower() or "th" in text
+
+
+@patch("src.voice.generator.GEMINI_API_KEY", "")
+def test_generate_marine_heatwave_tweet_falls_back_to_template():
+    """When Gemini has no API key, the fallback template is used."""
+    from src.voice.generator import generate_marine_heatwave_tweet
+    result = generate_marine_heatwave_tweet(
+        kind="first", days=5,
+        today_c=20.52, archive_max_c=20.31,
+        archive_max_year=2023, years_of_data=44,
+    )
+    assert isinstance(result, str)
+    assert "5" in result
+    assert "20.52" in result or "20.5" in result

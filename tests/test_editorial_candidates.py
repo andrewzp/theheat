@@ -33,3 +33,11 @@ class TestEditorialCandidates:
 
         assert score.context >= 80
         assert score.total >= 75
+
+    def test_category_hints_include_marine_heatwave(self):
+        from src.editorial.candidates import CATEGORY_HINTS
+        assert "marine_heatwave" in CATEGORY_HINTS
+        hints = CATEGORY_HINTS["marine_heatwave"]
+        assert "ocean" in hints
+        assert "record" in hints
+        assert "consecutive" in hints

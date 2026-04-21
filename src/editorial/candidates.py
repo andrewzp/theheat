@@ -33,6 +33,7 @@ CATEGORY_HINTS = {
     "storm_surge": ("predicted", "water level", "above"),
     "river_flood": ("flood stage", "gauge", "above"),
     "hot10": ("today", "anomaly", "normal"),
+    "marine_heatwave": ("ocean", "record", "consecutive"),
 }
 
 

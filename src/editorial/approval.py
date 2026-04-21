@@ -95,6 +95,19 @@ def recommend_approval_policy(
             reason="Low-sensitivity climate/weather signal that benefits from a slower editorial timer.",
         )
 
+    if tweet_type == "marine_heatwave":
+        return ApprovalPolicy(
+            key="marine_heatwave_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=90,
+            can_auto_approve=True,
+            reason=(
+                "Ocean-SST streak signal — low human-harm risk, high accuracy "
+                "from a single well-known dataset. Short review window lets a "
+                "human polish framing before auto-post."
+            ),
+        )
+
     if tweet_type in {"fire", "severe_weather", "global_disaster", "storm_surge", "river_flood", "drought"}:
         return ApprovalPolicy(
             key="manual_only",

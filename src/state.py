@@ -36,6 +36,14 @@ DEFAULT_STATE = {
     "city_monthly_min": {},
     # Record-breaking streaks: consecutive days a city has broken its daily record.
     "record_streaks": {},  # {city: {"days": int, "last_date": "YYYY-MM-DD", "start_date": "YYYY-MM-DD"}}
+    # Global ocean SST archive-high streak. Two-field state:
+    # seeded flips True after first observation (enables silent bootstrap);
+    # last_milestone_fired tracks which milestone we last tweeted so
+    # same-day re-runs don't double-fire.
+    "ocean_sst_streak": {
+        "seeded": False,
+        "last_milestone_fired": None,
+    },
 }
 
 
@@ -220,6 +228,10 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["city_monthly_max"] = deepcopy(next_state.get("city_monthly_max", base.get("city_monthly_max", {})))
     merged["city_monthly_min"] = deepcopy(next_state.get("city_monthly_min", base.get("city_monthly_min", {})))
     merged["record_streaks"] = deepcopy(next_state.get("record_streaks", base.get("record_streaks", {})))
+    # ocean_sst_streak — always-take-incoming, same semantics as record_streaks above.
+    merged["ocean_sst_streak"] = deepcopy(
+        next_state.get("ocean_sst_streak", base.get("ocean_sst_streak", {}))
+    )
     return merged
 
 
@@ -401,6 +413,20 @@ def prune_stale_record_streaks(state: dict, max_gap_days: int = 2) -> dict:
             stale.append(city)
     for city in stale:
         del streaks[city]
+    return state
+
+
+def update_ocean_sst_streak(state: dict, streak: dict) -> dict:
+    """Replace the stored ocean SST streak state.
+
+    Idempotent: callers always pass the full two-field dict
+    ({seeded: bool, last_milestone_fired: int | None}) computed from the
+    most recent observation. No incremental mutation.
+    """
+    state["ocean_sst_streak"] = {
+        "seeded": bool(streak.get("seeded", False)),
+        "last_milestone_fired": streak.get("last_milestone_fired"),
+    }
     return state
 
 

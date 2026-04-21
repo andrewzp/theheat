@@ -747,6 +747,69 @@ class TestRunAlerts:
         mock_gen.generate_fire_tweet.assert_called_once()
         mock_draft.assert_called()
 
+    def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
+        """Day-5 streak crossing → one draft saved under marine_heatwave."""
+        from src import main
+        from src.main import run_alerts
+        from src.data.ocean_sst import GlobalSSTObservation
+
+        fresh_st = _fresh_state()
+        fresh_st["ocean_sst_streak"] = {"seeded": True, "last_milestone_fired": None}
+
+        obs = GlobalSSTObservation(
+            date="2026-04-20", day_of_year=110,
+            today_c=20.52, archive_max_c=20.31,
+            archive_max_year=2023, years_of_data=44,
+            streak_days=5, streak_start_date="2026-04-16",
+            streak_peak_anomaly_c=0.25,
+        )
+
+        # Patch all other alert sources to no-ops so only ocean_sst runs.
+        monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
+        monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities", lambda cities: ([], []))
+        monkeypatch.setattr(main.firms, "fetch_fires", lambda: [])
+        monkeypatch.setattr(main.co2, "fetch_co2_data", lambda: [])
+        monkeypatch.setattr(main.co2, "detect_milestone", lambda readings: None)
+        monkeypatch.setattr(main.nws_alerts, "fetch_alerts", lambda: [])
+        monkeypatch.setattr(main.gdacs, "fetch_disasters", lambda min_severity=None: [])
+        monkeypatch.setattr(main.sea_ice, "fetch_sea_ice", lambda hemisphere=None: [])
+        monkeypatch.setattr(main.sea_ice, "detect_record_low", lambda readings: None)
+        monkeypatch.setattr(main.drought, "fetch_drought_data", lambda: [])
+        monkeypatch.setattr(main.enso, "fetch_enso_data", lambda: [])
+        monkeypatch.setattr(main.enso, "detect_transition", lambda readings: None)
+        monkeypatch.setattr(main.ocean, "fetch_ocean_conditions", lambda: [])
+        monkeypatch.setattr(main.ocean, "detect_extreme_waves", lambda r: [])
+        monkeypatch.setattr(main.ocean_sst, "fetch_global_sst", lambda: obs)
+        monkeypatch.setattr(main.water_levels, "fetch_water_levels", lambda: [])
+        monkeypatch.setattr(main.water_levels, "detect_storm_surge", lambda r: [])
+        monkeypatch.setattr(main.river_gauges, "fetch_river_levels", lambda: [])
+        monkeypatch.setattr(main.river_gauges, "detect_floods", lambda r: [])
+
+        from src.editorial.candidates import CandidateBundle, DraftCandidate, CandidateScore
+        stub_score = CandidateScore(
+            clarity=80, context=82, voice=78, punch=80, total=80,
+            reasons=("stubbed",),
+        )
+        stub_bundle = CandidateBundle(
+            category="marine_heatwave",
+            candidates=[DraftCandidate(
+                rank=1, text="Day 5 of record global SSTs.",
+                source="template", score=stub_score,
+            )],
+        )
+        monkeypatch.setattr(
+            main.generator,
+            "generate_marine_heatwave_tweet",
+            lambda **kwargs: stub_bundle,
+        )
+
+        run_alerts(fresh_st)
+
+        drafts = fresh_st.get("drafts", [])
+        marine_drafts = [d for d in drafts if d.get("type") == "marine_heatwave"]
+        assert len(marine_drafts) == 1
+        assert "marine_heatwave_streak_5_2026-04-20" in fresh_st.get("posted_events", [])
+
 
 class TestRunLeaderboard:
     @patch("src.main.save_draft")

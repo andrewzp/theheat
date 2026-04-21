@@ -425,6 +425,34 @@ def score_extreme_wave(wave_height_m: float) -> EditorialScore:
     )
 
 
+def score_marine_heatwave(
+    days: int,
+    peak_anomaly_c: float,
+    years_of_data: int,
+) -> EditorialScore:
+    reasons = [
+        f"{days}-day streak above the daily archive record",
+        f"peak {peak_anomaly_c:+.2f}°C above prior daily max",
+        f"{years_of_data}-year satellite record",
+    ]
+    if days >= 100:
+        reasons.append("triple-digit consecutive-day streak")
+    if peak_anomaly_c >= 0.5:
+        reasons.append("half-degree anomaly on a global mean")
+
+    return _build_score(
+        "marine_heatwave",
+        severity=72 + min(days / 4.0, 22) + min(peak_anomaly_c * 10, 10),
+        novelty=80 + min(days / 10.0, 10),
+        timeliness=86,
+        confidence=92,
+        shareability=80 + min(days / 20.0, 12),
+        sensitivity=6,
+        threshold=78,
+        reasons=reasons,
+    )
+
+
 def score_storm_surge(anomaly_m: float) -> EditorialScore:
     reasons = [f"{anomaly_m:.2f}m above predicted tide"]
     if anomaly_m >= 1.0:
