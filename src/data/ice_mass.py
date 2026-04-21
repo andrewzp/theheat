@@ -11,8 +11,6 @@ Records start 2002.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
-import os
 
 import requests
 

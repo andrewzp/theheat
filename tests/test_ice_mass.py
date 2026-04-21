@@ -36,5 +36,12 @@ class TestModuleSurface:
             current_mass_gt=None,
             event_id="ice_mass_record_greenland_monthly_2026-08",
         )
+        assert rec.region == "greenland"
         assert rec.kind == "monthly_loss_record"
+        assert rec.month == "2026-08"
         assert rec.monthly_delta_gt == -423.0
+        assert rec.previous_worst_gt == -350.0
+        assert rec.previous_worst_month == "2019-07"
+        assert rec.threshold_gt is None
+        assert rec.current_mass_gt is None
+        assert rec.event_id == "ice_mass_record_greenland_monthly_2026-08"
