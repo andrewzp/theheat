@@ -86,6 +86,15 @@ def recommend_approval_policy(
             reason="Country-level archive record — rare, elite signal. Review window gives the human a chance to polish the framing.",
         )
 
+    if tweet_type == "ice_mass_record":
+        return ApprovalPolicy(
+            key="ice_mass_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=105,
+            can_auto_approve=True,
+            reason="GRACE ice-mass milestone — rare, elite signal. Mid-length review window for framing polish.",
+        )
+
     if tweet_type in {"record", "record_low", "sea_ice_record", "enso", "extreme_wave"}:
         return ApprovalPolicy(
             key="editorial_hold",
