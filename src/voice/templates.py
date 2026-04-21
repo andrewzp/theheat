@@ -152,6 +152,12 @@ def river_flood_template(river: str, location: str, gauge_ft: float, flood_stage
     return random.choice(variants)
 
 
+def _ordinal(n: int) -> str:
+    if 11 <= (n % 100) <= 13:
+        return f"{n}th"
+    return f"{n}{['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]}"
+
+
 def marine_heatwave_template(
     kind: str,
     days: int,
@@ -169,7 +175,7 @@ def marine_heatwave_template(
                 f"{archive_max_c:.2f}°C, set {archive_max_year}."
             ),
             (
-                f"Five consecutive days of record-breaking global ocean "
+                f"{days} consecutive days of record-breaking global ocean "
                 f"surface temps. Today's mean: {today_c:.2f}°C. The previous "
                 f"record for this date was {archive_max_c:.2f}°C in "
                 f"{archive_max_year}. Archive goes back {years_of_data} years."
@@ -178,7 +184,7 @@ def marine_heatwave_template(
     else:
         variants = [
             (
-                f"The global ocean just posted its {days}th consecutive day "
+                f"The global ocean just posted its {_ordinal(days)} consecutive day "
                 f"above the daily record in {years_of_data} years of "
                 f"satellite data. Today: {today_c:.2f}°C."
             ),
