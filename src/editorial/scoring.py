@@ -747,12 +747,12 @@ def score_synthesis_fire_drought_heat(
     fires_n = int((component_count or {}).get("fires", 0) or 0)
     heats_n = int((component_count or {}).get("heats", 0) or 0)
 
-    severity = 75 + drought_d4_pct * 0.3 + min(fire_peak_frp, 1500) / 25 + min(abs(heat_peak_anomaly_c), 15) * 1.8
+    severity = 78 + drought_d4_pct * 0.3 + min(fire_peak_frp, 1500) / 25 + min(abs(heat_peak_anomaly_c), 15) * 1.8
     novelty = 88 + (6 if heat_kind == "all_time" else 0)
     timeliness = 90
-    confidence = 88
+    confidence = 78
     shareability = 82 + (4 if fires_n >= 2 else 0) + (4 if heats_n >= 2 else 0)
-    sensitivity = 10
+    sensitivity = 28
 
     reasons = [
         f"{drought_d4_pct:.0f}% in exceptional drought",

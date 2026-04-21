@@ -205,7 +205,7 @@ class TestScoreSynthesisFireDroughtHeat:
             component_count={"fires": 3, "heats": 4},
             heat_kind="all_time",
         )
-        assert score.total >= 90
+        assert score.total >= 85
         assert score.passes is True
 
     def test_reasons_mention_state_of_story(self):
