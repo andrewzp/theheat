@@ -102,3 +102,54 @@ class TestFetchGraceMass:
         assert readings[-1].event_id == "ice_mass_greenland_2026-04"
         # Auth header must be set
         assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
+
+    @responses.activate
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_http_error_returns_empty(self, _env):
+        responses.add(
+            responses.GET,
+            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
+            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            status=500,
+        )
+        assert fetch_grace_mass(region="greenland") == []
+
+    @responses.activate
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_unauthorized_returns_empty(self, _env):
+        responses.add(
+            responses.GET,
+            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
+            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            status=401,
+        )
+        assert fetch_grace_mass(region="greenland") == []
+
+    @patch("src.data.ice_mass.os.environ.get", return_value="")
+    def test_missing_token_returns_empty(self, _env):
+        # No responses mock needed — must short-circuit before any HTTP call.
+        assert fetch_grace_mass(region="greenland") == []
+
+    @responses.activate
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_malformed_rows_skipped(self, _env):
+        body = (
+            "HDR columns: time mass unc\n"
+            "2019.541   -3200.0   100.0\n"
+            "not a number    bad    data\n"
+            "2026.292   -5500.0   120.0\n"
+        )
+        responses.add(
+            responses.GET,
+            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
+            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            body=body,
+            status=200,
+        )
+        readings = fetch_grace_mass(region="greenland")
+        assert len(readings) == 2
+        assert readings[0].month == "2019-07"
+        assert readings[-1].month == "2026-04"
+
+    def test_unknown_region_returns_empty(self):
+        assert fetch_grace_mass(region="mars") == []
