@@ -5,6 +5,7 @@ from src.data.fire_footprint import (
     TIERS_HECTARES,
     _classify_tier,
 )
+from src.data.fire_footprint import detect_tier_crossings
 
 
 class TestClassifyTier:
@@ -52,3 +53,91 @@ class TestFireComplexDataclass:
         assert fc.hectares == 213_000
         assert fc.tier == 2
         assert fc.event_id == "fire_footprint_GWIS_123_tier2"
+
+
+def _mk_complex(complex_id: str, hectares: float, name: str | None = None) -> FireComplex:
+    tier = _classify_tier(hectares)
+    return FireComplex(
+        complex_id=complex_id,
+        name=name,
+        country="US",
+        region="California",
+        hectares=hectares,
+        start_date=None,
+        tier=tier,
+        event_id=f"fire_footprint_{complex_id}_tier{tier}",
+    )
+
+
+class TestDetectTierCrossings:
+    def test_new_complex_above_floor_emits(self):
+        state = {"fire_complex_tiers": {}}
+        complexes = [_mk_complex("A", 60_000)]  # tier 1
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert len(crossings) == 1
+        assert crossings[0].complex_id == "A"
+        assert crossings[0].tier == 1
+
+    def test_new_complex_below_floor_suppressed(self):
+        state = {"fire_complex_tiers": {}}
+        complexes = [_mk_complex("A", 15_000)]  # below tier 0
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert crossings == []
+
+    def test_same_tier_second_run_suppressed(self):
+        state = {"fire_complex_tiers": {"A": 1}}
+        complexes = [_mk_complex("A", 70_000)]  # still tier 1
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert crossings == []
+
+    def test_tier_upgrade_emits(self):
+        state = {"fire_complex_tiers": {"A": 1}}
+        complexes = [_mk_complex("A", 150_000)]  # now tier 2
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert len(crossings) == 1
+        assert crossings[0].tier == 2
+
+    def test_shrink_is_not_a_crossing(self):
+        state = {"fire_complex_tiers": {"A": 3}}
+        complexes = [_mk_complex("A", 60_000)]  # shrunk to tier 1
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert crossings == []  # don't tweet a fire getting smaller
+
+    def test_does_not_mutate_input_state(self):
+        state = {"fire_complex_tiers": {"A": 1}}
+        complexes = [_mk_complex("A", 150_000)]
+
+        detect_tier_crossings(complexes, state)
+
+        assert state["fire_complex_tiers"] == {"A": 1}
+
+    def test_multiple_complexes_independent(self):
+        state = {"fire_complex_tiers": {"A": 2}}
+        complexes = [
+            _mk_complex("A", 260_000),   # upgrade to tier 3
+            _mk_complex("B", 60_000),    # new at tier 1
+            _mk_complex("C", 10_000),    # below floor
+        ]
+
+        crossings = detect_tier_crossings(complexes, state)
+        emitted_ids = {c.complex_id for c in crossings}
+
+        assert emitted_ids == {"A", "B"}
+
+    def test_missing_state_key_treated_as_empty(self):
+        state = {}  # no fire_complex_tiers key at all
+        complexes = [_mk_complex("A", 60_000)]
+
+        crossings = detect_tier_crossings(complexes, state)
+
+        assert len(crossings) == 1

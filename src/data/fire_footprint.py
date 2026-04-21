@@ -42,3 +42,24 @@ def _classify_tier(hectares: float) -> int:
         if hectares >= threshold:
             tier = i
     return tier
+
+
+def detect_tier_crossings(
+    complexes: list[FireComplex],
+    state: dict,
+) -> list[FireComplex]:
+    """Return complexes whose current tier is strictly higher than the
+    last tier we've already tweeted about.
+
+    Does not mutate state. The caller writes the updated tier only after
+    a draft is successfully saved.
+    """
+    last_tiers = state.get("fire_complex_tiers", {}) or {}
+    crossings: list[FireComplex] = []
+    for fc in complexes:
+        if fc.tier < 0:
+            continue
+        previous = last_tiers.get(fc.complex_id, -1)
+        if fc.tier > previous:
+            crossings.append(fc)
+    return crossings
