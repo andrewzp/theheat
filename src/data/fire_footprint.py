@@ -60,6 +60,7 @@ GWIS_URL = (
     ",FireDiscoveryDateTime,UniqueFireIdentifier,IrwinID"
     "&f=json"
     "&resultRecordCount=2000"
+    "&orderByFields=IncidentSize+DESC"
 )
 
 HECTARES_FLOOR = TIERS_HECTARES[0]
@@ -108,15 +109,22 @@ def fetch_active_fire_perimeters() -> list["FireComplex"]:
     except Exception:
         return []
 
+    if data.get("exceededTransferLimit"):
+        print("[fire_footprint] Warning: NIFC result set exceeded 2000 — largest fires returned first, some may be missing")
+
     complexes: list[FireComplex] = []
     for feature in data.get("features", []) or []:
         try:
             attrs = feature.get("attributes", {}) or {}
 
+            # Skip child incidents that roll up into a complex parent row
+            if attrs.get("IsCpxChild") == 1:
+                continue
+
             # complex_id: prefer UniqueFireIdentifier, fall back to IrwinID
             complex_id = str(attrs.get("UniqueFireIdentifier") or "").strip()
             if not complex_id:
-                complex_id = str(attrs.get("IrwinID") or "").strip()
+                complex_id = str(attrs.get("IrwinID") or "").strip().strip("{}")
             if not complex_id:
                 continue
 
