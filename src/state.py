@@ -3,7 +3,7 @@
 from copy import deepcopy
 import json
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import requests
 
@@ -62,6 +62,14 @@ DEFAULT_STATE = {
     "fire_complex_tiers": {},
     # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
     "fire_footprint_last_run": None,
+    # Cross-source synthesis layer (src/editorial/synthesis.py).
+    "synthesis_components": {
+        "fires": {},              # {state: [{event_id, frp, region, at}]}
+        "heats": {},              # {state: [{event_id, kind, city, value_c, at}]}
+        "drought_snapshot": None, # {updated_at, entries: [...]}
+    },
+    # {rule_name: {region: last_fired_at_iso}}
+    "synthesis_cooldown": {},
 }
 
 
@@ -620,4 +628,115 @@ def finalize_run(state: dict, run: dict, status: str = "success", max_runs: int 
     history.insert(0, completed)
     if len(history) > max_runs:
         state["run_history"] = history[:max_runs]
+    return state
+
+
+def record_synthesis_component(
+    state: dict,
+    *,
+    kind: str,
+    region: str,
+    event_id: str,
+    metadata: dict | None = None,
+    timestamp: str | None = None,
+) -> dict:
+    bucket_key = "fires" if kind == "fire" else "heats"
+    components = state.setdefault("synthesis_components", {
+        "fires": {}, "heats": {}, "drought_snapshot": None
+    })
+    bucket = components.setdefault(bucket_key, {}).setdefault(region, [])
+    if any(entry.get("event_id") == event_id for entry in bucket):
+        return state
+    entry = {
+        "event_id": event_id,
+        "at": timestamp or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+    }
+    if metadata:
+        for k, v in metadata.items():
+            entry[k] = v
+    bucket.append(entry)
+    return state
+
+
+def get_synthesis_components(
+    state: dict, *, kind: str, region: str, since: str | None = None,
+) -> list[dict]:
+    bucket_key = "fires" if kind == "fire" else "heats"
+    components = state.get("synthesis_components") or {}
+    entries = (components.get(bucket_key) or {}).get(region) or []
+    if since is None:
+        return list(entries)
+    return [e for e in entries if e.get("at", "") >= since]
+
+
+def record_synthesis_drought_snapshot(state: dict, updates) -> dict:
+    entries = []
+    for u in updates or []:
+        if hasattr(u, "state"):
+            entries.append({
+                "state": u.state,
+                "d3_pct": float(getattr(u, "d3_pct", 0) or 0),
+                "d4_pct": float(getattr(u, "d4_pct", 0) or 0),
+                "total_drought_pct": float(getattr(u, "total_drought_pct", 0) or 0),
+            })
+        elif isinstance(u, dict):
+            entries.append({
+                "state": u.get("state", ""),
+                "d3_pct": float(u.get("d3_pct", 0) or 0),
+                "d4_pct": float(u.get("d4_pct", 0) or 0),
+                "total_drought_pct": float(u.get("total_drought_pct", 0) or 0),
+            })
+    components = state.setdefault("synthesis_components", {
+        "fires": {}, "heats": {}, "drought_snapshot": None
+    })
+    components["drought_snapshot"] = {
+        "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "entries": entries,
+    }
+    return state
+
+
+def get_synthesis_drought_snapshot(state: dict) -> dict | None:
+    components = state.get("synthesis_components") or {}
+    return components.get("drought_snapshot")
+
+
+def is_synthesis_on_cooldown(
+    state: dict, rule_name: str, region: str, days: int = 14,
+) -> bool:
+    cooldowns = (state.get("synthesis_cooldown") or {}).get(rule_name) or {}
+    last_fired = cooldowns.get(region)
+    if not last_fired:
+        return False
+    try:
+        last_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    return (datetime.now(UTC) - last_dt) < timedelta(days=days)
+
+
+def record_synthesis_fired(
+    state: dict, rule_name: str, region: str, timestamp: str | None = None,
+) -> dict:
+    cooldowns = state.setdefault("synthesis_cooldown", {})
+    per_rule = cooldowns.setdefault(rule_name, {})
+    per_rule[region] = (
+        timestamp or datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    )
+    return state
+
+
+def prune_stale_synthesis_components(state: dict, ttl_days: int = 14) -> dict:
+    cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z")
+    components = state.setdefault("synthesis_components", {
+        "fires": {}, "heats": {}, "drought_snapshot": None
+    })
+    for bucket_key in ("fires", "heats"):
+        bucket = components.setdefault(bucket_key, {})
+        for region in list(bucket.keys()):
+            fresh = [e for e in bucket[region] if e.get("at", "") >= cutoff]
+            if fresh:
+                bucket[region] = fresh
+            else:
+                del bucket[region]
     return state
