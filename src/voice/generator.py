@@ -971,3 +971,43 @@ def generate_marine_heatwave_tweet(
             "years_of_data": years_of_data,
         },
     )
+
+
+def generate_fire_footprint_tweet(
+    name: str | None,
+    country: str,
+    region: str,
+    hectares: float,
+    tier_hectares: int,
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Generate a tweet about a fire complex crossing a hectare tier.
+
+    Lead with acreage. No "ravaging" / "raging" / meta-commentary — the
+    number is the story. Honest framing: largest complex of this year,
+    not "largest ever."
+    """
+    subject = name if name else f"A fire complex in {region}"
+    acres = int(round(hectares * 2.47105, 0))
+    data = (
+        f"Fire complex: {subject}. Country: {country}. Region: {region}. "
+        f"Cumulative burned area: {int(hectares):,} hectares ({acres:,} acres). "
+        f"Just crossed the {tier_hectares:,}-hectare threshold. "
+        f"Source: NIFC WFIGS (National Interagency Fire Center). "
+        f"Lead with the acreage and the subject. No 'ravaging' / 'raging' — "
+        f"the number is the story. Frame honestly: the largest complex of "
+        f"{date.today().year}, not 'largest ever.'"
+    )
+    return generate_tweet(
+        data,
+        category="fire_footprint",
+        return_bundle=return_bundle,
+        fallback_fn=templates.fire_footprint_template,
+        fallback_args={
+            "name": name,
+            "country": country,
+            "region": region,
+            "hectares": hectares,
+        },
+    )

@@ -21,6 +21,7 @@ flowchart TD
         direction TB
         OM["Open-Meteo<br/>temperature records<br/>257 cities"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
+        GWISNIFC["GWIS/NIFC<br/>fire complex<br/>burn area"]:::source
         NOAACO2["NOAA GML<br/>Mauna Loa CO2"]:::source
         NWS["NWS Alerts<br/>severe weather<br/>emergency-tier only"]:::source
         GDACS["GDACS<br/>Red-tier disasters"]:::source
@@ -43,7 +44,7 @@ flowchart TD
 
     DEDUP -.->|seen| SKIP1[/"Skip — already drafted"/]:::kill
 
-    SCORE --> GATE1{"Signal score<br/>passes threshold?<br/>all-time: 80<br/>monthly: 76<br/>anomaly: 76<br/>streak: 74<br/>simultaneous: 78<br/>calendar-date: 72<br/>fires: 64<br/>disasters: 62"}:::gate
+    SCORE --> GATE1{"Signal score<br/>passes threshold?<br/>all-time: 80<br/>monthly: 76<br/>anomaly: 76<br/>streak: 74<br/>simultaneous: 78<br/>calendar-date: 72<br/>fires: 64<br/>fire footprint: 72<br/>disasters: 62"}:::gate
 
     GATE1 -.->|no| SKIP2[/"Suppress —<br/>not extraordinary enough"/]:::kill
 
@@ -124,6 +125,9 @@ Each source is fetched on a schedule (alerts every 4 hours, Hot 10 daily at 12:0
 
 ### Deduplicate
 Checks the event ID against the last 500 we've seen. Prevents drafting the same record twice. For evolving events like cyclones, the ID includes intensity tier so a Cat 3→Cat 4 strengthening produces a new event.
+
+### Fire footprint tier dedup
+Fire complexes evolve. The same fire burns bigger day after day, so the dedup event ID includes the hectare tier (`fire_footprint_<complex_id>_tier<N>`). A fire crossing 20k → 50k → 100k → 250k hectares produces one draft per threshold crossing, not one per day of burning. `state.fire_complex_tiers[complex_id]` remembers the last-notified tier; only strictly higher tiers are emitted. Mirrors the GDACS cyclone-tier pattern for Category 3→4 strengthening.
 
 ### Editorial Signal Scoring
 Six weighted factors produce a 0–100 score. Each event type has a threshold (records: 72, fires: 64, disasters: 62, etc). Below threshold = suppressed before generation. This is the first quality gate.

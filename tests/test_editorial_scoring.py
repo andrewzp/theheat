@@ -3,6 +3,7 @@ from src.editorial.scoring import (
     score_anomaly,
     score_co2_milestone,
     score_fire_event,
+    score_fire_footprint,
     score_global_disaster,
     score_hot10,
     score_monthly_record,
@@ -121,3 +122,60 @@ class TestScoreIceMassEvent:
             previous_worst_gt=-115.0,
         )
         assert score.passes is True
+
+
+class TestScoreFireFootprint:
+    def test_large_fire_passes_threshold(self):
+        score = score_fire_footprint(
+            hectares=213_000,
+            tier=3,
+            region="California",
+            has_name=True,
+        )
+        assert score.passes
+        assert score.threshold == 72
+        assert score.category == "fire_footprint"
+
+    def test_floor_tier_may_not_pass(self):
+        # Floor hit during peak season, no name — should be below threshold
+        import unittest.mock
+        from datetime import date
+        with unittest.mock.patch("src.editorial.scoring.date") as mock_date:
+            mock_date.today.return_value = date(date.today().year, 7, 15)
+            score = score_fire_footprint(
+                hectares=20_000,
+                tier=0,
+                region="Unknown",
+                has_name=False,
+            )
+        assert score.threshold == 72
+        # Floor fires are intentionally borderline — we care about the scale story
+        assert score.total < 80
+
+    def test_named_complex_scores_higher(self):
+        named = score_fire_footprint(hectares=150_000, tier=2, has_name=True)
+        unnamed = score_fire_footprint(hectares=150_000, tier=2, has_name=False)
+        assert named.total >= unnamed.total
+
+    def test_top_tier_mega_fire_scores_strong(self):
+        score = score_fire_footprint(
+            hectares=2_500_000,
+            tier=5,
+            region="Siberia",
+            has_name=False,
+        )
+        assert score.passes
+        # "strong" is the ceiling at this formula — elite is reserved for
+        # unprecedented events (Black Summer 2019 ≈ 19M ha scale).
+        assert score.label == "strong"
+
+    def test_region_hook_surfaces_in_reasons(self):
+        # tier=2 + no name keeps the reasons list short enough that the
+        # region hook survives the reasons[:3] cap in any season.
+        score = score_fire_footprint(
+            hectares=200_000,
+            tier=2,
+            region="Yakutia",
+            has_name=False,
+        )
+        assert any("Yakutia" in r for r in score.reasons)

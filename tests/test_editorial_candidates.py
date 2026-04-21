@@ -41,3 +41,18 @@ class TestEditorialCandidates:
         assert "ocean" in hints
         assert "record" in hints
         assert "consecutive" in hints
+
+
+class TestFireFootprintCategoryHint:
+    def test_candidate_with_footprint_keywords_scores_higher(self):
+        from src.editorial.candidates import score_candidate_text
+
+        aligned = score_candidate_text(
+            "The Dixie Complex has burned 213,000 hectares in California.",
+            "fire_footprint",
+        )
+        generic = score_candidate_text(
+            "A large fire is going on somewhere in California right now.",
+            "fire_footprint",
+        )
+        assert aligned.context > generic.context

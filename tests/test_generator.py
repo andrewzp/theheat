@@ -304,3 +304,86 @@ class TestGenerateIceMassTweet:
         assert result is not None
         assert "Antarctica" in result
         assert "3,000" in result or "3000" in result
+
+
+class TestFireFootprintTemplate:
+    def test_named_fire_leads_with_name(self):
+        from src.voice.templates import fire_footprint_template
+        text = fire_footprint_template(
+            name="Dixie Complex",
+            country="US",
+            region="California",
+            hectares=213_000,
+        )
+        assert "Dixie Complex" in text
+        assert "213,000" in text
+        assert "hectares" in text
+
+    def test_unnamed_fire_uses_region_fallback(self):
+        from src.voice.templates import fire_footprint_template
+        text = fire_footprint_template(
+            name=None,
+            country="Russia",
+            region="Yakutia",
+            hectares=300_000,
+        )
+        assert "Yakutia" in text
+        assert "Russia" in text
+        assert "300,000" in text
+
+    def test_includes_acre_conversion(self):
+        from src.voice.templates import fire_footprint_template
+        # Run many times so at least one acre-bearing variant appears.
+        produced = {
+            fire_footprint_template(
+                name="Test Fire",
+                country="US",
+                region="California",
+                hectares=100_000,
+            )
+            for _ in range(50)
+        }
+        assert any("acres" in t for t in produced)
+
+
+class TestGenerateFireFootprintTweet:
+    def test_uses_fire_footprint_category(self):
+        from unittest.mock import patch, MagicMock
+        from src.voice import generator
+
+        with patch.object(generator, "generate_tweet") as mock_gen:
+            mock_gen.return_value = "mocked tweet"
+            generator.generate_fire_footprint_tweet(
+                name="Dixie Complex",
+                country="US",
+                region="California",
+                hectares=213_000,
+                tier_hectares=100_000,
+            )
+            args, kwargs = mock_gen.call_args
+            assert kwargs["category"] == "fire_footprint"
+            # fallback args must carry all four fields
+            assert kwargs["fallback_args"]["name"] == "Dixie Complex"
+            assert kwargs["fallback_args"]["country"] == "US"
+            assert kwargs["fallback_args"]["region"] == "California"
+            assert kwargs["fallback_args"]["hectares"] == 213_000
+
+    def test_data_description_contains_key_facts(self):
+        from unittest.mock import patch
+        from src.voice import generator
+
+        with patch.object(generator, "generate_tweet") as mock_gen:
+            mock_gen.return_value = "mocked tweet"
+            generator.generate_fire_footprint_tweet(
+                name=None,
+                country="Russia",
+                region="Yakutia",
+                hectares=300_000,
+                tier_hectares=250_000,
+            )
+            args, kwargs = mock_gen.call_args
+            data_description = args[0]
+            assert "Yakutia" in data_description
+            assert "Russia" in data_description
+            assert "300,000" in data_description
+            assert "250,000" in data_description  # the crossed threshold

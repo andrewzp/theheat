@@ -56,6 +56,12 @@ DEFAULT_STATE = {
     "ice_mass_last_seen": {},  # {region: "YYYY-MM"}
     # Running count of ice_mass tweets per calendar year (cap: 8/year).
     "ice_annual_count": {},  # {year_str: int}
+    # Per-complex tier dedup for fire footprint (GWIS). Integer index into
+    # TIERS_HECTARES. Prevents re-tweeting the same fire at every update;
+    # only tier upgrades trigger a new draft.
+    "fire_complex_tiers": {},
+    # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
+    "fire_footprint_last_run": None,
 }
 
 
@@ -290,6 +296,22 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
             base.get("ice_annual_count", {}).get(year, 0),
             next_state.get("ice_annual_count", {}).get(year, 0),
         )
+    # Take max tier per complex across concurrent writes so a tier bump
+    # on one cron run isn't lost to a stale concurrent run.
+    merged["fire_complex_tiers"] = {}
+    for cid in set(
+        list(base.get("fire_complex_tiers", {}).keys())
+        + list(next_state.get("fire_complex_tiers", {}).keys())
+    ):
+        merged["fire_complex_tiers"][cid] = max(
+            int(base.get("fire_complex_tiers", {}).get(cid, -1)),
+            int(next_state.get("fire_complex_tiers", {}).get(cid, -1)),
+        )
+    # Max-merge the daily gate so concurrent cron runs keep the later date.
+    merged["fire_footprint_last_run"] = max(
+        base.get("fire_footprint_last_run") or "",
+        next_state.get("fire_footprint_last_run") or "",
+    ) or None
     return merged
 
 
@@ -566,6 +588,18 @@ def add_source_run(
         "note": note,
     })
     return run
+
+
+def update_fire_complex_tier(state: dict, complex_id: str, tier: int) -> dict:
+    """Record the highest tier we've tweeted for a fire complex.
+
+    Takes max so concurrent cron runs don't lose a tier bump.
+    """
+    tiers = state.setdefault("fire_complex_tiers", {})
+    current = int(tiers.get(complex_id, -1))
+    if tier > current:
+        tiers[complex_id] = int(tier)
+    return state
 
 
 def finalize_run(state: dict, run: dict, status: str = "success", max_runs: int = 20) -> dict:

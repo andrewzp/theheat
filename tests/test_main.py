@@ -1236,3 +1236,104 @@ class TestRunAlertsIceMass:
         }
         main.run_alerts(bot_state)
         assert called["n"] == 0
+
+
+class TestFireFootprintIntegration:
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.fire_footprint")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_tier_crossing_creates_draft_and_updates_state(
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        from src.data.fire_footprint import FireComplex
+
+        complex = FireComplex(
+            complex_id="GWIS_AAA",
+            name="Dixie Complex",
+            country="US",
+            region="California",
+            hectares=213_000,
+            start_date=None,
+            tier=3,
+            event_id="fire_footprint_GWIS_AAA_tier3",
+        )
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = []
+        mock_co2.detect_milestone.return_value = None
+        mock_ff.fetch_active_fire_perimeters.return_value = [complex]
+        mock_ff.detect_tier_crossings.return_value = [complex]
+        mock_ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+        mock_state.is_duplicate.return_value = False
+        mock_gen.generate_fire_footprint_tweet.return_value = "mocked tweet"
+        mock_draft.return_value = True
+
+        # Wire update_fire_complex_tier side_effect to actually write to state_dict
+        def _real_update_tier(sd, complex_id, tier):
+            sd.setdefault("fire_complex_tiers", {})[complex_id] = tier
+
+        mock_state.update_fire_complex_tier.side_effect = _real_update_tier
+
+        state_dict = _fresh_state()
+        run_alerts(state_dict)
+
+        mock_gen.generate_fire_footprint_tweet.assert_called_once()
+        call_kwargs = mock_gen.generate_fire_footprint_tweet.call_args.kwargs
+        assert call_kwargs["hectares"] == 213_000
+        assert call_kwargs["tier_hectares"] == 250_000  # mock TIERS_HECTARES[3]
+
+        mock_state.update_fire_complex_tier.assert_called_once_with(state_dict, "GWIS_AAA", 3)
+        # State updated with tier
+        assert state_dict.get("fire_complex_tiers", {}).get("GWIS_AAA") == 3
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.fire_footprint")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_same_day_second_run_gated_out(
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = []
+        mock_co2.detect_milestone.return_value = None
+        mock_ff.fetch_active_fire_perimeters.return_value = []
+
+        state_dict = _fresh_state()
+        state_dict["fire_footprint_last_run"] = date.today().isoformat()
+
+        run_alerts(state_dict)
+
+        mock_ff.fetch_active_fire_perimeters.assert_not_called()
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main.co2")
+    @patch("src.main.firms")
+    @patch("src.main.fire_footprint")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_fetch_error_is_logged_not_fatal(
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+    ):
+        mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
+        mock_firms.fetch_fires.return_value = []
+        mock_co2.fetch_co2_data.return_value = []
+        mock_co2.detect_milestone.return_value = None
+        mock_ff.fetch_active_fire_perimeters.side_effect = RuntimeError("boom")
+
+        state_dict = _fresh_state()
+
+        # Must not raise
+        run_alerts(state_dict)
+        mock_state.log_error.assert_any_call(state_dict, "fire_footprint", "boom")

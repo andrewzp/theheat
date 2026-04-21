@@ -23,6 +23,7 @@ CATEGORY_HINTS = {
     "country_high": ("country", "national", "record"),
     "country_low": ("country", "national", "record"),
     "fire": ("satellite", "confidence", "MW"),
+    "fire_footprint": ("hectares", "burned", "complex"),
     "co2_milestone": ("Mauna Loa", "280", "ppm"),
     "severe_weather": ("warning", "issued", "for"),
     "global_disaster": ("GDACS", "alert", "severity"),
