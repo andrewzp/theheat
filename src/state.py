@@ -60,6 +60,8 @@ DEFAULT_STATE = {
     # TIERS_HECTARES. Prevents re-tweeting the same fire at every update;
     # only tier upgrades trigger a new draft.
     "fire_complex_tiers": {},
+    # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
+    "fire_footprint_last_run": None,
 }
 
 
@@ -305,6 +307,11 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
             int(base.get("fire_complex_tiers", {}).get(cid, -1)),
             int(next_state.get("fire_complex_tiers", {}).get(cid, -1)),
         )
+    # Max-merge the daily gate so concurrent cron runs keep the later date.
+    merged["fire_footprint_last_run"] = max(
+        base.get("fire_footprint_last_run") or "",
+        next_state.get("fire_footprint_last_run") or "",
+    ) or None
     return merged
 
 

@@ -994,7 +994,7 @@ def generate_fire_footprint_tweet(
         f"Fire complex: {subject}. Country: {country}. Region: {region}. "
         f"Cumulative burned area: {int(hectares):,} hectares ({acres:,} acres). "
         f"Just crossed the {tier_hectares:,}-hectare threshold. "
-        f"Source: GWIS (EFFIS Global Wildfire Information System). "
+        f"Source: NIFC WFIGS (National Interagency Fire Center). "
         f"Lead with the acreage and the subject. No 'ravaging' / 'raging' — "
         f"the number is the story. Frame honestly: the largest complex of "
         f"{date.today().year}, not 'largest ever.'"

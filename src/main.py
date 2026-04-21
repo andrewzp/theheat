@@ -887,10 +887,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             status="failed", error=str(e)
         )
 
-    # 2b. Fire footprint / acreage (GWIS, once per day)
+    # 2b. Fire footprint / acreage (NIFC, once per day)
     today_iso = date.today().isoformat()
     if bot_state.get("fire_footprint_last_run") != today_iso:
-        print("[alerts] Checking fire footprints (GWIS)...")
+        print("[alerts] Checking fire footprints (NIFC)...")
         ff_start = time.perf_counter()
         source_promoted = 0
         source_drafted = 0
@@ -919,7 +919,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     return_bundle=True,
                 )
                 review_context = _review_context(
-                    source="GWIS",
+                    source="NIFC",
                     source_key="fire_footprint",
                     headline=f"Fire complex crossed {tier_threshold:,} ha",
                     current_run=current_run,

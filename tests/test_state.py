@@ -413,3 +413,26 @@ class TestFireComplexTiers:
         incoming = {"fire_complex_tiers": {"A": 1, "B": 3, "C": 0}}
         merged = _merge_state(base, incoming)
         assert merged["fire_complex_tiers"] == {"A": 2, "B": 3, "C": 0}
+
+
+class TestFireFootprintLastRunMerge:
+    def test_merge_takes_later_date_incoming_newer(self):
+        from src.state import _merge_state
+        base = {"fire_footprint_last_run": "2026-04-20"}
+        incoming = {"fire_footprint_last_run": "2026-04-21"}
+        merged = _merge_state(base, incoming)
+        assert merged["fire_footprint_last_run"] == "2026-04-21"
+
+    def test_merge_takes_later_date_base_newer(self):
+        from src.state import _merge_state
+        base = {"fire_footprint_last_run": "2026-04-21"}
+        incoming = {"fire_footprint_last_run": "2026-04-20"}
+        merged = _merge_state(base, incoming)
+        assert merged["fire_footprint_last_run"] == "2026-04-21"
+
+    def test_merge_all_none_produces_none(self):
+        from src.state import _merge_state
+        base = {"fire_footprint_last_run": None}
+        incoming = {"fire_footprint_last_run": None}
+        merged = _merge_state(base, incoming)
+        assert merged["fire_footprint_last_run"] is None

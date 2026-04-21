@@ -1,4 +1,4 @@
-"""Tests for fire footprint (GWIS) data."""
+"""Tests for fire footprint (NIFC WFIGS) data."""
 
 from unittest.mock import patch
 
