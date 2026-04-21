@@ -259,7 +259,11 @@ class TestDetectCumulativeMilestone:
         assert rec.current_mass_gt == -6042.0
 
     def test_no_fire_if_not_yet_crossed(self):
-        readings = [_reading("greenland", "2026-04", -4850.0)]
+        # -850 Gt is below the first -1000 Gt milestone threshold — no fire.
+        readings = [
+            _reading("greenland", "2026-03", -700.0),
+            _reading("greenland", "2026-04", -850.0),
+        ]
         state = {"ice_mass_last_milestone": {}}
         assert detect_cumulative_milestone(readings, state) is None
 

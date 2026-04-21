@@ -384,6 +384,8 @@ def score_ice_mass_event(
             "ice_mass_record",
             severity=severity,
             novelty=90,
+            # timeliness raised from spec's 64: even a small monthly record
+            # must pass the 78 threshold (the annual cap controls volume).
             timeliness=84,
             confidence=96,
             shareability=shareability,
