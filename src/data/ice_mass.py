@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import os
 
 import requests
 
@@ -65,7 +66,55 @@ class IceMassRecord:
 
 
 def fetch_grace_mass(region: str) -> list[IceMassReading]:
-    raise NotImplementedError
+    """Fetch the PODAAC Level-4 mass anomaly time series for a region.
+
+    Returns readings sorted oldest → newest. Returns [] on any failure
+    (missing token, HTTP error, parse error) so callers can treat the
+    lane as skipped rather than crashing.
+    """
+    if region not in REGION_URLS:
+        return []
+
+    token = os.environ.get("EARTHDATA_TOKEN", "")
+    if not token:
+        print("[ice_mass] EARTHDATA_TOKEN not configured — skipping")
+        return []
+
+    try:
+        resp = requests.get(
+            REGION_URLS[region],
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        print(f"[ice_mass] {region} fetch error: {e}")
+        return []
+
+    readings: list[IceMassReading] = []
+    for line in resp.text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("HDR") or stripped.startswith("#"):
+            continue
+        parts = stripped.split()
+        if len(parts) < 3:
+            continue
+        try:
+            decimal_year = float(parts[0])
+            mass_gt = float(parts[1])
+            uncertainty_gt = float(parts[2])
+        except ValueError:
+            continue
+        month = _decimal_year_to_month(decimal_year)
+        readings.append(IceMassReading(
+            region=region,
+            month=month,
+            mass_gt=mass_gt,
+            uncertainty_gt=uncertainty_gt,
+            event_id=f"ice_mass_{region}_{month}",
+        ))
+    readings.sort(key=lambda r: r.month)
+    return readings
 
 
 def detect_monthly_record(readings: list[IceMassReading], state: dict) -> IceMassRecord | None:
