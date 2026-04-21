@@ -239,4 +239,50 @@ def detect_streak_milestone(
     obs: GlobalSSTObservation,
     prior: dict,
 ) -> tuple[dict, MarineHeatwaveStreakEvent | None]:
-    raise NotImplementedError  # implemented in Task 4
+    """Decide whether an observation should fire a milestone tweet.
+
+    Returns (new_state, event_or_none). new_state is always the full
+    two-field dict the caller should persist via update_ocean_sst_streak.
+    """
+    seeded = bool(prior.get("seeded", False))
+    last_fired = prior.get("last_milestone_fired")
+
+    # 1. First-ever observation — silent seed.
+    if not seeded:
+        return ({"seeded": True, "last_milestone_fired": None}, None)
+
+    # 2. Streak broken — clear the fired-marker, no event.
+    if obs.streak_days <= 0:
+        return ({"seeded": True, "last_milestone_fired": None}, None)
+
+    # 3. Below first-fire threshold (day 5).
+    if obs.streak_days < 5:
+        # Fresh sub-threshold streak after a break should carry last_fired=None,
+        # which the streak-broken branch above will have already done.
+        return (
+            {"seeded": True, "last_milestone_fired": last_fired},
+            None,
+        )
+
+    # 4. Find the largest milestone not yet fired this streak.
+    already = last_fired or 0
+    candidates = [m for m in _milestones_up_to(obs.streak_days) if m > already]
+    if not candidates:
+        return (
+            {"seeded": True, "last_milestone_fired": last_fired},
+            None,
+        )
+    crossed = max(candidates)
+
+    event = MarineHeatwaveStreakEvent(
+        kind="first" if crossed == 5 and already == 0 else "milestone",
+        days=crossed,
+        peak_anomaly_c=obs.streak_peak_anomaly_c,
+        today_c=obs.today_c,
+        archive_max_c=obs.archive_max_c,
+        archive_max_year=obs.archive_max_year,
+        years_of_data=obs.years_of_data,
+        date=obs.date,
+        event_id=f"marine_heatwave_streak_{crossed}_{obs.date}",
+    )
+    return ({"seeded": True, "last_milestone_fired": crossed}, event)

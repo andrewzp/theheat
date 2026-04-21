@@ -229,3 +229,93 @@ def test_fetch_global_sst_handles_today_null_uses_latest_non_null():
     assert obs is not None
     assert obs.day_of_year == 98
     assert obs.today_c == pytest.approx(20.5)
+
+
+def _obs(streak_days: int = 5, **overrides):
+    from src.data.ocean_sst import GlobalSSTObservation
+    defaults = dict(
+        date="2026-04-20",
+        day_of_year=110,
+        today_c=20.5,
+        archive_max_c=20.3,
+        archive_max_year=2025,
+        years_of_data=44,
+        streak_days=streak_days,
+        streak_start_date="2026-04-16",
+        streak_peak_anomaly_c=0.2,
+    )
+    defaults.update(overrides)
+    return GlobalSSTObservation(**defaults)
+
+
+def test_detect_first_run_silent_seed():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": False, "last_milestone_fired": None}
+    new_state, event = detect_streak_milestone(_obs(streak_days=20), prior)
+    assert new_state == {"seeded": True, "last_milestone_fired": None}
+    assert event is None
+
+
+def test_detect_streak_under_5_no_fire():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": None}
+    new_state, event = detect_streak_milestone(_obs(streak_days=4), prior)
+    assert event is None
+    assert new_state == {"seeded": True, "last_milestone_fired": None}
+
+
+def test_detect_day_5_first_fire():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": None}
+    new_state, event = detect_streak_milestone(_obs(streak_days=5), prior)
+    assert event is not None
+    assert event.kind == "first"
+    assert event.days == 5
+    assert event.event_id == "marine_heatwave_streak_5_2026-04-20"
+    assert new_state == {"seeded": True, "last_milestone_fired": 5}
+
+
+def test_detect_milestone_crossing():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": 25}
+    new_state, event = detect_streak_milestone(_obs(streak_days=50), prior)
+    assert event is not None
+    assert event.kind == "milestone"
+    assert event.days == 50
+    assert new_state == {"seeded": True, "last_milestone_fired": 50}
+
+
+def test_detect_no_refire_same_milestone():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": 50}
+    new_state, event = detect_streak_milestone(_obs(streak_days=50), prior)
+    assert event is None
+    assert new_state == {"seeded": True, "last_milestone_fired": 50}
+
+
+def test_detect_skip_missed_milestones():
+    """Cron missed runs. Prior=5, streak=47 → fire 25 only (highest ≤ 47)."""
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": 5}
+    new_state, event = detect_streak_milestone(_obs(streak_days=47), prior)
+    assert event is not None
+    assert event.days == 25
+    assert new_state == {"seeded": True, "last_milestone_fired": 25}
+
+
+def test_detect_streak_break_clears_last_fired():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": 50}
+    new_state, event = detect_streak_milestone(_obs(streak_days=0), prior)
+    assert event is None
+    assert new_state == {"seeded": True, "last_milestone_fired": None}
+
+
+def test_detect_past_400_every_50():
+    from src.data.ocean_sst import detect_streak_milestone
+    prior = {"seeded": True, "last_milestone_fired": 400}
+    new_state, event = detect_streak_milestone(_obs(streak_days=450), prior)
+    assert event is not None
+    assert event.kind == "milestone"
+    assert event.days == 450
+    assert new_state == {"seeded": True, "last_milestone_fired": 450}
