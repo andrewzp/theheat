@@ -17,15 +17,16 @@ flowchart TD
     classDef out fill:#3a1a5c,stroke:#6a2fa8,color:#fff
     classDef state fill:#2a2a2a,stroke:#888,color:#fff
 
-    subgraph RAW["RAW MATERIALS — 13 free public data sources"]
+    subgraph RAW["RAW MATERIALS — 14 free public data sources"]
         direction TB
-        OM["Open-Meteo<br/>temperature records<br/>257 cities"]:::source
+        OM["Open-Meteo<br/>temperature records<br/>613 cities, 179 countries"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
-        GWISNIFC["GWIS/NIFC<br/>fire complex<br/>burn area"]:::source
-        NOAACO2["NOAA GML<br/>Mauna Loa CO2"]:::source
-        NWS["NWS Alerts<br/>severe weather<br/>emergency-tier only"]:::source
+        NIFC["NIFC WFIGS<br/>US fire complexes<br/>(tier dedup)"]:::source
+        NOAACO2["NOAA GML<br/>Mauna Loa CO2<br/>(12/yr cap)"]:::source
+        NWS["NWS Alerts<br/>severe weather<br/>9 extreme-tier events"]:::source
         GDACS["GDACS<br/>Red-tier disasters"]:::source
         NSIDC["NSIDC<br/>sea ice<br/>Mondays"]:::source
+        GRACE["GRACE-FO (PODAAC)<br/>Greenland + Antarctica<br/>ice mass (Mondays)"]:::source
         DROUGHT["US Drought Monitor<br/>Fridays"]:::source
         ENSO["NOAA CPC<br/>1st of month"]:::source
         MARINE["Open-Meteo Marine<br/>wave heights"]:::source
@@ -122,7 +123,7 @@ Sources run on a schedule; most run with every alert cycle, but some are gated b
 
 ## Stage Glossary
 
-### Raw Materials (12 Sources)
+### Raw Materials (14 Sources)
 Each source is fetched on a schedule (alerts every 4 hours, Hot 10 daily at 12:00 UTC). Each is wrapped in try/catch so one failure doesn't block the others.
 
 ### Deduplicate

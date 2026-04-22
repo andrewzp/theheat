@@ -1,9 +1,9 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 18, 2026
-**Status:** Live on GitHub Actions. Extreme signals detection shipped. Producing genuinely-better drafts (monthly records + era anchors + honest framing).
-**Latest commit:** `77ae1f0` on `main`
-**Tests:** 310 passing
+**Last updated:** April 22, 2026
+**Status:** Live on GitHub Actions. Four detection lanes merged (Ocean SST, GRACE ice mass, Fire Footprint/NIFC, Cross-Source Synthesis). Post-Codex-review bugs fixed. Feed now includes marine heatwave streaks, monthly ice-mass records, named US fire complexes crossing acreage tiers, and compound Fire×Drought×Heat synthesis signals.
+**Latest commit:** `0be88fc` on `main`
+**Tests:** 501 passing
 **Cost:** ~$60–90/month (Anthropic API for Sonnet evaluator). Everything else free tier.
 
 ---
@@ -28,17 +28,19 @@
 ```
 CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │
-├── Fetch from data sources
-│   ├── Open-Meteo ──────── city temps + archive (257 cities, all records)
-│   ├── NASA FIRMS ────────── satellite wildfire detections
-│   ├── GWIS/NIFC ──────────── fire-complex cumulative burn area (daily, tier-crossing only)
-│   ├── NOAA GML ──────────── Mauna Loa CO2 (daily PPM)
-│   ├── NWS Alerts ────────── Emergency-tier severe weather (Tornado Emergency,
-│   │                          Flash Flood Emergency, Hurricane, Storm Surge,
-│   │                          Extreme Wind). Routine warnings filtered out.
+├── Fetch from data sources (14 sources — 9 always-on, 5 day-gated)
+│   ├── Open-Meteo ──────── city temps + archive (613 cities, 179 countries, all records)
+│   ├── NASA FIRMS ────────── satellite wildfire detections (VIIRS_SNPP_NRT)
+│   ├── NIFC WFIGS ────────── US fire-complex cumulative burn area (daily, tier-crossing only)
+│   ├── NOAA GML ──────────── Mauna Loa CO2 (daily PPM, capped at 12 tweets/year)
+│   ├── NWS Alerts ────────── US severe weather — Tornado Emergency, Flash Flood
+│   │                          Emergency, Hurricane, Storm Surge, Extreme Wind,
+│   │                          Blizzard, Ice Storm, Extreme Cold, Extreme Heat.
 │   ├── GDACS ──────────────── Red-tier global disasters only
-│   ├── NSIDC ──────────────── Arctic/Antarctic sea ice (Mondays)
-│   ├── US Drought Monitor ── state drought (Fridays)
+│   ├── NSIDC ──────────────── Arctic/Antarctic sea ice (Mondays only)
+│   ├── GRACE-FO (PODAAC) ─── Greenland + Antarctica monthly ice mass (Mondays only,
+│   │                          Earthdata Login required, capped at 8 tweets/year)
+│   ├── US Drought Monitor ── state drought intensity (Fridays only)
 │   ├── NOAA CPC ──────────── ENSO transitions (1st of month)
 │   ├── Open-Meteo Marine ── ocean wave heights (16 points, location-aware thresholds)
 │   ├── NOAA CO-OPS ────────── coastal tide gauge storm surge (12 stations)
@@ -49,8 +51,10 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │                              400, +50 thereafter). Threshold: 78. Approval: suggested_auto,
 │                              90-min delay.
 │
-├── Detect extreme signals per city (NEW: unified bundle)
+├── Detect extreme signals per city (unified bundle)
 │   ├── All-time records (hottest/coldest in ~30yr archive) — elite
+│   ├── Country records (country-wide archive peak across all sampled
+│   │   cities in that country — the biggest single story)
 │   ├── Monthly records (hottest April ever, etc.) — strong
 │   ├── Anomaly records (15°C+ above/below monthly mean) — strong
 │   ├── Calendar-date records (legacy) — strong if big margin/old record
@@ -58,7 +62,10 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 │   └── Simultaneous events (5+ cities same day → one summary signal)
 │   Picks strongest signal per city; one tweet per bundle max.
 │
-├── Score events (editorial scoring — 19 scoring functions, thresholds 62-80)
+├── Cross-source synthesis (meta-layer, fires after per-source sections)
+│   └── Fire × Drought × Heat (US state, 14-day window, per-state cooldown)
+│
+├── Score events (editorial scoring — 22+ scoring functions, thresholds 56-82)
 │
 ├── Deduplicate against state (last 500 event IDs)
 │
@@ -111,22 +118,27 @@ theheat/
 │   ├── main.py                       Orchestrator (1,610 lines)
 │   ├── state.py                      GitHub Gist state + record-streak helpers (540 lines)
 │   ├── data/                         Data source modules
-│   │   ├── open_meteo.py             Unified extreme signal detection (673 lines)
-│   │   ├── firms.py                  NASA FIRMS wildfires
-│   │   ├── co2.py                    Mauna Loa CO2
-│   │   ├── nws_alerts.py             NWS — emergency-tier only (5 event types)
+│   │   ├── open_meteo.py             Unified extreme signal detection + country aggregation
+│   │   ├── firms.py                  NASA FIRMS wildfires (VIIRS letter-confidence aware)
+│   │   ├── fire_footprint.py         NIFC WFIGS named fire complexes, acreage tier dedup
+│   │   ├── co2.py                    Mauna Loa CO2 milestones (12/yr cap)
+│   │   ├── nws_alerts.py             NWS — 9 extreme-tier event types
 │   │   ├── gdacs.py                  GDACS — Red-tier only, intensity-tier dedup
 │   │   ├── sea_ice.py                Arctic/Antarctic sea ice
+│   │   ├── ice_mass.py               GRACE-FO Greenland + Antarctica (Mondays, Earthdata)
+│   │   ├── ocean_sst.py              NOAA OISST v2.1 global-mean streaks
 │   │   ├── drought.py                US Drought Monitor
 │   │   ├── enso.py                   ENSO transitions
 │   │   ├── ocean.py                  Extreme waves (location-aware thresholds)
 │   │   ├── water_levels.py           NOAA CO-OPS storm surge
 │   │   └── river_gauges.py           USGS river flood stages
 │   ├── editorial/
-│   │   ├── scoring.py                19 signal-scoring functions (593 lines)
+│   │   ├── scoring.py                22+ signal-scoring functions
 │   │   ├── candidates.py             Heuristic ranking (clarity/context/voice/punch)
 │   │   ├── approval.py               3-tier approval policy
-│   │   ├── evaluator.py              Claude Sonnet 4.6 virality evaluator (298 lines)
+│   │   ├── evaluator.py              Claude Sonnet 4.6 virality evaluator
+│   │   ├── synthesis.py              Cross-source synthesis rules (fire×drought×heat)
+│   │   ├── regions.py                Lat/lon → US state + city → state helpers
 │   │   └── _util.py                  Shared clamp utility
 │   ├── voice/
 │   │   ├── generator.py              Gemini Flash generation + 19 generator fns (880 lines)
@@ -138,7 +150,9 @@ theheat/
 │   └── storage/
 │       └── sqlite_store.py           SQLite backend (exists but unused in prod)
 │
-├── tests/                            22 test files, 310 tests
+├── tests/                            500+ tests across signal, scoring,
+│                                     generator, safety, state, synthesis,
+│                                     and integration suites
 │
 ├── dashboard/                        Next.js 15 + React 19 on Vercel
 │   └── app/
@@ -159,7 +173,7 @@ theheat/
 │   └── VOICE_PATTERNS.md             Voice pattern reference (labeled honestly: not proven-viral)
 │
 ├── data/
-│   ├── cities.csv                    257 cities
+│   ├── cities.csv                    613 cities across 179 countries
 │   └── normals.csv                   Climatological normals
 │
 ├── BRIEFING.md                       This file — session entry point
@@ -239,20 +253,23 @@ Source-specific gates: sea ice (Mondays), drought (Fridays), ENSO (1st of month)
 
 ## Editorial System
 
-### Signal Scoring (`src/editorial/scoring.py`) — 19 scoring functions
+### Signal Scoring (`src/editorial/scoring.py`)
 
 Signal types and thresholds:
-- **all_time_record** — threshold 80 (elite by default)
-- **country_record** (hottest/coldest across all sampled cities in a country) — 82 (elite by default; the biggest story the pipeline produces)
+- **synthesis_fire_drought_heat** — threshold 82 (compound story, elite by design)
+- **country_record** (archive peak across all sampled cities in a country) — 82 (elite)
+- **all_time_record** — 80 (elite by default)
+- **simultaneous_records** — 78
+- **marine_heatwave** (global-mean SST streak ≥5 days above archive) — 78
 - **monthly_record** — 76
 - **anomaly** — 76
 - **record_streak** — 74 (fires at 3+ days)
-- **simultaneous_records** — 78
+- **fire_footprint** — 72 (named US fire complex crossing acreage tier; manual_only)
+- **ice_mass_record** (GRACE-FO monthly loss record / cumulative milestone) — varies, elite-tier
 - **record** (calendar-date) — 72
 - **record_low** — 72
-- **fire** — 64
-- **fire_footprint** — threshold 72 (fire-complex cumulative burn area, manual_only approval)
-- **co2_milestone** — 58 (capped at 12 tweets/year via `co2_annual_count` state; weekly comparison pathway removed — CO2 only tweeted in the extreme)
+- **fire** — 64 (NASA FIRMS point detections)
+- **co2_milestone** — 58 (capped at 12 tweets/year via `co2_annual_count`)
 - **severe_weather** — 58
 - **global_disaster** — 62
 - **sea_ice_record** — 60
@@ -416,25 +433,27 @@ responses>=0.25
 ## Known Issues & Growth Levers
 
 ### Issues
-1. **Sequential API calls** — 257 cities checked sequentially. Alert cycle ~13 min. Not blocking.
+1. **Sequential API calls** — 613 cities checked sequentially. Alert cycle ~30 min.
 2. **Dashboard deployment** — may be behind latest main.
-3. **Archive span** — Open-Meteo only goes back ~30 years reliably. "All-time" framing must say "in 30 years of records."
-4. **SQLite store dormant** — exists but unused in prod. Ephemeral CI runners mean data is lost each run.
+3. **Archive span** — Open-Meteo only goes back ~30 years reliably. "All-time" framing must say "in 30 years of records." Enforced in the generator system prompt.
+4. **SQLite store** — lane-added keys now round-trip correctly via the metadata table (fixed 2026-04-22). Still not the default prod backend (Gist is), but no longer silently lossy if enabled.
+5. **Fire reverse-geocoder is continent-only** — `firms.py::reverse_geocode_simple` produces "somewhere in Asia" / "somewhere in Australia" labels, which generates weak fire drafts. First-class fix noted in Growth Levers.
+6. **Stray worktree artifact** — `theheat/theheat/` duplicate subdir from a Conductor worktree; untracked, safe to `rm -rf` when convenient. Causes `ImportPathMismatchError` on repo-root pytest.
 
 ### Growth levers (deferred by session owner)
 1. **Visual cards** — research says images 28× engagement. User rejected: "not if the facts are lame." Revisit once fact quality is proven.
-2. **Country-level records** — requires national-level aggregation we don't have.
-3. **Ocean SST / marine heatwaves** — NOAA OISST integration.
-4. **Ice events** — GLIMS, GRACE integration.
-5. **Cross-source story synthesis** — drought + fire + heat as one narrative.
-6. **RSS enrichment** — Carbon Brief, Climate Central feeds.
+2. **Voice engine upgrade** — see `docs/IDEAS.md`. Data-ticker tweets are "ok, not breakout-viral." Generator prompt, evaluator calibration, or a dedicated lead-with-the-stake rewrite pass are the three candidate interventions.
+3. **Fire geocoder regional precision** — `firms.py::reverse_geocode_simple` returns continent-only labels ("somewhere in Asia"), which produces weak fire drafts. Candidates: bounding boxes per country/region, or a bundled country polygon dataset.
+4. **RSS enrichment** — Carbon Brief, Climate Central feeds.
+5. **GWIS global fire footprint** — currently NIFC (US only). Revisit GWIS if they publish a JSON/GeoJSON API.
+6. **Additional synthesis rules** — marine heatwave × coastal heat dome (blocked until OISST has fired enough); hurricane × surge × flood (waits for hurricane season so the rule can be observed firing before we trust it).
 
 ---
 
 ## Repo
 
 - **GitHub:** `github.com/andrewzp/theheat`
-- **Branch:** `main` (latest: `77ae1f0`)
+- **Branch:** `main` (latest: `0be88fc`)
 - **Gist ID:** `06c02c97ffc0d11458687f1ed998d9e5`
 - **Dashboard:** https://dashboard-phi-beryl-65.vercel.app
 - **X:** @theheat (Premium tier — 4x/2x algo boost already active)
