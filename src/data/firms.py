@@ -57,11 +57,19 @@ def _parse_confidence(raw: str) -> int | None:
 
 def fetch_fires(
     confidence_min: int = 80,
-    frp_min: float = 100.0,
+    frp_min: float = 250.0,
     source: str = "VIIRS_SNPP_NRT",
     days: int = 1,
 ) -> list[FireEvent]:
-    """Fetch active fires from NASA FIRMS, filtered by confidence and FRP."""
+    """Fetch active fires from NASA FIRMS, filtered by confidence and FRP.
+
+    ``frp_min`` is Fire Radiative Power floor in megawatts. Raised from
+    100 to 250 MW on 2026-04-24 after reviewing production draft quality:
+    sub-200 MW fires produced weak copy (e.g., 136 MW framed with an
+    awkward "a coal power plant runs at 150 MW, this is one of those"
+    comparison). 250 MW roughly matches a "newsworthy" scale floor — a
+    fire that reads as a real incident, not noise near a farmer's burn.
+    """
     if not FIRMS_API_KEY:
         return []
 

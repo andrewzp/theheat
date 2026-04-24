@@ -22,8 +22,8 @@ class TestFetchFires:
     def test_happy_path_returns_filtered_fires(self):
         csv_body = (
             FIRMS_CSV_HEADER
-            + "34.05,-118.25,90,150.0\n"
-            + "40.71,-74.01,85,200.0\n"
+            + "34.05,-118.25,90,350.0\n"
+            + "40.71,-74.01,85,500.0\n"
         )
         responses.add(
             responses.GET,
@@ -35,7 +35,7 @@ class TestFetchFires:
         assert len(fires) == 2
         assert all(isinstance(f, FireEvent) for f in fires)
         assert fires[0].confidence == 90
-        assert fires[1].frp == 200.0
+        assert fires[1].frp == 500.0
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
@@ -59,6 +59,7 @@ class TestFetchFires:
         csv_body = (
             FIRMS_CSV_HEADER
             + "34.05,-118.25,90,10.0\n"  # frp too low
+            + "40.71,-74.01,90,200.0\n"   # also below new 250 default
         )
         responses.add(
             responses.GET,
@@ -66,8 +67,10 @@ class TestFetchFires:
             body=csv_body,
             status=200,
         )
-        fires = fetch_fires(frp_min=100.0)
-        assert len(fires) == 0
+        # Default frp_min is 250 MW (Apr 2026: raised from 100 to cut noise).
+        assert fetch_fires() == []
+        # Explicit low threshold still honors the older behavior.
+        assert len(fetch_fires(frp_min=100.0)) == 1
 
     def test_no_api_key_returns_empty(self):
         with patch("src.data.firms.FIRMS_API_KEY", ""):
@@ -96,9 +99,9 @@ class TestFetchFires:
         """
         csv_body = (
             FIRMS_CSV_HEADER
-            + "34.05,-118.25,h,200.0\n"   # high confidence → maps to 95
-            + "40.71,-74.01,n,150.0\n"    # nominal → 70, below 80 default
-            + "1.0,1.0,l,300.0\n"          # low → 30
+            + "34.05,-118.25,h,400.0\n"   # high confidence → maps to 95
+            + "40.71,-74.01,n,350.0\n"    # nominal → 70, below 80 default
+            + "1.0,1.0,l,600.0\n"          # low → 30
         )
         responses.add(
             responses.GET,
@@ -115,8 +118,8 @@ class TestFetchFires:
     def test_malformed_csv_rows_skipped(self):
         csv_body = (
             FIRMS_CSV_HEADER
-            + "34.05,-118.25,NOT_A_NUMBER,150.0\n"  # malformed confidence
-            + "40.71,-74.01,85,200.0\n"  # valid row
+            + "34.05,-118.25,NOT_A_NUMBER,400.0\n"  # malformed confidence
+            + "40.71,-74.01,85,350.0\n"  # valid row
         )
         responses.add(
             responses.GET,
@@ -133,7 +136,7 @@ class TestFetchFires:
     def test_fire_event_id_format(self):
         csv_body = (
             FIRMS_CSV_HEADER
-            + "34.05,-118.25,90,150.0\n"
+            + "34.05,-118.25,90,350.0\n"
         )
         responses.add(
             responses.GET,
