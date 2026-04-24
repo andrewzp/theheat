@@ -9,6 +9,10 @@ from src.voice.generator import (
     generate_record_low_tweet,
     generate_fire_tweet,
     generate_co2_milestone_tweet,
+    _detect_stock_formula,
+    _prompt_for_category,
+    SYSTEM_PROMPT,
+    _CATEGORY_PROMPTS,
 )
 
 
@@ -138,6 +142,99 @@ class TestGenerateTweet:
                 )
                 assert bundle is not None
                 assert "NEW RECORD" in bundle.text
+
+
+class TestDetectStockFormula:
+    """Regex guard against Gemini template traps identified in
+    docs/DRAFT_CORPUS.md 2026-04-24 section. Every pattern here is a
+    specific failure mode observed in production."""
+
+    def test_homes_count_formula_rejected(self):
+        bad = [
+            "A wildfire radiating 220 MW — enough to power 220,000 homes.",
+            "enough to power roughly 200,000 homes",
+            "enough to run 100,000 American homes",
+            "That is enough to run roughly 150,000 average US homes.",
+            "enough to power 130,000 electric heaters simultaneously",
+        ]
+        for t in bad:
+            assert _detect_stock_formula(t) is not None, f"Should reject: {t}"
+
+    def test_generic_power_plant_comparison_rejected(self):
+        bad = [
+            "A coal power plant produces about 1,000 MW. This is a third of that.",
+            "A standard nuclear reactor runs at around 1,000 MW.",
+            "A typical coal plant runs at 600 MW.",
+            "A small power plant delivers about 300 MW. Except it's a forest.",
+        ]
+        for t in bad:
+            assert _detect_stock_formula(t) is not None, f"Should reject: {t}"
+
+    def test_no_name_yet_closer_rejected(self):
+        bad = [
+            "A fire in Mexico. It has no name yet.",
+            "234 MW in Kazakhstan. The fire has no name yet.",
+        ]
+        for t in bad:
+            assert _detect_stock_formula(t) is not None
+
+    def test_continent_only_location_rejected(self):
+        bad = [
+            "A wildfire somewhere in Asia is radiating 161 MW.",
+            "The satellite confidence is 95%. The location is unknown.",
+            "Location still unknown. Satellite confidence: 95%.",
+            "A fire burning somewhere in Africa at 250 MW.",
+        ]
+        for t in bad:
+            assert _detect_stock_formula(t) is not None
+
+    def test_legitimate_tweets_not_rejected(self):
+        """Good tweets from the A/B corpus should pass through clean."""
+        good = [
+            "Sevilla is forecast to hit 86.4F today. The record for this date was set in 2002.",
+            "Chicago hit 82F today. Average high for April is 52F. That 29-degree jump used to define an entire season.",
+            "A 264 MW wildfire on Hawaii's Big Island. In APRIL. The average rainfall there this month is 2.5 inches.",
+            "Kathmandu forecast 88.5F today. That would break a record from 1999. The year the world worried about Y2K.",
+            # Named power-plant comparison — legit, Palo Verde is a real plant.
+            "The Dixie Complex is radiating more heat than the Palo Verde reactor outputs.",
+            # Seattle comparison — the one power-plant-family comparison that landed.
+            "Seattle, the whole city, averages about 1,000 MW of electricity use.",
+        ]
+        for t in good:
+            assert _detect_stock_formula(t) is None, f"Should NOT reject: {t}"
+
+    def test_empty_and_none_safe(self):
+        assert _detect_stock_formula("") is None
+        assert _detect_stock_formula(None) is None
+
+
+class TestPromptForCategory:
+    def test_unknown_category_falls_back_to_universal(self):
+        assert _prompt_for_category("unknown_type") == SYSTEM_PROMPT
+        assert _prompt_for_category("") == SYSTEM_PROMPT
+        assert _prompt_for_category(None) == SYSTEM_PROMPT
+
+    def test_known_category_includes_addendum(self):
+        result = _prompt_for_category("fire")
+        assert SYSTEM_PROMPT in result
+        assert "CATEGORY-SPECIFIC — WILDFIRE" in result
+        assert len(result) > len(SYSTEM_PROMPT)
+
+    def test_every_registered_category_prompt_loads(self):
+        # Sanity: no broken keys in _CATEGORY_PROMPTS; each assembles a
+        # prompt that strictly extends SYSTEM_PROMPT.
+        for category, addendum in _CATEGORY_PROMPTS.items():
+            result = _prompt_for_category(category)
+            assert SYSTEM_PROMPT in result
+            assert addendum in result
+
+    def test_fire_prompt_bans_stock_formulas(self):
+        fire_prompt = _prompt_for_category("fire")
+        # The fire addendum should explicitly warn Gemini off the two
+        # biggest fire-voice traps we identified.
+        assert "no name yet" in fire_prompt
+        assert "power-plant comparison" in fire_prompt.lower() or \
+               "power plant" in fire_prompt.lower()
 
 
 class TestGenerateRecordTweet:
