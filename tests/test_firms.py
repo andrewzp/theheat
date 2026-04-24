@@ -147,66 +147,119 @@ class TestFetchFires:
 
 
 class TestReverseGeocodeSimple:
-    def test_us_coordinates(self):
+    """The replacement for the old continent-only labels — produces
+    specific region names so Gemini doesn't have to guess (or make up)
+    a fire's location. Regression target: no more 'somewhere in Asia,
+    Unknown.'"""
+
+    def test_los_angeles_is_california(self):
         region, country = reverse_geocode_simple(34.05, -118.25)
-        assert "US" in region
+        assert region == "California"
         assert country == "US"
 
-    def test_australia_coordinates(self):
+    def test_seattle_is_pacific_northwest(self):
+        region, country = reverse_geocode_simple(47.6, -122.3)
+        assert region == "the Pacific Northwest"
+        assert country == "US"
+
+    def test_phoenix_is_us_southwest(self):
+        region, country = reverse_geocode_simple(33.45, -112.07)
+        assert region == "the US Southwest"
+        assert country == "US"
+
+    def test_sydney_is_new_south_wales(self):
         region, country = reverse_geocode_simple(-33.87, 151.21)
-        assert region == "Australia"
+        assert region == "New South Wales"
         assert country == "Australia"
 
-    def test_europe_coordinates(self):
+    def test_paris_is_france(self):
         region, country = reverse_geocode_simple(48.86, 2.35)
-        assert region == "Europe"
-        assert country == "Western Europe"
+        assert region == "France"
+        assert country == "France"
 
-    def test_unknown_coordinates(self):
-        # Deep ocean (south Atlantic)
+    def test_deep_ocean_falls_back_to_coords(self):
         region, country = reverse_geocode_simple(-60.0, -30.0)
         assert "S" in region  # fallback coordinate format
         assert country == "Unknown"
 
+    # Previously "somewhere in Asia" — the whole point of the fix.
+    def test_siberia_specific_label(self):
+        region, country = reverse_geocode_simple(62.0, 129.0)
+        assert region == "eastern Siberia"
+        assert country == "Russia"
+
+    def test_kazakhstan_steppe_specific(self):
+        region, country = reverse_geocode_simple(48.0, 68.0)
+        assert region == "the Kazakhstan steppe"
+        assert country == "Kazakhstan"
+
+    def test_amazon_basin_specific(self):
+        region, country = reverse_geocode_simple(-3.1, -60.0)
+        assert region == "the Amazon Basin"
+        assert country == "Brazil"
+
+    def test_congo_basin_specific(self):
+        region, country = reverse_geocode_simple(-2.0, 22.0)
+        assert region == "the Congo Basin"
+        assert country == "DR Congo"
+
+    def test_central_india(self):
+        region, country = reverse_geocode_simple(22.0, 78.0)
+        assert region == "India"
+        assert country == "India"
+
+    def test_iberia_is_iberian_peninsula(self):
+        region, country = reverse_geocode_simple(40.0, -4.0)
+        assert region == "the Iberian Peninsula"
+        assert country == "Spain"
+
+    def test_patagonia_specific(self):
+        region, country = reverse_geocode_simple(-50.0, -70.0)
+        assert region == "Patagonia"
+        assert country == "Argentina"
+
 
 class TestLatLonToRegion:
+    """Region lookups against the bounding-box table. Values moved to
+    more specific labels as part of the Apr 24 geocoder overhaul."""
+
     def test_northeastern_us(self):
-        assert _lat_lon_to_region(42.0, -72.0) == "Northeastern US"
+        assert _lat_lon_to_region(42.0, -72.0) == "the Northeastern US"
 
     def test_southeastern_us(self):
-        assert _lat_lon_to_region(30.0, -85.0) == "Southeastern US"
+        assert _lat_lon_to_region(33.0, -82.0) == "the Southeastern US"
 
-    def test_northwestern_us(self):
-        assert _lat_lon_to_region(47.0, -122.0) == "Northwestern US"
+    def test_california_specific(self):
+        assert _lat_lon_to_region(37.7, -122.4) == "California"
 
-    def test_southwestern_us(self):
-        assert _lat_lon_to_region(33.0, -112.0) == "Southwestern US"
+    def test_florida_specific(self):
+        assert _lat_lon_to_region(27.0, -81.0) == "Florida"
 
-    def test_canada(self):
-        assert _lat_lon_to_region(55.0, -100.0) == "Canada"
+    def test_canadian_prairies_specific(self):
+        assert _lat_lon_to_region(55.0, -100.0) == "the Canadian Prairies"
 
-    def test_latin_america(self):
-        assert _lat_lon_to_region(20.0, -100.0) == "Latin America"
+    def test_mexico_not_latin_america(self):
+        assert _lat_lon_to_region(20.0, -100.0) == "Mexico"
 
-    def test_europe(self):
-        assert _lat_lon_to_region(50.0, 10.0) == "Europe"
+    def test_central_europe_specific(self):
+        assert _lat_lon_to_region(50.0, 10.0) == "Central Europe"
 
-    def test_middle_east(self):
-        assert _lat_lon_to_region(30.0, 45.0) == "Middle East"
+    def test_levant_specific(self):
+        assert _lat_lon_to_region(33.0, 44.0) == "the Levant"
 
-    def test_africa(self):
-        assert _lat_lon_to_region(5.0, 20.0) == "Africa"
+    def test_congo_basin(self):
+        assert _lat_lon_to_region(0.0, 20.0) == "the Congo Basin"
 
-    def test_asia(self):
-        assert _lat_lon_to_region(35.0, 100.0) == "Asia"
+    def test_china_specific(self):
+        assert _lat_lon_to_region(35.0, 105.0) == "China"
 
-    def test_australia(self):
-        assert _lat_lon_to_region(-25.0, 135.0) == "Australia"
+    def test_central_australia(self):
+        assert _lat_lon_to_region(-25.0, 135.0) == "the Northern Territory"
 
     def test_fallback_coordinate_format(self):
         result = _lat_lon_to_region(-60.0, -30.0)
-        assert "60S" in result
-        assert "30W" in result
+        assert "60" in result
+        assert "S" in result
 
 
 class TestLatLonToCountry:
@@ -225,5 +278,12 @@ class TestLatLonToCountry:
     def test_australia(self):
         assert _lat_lon_to_country(-25.0, 135.0) == "Australia"
 
-    def test_unknown(self):
-        assert _lat_lon_to_country(70.0, 70.0) == "Unknown"
+    def test_russia(self):
+        assert _lat_lon_to_country(62.0, 129.0) == "Russia"
+
+    def test_kazakhstan(self):
+        assert _lat_lon_to_country(48.0, 68.0) == "Kazakhstan"
+
+    def test_unknown_deep_ocean(self):
+        # South Atlantic deep ocean, far from any of our boxes.
+        assert _lat_lon_to_country(-55.0, -45.0) == "Unknown"
