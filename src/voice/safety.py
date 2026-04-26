@@ -11,7 +11,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # capacity than the generator. Default matches the generator default.
 GEMINI_SAFETY_MODEL = os.environ.get(
     "GEMINI_SAFETY_MODEL",
-    os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+    os.environ.get("GEMINI_MODEL", "gemini-flash-latest"),
 )
 
 MONTHS = (
