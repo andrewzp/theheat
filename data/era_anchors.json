@@ -1,0 +1,319 @@
+{
+  "_meta": {
+    "purpose": "Pre-computed cultural anchors per year, used by record-type generators in src/voice/generator.py to ground 'last time it was this hot in YEAR' framings without asking Gemini to invent one.",
+    "selection_criteria": "Universally recognizable, time-marking (triggers feeling-of-elapsed-time, not fact lookup), globally legible (not US-only when avoidable), politically neutral, not mass-tragedy-as-scaffolding.",
+    "format": "year (string) -> list of short anchor strings, each ready to slot into 'back when X' / 'the year Y' / 'still when Z' framings.",
+    "year_coverage": "1995-2025. Open-Meteo archive starts ~1995; pre-1995 records are exceedingly rare in this pipeline.",
+    "tuning": "8 anchors per year is the design target — enough variety so the same year never gets the same framing twice in a row, few enough that curation stays high-quality."
+  },
+  "1995": [
+    "Windows 95 launched",
+    "Toy Story released as the first all-CGI feature",
+    "eBay was founded",
+    "Yahoo! was incorporated",
+    "Amazon sold only books",
+    "the OJ Simpson trial dominated TV",
+    "Pixar was a startup",
+    "DVDs didn't exist yet"
+  ],
+  "1996": [
+    "the Atlanta Olympics were on",
+    "Dolly the sheep was cloned",
+    "the Spice Girls hit number one",
+    "Mac and PC were still actually fighting",
+    "the Tickle Me Elmo craze peaked",
+    "Independence Day was the summer movie",
+    "Hotmail was new",
+    "AOL still mailed CD-ROMs"
+  ],
+  "1997": [
+    "Princess Diana's death stopped the world",
+    "Hong Kong was returned to China",
+    "Titanic was about to break every box-office record",
+    "Mars Pathfinder landed",
+    "Hale-Bopp comet was visible everywhere",
+    "Deep Blue beat Kasparov at chess",
+    "Buffy the Vampire Slayer premiered",
+    "the Spice Girls were the biggest band on earth"
+  ],
+  "1998": [
+    "Google was founded",
+    "Windows 98 was new",
+    "the iMac was the future of computing",
+    "Viagra was approved",
+    "Saving Private Ryan changed war movies",
+    "Friends was the most-watched show",
+    "the euro currency wasn't in circulation yet",
+    "MP3 players didn't exist"
+  ],
+  "1999": [
+    "Y2K had everyone worried",
+    "Napster launched and broke the music industry",
+    "The Matrix opened",
+    "Star Wars Episode I came out",
+    "the dot-com boom was at its peak",
+    "Prince's '1999' was finally on the radio for real",
+    "the Euro had just been introduced as accounting currency",
+    "Nokia phones were the cool ones"
+  ],
+  "2000": [
+    "the dot-com bubble burst",
+    "Y2K turned out to be fine",
+    "Survivor premiered and reality TV took off",
+    "Big Brother started",
+    "Erin Brockovich was the movie everyone discussed",
+    "Sydney hosted the Olympics",
+    "the iPod didn't exist yet",
+    "George W. Bush vs. Al Gore went to the courts"
+  ],
+  "2001": [
+    "the iPod launched",
+    "Wikipedia was founded",
+    "Shrek changed animation",
+    "Harry Potter and the Sorcerer's Stone hit theaters",
+    "Apple opened its first retail store",
+    "the September 11 attacks reshaped the world",
+    "Lord of the Rings: Fellowship of the Ring opened",
+    "BlackBerry phones were luxury"
+  ],
+  "2002": [
+    "the euro entered circulation",
+    "the Salt Lake City Olympics happened",
+    "Lord of the Rings: Two Towers came out",
+    "Spider-Man rebooted the superhero movie",
+    "American Idol premiered",
+    "Eminem's 8 Mile dropped",
+    "Friendster was the first big social network",
+    "the iPod's second generation launched"
+  ],
+  "2003": [
+    "MySpace launched",
+    "the Iraq War began",
+    "Concorde made its final flight",
+    "Friends had its final season",
+    "Finding Nemo was the summer hit",
+    "SARS swept Asia",
+    "Skype was founded",
+    "Apple released iTunes for Windows"
+  ],
+  "2004": [
+    "Facebook was launched, college-only",
+    "YouTube didn't exist yet",
+    "the Athens Olympics happened",
+    "the Boston Red Sox won the World Series after 86 years",
+    "the Indian Ocean tsunami hit on Boxing Day",
+    "Gmail invitation codes were luxury",
+    "Mozilla Firefox 1.0 shipped",
+    "Shrek 2 was the box-office king"
+  ],
+  "2005": [
+    "YouTube was founded",
+    "Hurricane Katrina hit New Orleans",
+    "Pope John Paul II died",
+    "Reddit launched",
+    "the Boeing 787 Dreamliner was unveiled",
+    "the iPod nano debuted",
+    "Pride and Prejudice with Keira Knightley came out",
+    "Crash won Best Picture in an upset"
+  ],
+  "2006": [
+    "Twitter was founded",
+    "Pluto was demoted from planet status",
+    "Facebook opened to anyone with an email",
+    "the Wii was released",
+    "The Office (US version) was hitting its stride",
+    "Borat was in theaters",
+    "Sony PS3 launched at $599",
+    "Italy won the World Cup in Berlin"
+  ],
+  "2007": [
+    "the iPhone launched",
+    "Harry Potter and the Deathly Hallows ended the series",
+    "the Great Recession warning signs appeared",
+    "Tumblr was founded",
+    "Live Free or Die Hard came out",
+    "Netflix started streaming",
+    "the Kindle launched",
+    "the iPlayer revolutionized British TV"
+  ],
+  "2008": [
+    "Lehman Brothers collapsed",
+    "Barack Obama was elected",
+    "the Beijing Olympics opened",
+    "the App Store launched",
+    "The Dark Knight broke every record",
+    "Spotify launched in Europe",
+    "Iron Man kicked off the MCU",
+    "Heath Ledger died before The Dark Knight came out"
+  ],
+  "2009": [
+    "Bitcoin's whitepaper was published",
+    "Avatar in 3D shocked theaters",
+    "Michael Jackson died",
+    "swine flu was the global pandemic scare",
+    "WhatsApp was founded",
+    "Slumdog Millionaire won Best Picture",
+    "Susan Boyle made everyone cry on Britain's Got Talent",
+    "Twitter hit mainstream during the Iran protests"
+  ],
+  "2010": [
+    "the iPad launched",
+    "Deepwater Horizon spilled into the Gulf for months",
+    "Inception had everyone arguing about the ending",
+    "the Chilean miner rescue captivated the world",
+    "Instagram launched",
+    "Pinterest was founded",
+    "the Eyjafjallajökull volcano grounded European flights",
+    "Toy Story 3 made adults cry"
+  ],
+  "2011": [
+    "Steve Jobs died",
+    "Will and Kate got married",
+    "the Arab Spring swept the Middle East",
+    "Fukushima nuclear disaster followed the Tohoku earthquake",
+    "Game of Thrones premiered on HBO",
+    "Snapchat launched",
+    "Adele's 21 became the bestselling album of the decade",
+    "Borders bookstores closed for good"
+  ],
+  "2012": [
+    "the London Olympics opened",
+    "Hurricane Sandy hit New York",
+    "the Mayan calendar 'ended'",
+    "Gangnam Style went viral",
+    "the Higgs boson was confirmed at CERN",
+    "Avengers assembled for the first time",
+    "Curiosity rover landed on Mars",
+    "Felix Baumgartner skydived from space"
+  ],
+  "2013": [
+    "Pope Francis was elected",
+    "Edward Snowden leaked the NSA files",
+    "Twitter went public",
+    "Breaking Bad ended",
+    "Iron Man 3 made a billion",
+    "Frozen took over every parent's house",
+    "the Boston Marathon bombing happened",
+    "Vine launched, briefly"
+  ],
+  "2014": [
+    "the Sochi Winter Olympics happened",
+    "Robin Williams died",
+    "the Ebola outbreak hit West Africa",
+    "the ALS Ice Bucket Challenge took over Facebook",
+    "Russia annexed Crimea",
+    "Malaysia Airlines MH370 disappeared",
+    "Frozen's 'Let It Go' was inescapable",
+    "the World Cup in Brazil opened"
+  ],
+  "2015": [
+    "the Apple Watch launched",
+    "the Paris attacks shook Europe",
+    "New Horizons flew past Pluto",
+    "Adele's 'Hello' broke streaming records",
+    "Star Wars: The Force Awakens revived the franchise",
+    "the Volkswagen emissions scandal broke",
+    "the US legalized same-sex marriage nationwide",
+    "Spotify hit 75 million users"
+  ],
+  "2016": [
+    "Brexit was voted in",
+    "Pokémon GO had everyone walking outside",
+    "the Cubs won the World Series after 108 years",
+    "Prince and David Bowie both died",
+    "Stranger Things premiered",
+    "the Rio Olympics happened",
+    "Hamilton was the hottest ticket on Broadway",
+    "AlphaGo beat Lee Sedol"
+  ],
+  "2017": [
+    "the Total Solar Eclipse crossed America",
+    "the iPhone X launched",
+    "the MeToo movement went viral",
+    "Hurricane Maria devastated Puerto Rico",
+    "Get Out redefined horror",
+    "Stranger Things 2 dropped",
+    "bitcoin first crossed $10,000",
+    "Despacito was inescapable"
+  ],
+  "2018": [
+    "Harry and Meghan got married",
+    "the Thai cave rescue captivated the world",
+    "Black Panther broke box-office records",
+    "the Florence and the Machine concert tour was huge",
+    "Fortnite hit 200 million players",
+    "BTS broke into the US mainstream",
+    "the Pyeongchang Olympics happened",
+    "A Star Is Born remade brought back power ballads"
+  ],
+  "2019": [
+    "Notre Dame burned",
+    "Game of Thrones ended",
+    "Avengers: Endgame closed the saga",
+    "Joker was the cultural lightning rod",
+    "the first photo of a black hole was published",
+    "TikTok hit critical mass globally",
+    "Greta Thunberg crossed the Atlantic by sailboat",
+    "Disney+ launched"
+  ],
+  "2020": [
+    "COVID lockdowns reshaped everything",
+    "Zoom became a verb",
+    "Tiger King was a pandemic phenomenon",
+    "the Tokyo Olympics were postponed",
+    "Among Us was the lockdown game",
+    "TikTok hit 1 billion downloads",
+    "stay-at-home was a way of life",
+    "drive-by birthday parades became normal"
+  ],
+  "2021": [
+    "the Capitol riot happened",
+    "the Suez Canal got blocked by the Ever Given",
+    "the Tokyo Olympics finally happened, in 2021",
+    "Squid Game took over Netflix",
+    "Dogecoin briefly hit $0.69",
+    "Britney Spears was finally freed from her conservatorship",
+    "Facebook rebranded to Meta",
+    "the James Webb Space Telescope launched"
+  ],
+  "2022": [
+    "Russia invaded Ukraine",
+    "Queen Elizabeth II died after 70 years on the throne",
+    "FTX collapsed in days",
+    "Wordle was bought by the New York Times",
+    "Top Gun: Maverick saved theaters",
+    "the World Cup happened in Qatar",
+    "ChatGPT was released to the public",
+    "Twitter was acquired by Elon Musk"
+  ],
+  "2023": [
+    "ChatGPT became part of everyday life",
+    "the Hollywood writers' strike shut down production",
+    "Barbie and Oppenheimer opened the same weekend",
+    "Taylor Swift's Eras Tour grossed over a billion",
+    "the OpenAI board fired Sam Altman, then unfired him",
+    "the Titan submersible imploded",
+    "Beyoncé's Renaissance Tour broke records",
+    "the Hawaii wildfires devastated Lahaina"
+  ],
+  "2024": [
+    "generative AI was suddenly everywhere",
+    "the Paris Olympics opened on the Seine",
+    "Trump won the US election a second time",
+    "'Brat summer' became a global aesthetic",
+    "Apple Vision Pro launched",
+    "the SpaceX Starship caught its booster mid-air",
+    "the total solar eclipse crossed North America",
+    "Taylor Swift kept dating Travis Kelce"
+  ],
+  "2025": [
+    "DeepSeek made the world rethink AI costs",
+    "the Bluesky exodus from X accelerated",
+    "Trump's second term began",
+    "the LA wildfires devastated Pacific Palisades",
+    "Sora 2 made AI video the default",
+    "the iPhone 17 launched",
+    "Studio Ghibli AI art took over the internet",
+    "Severance Season 2 dropped"
+  ]
+}

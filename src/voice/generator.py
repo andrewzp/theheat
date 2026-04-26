@@ -10,6 +10,7 @@ from datetime import date
 from src.editorial.candidates import CandidateBundle, rank_candidates
 from src.voice.safety import run_safety_pipeline
 from src.voice import templates
+from src.voice.era_anchors import pick_anchors
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # Model ID for the candidate generator. Made env-configurable on
@@ -392,6 +393,29 @@ def _detect_stock_formula(text: str) -> str | None:
     return None
 
 
+def _era_anchor_hint(year: int, seed_key: str, k: int = 4) -> str:
+    """Return a prompt fragment listing era anchors for ``year``.
+
+    Empty string when the year has no anchors (year < 1995 or > coverage
+    end) — caller's prompt then degrades to its prior behavior, which is
+    Gemini inventing the anchor (sometimes correctly, sometimes
+    hallucinating). Pre-computed anchors solve the hallucination side
+    AND give variety: a seeded sample of k anchors changes across cycles.
+
+    The seed should typically be ``f"{city}-{year}-{today_iso}"`` so
+    repeated runs in the same cycle pick the same anchors but different
+    days/cities pick different ones.
+    """
+    anchors = pick_anchors(year, k=k, seed=seed_key)
+    if not anchors:
+        return ""
+    bullets = "; ".join(anchors)
+    return (
+        f" Era anchors available for {year} (USE AT MOST ONE in the tweet — "
+        f"these are inspiration, not a list to recite): {bullets}."
+    )
+
+
 def _fallback_candidates(fallback_fn=None, fallback_args=None, count: int = DEFAULT_CANDIDATE_COUNT) -> list[tuple[str, str]]:
     if fallback_fn is None:
         return []
@@ -611,6 +635,10 @@ def generate_all_time_record_tweet(
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
     direction = "hottest" if kind == "high" else "coldest"
+    anchor_hint = _era_anchor_hint(
+        old_record_year,
+        seed_key=f"{city}-{old_record_year}-{date.today().isoformat()}",
+    )
     data = (
         f"Open-Meteo forecast {direction} reading for {city}, {country} today: "
         f"{temp_f}F ({new_temp_c}C). "
@@ -620,6 +648,7 @@ def generate_all_time_record_tweet(
         f"Note: do NOT claim 'hottest ever' or 'all-time' — the archive only goes back "
         f"{years_of_data} years reliably. Frame honestly: 'hottest in {years_of_data} years of records' "
         f"or 'hottest since {old_record_year}'."
+        f"{anchor_hint}"
     )
     return generate_tweet(
         data,
@@ -656,6 +685,10 @@ def generate_country_record_tweet(
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_temp_c * 9 / 5 + 32, 1)
     descriptor = "hottest" if kind == "high" else "coldest"
+    anchor_hint = _era_anchor_hint(
+        old_record_year,
+        seed_key=f"{country}-{old_record_year}-{date.today().isoformat()}",
+    )
     data = (
         f"Aggregating {cities_sampled} Open-Meteo monitored cities in {country}: "
         f"today's peak {descriptor} reading is {temp_f}F ({new_temp_c}C) at {peak_city}. "
@@ -666,6 +699,7 @@ def generate_country_record_tweet(
         f"'{country}'s {descriptor} since {old_record_year}'. "
         f"Do NOT claim 'hottest ever' — the archive is {years_of_data} years. "
         f"Lead with the country and the stake, not {peak_city}."
+        f"{anchor_hint}"
     )
     return generate_tweet(
         data,
@@ -704,6 +738,10 @@ def generate_monthly_record_tweet(
     month_name = ["", "January","February","March","April","May","June",
                   "July","August","September","October","November","December"][month]
     direction = "hottest" if kind == "high" else "coldest"
+    anchor_hint = _era_anchor_hint(
+        old_record_year,
+        seed_key=f"{city}-{month}-{old_record_year}-{date.today().isoformat()}",
+    )
     data = (
         f"Open-Meteo forecast {direction} reading for {city}, {country} today: "
         f"{temp_f}F ({new_temp_c}C). "
@@ -712,6 +750,7 @@ def generate_monthly_record_tweet(
         f"Previous {direction} {month_name} in that window: {old_f}F ({old_record_c}C) in {old_record_year}. "
         f"Frame honestly: 'hottest {month_name} since {old_record_year}' or "
         f"'hottest {month_name} in {years_of_data} years of records'."
+        f"{anchor_hint}"
     )
     return generate_tweet(
         data,
@@ -927,10 +966,15 @@ def generate_record_tweet(
 ) -> str | CandidateBundle | None:
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
+    anchor_hint = _era_anchor_hint(
+        old_record_year,
+        seed_key=f"{city}-{old_record_year}-{date.today().isoformat()}",
+    )
     data = (
         f"Open-Meteo forecast high for {city}, {country} today is {temp_f}F ({new_temp_c}C). "
         f"If that holds, it would beat the previous record for this calendar date: "
         f"{old_f}F ({old_record_c}C), set in {old_record_year}."
+        f"{anchor_hint}"
     )
     return generate_tweet(
         data,
@@ -1236,11 +1280,16 @@ def generate_record_low_tweet(
     """Generate a tweet about a record low temperature."""
     temp_f = round(new_temp_c * 9 / 5 + 32, 1)
     old_f = round(old_record_c * 9 / 5 + 32, 1)
+    anchor_hint = _era_anchor_hint(
+        old_record_year,
+        seed_key=f"{city}-low-{old_record_year}-{date.today().isoformat()}",
+    )
     data = (
         f"Open-Meteo forecast low for {city}, {country} tonight is {temp_f}F ({new_temp_c}C). "
         f"If that verifies, it would break the previous record low for this calendar date: "
         f"{old_f}F ({old_record_c}C), set in {old_record_year}. "
         f"Today's date: {__import__('datetime').date.today().strftime('%B %d')}."
+        f"{anchor_hint}"
     )
     return generate_tweet(
         data,
