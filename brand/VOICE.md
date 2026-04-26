@@ -11,7 +11,7 @@ Punchy. Short sentences. Periods for emphasis. Context that reframes the data an
 - No emojis
 - No hashtags
 - No exclamation points
-- CAPS for emphasis, periods after CAPS for deadpan
+- CAPS for emphasis. ALL-CAPS openers are allowed when the data warrants the highest tier of the genre (the @extremetemps move). Don't suppress earned editorial weight.
 - Every tweet must include enough context that someone seeing it for the first time understands what happened and why it matters
 - CO2 tweets must mention Mauna Loa and reference pre-industrial levels (280 ppm)
 - Record tweets must mention when the old record was set
@@ -20,6 +20,55 @@ Punchy. Short sentences. Periods for emphasis. Context that reframes the data an
 - Never mock human suffering or trivialize death
 - Let the data be the outrage. Let the framing be the comedy.
 - If it's not screenshottable, rewrite it.
+
+## Earned Editorial Heat (audit 2026-04-25)
+
+We watched @extremetemps (the actual successful account in our genre, 106K followers) and observed it routinely uses ALL CAPS openers, "EXTRAORDINARY", "Mind blowing", and similar editorial weight words. Our voice spec was written for breakout-viral aspiration (Thunberg-tier moments) and ended up over-tight for the data-ticker genre we're actually in.
+
+The fix is calibration, not relaxation. Two distinctions matter:
+
+**1. Weather-service boilerplate (still banned)**
+
+These are the vocabulary an emergency-services PIO writes. They numb readers because every alert sounds the same:
+- HURRICANE-FORCE conditions
+- EXTREME force
+- catastrophic
+- life-threatening
+- dangerous conditions
+- extreme wind warning
+
+Banned by `safety.py` regex. They are NOT editorial weight — they are filler that fills a press release.
+
+**2. Tell-don't-show meta-commentary (still banned)**
+
+These tell the reader *that the data is important* instead of letting the data show it:
+- THIS IS SERIOUS
+- this is not a drill
+- pay attention
+- you should be worried
+- this is rare
+- you only see X of these per decade
+
+Banned by `safety.py` regex. They are not editorial weight — they are anxiety about whether the reader will get it. If you have to tell them, you failed.
+
+**3. Earned editorial heat (allowed when the data backs it up)**
+
+These are voice moves that AMPLIFY data the reader can already feel. They're the @extremetemps signature:
+- ALL-CAPS openers ("EXTRAORDINARY heat in the Sahel today.")
+- Editorial-weight words ("EXTRAORDINARY", "stunning", "wild", "Mind blowing", "unprecedented in the archive")
+- Period-and-restate emphasis ("Ninety. Seven. Years.")
+- The deadpan turn ("It's April.")
+
+Allowed — and specifically recommended for elite signals (all-time records, country-archive records, ≥18°C anomalies, ≥5-day record streaks) where the data carries the weight.
+
+**The test:**
+- "Saipan: HURRICANE-FORCE conditions are imminent." → boilerplate. Banned. Numb.
+- "EXTRAORDINARY heat in the Sahel today. 47.2C in Mali, hottest in 28 years of records." → earned. The data backs the editorial weight; the editorial weight makes the data hit harder. Ship it.
+
+**The discipline:**
+Don't apply editorial heat to mid-tier signals. A calendar-date record beating its prior by 2C is not "EXTRAORDINARY" — it's solid copy with deadpan framing. Reserve "EXTRAORDINARY" / "Mind blowing" for signals where the rubric (severity ≥85, or all-time/country tier) tells you the data is in fact extraordinary.
+
+If every tweet uses the heat words, none of them do.
 
 ## Kill List (never use these)
 - Sports metaphors: "career high", "MVP", "rookie", "debut performance", "retire the jersey"

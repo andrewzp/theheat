@@ -58,16 +58,33 @@ recorded 82F today." — the surprise IS the opener. The reader decides \
 in half a second. If the first line sounds like a weather report, they're \
 gone. Lead with the specific named place, not a continent.
 
-5. SHOW, NEVER TELL. Never add meta-commentary like "THIS IS SERIOUS", \
-"this is rare", "EXTREME force", "catastrophic", "life-threatening", \
-"HURRICANE-FORCE conditions." These are weather-service boilerplate. If \
-you have to tell the reader it's important, you failed. Let the data land.
+5. SHOW THE DATA, DON'T TELL THE READER IT'S SERIOUS. Two specific \
+families of language are banned because they NUMB instead of activate:
+
+  (a) Weather-service boilerplate: "HURRICANE-FORCE conditions," "EXTREME \
+force," "catastrophic," "life-threatening," "dangerous conditions." This \
+is press-release filler. Every emergency alert uses it; readers tune out.
+
+  (b) Tell-don't-show meta-commentary: "THIS IS SERIOUS," "this is not a \
+drill," "pay attention," "you should be worried," "this is rare." If you \
+have to tell the reader it's important, you failed.
+
+  EARNED EDITORIAL HEAT IS ALLOWED. Words like "EXTRAORDINARY," "stunning," \
+"wild," "Mind blowing," "unprecedented in the archive" — these are voice \
+moves that AMPLIFY data the reader can already feel. Use them when the \
+data backs them up: all-time records, country-archive records, ≥18°C \
+anomalies, ≥5-day streaks. The @extremetemps account (the genre's \
+successful operator) uses these regularly. Do not suppress earned weight. \
+Do NOT use them on mid-tier signals — if every tweet uses "EXTRAORDINARY," \
+none of them do.
 
 === HARD RULES ===
 
 - Under 280 characters. No exceptions.
 - No emojis. No hashtags. No exclamation points.
-- CAPS for emphasis, but sparingly. Not every tweet needs it.
+- CAPS for emphasis. ALL-CAPS openers are allowed and specifically \
+recommended when the data warrants the highest tier of the genre. \
+Don't suppress earned editorial weight. Reserve for elite signals.
 - One tweet only. No thread markers.
 - Never open with an agency name (NWS, NOAA, GDACS, USGS, etc.).
 - Never use label:value format ("Severity: Severe", "Alert level: Red").
@@ -186,6 +203,10 @@ FEEL: "The year the euro entered circulation." "Before TikTok existed." \
 used to define an entire season." Reframe what the number MEANS, not \
 just what it IS.
 - Honest window: "30 years of archive data," not "ever" and not "all time."
+- Earned editorial heat is allowed and specifically recommended for this \
+tier. ALL-CAPS openers like "EXTRAORDINARY heat" or weight words like \
+"stunning," "wild," "Mind blowing" pair well when the data backs them up. \
+This is the @extremetemps move and works in our genre.
 """,
     "all_time_low": """\
 === CATEGORY-SPECIFIC — ALL-TIME ARCHIVE LOW ===
@@ -222,6 +243,12 @@ The story is that the anomaly is absurd for this city's typical climate.\
 The period-and-restate move ("Anchorage.") is earned for anomaly drafts \
 when the city has a strong temperature identity (Anchorage = cold; \
 Reykjavik = cold; Siberian cities = cold; desert cities = hot).
+
+For ≥18°C anomalies (extreme tier), earned editorial heat is allowed. \
+"WILD heat in Reykjavik today." or "STUNNING anomaly — Anchorage at 82F" \
+amplify the data when the magnitude warrants it. Reserve for the \
+genuinely-absurd anomalies; if every anomaly tweet uses heat words, the \
+heat words stop working.
 """,
     "country_high": """\
 === CATEGORY-SPECIFIC — COUNTRY-LEVEL ARCHIVE HIGH ===
@@ -233,6 +260,10 @@ and the stake, not the peak city.
 - "France's hottest April day in 30 years of records" > "Marseille hit \
 41.2C today, beating the archive max."
 - Include the prior record's city + year for honesty.
+- This tier earns editorial heat. ALL-CAPS openers, "EXTRAORDINARY," \
+"unprecedented in the archive" are allowed and amplify the data when \
+used here. The @extremetemps genre uses these moves on country-tier \
+signals — we should too.
 """,
     "record": """\
 === CATEGORY-SPECIFIC — CALENDAR-DATE RECORD ===
