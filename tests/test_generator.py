@@ -9,6 +9,8 @@ from src.voice.generator import (
     generate_record_low_tweet,
     generate_fire_tweet,
     generate_co2_milestone_tweet,
+    generate_simultaneous_records_tweet,
+    generate_simultaneous_records_roll_call_tweet,
     _detect_stock_formula,
     _prompt_for_category,
     SYSTEM_PROMPT,
@@ -507,3 +509,159 @@ class TestSynthesisGenerator:
             # Period-separated cadence, no emojis, no hashtags.
             assert "#" not in tweet
             assert "🔥" not in tweet
+
+
+class TestGenerateSimultaneousRecordsRollCallTweet:
+    """Roll-call generator (one option among formats — see
+    src/editorial/simultaneous_format.py for routing)."""
+
+    def _stations(self):
+        return [
+            {
+                "city": "Janakpur", "country": "Nepal",
+                "temp_c": 37.5, "kind": "high",
+                "old_record_c": 35.5, "old_record_year": 2002,
+                "margin_c": 2.0, "elevation_m": 80,
+            },
+            {
+                "city": "Dang", "country": "Nepal",
+                "temp_c": 36.1, "kind": "high",
+                "old_record_c": 34.4, "old_record_year": 2014,
+                "margin_c": 1.7, "elevation_m": 663,
+            },
+            {
+                "city": "Dhankuta", "country": "Nepal",
+                "temp_c": 29.2, "kind": "high",
+                "old_record_c": 27.0, "old_record_year": 2008,
+                "margin_c": 2.2, "elevation_m": 1192,
+            },
+        ]
+
+    def test_empty_stations_returns_none(self):
+        result = generate_simultaneous_records_roll_call_tweet(stations=[])
+        assert result is None
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
+    def test_prompt_includes_per_station_temps(self):
+        captured = {}
+        mock_response = MagicMock()
+        mock_response.text = "Three stations across Nepal broke records today. Janakpur 99.5F. Dang 97.0F at 663m. Dhankuta 84.6F at 1192m. All on the same day."
+        mock_client = MagicMock()
+        def _capture(*args, **kwargs):
+            captured["contents"] = kwargs.get("contents") or (args[1] if len(args) > 1 else None)
+            return mock_response
+        mock_client.models.generate_content.side_effect = _capture
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
+            with patch("src.voice.generator.run_safety_pipeline", return_value=(True, None)):
+                result = generate_simultaneous_records_roll_call_tweet(stations=self._stations())
+        assert result is not None
+        prompt = str(captured.get("contents", ""))
+        # Per-station rows make it into the prompt
+        assert "Janakpur" in prompt
+        assert "Dhankuta" in prompt
+        # Elevations included on the rows
+        assert "1192m" in prompt
+        # Sorted hottest first — Janakpur (37.5C) appears before Dhankuta (29.2C) in prompt
+        assert prompt.index("Janakpur") < prompt.index("Dhankuta")
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
+    def test_prompt_surfaces_elevation_spread_when_meaningful(self):
+        captured = {}
+        mock_response = MagicMock()
+        mock_response.text = "Three Nepal stations broke their records. Janakpur to Dhankuta — sea level to the foothills."
+        mock_client = MagicMock()
+        def _capture(*args, **kwargs):
+            captured["contents"] = kwargs.get("contents") or (args[1] if len(args) > 1 else None)
+            return mock_response
+        mock_client.models.generate_content.side_effect = _capture
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
+            with patch("src.voice.generator.run_safety_pipeline", return_value=(True, None)):
+                generate_simultaneous_records_roll_call_tweet(stations=self._stations())
+        prompt = str(captured.get("contents", ""))
+        # 80m to 1192m = 1112m spread → above the 800m threshold; note rendered.
+        assert "Elevation spread" in prompt
+        assert "80m" in prompt
+        assert "1192m" in prompt
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
+    def test_prompt_omits_spread_note_when_elevation_flat(self):
+        captured = {}
+        flat = [
+            {**s, "elevation_m": e}
+            for s, e in zip(self._stations(), [80, 100, 120])
+        ]
+        mock_response = MagicMock()
+        mock_response.text = "Three Nepal stations broke records today. Janakpur 99.5F. Dang 97.0F. Dhankuta 84.6F."
+        mock_client = MagicMock()
+        def _capture(*args, **kwargs):
+            captured["contents"] = kwargs.get("contents") or (args[1] if len(args) > 1 else None)
+            return mock_response
+        mock_client.models.generate_content.side_effect = _capture
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
+            with patch("src.voice.generator.run_safety_pipeline", return_value=(True, None)):
+                generate_simultaneous_records_roll_call_tweet(stations=flat)
+        prompt = str(captured.get("contents", ""))
+        assert "Elevation spread" not in prompt
+
+    def test_category_prompt_addendum_exists(self):
+        # Ensures the per-category prompt is wired so this generator
+        # gets the roll-call voice rules instead of the universal one.
+        assert "simultaneous_records_roll_call" in _CATEGORY_PROMPTS
+        addendum = _CATEGORY_PROMPTS["simultaneous_records_roll_call"]
+        assert "ROLL-CALL" in addendum or "roll-call" in addendum
+
+    @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
+    def test_altitude_endpoints_pinned_into_sample(self):
+        # If the highest-elevation station is also one of the cooler
+        # ones, the hottest-only sample would drop it and leave the
+        # spread note unanchored. Endpoint pinning fixes that.
+        # Build 8 stations: 6 hot lowland + 2 cool highland. Without
+        # pinning, the cool highland endpoint never makes the top-6.
+        stations = [
+            {
+                "city": f"Lowland{i}", "country": "Country",
+                "temp_c": 42.0 - i * 0.1, "kind": "high",
+                "old_record_c": 40.0, "old_record_year": 2010,
+                "margin_c": 2.0, "elevation_m": 50 + i,
+            }
+            for i in range(6)
+        ]
+        stations.append({
+            "city": "HighlandPeak", "country": "Country",
+            "temp_c": 18.0, "kind": "high",
+            "old_record_c": 16.0, "old_record_year": 2008,
+            "margin_c": 2.0, "elevation_m": 2400,
+        })
+        stations.append({
+            "city": "MidStation", "country": "Country",
+            "temp_c": 22.0, "kind": "high",
+            "old_record_c": 20.0, "old_record_year": 2012,
+            "margin_c": 2.0, "elevation_m": 1100,
+        })
+
+        captured = {}
+        mock_response = MagicMock()
+        mock_response.text = "Eight stations in Country broke records. From sea level to 2400m. All on the same day."
+        mock_client = MagicMock()
+        def _capture(*args, **kwargs):
+            captured["contents"] = kwargs.get("contents") or (args[1] if len(args) > 1 else None)
+            return mock_response
+        mock_client.models.generate_content.side_effect = _capture
+        mock_genai_mod = MagicMock()
+        mock_genai_mod.Client.return_value = mock_client
+        with patch.dict("sys.modules", {"google.genai": mock_genai_mod, "google": MagicMock(genai=mock_genai_mod)}):
+            with patch("src.voice.generator.run_safety_pipeline", return_value=(True, None)):
+                generate_simultaneous_records_roll_call_tweet(stations=stations)
+        prompt = str(captured.get("contents", ""))
+        # The high-elevation endpoint MUST appear in the prompt rows so
+        # the model has the station to anchor the spread note.
+        assert "HighlandPeak" in prompt
+        assert "2400m" in prompt
+        # And the lowest-elevation endpoint also makes it (Lowland0 = 50m).
+        assert "Lowland0" in prompt or "50m" in prompt

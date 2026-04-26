@@ -13,6 +13,140 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-25 — Voice engine v2 first verdict (7 drafts)
+
+**Context:** First alerts-cycle output after voice engine v2 (commit
+`827a891`), `gemini-flash-latest` (commit `b33d4a8`), 70+ region geocoder
+(commit `22cbc8e`), and 250 MW FRP floor (commit `023c3ed`) all shipped
+2026-04-24. The Apr 24 corpus is the baseline (7/35 = 20% shippable).
+
+**Grade distribution:** 3 A-, 3 B+/B, 1 reject (formula-opener dup).
+**Shippable rate: 6/7 = 86%.** v2 worked.
+
+**Headline finding:** the per-category prompt addenda are doing the
+work. Fire drafts now lead with specific named region + seasonal
+framing instead of MW math. Records lean reliably into era anchors.
+The one rut that returned (#7) is the "A fire burning in [LOCATION]
+right now is radiating..." opener — should be added to the v2 banned
+openers regex.
+
+### A/B grade — shippable (6)
+
+#### #1 New South Wales fire — signal 68 / copy ? — **A-**
+
+> New South Wales. A 327 MW fire today. The bushfire season here used
+> to know when to quit. It's April.
+
+Past-tense personification ("used to know when to quit") echoes the
+strongest Apr 24 move (Chicago anomaly: "used to define an entire
+season"). Lead with named region. No power-plant comparison, no
+home-count, no "no name yet". Best fire draft in the corpus history.
+This is the v2 result we wanted.
+
+#### #2 Kampung Baru Subang — signal 76 / copy ? — **B+**
+
+> Kampung Baru Subang, Malaysia forecast to hit 94.1F today. The
+> calendar date record from 1998 was 89.6F. Back then, Windows 98 was
+> new.
+
+Era anchor matches the record year (1998 → Windows 98). Slightly on
+the nose but the recognition is universal.
+
+#### #3 Navi Mumbai — signal 72 / copy ? — **A-**
+
+> Navi Mumbai is on pace for 106.7F today. That's 4.5F hotter than
+> its record for this date, set just last year in 2024.
+
+Accelerating-warming story — same family as Ipoh #24 from Apr 24
+("Two hottest Aprils back to back"). 106.7F is the kind of absolute
+number that does the work. "Set just last year in 2024" is the move.
+
+#### #4 Lucknow — signal 73 / copy ? — **B+**
+
+> Lucknow is forecast to hit 110.8F today. That beats its calendar
+> record from 1999. Before Y2K was a real worry.
+
+Y2K anchor is reliable per Apr 24 #32 Kathmandu. "Before Y2K was a
+real worry" twist is fresh. 110.8F carries it.
+
+#### #5 Manchester — signal 73 / copy ? — **B**
+
+> Manchester forecast: 68.7F today. That beats the previous record for
+> this date by nearly 3 degrees. The old mark of 66.0F was set in
+> 2004, the year before YouTube.
+
+"The year before YouTube" is sharp. Colon-restate matches Apr 24 #24
+Ipoh's voice move. The risk: 68.7F sounds modest globally. UK readers
+will get it; the rest of Twitter scrolls. "Nearly 3 degrees" is an
+approximation when an exact number was already given (2.7F). Could
+sharpen.
+
+#### #6 Mali Western Sahel — signal 69 / copy ? — **A-**
+
+> 404 MW of fire in Mali's Western Sahel. The land has been parched
+> for months, and the HOT season has barely started. It's April.
+
+ALL CAPS "HOT season" is voice engine v2 visibly unlocking — the
+@extremetemps observation argued the genre permits earned editorial
+heat. This earns it: drought + early-season + size. Lead with the
+number. Specific named region. No formula.
+
+### Rejected — voice failures (1)
+
+#### #7 Mali Western Sahel (dup) — **C+**
+
+> A fire burning in Mali right now is radiating 404 MW of heat. The
+> last rain fell there in October. That was 6 months ago.
+
+Same signal as #6, generated 46 seconds later. The "last rain fell
+there in October" beat is genuinely good. But the opener — "A fire
+burning in [LOCATION] right now is radiating..." — is the exact
+template that produced 12 D/F drafts on Apr 24. Voice engine v2's
+universal prompt should ban this opener pattern explicitly.
+
+Operationally: same-event dedup should have caught this. Both drafts
+came from the same alerts cycle (timestamps 75ms apart in the run
+log), suggesting the dedup window doesn't cover within-cycle. Worth
+checking.
+
+### Patterns confirmed working in this batch
+
+1. **Specific named region** — 6/7 drafts lead with city or named
+   region. Geocoder upgrade visible in fire drafts.
+2. **Era anchors landing reliably** — Windows 98, Y2K, YouTube,
+   "set just last year" all do work without feeling forced.
+3. **Past-tense framing of normal as past-tense** — "used to know
+   when to quit" (#1), echoing Apr 24 "used to define." Becoming a
+   named voice move.
+4. **Earned editorial heat** — ALL CAPS "HOT" in #6. v2 explicitly
+   intended.
+5. **No power-plant comparisons. No home-count formulas. No "no name
+   yet."** All three banned formulas absent from this batch.
+
+### Voice rut still open
+
+1. **"A [signal] [in LOCATION] right now is radiating..." opener** —
+   #7 reproduced this. v2 universal prompt + parse-time rejector
+   should explicitly catch the `^A (fire|wildfire|storm|...) [verb-ing]
+   (in|near) .* right now is (radiating|releasing|generating|putting
+   out)` shape.
+
+### Followups
+
+- Add the `A [X] in [Y] right now is radiating...` opener to the
+  voice engine v2 stock-formula rejector.
+- Investigate within-cycle dedup that allowed #6 and #7 (same Mali
+  fire, 46 seconds apart) to both reach pending.
+
+### Numbers
+
+- Pending drafts: 0 → 7
+- Shippable rate: 86% (vs 20% on Apr 24)
+- Mean grade: B+ (vs C+ on Apr 24)
+- Stock-formula appearances: 1/7 (vs ~25/35 on Apr 24)
+
+---
+
 ## 2026-04-24 — Fire template fatigue era (35 drafts)
 
 **Context:** First draft review after the FIRMS letter-confidence

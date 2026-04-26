@@ -302,6 +302,26 @@ heat record. All in the last 10 days." (Period-separated cadence.)
 co-occurrence. Compound framing.
 - Honest time range: "in the last 14 days," not "recently."
 """,
+    "simultaneous_records_roll_call": """\
+=== CATEGORY-SPECIFIC — MULTI-STATION ROLL-CALL ===
+
+The story: a cluster of stations all broke records the same day in \
+the same country, AND the cluster spans low and high altitudes. The \
+per-station list IS the story — readers process density faster than \
+a single number when the density is the point.
+
+- Open with the count and the country: "Six stations across Nepal \
+broke their April records today." Or lead with the elevation hook: \
+"Records from sea level to the Himalayan foothills today."
+- Then list 3-5 stations with temperatures. Slash- or period-separated.
+"Janakpur 26.8C / Dang 24.1C, 663m / Dhankuta 20.4C, 1192m"
+- Surface elevation only when stations span low and high altitudes — \
+that's the multi-station story. Otherwise elevation is noise.
+- One closing line is fine, optional. "All on the same day."
+- Do NOT add framing fluff ("This is unprecedented"). The list IS the \
+framing.
+- Stay under 280 chars. Drop stations before you drop temperatures.
+""",
 }
 
 
@@ -785,6 +805,111 @@ def generate_simultaneous_records_tweet(
     return generate_tweet(
         data,
         category="simultaneous_records",
+        return_bundle=return_bundle,
+        fallback_fn=None,
+        fallback_args={},
+    )
+
+
+def generate_simultaneous_records_roll_call_tweet(
+    stations: list[dict],
+    *,
+    return_bundle: bool = False,
+) -> str | CandidateBundle | None:
+    """Roll-call format for same-country, multi-altitude record clusters.
+
+    One option among formats — flat summary stays the default. Routing
+    decision lives in src/editorial/simultaneous_format.py. This generator
+    only fires when the routing layer hands it a qualifying subset.
+
+    Each station dict carries: city, country, temp_c, kind, margin_c,
+    old_record_c, old_record_year, elevation_m (int | None).
+    """
+    if not stations:
+        return None
+
+    SAMPLE_CAP = 6
+
+    sorted_by_heat = sorted(
+        stations,
+        key=lambda s: -float(s.get("temp_c", 0.0)),
+    )
+
+    # Force the min- and max-elevation stations into the sample even if
+    # they aren't the hottest. The whole point of the elevation-spread
+    # gate is the altitude story; if the high-altitude endpoint sits at
+    # rank 7 by temperature, dropping it leaves the model with a spread
+    # note but no station to anchor it. Fill remaining slots with the
+    # hottest stations not already pinned.
+    pinned: list[dict] = []
+    elev_known = [s for s in stations if s.get("elevation_m") is not None]
+    if len(elev_known) >= 2:
+        lowest = min(elev_known, key=lambda s: int(s["elevation_m"]))
+        highest = max(elev_known, key=lambda s: int(s["elevation_m"]))
+        # `id()` would be safe inside one call but keying by city+country
+        # tuple is more legible and matches how stations are de-duplicated
+        # everywhere else in the pipeline.
+        seen_keys: set[tuple[str, str]] = set()
+        for st in (lowest, highest):
+            key = (st.get("city", ""), st.get("country", ""))
+            if key not in seen_keys:
+                pinned.append(st)
+                seen_keys.add(key)
+    else:
+        seen_keys = set()
+
+    sample: list[dict] = list(pinned)
+    for st in sorted_by_heat:
+        if len(sample) >= SAMPLE_CAP:
+            break
+        key = (st.get("city", ""), st.get("country", ""))
+        if key in seen_keys:
+            continue
+        sample.append(st)
+        seen_keys.add(key)
+
+    # Present rows hottest-first regardless of pinning order — the
+    # ordering is editorial, not analytical.
+    sample.sort(key=lambda s: -float(s.get("temp_c", 0.0)))
+
+    rows: list[str] = []
+    for st in sample:
+        c = round(float(st["temp_c"]), 1)
+        f = round(c * 9 / 5 + 32, 1)
+        elev = st.get("elevation_m")
+        if elev is not None:
+            rows.append(f"{st['city']} {f}F ({c}C), {int(elev)}m")
+        else:
+            rows.append(f"{st['city']} {f}F ({c}C)")
+
+    countries = sorted({st.get("country", "") for st in stations if st.get("country")})
+    country_phrase = countries[0] if len(countries) == 1 else f"{len(countries)} countries"
+
+    elevations = [
+        int(st["elevation_m"])
+        for st in stations
+        if st.get("elevation_m") is not None
+    ]
+    elev_note = ""
+    if len(elevations) >= 2:
+        lo, hi = min(elevations), max(elevations)
+        spread = hi - lo
+        if spread >= 800:
+            elev_note = f" Elevation spread within the cluster: {lo}m to {hi}m."
+
+    data = (
+        f"On this date, {len(stations)} stations in {country_phrase} broke their "
+        f"daily calendar-date records. Per-station readings (sorted hottest first): "
+        f"{'; '.join(rows)}.{elev_note} "
+        f"Format the tweet as a roll-call: lead with the count and the country (or "
+        f"an elevation hook when stations span low and high altitudes), then list "
+        f"3-5 stations with temperatures. Use slashes or periods between rows. "
+        f"Surface elevations only when the cluster genuinely spans altitudes. "
+        f"Stay under 280 characters."
+    )
+    return generate_tweet(
+        data,
+        category="simultaneous_records_roll_call",
         return_bundle=return_bundle,
         fallback_fn=None,
         fallback_args={},

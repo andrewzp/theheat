@@ -19,6 +19,7 @@ from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial._regions import cities_to_state_map, lat_lon_to_state
+from src.editorial.simultaneous_format import select_roll_call_subset
 from src.editorial.scoring import (
     EditorialScore,
     score_all_time_record,
@@ -511,13 +512,34 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             status="failed", error=str(e)
         )
 
+    # (city, country) → elevation lookup for downstream prompt enrichment
+    # (notably the simultaneous_records roll-call format, which surfaces
+    # stations spanning low and high altitudes). Keyed by the pair because
+    # cities.csv has duplicate city names across countries (Hyderabad in
+    # India and Pakistan, Barcelona in Spain and Venezuela, etc.) — keying
+    # by city alone silently inherits the wrong country's elevation. Rows
+    # where elevation_m is empty are silently skipped.
+    city_elevations: dict[tuple[str, str], int] = {}
+    for c in cities:
+        raw = (c.get("elevation_m") or "").strip()
+        if not raw:
+            continue
+        try:
+            city_elevations[(c["city"], c["country"])] = int(float(raw))
+        except (ValueError, TypeError):
+            continue
+
     # 1. Extreme climate signals via Open-Meteo (unified fetch).
     # One archive call per city yields: all-time, monthly, calendar-date, anomaly.
     # Replaces separate records + record_lows sections.
     print("[alerts] Checking extreme climate signals...")
     signals_start = time.perf_counter()
     signal_counts = {"all_time": 0, "monthly": 0, "anomaly": 0, "calendar": 0, "streak": 0}
-    simultaneous_record_cities: list[tuple[str, str]] = []  # (city, country) tuples
+    # Per-station data for the simultaneous_records signal. Richer than
+    # just (city, country) so the roll-call format can surface temps,
+    # margins, and elevations. See src/editorial/simultaneous_format.py
+    # for the routing decision (flat summary vs. multi-station roll-call).
+    simultaneous_record_stations: list[dict] = []
     try:
         bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
         source_promoted = 0
@@ -668,8 +690,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             )
                         strongest_generator = _gen_c
                         signal_counts["calendar"] += 1
-                        # Track for simultaneous records detection
-                        simultaneous_record_cities.append((ev.city, ev.country))
+                        # Track for simultaneous records detection — keep the
+                        # full per-station shape so the roll-call format has
+                        # what it needs without re-fetching.
+                        simultaneous_record_stations.append({
+                            "city": ev.city,
+                            "country": ev.country,
+                            "temp_c": ev.new_temp_c,
+                            "kind": "high",
+                            "old_record_c": ev.old_record_c,
+                            "old_record_year": ev.old_record_year,
+                            "margin_c": round(ev.new_temp_c - ev.old_record_c, 1),
+                            "elevation_m": city_elevations.get((ev.city, ev.country)),
+                        })
 
             if strongest_signal and strongest_generator:
                 source_promoted += 1
@@ -779,30 +812,69 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                         drafted += 1
                                         signal_counts["streak"] += 1
 
-        # Simultaneous records detection — fire one summary signal if many cities broke records
-        if len(simultaneous_record_cities) >= 5:
+        # Simultaneous records detection — fire one summary signal if many cities broke records.
+        # Two formats available; flat summary is the default. Roll-call (per-station list with
+        # elevations) fires only when the cluster shape qualifies — same country with a
+        # meaningful elevation spread. See src/editorial/simultaneous_format.py.
+        if len(simultaneous_record_stations) >= 5:
             today_iso = date.today().isoformat()
             sim_event_id = f"simultaneous_records_{today_iso}"
             if not state.is_duplicate(bot_state, sim_event_id):
-                city_names = [c for c, _ in simultaneous_record_cities]
-                countries_list = [co for _, co in simultaneous_record_cities]
+                city_names = [s["city"] for s in simultaneous_record_stations]
                 sim_score = score_simultaneous_records(len(city_names), city_names)
                 if _should_draft(sim_score, sim_event_id):
-                    sim_gen = generator.generate_simultaneous_records_tweet(
-                        city_names=city_names,
-                        countries=countries_list,
-                        return_bundle=True,
-                    )
-                    sim_ctx = _review_context(
-                        source="open_meteo_extreme_signals",
-                        source_key="simultaneous_records",
-                        headline=f"{len(city_names)} cities broke records on same day",
-                        current_run=current_run,
-                        facts=[
-                            _fact("City count", len(city_names)),
-                            _fact("Sample cities", ", ".join(city_names[:5])),
-                        ],
-                    )
+                    roll_call_subset = select_roll_call_subset(simultaneous_record_stations)
+                    if roll_call_subset:
+                        sim_gen = generator.generate_simultaneous_records_roll_call_tweet(
+                            stations=roll_call_subset,
+                            return_bundle=True,
+                        )
+                        rc_country = roll_call_subset[0].get("country", "")
+                        rc_elevs = [
+                            s["elevation_m"] for s in roll_call_subset
+                            if s.get("elevation_m") is not None
+                        ]
+                        rc_facts = [
+                            _fact("Format", "roll-call"),
+                            _fact("Country", rc_country),
+                            _fact("Stations in subset", len(roll_call_subset)),
+                            _fact("Total simultaneous", len(simultaneous_record_stations)),
+                        ]
+                        if rc_elevs:
+                            rc_facts.append(
+                                _fact(
+                                    "Elevation range",
+                                    f"{min(rc_elevs)}m to {max(rc_elevs)}m",
+                                )
+                            )
+                        sim_ctx = _review_context(
+                            source="open_meteo_extreme_signals",
+                            source_key="simultaneous_records",
+                            headline=(
+                                f"{len(roll_call_subset)} stations across {rc_country} "
+                                f"broke records (multi-altitude)"
+                            ),
+                            current_run=current_run,
+                            facts=rc_facts,
+                        )
+                    else:
+                        countries_list = [s["country"] for s in simultaneous_record_stations]
+                        sim_gen = generator.generate_simultaneous_records_tweet(
+                            city_names=city_names,
+                            countries=countries_list,
+                            return_bundle=True,
+                        )
+                        sim_ctx = _review_context(
+                            source="open_meteo_extreme_signals",
+                            source_key="simultaneous_records",
+                            headline=f"{len(city_names)} cities broke records on same day",
+                            current_run=current_run,
+                            facts=[
+                                _fact("Format", "flat summary"),
+                                _fact("City count", len(city_names)),
+                                _fact("Sample cities", ", ".join(city_names[:5])),
+                            ],
+                        )
                     if _save_generated_draft(
                         sim_gen, bot_state, "simultaneous_records",
                         sim_event_id, sim_score, review_context=sim_ctx,
