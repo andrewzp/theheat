@@ -4,7 +4,7 @@
 **Status:** Live on GitHub Actions. Four detection lanes merged (Ocean SST, GRACE ice mass, Fire Footprint/NIFC, Cross-Source Synthesis). Post-Codex-review bugs fixed. Feed now includes marine heatwave streaks, monthly ice-mass records, named US fire complexes crossing acreage tiers, and compound Fire×Drought×Heat synthesis signals.
 **Latest commit:** `0be88fc` on `main`
 **Tests:** 501 passing
-**Cost:** ~$60–90/month (Anthropic API for Sonnet evaluator). Everything else free tier.
+**Cost:** ~$25–45/month for Anthropic API (Sonnet evaluator). Verified against console.anthropic.com 2026-04-24 — earlier "$60-90" estimate in this doc was inherited and never recalibrated against real usage. Everything else free tier (Gemini Flash, all data sources).
 
 ---
 
