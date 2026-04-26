@@ -12,6 +12,13 @@ from src.voice.safety import run_safety_pipeline
 from src.voice import templates
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Model ID for the candidate generator. Made env-configurable on
+# 2026-04-24 so we can A/B model versions without redeploys. Default is
+# Gemini 3.1 Flash-Lite Preview (verified API ID from Google AI Studio
+# 2026-04-24); override via GEMINI_MODEL secret for Flash, Pro, or
+# any future variant. If the configured model fails at runtime, the
+# generator falls back to template output as before.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
 
 SYSTEM_PROMPT = """\
 You are @theheat, a climate data account that goes viral. Your tweets make \
@@ -465,7 +472,7 @@ def generate_tweet_bundle(
                     f"Data:\n{data_description}"
                 )
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model=GEMINI_MODEL,
                     contents=prompt,
                 )
                 parsed = _parse_candidate_response(response.text)

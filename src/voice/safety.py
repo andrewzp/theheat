@@ -6,6 +6,13 @@ import os
 import re
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+# Safety LLM model ID. Same env-driven config as the generator — can be
+# pointed at a different variant if the safety check needs more or less
+# capacity than the generator. Default matches the generator default.
+GEMINI_SAFETY_MODEL = os.environ.get(
+    "GEMINI_SAFETY_MODEL",
+    os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite-preview"),
+)
 
 MONTHS = (
     "january", "february", "march", "april", "may", "june",
@@ -139,7 +146,7 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
         )
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=GEMINI_SAFETY_MODEL,
             contents=prompt,
         )
         answer = response.text.strip().upper()

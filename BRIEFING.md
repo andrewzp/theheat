@@ -412,7 +412,9 @@ responses>=0.25
 | Secret | Purpose |
 |--------|---------|
 | `TWITTER_API_KEY`, `TWITTER_API_SECRET`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_SECRET` | X API |
-| `GEMINI_API_KEY` | Gemini 2.5 Flash |
+| `GEMINI_API_KEY` | Google AI Studio API key for Gemini |
+| `GEMINI_MODEL` | (Optional) Model ID for the candidate generator. Default `gemini-3.1-flash-lite-preview` (set 2026-04-24). Override with `gemini-3.1-flash-preview`, `gemini-3.1-pro-preview`, or any future ID without redeploying. |
+| `GEMINI_SAFETY_MODEL` | (Optional) Separate model ID for the LLM safety layer. Defaults to whatever `GEMINI_MODEL` is. |
 | `ANTHROPIC_API_KEY` | Claude Sonnet 4.6 evaluator |
 | `GIST_ID` | State storage (`06c02c97ffc0d11458687f1ed998d9e5`) |
 | `GH_GIST_TOKEN` | PAT with `gist` scope for state writes |
