@@ -1,10 +1,10 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 22, 2026
-**Status:** Live on GitHub Actions. Four detection lanes merged (Ocean SST, GRACE ice mass, Fire Footprint/NIFC, Cross-Source Synthesis). Post-Codex-review bugs fixed. Feed now includes marine heatwave streaks, monthly ice-mass records, named US fire complexes crossing acreage tiers, and compound Fire×Drought×Heat synthesis signals.
-**Latest commit:** `0be88fc` on `main`
-**Tests:** 501 passing
-**Cost:** ~$25–45/month for Anthropic API (Sonnet evaluator). Verified against console.anthropic.com 2026-04-24 — earlier "$60-90" estimate in this doc was inherited and never recalibrated against real usage. Everything else free tier (Gemini Flash, all data sources).
+**Last updated:** April 24, 2026
+**Status:** Live on GitHub Actions. Voice engine v2 + fire geocoder upgrade + FRP floor raise + Gemini model upgrade all shipped 2026-04-24. The Apr 24 session's draft corpus (`docs/DRAFT_CORPUS.md`) is the eval baseline going forward.
+**Latest commit:** `1573d15` on `main`
+**Tests:** 522 passing
+**Cost:** ~$25–45/month for Anthropic API (Sonnet 4.6 evaluator). Verified against console.anthropic.com 2026-04-24. Set `EVALUATOR_ENABLED=false` to drop to ~$0/mo if cost ever becomes the constraint. Everything else free tier (Gemini Flash via `gemini-flash-latest` alias, all data sources).
 
 ---
 
@@ -173,7 +173,7 @@ theheat/
 │   └── VOICE_PATTERNS.md             Voice pattern reference (labeled honestly: not proven-viral)
 │
 ├── data/
-│   ├── cities.csv                    613 cities across 179 countries
+│   ├── cities.csv                    613 cities across 179 countries (city, country, lat, lon, elevation_m)
 │   └── normals.csv                   Climatological normals
 │
 ├── BRIEFING.md                       This file — session entry point
@@ -440,8 +440,8 @@ responses>=0.25
 2. **Dashboard deployment** — may be behind latest main.
 3. **Archive span** — Open-Meteo only goes back ~30 years reliably. "All-time" framing must say "in 30 years of records." Enforced in the generator system prompt.
 4. **SQLite store** — lane-added keys now round-trip correctly via the metadata table (fixed 2026-04-22). Still not the default prod backend (Gist is), but no longer silently lossy if enabled.
-5. **Fire reverse-geocoder is continent-only** — `firms.py::reverse_geocode_simple` produces "somewhere in Asia" / "somewhere in Australia" labels, which generates weak fire drafts. First-class fix noted in Growth Levers.
-6. **Stray worktree artifact** — `theheat/theheat/` duplicate subdir from a Conductor worktree; untracked, safe to `rm -rf` when convenient. Causes `ImportPathMismatchError` on repo-root pytest.
+5. **Stray worktree artifact** — `theheat/theheat/` duplicate subdir from a Conductor worktree; untracked, safe to `rm -rf` when convenient. Causes `ImportPathMismatchError` on repo-root pytest.
+6. **13 cities missing elevations** — bulk fetch on 2026-04-24 hit Open-Meteo elevation API rate limit on the last batch. Easy retry for whoever picks this up next.
 
 ### Growth levers (deferred by session owner)
 1. **Visual cards** — research says images 28× engagement. User rejected: "not if the facts are lame." Revisit once fact quality is proven.

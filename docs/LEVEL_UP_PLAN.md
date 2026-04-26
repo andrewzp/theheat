@@ -1,5 +1,25 @@
 # Level-Up Plan — April 24, 2026
 
+> **Annotated 2026-04-24:** the original Tier 1 ranking below put
+> "post-publish analytics loop" first. **That was wrong** — user
+> correctly pointed out we have ~1 posted tweet ever, so analytics
+> would be measuring noise. Quality-side work IS the Tier 1. Read the
+> tiers below with this correction in mind: era-anchor database and
+> historical-corpus regenerate-and-compare are the actual Tier 1.
+> Analytics is Tier 2 once posting volume is non-trivial.
+>
+> Also: cost figures throughout this doc were written against the stale
+> "$60-90/mo" BRIEFING figure. Real spend is $25-45/mo on Sonnet 4.6
+> evaluator (verified 2026-04-24). All "Opus would be too expensive"
+> framing is wrong — Opus 4.7 evaluator at our volume would be ~$50/mo.
+> User chose to keep Sonnet 4.6 anyway ("do it right for now").
+>
+> Also: @extremetemps observation from session — our voice spec is
+> over-engineered for breakout-viral aspiration when the actual
+> successful account in our genre uses ALL CAPS openers, multi-station
+> roll-calls, and editorial heat. Voice engine v2 partly addresses;
+> deeper rethink may be warranted.
+
 Written after: four-lane merge, Codex cleanup, fire geocoder upgrade,
 FRP floor raise, and voice engine v2 (per-category prompts + stock-
 formula rejector).
