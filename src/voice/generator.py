@@ -405,6 +405,18 @@ _STOCK_FORMULA_PATTERNS: tuple[tuple[str, str], ...] = (
         r"\b(?:somewhere in (?:asia|africa|europe|south america|north america|the americas|oceania))\b|\blocation (?:is\s+)?(?:still\s+)?unknown\b",
         "continent-only location / location unknown admission",
     ),
+    # Throat-clearing opener: "A [fire] burning/raging in [LOCATION]
+    # right now is radiating/releasing/putting out N MW..." The 2026-04-24
+    # corpus had 12 D/F drafts with this exact shape; the 2026-04-25 corpus
+    # caught it returning in draft #7 (Mali dup) despite voice engine v2.
+    # Issue: it buries the number behind throat-clearing prose. Lead with
+    # the number or the named region instead.
+    (
+        r"^A\s+(?:wildfire|fire|storm|tornado|hurricane|cyclone|blizzard)\b"
+        r"(?:[^.!?\n]*?)\s+is\s+(?:currently\s+|now\s+)?"
+        r"(?:radiating|releasing|generating|putting\s+out|emitting|producing)\b",
+        "throat-clearing 'A [event] in [location] is radiating...' opener",
+    ),
 )
 
 

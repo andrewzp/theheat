@@ -190,6 +190,36 @@ class TestDetectStockFormula:
         for t in bad:
             assert _detect_stock_formula(t) is not None
 
+    def test_throat_clearing_opener_rejected(self):
+        """The 'A [fire] burning in [LOCATION] right now is radiating...'
+        opener — 12 D/F drafts in 2026-04-24 corpus, returned as draft
+        #7 in 2026-04-25 corpus despite voice engine v2's prompt addenda.
+        Lead with the number or named region; this opener buries both."""
+        bad = [
+            "A fire burning in Mali right now is radiating 404 MW of heat.",
+            "A wildfire burning in Asia right now is radiating 220 MW of energy.",
+            "A wildfire burning in Australia right now is putting out 251 MW.",
+            "A wildfire in Africa is currently releasing 235 MW of power.",
+            "A wildfire burning in Mexico right now is generating 329 MW.",
+            "A storm in the Pacific is producing 450 MW of cyclonic energy.",
+        ]
+        for t in bad:
+            assert _detect_stock_formula(t) is not None, f"Should reject: {t}"
+
+    def test_throat_clearing_does_not_overreach(self):
+        """The pattern targets the specific A-event-burning-in-X-is-V-ing
+        opener. Variants that lead with the number, the named place, or a
+        non-radiating verb should pass through clean."""
+        good = [
+            "A 264 MW wildfire on Hawaii's Big Island. In APRIL.",
+            "404 MW of fire in Mali's Western Sahel. The land has been parched.",
+            "New South Wales. A 327 MW fire today. The bushfire season here used to know when to quit.",
+            "A wildfire was detected in the Kazakhstan steppe overnight.",
+            "A wildfire burning in Patagonia stopped advancing this morning.",
+        ]
+        for t in good:
+            assert _detect_stock_formula(t) is None, f"Should NOT reject: {t}"
+
     def test_legitimate_tweets_not_rejected(self):
         """Good tweets from the A/B corpus should pass through clean."""
         good = [
