@@ -21,6 +21,11 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # (e.g. ``gemini-3-flash-preview`` or ``gemini-2.5-flash``) to pin
 # behavior or roll back when a new Flash drops.
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+# Sonnet evaluator pass. Enabled by default — costs ~$25-45/mo on
+# Sonnet 4.6 (verified against console.anthropic.com 2026-04-24).
+# Set EVALUATOR_ENABLED=false as a kill switch when cost matters more
+# than the auto-rewrite/score-and-reject pass.
+EVALUATOR_ENABLED = os.environ.get("EVALUATOR_ENABLED", "true").lower() in {"1", "true", "yes"}
 
 SYSTEM_PROMPT = """\
 You are @theheat, a climate data account that goes viral. Your tweets make \
@@ -517,15 +522,17 @@ def generate_tweet_bundle(
 
     # Second inference pass: virality evaluator (Claude Sonnet 4.6)
     # Returns None if the tweet isn't worth posting — evaluator kill = no draft.
-    try:
-        from src.editorial.evaluator import evaluate_and_polish
+    # Disabled by default (cost) — set EVALUATOR_ENABLED=true to re-enable.
+    if EVALUATOR_ENABLED:
+        try:
+            from src.editorial.evaluator import evaluate_and_polish
 
-        result = evaluate_and_polish(bundle, data_description)
-        if result is None:
-            return None
-        bundle = result
-    except Exception as e:
-        print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
+            result = evaluate_and_polish(bundle, data_description)
+            if result is None:
+                return None
+            bundle = result
+        except Exception as e:
+            print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
 
     return bundle
 
