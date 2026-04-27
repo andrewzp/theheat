@@ -13,6 +13,56 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-26 — Voice engine v2.5 verdict (grading run aborted — Gist fetch failure)
+
+**Run timestamp:** 2026-04-27T06:02:13Z
+
+**Context:** This grading run targets the first alerts-cycle output after
+voice engine v2.5 (commits `d66f9d8`–`c75d0d4`), which shipped 2026-04-25.
+v2.5 changes: era-anchor database (data/era_anchors.json), multi-station
+roll-call format for elevation-spread clusters, recalibrated editorial-heat
+rules (earned heat allowed on elite signals), and a regex rejector for the
+`A [fire] burning in [LOCATION] right now is radiating N MW...` opener.
+
+**Grading aborted — data unavailable.** The corpus job fetches pending drafts
+from the Gist API (`api.github.com/gists/06c02c97ffc0d11458687f1ed998d9e5`).
+All three attempts (initial + 2 s, 5 s, 10 s backoff) returned HTTP 403:
+`API rate limit exceeded for 35.223.241.4`. This is an unauthenticated
+IP-level rate limit on the GitHub API, not a Gist-content issue. No pending
+drafts were retrieved.
+
+**No grades issued. No corpus data fabricated.**
+
+**Likely cause:** The grading job runs as an unauthenticated client. The
+shared egress IP (35.223.241.4, a GCP address) has hit GitHub's 60 req/hr
+unauthenticated ceiling, probably from concurrent CI/CD or other jobs sharing
+the same IP. Adding a `GITHUB_TOKEN` to the job environment would raise the
+limit to 5 000 req/hr and prevent recurrence.
+
+**v2.5 open questions (unanswered this run):**
+- Did era anchors actually fire on Apr 26 records — and did they pull from
+  data/era_anchors.json or revert to Gemini invention?
+- Did earned editorial heat appear on elite signals and stay absent on
+  mid-tier?
+- Has the banned opener formula (`A [fire] burning in [LOCATION] right now
+  is radiating...`) resurfaced, or is the regex rejector holding?
+- Did the roll-call format trigger on any elevation-spread cluster?
+
+These remain open until a subsequent grading run retrieves the queue.
+
+### Followup
+
+- Add `GITHUB_TOKEN` (read-only, public) to the grading job's environment so
+  the Gist fetch is authenticated and immune to shared-IP rate limiting.
+
+### Numbers
+
+- Pending drafts retrieved: 0 (fetch failure — not empty queue)
+- Grades issued: 0
+- v2.5 verdict: **deferred**
+
+---
+
 ## 2026-04-25 — Voice engine v2 first verdict (7 drafts)
 
 **Context:** First alerts-cycle output after voice engine v2 (commit
