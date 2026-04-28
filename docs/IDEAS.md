@@ -165,5 +165,56 @@ Grok A/B) ship and the voice still feels mid.
 
 ---
 
+## NVIDIA NIM as the dev-only A/B harness for generator candidates
+
+**What:** NVIDIA hosts ~80 open-weights models behind one OpenAI-compatible
+endpoint at `integrate.api.nvidia.com/v1` — Llama 4, Qwen 3, DeepSeek 3.2,
+GPT-OSS-120B, Kimi 2.5, GLM 5.1, MiniMax M2.7, Mistral variants. One API
+key, one base URL, model swaps via the `model` parameter. Free tier is
+40 requests/minute with 1,000 starter credits (expandable to 5,000 on
+request).
+
+**Why this is interesting (and what it's NOT):** NVIDIA explicitly
+positions this as **trial / prototyping / evaluation** infrastructure.
+For production use, expended credits → pay-as-you-go pricing kicks in.
+At @theheat's volume (6 cycles/day × ~25-50 LLM calls per cycle on busy
+days), the free tier would burn out in days. **This is not a Gemini Flash
+production replacement.** Anyone framing it as "free inference for
+production" is selling hype.
+
+But it IS useful — specifically as the **A/B testing harness** for the
+two parked model-swap lanes above:
+
+1. The Grok-vs-Gemini A/B already lives here (above). NVIDIA NIM lets
+   us also throw Llama 4, Qwen 3, DeepSeek into the same A/B during
+   *development* — same `data_description`, same prompt, observe voice
+   quality side-by-side. Pure dev-time use, fits the trial terms cleanly.
+2. The fine-tune lane (above) needs us to first know which base model
+   has the strongest starting voice on our prompts before committing
+   $100-300 compute to a LoRA. NVIDIA NIM is the cheapest way to test
+   8+ candidate base models without standing up local GPU inference.
+
+**Why parked (April 2026):** Voice engine v2.5 just shipped (era anchors,
+multi-station roll-call, recalibrated rules, opener-formula ban). The
+next draft corpus is the verdict. If v2.5 lifts quality enough, the A/B
+becomes lower-priority. Also: tiny risk of getting drawn into the hype —
+"free inference!" tweets are everywhere, and the trial-tier nature is
+under-acknowledged.
+
+**Un-park signal:** EITHER of the two lanes above un-parks (corpus shows
+voice ceiling on current stack), and we're ready to compare candidates
+before committing engineering time. NVIDIA NIM is then the harness — not
+the destination.
+
+**Concrete first step when un-parked:**
+- Add `src/voice/nvidia_generator.py` paralleling the Gemini path
+- Run all candidate models against ~10 representative `data_description`s
+  pulled from `docs/DRAFT_CORPUS.md`
+- Manual grade outputs against the same A-F rubric
+- Pick winner; either ship A/B in production (hitting paid tier) or
+  proceed to fine-tune the chosen base
+
+---
+
 *Anything else gets parked here when it's worth remembering but not worth
 building now. Keep entries tight — problem, why not now, what would change.*
