@@ -1,10 +1,14 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 24, 2026
-**Status:** Live on GitHub Actions. Voice engine v2 + fire geocoder upgrade + FRP floor raise + Gemini model upgrade all shipped 2026-04-24. The Apr 24 session's draft corpus (`docs/DRAFT_CORPUS.md`) is the eval baseline going forward.
-**Latest commit:** `1573d15` on `main`
-**Tests:** 522 passing
+**Last updated:** April 26, 2026
+**Status:** **POSTING PAUSED — quality below bar.** Bot is generating + grading drafts but not posting. Voice engine v2.5 (era-anchor database, multi-station roll-call, recalibrated rules, opener-formula ban) shipped 2026-04-25. Humor research + corpus lens evaluation completed 2026-04-26.
+**Latest commit:** `274678e` on `main`
+**Tests:** 559 passing
 **Cost:** ~$25–45/month for Anthropic API (Sonnet 4.6 evaluator). Verified against console.anthropic.com 2026-04-24. Set `EVALUATOR_ENABLED=false` to drop to ~$0/mo if cost ever becomes the constraint. Everything else free tier (Gemini Flash via `gemini-flash-latest` alias, all data sources).
+
+## Posting resumption bar (set 2026-04-26)
+
+**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. Current state: Apr 27 cycle = 9% A-grade (1 of 11). Need >50% sustained. The voice work is what closes the gap; until it does, the bot generates and grades but doesn't ship. This is a deliberate quality pause, not an operational gap.
 
 ---
 
