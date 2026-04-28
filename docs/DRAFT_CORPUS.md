@@ -13,6 +13,42 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-28 — Daily corpus grading (0 graded — Gist inaccessible)
+
+**Context:** GitHub API rate-limit hit on unauthenticated Gist fetch
+(`GET /gists/06c02c97ffc0d11458687f1ed998d9e5`). No auth token
+(`GH_TOKEN`, `GITHUB_TOKEN`, `GH_GIST_TOKEN`) found in the grading
+environment. `gh` CLI not installed. Proxy allowlist does not cover
+`api.github.com` or `gist.githubusercontent.com`. Queue state unknown.
+New drafts from the Apr 28 alert cycles (00:00, 04:00, 08:00 UTC) not
+accessible.
+
+**Grade distribution:** N/A — no drafts accessible.
+**Shippable rate (Apr 28):** N/A.
+
+**Headline finding:** Operational gap — queue inaccessible, no grading
+performed. This is an infrastructure issue, not a voice issue. The
+grading environment needs a read-scope GitHub PAT (or `GH_GIST_TOKEN`)
+exported as an environment variable so the unauthenticated rate-limit
+cannot block a run.
+
+**Staleness check (runbook §7):** Not performable. At next accessible
+run: bulk-reject any drafts generated before 2026-04-26 15:00 UTC
+if they contain real-time-baked language ("forecast to hit today,"
+"It is April 26/27"). The Apr 26 bulk-rejection events already cleared
+the Apr 24-25 cohort; the remaining risk is Apr 26-27 drafts now
+>48 hours old.
+
+**Proposal evidence:** No new evidence gathered. No proposal cycles-
+observed counts updated. All proposals last seen Apr 27 remain
+unchanged.
+
+**Followup (ops, not voice):** Export `GH_GIST_TOKEN` (read-scope PAT)
+into the cron agent's environment. One-time fix; prevents all future
+blocked runs.
+
+---
+
 ## 2026-04-27 — Voice engine v2.5 verdict (11 new drafts)
 
 **Context:** First alerts-cycle output after voice engine v2.5 shipped

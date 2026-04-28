@@ -10,16 +10,31 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `f321be8` (running on origin/main) |
 | Voice engine version | v2.5 (era anchors + multi-station roll-call + recalibrated rules + opener-formula ban) |
-| Last cycle A-rate | 9% (Apr 27, 1 of 11 drafts graded A-) |
+| Last graded A-rate | 9% (Apr 27, 1 of 11 drafts graded A-) |
+| Apr 28 run | Blocked — Gist inaccessible (API rate-limit, no auth token in env). No grading. |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 41 percentage points |
+| Gap | 41 percentage points (vs. last graded cycle Apr 27) |
 | Posting | paused until bar cleared |
 
 ## Active proposals
 
-Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage = (cycles observed) × (recency factor). Most-evidenced + most-recent at P1.
 
-### P1 — Reframe era anchors as one specificity vehicle, not the default
+### P1 — Add Wodehouse rule top-of-SYSTEM_PROMPT
+
+**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless.
+
+**Cycles observed:** Apr 24, Apr 25, Apr 27 (consistent across all three grading cycles).
+**Last seen:** Apr 27.
+**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
+
+> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
+
+**Expected impact:** highest-leverage prompt change in the proposal stack. Wodehouse violations cluster across grades; eliminating them moves several B drafts to B+/A- without changing anything else.
+
+**Status:** drafted. Awaiting human implementation.
+
+### P2 — Reframe era anchors as one specificity vehicle, not the default
 
 **Observed:** 5 of 5 record drafts in Apr 27 corpus used era anchors. The strongest record draft (Navi Mumbai, A-) used **accelerating-warming framing** (*"set just last year in 2024"*) — not an era anchor. Era anchors are over-deployed because they're the path of least resistance for Gemini.
 
@@ -39,7 +54,33 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 
 **Status:** drafted (HUMOR_RESEARCH.md §8.3 + §8.2 names the fix). Awaiting human implementation.
 
-### P2 — Widen plant-comparison regex adjective allowlist
+### P3 — Name humor moves as available tools (not requirements)
+
+**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently.
+
+**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they're the most-explicit move in the prompt).
+**Last seen:** Apr 27.
+**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+
+**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
+
+**Status:** drafted. Awaiting human implementation.
+
+### P4 — Add stranded-mechanic warning to fire prompt addendum
+
+**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), and [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing prose or over-explanation. The mechanics work; the surrounding text kills them.
+
+**Cycles observed:** Apr 27 (3 drafts — strongest single-cycle evidence of any 1-cycle proposal).
+**Last seen:** Apr 27.
+**Proposed fix:** add to `_CATEGORY_PROMPTS["fire"]`:
+
+> If you write a punchline, leave it alone. Don't pre-explain it ("for reference, a power plant runs at..."), don't post-explain it ("that's roughly one-eighth of that"), don't restate the data ("The new high: X. The old one: Y."). The data is the setup. The closer is the punchline. No math out loud.
+
+**Expected impact:** specifically targets the failure pattern that drove the Apr 27 fire regression. Should reduce stranded-mechanic D drafts.
+
+**Status:** drafted. Awaiting human implementation.
+
+### P5 — Widen plant-comparison regex adjective allowlist
 
 **Observed:** Apr 27 draft [4] (re-graded D) used *"a commercial nuclear reactor outputs around 3,000 MW"* — the existing regex misses this because "commercial" isn't in the adjective allowlist (`typical|standard|average|large|small|usual`).
 
@@ -51,7 +92,7 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 
 **Status:** ready to implement. Awaiting human greenlight.
 
-### P3 — Widen opener-formula verb list (or rewrite as shape match)
+### P6 — Widen opener-formula verb list (or rewrite as shape match)
 
 **Observed:** Apr 27 draft [11] (D) used *"A single wildfire in central India is **pushing** 297 MW"* — `pushing` isn't in the regex's verb allowlist (`radiating | releasing | generating | putting out | emitting | producing`).
 
@@ -63,46 +104,6 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 **Expected impact (b):** structural fix; needs false-positive analysis before shipping.
 
 **Status:** decision point — pick (a) tactical or (b) structural. Awaiting human direction.
-
-### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
-
-**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless.
-
-**Cycles observed:** Apr 24, Apr 25, Apr 27 (consistent across all corpus cycles).
-**Last seen:** Apr 27.
-**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
-
-> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
-
-**Expected impact:** highest-leverage prompt change in the proposal stack. Wodehouse violations cluster across grades; eliminating them moves several B drafts to B+/A- without changing anything else.
-
-**Status:** drafted. Awaiting human implementation.
-
-### P5 — Add stranded-mechanic warning to fire prompt addendum
-
-**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), and [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing prose or over-explanation. The mechanics work; the surrounding text kills them.
-
-**Cycles observed:** Apr 27 (3 drafts).
-**Last seen:** Apr 27.
-**Proposed fix:** add to `_CATEGORY_PROMPTS["fire"]`:
-
-> If you write a punchline, leave it alone. Don't pre-explain it ("for reference, a power plant runs at..."), don't post-explain it ("that's roughly one-eighth of that"), don't restate the data ("The new high: X. The old one: Y."). The data is the setup. The closer is the punchline. No math out loud.
-
-**Expected impact:** specifically targets the failure pattern that drove the Apr 27 fire regression. Should reduce stranded-mechanic D drafts.
-
-**Status:** drafted. Awaiting human implementation.
-
-### P6 — Name humor moves as available tools (not requirements)
-
-**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently.
-
-**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they're the most-explicit move in the prompt).
-**Last seen:** Apr 27.
-**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
-
-**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
-
-**Status:** drafted. Awaiting human implementation.
 
 ## Awaiting evidence
 
