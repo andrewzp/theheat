@@ -13,6 +13,343 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-27 — Voice engine v2.5 verdict (11 new drafts)
+
+**Context:** First alerts-cycle output after voice engine v2.5 shipped
+2026-04-26: era-anchor database (commit `3c3634d`), recalibrated voice
+rules permitting earned editorial heat (commit `609ff4b`), opener-
+formula regex ban (commit `c75d0d4`), multi-station roll-call (commit
+`98268ca`). Bot is confirmed running on `c75d0d4` per `gh run view`. The
+queue still holds 18 pending — drafts [1]-[11] are the new Apr 26-27
+batch graded here; drafts [12]-[18] are Apr 24-25 carryovers already
+graded in the 2026-04-25 section below (none have been approved or
+rejected since).
+
+**Grade distribution (new drafts only):** 1 A-, 5 B-range, 1 C+ (political
+era anchor), 4 D-range (banned-opener variants returned).
+**Shippable rate (Apr 27): 6/11 = 55%** — down from Apr 25's 86%.
+
+**Headline finding:** records held up. Era anchors are landing reliably:
+"Pokémon GO" (2016), "Hollywood writers were on strike" (2023), "the year
+before YouTube" (2004), "Y2K was a real worry" (1999), and "Windows 98 was
+new" (1998) all show in production. The era_anchors.json system is
+working as designed.
+
+Fires regressed. Four of eight new fire drafts use opener-formula
+variants the regex doesn't catch — either a new verb (`pushing` instead
+of `radiating`, draft [11]) or shapes that pass through the evaluator's
+rewrite path (drafts [3], [4], [6]). Plant-comparison regex also has a
+gap — it doesn't match "a commercial nuclear reactor" because
+"commercial" isn't in the adjective allowlist.
+
+One political-anchor regression: draft [7] surfaced "since Elon Musk
+bought Twitter" as the 2022 era anchor. Tracing back, era_anchors.json
+2022 has "Twitter was acquired by Elon Musk" and 2024 has "Trump won the
+US election a second time." Both violate the "never preach, never
+political" voice rule. Curation error from the Apr 25 build.
+
+### A range — strongest (1)
+
+#### [9] Mali Western Sahel fire — signal 67 — **A-**
+
+> Mali's Western Sahel is burning. A 291 MW fire is active in a
+> landscape where the burning season typically peaks in January and
+> ends by February. It is April 26.
+
+Terse three-sentence structure. "Mali's Western Sahel is burning" is the
+strongest fire opener in the new batch — declares the stake before the
+number. Season-mismatch context (peaks in January, April now) is sharp.
+"It is April 26" closer earns its place. Best fire draft since the
+2026-04-25 Mali "HOT season" entry.
+
+### B range — shippable (5)
+
+#### [8] Mexico highlands fire — signal 69 — **B+**
+
+> 379 megawatts of heat radiating from the State of Mexico highlands
+> right now. Satellite confidence: 95%. The summer monsoon that
+> extinguishes these fires is still weeks away.
+
+Lead with the number. "State of Mexico highlands" is specific. "Summer
+monsoon that extinguishes these fires" is ecosystem-aware framing —
+better than generic seasonal-clock context.
+
+#### [10] Petaling Jaya record — signal 72 — **B+**
+
+> Petaling Jaya is forecast to hit 93.6F today. The record for this
+> date was 89.2F — set in 2023, back when Hollywood writers were on
+> strike. That gap is 4.4 degrees.
+
+Era anchor lands (Hollywood writers' strike, from era_anchors.json 2023).
+"That gap is 4.4 degrees" closer is unusual — explicit gap rather than
+implied. Reads natural.
+
+#### [5] Bukit Rahman Putra monthly record — signal 79 — **B**
+
+> Bukit Rahman Putra is forecast to hit 94.5F today. If it holds, that
+> breaks an April record that has stood since 2016 — the year Pokémon
+> GO had everyone walking outside. The new high: 94.5F. The old one:
+> 93.7F.
+
+Era anchor strong (Pokémon GO from 2016 anchors). The closer
+("The new high: 94.5F. The old one: 93.7F.") restates the data already
+given — feels like model padding. Trim for ship.
+
+#### [1] Mexico State fire 258 MW — signal 66 — **B**
+
+> Mexico State is radiating 258 MW of energy. 95% satellite confidence.
+> The region's dry season doesn't break until late May. It is only
+> April 27.
+
+Lead with state name. Seasonal context. "It is only April 27" closer is
+the same beat as draft [9] — slight repetition risk if both ship.
+
+#### [2] Central Mexico fire 298 MW — signal 67 — **B-**
+
+> A 298 MW fire signature just appeared in central Mexico. Satellite
+> confidence is 95 percent. The historical peak for fire activity in
+> this region is still three weeks away. The rainy season does not
+> typically begin until June.
+
+Lead with the number. But two redundant seasonal-clock beats ("peak is
+three weeks away" + "rainy season doesn't begin until June") read as
+overstuffed. Pick one.
+
+### C range — needs rewrite (1)
+
+#### [7] Jacobabad record — signal 72 — **C+ (political)**
+
+> Jacobabad is forecast to hit 114.1F today. The old record for this
+> date was 112.1F. That record was set in 2022. It has only been the
+> record since Elon Musk bought Twitter.
+
+Era anchor crosses the political line. "Twitter was acquired by Elon
+Musk" is in `data/era_anchors.json` 2022 — curation error. The structural
+template (record-set-recently → era anchor) works, but Elon Musk is a
+politically-polarizing reference the bot's voice rules ban. Either the
+anchor entry gets pruned (immediate fix), or this draft needs rewrite
+with a different 2022 anchor (FTX collapse, Queen Elizabeth II, World
+Cup in Qatar).
+
+### D range — banned-formula variants returned (4)
+
+#### [3] Mexico State fire 281 MW — **D-**
+
+> A wildfire burning in Mexico State is radiating 281 MW of heat —
+> roughly the output of a mid-sized power plant, pointed at the sky.
+> Satellite confidence: 95%. It is April 27.
+
+Two simultaneous regressions: the banned opener formula (matches the
+regex per direct test — should have been rejected at generation), and
+the power-plant comparison ("a mid-sized power plant"). "Pointed at the
+sky" tries for poetry, doesn't land. This draft made it through despite
+the regex — likely Sonnet evaluator rewrote a clean Gemini candidate
+into this shape, and rewrites bypass `_detect_stock_formula`.
+
+#### [4] Mexico state fire 382 MW — **D**
+
+> A wildfire in Mexico state is radiating 382 MW of heat right now.
+> Satellite confidence: 95%. For reference, a commercial nuclear
+> reactor outputs around 3,000 MW. This fire is running at roughly
+> one-eighth of that — from a forest.
+
+Banned opener + plant comparison. "Commercial nuclear reactor" slips
+the existing plant-regex (doesn't have "commercial" in the adjective
+allowlist). "From a forest" closer is decent but everything before is
+the bad pattern.
+
+#### [6] Central India fire 274 MW — **D**
+
+> A single fire in central India is radiating 274 MW of heat right
+> now. That is roughly the output of a mid-sized power plant.
+> Satellite confidence: 95%. The date is April 27.
+
+Banned opener (variant: "A single fire in [LOCATION] is radiating") +
+plant comparison. "The date is April 27" — date-stamping closer with no
+seasonal hook, weak.
+
+#### [11] Central India fire 297 MW — **D**
+
+> A single wildfire in central India is pushing 297 MW of radiative
+> power. Monsoon season does not start for another six weeks.
+> Satellite confidence: 95%.
+
+Banned opener with verb-list gap: `pushing` isn't in the regex's
+verb allowlist (`radiating | releasing | generating | putting out |
+emitting | producing`). Direct evidence the regex needs widening — or
+better, restructured to match shape rather than verb. Monsoon-clock
+context is fine; opener kills it.
+
+### Patterns named in this batch
+
+1. **Opener-formula whack-a-mole.** Verb list hardcoded from Apr 24
+   corpus (`radiating | releasing | ...`) misses neighbors (`pushing` is
+   the new variant). Regex is chasing model entropy. Each new verb
+   requires corpus observation + deploy.
+2. **Plant-comparison adjective gap.** Existing regex catches
+   `a/an/the (typical|standard|average|large|small|usual)? (coal|nuclear|gas|power) plant/reactor runs/generates/produces N`.
+   Misses `commercial`, `industrial`, `mid-sized` (which is in [3]),
+   "high-capacity", and probably more. Same whack-a-mole shape.
+3. **Era anchors include politically-polarizing entries.** "Twitter was
+   acquired by Elon Musk" (2022) and "Trump won the US election a second
+   time" (2024) are in `data/era_anchors.json`. Curation oversight from
+   2026-04-25 build. Both violate "never preach, never political."
+4. **Era-anchor system is otherwise WORKING.** 5 of 5 record drafts in
+   this batch used era anchors that landed naturally. The "pre-computed
+   anchor passes through to prompt" plumbing is doing what it should.
+5. **Sonnet evaluator rewrites bypass `_detect_stock_formula`.** Drafts
+   [3] and [4] match the regex on direct test but shipped anyway —
+   evaluator rewrite path runs `run_safety_pipeline` only. User has
+   confirmed (2026-04-27) this is intentional design — Sonnet's rewrite
+   is a deliberate creative pass and trusts Sonnet's judgment over the
+   regex. Logging here for the record.
+
+### Followups (in priority order)
+
+1. **Prune politically-charged anchors from `data/era_anchors.json`.**
+   Remove "Twitter was acquired by Elon Musk" (2022), "Trump won the US
+   election a second time" (2024), and scan all 31 years for similar
+   (Capitol riot 2021, Brexit 2016 — these are in the file; verdict
+   pending re-read of the curation).
+2. **Widen plant-comparison regex** with more adjectives (`commercial`,
+   `industrial`, `mid-sized`, `high-capacity`) OR drop the adjective
+   slot entirely.
+3. **Widen opener-formula verb list** OR rewrite the regex to match
+   shape (`is\s+\w+(?:ing|s)\s+\d`) — flag false-positive risk first.
+4. **Bulk-reject the 4 D-range fire drafts** ([3], [4], [6], [11])
+   to clean the queue.
+5. **Out of scope (per user):** changing the evaluator rewrite path to
+   run `_detect_stock_formula`. Intentional.
+
+### Numbers
+
+- Pending drafts: 18 (11 new graded here, 7 carryovers from Apr 25)
+- Shippable rate (Apr 27 batch): 6/11 = 55% (down from Apr 25's 86%)
+- Records: 3 of 3 used era anchors; 2 cleanly, 1 political (curation issue)
+- Fires: 4 of 8 used banned-opener variants; 4 are clean
+- Bot confirmed running on commit `c75d0d4`
+
+### Humor-research lens evaluation (applied 2026-04-26)
+
+After grading the 18 drafts on the corpus rubric, ran them through the
+humor-theory framework from `brand/HUMOR_RESEARCH.md`. The lens
+dimensions for each tweet: violation present, voice keeps it benign,
+data-as-setup / voice-as-punchline structure, named mechanic operating
+(or none — pure data is valid), and Wodehouse rule (does the voice
+sound like it's trying).
+
+**Per-draft lens reading** — Apr 26-27 batch [1]-[11]:
+
+| # | Grade | Lens reading |
+|---|---|---|
+| 1 | B | Pure data setup + understatement closer ("It is only April 27"). Wodehouse intact. Working. |
+| 2 | B- | No clear punchline — two seasonal beats stack and dilute. Trying slightly. Pick one beat, not both. |
+| 3 | D- | Throat-clearing opener strands a poetry-attempt closer ("pointed at the sky"). Wodehouse violated — visibly trying. |
+| 4 | D | The "from a forest" closer IS a real Steven Wright idiom-flip move — but stranded inside throat-clearing + math-out-loud. The punchline is dead because the setup buried it. |
+| 5 | B | Era anchor lands ("Pokémon GO had everyone walking outside") — then restate-pads with data already given. Trim restate, the era anchor lands cleaner alone. |
+| 6 | D | No mechanic operating. Throat-clearing opener + plant comparison + flat date closer. Template fatigue, not failure-of-trying. |
+| 7 | C+ | Structural template works (setup → era anchor closer); content fails the "never political" criterion. Anchor was Elon Musk — pruned from `era_anchors.json` Apr 26. Tweet shape is fine; data was the problem. |
+| 8 | B+ | Lead with magnitude, ecosystem-specific closer ("monsoon that extinguishes these fires is still weeks away"). Subtle understatement, no formula. Working. |
+| 9 | A- | **Reference draft.** Period-and-restate opener ("Mali's Western Sahel is burning.") + bridge + understatement closer ("It is April 26"). Comic triple with all three beats earning their place. Wodehouse perfect. |
+| 10 | B+ | Era anchor lands ("Hollywood writers were on strike"). Closer ("That gap is 4.4 degrees") slightly try-hard — explicit gap math reader could have done. Trim, era anchor stronger alone. |
+| 11 | D | No mechanic. "Pushing" verb is the regex gap. If we trimmed throat-clearing to "297 MW wildfire in central India" — pure data delivery would have been valid. Failure is the opener, not absence of joke. |
+
+**Apr 25 carryovers in the queue [12]-[18]** — re-read through the lens:
+
+| # | Grade | Lens reading |
+|---|---|---|
+| 12 | C+ | Comic triple in the closer ("October. That was 6 months ago.") buried by throat-clearing opener. The right tweet is just the closer beats. |
+| 13 | A- | Earned editorial heat ("HOT season") + understatement closer ("It's April") + lead with number. Stack of mechanics, all earned, none trying. |
+| 14 | B | Era anchor lands ("the year before YouTube"). "Nearly 3 degrees" approximation when 2.7F is exact = mild Wodehouse violation (showing work). |
+| 15 | B+ | Era anchor with twist phrasing ("Before Y2K was a real worry"). 110.8F is absolute-scale shock. Two mechanics stacked. |
+| 16 | A- | **Accelerating-warming specificity** ("set just last year in 2024") — not an era anchor, a different vehicle. Carries the climate argument without saying it. |
+| 17 | B+ | Era anchor matching record year (1998 → Windows 98). Slight on-the-nose but recognition is universal. |
+| 18 | A- | **Reference draft.** Place opener + Steven Wright idiom-flip ("used to know when to quit") + past-tense personification + understatement closer. Multiple mechanics stacked, none trying. |
+
+### What the lens reveals
+
+**1. The strongest drafts use DIFFERENT mechanics, not the same one.**
+The five A-tier drafts ([9], [13], [16], [18], plus [8] B+) operate on
+different humor mechanics: idiom-flip, earned editorial heat,
+accelerating-warming, period-and-restate, ecosystem specificity. The
+bot is best when it varies the move. The weakest drafts ([3], [4],
+[6], [11]) all converge on the same throat-clearing-opener pattern.
+Variety vs convergence is a sharper diagnostic than the regex/score
+view alone.
+
+**2. Era anchors are over-represented because they're the path of
+least resistance.**
+5 of 7 record drafts in the queue used era anchors. The strongest
+record draft ([16] Navi Mumbai) did NOT — it used accelerating-warming
+specificity ("set just last year in 2024"). The strongest fire drafts
+([9], [13], [18]) used idiom-flip / understatement / earned editorial
+heat — not era anchors. Era anchors are easy for Gemini to deploy and
+they sometimes land, but they're not the only specificity vehicle and
+shouldn't be the default.
+
+**3. Wodehouse violations cluster in two specific patterns.**
+- **Approximation when exact is available** ([14] Manchester: "nearly
+  3 degrees" when it's 2.7F). Reads as soft.
+- **Restate-padding** ([5] Bukit Rahman Putra: "The new high: 94.5F.
+  The old one: 93.7F." after the data was already given). Reads as
+  showing work.
+Both are visible-effort signals. Eliminate them and several B drafts
+move to B+ without changing structure.
+
+**4. Stranded mechanics are an under-appreciated failure mode.**
+Drafts [3] ("pointed at the sky"), [4] ("from a forest"), and [12]
+("That was 6 months ago") all contain real humor moves — poetry
+attempt, Steven Wright idiom-flip, comic triple respectively. The
+moves don't fail; they're stranded inside throat-clearing or
+over-explanation. The tweet shape kills mechanics that would land if
+the surrounding prose were trimmed. This means the regex-rejector,
+Sonnet rewrite path, and per-category prompts should all push toward
+**leaving the punchline alone** — no setup-stuffing, no math-out-loud,
+no closer-on-top-of-closer.
+
+**5. Pure data delivery is valid and currently underused.**
+[16] Navi Mumbai is essentially flat data: forecast / margin / record-set-when.
+No mechanic. Earns A- because the recency itself is striking. The
+prompts should explicitly state: when the number alone is striking
+enough, present the data and trust the reader. Don't force a humor
+mechanic. ("not everything has to be a joke.")
+
+**6. The Wodehouse rule is the single most predictive principle.**
+Drafts that violated it (visible trying — poetry attempts, math-out-
+loud, restate-padding) graded D-/C+/B regardless of whether era anchors
+or specificity were present. Drafts that respected it (no visible
+trying — flat data, named mechanic that sounds natural) graded B+/A-
+regardless of whether they used a humor mechanic at all. The Wodehouse
+rule deserves top-of-prompt placement.
+
+### Implications for prompt updates (next step)
+
+1. **SYSTEM_PROMPT top section** — add Wodehouse rule explicitly:
+   *"Don't sound like you're trying. The data is already
+   extraordinary; the voice is its straight man."*
+2. **Name humor moves as available tools, not requirements.** List
+   them: comic triple, idiom-flip, understatement closer,
+   period-and-restate, deadpan, accelerating-warming, era anchor.
+   Add: *"None of these are mandatory. When the number alone is
+   striking, deliver the data plainly. Forced humor breaks the spell."*
+3. **Reframe era anchors in record-type addenda** as one of several
+   specificity vehicles. List the others (accelerating warming,
+   recency framing, place identity, absolute scale, era anchor) and
+   note: *"Vary across drafts. Era anchors used every record become
+   the formula they were meant to escape."*
+4. **Add stranded-mechanic warning to fire prompt.** *"If you write a
+   punchline, leave it alone. Don't pre-explain it ('for reference,
+   a power plant runs at...'), don't post-explain it ('that's
+   roughly one-eighth of that'). The data is the setup. The closer
+   is the punchline. No math out loud."*
+5. **Add Wodehouse-violation tells to the bad-examples list.**
+   "Approximation when exact is available," "restate-padding,"
+   "explicit gap math the reader could do."
+
+These are the empirically-grounded changes. Apply once user signs off.
+
+---
+
 ## 2026-04-25 — Voice engine v2 first verdict (7 drafts)
 
 **Context:** First alerts-cycle output after voice engine v2 (commit
@@ -230,21 +567,32 @@ lack.
 
 ### Near-duplicates — pick one (2 pairs)
 
-#### #3 Australia fire — signal 68 / copy 82 — **B (ship this one)**
+#### #3 Australia fire — signal 68 / copy 82 — **B (ship this one) — re-graded C+ on 2026-04-27**
 
 > 333 MW of fire detected in Australia. A small power plant delivers
 > about 300 MW. Except it's a forest.
 
-"Except it's a forest" is the best single closer in the fire vocabulary
-in this corpus.
+Original Apr 24 grade said *"Except it's a forest is the best single
+closer in the fire vocabulary in this corpus."* That was wrong.
+Grammar fails: by proximity, "it" refers to "a small power plant,"
+and "the small power plant is a forest" is nonsense. The closer
+gestures at a Wright-style flip but doesn't pin the referent — the
+reader has to bridge what the grammar should have. Re-grade C+ on
+2026-04-27 after applying the humor-research lens. Compare with
+corpus #29 ("This fire is a third of a power plant. Made of trees.")
+where the fragment correctly modifies "a power plant" and the
+referent lands. Lesson: Wright flips need the referent grammatically
+pinned, not gestured at.
 
 #### #4 Australia fire — signal 67 / copy 84 — **C (reject; near-dup of #3)**
 
 > Satellite just picked up a 307 MW fire in Australia. For reference,
 > a small power plant is about 300 MW. Except it's a forest.
 
-Same structure, same closer, weaker verb choice ("Satellite just picked
-up" buries the number).
+Same structure, same broken closer (per the #3 re-grade above:
+"Except it's a forest" doesn't pin the referent and the grammar
+fails). C rejection stands; original near-dup reasoning was right
+by accident.
 
 #### #5 St. Lawrence Island — signal 63 / copy 78 — **B-**
 
