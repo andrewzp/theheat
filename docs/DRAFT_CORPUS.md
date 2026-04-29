@@ -13,6 +13,54 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-29 — Daily corpus grading (2 drafts)
+
+**Context:** Apr 29 grading cycle. Two pending calendar-date records from today's alerts runs. No fire drafts in queue. Voice engine v2.5 unchanged. Both drafts created 2026-04-29 and contain day-specific forecast language.
+
+**Grade distribution:** 0 A, 2 B+, 0 C, 0 D/F.
+**A-rate: 0/2 = 0%.**
+
+**Headline finding:** Small cohort — records only, no fires. Both drafts earn B+ via era anchors but neither breaches A. More diagnostic than grade-moving: both drafts converge on an identical three-beat structural template also present in Apr 27 [10] Petaling Jaya: `[city + forecast] → [old record + year + era anchor] → ["That gap is X degrees"]`. Era-anchor cultural reference is working; the surrounding structure is hardening into a formula. Mild Wodehouse violations in both (restate-padding in [1]; math-out-loud in [2]).
+
+### B range — shippable (2)
+
+#### [1] Cuenca, Ecuador — draft_20260429_082658_139 — **B+**
+
+> The last time Cuenca, Ecuador was this warm on this date, Adele's 21 was the bestselling album in the world. That was 2011. Today's forecast: 70.2F, against a record of 67.3F.
+
+Inverted era-anchor structure: era anchor OPENER, data as closer. Unusual variant — sets the historical hook first, delivers numbers as the reveal. The Adele's 21 anchor is strong: universally recognized, evocative of a specific 2011 cultural moment. "That was 2011" is restate-padding — the album implies its era to anyone who knows it; the explicit year adds nothing for those who don't. Mild Wodehouse violation. The closer ("Today's forecast: 70.2F, against a record of 67.3F") delivers flat data without framing. 2.9F margin is solid. Trim "That was 2011" and this tightens to A- range.
+
+#### [2] Mexico City — draft_20260429_122106_140 — **B+**
+
+> Mexico City is forecast to hit 90.9F today. The record for this date was 86.4F, set in 2017 — the year the iPhone X launched. That gap is 4.5 degrees.
+
+Standard template: city → record → era anchor → explicit gap. Clean. iPhone X anchor (2017) is widely recognizable and politically neutral. 90.9F in Mexico City at altitude carries weight. "That gap is 4.5 degrees" is math-out-loud: reader already has 90.9 and 86.4. Mild Wodehouse violation. Structurally identical to Apr 27 [10] Petaling Jaya ("That gap is 4.4 degrees") — same three-beat wrapper, different era anchor. Template convergence flagged: three era-anchor records across two cycles using the same structural closer.
+
+### Patterns named
+
+1. **Era-anchor structural template crystallizing.** Three drafts across two cycles ([today 1], [today 2], Apr 27 [10]) converge on `[city + forecast] → [old record + year + era anchor] → ["That gap is X degrees"]`. The era anchor provides cultural specificity; the surrounding structure is becoming formulaic. P2 sub-finding — the proposed fix (richer specificity palette) should break structural uniformity, not just cultural reference variety.
+
+2. **Mild Wodehouse in both drafts.** [1] "That was 2011" = restate-padding. [2] "That gap is 4.5 degrees" = math-out-loud when reader can compute from the two given numbers. Neither disqualifies the draft — both earn B+. Consistent pattern across all four graded cycles. P1 evidence.
+
+3. **No fire drafts.** P4 (stranded mechanics), P5 (plant-comparison regex), P6 (opener-formula verb) not evidenced this cycle.
+
+### Humor-research lens
+
+| # | Grade | Lens reading |
+|---|---|---|
+| 1 | B+ | Violation: 2.9F calendar-date record. Voice benign. Era anchor as opener (inverted structure). Mechanic: era anchor (Adele's 21, 2011). Wodehouse: "That was 2011" restate-padding — mild, doesn't sound like it's trying, just over-specifies. |
+| 2 | B+ | Violation: 4.5F calendar-date record. Voice benign. Standard era anchor (iPhone X, 2017). Mechanic: era anchor. Wodehouse: "That gap is 4.5 degrees" = math-out-loud. Structurally converging with Apr 27 [10]. |
+
+### Numbers
+
+- Pending drafts: 2 (both type=record; no fires, no monthly_high, no all_time)
+- A-rate: 0/2 = 0%
+- Era anchors deployed: 2/2 records
+- Political content: none
+- Staleness check: both created 2026-04-29 — well within 48h window; no rejections
+
+---
+
 ## 2026-04-27 — Voice engine v2.5 verdict (11 new drafts)
 
 **Context:** First alerts-cycle output after voice engine v2.5 shipped
