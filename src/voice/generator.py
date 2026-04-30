@@ -34,6 +34,24 @@ people stop scrolling, feel something, and share. The data is already \
 extraordinary. Your job is to frame it so people FEEL the weight of the \
 numbers — and look smart for sharing.
 
+=== RULE #0 — DON'T SOUND LIKE YOU'RE TRYING ===
+
+The data is already extraordinary. The voice is its straight man. The \
+Wodehouse rule: trying too hard breaks the spell. Three failure modes \
+flag a draft as trying too hard:
+
+- Approximation when the exact number is available ("nearly 3 degrees" \
+when it's 2.7F). Use the exact figure or omit the comparison.
+- Restate-padding ("The new high: 94.5F. The old one: 93.7F.") after \
+the data was already in the tweet. The reader has the numbers; restating \
+them in slightly different form reads as showing your work.
+- Poetry-attempt closers ("pointed at the sky", "the river doesn't \
+know") inserted to add weight that the data already carries.
+
+If the number alone is striking, deliver it plainly. The strongest \
+A-grade drafts in the corpus often have no humor mechanic at all — \
+just the data, set up cleanly.
+
 === WHAT MAKES A TWEET VIRAL (not just informative) ===
 
 1. SPECIFICITY GIVES NUMBERS WEIGHT. "Hottest since 1929" is instantly \
@@ -235,6 +253,11 @@ than Manhattan." "Larger than last year's Big Sur fire."
 rainfall there this month is 2.5 inches."
 - One-idea tweets. Stack at most TWO facts — MW + seasonal twist, or \
 region + scale. Three comparisons reads like sales copy.
+- If you write a punchline, leave it alone. Don't pre-explain it ("for \
+reference, a power plant runs at..."), don't post-explain it ("that's \
+roughly one-eighth of that"), don't restate the data ("The new high: X. \
+The old one: Y."). The data is the setup. The closer is the punchline. \
+No math out loud.
 """,
     "all_time_high": f"""\
 === CATEGORY-SPECIFIC — ALL-TIME ARCHIVE HIGH ===
@@ -472,7 +495,7 @@ _STOCK_FORMULA_PATTERNS: tuple[tuple[str, str], ...] = (
     # power plant runs at 1,000 MW" / "a typical coal plant" / "a
     # standard nuclear reactor runs at around 1,000 MW."
     (
-        r"\b(?:a|an|the)\s+(?:typical|standard|average|large|small|usual)?\s*(?:coal|nuclear|gas|power)\s+(?:power\s+)?(?:plant|reactor)\s+(?:runs?|generates?|produces?|outputs?|delivers?)\s+(?:at\s+)?(?:about|around|roughly|approximately)?\s*\d",
+        r"\b(?:a|an|the)\s+(?:typical|standard|average|large|small|usual|commercial|industrial|mid-sized|high-capacity)?\s*(?:coal|nuclear|gas|power)\s+(?:power\s+)?(?:plant|reactor)\s+(?:runs?|generates?|produces?|outputs?|delivers?)\s+(?:at\s+)?(?:about|around|roughly|approximately)?\s*\d",
         "generic power-plant comparison (no named plant)",
     ),
     # "The fire has no name yet" closer family.
@@ -494,7 +517,7 @@ _STOCK_FORMULA_PATTERNS: tuple[tuple[str, str], ...] = (
     (
         r"^A\s+(?:wildfire|fire|storm|tornado|hurricane|cyclone|blizzard)\b"
         r"(?:[^.!?\n]*?)\s+is\s+(?:currently\s+|now\s+)?"
-        r"(?:radiating|releasing|generating|putting\s+out|emitting|producing)\b",
+        r"(?:radiating|releasing|generating|putting\s+out|emitting|producing|pushing|spewing|pumping\s+out|throwing\s+off|sending\s+up)\b",
         "throat-clearing 'A [event] in [location] is radiating...' opener",
     ),
 )
