@@ -50,24 +50,34 @@ ceiling #2. Tier 3 attacks ceiling #1.
 
 ### Tier 1 — Quality-side work (where the ceiling actually breaks)
 
-#### 2.1 Era-anchor database — **SHIPPED 2026-04-25**
+#### 2.1 Era-anchor database — **SHIPPED 2026-04-25, then PARKED at 1-in-10 on 2026-04-29**
 
-Pre-computed cultural anchors keyed by year (1995–2025, 8 anchors
-each). Generators that have an `old_record_year` get a seeded sample
-of 4 anchors as part of the prompt data. Replaces Gemini's invented
-anchors, which sometimes hallucinate (wrong year-event pairing) and
-lack variety (same prompt = same anchor).
+Pre-computed cultural anchors keyed by year (1995–2025). Generators
+that have an `old_record_year` get a seeded sample of 4 anchors as
+part of the prompt data. Replaces Gemini's invented anchors, which
+sometimes hallucinate.
 
 **Files:** `data/era_anchors.json`, `src/voice/era_anchors.py`,
-threaded into `generate_record_tweet`,
-`generate_all_time_record_tweet`, `generate_monthly_record_tweet`,
-`generate_country_record_tweet`, `generate_record_low_tweet`. 18
-new tests.
+threaded into 5 record-type generators.
 
-**Verdict:** ship verdict comes from the next post-cycle corpus.
-The hint format ("USE AT MOST ONE — these are inspiration, not a
-list to recite") was tuned to prevent Gemini from reciting all four
-in a single tweet.
+**Verdict (post-corpus, three cycles):** the hint over-deployed.
+Apr 25 / Apr 27 / Apr 29 corpora all showed 100% era-anchor
+deployment on records. User direction Apr 29: park at 1-in-10. Voice
+engine v3 (commit on 2026-04-29) ships:
+
+- `_era_anchor_should_fire(seed_key, rate=0.1)` deterministic gate.
+- `_era_anchor_hint` rewritten — 90% of calls return explicit
+  steer-away naming alternative specificity vehicles; 10% return
+  curated content framed as "your 1-in-10 turn."
+- 43-entry curation prune (political, US-centric, mass-tragedy
+  scaffolding entries removed).
+- Addendum-mismatch fix (`all_time_record`/`monthly_record` category
+  strings now use `kind`, matching `all_time_high/low` /
+  `monthly_high/low` addendum keys which had been dormant).
+
+**Status:** structural fix shipped. Empirical signal: next 3 cycles
+should drop era-anchor deployment to ~10% on records. If yes, P1
+moves to Resolved. If not, deeper intervention needed.
 
 ---
 

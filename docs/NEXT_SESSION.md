@@ -1,48 +1,35 @@
 # Start-of-Session Brief
 
-**Written:** 2026-04-24 after voice engine v2 + model upgrade.
-**Status going in:** 522 tests green on `main` at `1573d15`. Pending
-draft queue clear. The next alerts cycle is the first one running on
-`gemini-flash-latest` + voice engine v2 + the geocoder fix + the FRP
-floor raise — that output is the eval signal.
+**Written:** 2026-04-29 after voice engine v3 ship (era-anchor parking + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite).
 
-This is a 2-minute re-entry doc. If you're back from a break, read
-`docs/SESSION_BRIEF.md` first for what just happened.
+**Status going in:** 566 tests green on `main`. Posting paused (Apr 12 was last post, deliberate quality pause). Pending queue: ask first — bulk-rejected after Apr 29 grading.
+
+This is the 2-minute re-entry doc. If you want what just happened, read `docs/SESSION_BRIEF.md`. If you want the deeper state, read `BRIEFING.md`.
 
 ---
 
 ## 60-second state of the world
 
-**Code:**
-- Gemini generator now uses `gemini-flash-latest` (Google's alias to
-  current best Flash, currently `gemini-3-flash-preview`)
-- Voice engine v2 active: per-category prompt addenda, stock-formula
-  rejector at parse time, expanded universal prompt with explicit
-  bans for the worst template traps
-- Fire reverse-geocoder: 70+ named regions, no more "somewhere in Asia"
-- FRP floor: 250 MW (was 100 — sub-200 fires don't carry tweets)
-- `EVALUATOR_ENABLED` kill switch exists; default on; flip false to
-  drop ~$30/mo if cost matters
+**Posting status:** PAUSED. Resumption bar (set 2026-04-26): majority A-grade rate per corpus cycle. Currently 0% (Apr 29, 0 of 3). Track in `docs/QUALITY_TREND.md`.
 
-**Data:**
-- 613 cities, 179 countries, with `elevation_m` column. 13 missing
-  elevations (rate-limited batch — easy retry).
-- 117 historical drafts in state, all rejected.
-- Pending queue cleared.
-- `docs/DRAFT_CORPUS.md` is the longitudinal voice-quality archive.
+**Voice engine version:** v3, shipped 2026-04-29. Active changes:
+- Era anchors PARKED at 1-in-10 via `_era_anchor_should_fire` deterministic gate. 90% of record drafts get explicit "parked, use other vehicles" steer-away message; 10% get curated content framed as "your 1-in-10 turn."
+- Addendum-mismatch bug fixed (`all_time_record`/`monthly_record` categories now match `all_time_high/low` and `monthly_high/low` addendum keys, which had been dormant since they were written). Added missing `monthly_low`, `country_low`, `record_low` addenda.
+- 5 record-type per-category addenda rewritten to use a shared 6-vehicle specificity menu (`_RECORD_SPECIFICITY_VEHICLES`). Era anchor is option 6, marked PARKED.
+- SYSTEM_PROMPT #1 ("HISTORICAL WEIGHT") rewritten — was era-anchor-evangelizing, now lists all 6 specificity vehicles equally.
+- 3 new bad-examples: explicit-gap math ("That gap is 4.5 degrees"), restate-padding, era-anchor-then-restate template.
 
-**Cost:** ~$25-45/mo (verified). Stale "$60-90" figure was wrong.
+**Data:** 613 cities × 179 countries with elevation. `data/era_anchors.json` curated 2026-04-26 to remove 43 political/US-centric/mass-tragedy entries (Trump, Brexit, Capitol riot, Hurricane Sandy, etc).
+
+**Cost:** ~$30–55/mo total stack (Sonnet evaluator $25–45 + Gemini $5–10). The Gemini "free tier" claim was outdated; `gemini-flash-latest` aliases to a paid preview model. Pin `GEMINI_MODEL=gemini-2.5-flash` to return to free.
+
+**Daily routine:** the recurring grader (`trig_016PGeHZgEYWmeQhx1xGmYg6`) fires every day at 15:00 UTC = 8 AM Pacific. Grades pending drafts, refines `docs/IMPROVEMENT_PLAN.md`, opens a PR. Plan-refinement-only — does NOT implement code/prompts. Human reviews, we implement together.
+
+---
 
 ## First moves on a new session
 
-### 1. Look at the new draft queue (5 minutes)
-
-Pull pending drafts from the Gist. The first alerts cycle since
-voice engine v2 shipped will tell you whether the changes worked. If
-fires now lead with named region, no "homes powered" / "no name yet"
-formulas, and records lean into era anchors → it worked. If the same
-ruts return → the prompt isn't enough and we need stronger
-intervention.
+### 1. Pull pending drafts (5 minutes)
 
 ```bash
 curl -s https://api.github.com/gists/06c02c97ffc0d11458687f1ed998d9e5 \
@@ -56,96 +43,55 @@ for d in [d for d in state.get('drafts', []) if d.get('status') == 'pending']:
 "
 ```
 
-If the new corpus needs grading: append a new dated section to
-`docs/DRAFT_CORPUS.md` (oldest stays at the bottom, newest at the top
-per the file's pattern).
+The voice engine v3 changes will start showing in cycles after the Apr 29 commit pushed. Look for:
+- **Era-anchor rate dropping.** Apr 25/27/29 corpora had 100% era-anchor deployment on records. v3 should drop that to ~10%. Empirical signal of whether the gate works.
+- **Other specificity vehicles emerging.** Accelerating-warming framing, past-tense personification, place-as-punchline, absolute scale, ecosystem context. Variety is the goal.
+- **Wodehouse violations holding or returning.** "That gap is X degrees" appeared in Apr 27 + Apr 29. New bad-example targets it; check whether it returns.
 
-### 2. Pick one of these next moves
+If new corpus needs grading: append to `docs/DRAFT_CORPUS.md` (newest at top).
 
-#### A. Multi-station roll-call format (pinned mid-implementation)
-The `simultaneous_records` signal triggers on 5+ records same day
-but emits a flat summary instead of a per-station list. User wants
-this fixed but doesn't want roll-call to be the only output —
-build it as a callable format among others. Surface elevation when
-the cluster includes high-altitude cities.
+### 2. Read the daily plan-refinement PR (if one's waiting)
 
-Files: `src/data/open_meteo.py` (return per-station data), `src/
-voice/generator.py` (new generator function), `src/voice/templates.py`
-(roll-call fallback), `src/main.py` (route by cluster shape).
+The recurring agent fires at 15:00 UTC daily. Check open PRs on `github.com/andrewzp/theheat`. Refined `docs/IMPROVEMENT_PLAN.md` is the artifact.
 
-Estimated: 4-6 hours. New tests around 5-10.
+### 3. Pick a direction
 
-#### B. Era-anchor database (Tier 1 from LEVEL_UP_PLAN)
-Pre-computed cultural anchors per year for 1995-2025. Generator
-gets `[anchors]` for the relevant year as part of the prompt data
-instead of asking Gemini to invent one. Ends hallucinated anchors;
-gives reliable variety.
+Open menu:
 
-Files: new `data/era_anchors.json`, plumb into all
-record-type generators in `src/voice/generator.py`.
+#### A. Implement next active proposal from IMPROVEMENT_PLAN.md
+P1 (era anchors) is shipped, awaiting empirical confirmation. Next priorities by leverage:
+- **P4** Wodehouse rule top-of-prompt — most predictive failure mode, observed across all corpus cycles. ~30 min.
+- **P5** Stranded-mechanic warning in fire prompt — 3 drafts on Apr 27 had real moves stranded inside throat-clearing. ~15 min.
+- **P6** Name humor moves as available tools (mostly done in v3 record addenda; could replicate for fire / anomaly / synthesis).
+- **P2** / **P3** Widen plant-comparison + opener-formula regex — tactical. ~30 min total.
 
-Estimated: 6-8 hours. One-shot offline curation (use Claude
-chat to generate 8+ anchors per year, manual review).
+#### B. Two-bot architecture redesign (BIG, in flight)
+User raised 2026-04-29: separate Data Organizer (gathers + structures signals into "story bundles") from Writer (takes bundles, writes voice). Cleaner than current Gemini-generates-then-Sonnet-rewrites. Started exploring; ready for full brainstorm + spec → plan → implement. See SESSION_BRIEF.md for context. This is bigger than P1-P6 — architectural.
 
-#### C. Revise `docs/LEVEL_UP_PLAN.md`
-First-pass plan had analytics as Tier 1; user correctly pointed out
-we don't post enough for analytics to mean anything. Rewrite with
-quality-side work as Tier 1 (era anchors, regenerate corpus, prompt
-iteration) and analytics demoted to Tier 2-3.
+#### C. Prompts inventory file
+User asked for a single doc that lists all the bot's prompts (system + per-category + helpers + safety + evaluator) with content + locations. Half-built; abandoned mid-stride when the architectural conversation opened. Could finish for handoff before architecture redesign.
 
-Estimated: 30 minutes. Doc-only.
+#### D. Cost optimization
+Pin `GEMINI_MODEL=gemini-2.5-flash` in GitHub Actions secrets to drop ~$5–10/mo Gemini cost. ~5 min.
 
-#### D. Fill in the 13 missing elevations
-Trivial retry. Run the bulk-fetch script for rows where
-`elevation_m` is empty. Spread across smaller batches with longer
-delays to avoid the 429.
+#### E. Fix `evaluator_pass=null` issue
+Apr 29 drafts all had `evaluator_pass: null`. Either the evaluator isn't writing its verdict to draft state, or `EVALUATOR_ENABLED` got set false somewhere. Investigation, ~30 min.
 
-Estimated: 15 minutes.
+---
 
-#### E. Re-think the voice rules vs @extremetemps
-Bigger conversation. The @extremetemps observations from this
-session (ALL CAPS openers work, "EXTRAORDINARY" and "Mind blowing"
-are tools the genre uses, multi-station data dumps are the format)
-suggest some of our rules are too tight. Voice engine v2 partly
-addresses this but not fully.
-
-Could be a prompt iteration with explicit "data-ticker genre
-permission" — small caps, light editorial heat, density permitted
-when warranted.
-
-Estimated: 1-2 hours. Small but high-leverage.
-
-#### F. Visuals
-User said maps are "easy to add, hard part is the text." Now that
-voice engine v2 ships, this is plausibly closer to ready. But user
-also said "we don't want to give up our generator and evaluator
-model" — voice quality first.
-
-Defer until voice work proves out.
-
-#### G. Housekeeping
-- `rm -rf theheat/theheat/` (stray Conductor worktree duplicate)
-- 13 missing elevations (see D)
-- LEVEL_UP_PLAN tier reordering (see C)
-
-## Invariants (do not break, preserved across sessions)
+## Invariants (do not break)
 
 - **Utility, not business.** No follower / engagement optimization.
 - **Set-and-forget.** No new human-in-the-loop layers.
-- **$25-45/mo Anthropic cost is the budget.** Set
-  `EVALUATOR_ENABLED=false` to drop it; don't add new paid services
-  without asking.
-- **Honest framing.** Window must be stated. Open-Meteo = 30 yrs,
-  OISST = 44 yrs, GRACE = 24 yrs.
+- **Resumption bar.** Posting resumes when majority A-grade per cycle, sustained.
+- **Honest framing.** Open-Meteo = 30 yrs, OISST = 44 yrs, GRACE = 24 yrs.
 - **Extreme only.** Routine data isn't tweetable.
-- **No press-release openers.** Bans enforced by safety pipeline.
-- **No meta-commentary.** Voice engine v2 partially relaxed this for
-  data-earned editorial heat; still no "THIS IS SERIOUS" /
-  "catastrophic" / "life-threatening."
-- **Keep Sonnet evaluator on.** User explicitly said "do it right for
-  now" — don't switch to Opus or Haiku without permission.
-- **Default Gemini stays `gemini-flash-latest`.** Don't pin a
-  snapshot unless flipping back from a broken release.
+- **No press-release openers, no boilerplate, no meta-commentary.** Banned by safety pipeline + bad-examples.
+- **Earned editorial heat allowed for elite signals only** (all-time, country, ≥18°C anomaly, ≥5-day streak). Mid-tier records get the quiet voice.
+- **Sonnet evaluator stays on.** User said no Opus, no Haiku for now. `EVALUATOR_ENABLED=true`.
+- **Sonnet-rewrite-bypass-of-_detect_stock_formula is intentional.** User confirmed 2026-04-27. Don't add the bypass.
+- **Era anchors parked at 1-in-10.** Don't reach for them as the default. The gate enforces structurally.
+- **Daily agent doesn't implement.** It refines `docs/IMPROVEMENT_PLAN.md` and opens PRs. Human + Claude implement together.
 
 ## Common commands
 
@@ -153,29 +99,24 @@ Defer until voice work proves out.
 cd /Users/andrewpuschel/Documents/Claude/theheat
 source .venv/bin/activate
 
-# Full test suite
-python -m pytest
+python -m pytest tests/
 
-# Fetch and grade pending drafts (see "First moves" #1)
-# See docs/DRAFT_CORPUS.md for the grading format
-
-# Recent GitHub Actions runs
 gh run list --limit 5 --workflow=bot.yml
 
-# Tail a specific run's log for source-level signals
-gh run view <ID> --log | grep -iE '\[draft\]|\[alerts\]|\[generator\]'
+# Recent draft activity
+curl -s https://api.github.com/gists/06c02c97ffc0d11458687f1ed998d9e5 | python3 -c "..."
 
-# Override the generator model without redeploying
-gh secret set GEMINI_MODEL  # then paste e.g. gemini-3-flash-preview
+# Override Gemini model
+gh secret set GEMINI_MODEL  # paste e.g. gemini-2.5-flash to drop to free tier
 
-# Kill the evaluator (drops cost to ~$0)
-gh secret set EVALUATOR_ENABLED  # then type: false
+# Kill the evaluator (drops Anthropic cost)
+gh secret set EVALUATOR_ENABLED  # paste: false
 ```
 
 ## Open thread snapshots
 
-- **Voice quality:** voice engine v2 just shipped. Next corpus is
-  the verdict.
-- **Models:** Sonnet 4.6 evaluator + `gemini-flash-latest` generator.
-  Grok and OS fine-tune are parked in IDEAS.
-- **Drafts:** queue cleared. Next alerts cycle generates fresh.
+- **Voice engine v3 just shipped.** Empirical verdict comes from next 3 cycles. Daily grader will track.
+- **Two-bot architecture conversation pending.** Started 2026-04-29; brainstorm not yet held.
+- **Prompts inventory file** half-built (the user asked for it; pivoted to architecture mid-stride).
+- **`evaluator_pass=null` mystery** — all 3 Apr 29 drafts had no evaluator verdict. Worth investigating.
+- **Cost docs reflect reality now** ($30–55/mo, not "$25–45/mo with Gemini free tier").

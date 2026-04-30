@@ -1,14 +1,14 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 26, 2026
-**Status:** **POSTING PAUSED — quality below bar.** Bot is generating + grading drafts but not posting. Voice engine v2.5 (era-anchor database, multi-station roll-call, recalibrated rules, opener-formula ban) shipped 2026-04-25. Humor research + corpus lens evaluation completed 2026-04-26.
-**Latest commit:** `274678e` on `main`
-**Tests:** 559 passing
-**Cost:** ~$25–45/month for Anthropic API (Sonnet 4.6 evaluator). Verified against console.anthropic.com 2026-04-24. Set `EVALUATOR_ENABLED=false` to drop to ~$0/mo if cost ever becomes the constraint. Everything else free tier (Gemini Flash via `gemini-flash-latest` alias, all data sources).
+**Last updated:** April 29, 2026
+**Status:** **POSTING PAUSED — quality below bar.** Bot is generating + grading drafts but not posting. Voice engine v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) shipped 2026-04-29. Humor research + corpus lens evaluation completed 2026-04-26. Daily plan-refinement agent runs 15:00 UTC.
+**Latest commit:** `cc360f2` voice engine v3 on `main`
+**Tests:** 566 passing
+**Cost:** Anthropic API ~$25–45/month (Sonnet 4.6 evaluator) + Google API ~$5–10/month (Gemini, was claimed free tier — `gemini-flash-latest` aliases to a paid preview model at $0.30/$2.50 per MTok). **Total stack: ~$30–55/month.** Set `EVALUATOR_ENABLED=false` to drop Anthropic to ~$0/mo. Pin `GEMINI_MODEL=gemini-2.5-flash` to drop Google to ~$0/mo (Apr 24 corpus on free-tier 2.5-flash was equivalent quality).
 
 ## Posting resumption bar (set 2026-04-26)
 
-**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. Current state: Apr 27 cycle = 9% A-grade (1 of 11). Need >50% sustained. The voice work is what closes the gap; until it does, the bot generates and grades but doesn't ship. This is a deliberate quality pause, not an operational gap.
+**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. Current state: **Apr 29 cycle = 0% A-grade (0 of 3).** Need >50% sustained. Voice engine v3 just shipped; next 3 cycles are the empirical signal on whether the era-anchor parking + addendum-mismatch fix + vehicle-agnostic prompt actually moved the needle. The voice work is what closes the gap; until it does, the bot generates and grades but doesn't ship. This is a deliberate quality pause, not an operational gap.
 
 ---
 

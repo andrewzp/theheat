@@ -8,36 +8,36 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `f321be8` (running on origin/main) |
-| Voice engine version | v2.5 (era anchors + multi-station roll-call + recalibrated rules + opener-formula ban) |
-| Last cycle A-rate | 9% (Apr 27, 1 of 11 drafts graded A-) |
+| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
+| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
+| Last cycle A-rate | 0% (Apr 29, 0 of 3) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 41 percentage points |
+| Gap | 50 percentage points |
 | Posting | paused until bar cleared |
 
 ## Active proposals
 
 Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
 
-### P1 — Reframe era anchors as one specificity vehicle, not the default
+### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
-**Observed:** 5 of 5 record drafts in Apr 27 corpus used era anchors. The strongest record draft (Navi Mumbai, A-) used **accelerating-warming framing** (*"set just last year in 2024"*) — not an era anchor. Era anchors are over-deployed because they're the path of least resistance for Gemini.
+**Observed (cumulative):** 3 of 3 records used era anchors on Apr 25, 5 of 5 on Apr 27, 3 of 3 on Apr 29 — three consecutive cycles at 100%. User direction same day: park era anchors at no more than 1-in-10 tweets. Prose-only de-emphasis was insufficient; structural gate was required.
 
-**Cycles observed:** Apr 25 (3/3 records used era anchors), Apr 27 (5/5).
-**Last seen:** Apr 27.
-**Proposed fix:** rewrite per-category record addenda (`record`, `all_time_high`, `monthly_high`, `country_high`, `record_low`) to list specificity vehicles equally:
-- Era anchor (year → cultural moment)
-- Accelerating-warming (record set within last 1-3 years)
-- Past-tense personification ("used to define," "used to know when to quit")
-- Place-as-punchline (Anchorage period-and-restate)
-- Absolute scale (number does the work alone — Kuwait 53.2C)
-- Understatement closer ("It's April.")
+**Cycles observed:** Apr 25, Apr 27, Apr 29 (3 cycles, 100% deployment each).
+**Last seen:** Apr 29.
 
-Add explicit guidance: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Era anchors used every record become the formula they were meant to escape."*
+**Implemented in same-day commit (voice engine v3):**
 
-**Expected impact:** breaks the convergence-on-era-anchors pattern. Gives Gemini a richer specificity palette. Should lift A-rate on records by 1-2 grade tiers based on Apr 25 corpus where 3 record drafts used different mechanics and all earned A-/B+.
+1. `_era_anchor_should_fire(seed_key, rate=0.1)` — deterministic 1-in-10 gate, seeded by city+year+date. Same draft cycle reproducible; across many seeds fires at ~10%.
+2. `_era_anchor_hint` rewritten: 90% of calls return explicit "parked, not your turn" steer-away message naming the 5 alternative specificity vehicles. 10% of calls return curated content framed as "your 1-in-10 turn."
+3. **Addendum-mismatch bug fixed.** `generate_all_time_record_tweet` was using `category="all_time_record"` but addenda were keyed `all_time_high`/`all_time_low` — addenda had been dormant. Fixed to `category=f"all_time_{kind}"`. Same fix for monthly. Added missing `monthly_low`, `country_low`, `record_low` addenda.
+4. **5 record-type per-category addenda rewritten** to use a shared 6-vehicle specificity menu (`_RECORD_SPECIFICITY_VEHICLES` constant). Era anchor is option 6, explicitly marked PARKED.
+5. **SYSTEM_PROMPT #1 ("HISTORICAL WEIGHT") rewritten** to be vehicle-agnostic. Was era-anchor-evangelizing ("anchor the year to something human"); now lists all 6 specificity vehicles equally and notes era anchors are parked.
+6. **3 new bad-examples added:** explicit-gap math ("That gap is 4.5 degrees"), restate-padding ("The new high: X. The old one: Y."), era-anchor-then-restate template.
 
-**Status:** drafted (HUMOR_RESEARCH.md §8.3 + §8.2 names the fix). Awaiting human implementation.
+**Tests:** 23 era_anchor tests pass (up from 18 — added 5 gate tests). Full suite 566 passing.
+
+**Status:** SHIPPED. Now awaiting 3+ cycles to confirm era-anchor deployment drops to ~10% empirically. If next 3 cycles show ≤30% era-anchor rate on records, P1 promotes to Resolved (archive).
 
 ### P2 — Widen plant-comparison regex adjective allowlist
 
@@ -66,10 +66,10 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 
 ### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
 
-**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless.
+**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless. Apr 29 [2] Mexico City repeated the explicit-gap-math violation ("That gap is 4.5 degrees" — same pattern as Apr 27 [10] Petaling Jaya). Two consecutive cycles with the same violation.
 
-**Cycles observed:** Apr 24, Apr 25, Apr 27 (consistent across all corpus cycles).
-**Last seen:** Apr 27.
+**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29 (consistent across all corpus cycles).
+**Last seen:** Apr 29.
 **Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
 
 > 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.

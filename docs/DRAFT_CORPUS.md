@@ -13,6 +13,104 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-29 — Era anchors at 100% on records (3 drafts)
+
+**Context:** Three new record drafts came in on 2026-04-29 cycles. All
+three used era anchors. This is the third consecutive cycle with
+≥80% era-anchor deployment on record drafts (Apr 25: 3/3 used era
+anchors, Apr 27: 5/5, Apr 29: 3/3). User direction (2026-04-29):
+park era anchors at 1-in-10. Implemented same day in commit (this
+session).
+
+**Grade distribution:** 0 A, 2 B (B / B+), 1 B-. **A-rate: 0% (0/3).**
+Gap from resumption bar: 50 points.
+
+### Per-draft
+
+#### [1] Cuenca, Ecuador — score 72 — **B-**
+
+> The last time Cuenca, Ecuador was this warm on this date, Adele's
+> 21 was the bestselling album in the world. That was 2011. Today's
+> forecast: 70.2F, against a record of 67.3F.
+
+Era anchor inverted to opener (Steven Wright move: lead with the
+cultural reference, ground in data after). Anchor lands ("Adele's 21"
+is in `era_anchors.json` 2011). **Problem:** 70.2F is not impressive
+without altitude context. Cuenca is at ~2,500m — the temp IS extreme
+for that elevation, but the tweet doesn't surface it. Reader sees
+70.2F and thinks "that's not hot." Ecosystem-specificity vehicle
+(which carried Apr 27 [8] Mexico highlands B+) is the missing move.
+
+#### [2] Mexico City — score 74 — **B**
+
+> Mexico City is forecast to hit 90.9F today. The record for this
+> date was 86.4F, set in 2017 — the year the iPhone X launched.
+> That gap is 4.5 degrees.
+
+Era anchor lands (iPhone X / 2017 in `era_anchors.json`). Closer is
+"That gap is 4.5 degrees" — **same Wodehouse soft-violation flagged
+on Apr 27 [10] Petaling Jaya** (explicit gap math the reader could
+do). Trim that and it's B+. Same Wodehouse-violation pattern,
+second cycle.
+
+#### [3] Jacksonville — score 73 — **B+**
+
+> Jacksonville is on pace for 92.8F today. The old record was 90F,
+> set in 2002. Last time it was this hot on this date, the first
+> Spider-Man movie was still in theaters.
+
+Strongest of the three. Era anchor (2002 Spider-Man, in
+`era_anchors.json`) + "still in theaters" temporal-duration framing.
+**No Wodehouse violation.** Tight.
+
+### Patterns named in this batch
+
+1. **Era-anchor convergence at 100%.** All 3 records used era anchors.
+   Third cycle with this pattern. P1 evidence count: now 3 cycles.
+2. **Wodehouse violation repeats.** "That gap is X degrees" surfaced
+   on Apr 27 [10] (B+) and now Apr 29 [2] (B). Same explicit-gap
+   math pattern. P4 evidence count: 2 cycles direct + multiple
+   indirect.
+3. **Missing ecosystem context** for high-altitude cities. Cuenca at
+   70.2F is hot for 2,500m elevation but the tweet doesn't say so.
+   Apr 27 [8] Mexico highlands used the right ecosystem move
+   ("monsoon that extinguishes these fires"). The bot should be
+   reaching for elevation/climate-zone context when the absolute
+   temperature is mid-range but the location makes it extreme.
+4. **`evaluator_pass` field is null on all 3 drafts.** Sonnet
+   evaluator either didn't run or didn't write its verdict. Worth
+   investigating but separate from voice work — possibly
+   `EVALUATOR_ENABLED=false` got set somewhere, or the pass-through
+   has a logging gap.
+
+### Followups
+
+1. **Era-anchor 1-in-10 gate SHIPPED 2026-04-29** (this session) —
+   `_era_anchor_should_fire` deterministic gate, 90% of calls return
+   explicit steer-away with alternative vehicles named, 10% of calls
+   return curated content framed as "your 1-in-10 turn." Plus the
+   addendum-mismatch fix (`all_time_record`/`monthly_record`
+   categories now match `all_time_high/low` and `monthly_high/low`
+   addendum keys, which had been dormant). Plus rewrite of all 5
+   record-type per-category addenda to use a shared 6-vehicle menu.
+   Plus SYSTEM_PROMPT #1 ("HISTORICAL WEIGHT") rewritten to be
+   vehicle-agnostic (era anchors no longer evangelized as the move).
+   Plus three new bad-examples (gap math, restate-padding, era-
+   anchor-then-restate template).
+2. **Verify the gate empirically** — next 3 cycles should show era
+   anchors on ≤30% of records (statistically expected ~10%).
+3. **Evaluator null verdict** — needs investigation. Out of scope
+   for this voice-work session.
+
+### Numbers
+
+- A-rate: 0% (was 9% Apr 27, 43% Apr 25, 9% Apr 24)
+- Gap from bar: 50 points
+- Era-anchor deployment on records: 100% (3/3) — pre-gate
+- Tests: 566 passing (was 561, +5 from new gate tests)
+
+---
+
 ## 2026-04-27 — Voice engine v2.5 verdict (11 new drafts)
 
 **Context:** First alerts-cycle output after voice engine v2.5 shipped

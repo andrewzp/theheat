@@ -1,3 +1,84 @@
+# Session Brief
+
+Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest section at top.
+
+---
+
+# 2026-04-26 → 2026-04-29 — Voice engine v3 + research grounding + posting paused
+
+## Where we landed
+
+`main` is on the voice engine v3 ship commit. **566 tests passing** (was 522 at session start). Posting paused since 2026-04-12 — deliberate quality bar set 2026-04-26: posting resumes when majority of corpus-graded drafts earn A grades. Currently 0% A-rate (Apr 29). Daily plan-refinement agent runs 15:00 UTC, refining `docs/IMPROVEMENT_PLAN.md`.
+
+## The big shifts this session
+
+1. **Posting bar made explicit.** "Resume posting when majority A" — pinned in BRIEFING. Applies to all future cycles. Stale drafts can't ship even when shippable; window expires.
+2. **Humor research grounded the voice work.** New doc `brand/HUMOR_RESEARCH.md` (270 lines) covers the four humor theories (Kant/Schopenhauer incongruity, McGraw & Warren benign violation, relief, superiority), joke construction, comic triple, brevity + specificity, deadpan tradition (Steven Wright, Mitch Hedberg, Bob Newhart), British humor (Wodehouse rule), and Shifman meme theory. Gives every voice mechanic a name and a corpus example. **Wodehouse rule named as the most predictive principle:** the voice should never sound like it's trying to be funny.
+3. **Era anchors parked at 1-in-10.** Three consecutive corpus cycles (Apr 25, 27, 29) showed 100% era-anchor deployment on records. User direction Apr 29: park at no more than 1-in-10 tweets. Voice engine v3 ships the structural gate (`_era_anchor_should_fire`, deterministic by city+year+date seed). 90% of record drafts get explicit "parked, use other vehicles" steer-away; 10% get curated content framed as "your 1-in-10 turn."
+4. **Addendum-mismatch bug fixed.** `generate_all_time_record_tweet` was using `category="all_time_record"` but addenda were keyed `all_time_high`/`all_time_low` — addenda had been DORMANT. Fixed to `category=f"all_time_{kind}"`. Same for monthly. Added missing `monthly_low`, `country_low`, `record_low` addenda. The voice work that went into those addenda has now actually started applying.
+5. **Daily plan-refinement agent created.** `trig_016PGeHZgEYWmeQhx1xGmYg6`, fires 15:00 UTC daily. Reads framework docs, grades drafts, refines `docs/IMPROVEMENT_PLAN.md`, opens a PR. Plan-only — does NOT implement code/prompts. User reviews, we implement together.
+6. **Anchor curation cleaned.** Pruned 43 entries from `data/era_anchors.json` (politically-charged: Trump, Brexit, Capitol riot, Elon/Twitter, MeToo; mass tragedies as scaffolding: 9/11, Katrina, Hurricane Sandy, Indian Ocean tsunami; US-only sports: Cubs, Red Sox; etc). Now 205 anchors / 31 years / 6.6 avg per year, all globally legible and politically neutral.
+7. **Two-bot architecture conversation opened.** User raised: separate Data Organizer (gathers + structures signals into "story bundles") from Writer (takes bundles, writes voice with great voice). Cleaner than current Gemini-generates-then-Sonnet-rewrites. Brainstorm pending.
+8. **Cost reality update.** "Free tier" Gemini claim was outdated. `gemini-flash-latest` aliases to a paid preview model at $0.30/$2.50 per MTok. Current Gemini spend: ~$5–10/mo. Pin `GEMINI_MODEL=gemini-2.5-flash` to return to free tier.
+
+User also clarified important nuances:
+
+- **"not everything has to be a joke"** — humor mechanics are tools, not mandates. Pure data delivery is valid when the number is striking enough.
+- **"the era anchor can't be used every time. it gets so old and lame"** — drove the 1-in-10 parking decision.
+- **"we paused posting because the tweets sucked"** — explained the 0-pending state. Posting is a deliberate quality pause, not an operational gap.
+- **"we can't post those because they aren't real time"** — drafts have time-baked content, expire fast. 14 stale pending bulk-rejected 2026-04-26.
+- **"keep building and refine an improvement plan, then i can review it and we can implement together"** — sets the agent autonomy boundary. Daily agent refines plan; human + Claude implement.
+
+## What shipped this session (chronological)
+
+- Voice engine v2.5 (era anchors + multi-station roll-call + recalibrated rules + opener-formula ban + earned editorial heat permission) — pre-session leftover
+- BRIEFING resumption-bar pin + `docs/QUALITY_TREND.md` (A-rate trend + rejection log)
+- Bulk-reject 4 D-range fires + 14 stale pending drafts (queue zeroed for clean baseline)
+- `brand/HUMOR_RESEARCH.md` (270 lines, sibling to VIRALITY_RESEARCH)
+- Apr 27 corpus humor-lens evaluation + Apr 24 corpus re-grades (#3, #4 demoted on grammatical-referent issue)
+- `data/era_anchors.json` audit + 43-entry prune
+- `docs/CLAUDE_DESIGN_BRIEF.md` + `docs/claude-design-handoff/` folder (3-direction brand identity request)
+- `docs/IDEAS.md` NVIDIA NIM entry (dev-only A/B harness)
+- `docs/IMPROVEMENT_PLAN.md` (living plan refined daily by autonomous agent)
+- Daily recurring schedule `trig_016PGeHZgEYWmeQhx1xGmYg6` for plan refinement
+- Apr 29 corpus grading (3 drafts, 0% A-rate)
+- **Voice engine v3 (this commit):** era-anchor 1-in-10 gate + addendum-mismatch fix + 5 record-type addenda rewrite to 6-vehicle menu + SYSTEM_PROMPT #1 vehicle-agnostic rewrite + 3 new bad-examples + 5 new gate tests
+
+## What's pinned mid-implementation
+
+1. **Two-bot architecture redesign.** User raised 2026-04-29; we sketched the shape (Data Organizer outputs structured story bundles; Writer takes bundles + voice). Brainstorm not yet held. Bigger lift than P1-P6 — architectural.
+2. **Prompts inventory doc.** User asked for a single doc listing all bot prompts (system + per-category + helpers + safety + evaluator) with content + locations. Half-built; abandoned mid-stride when the architecture conversation opened.
+
+## Other open threads
+
+- **Voice rules vs @extremetemps:** the voice spec is over-engineered for breakout-viral aspiration when our genre uses ALL CAPS / editorial heat / multi-station data dumps. Voice engine v2.5 partially addresses; deeper rethink still possible.
+- **`evaluator_pass=null`** on all 3 Apr 29 drafts. Either evaluator isn't writing verdict to draft state, or `EVALUATOR_ENABLED` got set false. Worth investigating.
+- **Daily plan-refinement agent's first run** is tomorrow morning. Should observe the empirical effect of the v3 era-anchor gate.
+
+## Numbers
+
+- Tests: 522 → 566 (+44 across the session)
+- Commits pushed to `main`: 12+ (era_anchors prune, HUMOR_RESEARCH, corpus updates, design brief, IDEAS, BRIEFING, QUALITY_TREND, IMPROVEMENT_PLAN, voice engine v3 — final commit pending in this session)
+- Era-anchor inventory: 248 → 205 (43 pruned)
+- Pending drafts: 0 (paused; would-be drafts get graded but not posted)
+- API spend: $30–55/mo total stack
+- Posting cadence: 0 (last post Apr 12; resumption bar majority-A not yet cleared)
+
+## When picking up in the next session
+
+Read in order:
+1. `BRIEFING.md` (current state)
+2. This file's top section (Apr 26-29 — what just happened)
+3. `docs/NEXT_SESSION.md` (action menu, invariants, common commands)
+4. `docs/IMPROVEMENT_PLAN.md` (living plan, P1 SHIPPED + P4-P6 active)
+5. `docs/QUALITY_TREND.md` (A-rate trend)
+6. `docs/DRAFT_CORPUS.md` Apr 29 + Apr 27 sections (lens evaluations + re-grades)
+7. `brand/HUMOR_RESEARCH.md` (the framework)
+
+Pull pending drafts. If new corpus needs grading, append to `DRAFT_CORPUS.md`. Then pick a menu item from `NEXT_SESSION.md` — likely either continue the voice work (P4 Wodehouse top-of-prompt), open the two-bot architecture brainstorm, or finish the prompts inventory.
+
+---
+
 # Session Brief — April 24, 2026
 
 Handoff doc for picking up @theheat work. Read after `BRIEFING.md`.
