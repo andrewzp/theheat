@@ -25,6 +25,40 @@ def _make_bundle(text: str, category: str = "record") -> CandidateBundle:
     return CandidateBundle(category=category, candidates=[candidate])
 
 
+def _make_scored_bundle(
+    text: str,
+    verdict: EvaluatorVerdict,
+    *,
+    source: str = "gemini",
+    category: str = "record",
+) -> CandidateBundle:
+    score = CandidateScore(clarity=70, context=70, voice=70, punch=70, total=70, reasons=("test",))
+    candidate = DraftCandidate(rank=1, text=text, source=source, score=score)
+    return CandidateBundle(
+        category=category,
+        candidates=[candidate],
+        evaluator_verdict=verdict.as_dict(),
+        evaluator_used_rewrite=source == "evaluator_rewrite",
+    )
+
+
+def _editorial_score():
+    from src.editorial.scoring import EditorialScore
+
+    return EditorialScore(
+        category="record",
+        severity=80,
+        novelty=80,
+        timeliness=80,
+        confidence=80,
+        shareability=80,
+        sensitivity=0,
+        total=80,
+        threshold=60,
+        reasons=["test"],
+    )
+
+
 def _mock_anthropic_response(response_json: dict) -> MagicMock:
     """Helper: build a mock Anthropic response."""
     content_block = MagicMock()
@@ -186,21 +220,24 @@ class TestEvaluateAndPolish:
     @patch("src.editorial.evaluator.ANTHROPIC_API_KEY", "")
     def test_no_api_key_returns_original(self):
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
+        assert verdict.reasoning == "evaluator skipped"
 
     def test_empty_bundle_returns_original(self):
         bundle = CandidateBundle(category="record", candidates=[])
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result.candidates == []
+        assert verdict.reasoning == "evaluator skipped"
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_passing_returns_original(self, mock_get_client):
         mock_get_client.return_value = _mock_anthropic_client(_passing_response())
         bundle = _make_bundle("Phoenix just dropped 121F. NEW RECORD. The old one was from last year.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result.text == bundle.text
         assert len(result.candidates) == 1
+        assert verdict.passed is True
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_failing_with_rewrite_replaces_top(self, mock_get_client):
@@ -208,13 +245,14 @@ class TestEvaluateAndPolish:
         rewrite = "CO2 at Mauna Loa: 435 ppm. Pre-industrial was 280. We are 55% above where the atmosphere was for all of human civilization."
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle(original, category="co2_milestone")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result.text == rewrite
         assert result.candidates[0].source == "evaluator_rewrite"
         assert result.candidates[0].rank == 1
         assert len(result.candidates) == 2
         assert result.candidates[1].text == original
         assert result.candidates[1].rank == 2
+        assert verdict.passed is False
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_failing_rewrite_fails_safety_returns_none(self, mock_get_client):
@@ -222,8 +260,9 @@ class TestEvaluateAndPolish:
         rewrite_with_bang = "Phoenix hit 121F! NEW RECORD!"
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite_with_bang))
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result is None
+        assert verdict.passed is False
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_failing_no_rewrite_returns_none(self, mock_get_client):
@@ -232,8 +271,9 @@ class TestEvaluateAndPolish:
         resp["rewrite"] = None
         mock_get_client.return_value = _mock_anthropic_client(resp)
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result is None
+        assert verdict.passed is False
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_overlong_rewrite_returns_none(self, mock_get_client):
@@ -241,8 +281,9 @@ class TestEvaluateAndPolish:
         rewrite = "A" * 300
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result is None
+        assert verdict.passed is False
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_score_regression_returns_none(self, mock_get_client):
@@ -250,8 +291,9 @@ class TestEvaluateAndPolish:
         rewrite = "Meh."
         mock_get_client.return_value = _mock_anthropic_client(_failing_response(rewrite))
         bundle = _make_bundle("Original tweet with good structure and data density 121F record.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result is None
+        assert verdict.passed is False
 
     @patch("src.editorial.evaluator._get_anthropic_client")
     def test_api_failure_returns_original(self, mock_get_client):
@@ -259,8 +301,71 @@ class TestEvaluateAndPolish:
         client.messages.create.side_effect = Exception("timeout")
         mock_get_client.return_value = client
         bundle = _make_bundle("Original tweet.")
-        result = evaluate_and_polish(bundle, "data")
+        result, verdict = evaluate_and_polish(bundle, "data")
         assert result.text == "Original tweet."
+        assert verdict.reasoning == "evaluator skipped"
+
+
+# --- Draft persistence ---
+
+class TestEvaluatorDraftMetadata:
+    def test_passing_evaluation_gets_persisted_on_draft(self):
+        from src.main import _save_generated_draft
+
+        state = {"drafts": []}
+        verdict = EvaluatorVerdict(
+            passed=True,
+            scores={"awe": 8, "comparison": 8, "social_currency": 8, "opener": 8, "show_not_tell": 9},
+            total=41,
+            failures=[],
+            reasoning="strong enough",
+            rewrite=None,
+        )
+        bundle = _make_scored_bundle("Original tweet.", verdict)
+
+        assert _save_generated_draft(bundle, state, "record", "evt_pass", _editorial_score()) is True
+
+        draft = state["drafts"][0]
+        assert draft["evaluator_pass"] is True
+        assert draft["evaluator_total"] == 41
+        assert draft["evaluator_scores"]["awe"] == 8
+        assert draft["evaluator_failures"] == []
+        assert draft["evaluator_used_rewrite"] is False
+
+    def test_rewrite_accepted_marks_rewrite_usage(self):
+        from src.main import _save_generated_draft
+
+        state = {"drafts": []}
+        verdict = EvaluatorVerdict(
+            passed=False,
+            scores={"awe": 4, "comparison": 4, "social_currency": 5, "opener": 4, "show_not_tell": 8},
+            total=25,
+            failures=["awe", "comparison", "opener"],
+            reasoning="rewrite needed",
+            rewrite="Better tweet.",
+        )
+        bundle = _make_scored_bundle("Better tweet.", verdict, source="evaluator_rewrite")
+
+        assert _save_generated_draft(bundle, state, "record", "evt_rewrite", _editorial_score()) is True
+
+        draft = state["drafts"][0]
+        assert draft["evaluator_pass"] is False
+        assert draft["evaluator_failures"] == ["awe", "comparison", "opener"]
+        assert draft["evaluator_used_rewrite"] is True
+
+    def test_skipped_evaluator_gets_null_pass(self):
+        from src.main import _save_generated_draft
+
+        state = {"drafts": []}
+        bundle = _make_scored_bundle("Original tweet.", _passing_verdict())
+
+        assert _save_generated_draft(bundle, state, "record", "evt_skip", _editorial_score()) is True
+
+        draft = state["drafts"][0]
+        assert draft["evaluator_pass"] is None
+        assert draft["evaluator_total"] == 0
+        assert draft["evaluator_scores"] == {}
+        assert draft["evaluator_failures"] == []
 
 
 # --- EvaluatorVerdict ---

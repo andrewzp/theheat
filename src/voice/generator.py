@@ -524,6 +524,18 @@ era-anchor framing ('it gets so old and lame'). The gate is the
 structural enforcement; prose-only de-emphasis didn't hold."""
 
 
+def _with_evaluator_verdict(bundle: CandidateBundle, verdict: object) -> CandidateBundle:
+    verdict_payload = verdict.as_dict() if hasattr(verdict, "as_dict") else None
+    return CandidateBundle(
+        category=bundle.category,
+        candidates=bundle.candidates,
+        evaluator_verdict=verdict_payload,
+        evaluator_used_rewrite=bool(
+            bundle.candidates and bundle.candidates[0].source == "evaluator_rewrite"
+        ),
+    )
+
+
 def _era_anchor_should_fire(seed_key: str, rate: float = _ERA_ANCHOR_GATE_RATE) -> bool:
     """Deterministic 1-in-10 gate. Same seed_key → same answer, so a
     given draft cycle is reproducible and testable. Across many
@@ -743,10 +755,10 @@ def generate_tweet_bundle(
         try:
             from src.editorial.evaluator import evaluate_and_polish
 
-            result = evaluate_and_polish(bundle, data_description)
+            result, verdict = evaluate_and_polish(bundle, data_description)
             if result is None:
                 return None
-            bundle = result
+            bundle = _with_evaluator_verdict(result, verdict)
         except Exception as e:
             print(f"[generator] Evaluator import/call failed, using ranked bundle: {e}")
 
