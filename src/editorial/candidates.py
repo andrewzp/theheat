@@ -88,6 +88,8 @@ class DraftCandidate:
 class CandidateBundle:
     category: str
     candidates: list[DraftCandidate]
+    evaluator_verdict: dict | None = None
+    evaluator_used_rewrite: bool = False
 
     @property
     def text(self) -> str:

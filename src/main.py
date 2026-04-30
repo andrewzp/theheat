@@ -153,21 +153,23 @@ def _should_draft(score: EditorialScore, event_id: str = "") -> bool:
 
 def _unwrap_generated_result(
     generated: str | CandidateBundle | object | None,
-) -> tuple[str, list[dict] | None, dict | None]:
+) -> tuple[str, list[dict] | None, dict | None, dict | None]:
     if generated is None:
-        return "", None, None
+        return "", None, None, None
 
     if isinstance(generated, str):
-        return generated, None, None
+        return generated, None, None, None
 
     if isinstance(generated, CandidateBundle):
         candidates = [candidate.as_dict() for candidate in generated.candidates]
         selected_score = generated.selected_score.as_dict() if generated.selected_score else None
-        return generated.text, candidates, selected_score
+        evaluator_metadata = _evaluator_metadata_from_bundle(generated)
+        return generated.text, candidates, selected_score, evaluator_metadata
 
     text = getattr(generated, "text", "") if isinstance(getattr(generated, "text", ""), str) else ""
     candidates = getattr(generated, "candidates", None)
     selected_score = getattr(generated, "selected_score", None)
+    evaluator_metadata = _evaluator_metadata_from_bundle(generated)
 
     candidate_payload = None
     if candidates:
@@ -179,7 +181,28 @@ def _unwrap_generated_result(
                 candidate_payload.append(candidate)
 
     selected_payload = selected_score.as_dict() if hasattr(selected_score, "as_dict") else selected_score
-    return text, candidate_payload, selected_payload
+    return text, candidate_payload, selected_payload, evaluator_metadata
+
+
+def _evaluator_metadata_from_bundle(generated: object) -> dict | None:
+    verdict = getattr(generated, "evaluator_verdict", None)
+    if not isinstance(verdict, dict):
+        return None
+
+    scores = verdict.get("scores") if isinstance(verdict.get("scores"), dict) else {}
+    failures_raw = verdict.get("failures")
+    failures = [str(item) for item in failures_raw] if isinstance(failures_raw, list) else []
+    skipped = verdict.get("reasoning") == "evaluator skipped"
+    # Null means the evaluator did not actually run; True/False means it returned a verdict.
+    evaluator_pass = None if skipped else bool(verdict.get("passed"))
+
+    return {
+        "evaluator_pass": evaluator_pass,
+        "evaluator_total": int(verdict.get("total") or 0),
+        "evaluator_scores": scores,
+        "evaluator_failures": failures,
+        "evaluator_used_rewrite": bool(getattr(generated, "evaluator_used_rewrite", False)),
+    }
 
 
 def _fact(label: str, value: str | int | float | None) -> dict | None:
@@ -316,6 +339,7 @@ def save_draft(
     candidates: list[dict] | None = None,
     candidate_score: dict | None = None,
     review_context: dict | None = None,
+    evaluator_metadata: dict | None = None,
     city: str = "",
     tweet_date: str = "",
     cooldown_exempt: bool = False,
@@ -416,6 +440,8 @@ def save_draft(
         draft["candidate_score"] = candidate_score
     if review_context:
         draft["review_context"] = review_context
+    if evaluator_metadata is not None:
+        draft.update(evaluator_metadata)
 
     policy = recommend_approval_policy(
         tweet_type,
@@ -446,7 +472,7 @@ def _save_generated_draft(
     tweet_date: str = "",
     cooldown_exempt: bool = False,
 ) -> bool:
-    tweet_text, candidates, candidate_score = _unwrap_generated_result(generated)
+    tweet_text, candidates, candidate_score, evaluator_metadata = _unwrap_generated_result(generated)
     if not tweet_text:
         return False
     return save_draft(
@@ -458,6 +484,7 @@ def _save_generated_draft(
         candidates=candidates,
         candidate_score=candidate_score,
         review_context=review_context,
+        evaluator_metadata=evaluator_metadata,
         city=city,
         tweet_date=tweet_date,
         cooldown_exempt=cooldown_exempt,

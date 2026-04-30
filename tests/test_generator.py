@@ -168,6 +168,10 @@ class TestDetectStockFormula:
             "A standard nuclear reactor runs at around 1,000 MW.",
             "A typical coal plant runs at 600 MW.",
             "A small power plant delivers about 300 MW. Except it's a forest.",
+            "a commercial nuclear reactor outputs around 3,000 MW",
+            "an industrial power plant generates 1,200",
+            "a mid-sized coal plant produces 800 MW",
+            "a high-capacity gas plant runs at 2,500 MW",
         ]
         for t in bad:
             assert _detect_stock_formula(t) is not None, f"Should reject: {t}"
@@ -202,6 +206,11 @@ class TestDetectStockFormula:
             "A wildfire in Africa is currently releasing 235 MW of power.",
             "A wildfire burning in Mexico right now is generating 329 MW.",
             "A storm in the Pacific is producing 450 MW of cyclonic energy.",
+            "A wildfire in central India is pushing 297 MW",
+            "A fire in Queensland is spewing 450 MW",
+            "A wildfire is pumping out 800 MW into the upper atmosphere",
+            "A fire in California is throwing off 600 MW",
+            "A wildfire in Spain is sending up 350 MW",
         ]
         for t in bad:
             assert _detect_stock_formula(t) is not None, f"Should reject: {t}"
@@ -241,6 +250,12 @@ class TestDetectStockFormula:
 
 
 class TestPromptForCategory:
+    def test_wodehouse_rule_is_first_substantive_rule(self):
+        assert "DON'T SOUND LIKE YOU'RE TRYING" in SYSTEM_PROMPT
+        assert SYSTEM_PROMPT.index("DON'T SOUND LIKE YOU'RE TRYING") < SYSTEM_PROMPT.index(
+            "WHAT MAKES A TWEET VIRAL"
+        )
+
     def test_unknown_category_falls_back_to_universal(self):
         assert _prompt_for_category("unknown_type") == SYSTEM_PROMPT
         assert _prompt_for_category("") == SYSTEM_PROMPT
@@ -267,6 +282,7 @@ class TestPromptForCategory:
         assert "no name yet" in fire_prompt
         assert "power-plant comparison" in fire_prompt.lower() or \
                "power plant" in fire_prompt.lower()
+        assert "If you write a punchline, leave it alone" in _CATEGORY_PROMPTS["fire"]
 
 
 class TestGenerateRecordTweet:

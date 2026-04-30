@@ -242,33 +242,34 @@ def evaluate_candidate(
 def evaluate_and_polish(
     bundle: CandidateBundle,
     data_description: str,
-) -> CandidateBundle | None:
-    """Evaluate top candidate and return improved bundle, or None to kill the draft.
+) -> tuple[CandidateBundle | None, EvaluatorVerdict]:
+    """Evaluate top candidate and return improved bundle plus verdict.
 
     If the top candidate passes, returns bundle unchanged.
     If it fails and a rewrite is accepted, the rewrite replaces the top candidate.
     If it fails and the rewrite can't be used, returns None — the event is
     not worth tweeting about. A tweet the evaluator explicitly rejects
-    should not become a draft.
+    should not become a draft. The verdict always describes the original
+    top-ranked candidate.
     """
     if not bundle.candidates:
-        return bundle
+        return bundle, _passing_verdict()
 
     top = bundle.candidates[0]
     verdict = evaluate_candidate(top.text, data_description, bundle.category)
 
     if verdict.passed:
-        return bundle
+        return bundle, verdict
 
     if not verdict.rewrite:
         print(f"[evaluator] KILLED draft — failed evaluation with no rewrite: {top.text[:60]}...")
-        return None
+        return None, verdict
 
     # Run the rewrite through safety pipeline
     safe, reason = run_safety_pipeline(verdict.rewrite)
     if not safe:
         print(f"[evaluator] KILLED draft — rewrite failed safety ({reason}): {top.text[:60]}...")
-        return None
+        return None, verdict
 
     # Build new candidate from the rewrite
     rewrite_score = score_candidate_text(verdict.rewrite, bundle.category)
@@ -276,7 +277,7 @@ def evaluate_and_polish(
     # Score-regression guard: don't accept a rewrite that scores worse
     if rewrite_score.total < top.score.total:
         print(f"[evaluator] KILLED draft — rewrite scored lower ({rewrite_score.total} < {top.score.total}): {top.text[:60]}...")
-        return None
+        return None, verdict
 
     rewrite_candidate = DraftCandidate(
         rank=1,
@@ -295,4 +296,4 @@ def evaluate_and_polish(
     return CandidateBundle(
         category=bundle.category,
         candidates=[rewrite_candidate] + rest,
-    )
+    ), verdict
