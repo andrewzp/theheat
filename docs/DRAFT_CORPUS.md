@@ -13,6 +13,50 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-04-30 — No fresh drafts (Gist API rate-limited)
+
+**Context:** Daily grader fired 2026-04-30 (15:00 UTC). GitHub Gist API returned HTTP 403
+rate-limit error on unauthenticated fetch. The draft queue state could not be read. This
+is not a confirmed empty-queue run — pending drafts may exist; their status is unknown.
+
+**Grade distribution:** N/A. **A-rate: N/A.**
+Gap from resumption bar: unknown (last known 50 pp, as of Apr 29).
+
+### Why the queue was inaccessible
+
+The grader uses an unauthenticated `curl` call to `api.github.com/gists/06c02c97ffc0d11458687f1ed998d9e5`.
+GitHub's unauthenticated rate limit is 60 req/hr per IP; the shared runner IP exhausted
+its allocation before this run. `GH_GIST_TOKEN` (PAT with gist scope) exists as a repo
+secret but is not surfaced to the grader's invocation. Fix: add
+`-H "Authorization: token $GH_GIST_TOKEN"` to the grader's curl call.
+
+### Staleness check (skipped)
+
+Could not perform the 48-hour bulk-reject pass. Any Apr 30 drafts with baked-in date
+language ("forecast to hit X today", "It is April 30") will be stale by the next grader
+run if the auth issue persists. Flag for manual queue audit.
+
+### Patterns named
+
+None — no grading data this cycle.
+
+### Followups
+
+1. **Fix grader auth.** Unauthenticated Gist reads will hit the rate limit on any shared
+   runner. Surface `GH_GIST_TOKEN` into the grader environment and add it as the
+   `Authorization` header. Blocks all draft-dependent steps (grading, staleness check,
+   bulk-reject) when this fails.
+2. **Manual queue audit.** On next successful grader run, check for drafts created on
+   Apr 30 with real-time-baked content and reject them per the 48-hr staleness policy.
+
+### Numbers
+
+- A-rate: N/A (queue inaccessible)
+- Corpus cycles to date: 5 (Apr 24, Apr 25, Apr 27, Apr 29, Apr 30/N/A)
+- Active proposals unaffected: no new evidence, no retirements this cycle
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
