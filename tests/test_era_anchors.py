@@ -124,24 +124,92 @@ class TestPickAnchors:
         assert sorted(result) == ["a", "b"]
 
 
+class TestEraAnchorOneInTenGate:
+    """Era anchors are parked at 1-in-10 per user direction (2026-04-29)
+    after Apr 27 + Apr 29 corpora showed every record draft converging
+    on era-anchor framing. The gate enforces structurally; prose-only
+    de-emphasis didn't hold."""
+
+    def test_gate_rate_close_to_ten_percent(self):
+        # Statistical: across many seeds, gate fires at ~10%.
+        from src.voice.generator import _era_anchor_should_fire
+        fires = sum(1 for i in range(10000) if _era_anchor_should_fire(f"seed-{i}"))
+        # Binomial 95% CI for n=10000, p=0.1 is ~[940, 1060]; widen slightly.
+        assert 850 < fires < 1150, f"Gate fired {fires}/10000 times, expected ~1000"
+
+    def test_gate_is_deterministic_per_seed(self):
+        from src.voice.generator import _era_anchor_should_fire
+        for seed in ("a", "b", "c", "city-1999-2026-04-26"):
+            assert _era_anchor_should_fire(seed) == _era_anchor_should_fire(seed)
+
+    def test_gate_rate_parameter_works(self):
+        # Higher rate should fire more often.
+        from src.voice.generator import _era_anchor_should_fire
+        fires_at_50 = sum(1 for i in range(2000) if _era_anchor_should_fire(f"r50-{i}", rate=0.5))
+        assert 800 < fires_at_50 < 1200, f"At rate=0.5, fires={fires_at_50}/2000"
+
+
+def _find_seed(should_fire: bool, prefix: str = "find") -> str:
+    """Find a seed where the gate matches the desired bool. Test helper."""
+    from src.voice.generator import _era_anchor_should_fire
+    for i in range(10000):
+        seed = f"{prefix}-{i}"
+        if _era_anchor_should_fire(seed) == should_fire:
+            return seed
+    raise RuntimeError(f"Couldn't find seed where fire={should_fire}")
+
+
 class TestEraAnchorIntegrationWithGenerator:
-    """Verify the anchor hint actually flows into the prompt data string
-    when a record-type generator is invoked."""
+    """Verify the anchor hint flows correctly into the prompt — both
+    when the gate fires (curated content) and when it doesn't (steer-
+    away message)."""
 
-    def test_helper_returns_empty_for_unknown_year(self):
+    def test_helper_steers_away_when_gate_skips(self):
+        # 90% of calls should return the explicit "parked" steer-away
+        # message naming alternative specificity vehicles.
         from src.voice.generator import _era_anchor_hint
-        hint = _era_anchor_hint(1850, seed_key="test")
-        assert hint == ""
+        seed_no_fire = _find_seed(should_fire=False)
+        hint = _era_anchor_hint(1999, seed_key=seed_no_fire)
+        # Steer-away includes parking signal AND the alternative vehicles
+        assert "parked" in hint.lower() or "1 per 10" in hint or "1 in 10" in hint
+        # Names at least 2 of the 5 alternative vehicles
+        alternatives = ["accelerating-warming", "past-tense personification",
+                        "place-as-punchline", "absolute scale", "ecosystem context"]
+        named = sum(1 for alt in alternatives if alt in hint.lower())
+        assert named >= 3, f"Only {named} alternative vehicles named in steer-away"
 
-    def test_helper_includes_year_label(self):
+    def test_helper_steers_away_does_not_use_year_label_as_anchor(self):
+        # When gate skips, hint should NOT present the curated year-anchor list.
         from src.voice.generator import _era_anchor_hint
-        hint = _era_anchor_hint(1999, seed_key="test")
+        seed_no_fire = _find_seed(should_fire=False)
+        hint = _era_anchor_hint(1999, seed_key=seed_no_fire)
+        # The curated content for 1999 includes "Y2K", "Matrix", etc.
+        # The steer-away should NOT list them (would defeat the parking).
+        assert "Y2K" not in hint and "Matrix" not in hint
+
+    def test_helper_returns_curated_when_gate_fires(self):
+        from src.voice.generator import _era_anchor_hint
+        seed_fires = _find_seed(should_fire=True)
+        hint = _era_anchor_hint(1999, seed_key=seed_fires)
         assert "1999" in hint
+        # Curated content for 1999 (any one of these should appear)
+        anchors_1999 = ("Y2K", "Matrix", "Napster", "Star Wars", "dot-com")
+        named = sum(1 for a in anchors_1999 if a in hint)
+        assert named >= 1, f"Curated 1999 content missing from gate-fire path: {hint}"
 
-    def test_helper_includes_use_at_most_one_guidance(self):
-        # Critical voice rule — Gemini must not list multiple anchors
-        # in one tweet ("the year of A, B, and C..."). Era anchors are
-        # inspiration for ONE, not a recital.
+    def test_helper_returns_curated_includes_one_in_ten_messaging(self):
+        # When gate fires, the hint frames it as "your 1-in-10 turn"
+        # so Gemini knows this is the rare permitted draft.
         from src.voice.generator import _era_anchor_hint
-        hint = _era_anchor_hint(2007, seed_key="test")
-        assert "USE AT MOST ONE" in hint or "use at most one" in hint.lower()
+        seed_fires = _find_seed(should_fire=True)
+        hint = _era_anchor_hint(1999, seed_key=seed_fires)
+        assert "1-in-10" in hint or "1 in 10" in hint or "your" in hint.lower()
+
+    def test_helper_returns_empty_for_unknown_year_when_gated_in(self):
+        # Even when the gate fires, an unknown year (1850) has no
+        # curated content — return empty string. Caller's prompt
+        # then degrades gracefully.
+        from src.voice.generator import _era_anchor_hint
+        seed_fires = _find_seed(should_fire=True)
+        hint = _era_anchor_hint(1850, seed_key=seed_fires)
+        assert hint == ""

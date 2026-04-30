@@ -36,12 +36,17 @@ numbers — and look smart for sharing.
 
 === WHAT MAKES A TWEET VIRAL (not just informative) ===
 
-1. HISTORICAL WEIGHT. The best context is a record. "Hottest since 1929" \
-is instantly shareable. Even better: anchor the year to something human. \
-"Last time it was this hot in Buenos Aires, the stock market hadn't \
-crashed yet" — now the reader can FEEL how long ago that was. Use history \
-to give the number weight: eras, events, inventions, lifetimes. The \
-sharer looks cultured, not just informed.
+1. SPECIFICITY GIVES NUMBERS WEIGHT. "Hottest since 1929" is instantly \
+shareable because the year is specific. The bot has multiple specificity \
+vehicles — accelerating-warming framing ("set just last year in 2024"), \
+past-tense personification ("used to define an entire season"), \
+place-as-punchline (period-and-restate the city), absolute scale (let \
+the number carry it alone), ecosystem context ("hot for a city at \
+2,500m"), and era anchors (the year tied to a cultural moment). Era \
+anchors are PARKED at 1-in-10 — the data prompt will tell you when it's \
+your turn. Every other draft, pick one of the other vehicles. The \
+strongest record drafts in the corpus often use NO specificity vehicle \
+at all — when the number alone is striking, deliver the data plainly.
 
 2. REPLY BAIT. The best tweets make people want to add their take. A tweet \
 that says everything leaves nothing to say. Leave a gap — an implication \
@@ -153,7 +158,47 @@ it at most once per 10 tweets.
 - "Saipan: Extreme Wind Warning. This is issued for catastrophic, life-threatening winds." [explains the tier + weather-service language]
 - "A wildfire burning somewhere in Asia is radiating 220 MW — enough to power 220,000 homes." [continent-only location + stock homes formula]
 - "A coal power plant produces about 150 MW. One is built to do that." [generic plant comparison + rhetorical subversion that adds nothing]
+- "That gap is 4.5 degrees." [explicit-gap math the reader could do — soft Wodehouse violation. The data is already in the tweet; trust the reader to compute. Don't show your work.]
+- "The new high: 94.5F. The old one: 93.7F." [restate-padding after the data was already given. Restating in slightly different form reads as the model showing its work and breaks the spell.]
+- "The last time it was this hot, [era anchor]. That was [YEAR]. [Restate the data]." [era-anchor-then-restate is the most over-used record framing in our corpus. Era anchors are parked at 1 in 10; do not reach for one unless the data prompt tells you it's your turn.]
 """
+
+
+# Shared specificity-vehicle menu for record-type categories. Era
+# anchors became over-deployed (Apr 27 + Apr 29 corpora — every
+# record draft used them) so they're parked at 1-in-10. The other
+# vehicles below are equally valid; corpus references show which
+# A-grade drafts each vehicle carried.
+_RECORD_SPECIFICITY_VEHICLES = """\
+Specificity vehicles available — pick whichever fits the data:
+
+1. ACCELERATING-WARMING — "set just last year in 2024" / "Two hottest \
+Aprils in the 30-year archive: back to back." Carries the climate \
+argument without saying it. CORPUS REFERENCE: Navi Mumbai (A-, Apr 25).
+2. PAST-TENSE PERSONIFICATION — "used to define an entire season" / \
+"The bushfire season here used to know when to quit." Reframes what \
+the number MEANS, not what it IS. CORPUS REFERENCES: Chicago anomaly \
+(A-, Apr 24), NSW fire (A-, Apr 25).
+3. PLACE-AS-PUNCHLINE — "Anchorage recorded 82F today. Average for this \
+date is 57F. Anchorage." Period-and-restate when the city's identity \
+is the joke. Works for cities with strong climate identity (Anchorage \
+= cold, Reykjavik = cold, desert cities = hot, etc).
+4. ABSOLUTE SCALE — "Kuwait City: 53.2C. That's 127.8F. Highest reading \
+anywhere on Earth this year." Number does the work alone. No framing \
+needed when the data is already extreme.
+5. ECOSYSTEM CONTEXT — "The summer monsoon that extinguishes these \
+fires is still weeks away." / "Hot for a city at 2,500m." Specific to \
+the geography. Tells the reader why this number is more extreme than \
+it appears at face value. CORPUS REFERENCE: Mexico highlands (B+, Apr 27).
+6. ERA ANCHOR — PARKED. The bot uses this at most 1 in 10 record \
+drafts. The system will tell you when it's your turn (look for "your \
+1-in-10 era-anchor turn" in the data prompt). Every other draft, do \
+NOT reach for an era anchor. Pick from 1-5 above.
+
+None of these are mandatory. When the number alone is striking, deliver \
+the data plainly — the corpus has multiple A-grade drafts (Medan B, \
+Kuwait City absolute-scale moves) that use no specificity vehicle at \
+all. Forced framing breaks the spell."""
 
 
 # Category-specific addenda appended to SYSTEM_PROMPT when a signal
@@ -191,45 +236,51 @@ rainfall there this month is 2.5 inches."
 - One-idea tweets. Stack at most TWO facts — MW + seasonal twist, or \
 region + scale. Three comparisons reads like sales copy.
 """,
-    "all_time_high": """\
+    "all_time_high": f"""\
 === CATEGORY-SPECIFIC — ALL-TIME ARCHIVE HIGH ===
 
-This is an elite signal — don't waste the scroll. Lean into era anchors:
+This is an elite signal — don't waste the scroll.
 
-- The old record year is a gift. Anchor it to something the reader can \
-FEEL: "The year the euro entered circulation." "Before TikTok existed." \
-"Still when Yahoo was the default search."
-- Past-tense-as-new-normal framing is underused: "That 29-degree jump \
-used to define an entire season." Reframe what the number MEANS, not \
-just what it IS.
-- Honest window: "30 years of archive data," not "ever" and not "all time."
-- Earned editorial heat is allowed and specifically recommended for this \
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Honest window: "30 years of archive data," not "ever" and not "all time."
+
+Earned editorial heat is allowed and specifically recommended for this \
 tier. ALL-CAPS openers like "EXTRAORDINARY heat" or weight words like \
 "stunning," "wild," "Mind blowing" pair well when the data backs them up. \
 This is the @extremetemps move and works in our genre.
 """,
-    "all_time_low": """\
+    "all_time_low": f"""\
 === CATEGORY-SPECIFIC — ALL-TIME ARCHIVE LOW ===
 
-Same patterns as all_time_high — era anchor, past-tense framing, \
-honest 30-year window. But cold records are read differently: they \
-feel like climate-denial fodder unless framed with care. Lean on the \
-"accelerating extremes in both directions" angle rather than "it's \
-still cold somewhere."
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Honest 30-year window. Cold records are read differently from hot \
+ones: they feel like climate-denial fodder unless framed with care. \
+Lean on the "accelerating extremes in both directions" angle rather \
+than "it's still cold somewhere."
 """,
-    "monthly_high": """\
+    "monthly_high": f"""\
 === CATEGORY-SPECIFIC — MONTHLY RECORD HIGH ===
 
 The specific story is "normal has moved." Often the prior record was \
-just years ago. The "back-to-back" angle is underused:
+just years ago — accelerating-warming framing is the natural fit when \
+the gap is small.
 
-- "Two hottest Aprils in the 30-year archive: back to back."
-- "The old record was from last year. The one before was two years \
-before that."
+{_RECORD_SPECIFICITY_VEHICLES}
 
 Avoid "hottest April ever." Say "hottest April in 30 years of archive \
 data." If the prior record year IS the current year, don't even draft \
 this (the same-year suppression filter should have caught it upstream).
+""",
+    "monthly_low": f"""\
+=== CATEGORY-SPECIFIC — MONTHLY RECORD LOW ===
+
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Honest 30-year window. Frame as "accelerating extremes in both \
+directions" rather than "it's still cold somewhere" — cold records \
+are easy to misread as climate-denial otherwise.
 """,
     "anomaly_hot": """\
 === CATEGORY-SPECIFIC — HOT ANOMALY ===
@@ -250,7 +301,7 @@ amplify the data when the magnitude warrants it. Reserve for the \
 genuinely-absurd anomalies; if every anomaly tweet uses heat words, the \
 heat words stop working.
 """,
-    "country_high": """\
+    "country_high": f"""\
 === CATEGORY-SPECIFIC — COUNTRY-LEVEL ARCHIVE HIGH ===
 
 This is the biggest single-day story the pipeline produces: a country's \
@@ -260,17 +311,46 @@ and the stake, not the peak city.
 - "France's hottest April day in 30 years of records" > "Marseille hit \
 41.2C today, beating the archive max."
 - Include the prior record's city + year for honesty.
-- This tier earns editorial heat. ALL-CAPS openers, "EXTRAORDINARY," \
+
+{_RECORD_SPECIFICITY_VEHICLES}
+
+This tier earns editorial heat. ALL-CAPS openers, "EXTRAORDINARY," \
 "unprecedented in the archive" are allowed and amplify the data when \
 used here. The @extremetemps genre uses these moves on country-tier \
 signals — we should too.
 """,
-    "record": """\
+    "country_low": f"""\
+=== CATEGORY-SPECIFIC — COUNTRY-LEVEL ARCHIVE LOW ===
+
+A country's coldest reading anywhere across our sample. Lead with the \
+country, not the peak city.
+
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Frame as "accelerating extremes in both directions" rather than "it's \
+still cold somewhere" — cold-side framing is easily misread.
+""",
+    "record": f"""\
 === CATEGORY-SPECIFIC — CALENDAR-DATE RECORD ===
 
-Treat like the all-time / monthly categories: specific place, era anchor \
-for the old record year, honest framing. Use "forecast to" / "on pace" \
-(Open-Meteo records are provisional).
+Calendar-date records are the most common record type. Mid-tier — earned \
+editorial heat (ALL-CAPS, "EXTRAORDINARY") is NOT appropriate here unless \
+the gap or recency makes the record genuinely extraordinary. Most \
+calendar-date records ship on quiet voice.
+
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Open-Meteo records are provisional — use "forecast to" / "on pace", not \
+"just broke."
+""",
+    "record_low": f"""\
+=== CATEGORY-SPECIFIC — CALENDAR-DATE RECORD LOW ===
+
+{_RECORD_SPECIFICITY_VEHICLES}
+
+Frame as "accelerating extremes in both directions" rather than "it's \
+still cold somewhere." Use "forecast to" / "on pace" — Open-Meteo lows \
+are provisional.
 """,
     "co2_milestone": """\
 === CATEGORY-SPECIFIC — CO2 MILESTONE ===
@@ -436,26 +516,75 @@ def _detect_stock_formula(text: str) -> str | None:
     return None
 
 
-def _era_anchor_hint(year: int, seed_key: str, k: int = 4) -> str:
-    """Return a prompt fragment listing era anchors for ``year``.
+_ERA_ANCHOR_GATE_RATE = 0.1
+"""Fraction of record drafts that get curated era-anchor content. User
+direction (2026-04-29): era anchors are parked at no more than 1 in 10
+tweets after Apr 27 + Apr 29 corpora showed every record converging on
+era-anchor framing ('it gets so old and lame'). The gate is the
+structural enforcement; prose-only de-emphasis didn't hold."""
 
-    Empty string when the year has no anchors (year < 1995 or > coverage
-    end) — caller's prompt then degrades to its prior behavior, which is
-    Gemini inventing the anchor (sometimes correctly, sometimes
-    hallucinating). Pre-computed anchors solve the hallucination side
-    AND give variety: a seeded sample of k anchors changes across cycles.
+
+def _era_anchor_should_fire(seed_key: str, rate: float = _ERA_ANCHOR_GATE_RATE) -> bool:
+    """Deterministic 1-in-10 gate. Same seed_key → same answer, so a
+    given draft cycle is reproducible and testable. Across many
+    seed_keys, fires at ``rate``.
+    """
+    import random as _random
+    return _random.Random(seed_key).random() < rate
+
+
+def _era_anchor_hint(year: int, seed_key: str, k: int = 4) -> str:
+    """Return a prompt fragment for the writer about era-anchor framing.
+
+    Two outputs depending on the 1-in-10 gate:
+
+    - Gate FIRES (~10% of calls): curated era-anchor content for
+      ``year``, framed as "this is your 1-in-10 turn." Reader (Gemini)
+      may use one of the anchors OR pick a different specificity vehicle.
+    - Gate SKIPS (~90% of calls): explicit steer-away message naming
+      the alternative specificity vehicles. Tells Gemini NOT to invent
+      a year-anchor framing for this draft.
+
+    The 90% steer-away path is the policy enforcement. Without it,
+    Gemini reaches for era anchors by default (Apr 27, Apr 29 corpora
+    confirmed). With it, the writer must reach for accelerating-warming,
+    past-tense personification, place-as-punchline, absolute scale, or
+    ecosystem context instead.
 
     The seed should typically be ``f"{city}-{year}-{today_iso}"`` so
-    repeated runs in the same cycle pick the same anchors but different
-    days/cities pick different ones.
+    repeated runs in the same cycle are stable, but different cities
+    or days can fire independently.
     """
+    if not _era_anchor_should_fire(seed_key):
+        return (
+            " Era anchors are parked: the bot uses them at most 1 per 10 "
+            "tweets, and this draft is NOT your turn. Do NOT invent a "
+            "year-anchor framing. Reach for one of these specificity "
+            "vehicles instead: accelerating-warming framing ('set just "
+            "last year in 2024'), past-tense personification ('used to "
+            "define an entire season'), place-as-punchline (period-and-"
+            "restate the city name when the city's identity is the "
+            "joke), absolute scale (let the number carry it alone), or "
+            "ecosystem context ('the monsoon that extinguishes these "
+            "fires is still weeks away'). The strongest record drafts "
+            "in the corpus use NO era anchor — let the data and framing "
+            "land naturally."
+        )
+
     anchors = pick_anchors(year, k=k, seed=seed_key)
     if not anchors:
+        # Gate fired but no curated content for this year (year < 1995
+        # or > coverage end). Caller's prompt degrades to no anchor; the
+        # writer should pick a different vehicle for this specific draft.
         return ""
     bullets = "; ".join(anchors)
     return (
-        f" Era anchors available for {year} (USE AT MOST ONE in the tweet — "
-        f"these are inspiration, not a list to recite): {bullets}."
+        f" This draft is your 1-in-10 era-anchor turn (year {year}). Era "
+        f"anchors permitted here — use ONE of these natural cultural "
+        f"references if it fits, OR still pick a different specificity "
+        f"vehicle (accelerating-warming, past-tense personification, "
+        f"place-as-punchline, absolute scale, ecosystem context). The "
+        f"options for {year}: {bullets}."
     )
 
 
@@ -695,7 +824,7 @@ def generate_all_time_record_tweet(
     )
     return generate_tweet(
         data,
-        category="all_time_record",
+        category=f"all_time_{kind}",
         return_bundle=return_bundle,
         fallback_fn=templates.record_template,
         fallback_args={
@@ -797,7 +926,7 @@ def generate_monthly_record_tweet(
     )
     return generate_tweet(
         data,
-        category="monthly_record",
+        category=f"monthly_{kind}",
         return_bundle=return_bundle,
         fallback_fn=templates.record_template,
         fallback_args={
