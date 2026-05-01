@@ -415,6 +415,44 @@ class TestFireComplexTiers:
         assert merged["fire_complex_tiers"] == {"A": 2, "B": 3, "C": 0}
 
 
+class TestTwoBotMemoryState:
+    def test_default_state_has_memory_schema(self):
+        from src.state import DEFAULT_STATE
+
+        assert DEFAULT_STATE["memory"] == {
+            "ongoing_events": [],
+            "used_era_anchors": [],
+            "used_peer_comparisons": [],
+            "used_framings": [],
+            "shipped_tweets": [],
+        }
+
+    def test_get_memory_backfills_missing_schema(self):
+        from src.state import get_memory
+
+        state = {}
+        memory = get_memory(state)
+
+        assert "memory" in state
+        assert memory["used_era_anchors"] == []
+        assert memory["shipped_tweets"] == []
+
+    def test_merge_preserves_memory_lists(self):
+        from src.state import _merge_state
+
+        base = {"memory": {"used_era_anchors": ["spider-man 2002"]}}
+        incoming = {
+            "memory": {
+                "used_era_anchors": ["adele 21"],
+                "used_peer_comparisons": ["hoover dam"],
+            }
+        }
+        merged = _merge_state(base, incoming)
+
+        assert merged["memory"]["used_era_anchors"] == ["spider-man 2002", "adele 21"]
+        assert merged["memory"]["used_peer_comparisons"] == ["hoover dam"]
+
+
 class TestFireFootprintLastRunMerge:
     def test_merge_takes_later_date_incoming_newer(self):
         from src.state import _merge_state

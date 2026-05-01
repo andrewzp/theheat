@@ -1,0 +1,116 @@
+"""Stage 3: senior-editor fire writer."""
+
+from __future__ import annotations
+
+import json
+import os
+
+from src.two_bot.prompts.writer_prompt import (
+    WRITER_SYSTEM_PROMPT,
+    WRITER_USER_PROMPT_TEMPLATE,
+)
+from src.two_bot.types import MemorySlice, StoryBundle, WriterResult
+
+WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+_SUPPORTED_PREFIXES = {
+    "claude-": "anthropic",
+    "gemini-": "google",
+}
+_UNSUPPORTED_BUT_ALLOWED = ("gpt-", "o")
+
+
+def _resolve_provider(model: str) -> str:
+    for prefix, provider in _SUPPORTED_PREFIXES.items():
+        if model.startswith(prefix):
+            return provider
+    if any(model.startswith(p) for p in _UNSUPPORTED_BUT_ALLOWED):
+        return "unsupported_openai"
+    raise RuntimeError(
+        f"THEHEAT_WRITER_MODEL={model!r} does not match any supported "
+        f"prefix ({', '.join(_SUPPORTED_PREFIXES)}). "
+        "Set the env var to a supported model id."
+    )
+
+
+WRITER_PROVIDER = _resolve_provider(WRITER_MODEL)
+
+
+def _bundle_json(bundle: StoryBundle) -> str:
+    return json.dumps(bundle.to_dict(), sort_keys=True)
+
+
+def _memory_json(memory: MemorySlice) -> str:
+    return json.dumps(memory.to_dict(), sort_keys=True)
+
+
+def _parse_writer_json(raw: str) -> WriterResult:
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"[two_bot.writer] Invalid JSON response: {raw}")
+        raise ValueError("Writer returned invalid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Writer response must be a JSON object")
+    try:
+        return WriterResult(
+            tweet=parsed.get("tweet"),
+            kill_reason=parsed.get("kill_reason"),
+            angle_chosen=parsed.get("angle_chosen") or "",
+            era_anchor_used=parsed.get("era_anchor_used"),
+            peer_comparison_used=parsed.get("peer_comparison_used"),
+            reasoning=parsed.get("reasoning") or "",
+        )
+    except TypeError as exc:
+        raise ValueError("Writer response is missing required fields") from exc
+
+
+def _call_anthropic(user_prompt: str) -> str:
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is required for the Anthropic writer")
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model=WRITER_MODEL,
+        max_tokens=1024,
+        system=WRITER_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    return response.content[0].text
+
+
+def _call_google(user_prompt: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for the Gemini writer")
+    from google import genai
+
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model=WRITER_MODEL,
+        contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
+    )
+    return response.text
+
+
+def write_fire_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
+    """Call the configured writer model and parse a WriterResult."""
+
+    if WRITER_PROVIDER == "unsupported_openai":
+        raise NotImplementedError("OpenAI writer provider is not implemented")
+
+    user_prompt = WRITER_USER_PROMPT_TEMPLATE.format(
+        bundle_json=_bundle_json(bundle),
+        memory_json=_memory_json(memory),
+    )
+    if WRITER_PROVIDER == "anthropic":
+        raw = _call_anthropic(user_prompt)
+    elif WRITER_PROVIDER == "google":
+        raw = _call_google(user_prompt)
+    else:
+        raise RuntimeError(f"Unsupported writer provider: {WRITER_PROVIDER}")
+    return _parse_writer_json(raw)
+

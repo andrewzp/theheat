@@ -26,6 +26,13 @@ DEFAULT_STATE = {
     "drafts": [],
     "run_history": [],
     "errors": [],
+    "memory": {
+        "ongoing_events": [],
+        "used_era_anchors": [],
+        "used_peer_comparisons": [],
+        "used_framings": [],
+        "shipped_tweets": [],
+    },
     # Tracks the hottest/coldest reading we've seen for each city across
     # the full history we have access to (Open-Meteo archive, ~1940 onward).
     # Used for "hottest since X year" detection.
@@ -82,11 +89,33 @@ def _fresh_state() -> dict:
     return deepcopy(DEFAULT_STATE)
 
 
+def get_memory(state: dict) -> dict:
+    """Return state memory, backfilled with the current first-build schema."""
+
+    default_memory = deepcopy(DEFAULT_STATE["memory"])
+    current = state.setdefault("memory", {})
+    if not isinstance(current, dict):
+        current = {}
+        state["memory"] = current
+    for key, value in default_memory.items():
+        current.setdefault(key, value)
+    return current
+
+
+def set_memory(state: dict, memory: dict) -> dict:
+    """Replace state memory after backfilling the first-build schema."""
+
+    state["memory"] = deepcopy(memory) if isinstance(memory, dict) else {}
+    get_memory(state)
+    return state
+
+
 def _normalize_state(state: dict | None) -> dict:
     """Ensure all expected top-level keys exist in the state payload."""
     normalized = _fresh_state()
     if isinstance(state, dict):
         normalized.update(state)
+    get_memory(normalized)
     return normalized
 
 
@@ -218,6 +247,77 @@ def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50
     return merged[-max_items:]
 
 
+def _merge_memory(current: dict | None, incoming: dict | None) -> dict:
+    base = deepcopy(DEFAULT_STATE["memory"])
+    if isinstance(current, dict):
+        base.update(deepcopy(current))
+    next_memory = deepcopy(DEFAULT_STATE["memory"])
+    if isinstance(incoming, dict):
+        next_memory.update(deepcopy(incoming))
+
+    merged = deepcopy(DEFAULT_STATE["memory"])
+    merged["used_era_anchors"] = _merge_ordered_unique(
+        base.get("used_era_anchors", []),
+        next_memory.get("used_era_anchors", []),
+    )
+    merged["used_peer_comparisons"] = _merge_ordered_unique(
+        base.get("used_peer_comparisons", []),
+        next_memory.get("used_peer_comparisons", []),
+    )
+    merged["used_framings"] = _merge_ordered_unique(
+        base.get("used_framings", []),
+        next_memory.get("used_framings", []),
+    )
+
+    tweets = []
+    seen_tweets = set()
+    for row in [*(base.get("shipped_tweets", []) or []), *(next_memory.get("shipped_tweets", []) or [])]:
+        if not isinstance(row, dict):
+            continue
+        key = (
+            row.get("tweet_text"),
+            row.get("signal_kind"),
+            row.get("event_id"),
+            row.get("shipped_at"),
+        )
+        if key in seen_tweets:
+            continue
+        seen_tweets.add(key)
+        tweets.append(deepcopy(row))
+    tweets.sort(key=lambda row: _parse_state_timestamp(row.get("shipped_at")))
+    merged["shipped_tweets"] = tweets
+
+    events: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for row in [*(base.get("ongoing_events", []) or []), *(next_memory.get("ongoing_events", []) or [])]:
+        if not isinstance(row, dict):
+            continue
+        event_id = row.get("event_id")
+        if not event_id:
+            anonymous.append(deepcopy(row))
+            continue
+        existing = events.get(event_id)
+        if existing is None:
+            events[event_id] = deepcopy(row)
+            continue
+        existing["first_seen"] = min(
+            existing.get("first_seen") or row.get("first_seen") or "",
+            row.get("first_seen") or existing.get("first_seen") or "",
+        ) or None
+        existing["last_seen"] = max(
+            existing.get("last_seen") or row.get("last_seen") or "",
+            row.get("last_seen") or existing.get("last_seen") or "",
+        ) or None
+        existing["days_running"] = max(
+            int(existing.get("days_running") or 0),
+            int(row.get("days_running") or 0),
+        )
+        for field in ("region", "country", "signal_kind"):
+            existing[field] = row.get(field) or existing.get(field)
+    merged["ongoing_events"] = list(events.values()) + anonymous
+    return merged
+
+
 def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
@@ -247,6 +347,7 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
+    merged["memory"] = _merge_memory(base.get("memory"), next_state.get("memory"))
     # Extreme record tracking — always take the incoming (most recent) dict
     # since detection functions only write when a new record is set.
     merged["city_all_time_max"] = deepcopy(next_state.get("city_all_time_max", base.get("city_all_time_max", {})))
