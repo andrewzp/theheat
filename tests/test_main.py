@@ -728,8 +728,19 @@ class TestRunAlerts:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_drafts_fire_alert(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        monkeypatch,
     ):
+        # Pin scoring.date.today() to mid-April so the shoulder-season novelty
+        # boost keeps the synthetic fire above the editorial threshold across
+        # calendar tipover (May would drop a frp=250 signal below 64).
+        import src.editorial.scoring as _scoring
+        class _FixedAprilDate(date):
+            @classmethod
+            def today(cls):
+                return date(2026, 4, 15)
+        monkeypatch.setattr(_scoring, "date", _FixedAprilDate)
+
         mock_om.load_cities.return_value = []
         mock_om.check_records_for_cities.return_value = []
         mock_firms.fetch_fires.return_value = [

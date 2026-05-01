@@ -2,6 +2,8 @@
 
 import responses
 from datetime import date
+from unittest.mock import patch
+import src.data.open_meteo as _open_meteo_module
 from src.data.open_meteo import (
     CityTemp,
     compute_anomalies,
@@ -18,7 +20,28 @@ from src.data.open_meteo import (
 )
 
 
+import pytest
+
+
+class _FixedAprilDate(date):
+    @classmethod
+    def today(cls):
+        return date(2026, 4, 15)
+
+
+@pytest.fixture
+def freeze_april(monkeypatch):
+    """Freeze ``date.today()`` inside open_meteo to mid-April so month-keyed
+    fixtures (e.g. ``{4: 30.0}``) keep matching across calendar tipover.
+    """
+    monkeypatch.setattr(_open_meteo_module, "date", _FixedAprilDate)
+
+
 class TestComputeAnomalies:
+    @pytest.fixture(autouse=True)
+    def _freeze(self, freeze_april):
+        pass
+
     def test_positive_anomaly(self):
         temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 45.0)]
         normals = {"Phoenix": {4: 30.0}}  # April normal
