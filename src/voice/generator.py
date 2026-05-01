@@ -124,6 +124,18 @@ not "just broke."
 - If you've already written about this event, use a DIFFERENT comparison \
 or framing. Never repeat the same context line across multiple tweets \
 about the same storm, record, or event.
+- ORIENT THE READER GEOGRAPHICALLY. Most readers do not know where \
+Conakry is, or Bishkek, or Yakutsk, or Manaus. If the named place is \
+not a city any educated reader would instantly place on a globe \
+(London, Tokyo, New York, Paris, Berlin, Sydney, Mumbai, Cairo, \
+Moscow, Beijing, Shanghai, Mexico City, São Paulo, Buenos Aires, \
+Hong Kong, Bangkok, Istanbul, Rome, Madrid, Toronto, LA, Chicago, \
+Miami — and a small handful of similar globally-iconic names), \
+include the country: "Conakry, Guinea" / "Yakutsk, Russia" / \
+"Manaus, Brazil." This applies whether the place leads the tweet \
+or appears mid-sentence. When in doubt, include the country. The \
+cost of being slightly redundant is small; the cost of a reader not \
+knowing where the event happened is total.
 
 === STOCK FORMULAS TO AVOID ===
 

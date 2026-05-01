@@ -45,6 +45,7 @@ If your only available angles are historical-context claims, return tweet=null w
 - No throat-clearing openers. ("A wildfire in X is putting out N MW of radiative power.")
 - Do not pre-explain or post-explain a punch line.
 - Every concrete claim - number, date, named entity, comparison - must be either (a) traceable to the bundle or (b) a well-established general-knowledge fact you are CONFIDENT in. If you are unsure, leave it out.
+- ORIENT THE READER GEOGRAPHICALLY. Most readers do not know where Conakry is, or Bishkek, or Yakutsk, or Manaus. If the named place is not a city any educated reader would instantly place on a globe (London, Tokyo, New York, Paris, Berlin, Sydney, Mumbai, Cairo, Moscow, Beijing, Shanghai, Mexico City, São Paulo, Buenos Aires, Hong Kong, Bangkok, Istanbul, Rome, Madrid, Toronto, LA, Chicago, Miami - and a small handful of similar globally-iconic names), include the country: "Conakry, Guinea" / "Yakutsk, Russia" / "Manaus, Brazil." When in doubt, include the country. The cost of being slightly redundant is small; the cost of a reader not knowing where the event happened is total.
 
 # FOREVER-BANNED REUSE
 
