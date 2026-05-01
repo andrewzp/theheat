@@ -38,9 +38,10 @@ The fix is a role inversion:
 FIRMS detection
   │
   ▼
-[Stage 1] INTERN  (Gemini Flash, structured JSON output)
-  Input: FireEvent + access to historical FIRMS context
-  Output: StoryBundle (facts only — no angle proposals)
+[Stage 1] INTERN  (deterministic — NO LLM call in first build)
+  Input: FireEvent
+  Output: StoryBundle (signal facts only). historical_context is OMITTED
+          in first build until real distributions are computed — see §6.
   │
   ▼
 [Stage 2] MEMORY AUGMENT
@@ -52,22 +53,39 @@ FIRMS detection
   ▼
 [Stage 3] WRITER  (Sonnet 4.6, configurable)
   Input: bundle + memory slice + voice prompt + Economist framing
-  Output: final tweet text OR null
+  Output: WriterResult — tweet text + kill_reason (None if shipping)
+  │
+  ▼
+[Stage 3.5] CLAIM EXTRACTION  (Gemini Flash)
+  Input: writer's tweet text
+  Output: list of concrete claims (numbers, dates, named entities,
+          comparisons, era anchors, peer comparisons) extracted from
+          the text. This is the source of truth for what the writer
+          ACTUALLY said — independent of writer's self-report. Catches
+          undeclared era anchors.
   │
   ▼
 [Stage 4] FACT-CHECKER  (Gemini Flash)
-  Input: writer's tweet + bundle + do-not-reuse inventory
+  Input: extracted claims + bundle + full state["memory"]
   Output: pass / fail + reasons
   Strict: any unverifiable claim or any reuse → kill
   │
   ▼
 [Stage 5] MEMORY WRITE-BACK
-  Persists: tweet text, era anchors used, peer-class comparisons used,
-  framings used, ongoing-event state.
+  Persists: tweet text, era anchors and peer-class comparisons taken
+  from the extracted-claims list (NOT writer self-report), framings
+  used, ongoing-event state.
   │
   ▼
 state.json drafts queue (status: pending)
 ```
+
+**Concurrency note (A2 fix):** in `run_alerts`, fire signals are
+processed **serially**. The existing `run_alerts` loop is already
+serial; codex must add a comment marking the fire branch as
+serial-by-contract to prevent future parallelization breaking memory
+write-back. Optimistic locking on Gist writes is a follow-up, not
+first build.
 
 ## 3. File inventory
 
@@ -82,24 +100,25 @@ state.json drafts queue (status: pending)
 | `src/two_bot/fact_check.py` | Stage 4 — Gemini fact-checker |
 | `src/two_bot/pipeline.py` | Orchestrates all 5 stages |
 | `src/two_bot/types.py` | Dataclasses: `StoryBundle`, `MemorySlice`, `WriterResult`, `FactCheckResult` |
-| `src/two_bot/historical_context.py` | Computes `historical_context` fields from FIRMS archive |
+| `src/two_bot/claim_extractor.py` | Stage 3.5 — extracts concrete claims from tweet text via Gemini Flash |
 | `src/two_bot/prompts/writer_prompt.py` | Full writer system prompt (constant) |
 | `src/two_bot/prompts/fact_check_prompt.py` | Full fact-check system prompt (constant) |
-| `src/two_bot/prompts/intern_prompt.py` | Full intern system prompt (constant) |
+| `src/two_bot/prompts/claim_extract_prompt.py` | Full claim-extraction system prompt (constant) |
 | `tests/two_bot/__init__.py` | Package |
+| `tests/two_bot/conftest.py` | Shared test fixtures: `_bundle()`, `_memory()`, `_state_with_memory()`, `_fake_writer_response()`, `_fake_fact_check_response()` helpers |
 | `tests/two_bot/test_intern.py` | Stage 1 tests |
 | `tests/two_bot/test_memory.py` | Stage 2/5 tests |
 | `tests/two_bot/test_writer.py` | Stage 3 tests (mocked LLM) |
+| `tests/two_bot/test_claim_extractor.py` | Stage 3.5 tests (mocked LLM) |
 | `tests/two_bot/test_fact_check.py` | Stage 4 tests (mocked LLM) |
-| `tests/two_bot/test_pipeline.py` | End-to-end integration tests |
-| `tests/two_bot/test_historical_context.py` | Historical computation tests |
+| `tests/two_bot/test_pipeline.py` | End-to-end integration tests including memory-loop test (T2) |
 
 ### Modified files
 
 | Path | Change |
 |---|---|
 | `src/main.py` | In `run_alerts`, replace the fire branch (`generator.generate_fire_tweet(...)`) with `two_bot.pipeline.generate_fire_draft(...)`. Other categories untouched. |
-| `src/state.py` | Extend `DEFAULT_STATE` with a `"memory"` key (schema in §6). Add helpers `get_memory(state)` / `set_memory(state, memory)`. |
+| `src/state.py` | Extend `DEFAULT_STATE` with a `"memory"` key (schema in §7). Add helpers `get_memory(state)` / `set_memory(state, memory)`. |
 | `requirements.txt` | No new runtime deps. (anthropic, google-genai already present.) |
 | `pytest.ini` or `pyproject.toml` | Ensure `tests/two_bot` is discovered (default config should already do this — verify). |
 
@@ -126,15 +145,22 @@ from typing import Any
 
 @dataclass
 class StoryBundle:
-    """The intern's output. Pure facts; no editorial angles."""
+    """The intern's output. Pure facts; no editorial angles.
+
+    First-build note (A1): `historical_context` is an empty dict in the
+    first build. The full schema (percentiles, seasonal peak, etc.) will
+    be filled once real FIRMS distributions are computed in a follow-up
+    PR. The writer prompt explicitly handles an empty historical_context
+    by falling back to bundle facts + world-knowledge angles.
+    """
     signal_kind: str  # "fire" for first build
     where: str  # "Mali", "Southwestern US", etc.
     when: str  # ISO date "2026-04-30"
     event_id: str
     headline_metric: dict[str, Any]  # {"label", "value", "unit"}
     current_facts: list[dict[str, Any]]  # [{"label", "value", "unit"?}]
-    historical_context: dict[str, Any]  # see §5
-    raw_signal_dump: dict[str, Any]  # full source data
+    historical_context: dict[str, Any] = field(default_factory=dict)  # empty in first build
+    raw_signal_dump: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -172,16 +198,34 @@ class MemorySlice:
 
 @dataclass
 class WriterResult:
-    """The writer's output."""
-    tweet: str | None  # None means "signal didn't earn extraordinary"
-    angle_chosen: str  # short label e.g. "off_season_irony"
-    era_anchor_used: str | None
-    peer_comparison_used: str | None
-    reasoning: str  # one-sentence explanation
+    """The writer's output.
+
+    Q2 fix: tweet=None alone is ambiguous (kill decision vs. parse
+    error vs. API failure). We split:
+      - shipping a tweet: tweet=<str>, kill_reason=None
+      - writer chose to kill: tweet=None, kill_reason=<reason str>
+    System failures (parse error, API error, missing key) RAISE; they
+    don't return WriterResult. The pipeline catches and logs.
+    """
+    tweet: str | None
+    kill_reason: str | None  # None when tweet is non-None; required when tweet is None
+    angle_chosen: str  # short label e.g. "off_season_irony", "" when killed
+    era_anchor_used: str | None  # writer's self-report (advisory; canonical source is claim_extractor)
+    peer_comparison_used: str | None  # writer's self-report (advisory)
+    reasoning: str  # one-sentence explanation, used for debugging and grading
+
+    def __post_init__(self):
+        # Invariant: exactly one of tweet/kill_reason is non-None.
+        if (self.tweet is None) == (self.kill_reason is None):
+            raise ValueError(
+                "WriterResult invariant violated: exactly one of tweet/kill_reason "
+                "must be non-None"
+            )
 
     def to_dict(self) -> dict:
         return {
             "tweet": self.tweet,
+            "kill_reason": self.kill_reason,
             "angle_chosen": self.angle_chosen,
             "era_anchor_used": self.era_anchor_used,
             "peer_comparison_used": self.peer_comparison_used,
@@ -190,16 +234,28 @@ class WriterResult:
 
 
 @dataclass
+class ExtractedClaim:
+    """One concrete claim extracted from tweet text by Stage 3.5."""
+    text: str  # exact substring of the tweet
+    kind: str  # "number" | "date" | "named_entity" | "comparison" | "era_anchor" | "peer_comparison"
+
+    def to_dict(self) -> dict:
+        return {"text": self.text, "kind": self.kind}
+
+
+@dataclass
 class FactCheckResult:
     passed: bool
     failures: list[str]  # human-readable reasons
     raw_response: str  # full LLM response, for debugging
+    extracted_claims: list[ExtractedClaim] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "passed": self.passed,
             "failures": self.failures,
             "raw_response": self.raw_response,
+            "extracted_claims": [c.to_dict() for c in self.extracted_claims],
         }
 ```
 
@@ -208,7 +264,8 @@ class FactCheckResult:
 ### Responsibility
 
 Take a `FireEvent` and produce a `StoryBundle`. The bundle is *pure
-facts*: signal data + historical climate context. No editorial framings.
+signal facts*. No editorial framings. **No historical_context in first
+build — A1 fix.**
 
 ### Function
 
@@ -216,30 +273,25 @@ facts*: signal data + historical climate context. No editorial framings.
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a StoryBundle for a fire signal.
 
-    Calls historical_context.compute_fire_context(fire) to populate
-    historical_context. The intern model itself (Gemini Flash) is NOT
-    called in this build — historical_context is computed deterministically
-    from FIRMS archive queries. We reserve the intern-as-LLM role for
-    future signal types where context is harder to specify.
+    First-build (A1): purely deterministic. No LLM call. No historical
+    archive lookup. The bundle contains the FireEvent's signal data; the
+    writer falls back to bundle facts + its own world knowledge for
+    framing (peer-class comparisons it can recall, country-level
+    geographic context it knows from training, etc.).
+
+    Future build: when real country-month FRP distributions are computed
+    (see scripts/compute_fire_distribution.py — separate PR), this
+    function will populate historical_context with verified percentile,
+    seasonal-peak, and rarity data.
     """
 ```
 
-**Key design note:** in this first build, the intern does **not** call
-Gemini. `build_fire_bundle` is deterministic — it pulls historical
-context from `historical_context.compute_fire_context()`. We chose this
-because (a) fire context is well-specified (percentiles, seasonal peak,
-recent-similar-events) and (b) deterministic context is easier to test
-and debug than LLM-generated context. The "intern as LLM" pattern is
-preserved for later signal types if needed; the fact-checker role still
-uses Gemini, which preserves the principle of using the cheap model for
-structured low-creativity work.
-
-### Bundle for fire — exact field list
+### Bundle for fire — exact field list (first build)
 
 ```python
 StoryBundle(
     signal_kind="fire",
-    where=fire.nearest_city,  # may be country if no city
+    where=fire.nearest_city or fire.country,
     when=date.today().isoformat(),
     event_id=fire.event_id,
     headline_metric={"label": "FRP", "value": fire.frp, "unit": "MW"},
@@ -250,16 +302,7 @@ StoryBundle(
         {"label": "lat", "value": fire.lat},
         {"label": "lon", "value": fire.lon},
     ],
-    historical_context={
-        # All optional — None if not computable
-        "frp_percentile_country_month": float | None,
-        "is_country_april_record": bool,  # generic month, not just april
-        "country_record_year": int | None,
-        "country_fire_season_peak_month": int | None,
-        "weeks_past_seasonal_peak": int | None,
-        "similar_events_country_30d": int,
-        "similar_events_country_365d": int,
-    },
+    historical_context={},  # A1: empty in first build; writer prompt handles this
     raw_signal_dump={
         "lat": fire.lat, "lon": fire.lon,
         "confidence": fire.confidence, "frp": fire.frp,
@@ -269,115 +312,38 @@ StoryBundle(
 )
 ```
 
-## 6. Historical context (`src/two_bot/historical_context.py`)
+## 6. Historical context — DEFERRED (A1 fix)
 
-### Approach
+**This module is NOT built in the first build.** The original draft
+proposed a static stub table of country-month FRP distributions with
+placeholder p99 values. That was unsafe: the writer would treat
+placeholder percentiles as authoritative and write confident "largest
+fire since records began" claims based on garbage data.
 
-For first build, use a **static reference table** of country-month FRP
-distributions, computed once from FIRMS archive and committed to the
-repo. Refresh quarterly via a separate script. Live FIRMS queries for
-"recent similar events" use a 30/365-day rolling cache in
-`state.json` under `state["memory"]["fire_archive_cache"]`.
+### First-build behavior
 
-This avoids per-tweet network round-trips to FIRMS archive, which can
-be slow and rate-limited.
+`StoryBundle.historical_context = {}` always. Writer prompt explicitly
+handles the empty case (see §8 — "If historical_context is empty, do
+not invent percentile / record-year / seasonal-peak claims. Use bundle
+facts and your own world knowledge only.").
 
-### Data file
+### Future build (separate PR)
 
-```
-data/fire_country_month_distribution.json
-```
+When real distributions are computed:
 
-Schema:
+1. Create `scripts/compute_fire_distribution.py` that pulls VIIRS
+   archive 2012-current and computes per-country-per-month
+   {count, p50, p90, p95, p99}. Output to
+   `data/fire_country_month_distribution.json`.
+2. Create `src/two_bot/historical_context.py` with the functions
+   originally specified (compute_fire_context, percentile_for_frp,
+   etc.) — populated from the real table only.
+3. Wire `build_fire_bundle` to call `compute_fire_context` and
+   populate `historical_context`.
+4. Update writer prompt to reference the new fields.
 
-```json
-{
-  "_meta": {
-    "computed_at": "2026-04-30",
-    "source": "FIRMS VIIRS archive 2012-2026",
-    "method": "Per-country, per-month: count of detections, p50/p90/p95/p99 FRP"
-  },
-  "ML": {
-    "1": {"count": 1234, "p50": 12.0, "p90": 80.0, "p95": 150.0, "p99": 320.0},
-    "2": {...},
-    ...
-  },
-  "US": {...},
-  ...
-}
-```
-
-For the **first build**, this file may be **stub data** (a small
-hand-curated table covering the top 20 fire-prone countries). Codex
-should:
-
-1. Create a stub file with **at least 20 country codes**: US, CA, RU,
-   AU, BR, ID, IN, MX, CN, AR, CL, MZ, AO, ZA, ML, NE, TD, SD, ET, KE.
-2. For each, fill 12 months with placeholder values:
-   `{"count": 1000, "p50": 10.0, "p90": 80.0, "p95": 200.0, "p99": 500.0}`.
-3. Note in `_meta`: `"method": "PLACEHOLDER — replace with computed
-   distribution before promoting beyond first build"`.
-4. Add a `scripts/compute_fire_distribution.py` skeleton (file,
-   docstring, NotImplementedError) for future actual computation.
-
-### Functions
-
-```python
-def compute_fire_context(fire: FireEvent) -> dict:
-    """Return the historical_context dict for the bundle.
-
-    Pulls from data/fire_country_month_distribution.json and from the
-    in-state recent-events cache. Returns dict matching the schema in
-    StoryBundle.historical_context.
-    """
-
-def country_fire_season_peak_month(country_code: str) -> int | None:
-    """Return the month (1-12) with the highest historical detection
-    count for the country, or None if the country isn't in the table."""
-
-def percentile_for_frp(country_code: str, month: int, frp: float) -> float | None:
-    """Return the percentile (0-100) of an FRP value for that country
-    and month. Linear interpolation between p50/p90/p95/p99. Returns
-    None if the country isn't in the table."""
-
-def is_country_record_for_month(
-    country_code: str, month: int, frp: float, recent_events: list[dict]
-) -> tuple[bool, int | None]:
-    """Return (is_record, year_set). Compares the current FRP to the
-    p99 cutoff and to recent events from cache. Approximate; refine
-    when the static table is replaced by computed distributions."""
-```
-
-### Tests
-
-```python
-# tests/two_bot/test_historical_context.py
-def test_country_fire_season_peak_month_known_country():
-    # ML (Mali) peak should be in Jan-Mar (dry season)
-    peak = country_fire_season_peak_month("ML")
-    assert peak in {1, 2, 3, 4}
-
-def test_country_fire_season_peak_month_unknown_country():
-    assert country_fire_season_peak_month("ZZ") is None
-
-def test_percentile_for_frp_p99_or_above():
-    pct = percentile_for_frp("ML", 4, 1000.0)  # well above p99
-    assert pct >= 99.0
-
-def test_percentile_for_frp_unknown_country():
-    assert percentile_for_frp("ZZ", 4, 100.0) is None
-
-def test_compute_fire_context_returns_required_keys(monkeypatch):
-    fire = FireEvent(lat=14.5, lon=-3.5, confidence=95, frp=361.0,
-                     nearest_city="Timbuktu", country="ML",
-                     event_id="fire_test")
-    ctx = compute_fire_context(fire)
-    required = {"frp_percentile_country_month", "is_country_april_record",
-                "country_record_year", "country_fire_season_peak_month",
-                "weeks_past_seasonal_peak", "similar_events_country_30d",
-                "similar_events_country_365d"}
-    assert required.issubset(ctx.keys())
-```
+That work is its own PR. Codex must NOT bundle it into the first
+build, even with stub data.
 
 ## 7. Stage 2/5 — Memory layer (`src/two_bot/memory.py`)
 
@@ -400,11 +366,13 @@ Add to `DEFAULT_STATE` in `src/state.py`:
     "used_framings": [],        # list of strings (short labels)
     "shipped_tweets": [],       # list of {tweet_text, signal_kind,
                                 # event_id, country, shipped_at}
-    "fire_archive_cache": {     # 30/365-day rolling FIRMS context
-        "by_country": {},       # {country_code: [{event_id, frp,
-                                # detected_at, lat, lon}, ...]}
-        "last_refreshed": None,
-    },
+    # NOTE (A4): no fire_archive_cache in first build. The original
+    # draft included a 30/365-day rolling FIRMS cache here, but Gist
+    # is KB-scale storage and the cache could blow MB. Since
+    # historical_context is also deferred to a future PR (§6), there
+    # is nothing to cache for now. The cache will be reintroduced
+    # alongside historical_context in its own PR, with the cache
+    # capped at 30 days OR moved to SQLite via THEHEAT_STATE_BACKEND.
 }
 ```
 
@@ -429,22 +397,54 @@ def build_memory_slice(state: dict, bundle: StoryBundle) -> MemorySlice:
       uses the full list from state for deterministic enforcement.
     """
 
-def record_shipped(state: dict, bundle: StoryBundle, writer: WriterResult) -> None:
+def record_shipped(
+    state: dict,
+    bundle: StoryBundle,
+    writer: WriterResult,
+    extracted: list[ExtractedClaim],
+) -> None:
     """Stage 5 — write back. Mutates state in place.
 
-    - Append to shipped_tweets.
-    - If writer.era_anchor_used: lowercase + append to used_era_anchors.
-    - If writer.peer_comparison_used: same.
-    - Append writer.angle_chosen to used_framings.
+    Q1 fix: era anchors and peer comparisons are taken from `extracted`
+    (Stage 3.5 output), NOT from writer.era_anchor_used /
+    writer.peer_comparison_used. The writer's self-report is advisory
+    only; if the writer slipped in a reference without declaring it,
+    we still capture it.
+
+    - Append the tweet to shipped_tweets.
+    - For each ExtractedClaim with kind=="era_anchor":
+        normalize(claim.text) → append to used_era_anchors (dedup).
+    - For each ExtractedClaim with kind=="peer_comparison":
+        normalize(claim.text) → append to used_peer_comparisons (dedup).
+    - Append writer.angle_chosen to used_framings (dedup, exact match).
     - Update or insert into ongoing_events for this event_id.
     """
 
-def is_reuse(memory: MemorySlice, candidate: str, kind: str) -> bool:
+def is_reuse(state: dict, candidate: str, kind: str) -> bool:
     """Check if a candidate string matches a forever-banned element.
-    Case-insensitive substring + token-overlap matching for era anchors
-    and peer comparisons; exact-match for framings.
+    Reads the FULL authoritative lists from state["memory"], not the
+    capped slice the writer saw.
+
+    Q3 fix — exact algorithms by kind:
+
+    - 'tweet_text': exact match after _normalize().
+    - 'era_anchor', 'peer_comparison': two checks, EITHER triggers reuse:
+        (a) Normalized substring: _normalize(stored) is a substring of
+            _normalize(candidate).
+        (b) Token overlap: tokens(stored) is a non-empty subset of
+            tokens(candidate). Tokens are word-character runs after
+            lowercasing, with a stopword list of {"the","a","an","of",
+            "in","on","at","to","for","is","was","were","this","that"}
+            removed. Empty token sets do NOT trigger reuse.
+    - 'framing': exact match on the snake_case label after lowercase.
+      No substring, no tokenization.
+
     kind: 'era_anchor' | 'peer_comparison' | 'framing' | 'tweet_text'
     """
+
+def _normalize(s: str) -> str:
+    """Lowercase, strip leading/trailing whitespace, collapse internal
+    whitespace runs to single space, remove trailing punctuation."""
 ```
 
 ### Tests
@@ -459,25 +459,52 @@ def test_build_memory_slice_filters_by_country():
     slice = build_memory_slice(state, bundle)
     assert len(slice.recent_tweets_same_country) == 2
 
-def test_record_shipped_appends_era_anchor():
+def test_record_shipped_uses_extracted_claims_not_writer_self_report():
+    """Q1: era_anchor_used in memory must come from the extracted-claims
+    list, not the writer's self-report. Catches undeclared anchors."""
     state = _empty_memory_state()
-    writer = WriterResult(tweet="...", angle_chosen="rarity",
-                          era_anchor_used="Spider-Man 2002",
-                          peer_comparison_used=None, reasoning="...")
+    writer = WriterResult(
+        tweet="In 2002, Spider-Man was new. Today, Mali burned.",
+        kill_reason=None,
+        angle_chosen="rarity",
+        era_anchor_used=None,  # writer LIED about not using one
+        peer_comparison_used=None,
+        reasoning="...",
+    )
+    extracted = [
+        ExtractedClaim(text="2002 Spider-Man", kind="era_anchor"),
+    ]
     bundle = _bundle()
-    record_shipped(state, bundle, writer)
-    assert "spider-man 2002" in state["memory"]["used_era_anchors"]
+    record_shipped(state, bundle, writer, extracted)
+    assert "2002 spider-man" in state["memory"]["used_era_anchors"]
 
-def test_is_reuse_case_insensitive():
-    memory = MemorySlice(used_era_anchors=["spider-man 2002"])
-    assert is_reuse(memory, "Spider-Man 2002", "era_anchor")
-    assert is_reuse(memory, "the year Spider-Man 2002 came out", "era_anchor")
-    assert not is_reuse(memory, "Spider-Man 3", "era_anchor")
+def test_is_reuse_normalized_substring():
+    state = {"memory": {"used_era_anchors": ["spider-man 2002"],
+                        "used_peer_comparisons": [], "used_framings": [],
+                        "shipped_tweets": []}}
+    assert is_reuse(state, "Spider-Man 2002", "era_anchor")
+    assert is_reuse(state, "the year Spider-Man 2002 came out", "era_anchor")
+
+def test_is_reuse_token_overlap():
+    """Token-overlap branch: 'spider-man came out in 2002' tokens fully
+    present in 'in 2002 spider-man was new'."""
+    state = {"memory": {"used_era_anchors": ["spider-man came out in 2002"],
+                        "used_peer_comparisons": [], "used_framings": [],
+                        "shipped_tweets": []}}
+    assert is_reuse(state, "in 2002 spider-man was new on screens", "era_anchor")
+
+def test_is_reuse_no_match_when_year_differs():
+    state = {"memory": {"used_era_anchors": ["spider-man 2002"],
+                        "used_peer_comparisons": [], "used_framings": [],
+                        "shipped_tweets": []}}
+    assert not is_reuse(state, "Spider-Man 3 was 2007", "era_anchor")
 
 def test_is_reuse_framing_exact_match_only():
-    memory = MemorySlice(used_framings=["off_season_irony"])
-    assert is_reuse(memory, "off_season_irony", "framing")
-    assert not is_reuse(memory, "off_season", "framing")
+    state = {"memory": {"used_era_anchors": [], "used_peer_comparisons": [],
+                        "used_framings": ["off_season_irony"],
+                        "shipped_tweets": []}}
+    assert is_reuse(state, "off_season_irony", "framing")
+    assert not is_reuse(state, "off_season", "framing")
 ```
 
 ## 8. Stage 3 — Writer (`src/two_bot/writer.py`)
@@ -487,12 +514,32 @@ def test_is_reuse_framing_exact_match_only():
 ```python
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# A5 fix: validate at module import — fail loudly at startup, not at first call.
+_SUPPORTED_PREFIXES = {
+    "claude-": "anthropic",
+    "gemini-": "google",
+}
+_UNSUPPORTED_BUT_ALLOWED = ("gpt-", "o")  # config-supported, raise NotImplementedError on call
+
+def _resolve_provider(model: str) -> str:
+    for prefix, provider in _SUPPORTED_PREFIXES.items():
+        if model.startswith(prefix):
+            return provider
+    if any(model.startswith(p) for p in _UNSUPPORTED_BUT_ALLOWED):
+        return "unsupported_openai"
+    raise RuntimeError(
+        f"THEHEAT_WRITER_MODEL={model!r} does not match any supported "
+        f"prefix ({', '.join(_SUPPORTED_PREFIXES)}). "
+        "Set the env var to a supported model id."
+    )
+
+WRITER_PROVIDER = _resolve_provider(WRITER_MODEL)
 ```
 
-If `WRITER_MODEL` starts with `claude-`, use the Anthropic SDK. If it
-starts with `gemini-`, use the Google GenAI SDK. If it starts with
-`gpt-` or `o`, raise `NotImplementedError("OpenAI writer not wired in
-first build")` — config supports it but no SDK call yet.
+If `WRITER_PROVIDER == "anthropic"`, use the Anthropic SDK. If
+`"google"`, use the Google GenAI SDK. If `"unsupported_openai"`,
+`write_fire_tweet` raises `NotImplementedError` at call time.
 
 ### Function
 
@@ -503,15 +550,22 @@ def write_fire_tweet(
 ) -> WriterResult:
     """Call the writer model with the full prompt.
 
-    Returns WriterResult. tweet=None means the signal didn't earn
-    'extraordinary' — the writer explicitly returned a kill verdict.
+    Returns WriterResult with the invariant from §4: exactly one of
+    tweet / kill_reason is non-None.
 
     Output format: the writer is instructed to return a JSON object
-    matching WriterResult schema. We parse and validate.
+    matching WriterResult schema. We parse and construct the dataclass;
+    its __post_init__ enforces the invariant.
 
-    On API error: raise. Caller (pipeline.py) decides whether to swallow.
-    On parse failure: log raw response, raise ValueError.
-    On API key missing: raise RuntimeError. No silent fallback.
+    Errors:
+    - Missing ANTHROPIC_API_KEY (when provider==anthropic) → raise RuntimeError.
+    - Missing GEMINI_API_KEY (when provider==google) → raise RuntimeError.
+    - WRITER_PROVIDER == 'unsupported_openai' → raise NotImplementedError.
+    - SDK call fails → raise.
+    - Response can't be parsed as JSON → log raw, raise ValueError.
+    - Parsed JSON doesn't satisfy WriterResult invariants → raise ValueError.
+
+    The pipeline (§11) catches and logs.
     """
 ```
 
@@ -533,7 +587,24 @@ You receive a JSON "story bundle" describing a single climate signal, plus a "me
 
 2. If it earns extraordinary, write the tweet. Pick the angle YOU think works best for this signal.
 
-3. If nothing earns extraordinary, return tweet=null. Better to say nothing than to ship filler.
+3. If nothing earns extraordinary, set tweet=null and supply a one-line kill_reason. Better to say nothing than to ship filler.
+
+# IF historical_context IS EMPTY
+
+In this build, the `historical_context` field of the bundle is **always empty**. The intern has not yet been wired to compute percentile, seasonal-peak, or rarity data. You MUST NOT invent claims of that kind.
+
+Specifically, do NOT write:
+- "Largest [time-window] fire in [country] since [year]."
+- "First time the FRP has crossed [threshold]."
+- "[country]'s fire season peaks in [month]."
+- Any percentile or rarity claim.
+
+You MAY use, from your own training:
+- General geographic knowledge ("Mali is in the Sahel").
+- Well-known cultural era anchors with confident dates.
+- Well-known named, sized peer-class comparisons (specific named power plants, dams, etc.) — if you are 95%+ confident in the number.
+
+If your only available angles are historical-context claims, return tweet=null with kill_reason="no historical_context available; nothing else earned extraordinary".
 
 # HARD RULES
 
@@ -560,15 +631,20 @@ The bot's voice library shrinks monotonically. That is the design. If you cannot
 
 # OUTPUT FORMAT
 
-Return ONLY a JSON object:
+Return ONLY a JSON object. Exactly one of `tweet` and `kill_reason` must be non-null:
 
 {
-  "tweet": "<the tweet, or null>",
-  "angle_chosen": "<short snake_case label, e.g. off_season_irony, named_comparison_scale, country_record_rarity, plain_number>",
+  "tweet": "<the tweet text, or null if killing>",
+  "kill_reason": "<one-line reason if tweet is null, else null>",
+  "angle_chosen": "<short snake_case label, e.g. off_season_irony, named_comparison_scale, country_record_rarity, plain_number; empty string if killed>",
   "era_anchor_used": "<exact phrasing of the era anchor if you used one, else null>",
   "peer_comparison_used": "<exact phrasing of the peer comparison if you used one, else null>",
   "reasoning": "<one sentence on why you chose this angle, or why you killed the draft>"
 }
+
+Note: the era_anchor_used and peer_comparison_used fields are advisory.
+A separate extraction step will independently scan the tweet for these
+elements; you cannot hide a reuse by omitting it from the self-report.
 
 No markdown. No code fences. No prose outside the JSON.
 """
@@ -590,32 +666,142 @@ Write the tweet, or return tweet=null.
 
 ### Tests
 
+Test fixtures `_bundle()`, `_memory()`, `_fake_writer_response()` live
+in `tests/two_bot/conftest.py` (see §3 — added to file inventory).
+
 ```python
-def test_write_fire_tweet_calls_anthropic_with_prompt(mock_anthropic):
-    mock_anthropic.return_value = _fake_response(json.dumps({
-        "tweet": "Mali fire test", "angle_chosen": "rarity",
+def test_write_fire_tweet_returns_tweet(mock_anthropic):
+    mock_anthropic.return_value = _fake_writer_response({
+        "tweet": "Mali fire test", "kill_reason": None,
+        "angle_chosen": "rarity",
         "era_anchor_used": None, "peer_comparison_used": None,
         "reasoning": "test",
-    }))
+    })
     result = write_fire_tweet(_bundle(), _memory())
     assert result.tweet == "Mali fire test"
+    assert result.kill_reason is None
     assert mock_anthropic.called
 
-def test_write_fire_tweet_returns_null_tweet():
-    # writer can decide to kill
-    ...
+def test_write_fire_tweet_returns_kill(mock_anthropic):
+    mock_anthropic.return_value = _fake_writer_response({
+        "tweet": None, "kill_reason": "no historical_context available",
+        "angle_chosen": "", "era_anchor_used": None,
+        "peer_comparison_used": None, "reasoning": "...",
+    })
+    result = write_fire_tweet(_bundle(), _memory())
+    assert result.tweet is None
+    assert result.kill_reason
 
-def test_write_fire_tweet_raises_on_invalid_json():
-    # parse failure
-    ...
+def test_write_fire_tweet_raises_on_both_tweet_and_kill_set(mock_anthropic):
+    """WriterResult.__post_init__ enforces the invariant."""
+    mock_anthropic.return_value = _fake_writer_response({
+        "tweet": "x", "kill_reason": "y",  # invariant violation
+        "angle_chosen": "x", "era_anchor_used": None,
+        "peer_comparison_used": None, "reasoning": "x",
+    })
+    with pytest.raises(ValueError):
+        write_fire_tweet(_bundle(), _memory())
+
+def test_write_fire_tweet_raises_on_invalid_json(mock_anthropic):
+    mock_anthropic.return_value = _fake_writer_response_raw("not json")
+    with pytest.raises(ValueError):
+        write_fire_tweet(_bundle(), _memory())
 
 def test_write_fire_tweet_raises_on_missing_api_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
     with pytest.raises(RuntimeError):
         write_fire_tweet(_bundle(), _memory())
+
+def test_writer_provider_resolved_at_import(monkeypatch):
+    """A5: unsupported model id should fail at import, not at call time."""
+    monkeypatch.setenv("THEHEAT_WRITER_MODEL", "totally-fake-model")
+    with pytest.raises(RuntimeError):
+        # forcing reimport
+        import importlib, src.two_bot.writer
+        importlib.reload(src.two_bot.writer)
 ```
 
-## 9. Stage 4 — Fact-checker (`src/two_bot/fact_check.py`)
+## 9. Stage 3.5 — Claim extractor (`src/two_bot/claim_extractor.py`)
+
+### Responsibility
+
+Take the writer's tweet text and extract every concrete claim into a
+structured list. This is the source of truth for what the writer
+ACTUALLY said. The writer's self-report (`era_anchor_used`,
+`peer_comparison_used`) is advisory and may be incomplete; the
+extractor is authoritative.
+
+### Function
+
+```python
+def extract_claims(tweet: str) -> list[ExtractedClaim]:
+    """Extract concrete claims from tweet text via Gemini Flash.
+
+    Returns a list of ExtractedClaim, each with:
+    - text: exact substring of the tweet
+    - kind: one of "number", "date", "named_entity", "comparison",
+            "era_anchor", "peer_comparison"
+
+    On API error: raise.
+    On parse failure: log raw, raise ValueError.
+    On missing GEMINI_API_KEY: raise RuntimeError.
+    """
+```
+
+### Prompt (`src/two_bot/prompts/claim_extract_prompt.py`)
+
+```python
+CLAIM_EXTRACT_SYSTEM_PROMPT = """\
+You extract concrete claims from short tweets about climate and weather. Read the tweet and produce a structured list.
+
+A "concrete claim" is anything specific the reader could fact-check:
+- number: any quantity ("361 MW", "47 inches", "1.4×")
+- date: any specific date or year ("April 30", "2002", "since 2012")
+- named_entity: a specific named place / event / object ("Mali", "Hoover Dam", "Hurricane Katrina")
+- comparison: a "X compared to Y" structure ("warmer than 1929", "twice the size of Manhattan")
+- era_anchor: a cultural / historical / pop-culture reference used to convey time ("Spider-Man came out", "Adele's 21 was top of the charts")
+- peer_comparison: a sized peer-class object used as a benchmark ("a 250 MW gas plant", "the Hoover Dam at 2,080 MW")
+
+Extract every claim. Each gets exactly one kind label. If the same substring could fit two kinds, prefer the more specific (era_anchor > date; peer_comparison > comparison; named_entity > date for "Hurricane Katrina").
+
+Return ONLY a JSON list:
+
+[
+  {"text": "<exact substring>", "kind": "number|date|named_entity|comparison|era_anchor|peer_comparison"},
+  ...
+]
+
+No markdown. No code fences. No prose outside the JSON.
+"""
+
+CLAIM_EXTRACT_USER_PROMPT_TEMPLATE = """\
+TWEET:
+{tweet}
+
+Extract the claims.
+"""
+```
+
+### Tests
+
+```python
+def test_extract_claims_returns_list(mock_gemini):
+    mock_gemini.return_value = json.dumps([
+        {"text": "361 MW", "kind": "number"},
+        {"text": "Mali", "kind": "named_entity"},
+        {"text": "Spider-Man came out", "kind": "era_anchor"},
+    ])
+    claims = extract_claims("Mali fire is 361 MW. Spider-Man came out the last time.")
+    assert len(claims) == 3
+    assert claims[2].kind == "era_anchor"
+
+def test_extract_claims_raises_on_invalid_json(mock_gemini):
+    mock_gemini.return_value = "not json"
+    with pytest.raises(ValueError):
+        extract_claims("anything")
+```
+
+## 10. Stage 4 — Fact-checker (`src/two_bot/fact_check.py`)
 
 ### Configuration
 
@@ -629,53 +815,62 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 ```python
 def fact_check(
     tweet: str,
+    extracted: list[ExtractedClaim],
     bundle: StoryBundle,
     state: dict,  # full state — for AUTHORITATIVE memory access
 ) -> FactCheckResult:
     """Run the cheap model as a strict fact-checker.
 
+    Q1 fix: takes pre-extracted claims (Stage 3.5 output) so reuse
+    checks can match against the EXTRACTED claim text (which is what
+    the writer actually wrote), not the writer's self-report.
+
     Returns FactCheckResult with passed=True if and only if every concrete
     claim verifies. Strict: any unverified claim or any reuse → fail.
 
-    On API error: raise. Caller decides whether to fail-open (don't ship)
-    or fail-closed.
+    On API error: raise. Caller decides handling.
     On parse failure: log raw, raise ValueError.
 
-    Reuse checks (era-anchor / peer-comparison / shipped-tweet) are run
-    DETERMINISTICALLY in Python against the FULL authoritative lists
-    in state["memory"] (not the capped slice the writer saw). Only
-    world-knowledge verification goes to the LLM.
+    Reuse checks are run DETERMINISTICALLY via memory.is_reuse() against
+    the FULL authoritative lists in state["memory"]. The extracted-claims
+    list is the canonical source of "what era anchor / peer comparison
+    did the writer use?" — not writer.era_anchor_used.
+
+    Only bundle-fact and world-knowledge verification go to the LLM.
     """
 ```
 
 ### Implementation outline
 
 ```python
-def fact_check(tweet, bundle, state):
+def fact_check(tweet, extracted, bundle, state):
     failures = []
-    mem = state.get("memory", {})
 
-    # Deterministic reuse checks first — against the FULL lists.
-    for shipped in mem.get("shipped_tweets", []):
-        if _normalized(tweet) == _normalized(shipped.get("tweet_text", "")):
-            failures.append(f"reuse: tweet text duplicates shipped tweet")
-    for ea in mem.get("used_era_anchors", []):
-        if _contains_phrase(tweet, ea):
-            failures.append(f"reuse: era anchor '{ea}' already used")
-    for pc in mem.get("used_peer_comparisons", []):
-        if _contains_phrase(tweet, pc):
-            failures.append(f"reuse: peer comparison '{pc}' already used")
+    # 1) Deterministic tweet-text reuse (full text duplicates).
+    if memory.is_reuse(state, tweet, "tweet_text"):
+        failures.append("reuse: tweet text duplicates shipped tweet")
+
+    # 2) Deterministic reuse on EVERY extracted era_anchor / peer_comparison.
+    for claim in extracted:
+        if claim.kind == "era_anchor" and memory.is_reuse(state, claim.text, "era_anchor"):
+            failures.append(f"reuse: era anchor '{claim.text}' already used")
+        if claim.kind == "peer_comparison" and memory.is_reuse(state, claim.text, "peer_comparison"):
+            failures.append(f"reuse: peer comparison '{claim.text}' already used")
 
     if failures:
-        return FactCheckResult(passed=False, failures=failures, raw_response="(local checks)")
+        return FactCheckResult(
+            passed=False, failures=failures,
+            raw_response="(local reuse checks)", extracted_claims=extracted,
+        )
 
-    # LLM verification of bundle facts and world-knowledge claims.
-    raw = _call_gemini(tweet, bundle)  # see prompt below
+    # 3) LLM verification of bundle facts and world-knowledge claims.
+    raw = _call_gemini(tweet, bundle)
     parsed = _parse_fact_check_json(raw)  # {"passed": bool, "failures": [...]}
     return FactCheckResult(
         passed=parsed["passed"],
         failures=parsed.get("failures", []),
         raw_response=raw,
+        extracted_claims=extracted,
     )
 ```
 
@@ -719,29 +914,25 @@ Fact-check.
 
 ```python
 def test_fact_check_deterministic_tweet_reuse():
-    state = {"memory": {
-        "shipped_tweets": [{"tweet_text": "A wildfire in Mali..."}],
-        "used_era_anchors": [], "used_peer_comparisons": [],
-    }}
-    result = fact_check("A wildfire in Mali...", _bundle(), state)
+    state = _state_with_memory(shipped_tweets=[{"tweet_text": "A wildfire in Mali..."}])
+    result = fact_check("A wildfire in Mali...", [], _bundle(), state)
     assert not result.passed
     assert any("reuse" in f.lower() for f in result.failures)
 
-def test_fact_check_deterministic_era_anchor_reuse():
-    state = {"memory": {
-        "shipped_tweets": [],
-        "used_era_anchors": ["spider-man 2002"],
-        "used_peer_comparisons": [],
-    }}
-    tweet = "Last time it was this hot, the first Spider-Man 2002 movie was new."
-    result = fact_check(tweet, _bundle(), state)
+def test_fact_check_deterministic_era_anchor_reuse_via_extraction():
+    """Q1: reuse is detected via the EXTRACTED claim, not writer self-report."""
+    state = _state_with_memory(used_era_anchors=["spider-man 2002"])
+    extracted = [ExtractedClaim(text="Spider-Man 2002", kind="era_anchor")]
+    result = fact_check(
+        "Last time it was this hot, the first Spider-Man 2002 movie was new.",
+        extracted, _bundle(), state,
+    )
     assert not result.passed
 
 def test_fact_check_calls_llm_when_local_passes(mock_gemini):
     mock_gemini.return_value = '{"passed": true, "failures": []}'
-    state = {"memory": {"shipped_tweets": [], "used_era_anchors": [],
-                        "used_peer_comparisons": []}}
-    result = fact_check("Some clean tweet.", _bundle(), state)
+    state = _state_with_memory()
+    result = fact_check("Some clean tweet.", [], _bundle(), state)
     assert result.passed
     assert mock_gemini.called
 
@@ -751,13 +942,12 @@ def test_fact_check_propagates_llm_failure(mock_gemini):
         "failures": [{"claim": "since 2012", "category": "BUNDLE_FACT",
                       "reason": "bundle says 2014"}],
     })
-    state = {"memory": {"shipped_tweets": [], "used_era_anchors": [],
-                        "used_peer_comparisons": []}}
-    result = fact_check("...since 2012", _bundle(), state)
+    state = _state_with_memory()
+    result = fact_check("...since 2012", [], _bundle(), state)
     assert not result.passed
 ```
 
-## 10. Stage Pipeline (`src/two_bot/pipeline.py`)
+## 11. Stage Pipeline (`src/two_bot/pipeline.py`)
 
 ### Function
 
@@ -800,7 +990,10 @@ Replace the body that calls `generator.generate_fire_tweet(...)` and
 `save_draft(...)` with:
 
 ```python
-# Two-bot pipeline for fire (replaces generator.generate_fire_tweet)
+# Two-bot pipeline for fire (replaces generator.generate_fire_tweet).
+# This loop is SERIAL by contract — see Concurrency note in §2. Memory
+# write-back in generate_fire_draft mutates state["memory"]; concurrent
+# invocations would race on Gist persistence.
 from src.two_bot.pipeline import generate_fire_draft
 
 draft = generate_fire_draft(fire, bot_state)
@@ -822,29 +1015,36 @@ strictly the writing/evaluation portion.
 ### End-to-end test
 
 ```python
-def test_pipeline_happy_path(mock_writer, mock_fact_check):
+def test_pipeline_happy_path(mock_writer, mock_extract, mock_fact_check):
     """Full pipeline with mocked LLMs. Verifies state.memory updates."""
     mock_writer.return_value = WriterResult(
-        tweet="Mali fire is 1.4× the output of a 250 MW gas plant.",
+        tweet="Mali fire is 1.4× a 250 MW gas plant.",
+        kill_reason=None,
         angle_chosen="named_comparison_scale",
         era_anchor_used=None,
         peer_comparison_used="250 MW gas plant",
         reasoning="...",
     )
+    mock_extract.return_value = [
+        ExtractedClaim(text="250 MW gas plant", kind="peer_comparison"),
+        ExtractedClaim(text="Mali", kind="named_entity"),
+    ]
     mock_fact_check.return_value = FactCheckResult(
         passed=True, failures=[], raw_response="...",
+        extracted_claims=mock_extract.return_value,
     )
-    fire = FireEvent(...)
-    state = _empty_memory_state()
+    fire = _fire_event()
+    state = _state_with_memory()
     draft = generate_fire_draft(fire, state)
 
     assert draft is not None
     assert draft["text"].startswith("Mali")
-    # Memory write-back happened
+    # Memory write-back happened — used_peer_comparisons populated from
+    # EXTRACTED claim, not writer self-report
     assert "250 mw gas plant" in state["memory"]["used_peer_comparisons"]
 
-def test_pipeline_writer_returns_null():
-    # writer.tweet=None → return None, no memory write
+def test_pipeline_writer_kills():
+    # writer returns kill_reason → return None, no memory write
     ...
 
 def test_pipeline_fact_check_fails():
@@ -854,9 +1054,53 @@ def test_pipeline_fact_check_fails():
 def test_pipeline_writer_raises():
     # exception → log + return None, no memory write
     ...
+
+def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_check):
+    """T2 — the LINCHPIN test. Run pipeline once, memory updates, run again
+    with the writer trying to reuse the same era anchor → fact-check kills
+    the second draft."""
+    state = _state_with_memory()
+    fire = _fire_event(event_id="fire_first")
+
+    # First run: writer uses Spider-Man 2002.
+    mock_writer.return_value = WriterResult(
+        tweet="Mali burned. The last time, Spider-Man 2002 was new.",
+        kill_reason=None, angle_chosen="rarity",
+        era_anchor_used="Spider-Man 2002",
+        peer_comparison_used=None, reasoning="...",
+    )
+    mock_extract.return_value = [
+        ExtractedClaim(text="Spider-Man 2002", kind="era_anchor"),
+    ]
+    mock_fact_check.return_value = FactCheckResult(
+        passed=True, failures=[], raw_response="ok",
+        extracted_claims=mock_extract.return_value,
+    )
+    draft1 = generate_fire_draft(fire, state)
+    assert draft1 is not None
+    assert "spider-man 2002" in state["memory"]["used_era_anchors"]
+
+    # Second run: writer tries Spider-Man 2002 again (slipped in without
+    # declaring it). Pipeline must catch via extraction + fact-check.
+    fire2 = _fire_event(event_id="fire_second")
+    mock_writer.return_value = WriterResult(
+        tweet="Another Mali fire. Spider-Man 2002 was new last time.",
+        kill_reason=None, angle_chosen="rarity",
+        era_anchor_used=None,  # writer LIED: didn't declare reuse
+        peer_comparison_used=None, reasoning="...",
+    )
+    mock_extract.return_value = [
+        ExtractedClaim(text="Spider-Man 2002", kind="era_anchor"),
+    ]
+    # Don't mock fact-check this time — let the real deterministic reuse
+    # check run against state["memory"].
+    from src.two_bot.fact_check import fact_check as real_fact_check
+    mock_fact_check.side_effect = real_fact_check
+    draft2 = generate_fire_draft(fire2, state)
+    assert draft2 is None  # killed by reuse detection
 ```
 
-## 11. Acceptance criteria
+## 12. Acceptance criteria
 
 The build is complete when ALL of the following are true:
 
@@ -868,15 +1112,25 @@ The build is complete when ALL of the following are true:
 4. **Fire branch in `src/main.py`** uses `two_bot.pipeline.generate_fire_draft`,
    not `generator.generate_fire_tweet`.
 5. **`DEFAULT_STATE`** in `src/state.py` includes the `"memory"` key per §7.
-6. **A test running with mocked LLMs** demonstrates an end-to-end fire
-   draft producing a `state.json`-compatible draft dict and updating
-   memory state.
-7. **Manual smoke test** documented in PR description: run the pipeline
+6. **`tests/test_main.py::TestRunAlerts::test_drafts_fire_alert`** is
+   updated (T1 fix). The current test mocks `src.main.generator` and
+   asserts `generate_fire_tweet` was called once. Because main.py now
+   calls `two_bot.pipeline.generate_fire_draft` for fire, codex must
+   either (a) rewrite this test to mock `two_bot.pipeline.generate_fire_draft`
+   and assert the new call path, or (b) replace it with an equivalent test
+   in `tests/two_bot/test_pipeline.py`. The acceptance test runs from a
+   clean clone and passes.
+7. **End-to-end memory-loop test passes** (T2 fix). The
+   `test_pipeline_memory_loop_blocks_reuse` test in §11 exercises the
+   forever-ban memory loop end-to-end with mocked LLMs. This is the
+   linchpin test — if it passes, the architecture's core claim is
+   validated.
+8. **Manual smoke test** documented in PR description: run the pipeline
    once locally with real API keys against a synthetic FireEvent, verify
    the produced tweet and memory updates by hand. Include the tweet
    text in the PR description.
 
-## 12. Out of scope
+## 13. Out of scope
 
 Codex must not do any of the following in this PR:
 
@@ -885,15 +1139,18 @@ Codex must not do any of the following in this PR:
 - Change `evaluate_and_polish` or the evaluator path for non-fire categories.
 - Modify the corpus loop, daily plan-refinement agent, or any docs
   outside this spec file and the PR description.
-- Implement the actual FIRMS-archive distribution computation. The
-  static stub table is correct for first build.
+- **Build `src/two_bot/historical_context.py`**. A1 fix — that module is
+  deferred to a separate PR after real FIRMS distributions are computed.
+  Stub tables and `is_placeholder` flags are NOT acceptable substitutes.
+- Add `fire_archive_cache` to `state["memory"]`. A4 fix — deferred to
+  the same PR as historical_context.
 - Add a writer-model bake-off, multi-pass voice critique, or any A/B
   flagging.
 - Touch posting logic; posting remains paused regardless of this PR.
 - Replace the memory backend with mempalace or any vector store. State
   lives in state.json for this build.
 
-## 13. PR & branching
+## 14. PR & branching
 
 - Branch name: `two-bot-fire-pipeline`
 - Base: `main`
@@ -903,19 +1160,19 @@ Codex must not do any of the following in this PR:
 - PR title: `feat: two-bot pipeline for fire signals`
 - PR description must include:
   - Summary of what changed
-  - Acceptance criteria checklist (§11) with each box checked
-  - The smoke-test tweet output (§11 item 7)
-  - Confirmation that no out-of-scope items (§12) were touched
+  - Acceptance criteria checklist (§12) with each box checked
+  - The smoke-test tweet output (§12 item 8)
+  - Confirmation that no out-of-scope items (§13) were touched
 
 Do NOT push to `main` directly. Do NOT merge the PR; the user reviews
 and merges.
 
-## 14. Voice rules carried forward
+## 15. Voice rules carried forward
 
 These rules are baked into `WRITER_SYSTEM_PROMPT` (§8). Do NOT also
 duplicate them as Python regex filters — those filters were the band-
 aid for the old architecture. The writer prompt is now the source of
-truth; the fact-checker is the enforcement.
+truth; the fact-checker (§10) is the enforcement.
 
 For reference, here are the voice rules being carried forward:
 
