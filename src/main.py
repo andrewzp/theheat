@@ -1018,13 +1018,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         "region": fire.nearest_city or "",
                     },
                 )
-            generated = generator.generate_fire_tweet(
-                region=fire.nearest_city,
-                country=fire.country,
-                confidence=fire.confidence,
-                frp=fire.frp,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="NASA FIRMS",
                 source_key="firms",
@@ -1037,7 +1030,24 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Fire radiative power", f"{fire.frp:.0f} MW"),
                 ],
             )
-            if _save_generated_draft(generated, bot_state, "fire", fire.event_id, score, review_context=review_context):
+            # Two-bot pipeline for fire (replaces generator.generate_fire_tweet).
+            # This loop is SERIAL by contract: generate_fire_draft mutates
+            # state["memory"], so concurrent invocations would race on Gist
+            # persistence.
+            from src.two_bot.pipeline import generate_fire_draft
+
+            draft = generate_fire_draft(fire, bot_state)
+            if draft is None:
+                continue
+            review_context["two_bot"] = draft["two_bot_metadata"]
+            if save_draft(
+                draft["text"],
+                bot_state,
+                "fire",
+                fire.event_id,
+                score=score,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, fire.event_id)
                 drafted += 1
                 source_drafted += 1
