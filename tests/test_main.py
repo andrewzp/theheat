@@ -722,13 +722,15 @@ class TestRunAlerts:
         mock_state.log_error.assert_called()
 
     @patch("src.main.save_draft")
+    @patch("src.two_bot.pipeline.generate_fire_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_drafts_fire_alert(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen,
+        mock_generate_fire_draft, mock_draft,
         monkeypatch,
     ):
         # Pin scoring.date.today() to mid-April so the shoulder-season novelty
@@ -749,13 +751,19 @@ class TestRunAlerts:
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
         mock_state.is_duplicate.return_value = False
-        mock_gen.generate_fire_tweet.return_value = "Fire in Southwestern US."
+        mock_generate_fire_draft.return_value = {
+            "type": "fire",
+            "text": "Fire in Southwestern US.",
+            "event_id": "fire_1",
+            "two_bot_metadata": {"angle_chosen": "plain_number"},
+        }
         mock_draft.return_value = True
 
         state = _fresh_state()
         run_alerts(state)
 
-        mock_gen.generate_fire_tweet.assert_called_once()
+        mock_generate_fire_draft.assert_called_once()
+        mock_gen.generate_fire_tweet.assert_not_called()
         mock_draft.assert_called()
 
     def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
