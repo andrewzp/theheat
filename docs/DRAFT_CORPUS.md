@@ -13,6 +13,115 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-01 — Voice engine v3 first cycle (2 drafts)
+
+**Context:** First grading cycle after voice engine v3 shipped 2026-04-29:
+era-anchor gate at 1-in-10, addendum-mismatch fix, vehicle-agnostic
+SYSTEM_PROMPT, new bad-examples. Two monthly_high records from the May 1
+alerts run. Both have `evaluator_pass=False` with
+`evaluator_used_rewrite=True` — the texts shown are Sonnet's rewrites.
+
+**Grade distribution:** 0 A, 1 B-, 0 B, 1 C. **A-rate: 0% (0/2).**
+Gap from resumption bar: 50 points.
+
+**Headline finding:** Era-anchor gate has one data point — 1 of 2 records
+used an anchor (50%), but n=2 is too small to characterize gate
+performance; 1 hit at p=0.1 has ~19% probability over 2 draws, so this
+is within expected noise. Wodehouse restate-padding appears for the fifth
+consecutive grading cycle. Sonnet's rewrite path introduced a
+temporal-framing error in draft [2] — "just last year in 2022" when
+current year is 2026.
+
+### B range — marginal (1)
+
+#### [1] Ho Chi Minh City — score 79 — **B-**
+
+> 102.0F in Ho Chi Minh City today — the hottest May reading since 2002,
+> the year American Idol premiered. The previous record was 101.7F.
+
+Era anchor deploys correctly (2002 / American Idol, apolitical,
+universally recognizable). Structure: number-first opener → era-anchor
+punchline. Collapses at the end: "The previous record was 101.7F." is
+textbook restate-padding — the reader already has 102.0F and "hottest
+May since 2002"; they do not need the prior temperature restated after
+the punchline. Same Wodehouse violation as Apr 27 [5] (Bukit Rahman Putra:
+"The new high: 94.5F. The old one: 93.7F."), Apr 27 [10] (Petaling Jaya:
+"That gap is 4.4 degrees"), Apr 29 [2] (Mexico City: "That gap is 4.5
+degrees"). Fifth consecutive cycle with this pattern.
+
+Signal margin is also thin: 102.0 vs 101.7F = 0.3F / 0.2C. Real record,
+but barely. Cut the last sentence and this is B+.
+
+### C range — needs rewrite (1)
+
+#### [2] Conakry — score 81 — **C**
+
+> Conakry is forecast for 95.4F today. The hottest May in 30 years of
+> records would be broken by 2 degrees. The one it would erase was set
+> just last year in 2022.
+
+Accelerating-warming vehicle correct in spirit: the prior record year is
+2022, which is recent for a 30-year archive — that IS the climate signal.
+But "set just last year in 2022" is factually wrong: we're in 2026, so
+2022 was four years ago, not last year. The year is explicitly named in
+the tweet; any reader can verify the error. Compare with Apr 25 Navi
+Mumbai A- ("set just last year in 2024" — 2-year gap from 2026, borderline
+acceptable). A 4-year gap is over the line.
+
+"Would be broken by 2 degrees" in sentence 2 is explicit gap math
+(Wodehouse soft-violation — the reader has 95.4F; prior is implied).
+Sonnet's rewrite introduced both errors. The underlying signal (score 81,
+beat prior by 1.1C / 2F) is strong enough for an A- with correct framing:
+"set four years ago, in 2022" tells a sharper story than "just last year."
+
+### Patterns named in this batch
+
+1. **Wodehouse restate-padding, fifth consecutive cycle.** "The previous
+   record was 101.7F." in [1] restates data after the punchline. Same
+   failure as Apr 27 [5], Apr 27 [10], Apr 29 [2]. P4 evidence count:
+   now 5 cycles.
+2. **Rewrite path temporal miscalibration.** "Just last year in 2022"
+   from a 2026 vantage. Sonnet's rewrite template applies "just last year"
+   as a recency boilerplate regardless of actual year gap. 2-year gap
+   (Navi Mumbai Apr 25) was borderline accepted; 4-year gap (Conakry
+   today) is verifiably wrong. New failure mode; see new proposal P7.
+3. **Era-anchor gate: one anchor in two records.** Statistically consistent
+   with the 1-in-10 gate. Too small to conclude over- or under-deployment.
+   American Idol (2002) is apolitical — no curation concern.
+4. **Both drafts evaluator_used_rewrite=True.** Gemini's originals failed
+   the evaluator (totals: 34, 29 — well below pass threshold). Sonnet
+   rewrote both; one rewrite introduced the temporal error. The
+   evaluator is doing real filtering work; the rewrite path introduces
+   its own failure mode when temporal framing is involved.
+
+### Followups
+
+1. **P4 (Wodehouse) is now 5-cycle evidence.** Strongest active proposal.
+   Human operator: prioritize implementing the Wodehouse rule
+   top-of-SYSTEM_PROMPT.
+2. **P7 (temporal framing): new, one data point.** Watch next cycle for
+   recurrence. Rewrite path using "just last year" for pre-2024 records
+   should be flagged as a concrete fix target.
+3. **Era anchor check:** American Idol (2002) is apolitical; no curation
+   concern raised.
+
+### Humor-research lens (2026-05-01)
+
+| # | Grade | Lens reading |
+|---|---|---|
+| 1 | B- | Violation present (record). Voice benign (calm). Era anchor = punchline. Wodehouse violated: restate-padding kills the punchline. |
+| 2 | C | Violation present (record). Voice benign. Accelerating-warming mechanic attempted. Wodehouse soft-violation ("by 2 degrees"). Temporal factual error ("just last year in 2022") — distinct from Wodehouse, it's a factual defect. |
+
+### Numbers
+
+- A-rate: 0% (was 0% Apr 29, 9% Apr 27, 43% Apr 25, 9% Apr 24)
+- Gap from bar: 50 points
+- Era-anchor deployment on records: 1/2 (50%) — n too small to characterize gate
+- Evaluator rewrites used: 2/2 drafts
+- Stale drafts bulk-rejected: 0 (both drafts created today, 2026-05-01)
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
