@@ -491,6 +491,30 @@ def _save_generated_draft(
     )
 
 
+def _maybe_shadow_two_bot(bundle, bot_state: dict, review_context: dict) -> None:
+    """Run the shadow two-bot pipeline if enabled, attaching results in place.
+
+    Gated by ``THEHEAT_SHADOW_AB_ENABLED=1``. The shadow's tweet text and
+    metadata are stored on ``review_context["shadow_two_bot"]``; the live
+    voice-generator tweet is unaffected. Never raises.
+    """
+    if os.environ.get("THEHEAT_SHADOW_AB_ENABLED") != "1":
+        return
+    if review_context is None:
+        return
+    try:
+        from src.two_bot.pipeline import generate_shadow_draft
+
+        shadow = generate_shadow_draft(bundle, bot_state)
+        if shadow:
+            review_context["shadow_two_bot"] = {
+                "text": shadow["text"],
+                **shadow["two_bot_metadata"],
+            }
+    except Exception as exc:
+        print(f"[shadow_ab] Skipped due to error: {exc}")
+
+
 def post_approved(tweet_text: str, bot_state: dict) -> str:
     """Post an approved tweet to X.
 
@@ -787,6 +811,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     )
                     if anomaly_magnitude >= 18:
                         elite = True
+                if strongest_type == "monthly_high":
+                    from src.two_bot.intern import build_monthly_high_bundle
+                    _maybe_shadow_two_bot(
+                        build_monthly_high_bundle(strongest_signal),
+                        bot_state, review_context,
+                    )
                 if _save_generated_draft(
                     generated, bot_state, strongest_type,
                     strongest_event_id, strongest_score,
@@ -951,6 +981,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             )
             # Country records are the biggest story — not subject to
             # per-city cooldown (no single city "owns" this).
+            from src.two_bot.intern import build_country_record_bundle
+            _maybe_shadow_two_bot(
+                build_country_record_bundle(cr), bot_state, cr_ctx,
+            )
             if _save_generated_draft(
                 cr_gen, bot_state, f"country_{cr.kind}",
                 cr.event_id, score, review_context=cr_ctx,
@@ -1241,6 +1275,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Max hail", alert.max_hail_size or "—"),
                     _fact("Tornado detection", alert.tornado_detection or "—"),
                 ],
+            )
+            from src.two_bot.intern import build_severe_weather_bundle
+            _maybe_shadow_two_bot(
+                build_severe_weather_bundle(alert), bot_state, review_context,
             )
             if _save_generated_draft(generated, bot_state, "severe_weather", alert.event_id, score, review_context=review_context):
                 state.record_event(bot_state, alert.event_id)

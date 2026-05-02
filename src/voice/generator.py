@@ -723,8 +723,9 @@ def generate_tweet_bundle(
     if GEMINI_API_KEY:
         try:
             from google import genai
+            from google.genai import types as genai_types
 
-            client = genai.Client(api_key=GEMINI_API_KEY)
+            client = genai.Client(api_key=GEMINI_API_KEY, http_options=genai_types.HttpOptions(timeout=90))
         except Exception as e:
             print(f"[generator] WARNING: Gemini client init failed ({e}) — using template fallback")
     else:

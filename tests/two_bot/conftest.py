@@ -146,7 +146,7 @@ def mock_writer(monkeypatch):
     from src.two_bot import pipeline
 
     mock = MagicMock()
-    monkeypatch.setattr(pipeline.writer, "write_fire_tweet", mock)
+    monkeypatch.setattr(pipeline.writer, "write_tweet", mock)
     return mock
 
 

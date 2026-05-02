@@ -72,7 +72,7 @@ def _call_anthropic(user_prompt: str) -> str:
         raise RuntimeError("ANTHROPIC_API_KEY is required for the Anthropic writer")
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.Anthropic(api_key=api_key, timeout=90.0)
     response = client.messages.create(
         model=WRITER_MODEL,
         max_tokens=1024,
@@ -87,8 +87,9 @@ def _call_google(user_prompt: str) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for the Gemini writer")
     from google import genai
+    from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
     response = client.models.generate_content(
         model=WRITER_MODEL,
         contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
@@ -96,8 +97,12 @@ def _call_google(user_prompt: str) -> str:
     return response.text
 
 
-def write_fire_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
-    """Call the configured writer model and parse a WriterResult."""
+def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
+    """Call the configured writer model and parse a WriterResult.
+
+    Signal-agnostic. The bundle's ``signal_kind`` and ``historical_context``
+    fields tell the writer what kind of story to compose.
+    """
 
     if WRITER_PROVIDER == "unsupported_openai":
         raise NotImplementedError("OpenAI writer provider is not implemented")
@@ -113,4 +118,9 @@ def write_fire_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
     else:
         raise RuntimeError(f"Unsupported writer provider: {WRITER_PROVIDER}")
     return _parse_writer_json(raw)
+
+
+# Backwards-compat alias. The writer is signal-agnostic; legacy callers
+# reference ``write_fire_tweet``.
+write_fire_tweet = write_tweet
 

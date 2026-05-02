@@ -1341,6 +1341,67 @@ export default function Dashboard() {
                           </div>
                         )}
 
+                        {selectedDraft.review_context?.shadow_two_bot?.text && (
+                          <div className="shadow-two-bot-panel" style={{
+                            border: "1px solid #3a3a3a",
+                            borderRadius: 6,
+                            padding: 12,
+                            marginTop: 12,
+                            background: "#1a1a1a",
+                          }}>
+                            <div style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              letterSpacing: "0.05em",
+                              color: "#9aa0a6",
+                              marginBottom: 8,
+                            }}>
+                              SHADOW (TWO-BOT)
+                            </div>
+                            <div style={{
+                              whiteSpace: "pre-wrap",
+                              fontFamily: "ui-monospace, monospace",
+                              fontSize: 14,
+                              lineHeight: 1.5,
+                              color: "#e8eaed",
+                            }}>
+                              {selectedDraft.review_context.shadow_two_bot.text}
+                            </div>
+                            <div style={{
+                              fontSize: 11,
+                              color: "#9aa0a6",
+                              marginTop: 6,
+                              display: "flex",
+                              gap: 12,
+                              flexWrap: "wrap",
+                            }}>
+                              <span>{selectedDraft.review_context.shadow_two_bot.text.length}/280</span>
+                              {selectedDraft.review_context.shadow_two_bot.angle_chosen && (
+                                <span>angle: {selectedDraft.review_context.shadow_two_bot.angle_chosen}</span>
+                              )}
+                              {selectedDraft.review_context.shadow_two_bot.writer_model && (
+                                <span>writer: {selectedDraft.review_context.shadow_two_bot.writer_model}</span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => navigator.clipboard?.writeText(selectedDraft.review_context.shadow_two_bot.text)}
+                                style={{
+                                  marginLeft: "auto",
+                                  fontSize: 11,
+                                  padding: "2px 8px",
+                                  background: "#2a2a2a",
+                                  border: "1px solid #3a3a3a",
+                                  borderRadius: 4,
+                                  color: "#e8eaed",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                copy
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="workbench-grid">
                           <div className="workbench-panel">
                             <h3>Why This Exists</h3>
