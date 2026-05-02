@@ -13,6 +13,94 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-02 — Daily corpus grading (1 draft)
+
+**Context:** Single severe_weather draft in the queue from the 2026-05-01
+23:01 UTC cycle. No record drafts, no fire drafts. Sparse batch — either
+no qualifying signals fired in the last cycle window or the cap/dedup
+cleaned the queue before this run. Voice engine v3 active (era anchor
+1-in-10 gate + vehicle-agnostic SYSTEM_PROMPT). First grading cycle since
+the gate shipped; no record drafts to test the gate against.
+
+**Grade distribution:** 0 A, 1 B- (see below). **A-rate: 0% (0/1).**
+Gap from resumption bar: 50 points.
+
+### B range — functional (1)
+
+#### [1] Point Lay blizzard — score 63 — **B-**
+
+> BLIZZARD WARNING in Point Lay, Alaska. 40 mph gusts. It is May 1.
+
+Seasonal-timing mechanic operates correctly. Three-beat structure: alert
++ magnitude + date punchline. "It is May 1." is the understatement-closer
+move — timing as the punchline — same pattern as "It's April." in the
+golden set and throughout the fire corpus. Wodehouse rule intact: no
+visible effort, no over-explanation, data leads.
+
+**Problems:**
+
+1. **"BLIZZARD WARNING" opener has bureaucratic-alert flavor.** Names the
+   NWS product rather than the phenomenon. Compare the golden set: "#25:
+   Tornado warning issued for central Oklahoma." (lowercase, phenomenon
+   described) and "#17: New wildfire detected in Northern California."
+   (phenomenon first). The tighter version: "Point Lay, Alaska. Blizzard.
+   It is May 1." — same comic triple, location-first framing (Hemingway
+   mode), "Blizzard" as the impact noun, no certification-header baggage.
+
+2. **40 mph gusts is thin data.** Blizzard threshold is 35 mph sustained;
+   40 mph gusts is barely above floor. Not a striking magnitude. Contrast
+   with corpus exemplar "Anchorage recorded 82F" — the number itself is
+   the violation, no framing required.
+
+3. **"It is May 1." has rapid expiry.** Generated 23:01 UTC May 1; graded
+   ~16 hours later on May 2. The closer is now factually wrong: it is not
+   May 1. This draft cannot ship. Under the 48-hour staleness policy the
+   draft is NOT old enough for bulk-reject — but the date reference makes
+   it functionally dead. Manual reject recommended. New proposal P7 below.
+
+**Humor lens:**
+- Violation present: yes — May blizzard warning in Arctic Alaska. Spring
+  encroachment context, seasonal timing is the incongruity.
+- Voice keeps it benign: yes — deadpan, no "dangerous conditions" panic
+  framing, factual register throughout.
+- Setup → punchline: yes — BLIZZARD WARNING + gusts = setup; "It is May
+  1." = punchline. Structure is clean.
+- Named mechanic: understatement closer / timing-as-punchline. Operating.
+- Wodehouse rule: intact. No math-out-loud, no approximation, no restate.
+
+### Patterns named in this batch
+
+1. **Date-specific closers expire same-day.** "It is May 1." generated
+   late on May 1, wrong by the May 2 grading cycle. The golden set and
+   corpus exemplars consistently use "It's April." (month-only) — no
+   specific date, doesn't expire next day, punchier. The bot occasionally
+   bakes the exact date ("It is April 27.", "It is May 1.") when month-only
+   would be more durable and stylistically consistent. New proposal P7.
+
+2. **Sparse queue at grading time.** Single draft suggests either no
+   qualifying signals fired in the last cycle window or the cap/dedup
+   cleaned the queue. Consistent with posting paused; low-signal day.
+   No inference beyond that.
+
+### Followups
+
+1. **P7 (new): date-specific closers.** Prompt note: prefer "It's [MONTH]."
+   over "It is [MONTH D]." Matches corpus exemplars, more durable, punchier.
+2. **Manual reject recommended for [1].** "It is May 1." is wrong as of
+   May 2. Not 48h old so no bulk-reject, but non-shippable.
+3. **Era-anchor gate empirical check pending.** No record drafts in today's
+   batch — gate remains untested post-ship. Need 3+ cycles with record
+   drafts to confirm deployment rate dropped to ~10%.
+
+### Numbers
+
+- A-rate: 0% (was 0% Apr 29, 9% Apr 27, 43% Apr 25, 9% Apr 24)
+- Gap from bar: 50 points (unchanged)
+- Era-anchor deployment on records: N/A — no record drafts
+- Severe_weather drafts: 1 of 1 correct mechanic, thin data payload
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
