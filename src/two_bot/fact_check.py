@@ -49,8 +49,9 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for fact-checking")
     from google import genai
+    from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
     user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
         tweet=tweet,
         bundle_json=json.dumps(bundle.to_dict(), sort_keys=True),
