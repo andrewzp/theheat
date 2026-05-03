@@ -17,6 +17,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
+| 2026-05-03 | 0 | — | — | — | — | **N/A** | — | Gist inaccessible: GitHub API rate-limited (unauthenticated), raw Gist URL blocked at network level. First scheduled run post-v3 ship; no empirical data on era-anchor gate. Apr 29 staleness-reject also blocked — three pending records now >4 days stale. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -25,7 +26,21 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 
 ## Rejection events
 
-Drafts that got rejected, with dates. The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section logs the rejection EVENT (when, why, count) so the operational history is traceable.
+Drafts that got rejected, with dates.
+
+### 2026-05-03 — Staleness-reject blocked (Gist inaccessible)
+
+**Why:** The 48-hour staleness bulk-reject (runbook step 7) could not execute — Gist
+API unreachable due to unauthenticated rate limit. The three Apr 29 record drafts
+(Cuenca B-, Mexico City B, Jacksonville B+) all contain "forecast to hit X today"
+real-time-baked text and are now >4 days stale. They should be bulk-rejected on the
+next run that can reach the Gist, regardless of grade, per the 2026-04-26 staleness
+policy.
+
+**Pending action for next accessible run:** bulk-reject all pending drafts with
+`created_at` before `2026-05-01T15:00:00Z` (>48h as of May 3 15:00 UTC).
+
+ The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section logs the rejection EVENT (when, why, count) so the operational history is traceable.
 
 ### 2026-04-26 — Bulk-reject 14 stale pending drafts
 

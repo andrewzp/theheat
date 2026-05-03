@@ -13,6 +13,52 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-03 — Gist inaccessible (0 drafts)
+
+**Context:** Daily grading run fired as scheduled (2026-05-03). Gist
+`06c02c97ffc0d11458687f1ed998d9e5` unreachable: GitHub API returned HTTP
+403 rate-limit for unauthenticated requests; raw Gist URL
+(`gist.githubusercontent.com`) blocked at the network level ("Host not in
+allowlist"). No pending drafts retrieved. Per runbook: appending a
+no-access entry rather than skipping the run.
+
+**This is the first scheduled run since voice engine v3 shipped
+2026-04-29.** That ship included: `_era_anchor_should_fire` gate (1-in-10
+deterministic), addendum-mismatch fix (`all_time_record` → `all_time_high/low`
+key alignment), SYSTEM_PROMPT #1 rewritten to be vehicle-agnostic, three new
+bad-examples (gap math, restate-padding, era-anchor-then-restate). The Apr 29
+corpus showed 0% A-rate on 3 record drafts, all era-anchor. This cycle would
+have been the first empirical read on whether v3 moved the pattern.
+
+**Grade distribution:** N/A — Gist inaccessible. 0 drafts graded.
+**A-rate: N/A.** Gap from bar: unknown (last known: 50 points, Apr 29).
+
+### Staleness check
+
+Could not execute the 48-hour staleness bulk-reject (runbook step 7). The
+last known pending drafts were three Apr 29 records (all era-anchor, all
+"forecast to hit X today" baked text). All three are now >4 days old and
+contain real-time-baked content — they should be rejected on next accessible
+run regardless of grade, per the 2026-04-26 staleness policy.
+
+### Operational note
+
+Authentication gap: `api.github.com/gists/` throttles unauthenticated
+requests at 60/hour per IP. The agent runs in an environment where no
+`GH_GIST_TOKEN` is in scope. Fix: ensure `GH_GIST_TOKEN` (or any PAT with
+`gist` scope) is available in the agent's execution environment before the
+grading cron fires. Without it every run in a busy IP block will hit this.
+
+### Proposal tracking
+
+No new evidence possible without draft data. P1–P5 evidence counts and
+last-seen dates unchanged from Apr 29 state. May 3 counts as cycle #2 since
+Apr 27 for proposals P2, P3, P5, P6 (last seen Apr 27); one more cycle
+without appearance will trigger retirement review. P4 (Wodehouse) last seen
+Apr 29, now at cycle #1 since then.
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
