@@ -1,0 +1,6 @@
+# theheat dashboard — internal control panel, not for public indexing.
+# The Basic Auth middleware should already block crawlers, but this
+# is the explicit declaration in case a credential leaks or someone
+# disables auth temporarily.
+User-agent: *
+Disallow: /

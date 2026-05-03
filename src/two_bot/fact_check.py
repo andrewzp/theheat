@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+from src.config import CHEAP_MODEL
 from src.two_bot import memory
 from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_SYSTEM_PROMPT,
@@ -12,7 +13,7 @@ from src.two_bot.prompts.fact_check_prompt import (
 )
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
 
-FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", "gemini-2.5-flash")
+FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 
