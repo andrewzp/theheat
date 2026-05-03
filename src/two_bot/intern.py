@@ -5,7 +5,7 @@ from datetime import date
 
 from src.data.firms import FireEvent
 from src.data.nws_alerts import SevereWeatherAlert
-from src.data.open_meteo import CountryRecord, MonthlyRecord
+from src.data.open_meteo import CountryRecord, MonthlyRecord, RecordEvent
 from src.two_bot.types import StoryBundle
 
 _MONTH_NAMES = [
@@ -104,6 +104,43 @@ def build_country_record_bundle(cr: CountryRecord) -> StoryBundle:
             "margin_c": round(cr.new_temp_c - cr.old_record_c, 2),
         },
         raw_signal_dump=asdict(cr),
+    )
+
+
+def build_record_bundle(ev: RecordEvent) -> StoryBundle:
+    """Assemble a StoryBundle for a calendar-day record signal.
+
+    "Calendar-day record" means a city is forecast to break the previous
+    record for *this specific date* (e.g. May 3). These signals fire
+    routinely in temperate climates, so the editorial bar should be high
+    — the writer's discipline (and the empty-margin guard) decides
+    whether it ships, not the absolute temperature.
+    """
+
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
+    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    return StoryBundle(
+        signal_kind="calendar_record",
+        where=where,
+        when=date.today().isoformat(),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": "forecast_high_c",
+            "value": ev.new_temp_c,
+            "unit": "C",
+        },
+        current_facts=[
+            {"label": "city", "value": ev.city},
+            {"label": "country", "value": ev.country},
+            {"label": "calendar_date", "value": date.today().isoformat()},
+        ],
+        historical_context={
+            "prior_record_c": ev.old_record_c,
+            "prior_record_year": ev.old_record_year,
+            "margin_c": margin_c,
+            "scope": "calendar_date_only",
+        },
+        raw_signal_dump=asdict(ev),
     )
 
 

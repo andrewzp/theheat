@@ -491,6 +491,70 @@ def _save_generated_draft(
     )
 
 
+def _two_bot_bundle_for_extreme_signal(strongest_type: str, strongest_signal):
+    """Return a StoryBundle for the extreme_signals dispatch loop, or
+    None if this signal type doesn't have a bundle builder yet.
+
+    Batch 1 (2026-05-03): record (calendar-day) and monthly_high.
+    Follow-ups: all_time_high/low, anomaly_hot/cold (need new builders).
+    """
+    try:
+        if strongest_type == "record":
+            from src.two_bot.intern import build_record_bundle
+            return build_record_bundle(strongest_signal)
+        if strongest_type == "monthly_high":
+            from src.two_bot.intern import build_monthly_high_bundle
+            return build_monthly_high_bundle(strongest_signal)
+    except Exception as exc:
+        print(f"[two_bot.dispatch] Bundle build failed for {strongest_type}: {exc}")
+    return None
+
+
+def _try_two_bot_draft(
+    bundle,
+    bot_state: dict,
+    score,
+    *,
+    legacy_type: str,
+    event_id: str,
+    review_context: dict,
+    city: str = "",
+    tweet_date: str = "",
+    cooldown_exempt: bool = False,
+) -> bool:
+    """Run the live two-bot pipeline (writer → claim extract → fact-check
+    → memory) and save the draft. Returns True iff a draft was saved.
+
+    Bypasses the voice generator entirely. The cheap-model directive
+    (2026-05-03): no Gemini Flash writes the audience-facing text. If
+    two-bot returns None, no draft ships for this signal — we do NOT
+    fall through to the voice generator.
+
+    ``legacy_type`` is the pre-port signal-type label (e.g. "record",
+    "monthly_high", "country_high") used by the dashboard and editorial
+    state. The bundle.signal_kind may differ slightly (e.g.
+    "calendar_record" vs "record") to give the writer better semantic
+    cues, but the saved draft uses the legacy label for compatibility.
+    """
+    from src.two_bot.pipeline import generate_draft
+
+    draft = generate_draft(bundle, bot_state)
+    if draft is None:
+        return False
+    review_context["two_bot"] = draft["two_bot_metadata"]
+    return save_draft(
+        draft["text"],
+        bot_state,
+        legacy_type,
+        event_id,
+        score=score,
+        review_context=review_context,
+        city=city,
+        tweet_date=tweet_date,
+        cooldown_exempt=cooldown_exempt,
+    )
+
+
 def _maybe_shadow_two_bot(bundle, bot_state: dict, review_context: dict) -> None:
     """Run the shadow two-bot pipeline if enabled, attaching results in place.
 
@@ -793,7 +857,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             ),
                         },
                     )
-                generated = strongest_generator()
                 review_context = _review_context(
                     source="Open-Meteo forecast + archive",
                     source_key="open_meteo_extreme_signals",
@@ -811,24 +874,55 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     )
                     if anomaly_magnitude >= 18:
                         elite = True
-                if strongest_type == "monthly_high":
-                    from src.two_bot.intern import build_monthly_high_bundle
-                    _maybe_shadow_two_bot(
-                        build_monthly_high_bundle(strongest_signal),
-                        bot_state, review_context,
-                    )
-                if _save_generated_draft(
-                    generated, bot_state, strongest_type,
-                    strongest_event_id, strongest_score,
-                    review_context=review_context,
-                    city=strongest_city,
-                    tweet_date=date.today().isoformat(),
-                    cooldown_exempt=elite,
-                ):
-                    state.record_event(bot_state, strongest_event_id)
-                    drafted += 1
-                    source_drafted += 1
 
+                # Route through the two-bot pipeline for signal types
+                # with bundle builders. The user's directive (2026-05-03):
+                # cheap models gather/organize data; only the writer
+                # model (Sonnet) produces tweet text. No fallback to
+                # voice gen on failure — if two-bot can't produce a
+                # draft, none ships, and we move on.
+                two_bot_bundle = _two_bot_bundle_for_extreme_signal(
+                    strongest_type, strongest_signal,
+                )
+                two_bot_saved = False
+                voice_gen_saved = False
+                if two_bot_bundle is not None:
+                    # User directive 2026-05-03: cheap models do not
+                    # write. For supported types we run two-bot only;
+                    # if it returns None, no draft ships for this signal.
+                    two_bot_saved = _try_two_bot_draft(
+                        two_bot_bundle, bot_state, strongest_score,
+                        legacy_type=strongest_type,
+                        event_id=strongest_event_id,
+                        review_context=review_context,
+                        city=strongest_city,
+                        tweet_date=date.today().isoformat(),
+                        cooldown_exempt=elite,
+                    )
+                    if two_bot_saved:
+                        state.record_event(bot_state, strongest_event_id)
+                        drafted += 1
+                        source_drafted += 1
+                else:
+                    # Unsupported types still go through voice gen until
+                    # they get bundle builders. Tracked as follow-ups:
+                    # all_time_high/low, anomaly_hot/cold in this loop;
+                    # plus the long tail handled in other blocks.
+                    generated = strongest_generator()
+                    voice_gen_saved = _save_generated_draft(
+                        generated, bot_state, strongest_type,
+                        strongest_event_id, strongest_score,
+                        review_context=review_context,
+                        city=strongest_city,
+                        tweet_date=date.today().isoformat(),
+                        cooldown_exempt=elite,
+                    )
+                    if voice_gen_saved:
+                        state.record_event(bot_state, strongest_event_id)
+                        drafted += 1
+                        source_drafted += 1
+
+                if two_bot_saved or voice_gen_saved:
                     # Streak tracking — update on any calendar-date high record
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
@@ -954,15 +1048,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, cr.event_id):
                 continue
             source_promoted += 1
-            cr_gen = generator.generate_country_record_tweet(
-                country=cr.country, kind=cr.kind,
-                new_temp_c=cr.new_temp_c, peak_city=cr.peak_city,
-                old_temp_c=cr.old_record_c, old_record_year=cr.old_record_year,
-                old_record_city=cr.old_record_city,
-                years_of_data=cr.years_of_data,
-                cities_sampled=cr.cities_sampled,
-                return_bundle=True,
-            )
             descriptor = "hottest" if cr.kind == "high" else "coldest"
             cr_ctx = _review_context(
                 source="Open-Meteo archive (country-wide aggregate)",
@@ -979,15 +1064,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Cities aggregated", cr.cities_sampled),
                 ],
             )
-            # Country records are the biggest story — not subject to
-            # per-city cooldown (no single city "owns" this).
+            # Country records: ported to two-bot writer (Sonnet) on
+            # 2026-05-03. Country records are also not subject to
+            # per-city cooldown — no single city "owns" this story.
             from src.two_bot.intern import build_country_record_bundle
-            _maybe_shadow_two_bot(
-                build_country_record_bundle(cr), bot_state, cr_ctx,
-            )
-            if _save_generated_draft(
-                cr_gen, bot_state, f"country_{cr.kind}",
-                cr.event_id, score, review_context=cr_ctx,
+            cr_bundle = build_country_record_bundle(cr)
+            if _try_two_bot_draft(
+                cr_bundle, bot_state, score,
+                legacy_type=f"country_{cr.kind}",
+                event_id=cr.event_id,
+                review_context=cr_ctx,
             ):
                 state.record_event(bot_state, cr.event_id)
                 drafted += 1
@@ -1248,20 +1334,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, alert.event_id):
                 continue
             source_promoted += 1
-            # Find previous drafts about this event to avoid repeating comparisons
-            event_base = "_".join(alert.event_id.split("_")[:3])  # e.g. "nws_Hurricane_Warning"
-            prev_drafts = _previous_drafts_for_event(bot_state, event_base)
-            generated = generator.generate_severe_weather_tweet(
-                event_type=alert.event_type,
-                area=alert.area,
-                severity=alert.severity,
-                description=alert.description,
-                max_wind_gust=alert.max_wind_gust,
-                max_hail_size=alert.max_hail_size,
-                tornado_detection=alert.tornado_detection,
-                already_drafted=prev_drafts or None,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="NWS Alerts",
                 source_key="nws_alerts",
@@ -1276,11 +1348,19 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Tornado detection", alert.tornado_detection or "—"),
                 ],
             )
+            # Severe weather: ported to two-bot writer 2026-05-03. The
+            # ``already_drafted`` repetition guard from the voice-gen
+            # path is intentionally NOT preserved here — the two-bot
+            # memory layer (``used_framings``, ``shipped_tweet_texts``)
+            # already enforces non-repetition. Cleaner than two layers.
             from src.two_bot.intern import build_severe_weather_bundle
-            _maybe_shadow_two_bot(
-                build_severe_weather_bundle(alert), bot_state, review_context,
-            )
-            if _save_generated_draft(generated, bot_state, "severe_weather", alert.event_id, score, review_context=review_context):
+            sw_bundle = build_severe_weather_bundle(alert)
+            if _try_two_bot_draft(
+                sw_bundle, bot_state, score,
+                legacy_type="severe_weather",
+                event_id=alert.event_id,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, alert.event_id)
                 drafted += 1
                 source_drafted += 1
