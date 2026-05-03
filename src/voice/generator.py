@@ -7,21 +7,23 @@ import os
 import re
 from datetime import date
 
+from src.config import CHEAP_MODEL
 from src.editorial.candidates import CandidateBundle, rank_candidates
 from src.voice.safety import run_safety_pipeline
 from src.voice import templates
 from src.voice.era_anchors import pick_anchors
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-# Model ID for the candidate generator. Made env-configurable on
-# 2026-04-24 so we can A/B model versions without redeploys. Default
-# is the ``gemini-flash-latest`` alias — Google rolls this to whatever
-# their current best Flash model is, so we auto-follow upgrades without
-# touching code. Currently aliases ``gemini-3-flash-preview`` ($0.30/$2.50
-# per MTok). Set GEMINI_MODEL to a specific snapshot
-# (e.g. ``gemini-3-flash-preview`` or ``gemini-2.5-flash``) to pin
-# behavior or roll back when a new Flash drops.
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+# Model ID for the candidate generator. Defaults to the centralized
+# ``CHEAP_MODEL`` (currently ``gemini-2.5-flash``, the stable snapshot).
+# Historically this was ``gemini-flash-latest`` — that alias rolled to
+# Gemini 3 Flash Preview on or before 2026-05-02, which has high latency
+# variance and consistently exceeded our 90s timeout under voice-gen
+# workload (12K-char prompts asking for 4 candidates). Rolled back
+# 2026-05-03. Set GEMINI_MODEL to a specific snapshot to A/B; do not
+# point this at ``-latest`` aliases without re-validating timeouts and
+# retry behavior.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", CHEAP_MODEL)
 # Sonnet evaluator pass. Enabled by default — costs ~$25-45/mo on
 # Sonnet 4.6 (verified against console.anthropic.com 2026-04-24).
 # Set EVALUATOR_ENABLED=false as a kill switch when cost matters more
@@ -487,7 +489,14 @@ def _prompt_for_category(category: str | None) -> str:
         return SYSTEM_PROMPT
     return f"{SYSTEM_PROMPT}\n\n{addendum}"
 
-MAX_RETRIES = 3
+# A timed-out call almost never succeeds on a retry — the workload is the
+# same, the server-side latency is the same, and we just spent another 180s
+# of CI minutes. One attempt; if it times out, fall through to the template
+# fallback (which is good enough for non-extraordinary signals).
+# Bumped down from 3 → 1 on 2026-05-03 after a stuck production run was
+# traced to 3× retries on a slow Gemini 3 Preview call (4.5 minutes wasted
+# per qualifying signal).
+MAX_RETRIES = 1
 DEFAULT_CANDIDATE_COUNT = 4
 
 
@@ -725,7 +734,11 @@ def generate_tweet_bundle(
             from google import genai
             from google.genai import types as genai_types
 
-            client = genai.Client(api_key=GEMINI_API_KEY, http_options=genai_types.HttpOptions(timeout=90))
+            # 180s, not 90s. Voice-gen calls a 12K-char system prompt and
+            # ask for 4 distinct tweet candidates, which is a much heavier
+            # workload than fact_check.py (1K prompt, single JSON output).
+            # 90s was empirically too aggressive — see PR rationale.
+            client = genai.Client(api_key=GEMINI_API_KEY, http_options=genai_types.HttpOptions(timeout=180))
         except Exception as e:
             print(f"[generator] WARNING: Gemini client init failed ({e}) — using template fallback")
     else:

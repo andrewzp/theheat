@@ -68,8 +68,9 @@ class TestGenerateTweet:
                 fallback_args={"key": "val"},
             )
             assert result == "fallback tweet"
-            # 3 generator retries + 1 evaluator call (which also fails gracefully)
-            assert mock_client.models.generate_content.call_count >= 3
+            # MAX_RETRIES is 1 since 2026-05-03 (timeouts don't recover on
+            # retry), so we just need at least one generator call attempted.
+            assert mock_client.models.generate_content.call_count >= 1
 
     @patch("src.voice.generator.GEMINI_API_KEY", "fake_key")
     def test_safety_rejection_triggers_retry(self):
@@ -95,8 +96,9 @@ class TestGenerateTweet:
                     fallback_args={"key": "val"},
                 )
                 assert result == "safe fallback"
-                # 3 generator retries + 1 evaluator call (which also fails gracefully)
-                assert mock_client.models.generate_content.call_count >= 3
+                # MAX_RETRIES is 1; one safety-rejected attempt is enough
+                # to fall through to the template fallback path.
+                assert mock_client.models.generate_content.call_count >= 1
 
     @patch("src.voice.generator.GEMINI_API_KEY", "")
     def test_bundle_generation_uses_multiple_fallback_variants(self):

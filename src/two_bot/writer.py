@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 
+from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
     WRITER_SYSTEM_PROMPT,
     WRITER_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.types import MemorySlice, StoryBundle, WriterResult
 
-WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
+WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", _DEFAULT_WRITER_MODEL)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 _SUPPORTED_PREFIXES = {

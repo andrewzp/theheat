@@ -156,16 +156,21 @@ export default function Dashboard() {
   const [generating, setGenerating] = useState(false)
   const [posting, setPosting] = useState(false)
   const [composeStatus, setComposeStatus] = useState(null)
+  const [modelConfig, setModelConfig] = useState(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const [stateRes, draftsRes] = await Promise.all([
+      const [stateRes, draftsRes, configRes] = await Promise.all([
         fetch("/api/state"),
         fetch("/api/drafts"),
+        fetch("/api/config"),
       ])
       setData(await stateRes.json())
       const d = await draftsRes.json()
       setDrafts(d.drafts || [])
+      if (configRes.ok) {
+        setModelConfig(await configRes.json())
+      }
     } catch (e) {
       console.error(e)
     } finally {
@@ -1088,6 +1093,30 @@ export default function Dashboard() {
                 </div>
               </div>
             </section>
+
+            {modelConfig && (
+              <section className="panel" style={{ marginBottom: 16 }}>
+                <h2 className="section-title">Model Config</h2>
+                <div className="meta" style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 16, rowGap: 4, fontFamily: "ui-monospace, monospace", fontSize: 13 }}>
+                  <span style={{ color: "#9aa0a6" }}>writer</span>
+                  <strong>{modelConfig.writer_model}</strong>
+                  <span style={{ color: "#9aa0a6" }}>fact-check</span>
+                  <strong>{modelConfig.fact_check_model}</strong>
+                  <span style={{ color: "#9aa0a6" }}>claim-extract</span>
+                  <strong>{modelConfig.claim_extract_model}</strong>
+                  <span style={{ color: "#9aa0a6" }}>voice-gen</span>
+                  <strong>{modelConfig.voice_gen_model}</strong>
+                  <span style={{ color: "#9aa0a6" }}>evaluator</span>
+                  <strong style={{ color: modelConfig.evaluator_enabled ? "#7fbf7f" : "#9aa0a6" }}>
+                    {modelConfig.evaluator_enabled ? "enabled" : "disabled"}
+                  </strong>
+                  <span style={{ color: "#9aa0a6" }}>shadow A/B</span>
+                  <strong style={{ color: modelConfig.shadow_ab_enabled ? "#7fbf7f" : "#9aa0a6" }}>
+                    {modelConfig.shadow_ab_enabled ? "enabled" : "disabled"}
+                  </strong>
+                </div>
+              </section>
+            )}
 
             <section className="two-up">
               <article className="panel">

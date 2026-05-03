@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 
+from src.config import CHEAP_MODEL
 from src.two_bot.prompts.claim_extract_prompt import (
     CLAIM_EXTRACT_SYSTEM_PROMPT,
     CLAIM_EXTRACT_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.types import ExtractedClaim
 
-CLAIM_EXTRACT_MODEL = os.environ.get("THEHEAT_CLAIM_EXTRACT_MODEL", "gemini-2.5-flash")
+CLAIM_EXTRACT_MODEL = os.environ.get("THEHEAT_CLAIM_EXTRACT_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 _VALID_KINDS = {
     "number",
