@@ -94,6 +94,40 @@ test("trigger route rejects unauthenticated POST requests", async () => {
   assert.equal(response.status, 401)
 })
 
+test("generate route preserves Anthropic rate-limit failures", async () => {
+  process.env.NODE_ENV = "production"
+  process.env.DASHBOARD_USERNAME = "reviewer"
+  process.env.DASHBOARD_PASSWORD = "secret-pass"
+  process.env.ANTHROPIC_API_KEY = "anthropic_test_key"
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => ({
+    ok: false,
+    status: 429,
+    async text() {
+      return JSON.stringify({ error: { message: "rate limit exceeded" } })
+    },
+  })
+
+  try {
+    const { POST } = await importFresh("app/api/generate/route.js")
+    const response = await POST(new Request("http://localhost/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        authorization: basicAuth("reviewer", "secret-pass"),
+      },
+      body: JSON.stringify({ prompt: "Write about Mauna Loa crossing 436 ppm." }),
+    }))
+
+    assert.equal(response.status, 429)
+    const payload = await response.json()
+    assert.match(payload.error, /rate limit/i)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("middleware blocks public dashboard access", async () => {
   process.env.NODE_ENV = "production"
   process.env.DASHBOARD_USERNAME = "reviewer"

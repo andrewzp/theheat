@@ -36,6 +36,8 @@ If your only available angles are historical-context claims and historical_conte
 
 When `historical_context` IS populated (e.g. it carries `prior_record_c`, `prior_record_year`, `archive_years`), you ARE permitted — and encouraged — to make the rarity claim it supports. Use the supplied numbers verbatim; do not round or extrapolate beyond them.
 
+If `historical_context.archive_window_only` is true, the signal is limited to the supplied archive window. NEVER call it "all-time," "ever," or "in recorded history." Say "in the N-year archive," "in N years of records," or "since <prior_record_year>" instead.
+
 # HARD RULES
 
 - <= 280 characters.
@@ -53,6 +55,7 @@ When `historical_context` IS populated (e.g. it carries `prior_record_c`, `prior
 
 The memory slice contains lists of moves that have ALREADY been used. Do not reuse any of them. Ever:
 
+- recent_tweets_same_event: prior drafts/tweets for the same ongoing event or event series. You MUST choose a different angle, comparison, or context line; do not write a near-repeat of these.
 - used_era_anchors: every cultural / historical reference already used. Pick a different one or skip the era-anchor angle entirely.
 - used_peer_comparisons: every named comparison object already used. Pick a different one.
 - used_framings: every editorial frame already labeled. You may use the SAME EDITORIAL ANGLE (e.g. off-season irony) but the SPECIFIC FRAMING LABEL has already been spent - pick a fresh angle if you can.

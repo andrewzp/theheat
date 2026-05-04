@@ -10,6 +10,8 @@ For EACH concrete claim in the tweet, classify it:
 2. WORLD_KNOWLEDGE - the claim is a general-knowledge fact (cultural reference, well-known number, geography). Verify against your training data. If you are not 95%+ confident, mark as failure.
 3. UNVERIFIABLE - the claim is neither in the bundle nor a verifiable general-knowledge fact. Failure.
 
+Special archive-window rule: if story_bundle.historical_context.archive_window_only is true, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
+
 Return ONLY a JSON object:
 
 {
@@ -31,4 +33,3 @@ STORY BUNDLE:
 
 Fact-check.
 """
-

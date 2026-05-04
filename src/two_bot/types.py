@@ -40,6 +40,7 @@ class MemorySlice:
     """The memory layer's contribution to the writer's context."""
 
     recent_tweets_same_country: list[str] = field(default_factory=list)
+    recent_tweets_same_event: list[str] = field(default_factory=list)
     ongoing_event: dict | None = None
     used_era_anchors: list[str] = field(default_factory=list)
     used_peer_comparisons: list[str] = field(default_factory=list)
@@ -49,6 +50,7 @@ class MemorySlice:
     def to_dict(self) -> dict:
         return {
             "recent_tweets_same_country": self.recent_tweets_same_country,
+            "recent_tweets_same_event": self.recent_tweets_same_event,
             "ongoing_event": self.ongoing_event,
             "used_era_anchors": self.used_era_anchors,
             "used_peer_comparisons": self.used_peer_comparisons,
@@ -111,4 +113,3 @@ class FactCheckResult:
             "raw_response": self.raw_response,
             "extracted_claims": [c.to_dict() for c in self.extracted_claims],
         }
-

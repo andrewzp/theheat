@@ -492,19 +492,24 @@ def _save_generated_draft(
 
 
 def _two_bot_bundle_for_extreme_signal(strongest_type: str, strongest_signal):
-    """Return a StoryBundle for the extreme_signals dispatch loop, or
-    None if this signal type doesn't have a bundle builder yet.
+    """Return a StoryBundle for the extreme_signals dispatch loop.
 
-    Batch 1 (2026-05-03): record (calendar-day) and monthly_high.
-    Follow-ups: all_time_high/low, anomaly_hot/cold (need new builders).
+    All extreme_signals types now have bundle builders (full port,
+    2026-05-04). Voice generator is no longer reachable from this loop.
+    Returns None only if a build raises — in which case the signal is
+    silently dropped rather than falling through to voice gen.
     """
     try:
+        from src.two_bot import intern
+
         if strongest_type == "record":
-            from src.two_bot.intern import build_record_bundle
-            return build_record_bundle(strongest_signal)
-        if strongest_type == "monthly_high":
-            from src.two_bot.intern import build_monthly_high_bundle
-            return build_monthly_high_bundle(strongest_signal)
+            return intern.build_record_bundle(strongest_signal)
+        if strongest_type in ("monthly_high", "monthly_low"):
+            return intern.build_monthly_high_bundle(strongest_signal)
+        if strongest_type in ("all_time_high", "all_time_low"):
+            return intern.build_all_time_record_bundle(strongest_signal)
+        if strongest_type in ("anomaly_hot", "anomaly_cold"):
+            return intern.build_anomaly_bundle(strongest_signal)
     except Exception as exc:
         print(f"[two_bot.dispatch] Bundle build failed for {strongest_type}: {exc}")
     return None
@@ -875,52 +880,37 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     if anomaly_magnitude >= 18:
                         elite = True
 
-                # Route through the two-bot pipeline for signal types
-                # with bundle builders. The user's directive (2026-05-03):
-                # cheap models gather/organize data; only the writer
-                # model (Sonnet) produces tweet text. No fallback to
-                # voice gen on failure — if two-bot can't produce a
-                # draft, none ships, and we move on.
+                # Route through the two-bot pipeline. User directive
+                # 2026-05-04: the cheap model never writes audience-
+                # facing prose. If a future signal type is added that
+                # doesn't have a bundle builder, we DROP the signal
+                # rather than fall through to voice gen — a missed
+                # tweet is better than a Gemini-Flash-written tweet.
                 two_bot_bundle = _two_bot_bundle_for_extreme_signal(
                     strongest_type, strongest_signal,
                 )
-                two_bot_saved = False
-                voice_gen_saved = False
-                if two_bot_bundle is not None:
-                    # User directive 2026-05-03: cheap models do not
-                    # write. For supported types we run two-bot only;
-                    # if it returns None, no draft ships for this signal.
-                    two_bot_saved = _try_two_bot_draft(
-                        two_bot_bundle, bot_state, strongest_score,
-                        legacy_type=strongest_type,
-                        event_id=strongest_event_id,
-                        review_context=review_context,
-                        city=strongest_city,
-                        tweet_date=date.today().isoformat(),
-                        cooldown_exempt=elite,
+                if two_bot_bundle is None:
+                    print(
+                        f"[two_bot.dispatch] No bundle builder for "
+                        f"extreme-signal type {strongest_type!r}; "
+                        f"dropping {strongest_event_id}"
                     )
-                    if two_bot_saved:
-                        state.record_event(bot_state, strongest_event_id)
-                        drafted += 1
-                        source_drafted += 1
-                else:
-                    # Unsupported types still go through voice gen until
-                    # they get bundle builders. Tracked as follow-ups:
-                    # all_time_high/low, anomaly_hot/cold in this loop;
-                    # plus the long tail handled in other blocks.
-                    generated = strongest_generator()
-                    voice_gen_saved = _save_generated_draft(
-                        generated, bot_state, strongest_type,
-                        strongest_event_id, strongest_score,
-                        review_context=review_context,
-                        city=strongest_city,
-                        tweet_date=date.today().isoformat(),
-                        cooldown_exempt=elite,
-                    )
-                    if voice_gen_saved:
-                        state.record_event(bot_state, strongest_event_id)
-                        drafted += 1
-                        source_drafted += 1
+                    continue
+
+                two_bot_saved = _try_two_bot_draft(
+                    two_bot_bundle, bot_state, strongest_score,
+                    legacy_type=strongest_type,
+                    event_id=strongest_event_id,
+                    review_context=review_context,
+                    city=strongest_city,
+                    tweet_date=date.today().isoformat(),
+                    cooldown_exempt=elite,
+                )
+                voice_gen_saved = False  # voice gen no longer reachable
+                if two_bot_saved:
+                    state.record_event(bot_state, strongest_event_id)
+                    drafted += 1
+                    source_drafted += 1
 
                 if two_bot_saved or voice_gen_saved:
                     # Streak tracking — update on any calendar-date high record
@@ -935,12 +925,17 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                     streak["days"], streak.get("peak_temp_c", ev_cd.new_temp_c),
                                 )
                                 if _should_draft(streak_score, streak_event_id):
-                                    streak_gen = generator.generate_record_streak_tweet(
-                                        city=ev_cd.city, country=ev_cd.country,
+                                    from src.data.open_meteo import RecordStreakEvent
+                                    from src.two_bot.intern import build_record_streak_bundle
+                                    streak_event = RecordStreakEvent(
+                                        city=ev_cd.city,
+                                        country=ev_cd.country,
                                         consecutive_days=streak["days"],
+                                        start_date=streak["start_date"],
                                         peak_temp_c=streak.get("peak_temp_c", ev_cd.new_temp_c),
-                                        return_bundle=True,
+                                        event_id=streak_event_id,
                                     )
+                                    streak_bundle = build_record_streak_bundle(streak_event)
                                     streak_ctx = _review_context(
                                         source="state.record_streaks",
                                         source_key="record_streak",
@@ -952,9 +947,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                             _fact("Peak temp", _temp_pair_c(streak.get("peak_temp_c", ev_cd.new_temp_c))),
                                         ],
                                     )
-                                    if _save_generated_draft(
-                                        streak_gen, bot_state, "record_streak",
-                                        streak_event_id, streak_score, review_context=streak_ctx,
+                                    if _try_two_bot_draft(
+                                        streak_bundle, bot_state, streak_score,
+                                        legacy_type="record_streak",
+                                        event_id=streak_event_id,
+                                        review_context=streak_ctx,
                                         city=ev_cd.city,
                                         tweet_date=date.today().isoformat(),
                                         cooldown_exempt=True,
@@ -974,12 +971,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 city_names = [s["city"] for s in simultaneous_record_stations]
                 sim_score = score_simultaneous_records(len(city_names), city_names)
                 if _should_draft(sim_score, sim_event_id):
+                    from src.two_bot.intern import build_simultaneous_records_bundle
                     roll_call_subset = select_roll_call_subset(simultaneous_record_stations)
                     if roll_call_subset:
-                        sim_gen = generator.generate_simultaneous_records_roll_call_tweet(
-                            stations=roll_call_subset,
-                            return_bundle=True,
-                        )
                         rc_country = roll_call_subset[0].get("country", "")
                         rc_elevs = [
                             s["elevation_m"] for s in roll_call_subset
@@ -1008,13 +1002,8 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             current_run=current_run,
                             facts=rc_facts,
                         )
+                        sim_stations = roll_call_subset
                     else:
-                        countries_list = [s["country"] for s in simultaneous_record_stations]
-                        sim_gen = generator.generate_simultaneous_records_tweet(
-                            city_names=city_names,
-                            countries=countries_list,
-                            return_bundle=True,
-                        )
                         sim_ctx = _review_context(
                             source="open_meteo_extreme_signals",
                             source_key="simultaneous_records",
@@ -1026,9 +1015,15 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                 _fact("Sample cities", ", ".join(city_names[:5])),
                             ],
                         )
-                    if _save_generated_draft(
-                        sim_gen, bot_state, "simultaneous_records",
-                        sim_event_id, sim_score, review_context=sim_ctx,
+                        sim_stations = simultaneous_record_stations
+                    sim_bundle = build_simultaneous_records_bundle(
+                        sim_stations, event_id=sim_event_id, when=today_iso,
+                    )
+                    if _try_two_bot_draft(
+                        sim_bundle, bot_state, sim_score,
+                        legacy_type="simultaneous_records",
+                        event_id=sim_event_id,
+                        review_context=sim_ctx,
                     ):
                         state.record_event(bot_state, sim_event_id)
                         drafted += 1
@@ -1208,14 +1203,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     source_promoted += 1
                     tier_idx = min(fc.tier, len(fire_footprint.TIERS_HECTARES) - 1)
                     tier_threshold = fire_footprint.TIERS_HECTARES[tier_idx]
-                    generated = generator.generate_fire_footprint_tweet(
-                        name=fc.name,
-                        country=fc.country,
-                        region=fc.region,
-                        hectares=fc.hectares,
-                        tier_hectares=tier_threshold,
-                        return_bundle=True,
-                    )
                     review_context = _review_context(
                         source="NIFC",
                         source_key="fire_footprint",
@@ -1230,7 +1217,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Ignition date", fc.start_date.isoformat() if fc.start_date else "—"),
                         ],
                     )
-                    if _save_generated_draft(generated, bot_state, "fire_footprint", fc.event_id, score, review_context=review_context):
+                    from src.two_bot.intern import build_fire_footprint_bundle
+                    ff_bundle = build_fire_footprint_bundle(fc)
+                    if _try_two_bot_draft(
+                        ff_bundle, bot_state, score,
+                        legacy_type="fire_footprint",
+                        event_id=fc.event_id,
+                        review_context=review_context,
+                    ):
                         state.record_event(bot_state, fc.event_id)
                         state.update_fire_complex_tier(bot_state, fc.complex_id, fc.tier)
                         drafted += 1
@@ -1286,11 +1280,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             score = score_co2_milestone(milestone.ppm_crossed, milestone.actual_ppm)
             if _should_draft(score, milestone.event_id):
                 source_promoted += 1
-                generated = generator.generate_co2_milestone_tweet(
-                    ppm_crossed=milestone.ppm_crossed,
-                    actual_ppm=milestone.actual_ppm,
-                    return_bundle=True,
-                )
                 review_context = _review_context(
                     source="NOAA GML",
                     source_key="co2",
@@ -1302,7 +1291,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         _fact("Pre-industrial baseline", "280 ppm"),
                     ],
                 )
-                if _save_generated_draft(generated, bot_state, "co2_milestone", milestone.event_id, score, review_context=review_context):
+                from src.two_bot.intern import build_co2_milestone_bundle
+                co2_bundle = build_co2_milestone_bundle(milestone)
+                if _try_two_bot_draft(
+                    co2_bundle, bot_state, score,
+                    legacy_type="co2_milestone",
+                    event_id=milestone.event_id,
+                    review_context=review_context,
+                ):
                     state.record_event(bot_state, milestone.event_id)
                     _increment_co2_annual_count(bot_state)
                     drafted += 1
@@ -1348,11 +1344,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Tornado detection", alert.tornado_detection or "—"),
                 ],
             )
-            # Severe weather: ported to two-bot writer 2026-05-03. The
-            # ``already_drafted`` repetition guard from the voice-gen
-            # path is intentionally NOT preserved here — the two-bot
-            # memory layer (``used_framings``, ``shipped_tweet_texts``)
-            # already enforces non-repetition. Cleaner than two layers.
+            # Severe weather: ported to two-bot writer 2026-05-03.
+            # Event-scoped repetition now flows through the two-bot
+            # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_severe_weather_bundle
             sw_bundle = build_severe_weather_bundle(alert)
             if _try_two_bot_draft(
@@ -1390,23 +1384,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, disaster.event_id):
                 continue
             source_promoted += 1
-            # Find previous drafts about this base event to avoid repeating comparisons
-            # e.g. "gdacs_TC_1001270" matches across tiers
-            event_base = "_".join(disaster.event_id.split("_")[:3])
-            prev_drafts = _previous_drafts_for_event(bot_state, event_base)
-            generated = generator.generate_global_disaster_tweet(
-                disaster_type=disaster.disaster_type,
-                name=disaster.name,
-                country=disaster.country,
-                severity=disaster.severity,
-                description=disaster.description,
-                severity_value=disaster.severity_value,
-                severity_unit=disaster.severity_unit,
-                alert_score=disaster.alert_score,
-                population_affected=disaster.population_affected,
-                already_drafted=prev_drafts or None,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="GDACS",
                 source_key="gdacs",
@@ -1419,7 +1396,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Name", disaster.name),
                 ],
             )
-            if _save_generated_draft(generated, bot_state, "global_disaster", disaster.event_id, score, review_context=review_context):
+            # Event-scoped repetition now flows through the two-bot
+            # memory slice as ``recent_tweets_same_event``.
+            from src.two_bot.intern import build_global_disaster_bundle
+            gd_bundle = build_global_disaster_bundle(disaster)
+            if _try_two_bot_draft(
+                gd_bundle, bot_state, score,
+                legacy_type="global_disaster",
+                event_id=disaster.event_id,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, disaster.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -1453,13 +1439,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 source_promoted = 1 if score and _should_draft(score, record.event_id) else 0
                 source_drafted = 0
                 if record and source_promoted:
-                    generated = generator.generate_sea_ice_record_tweet(
-                        hemisphere=record.hemisphere,
-                        extent=record.extent_million_km2,
-                        previous_extent=record.previous_extent,
-                        previous_year=record.previous_year,
-                        return_bundle=True,
-                    )
                     review_context = _review_context(
                         source="NSIDC",
                         source_key=f"sea_ice_{hemisphere.lower()}",
@@ -1471,7 +1450,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Previous record year", record.previous_year),
                         ],
                     )
-                    if _save_generated_draft(generated, bot_state, "sea_ice_record", record.event_id, score, review_context=review_context):
+                    from src.two_bot.intern import build_sea_ice_bundle
+                    si_bundle = build_sea_ice_bundle(record)
+                    if _try_two_bot_draft(
+                        si_bundle, bot_state, score,
+                        legacy_type="sea_ice_record",
+                        event_id=record.event_id,
+                        review_context=review_context,
+                    ):
                         state.record_event(bot_state, record.event_id)
                         drafted += 1
                         source_drafted = 1
@@ -1509,7 +1495,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     score = score_drought(drought_updates)
                     if _should_draft(score, event_id):
                         source_promoted = 1
-                        generated = generator.generate_drought_tweet(states=drought_updates, return_bundle=True)
                         worst_state = max(
                             drought_updates,
                             key=lambda item: (
@@ -1533,7 +1518,22 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                 _fact("States summarized", len(drought_updates)),
                             ],
                         )
-                        if _save_generated_draft(generated, bot_state, "drought", event_id, score, review_context=review_context):
+                        # The drought source feeds the writer the per-state
+                        # dicts so it can pick its own emphasis (one
+                        # standout vs. roll-call across N states).
+                        from dataclasses import asdict as _asdict, is_dataclass
+                        from src.two_bot.intern import build_drought_bundle
+                        drought_dicts = [
+                            _asdict(item) if is_dataclass(item) else dict(item)
+                            for item in drought_updates
+                        ]
+                        drought_bundle = build_drought_bundle(drought_dicts, event_id=event_id)
+                        if _try_two_bot_draft(
+                            drought_bundle, bot_state, score,
+                            legacy_type="drought",
+                            event_id=event_id,
+                            review_context=review_context,
+                        ):
                             state.record_event(bot_state, event_id)
                             drafted += 1
                             source_drafted = 1
@@ -1573,12 +1573,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             source_promoted = 1 if score and _should_draft(score, transition["event_id"]) else 0
             source_drafted = 0
             if transition and source_promoted:
-                generated = generator.generate_enso_tweet(
-                    to_status=transition["to_status"],
-                    oni_value=transition["oni_value"],
-                    previous_duration=transition["previous_duration_months"],
-                    return_bundle=True,
-                )
                 review_context = _review_context(
                     source="NOAA CPC",
                     source_key="enso",
@@ -1590,7 +1584,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         _fact("Previous duration", f"{transition['previous_duration_months']} months"),
                     ],
                 )
-                if _save_generated_draft(generated, bot_state, "enso", transition["event_id"], score, review_context=review_context):
+                from src.two_bot.intern import build_enso_bundle
+                enso_bundle = build_enso_bundle(transition)
+                if _try_two_bot_draft(
+                    enso_bundle, bot_state, score,
+                    legacy_type="enso",
+                    event_id=transition["event_id"],
+                    review_context=review_context,
+                ):
                     state.record_event(bot_state, transition["event_id"])
                     drafted += 1
                     source_drafted = 1
@@ -1628,12 +1629,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, wave.event_id):
                 continue
             source_promoted += 1
-            generated = generator.generate_extreme_wave_tweet(
-                location=wave.location,
-                ocean=wave.ocean,
-                wave_height_m=wave.wave_height_m,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="Open-Meteo Marine",
                 source_key="ocean",
@@ -1645,7 +1640,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Wave height", f"{wave.wave_height_m:.1f}m / {wave.wave_height_m * 3.281:.0f}ft"),
                 ],
             )
-            if _save_generated_draft(generated, bot_state, "extreme_wave", wave.event_id, score, review_context=review_context):
+            from src.two_bot.intern import build_extreme_wave_bundle
+            wave_bundle = build_extreme_wave_bundle(wave)
+            if _try_two_bot_draft(
+                wave_bundle, bot_state, score,
+                legacy_type="extreme_wave",
+                event_id=wave.event_id,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, wave.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -1683,15 +1685,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             )
             if _should_draft(score, event.event_id):
                 source_promoted += 1
-                generated = generator.generate_marine_heatwave_tweet(
-                    kind=event.kind,
-                    days=event.days,
-                    today_c=event.today_c,
-                    archive_max_c=event.archive_max_c,
-                    archive_max_year=event.archive_max_year,
-                    years_of_data=event.years_of_data,
-                    return_bundle=True,
-                )
                 review_context = _review_context(
                     source="NOAA OISST v2.1 (ClimateReanalyzer)",
                     source_key="ocean_sst",
@@ -1705,9 +1698,13 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         _fact("Archive span", f"{event.years_of_data} years"),
                     ],
                 )
-                if _save_generated_draft(
-                    generated, bot_state, "marine_heatwave",
-                    event.event_id, score, review_context=review_context,
+                from src.two_bot.intern import build_marine_heatwave_bundle
+                mhw_bundle = build_marine_heatwave_bundle(event)
+                if _try_two_bot_draft(
+                    mhw_bundle, bot_state, score,
+                    legacy_type="marine_heatwave",
+                    event_id=event.event_id,
+                    review_context=review_context,
                 ):
                     state.record_event(bot_state, event.event_id)
                     drafted += 1
@@ -1742,14 +1739,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, surge.event_id):
                 continue
             source_promoted += 1
-            generated = generator.generate_storm_surge_tweet(
-                station_name=surge.station_name,
-                state=surge.state,
-                anomaly_m=surge.anomaly_m,
-                observed_m=surge.observed_m,
-                predicted_m=surge.predicted_m,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="NOAA CO-OPS",
                 source_key="water_levels",
@@ -1762,7 +1751,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Observed vs predicted", f"{surge.observed_m:.2f}m vs {surge.predicted_m:.2f}m"),
                 ],
             )
-            if _save_generated_draft(generated, bot_state, "storm_surge", surge.event_id, score, review_context=review_context):
+            from src.two_bot.intern import build_storm_surge_bundle
+            ss_bundle = build_storm_surge_bundle(surge)
+            if _try_two_bot_draft(
+                ss_bundle, bot_state, score,
+                legacy_type="storm_surge",
+                event_id=surge.event_id,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, surge.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -1793,14 +1789,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             if not _should_draft(score, flood.event_id):
                 continue
             source_promoted += 1
-            generated = generator.generate_river_flood_tweet(
-                river=flood.river,
-                location=flood.location,
-                gauge_height_ft=flood.gauge_height_ft,
-                flood_stage_ft=flood.flood_stage_ft,
-                above_by_ft=flood.above_by_ft,
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="USGS Water",
                 source_key="river_gauges",
@@ -1813,7 +1801,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Above flood stage", f"{flood.above_by_ft:.1f}ft"),
                 ],
             )
-            if _save_generated_draft(generated, bot_state, "river_flood", flood.event_id, score, review_context=review_context):
+            from src.two_bot.intern import build_river_flood_bundle
+            rf_bundle = build_river_flood_bundle(flood)
+            if _try_two_bot_draft(
+                rf_bundle, bot_state, score,
+                legacy_type="river_flood",
+                event_id=flood.event_id,
+                review_context=review_context,
+            ):
                 state.record_event(bot_state, flood.event_id)
                 drafted += 1
                 source_drafted += 1
@@ -1881,18 +1876,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         earliest = readings[0].month
                         earliest_year = int(earliest.split("-")[0])
                         years_of_record = date.today().year - earliest_year
-                        generated = generator.generate_ice_mass_tweet(
-                            region=record.region,
-                            kind=record.kind,
-                            month=record.month,
-                            monthly_delta_gt=record.monthly_delta_gt,
-                            previous_worst_gt=record.previous_worst_gt,
-                            previous_worst_month=record.previous_worst_month,
-                            threshold_gt=record.threshold_gt,
-                            current_mass_gt=record.current_mass_gt,
-                            years_of_record=years_of_record,
-                            return_bundle=True,
-                        )
                         headline = (
                             f"{record.region.title()}: largest monthly ice loss on record"
                             if record.kind == "monthly_loss_record"
@@ -1929,9 +1912,17 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             current_run=current_run,
                             facts=facts,
                         )
-                        if _save_generated_draft(
-                            generated, bot_state, "ice_mass_record",
-                            record.event_id, score, review_context=review_context,
+                        from src.two_bot.intern import build_ice_mass_bundle
+                        ice_bundle = build_ice_mass_bundle(
+                            record,
+                            years_of_record=years_of_record,
+                            archive_start_year=earliest_year,
+                        )
+                        if _try_two_bot_draft(
+                            ice_bundle, bot_state, score,
+                            legacy_type="ice_mass_record",
+                            event_id=record.event_id,
+                            review_context=review_context,
                         ):
                             state.record_event(bot_state, record.event_id)
                             _increment_ice_annual_count(bot_state)
@@ -2001,17 +1992,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             synthesis_promoted += 1
             if not _should_draft(score, sig.event_id):
                 continue
-            generated = generator.generate_synthesis_fire_drought_heat_tweet(
-                state=sig.region,
-                drought_d4_pct=comps["drought_d4_pct"],
-                fire_peak_frp=comps["fire_peak_frp"],
-                fire_peak_region=comps["fire_peak_region"],
-                heat_peak_city=comps["heat_peak_city"],
-                heat_peak_kind=comps["heat_peak_kind"],
-                heat_peak_value_c=comps["heat_peak_value_c"],
-                window_days=comps["window_days"],
-                return_bundle=True,
-            )
             review_context = _review_context(
                 source="Cross-source synthesis (FIRMS + USDM + Open-Meteo)",
                 source_key="synthesis_fire_drought_heat",
@@ -2026,9 +2006,26 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Window", f"{comps['window_days']} days"),
                 ],
             )
-            if _save_generated_draft(
-                generated, bot_state, "synthesis_fire_drought_heat",
-                sig.event_id, score, review_context=review_context,
+            from src.two_bot.intern import build_synthesis_bundle
+            synth_bundle = build_synthesis_bundle({
+                "event_id": sig.event_id,
+                "region": sig.region,
+                "kind": "fire_drought_heat",
+                "headline": sig.headline,
+                "rule_name": sig.rule_name,
+                "components": [
+                    {"kind": "drought", "d4_pct": comps["drought_d4_pct"]},
+                    {"kind": "fire", "peak_frp_mw": comps["fire_peak_frp"], "peak_region": comps["fire_peak_region"]},
+                    {"kind": "heat", "peak_city": comps["heat_peak_city"], "peak_kind": comps["heat_peak_kind"], "peak_value_c": comps["heat_peak_value_c"]},
+                ],
+                "window_days": comps["window_days"],
+                "total_score": score.total if hasattr(score, "total") else None,
+            })
+            if _try_two_bot_draft(
+                synth_bundle, bot_state, score,
+                legacy_type="synthesis_fire_drought_heat",
+                event_id=sig.event_id,
+                review_context=review_context,
             ):
                 state.record_event(bot_state, sig.event_id)
                 state.record_synthesis_fired(bot_state, sig.rule_name, sig.region)
@@ -2174,14 +2171,6 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
             )
             return bot_state
 
-        hot10_data = []
-        for i, ct in enumerate(hot10, 1):
-            hot10_data.append(
-                f"{i}. {ct.city}, {ct.country}: "
-                f"{ct.temp_high_c:.1f}C (normal: {ct.normal_high_c:.1f}C, "
-                f"anomaly: +{ct.anomaly_c:.1f}C)"
-            )
-
         prev_cities = bot_state.get("last_hot10", {}).get("cities", [])
         changes = []
         for i, ct in enumerate(hot10):
@@ -2194,25 +2183,12 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
             else:
                 changes.append(f"{ct.city} NEW to the Hot 10")
 
-        data_desc = "Today's Hot 10 cities by temperature anomaly (how far above normal):\n"
-        data_desc += "\n".join(hot10_data)
-        if changes:
-            data_desc += "\n\nChanges from yesterday: " + ", ".join(changes[:3])
-
-        from src.voice.templates import hot10_template
         top_anomaly = hot10[0].anomaly_c if hot10 else 0.0
         score = score_hot10(top_anomaly, len(hot10), len(changes))
-        generated = generator.generate_tweet(
-            data_desc,
-            category="hot10",
-            return_bundle=True,
-            fallback_fn=hot10_template,
-            fallback_args={"cities": [{"city": ct.city, "anomaly_c": ct.anomaly_c} for ct in hot10]},
-        )
 
         event_id = f"hot10_{date.today().isoformat()}"
         drafted_count = 0
-        if generated and _should_draft(score, event_id):
+        if _should_draft(score, event_id):
             leader = hot10[0] if hot10 else None
             review_context = _review_context(
                 source="Open-Meteo + normals",
@@ -2226,7 +2202,27 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Ranking changes", len(changes)),
                 ],
             )
-            drafted_count = 1 if _save_generated_draft(generated, bot_state, "hot10", event_id, score, review_context=review_context) else 0
+            from src.two_bot.intern import build_hot10_bundle
+            hot10_dicts = [
+                {
+                    "city": ct.city,
+                    "country": ct.country,
+                    "temp_high_c": ct.temp_high_c,
+                    "normal_high_c": ct.normal_high_c,
+                    "anomaly_c": ct.anomaly_c,
+                }
+                for ct in hot10
+            ]
+            hot10_bundle = build_hot10_bundle(
+                hot10_dicts, changes=changes, event_id=event_id,
+            )
+            if _try_two_bot_draft(
+                hot10_bundle, bot_state, score,
+                legacy_type="hot10",
+                event_id=event_id,
+                review_context=review_context,
+            ):
+                drafted_count = 1
 
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
