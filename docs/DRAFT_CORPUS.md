@@ -13,6 +13,99 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-04 — No fresh drafts (Gist inaccessible); two-bot architecture live (N=0)
+
+**Context:** Grading run fired 2026-05-04. Gist `06c02c97ffc0d11458687f1ed998d9e5`
+inaccessible — GitHub API unauthenticated rate-limit hit; no `GH_GIST_TOKEN`
+available in the agent environment. Queue could not be pulled. **0 drafts graded.**
+
+**A-rate: N/A.** No grade distribution.
+
+**Architectural change (critical for future grading):** Between the Apr 29 corpus
+run and today, the two-bot pipeline shipped (PR #25, commit `00f621a`, then PR #26
+docs sweep). Per `BRIEFING.md` (updated 2026-05-04):
+
+> *"TWO-BOT ARCHITECTURE LIVE. Every audience-facing tweet is now drafted by Claude
+> Sonnet 4.6 via the two-bot pipeline (intern → writer → claim-extractor → fact-check
+> → memory). Gemini Flash never writes prose anymore. Voice generator
+> `src/voice/generator.py` is no longer reached on any live signal path."*
+
+The live writer prompt is `src/two_bot/prompts/writer_prompt.py::WRITER_SYSTEM_PROMPT`.
+Future corpus grading is against Sonnet output, not Gemini. The failure modes to watch
+are those in the new prompt's blind spots.
+
+**What the new writer prompt already handles — previous proposals resolved:**
+
+- **Plant comparisons:** explicitly banned including commercial/industrial/mid-sized/
+  high-capacity adjectives: "never compare a fire's MW to a typical/standard/average/
+  large/small/commercial/industrial/mid-sized/high-capacity/usual nuclear/coal/gas/
+  power plant/reactor." Old P2 resolved.
+- **Throat-clearing openers** ("A wildfire in X is putting out N MW"): "No throat-
+  clearing openers" stated explicitly. Old P3 resolved.
+- **Restate-padding:** "No restate-padding. If a number is in the tweet, do not also
+  restate it as 'the new high: X. The old one: Y.'" Old P5 substantially resolved.
+- **Pre/post-explain punchlines:** "Do not pre-explain or post-explain a punch line."
+- **Poetry-attempt closers:** "No poetry-attempt closers. ('The river doesn't know.'
+  'Pointed at the sky.') The data carries the punch."
+- **Hallucinated archive claims:** "If `historical_context` is empty, do NOT invent
+  rarity claims" — a structural gap the old system never addressed.
+
+**Gaps in the new writer prompt — new proposals surfaced:**
+
+1. **Era-anchor frequency ungated.** Memory slice tracks `used_era_anchors` (prevents
+   reuse of the same anchor) but imposes no cap on frequency. Sonnet can use a different
+   era anchor for every record signal — 100% deployment returns, just with fresh anchors.
+   Old 1-in-10 gate shipped Apr 29 in now-bypassed `voice/generator.py`. Highest-leverage
+   gap.
+
+2. **Named humor mechanics absent.** Writer prompt lists data-centric angles (rarity,
+   scale, context) but doesn't name voice mechanics: comic triple, idiom-flip,
+   understatement closer, era anchor as *one* specificity vehicle, accelerating-warming.
+   "Pick the angle you think works best" without a named palette may produce less variety
+   and narrower mechanic range than the corpus's A-grade drafts showed.
+
+3. **Earned editorial heat not explicitly permitted.** Old `brand/VOICE.md` and
+   `voice/generator.py` explicitly allowed ALL-CAPS for elite signals. New prompt
+   ("Economist correspondent, wry without precious") implies restraint without unlocking
+   the move. Risk: flat copy on all-time-record and country-record signals where the data
+   warrants editorial weight.
+
+4. **"Approximation when exact is available" not banned.** New prompt bans restate-
+   padding, poetry-attempt closers, pre/post-explain — but not "nearly 3 degrees" when
+   the bundle contains 2.7F. Observed twice in old corpus (Apr 27 [14] Manchester,
+   Apr 29 [2] Mexico City). Partial Wodehouse gap remains in new prompt.
+
+**Staleness policy note:** Drafts created before 2026-05-02 with real-time-baked
+content are stale per the 48-hour policy. Agent could not execute the PATCH to mark
+them rejected (no Gist auth). Operator should run manual bulk-reject once access is
+restored.
+
+### Patterns named
+
+1. **Agent environment dependency.** `GH_GIST_TOKEN` must be set in the grading
+   agent's environment. When missing, the agent cannot pull the queue — run defaults to
+   0 drafts.
+2. **Architecture transitions resolve and open proposals simultaneously.** P2/P3/P5
+   — multiple corpus cycles to identify each — resolved at once when the writer prompt
+   was written with explicit bans. The corpus was the evidence base the new prompt was
+   built from.
+3. **Era anchors now drawn from Sonnet training, not `data/era_anchors.json`.** The
+   Apr 26 prune of 43 politically-charged anchors has no effect on the new pipeline.
+   Sonnet generates its own era anchors from training knowledge. Political-anchor risk
+   (Elon Musk 2022, Trump 2024, Capitol riot 2021) may persist if Sonnet reaches for
+   these unprompted.
+
+### Followups
+
+1. Restore `GH_GIST_TOKEN` in agent environment before next run.
+2. Operator: run manual bulk-reject on stale drafts (any pending draft with
+   "forecast to hit X today" / dated references created before 2026-05-02).
+3. Implement era-anchor frequency guidance in `WRITER_SYSTEM_PROMPT` (new P1).
+4. Implement earned editorial heat permission in `WRITER_SYSTEM_PROMPT` (new P3).
+5. Grade first batch of Sonnet-generated drafts to establish new two-bot baseline.
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All

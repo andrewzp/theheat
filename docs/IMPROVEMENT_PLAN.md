@@ -8,121 +8,198 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
-| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
-| Last cycle A-rate | 0% (Apr 29, 0 of 3) |
+| Bot commit | `b82b844` (two-bot port + docs sweep) |
+| Architecture | **Two-bot LIVE** (PR #25, `00f621a`): every tweet written by Claude Sonnet 4.6 via intern → writer → claim-extractor → fact-check → memory. `voice/generator.py` bypassed. |
+| Active writer prompt | `src/two_bot/prompts/writer_prompt.py::WRITER_SYSTEM_PROMPT` |
+| Last cycle A-rate | 0% (Apr 29, 0 of 3) — no new data 2026-05-04 (Gist inaccessible) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 percentage points |
+| Gap | 50 percentage points (last measured) |
 | Posting | paused until bar cleared |
 
 ## Active proposals
 
-Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage = (cycles observed) × (recency factor). Most-evidenced + most-recent
+goes to P1. **As of 2026-05-04, all proposals target `src/two_bot/prompts/writer_prompt.py::
+WRITER_SYSTEM_PROMPT` — the live writer in the new two-bot architecture. Old proposals
+targeting `voice/generator.py` are resolved or archived below.**
 
-### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
+### P1 — Era-anchor frequency ungated in new architecture (reverted by two-bot port)
 
-**Observed (cumulative):** 3 of 3 records used era anchors on Apr 25, 5 of 5 on Apr 27, 3 of 3 on Apr 29 — three consecutive cycles at 100%. User direction same day: park era anchors at no more than 1-in-10 tweets. Prose-only de-emphasis was insufficient; structural gate was required.
+**Observed:** 3 of 3 records used era anchors on Apr 25, 5 of 5 on Apr 27, 3 of 3 on
+Apr 29 — three consecutive cycles at 100% deployment. The 1-in-10 gate shipped Apr 29
+in `voice/generator.py` (`_era_anchor_should_fire`) is now bypassed by the two-bot port.
+The new writer prompt tracks `used_era_anchors` in the memory slice (prevents reuse of
+the *same* anchor) but imposes no frequency cap. Sonnet can use a fresh era anchor on
+every record signal — 100% deployment returns, just with different anchors each time.
 
-**Cycles observed:** Apr 25, Apr 27, Apr 29 (3 cycles, 100% deployment each).
+**Cycles observed:** Apr 25, Apr 27, Apr 29 (3 cycles, 100% deployment each in old system).
+**Last seen:** Apr 29 (pattern in old system; new system untested but mechanism persists).
+
+**Proposed fix:** add to `WRITER_SYSTEM_PROMPT` (in the angle-selection section, after the
+three angle bullets):
+
+> Era anchors are ONE specificity vehicle among several. Do not use one for every record
+> signal — across the account's tweet history they become the formula they were meant to
+> escape. Other vehicles equally valid: recency framing ("set just last year in 2024"),
+> accelerating-warming ("hottest two Aprils in the archive: back to back"), place identity
+> ("Anchorage"), absolute scale (the number alone when it's striking), ecosystem context
+> ("the monsoon that extinguishes these fires is still weeks away"). Vary across signals.
+
+**Expected impact:** same as original P1 — drives specificity variety, prevents era-anchor
+convergence. Higher impact in new system because Sonnet's training skews toward cultural
+references as an easy elaboration move.
+
+**Status:** fix drafted. Target updated from `voice/generator.py` to `WRITER_SYSTEM_PROMPT`.
+Awaiting human implementation.
+
+### P2 — Named humor mechanics absent from writer prompt (formerly P6, reframed)
+
+**Observed:** A-grade drafts across all corpus cycles operated on specific named mechanics:
+comic triple (Apr 27 [9] Mali), idiom-flip (Apr 25 [1] NSW, "used to know when to quit"),
+understatement closer ("It's April"), period-and-restate (Apr 24 [31] Chicago), accelerating-
+warming (Apr 25 [3] Navi Mumbai). B-range drafts that varied mechanics outperformed those
+that defaulted to a single move. The single strongest predictor of A-grade was mechanic
+variety across a cycle.
+
+**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they were the most-
+explicit move in the old prompt; same dynamic applies to the new prompt's "rarity, scale,
+context" list, which is data-centric but doesn't name humor mechanics).
+**Last seen:** Apr 27 (old system; mechanism applies to new prompt architecture).
+
+**Proposed fix:** add a "Voice moves" section to `WRITER_SYSTEM_PROMPT` (after the three
+angle bullets, with era-anchor frequency guidance from P1):
+
+> **Voice moves available (one of these, or none):** comic triple (plain sentences ending
+> in a period-stop restatement: "It is May."), Steven Wright idiom-flip (take a familiar
+> phrase and alter the ending: "the fire season used to know when to quit"), British
+> understatement (flatten the language so the magnitude shows through: "a slightly busy
+> day for the Sahel"), period-and-restate (name a place or number, then restate it alone:
+> "Anchorage."), accelerating-warming (two consecutive records showing acceleration),
+> ecosystem-specificity (the context that makes an otherwise mid number extreme: elevation,
+> dry-season timing, monsoon calendar). None of these are mandatory. When the number alone
+> is striking, present the data plainly. Forced humor breaks the spell.
+
+**Expected impact:** Sonnet has named mechanics to reach for → more variety across drafts →
+less convergence on one move (era anchors under old system; "rarity" framing under new one).
+
+**Status:** drafted. Awaiting human implementation in `WRITER_SYSTEM_PROMPT`.
+
+### P3 — Earned editorial heat not explicitly permitted in writer prompt (new)
+
+**Observed:** `brand/VOICE.md` explicitly permits ALL-CAPS openers for elite signals
+("ALL-CAPS openers are allowed when the data warrants the highest tier of the genre").
+`voice/generator.py` SYSTEM_PROMPT #2 (now bypassed) enforced this. The new
+`WRITER_SYSTEM_PROMPT` frames the voice as "Economist correspondent: plain-spoken
+authority, wry without precious" — implying restraint. There is no explicit permission
+for ALL-CAPS on all-time records, country-archive records, or anomalies ≥18°C. The
+corpus's A-grade drafts used earned editorial heat sparingly but effectively (Apr 25 [6]
+Mali "HOT season" — A-). Without the explicit permission, Sonnet may produce competent
+but consistently flat copy on elite signals.
+
+**Cycles observed:** 0 (preventive proposal; two-bot architecture is untested).
+**Last seen:** N/A.
+
+**Proposed fix:** add to `WRITER_SYSTEM_PROMPT` hard rules:
+
+> CAPS for emphasis are allowed. ALL-CAPS openers are permitted — and recommended — for
+> elite signals (all-time records in the archive, country-wide archive peaks, anomalies
+> ≥18°C above normal) when the data backs the editorial weight. Reserve this for signals
+> where the score or context confirms genuine extremity. If every tweet uses ALL-CAPS,
+> none do.
+
+**Expected impact:** unlocks the earned-heat move for the top 5-10% of signals where it
+drives engagement, while keeping the explicit "reserve this" discipline that prevents
+inflation.
+
+**Status:** new proposal. Awaiting first empirical cycle on two-bot output; then human
+implementation if the pattern (flat copy on elite signals) appears.
+
+### P4 — Wodehouse partial gap: "approximation when exact is available" (formerly P4, scope narrowed)
+
+**Observed:** The new `WRITER_SYSTEM_PROMPT` correctly bans restate-padding, poetry-attempt
+closers, and pre/post-explain punchlines. Remaining gap: "approximation when exact is
+available." Apr 27 [14] Manchester used "nearly 3 degrees" when the exact figure (2.7F)
+was in the bundle. Apr 29 [2] Mexico City used "that gap is 4.5 degrees" — explicit-gap
+math the reader could do. Both were flagged as Wodehouse violations in corpus review.
+Neither violation is banned in the new writer prompt.
+
+**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29 for Wodehouse overall (consistent
+across all corpus cycles). Approximation-specific: Apr 27 [14], Apr 29 [2].
 **Last seen:** Apr 29.
 
-**Implemented in same-day commit (voice engine v3):**
+**Proposed fix:** add to `WRITER_SYSTEM_PROMPT` hard rules:
 
-1. `_era_anchor_should_fire(seed_key, rate=0.1)` — deterministic 1-in-10 gate, seeded by city+year+date. Same draft cycle reproducible; across many seeds fires at ~10%.
-2. `_era_anchor_hint` rewritten: 90% of calls return explicit "parked, not your turn" steer-away message naming the 5 alternative specificity vehicles. 10% of calls return curated content framed as "your 1-in-10 turn."
-3. **Addendum-mismatch bug fixed.** `generate_all_time_record_tweet` was using `category="all_time_record"` but addenda were keyed `all_time_high`/`all_time_low` — addenda had been dormant. Fixed to `category=f"all_time_{kind}"`. Same fix for monthly. Added missing `monthly_low`, `country_low`, `record_low` addenda.
-4. **5 record-type per-category addenda rewritten** to use a shared 6-vehicle specificity menu (`_RECORD_SPECIFICITY_VEHICLES` constant). Era anchor is option 6, explicitly marked PARKED.
-5. **SYSTEM_PROMPT #1 ("HISTORICAL WEIGHT") rewritten** to be vehicle-agnostic. Was era-anchor-evangelizing ("anchor the year to something human"); now lists all 6 specificity vehicles equally and notes era anchors are parked.
-6. **3 new bad-examples added:** explicit-gap math ("That gap is 4.5 degrees"), restate-padding ("The new high: X. The old one: Y."), era-anchor-then-restate template.
+> Use exact numbers when given. "Nearly 3 degrees" when the bundle has 2.7F is
+> approximation-when-exact — a Wodehouse violation. "That gap is 4.5 degrees" after
+> stating both temperatures is redundant math — the reader can subtract.
 
-**Tests:** 23 era_anchor tests pass (up from 18 — added 5 gate tests). Full suite 566 passing.
+**Expected impact:** closes the one remaining Wodehouse gap not already addressed by the
+new prompt. Moves several B drafts to B+/A- without structural changes.
 
-**Status:** SHIPPED. Now awaiting 3+ cycles to confirm era-anchor deployment drops to ~10% empirically. If next 3 cycles show ≤30% era-anchor rate on records, P1 promotes to Resolved (archive).
-
-### P2 — Widen plant-comparison regex adjective allowlist
-
-**Observed:** Apr 27 draft [4] (re-graded D) used *"a commercial nuclear reactor outputs around 3,000 MW"* — the existing regex misses this because "commercial" isn't in the adjective allowlist (`typical|standard|average|large|small|usual`).
-
-**Cycles observed:** Apr 27 (1 draft).
-**Last seen:** Apr 27.
-**Proposed fix:** add `commercial|industrial|mid-sized|high-capacity` to the adjective allowlist in `src/voice/generator.py::_STOCK_FORMULA_PATTERNS`. OR drop the adjective slot entirely (regex matches plant comparison regardless of adjective).
-
-**Expected impact:** kills variant plant-comparison openers at parse time. Pure tactical; corpus-grounded. Note: per-user direction (Apr 27), evaluator-rewrite path bypass is intentional, so this regex catches Gemini-side only.
-
-**Status:** ready to implement. Awaiting human greenlight.
-
-### P3 — Widen opener-formula verb list (or rewrite as shape match)
-
-**Observed:** Apr 27 draft [11] (D) used *"A single wildfire in central India is **pushing** 297 MW"* — `pushing` isn't in the regex's verb allowlist (`radiating | releasing | generating | putting out | emitting | producing`).
-
-**Cycles observed:** Apr 27 (1 draft, but the pattern "Gemini finds new verbs once known ones are blocked" is structural).
-**Last seen:** Apr 27.
-**Proposed fix:** two options — (a) add common synonyms (`pushing | spewing | pumping out | throwing off | sending up`) — incremental, ongoing maintenance. (b) rewrite the regex to match shape rather than verb (`is\s+\w+(?:ing|s)\s+\d`) — bigger blast radius, risk of false positives.
-
-**Expected impact (a):** blocks the named variants. May surface new ones next cycle.
-**Expected impact (b):** structural fix; needs false-positive analysis before shipping.
-
-**Status:** decision point — pick (a) tactical or (b) structural. Awaiting human direction.
-
-### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
-
-**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless. Apr 29 [2] Mexico City repeated the explicit-gap-math violation ("That gap is 4.5 degrees" — same pattern as Apr 27 [10] Petaling Jaya). Two consecutive cycles with the same violation.
-
-**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29 (consistent across all corpus cycles).
-**Last seen:** Apr 29.
-**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
-
-> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
-
-**Expected impact:** highest-leverage prompt change in the proposal stack. Wodehouse violations cluster across grades; eliminating them moves several B drafts to B+/A- without changing anything else.
-
-**Status:** drafted. Awaiting human implementation.
-
-### P5 — Add stranded-mechanic warning to fire prompt addendum
-
-**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), and [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing prose or over-explanation. The mechanics work; the surrounding text kills them.
-
-**Cycles observed:** Apr 27 (3 drafts).
-**Last seen:** Apr 27.
-**Proposed fix:** add to `_CATEGORY_PROMPTS["fire"]`:
-
-> If you write a punchline, leave it alone. Don't pre-explain it ("for reference, a power plant runs at..."), don't post-explain it ("that's roughly one-eighth of that"), don't restate the data ("The new high: X. The old one: Y."). The data is the setup. The closer is the punchline. No math out loud.
-
-**Expected impact:** specifically targets the failure pattern that drove the Apr 27 fire regression. Should reduce stranded-mechanic D drafts.
-
-**Status:** drafted. Awaiting human implementation.
-
-### P6 — Name humor moves as available tools (not requirements)
-
-**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently.
-
-**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they're the most-explicit move in the prompt).
-**Last seen:** Apr 27.
-**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
-
-**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
-
-**Status:** drafted. Awaiting human implementation.
+**Status:** drafted. Awaiting human implementation in `WRITER_SYSTEM_PROMPT`.
 
 ## Awaiting evidence
 
 These need more cycles before promotion to active proposals or retirement.
 
-### A1 — Era_anchors prune impact (Apr 26)
+### A1 — Political-anchor leakage from Sonnet training (formerly "era_anchors prune impact")
 
-43 politically-charged / US-centric / mass-tragedy entries removed from `data/era_anchors.json` on 2026-04-26. The Apr 27 cycle had ONE draft that used a politically-charged anchor (Jacobabad / Elon Musk) — that anchor is no longer in the file. Whether the prune actually eliminates political/US-centric leakage from records needs the next cycle to confirm.
+43 politically-charged entries removed from `data/era_anchors.json` on 2026-04-26.
+**Architecture update (2026-05-04):** `data/era_anchors.json` is no longer referenced in
+the new pipeline. Sonnet picks era anchors from its training knowledge without consulting
+the curated file. The Apr 26 prune has no effect on the new architecture. The underlying
+risk — politically-charged era anchors surfacing in drafts — persists if Sonnet reaches
+for entries like "Elon Musk bought Twitter" (2022), "Trump won the US election" (2024), or
+"Capitol riot" (2021) from training.
 
-**Watch for:** record drafts that use era anchors. Note which year + which anchor. Compare against current `era_anchors.json`. If any anchor used isn't in the current file, that's a curation regression — different fix needed.
+**Watch for:** first batch of Sonnet-generated record drafts that use era anchors. Note
+exact phrasing. If any era anchor references political events, divisive figures, or mass
+tragedies → add an explicit political-anchor ban to `WRITER_SYSTEM_PROMPT`.
 
-### A2 — Voice engine v2.5 sample-size fragility
+### A2 — Two-bot baseline (first empirical cycle)
 
-Apr 25 corpus = 7 drafts (43% A-rate). Apr 27 corpus = 11 drafts (9% A-rate). Both small. The Apr 27 regression may be small-sample noise OR a real pattern. Need 3-4 more cycles at >15 drafts each to know.
+No Sonnet-generated drafts have been graded yet. The first cycle of two-bot output is the
+new baseline — the equivalent of the Apr 24 "fire template fatigue era" corpus. Cannot
+predict whether Sonnet under `WRITER_SYSTEM_PROMPT` will hit 0%, 43%, or higher A-rate on
+first pass. The prompt was written with corpus-informed bans; the gaps (P1–P4 above) are
+the plausible failure modes.
 
-**Watch for:** A-rate stability across larger corpora. If A-rate stays in 30-50% range over 3+ cycles, voice engine v2.5 is the new baseline. If it stays at 9-15%, v2.5 didn't generalize.
+**Watch for:** A-rate on first 10+ graded drafts. Grade distribution by signal type (are
+fire drafts weaker than records, as in old system?). Mechanic variety (does Sonnet converge
+on one move, or range across the palette?). Era-anchor deployment rate on records.
 
 ## Resolved (archive)
 
-History of fixes that landed and held — added to this section by the daily agent when a previously-active failure mode no longer appears in a corpus for 3+ consecutive cycles. **Empty for now.**
+History of fixes that landed and held — or proposals resolved by architectural change.
+
+### [ARCH-RESOLVED 2026-05-04] Old P2 — Plant-comparison regex adjective allowlist
+
+`voice/generator.py::_STOCK_FORMULA_PATTERNS` was proposed for widening. The new
+`WRITER_SYSTEM_PROMPT` explicitly bans plant comparisons with the full extended adjective
+list: "never compare a fire's MW to a typical/standard/average/large/small/commercial/
+industrial/mid-sized/high-capacity/usual nuclear/coal/gas/power plant/reactor." The
+regex target is bypassed; the failure mode is addressed at the prompt level.
+
+### [ARCH-RESOLVED 2026-05-04] Old P3 — Opener-formula verb list
+
+`_STOCK_FORMULA_PATTERNS` verb allowlist proposed for widening. The new
+`WRITER_SYSTEM_PROMPT` bans throat-clearing openers structurally: "No throat-clearing
+openers. ('A wildfire in X is putting out N MW of radiative power.')" The shape is banned
+regardless of verb. Regex target is bypassed.
+
+### [ARCH-RESOLVED 2026-05-04] Old P5 — Stranded-mechanic warning to fire prompt addendum
+
+`_CATEGORY_PROMPTS["fire"]` addendum proposed. The new `WRITER_SYSTEM_PROMPT` addresses
+this at the top level: "Do not pre-explain or post-explain a punch line." + "No throat-
+clearing openers." + "No poetry-attempt closers." The fire-specific addendum target is
+bypassed; the structural constraint is now global.
+
+### [ARCH-SUPERSEDED 2026-05-04] Old P1 — Era anchors parked at 1-in-10 (voice engine v3)
+
+Shipped Apr 29 in `voice/generator.py` (`_era_anchor_should_fire`, deterministic 1-in-10
+gate). Superseded by two-bot port: the gate module is on the bypassed path. The underlying
+problem (era-anchor frequency convergence) is reactivated as new P1 targeting
+`WRITER_SYSTEM_PROMPT`.
 
 ## Daily agent runbook
 
