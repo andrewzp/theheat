@@ -2,6 +2,90 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0.0] - 2026-05-04
+
+The two-bot architecture is now THE pipeline. Gemini Flash retired from
+the writing path; Sonnet 4.6 drafts every audience-facing tweet.
+
+### Added (PR #21)
+
+- **Shadow A/B infrastructure** for `monthly_high`, `country_record`,
+  and `severe_weather` signals — generates a parallel two-bot draft
+  alongside the live voice-gen tweet for side-by-side comparison.
+  Gated by `THEHEAT_SHADOW_AB_ENABLED=1`.
+- **90-second timeouts on all LLM clients** (`anthropic.Anthropic`,
+  `genai.Client`) to prevent indefinite GitHub Actions hangs. The
+  trigger: a stuck production run held the concurrency lock for 2+
+  hours on a slow Gemini 3 Flash Preview call.
+- Bundle builders for `monthly_high`, `country_record`, and
+  `severe_weather` (`build_*_bundle` in `src/two_bot/intern.py`).
+
+### Added (PR #22)
+
+- **Centralized model config** in `src/config.py` (`CHEAP_MODEL`,
+  `WRITER_MODEL`). All four LLM callers (voice/generator,
+  two_bot/{fact_check, claim_extractor, writer}) now import defaults
+  from one place; per-caller env overrides preserved for surgical A/B.
+- **Dashboard hardening**: `GET /api/config` endpoint, MODEL CONFIG
+  panel showing live model selection, `robots.txt` + `X-Robots-Tag`
+  HTTP header + meta robots tag, `Referrer-Policy: no-referrer`.
+  Belt+suspenders against indexing on top of existing Basic Auth.
+
+### Changed (PR #22)
+
+- **Rolled voice generator off `gemini-flash-latest`** (currently
+  aliases to Gemini 3 Flash Preview, chronically slow under our
+  workload) back to stable `gemini-2.5-flash`. Bumped HTTP timeout
+  90s → 180s for voice-gen specifically (12K-char prompt asking for
+  4 candidates is heavier than fact-check). Dropped `MAX_RETRIES`
+  3 → 1: timeouts don't recover on retry.
+
+### Changed (PR #25)
+
+- **Full voice→two-bot port.** Every audience-facing signal type now
+  runs through the two-bot writer (Sonnet 4.6). Voice generator is no
+  longer reached on any live path. 22 bundle builders in
+  `src/two_bot/intern.py`, one per signal source.
+- **Dashboard `/api/generate`** swapped from Gemini Flash to Anthropic
+  Sonnet (`THEHEAT_WRITER_MODEL`). Manual compose now uses the same
+  writer as the bot.
+- **Removed `already_drafted` repetition guard** for `severe_weather`
+  and `global_disaster`. Replaced with `recent_tweets_same_event`
+  window in `src/two_bot/memory.py` so the writer sees prior drafts
+  in the same NWS/GDACS event series.
+- **Extreme-signals dispatch** now drops unsupported signal types
+  rather than falling through to voice gen. A missed tweet is better
+  than a Gemini-Flash-written tweet.
+
+### Codex review fixes (in PR #25)
+
+Bundle builders now preserve facts the writer needs:
+- `build_all_time_record_bundle`: `archive_window_only=True` and
+  `signal_kind="open_meteo_archive_high/low"` to keep the writer
+  honest about archive scope (not "hottest day ever in history").
+- `build_monthly_high_bundle`: `monthly_low` label distinguished
+  from `monthly_high` based on `kind`.
+- `build_enso_bundle`: aligned key names with the dispatch dict
+  (`status_to`, `previous_duration_months`).
+- `build_fire_footprint_bundle`: now carries the tier threshold the
+  voice generator referenced.
+- `build_ice_mass_bundle`: archive span preserved.
+- `build_drought_bundle`: severity metrics surfaced beyond raw counts.
+
+### Removed (effectively)
+
+- `src/voice/generator.py` is no longer called on any live signal
+  path. The 1,730 lines remain in the repo as defensive code +
+  template fallbacks. Slated for deletion in a follow-up cleanup PR.
+
+### Deferred / open follow-ups
+
+- Disable Sonnet evaluator pass via `EVALUATOR_ENABLED=false`
+  (saves $25–45/mo; redundant with `fact_check.py`).
+- Delete `src/voice/generator.py` and downstream dead code.
+- Category-tune `writer_prompt.py` for the ~16 newly-ported signal
+  types as production data surfaces failure modes.
+
 ## [0.1.0.0] - 2026-04-21
 
 ### Added
