@@ -1,5 +1,5 @@
 from src.two_bot.memory import build_memory_slice, is_reuse, record_shipped
-from src.two_bot.types import ExtractedClaim, WriterResult
+from src.two_bot.types import ExtractedClaim, StoryBundle, WriterResult
 
 from tests.two_bot.conftest import (
     _bundle,
@@ -23,6 +23,85 @@ def test_build_memory_slice_filters_by_country():
     memory_slice = build_memory_slice(state, bundle)
 
     assert len(memory_slice.recent_tweets_same_country) == 2
+
+
+def test_build_memory_slice_exposes_recent_tweets_for_event_base():
+    state = _state_with_memory(
+        shipped_tweets=[
+            {
+                "tweet_text": "Hurricane Alpha hit Cat 3 in the Atlantic.",
+                "event_id": "gdacs_TC_1001270_tier3",
+                "country": "US",
+                "shipped_at": "2026-05-03T00:00:00Z",
+            },
+            {
+                "tweet_text": "Unrelated cyclone tweet.",
+                "event_id": "gdacs_TC_9999999_tier3",
+                "country": "US",
+                "shipped_at": "2026-05-03T01:00:00Z",
+            },
+        ]
+    )
+    state["drafts"] = [
+        {
+            "text": "Hurricane Alpha pushed higher again.",
+            "event_id": "gdacs_TC_1001270_tier4",
+            "created_at": "2026-05-03T02:00:00Z",
+        }
+    ]
+    bundle = _bundle(event_id="gdacs_TC_1001270_tier5", country="US")
+
+    memory_slice = build_memory_slice(state, bundle)
+
+    assert memory_slice.recent_tweets_same_event == [
+        "Hurricane Alpha pushed higher again.",
+        "Hurricane Alpha hit Cat 3 in the Atlantic.",
+    ]
+
+
+def test_memory_slice_groups_severe_weather_by_event_type_and_area():
+    state = _empty_memory_state()
+    bundle = StoryBundle(
+        signal_kind="severe_weather",
+        where="Florida Keys",
+        when="2026-05-04",
+        event_id="nws_https://api.weather.gov/alerts/alpha",
+        headline_metric={"label": "event_type", "value": "Hurricane Warning"},
+        current_facts=[
+            {"label": "event_type", "value": "Hurricane Warning"},
+            {"label": "area", "value": "Florida Keys"},
+        ],
+        historical_context={},
+        raw_signal_dump={},
+    )
+    writer = WriterResult(
+        tweet="Florida Keys are under a hurricane warning.",
+        kill_reason=None,
+        angle_chosen="plain_warning",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    record_shipped(state, bundle, writer, [])
+    next_bundle = StoryBundle(
+        signal_kind="severe_weather",
+        where="Florida Keys",
+        when="2026-05-04",
+        event_id="nws_https://api.weather.gov/alerts/beta",
+        headline_metric={"label": "event_type", "value": "Hurricane Warning"},
+        current_facts=[
+            {"label": "event_type", "value": "Hurricane Warning"},
+            {"label": "area", "value": "Florida Keys"},
+        ],
+        historical_context={},
+        raw_signal_dump={},
+    )
+
+    memory_slice = build_memory_slice(state, next_bundle)
+
+    assert memory_slice.recent_tweets_same_event == [
+        "Florida Keys are under a hurricane warning.",
+    ]
 
 
 def test_record_shipped_uses_extracted_claims_not_writer_self_report():
@@ -87,4 +166,3 @@ def test_is_reuse_framing_exact_match_only():
 
     assert is_reuse(state, "off_season_irony", "framing")
     assert not is_reuse(state, "off_season", "framing")
-

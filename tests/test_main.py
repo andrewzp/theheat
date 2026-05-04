@@ -820,8 +820,11 @@ class TestRunAlerts:
         # Stub the two-bot pipeline (live path post-2026-05-04 port) so
         # we don't make real LLM calls. Side-effect: save a draft to
         # state so the assertions below see the marine_heatwave draft.
+        captured = {}
         def fake_try_two_bot(bundle, bot_state, score, *, legacy_type, event_id, review_context, **kwargs):
             from src.main import save_draft
+            captured["bundle"] = bundle
+            captured["legacy_type"] = legacy_type
             return save_draft(
                 "Day 5 of record global SSTs.",
                 bot_state, legacy_type, event_id,
@@ -836,6 +839,14 @@ class TestRunAlerts:
         marine_drafts = [d for d in drafts if d.get("type") == "marine_heatwave"]
         assert len(marine_drafts) == 1
         assert "marine_heatwave_streak_5_2026-04-20" in fresh_st.get("posted_events", [])
+        assert captured["legacy_type"] == "marine_heatwave"
+        assert captured["bundle"].signal_kind == "marine_heatwave"
+        assert captured["bundle"].headline_metric == {
+            "label": "streak_days",
+            "value": 5,
+            "unit": "days",
+        }
+        assert captured["bundle"].historical_context["archive_max_year"] == 2023
 
 
 class TestRunLeaderboard:
@@ -1551,6 +1562,7 @@ class TestSynthesisStage:
             captured["legacy_type"] = legacy_type
             captured["event_id"] = event_id
             captured["bundle_signal_kind"] = bundle.signal_kind
+            captured["components"] = bundle.raw_signal_dump.get("components")
             return True
         monkeypatch.setattr(main, "_try_two_bot_draft", fake_two_bot)
 
@@ -1558,6 +1570,11 @@ class TestSynthesisStage:
 
         assert captured.get("legacy_type") == "synthesis_fire_drought_heat"
         assert captured.get("bundle_signal_kind") == "synthesis_fire_drought_heat"
+        assert captured["components"] == [
+            {"kind": "drought", "d4_pct": 10.0},
+            {"kind": "fire", "peak_frp_mw": 1400.0, "peak_region": "Sacramento"},
+            {"kind": "heat", "peak_city": "Sacramento", "peak_kind": "calendar", "peak_value_c": 40.0},
+        ]
         assert "california" in captured["event_id"]
         # Cooldown must have been recorded so a second cycle is suppressed.
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}

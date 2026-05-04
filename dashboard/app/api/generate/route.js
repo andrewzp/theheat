@@ -8,6 +8,41 @@ import { requireDashboardAuth } from "../../../lib/auth.js"
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const WRITER_MODEL = process.env.THEHEAT_WRITER_MODEL || "claude-sonnet-4-6"
 
+function parseProviderError(text) {
+  try {
+    const parsed = JSON.parse(text)
+    return parsed?.error?.message || parsed?.message || text
+  } catch {
+    return text
+  }
+}
+
+function anthropicErrorResponse(status, text) {
+  const providerMessage = parseProviderError(text || "")
+  if (status === 401 || status === 403) {
+    return Response.json(
+      { error: `Anthropic auth failed: ${providerMessage}`, provider_status: status },
+      { status }
+    )
+  }
+  if (status === 429) {
+    return Response.json(
+      { error: `Anthropic rate limit: ${providerMessage}`, provider_status: status },
+      { status: 429 }
+    )
+  }
+  if (status >= 400 && status < 500) {
+    return Response.json(
+      { error: `Anthropic request rejected: ${providerMessage}`, provider_status: status },
+      { status }
+    )
+  }
+  return Response.json(
+    { error: `Anthropic unavailable: ${providerMessage}`, provider_status: status },
+    { status: 502 }
+  )
+}
+
 const SYSTEM_PROMPT = `You are @theheat, a climate data account with a voice. You report \
 extreme weather with genuine surprise at the absurdity of the numbers. Your personality \
 comes from how you frame the data — punchy sentences, deadpan context, comparisons that \
@@ -77,7 +112,7 @@ export async function POST(request) {
 
     if (!res.ok) {
       const errText = await res.text()
-      return Response.json({ error: `Anthropic ${res.status}: ${errText}` }, { status: 500 })
+      return anthropicErrorResponse(res.status, errText)
     }
 
     const data = await res.json()

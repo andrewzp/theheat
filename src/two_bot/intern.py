@@ -12,7 +12,7 @@ from datetime import date
 
 from src.data.co2 import CO2Milestone
 from src.data.firms import FireEvent
-from src.data.fire_footprint import FireComplex
+from src.data.fire_footprint import FireComplex, TIERS_HECTARES
 from src.data.gdacs import GlobalDisasterEvent
 from src.data.ice_mass import IceMassRecord
 from src.data.nws_alerts import SevereWeatherAlert
@@ -71,13 +71,14 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
 
     month_name = _MONTH_NAMES[ev.month] if 1 <= ev.month <= 12 else str(ev.month)
     where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    metric_label = "forecast_high_c" if ev.kind == "high" else "forecast_low_c"
     return StoryBundle(
-        signal_kind="monthly_high",
+        signal_kind=f"monthly_{ev.kind}",
         where=where,
         when=date.today().isoformat(),
         event_id=ev.event_id,
         headline_metric={
-            "label": "forecast_high_c",
+            "label": metric_label,
             "value": ev.new_temp_c,
             "unit": "C",
         },
@@ -211,7 +212,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
 
     where = f"{ev.city}, {ev.country}" if ev.country else ev.city
     return StoryBundle(
-        signal_kind=f"all_time_{ev.kind}",
+        signal_kind=f"open_meteo_archive_{ev.kind}",
         where=where,
         when=date.today().isoformat(),
         event_id=ev.event_id,
@@ -229,9 +230,20 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
             "prior_record_c": ev.old_record_c,
             "prior_record_year": ev.old_record_year,
             "archive_years": ev.years_of_data,
+            "archive_start_year": date.today().year - ev.years_of_data,
+            "archive_window_only": True,
             "kind": ev.kind,
             "margin_c": round(ev.new_temp_c - ev.old_record_c, 2),
             "scope": "archive_history",
+            "forbidden_claims": [
+                "all-time high",
+                "all-time low",
+                "hottest ever",
+                "coldest ever",
+                "highest ever",
+                "lowest ever",
+                "in recorded history",
+            ],
         },
         raw_signal_dump=asdict(ev),
     )
@@ -348,6 +360,11 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
 
     where = f"{fc.region}, {fc.country}" if fc.region and fc.country else (fc.region or fc.country)
     name = fc.name or "Unnamed complex"
+    tier_hectares = (
+        TIERS_HECTARES[min(fc.tier, len(TIERS_HECTARES) - 1)]
+        if fc.tier >= 0 and TIERS_HECTARES
+        else None
+    )
     return StoryBundle(
         signal_kind="fire_footprint",
         where=where or "Unknown",
@@ -364,6 +381,7 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
             {"label": "country", "value": fc.country},
             {"label": "hectares", "value": fc.hectares},
             {"label": "tier", "value": fc.tier},
+            {"label": "tier_hectares", "value": tier_hectares, "unit": "hectares"},
             {"label": "start_date", "value": fc.start_date.isoformat() if fc.start_date else None},
         ],
         historical_context={},
@@ -375,6 +393,7 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
             "hectares": fc.hectares,
             "start_date": fc.start_date.isoformat() if fc.start_date else None,
             "tier": fc.tier,
+            "tier_hectares": tier_hectares,
             "event_id": fc.event_id,
         },
     )
@@ -477,7 +496,12 @@ def build_sea_ice_bundle(record: SeaIceRecord) -> StoryBundle:
     )
 
 
-def build_ice_mass_bundle(record: IceMassRecord) -> StoryBundle:
+def build_ice_mass_bundle(
+    record: IceMassRecord,
+    *,
+    years_of_record: int | None = None,
+    archive_start_year: int | None = None,
+) -> StoryBundle:
     """GRACE ice mass loss / cumulative milestone for a polar region."""
 
     return StoryBundle(
@@ -496,11 +520,14 @@ def build_ice_mass_bundle(record: IceMassRecord) -> StoryBundle:
             {"label": "month", "value": record.month},
             {"label": "monthly_delta_gt", "value": record.monthly_delta_gt},
             {"label": "current_mass_gt", "value": record.current_mass_gt},
+            {"label": "years_of_record", "value": years_of_record},
         ],
         historical_context={
             "previous_worst_gt": record.previous_worst_gt,
             "previous_worst_month": record.previous_worst_month,
             "threshold_gt": record.threshold_gt,
+            "years_of_record": years_of_record,
+            "archive_start_year": archive_start_year,
             "scope": "grace_satellite_archive",
         },
         raw_signal_dump=asdict(record),
@@ -629,18 +656,26 @@ def build_drought_bundle(updates: list[dict], *, event_id: str) -> StoryBundle:
     total_drought_pct).
     """
 
+    def _severity(row: dict) -> float:
+        return float(row.get("d3_pct") or 0) + float(row.get("d4_pct") or 0)
+
+    worst = max(updates, key=_severity) if updates else {}
+    worst_value = round(_severity(worst), 1) if worst else 0.0
     return StoryBundle(
         signal_kind="drought",
         where="United States",
         when=date.today().isoformat(),
         event_id=event_id,
         headline_metric={
-            "label": "states_affected",
-            "value": len(updates),
-            "unit": "states",
+            "label": "worst_extreme_exceptional_pct",
+            "value": worst_value,
+            "unit": "%",
         },
         current_facts=[
             {"label": "state_count", "value": len(updates)},
+            {"label": "worst_state", "value": worst.get("state")},
+            {"label": "worst_d3_pct", "value": worst.get("d3_pct")},
+            {"label": "worst_d4_pct", "value": worst.get("d4_pct")},
             {"label": "states", "value": updates},
         ],
         historical_context={"scope": "us_drought_monitor_weekly"},
@@ -656,6 +691,8 @@ def build_enso_bundle(transition: dict) -> StoryBundle:
     event_id).
     """
 
+    status_from = transition.get("from_status", transition.get("status_from"))
+    status_to = transition.get("to_status", transition.get("status_to"))
     return StoryBundle(
         signal_kind="enso",
         where="Equatorial Pacific (Niño 3.4)",
@@ -668,9 +705,10 @@ def build_enso_bundle(transition: dict) -> StoryBundle:
         },
         current_facts=[
             {"label": "season", "value": transition.get("season")},
-            {"label": "status_from", "value": transition.get("status_from")},
-            {"label": "status_to", "value": transition.get("status_to")},
+            {"label": "status_from", "value": status_from},
+            {"label": "status_to", "value": status_to},
             {"label": "oni_value", "value": transition.get("oni_value")},
+            {"label": "previous_duration_months", "value": transition.get("previous_duration_months")},
         ],
         historical_context={"scope": "noaa_oni_3month_running_mean"},
         raw_signal_dump=transition,
@@ -744,4 +782,3 @@ def build_synthesis_bundle(synthesis: dict) -> StoryBundle:
         },
         raw_signal_dump=synthesis,
     )
-

@@ -70,8 +70,51 @@ def _country_for(bundle: StoryBundle) -> str:
 
 def _tweet_text(row: Any) -> str:
     if isinstance(row, dict):
-        return str(row.get("tweet_text") or "")
+        return str(row.get("tweet_text") or row.get("text") or "")
     return str(row or "")
+
+
+def _row_time(row: dict) -> datetime:
+    return (
+        _parse_time(row.get("shipped_at"))
+        or _parse_time(row.get("created_at"))
+        or _parse_time(row.get("updated_at"))
+        or datetime.fromtimestamp(0, UTC)
+    )
+
+
+def _event_base(event_id: Any) -> str:
+    parts = str(event_id or "").split("_")
+    if len(parts) < 3:
+        return str(event_id or "")
+    return "_".join(parts[:3])
+
+
+def _fact_value(bundle: StoryBundle, label: str) -> str:
+    for fact in bundle.current_facts:
+        if fact.get("label") == label:
+            return str(fact.get("value") or "")
+    return ""
+
+
+def _event_series_key(bundle: StoryBundle) -> str:
+    if bundle.signal_kind == "severe_weather":
+        event_type = _fact_value(bundle, "event_type")
+        area = _fact_value(bundle, "area") or bundle.where
+        if event_type and area:
+            return f"severe_weather::{_normalize(event_type)}::{_normalize(area)}"
+
+    if bundle.signal_kind == "global_disaster":
+        disaster_type = _fact_value(bundle, "disaster_type")
+        name = _fact_value(bundle, "name")
+        country = _fact_value(bundle, "country") or _country_for(bundle)
+        if disaster_type and name and country:
+            return (
+                f"global_disaster::{_normalize(disaster_type)}::"
+                f"{_normalize(name)}::{_normalize(country)}"
+            )
+
+    return ""
 
 
 def _dedup_append(values: list, value: Any) -> None:
@@ -88,6 +131,10 @@ def build_memory_slice(state: dict, bundle: StoryBundle) -> MemorySlice:
 
     memory = _memory(state)
     country = _country_for(bundle)
+    event_keys = {
+        key for key in (_event_base(bundle.event_id), _event_series_key(bundle))
+        if key
+    }
     cutoff = datetime.now(UTC).timestamp() - (30 * 24 * 60 * 60)
 
     same_country_rows = []
@@ -125,12 +172,30 @@ def build_memory_slice(state: dict, bundle: StoryBundle) -> MemorySlice:
         row for row in memory.get("shipped_tweets", []) if isinstance(row, dict)
     ]
     shipped_rows.sort(
-        key=lambda row: _parse_time(row.get("shipped_at")) or datetime.fromtimestamp(0, UTC),
+        key=_row_time,
         reverse=True,
     )
 
+    same_event_rows = []
+    if event_keys:
+        for row in list(memory.get("shipped_tweets", [])) + list(state.get("drafts", [])):
+            if not isinstance(row, dict):
+                continue
+            row_keys = {
+                key for key in (_event_base(row.get("event_id")), row.get("event_series_key"))
+                if key
+            }
+            if not row_keys.intersection(event_keys):
+                continue
+            text = _tweet_text(row)
+            if not text:
+                continue
+            same_event_rows.append(row)
+    same_event_rows.sort(key=_row_time, reverse=True)
+
     return MemorySlice(
         recent_tweets_same_country=[_tweet_text(row) for row in same_country_rows[:5]],
+        recent_tweets_same_event=[_tweet_text(row) for row in same_event_rows[:5]],
         ongoing_event=ongoing_event,
         used_era_anchors=list(memory.get("used_era_anchors", []))[-200:],
         used_peer_comparisons=list(memory.get("used_peer_comparisons", []))[-200:],
@@ -145,7 +210,7 @@ def record_shipped(
     writer: WriterResult,
     extracted: list[ExtractedClaim],
 ) -> None:
-    """Write successful fire draft memory back into state in place."""
+    """Write successful two-bot draft memory back into state in place."""
 
     if writer.tweet is None:
         raise ValueError("Cannot record shipped memory for a killed writer result")
@@ -153,16 +218,18 @@ def record_shipped(
     memory = _memory(state)
     country = _country_for(bundle)
     now = _utc_now_iso()
+    event_series_key = _event_series_key(bundle)
 
-    memory.setdefault("shipped_tweets", []).append(
-        {
-            "tweet_text": writer.tweet,
-            "signal_kind": bundle.signal_kind,
-            "event_id": bundle.event_id,
-            "country": country,
-            "shipped_at": now,
-        }
-    )
+    shipped_row = {
+        "tweet_text": writer.tweet,
+        "signal_kind": bundle.signal_kind,
+        "event_id": bundle.event_id,
+        "country": country,
+        "shipped_at": now,
+    }
+    if event_series_key:
+        shipped_row["event_series_key"] = event_series_key
+    memory.setdefault("shipped_tweets", []).append(shipped_row)
 
     for claim in extracted:
         if claim.kind == "era_anchor":
@@ -242,4 +309,3 @@ def is_reuse(state: dict, candidate: str, kind: str) -> bool:
         if stored_tokens and stored_tokens.issubset(candidate_tokens):
             return True
     return False
-

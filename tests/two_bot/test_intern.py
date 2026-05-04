@@ -209,11 +209,31 @@ def test_build_all_time_record_bundle_uses_archive_scope():
         event_id="all_time_high_Phoenix_2026-05-04",
     )
     bundle = build_all_time_record_bundle(ev)
-    assert bundle.signal_kind == "all_time_high"
+    assert bundle.signal_kind == "open_meteo_archive_high"
     assert bundle.where == "Phoenix, US"
     assert bundle.historical_context["scope"] == "archive_history"
     assert bundle.historical_context["archive_years"] == 80
     assert bundle.historical_context["margin_c"] == 0.5
+    assert bundle.historical_context["archive_window_only"] is True
+    assert "hottest ever" in bundle.historical_context["forbidden_claims"]
+
+
+def test_build_monthly_low_bundle_uses_low_semantics():
+    ev = MonthlyRecord(
+        city="Ulaanbaatar", country="Mongolia", kind="low",
+        month=5,
+        new_temp_c=-8.0, old_record_c=-6.5, old_record_year=1998,
+        years_of_data=30,
+        event_id="monthly_low_Ulaanbaatar_2026-05-04",
+    )
+    bundle = build_monthly_high_bundle(ev)
+    assert bundle.signal_kind == "monthly_low"
+    assert bundle.headline_metric == {
+        "label": "forecast_low_c",
+        "value": -8.0,
+        "unit": "C",
+    }
+    assert bundle.historical_context["margin_c"] == -1.5
 
 
 def test_build_anomaly_bundle_classifies_kind_by_sign():
@@ -271,6 +291,7 @@ def test_build_fire_footprint_bundle_includes_complex_name():
     assert bundle.signal_kind == "fire_footprint"
     assert bundle.where == "California, US"
     assert {"label": "complex_name", "value": "Caldor Fire"} in bundle.current_facts
+    assert {"label": "tier_hectares", "value": 100000, "unit": "hectares"} in bundle.current_facts
 
 
 def test_build_co2_milestone_bundle_anchors_to_mauna_loa():
@@ -329,10 +350,12 @@ def test_build_ice_mass_bundle_picks_metric_from_kind():
         current_mass_gt=None,
         event_id="ice_mass_grn_2026-04",
     )
-    bundle = build_ice_mass_bundle(m)
+    bundle = build_ice_mass_bundle(m, years_of_record=24, archive_start_year=2002)
     assert bundle.signal_kind == "ice_mass_record"
     assert bundle.headline_metric["label"] == "monthly_delta_gt"
     assert bundle.headline_metric["value"] == -450.0
+    assert bundle.historical_context["years_of_record"] == 24
+    assert bundle.historical_context["archive_start_year"] == 2002
 
 
 def test_build_marine_heatwave_bundle_uses_global_where():
@@ -392,20 +415,29 @@ def test_build_drought_bundle_aggregates_states():
     ]
     bundle = build_drought_bundle(updates, event_id="drought_2026-05-04")
     assert bundle.signal_kind == "drought"
-    assert bundle.headline_metric["value"] == 2
+    assert bundle.headline_metric == {
+        "label": "worst_extreme_exceptional_pct",
+        "value": 33.0,
+        "unit": "%",
+    }
+    assert {"label": "worst_state", "value": "California"} in bundle.current_facts
 
 
 def test_build_enso_bundle_passes_through_oni():
     transition = {
         "event_id": "enso_2026-05",
         "season": "MAM",
-        "status_from": "Neutral",
-        "status_to": "El Nino",
+        "from_status": "Neutral",
+        "to_status": "El Nino",
         "oni_value": 0.6,
+        "previous_duration_months": 8,
     }
     bundle = build_enso_bundle(transition)
     assert bundle.signal_kind == "enso"
     assert bundle.headline_metric["value"] == 0.6
+    assert {"label": "status_from", "value": "Neutral"} in bundle.current_facts
+    assert {"label": "status_to", "value": "El Nino"} in bundle.current_facts
+    assert {"label": "previous_duration_months", "value": 8} in bundle.current_facts
 
 
 def test_build_synthesis_bundle_carries_components():
@@ -439,4 +471,3 @@ def test_build_hot10_bundle_centers_on_leader():
     assert bundle.signal_kind == "hot10"
     assert bundle.where == "Phoenix, US"
     assert bundle.headline_metric["value"] == 9.2
-

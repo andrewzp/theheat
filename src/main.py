@@ -1344,11 +1344,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Tornado detection", alert.tornado_detection or "—"),
                 ],
             )
-            # Severe weather: ported to two-bot writer 2026-05-03. The
-            # ``already_drafted`` repetition guard from the voice-gen
-            # path is intentionally NOT preserved here — the two-bot
-            # memory layer (``used_framings``, ``shipped_tweet_texts``)
-            # already enforces non-repetition. Cleaner than two layers.
+            # Severe weather: ported to two-bot writer 2026-05-03.
+            # Event-scoped repetition now flows through the two-bot
+            # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_severe_weather_bundle
             sw_bundle = build_severe_weather_bundle(alert)
             if _try_two_bot_draft(
@@ -1398,9 +1396,8 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     _fact("Name", disaster.name),
                 ],
             )
-            # The voice-gen ``already_drafted`` repetition guard is dropped
-            # here. Two-bot's memory layer (used_framings, shipped_tweets)
-            # handles non-repetition; one source of truth is cleaner.
+            # Event-scoped repetition now flows through the two-bot
+            # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_global_disaster_bundle
             gd_bundle = build_global_disaster_bundle(disaster)
             if _try_two_bot_draft(
@@ -1916,7 +1913,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             facts=facts,
                         )
                         from src.two_bot.intern import build_ice_mass_bundle
-                        ice_bundle = build_ice_mass_bundle(record)
+                        ice_bundle = build_ice_mass_bundle(
+                            record,
+                            years_of_record=years_of_record,
+                            archive_start_year=earliest_year,
+                        )
                         if _try_two_bot_draft(
                             ice_bundle, bot_state, score,
                             legacy_type="ice_mass_record",
