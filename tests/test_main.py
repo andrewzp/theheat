@@ -493,6 +493,7 @@ class TestMonthlyRecordSameYearSuppression:
 
         mock_gen.generate_monthly_record_tweet.assert_not_called()
 
+    @patch("src.main._try_two_bot_draft")
     @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
@@ -500,8 +501,12 @@ class TestMonthlyRecordSameYearSuppression:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_allows_monthly_when_old_record_prior_year(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot
     ):
+        """When the prior record was set in a prior year, the signal
+        should be allowed through — and it should hit the two-bot
+        pipeline (monthly_high was ported from voice gen to two-bot
+        on 2026-05-03 per the no-cheap-model-writing directive)."""
         from src.data.open_meteo import ExtremeSignalBundle, MonthlyRecord
         from datetime import date
 
@@ -524,13 +529,17 @@ class TestMonthlyRecordSameYearSuppression:
         mock_co2.fetch_co2_data.return_value = []
         mock_co2.detect_milestone.return_value = None
         mock_state.is_duplicate.return_value = False
-        mock_gen.generate_monthly_record_tweet.return_value = "mock tweet"
-        mock_draft.return_value = True
+        mock_two_bot.return_value = True
 
         state = _fresh_state()
         run_alerts(state)
 
-        mock_gen.generate_monthly_record_tweet.assert_called_once()
+        # Voice generator must NOT be called for monthly_high anymore —
+        # this is the whole point of the port.
+        mock_gen.generate_monthly_record_tweet.assert_not_called()
+        # Two-bot path is exercised. The bundle that flows through is
+        # built from the MonthlyRecord above.
+        mock_two_bot.assert_called_once()
 
 
 class TestCO2AnnualCap:

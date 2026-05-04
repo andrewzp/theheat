@@ -1,11 +1,12 @@
 from datetime import date
 
 from src.data.nws_alerts import SevereWeatherAlert
-from src.data.open_meteo import CountryRecord, MonthlyRecord
+from src.data.open_meteo import CountryRecord, MonthlyRecord, RecordEvent
 from src.two_bot.intern import (
     build_country_record_bundle,
     build_fire_bundle,
     build_monthly_high_bundle,
+    build_record_bundle,
     build_severe_weather_bundle,
 )
 
@@ -113,4 +114,53 @@ def test_build_severe_weather_bundle_has_empty_historical_context():
     }
     assert bundle.historical_context == {}
     assert {"label": "max_wind_gust", "value": "40 mph"} in bundle.current_facts
+
+
+def test_build_record_bundle_includes_country_in_where():
+    """Regression: a 2026-05-03 draft shipped 'Riga' without 'Latvia'.
+    The geographic-orientation rule lives in the writer prompt, but
+    'where' must already include the country so the writer doesn't
+    have to re-derive it from current_facts. (Bundle-level discipline,
+    not just prompt-level discipline.)"""
+    ev = RecordEvent(
+        city="Riga",
+        country="Latvia",
+        new_temp_c=24.4,  # 75.9F
+        old_record_c=22.6,  # 72.7F
+        old_record_year=1996,
+        event_id="record_Riga_2026-05-03",
+    )
+
+    bundle = build_record_bundle(ev)
+
+    assert bundle.signal_kind == "calendar_record"
+    assert bundle.where == "Riga, Latvia"
+    assert bundle.event_id == "record_Riga_2026-05-03"
+    assert bundle.headline_metric == {
+        "label": "forecast_high_c",
+        "value": 24.4,
+        "unit": "C",
+    }
+    assert bundle.historical_context["prior_record_c"] == 22.6
+    assert bundle.historical_context["prior_record_year"] == 1996
+    assert bundle.historical_context["scope"] == "calendar_date_only"
+    # Margin matters: a +1.8C this-date-only "record" is not extraordinary.
+    # The writer's discipline must see the small margin and decide whether
+    # to ship.
+    assert bundle.historical_context["margin_c"] == 1.8
+
+
+def test_build_record_bundle_falls_back_to_city_when_country_missing():
+    ev = RecordEvent(
+        city="Reykjavik",
+        country="",
+        new_temp_c=15.0,
+        old_record_c=14.0,
+        old_record_year=2020,
+        event_id="record_Reykjavik_2026-05-03",
+    )
+
+    bundle = build_record_bundle(ev)
+
+    assert bundle.where == "Reykjavik"
 

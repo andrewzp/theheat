@@ -1,5 +1,9 @@
 from src.two_bot.fact_check import fact_check as real_fact_check
-from src.two_bot.pipeline import generate_fire_draft, generate_shadow_draft
+from src.two_bot.pipeline import (
+    generate_draft,
+    generate_fire_draft,
+    generate_shadow_draft,
+)
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle, WriterResult
 
 from tests.two_bot.conftest import _bundle, _fire_event, _state_with_memory
@@ -254,4 +258,89 @@ def test_shadow_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_
 
     assert result is None
     assert state["memory"]["shipped_tweets"] == []
+
+
+# ----------------------- generic generate_draft tests -----------------------
+
+
+def test_generate_draft_records_memory(mock_writer, mock_extract, mock_fact_check):
+    """Unlike generate_shadow_draft, generate_draft must write to the
+    memory layer when a draft is produced. This is the live path —
+    skipping memory would let the same tweet ship repeatedly."""
+    mock_writer.return_value = WriterResult(
+        tweet="Conakry, Guinea: hottest May since 2022.",
+        kill_reason=None,
+        angle_chosen="rarity",
+        era_anchor_used="some-era-anchor",
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    mock_extract.return_value = [
+        ExtractedClaim(text="some-era-anchor", kind="era_anchor"),
+    ]
+    mock_fact_check.return_value = FactCheckResult(
+        passed=True, failures=[], raw_response="ok",
+        extracted_claims=mock_extract.return_value,
+    )
+    state = _state_with_memory()
+
+    result = generate_draft(_monthly_high_bundle(), state)
+
+    assert result is not None
+    assert result["text"].startswith("Conakry")
+    assert result["type"] == "monthly_high"
+    assert result["event_id"] == "meteo_monthly_Conakry_2026-05-01"
+    # Live path DOES record memory — the shadow path is the one that doesn't.
+    assert "some-era-anchor" in state["memory"]["used_era_anchors"]
+
+
+def test_generate_draft_returns_none_on_writer_kill(mock_writer, mock_extract, mock_fact_check):
+    mock_writer.return_value = WriterResult(
+        tweet=None,
+        kill_reason="not extraordinary",
+        angle_chosen="",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    state = _state_with_memory()
+
+    result = generate_draft(_monthly_high_bundle(), state)
+
+    assert result is None
+    assert state["memory"]["shipped_tweets"] == []
+    assert not mock_extract.called
+
+
+def test_generate_draft_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_fact_check):
+    mock_writer.return_value = WriterResult(
+        tweet="Conakry, Guinea: hottest May.",
+        kill_reason=None,
+        angle_chosen="rarity",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    mock_extract.return_value = []
+    mock_fact_check.return_value = FactCheckResult(
+        passed=False, failures=["unverified"], raw_response="fail",
+        extracted_claims=[],
+    )
+    state = _state_with_memory()
+
+    result = generate_draft(_monthly_high_bundle(), state)
+
+    assert result is None
+    # Critically, memory is NOT written when fact-check fails — even though
+    # the writer succeeded. record_shipped only fires on the full happy path.
+    assert state["memory"]["shipped_tweets"] == []
+
+
+def test_generate_draft_swallows_exceptions(mock_writer):
+    mock_writer.side_effect = RuntimeError("upstream API down")
+    state = _state_with_memory()
+
+    result = generate_draft(_monthly_high_bundle(), state)
+
+    assert result is None  # never raises
 
