@@ -1,6 +1,12 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
+// Manual-compose endpoint used by the dashboard "Generate Preview"
+// button. Routed to Anthropic Sonnet on 2026-05-04 alongside the rest
+// of the writer-tier port. Gemini Flash never writes audience-facing
+// prose anymore — it only does structured-output work (fact-check,
+// claim extract) on the backend pipeline.
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const WRITER_MODEL = process.env.THEHEAT_WRITER_MODEL || "claude-sonnet-4-6"
 
 const SYSTEM_PROMPT = `You are @theheat, a climate data account with a voice. You report \
 extreme weather with genuine surprise at the absurdity of the numbers. Your personality \
@@ -14,6 +20,8 @@ Rules:
 - CAPS for emphasis. Periods after CAPS for deadpan.
 - Every tweet must include enough context that someone seeing it for the first time \
 understands what happened and why it matters.
+- Always include the country for non-iconic cities (e.g. "Conakry, Guinea", not just \
+"Conakry"). Tokyo, Paris, NYC, London, Cairo, Sydney, Miami can stand alone.
 - CO2 tweets must mention Mauna Loa and reference pre-industrial levels (280 ppm).
 - Record tweets must mention when the old record was set.
 - Never preach, never political, never moralize.
@@ -28,15 +36,17 @@ Examples:
 - "Atmospheric CO2 at Mauna Loa: 433.24 ppm. First time above 433 in recorded history. Pre-industrial was 280."
 - "Satellite picked up a 1,200 MW fire in Siberia. For reference, a large power plant is about 1,000 MW. Except it's a forest."
 - "Houston is on the Hot 10. In April. That doesn't usually happen until July."
-- "Ocean surface temps just broke the record for the 400th consecutive day. Four. Hundred. Days."`
+- "Ocean surface temps just broke the record for the 400th consecutive day. Four. Hundred. Days."
+
+Return ONLY the tweet text. No quotation marks, no commentary, no markdown.`
 
 export async function POST(request) {
   const authError = requireDashboardAuth(request)
   if (authError) {
     return authError
   }
-  if (!GEMINI_API_KEY) {
-    return Response.json({ error: "No Gemini API key configured" }, { status: 500 })
+  if (!ANTHROPIC_API_KEY) {
+    return Response.json({ error: "No Anthropic API key configured" }, { status: 500 })
   }
 
   const { prompt } = await request.json()
@@ -44,28 +54,40 @@ export async function POST(request) {
     return Response.json({ error: "Prompt too short" }, { status: 400 })
   }
 
-  const fullPrompt = `${SYSTEM_PROMPT}\n\nWrite a tweet about this:\n${prompt}`
-
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-        }),
-      }
-    )
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: WRITER_MODEL,
+        max_tokens: 400,
+        system: SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Write a tweet about this:\n${prompt}`,
+          },
+        ],
+      }),
+    })
 
-    const data = await res.json()
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "") || ""
-
-    if (!text) {
-      return Response.json({ error: "Gemini returned empty response" }, { status: 500 })
+    if (!res.ok) {
+      const errText = await res.text()
+      return Response.json({ error: `Anthropic ${res.status}: ${errText}` }, { status: 500 })
     }
 
-    return Response.json({ tweet: text, chars: text.length })
+    const data = await res.json()
+    const text = data?.content?.[0]?.text?.trim()?.replace(/^["']|["']$/g, "") || ""
+
+    if (!text) {
+      return Response.json({ error: "Anthropic returned empty response" }, { status: 500 })
+    }
+
+    return Response.json({ tweet: text, chars: text.length, writer_model: WRITER_MODEL })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
   }

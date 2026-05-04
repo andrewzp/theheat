@@ -592,12 +592,15 @@ class TestCO2AnnualCap:
 
     @patch("src.main.save_draft")
     @patch("src.main.generator")
+    @patch("src.main._try_two_bot_draft")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     def test_allows_milestone_below_cap(
-        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_om, mock_firms, mock_co2, mock_two_bot, mock_gen, mock_draft
     ):
+        """Below the annual CO2 cap, a fresh milestone should reach the
+        two-bot pipeline (ported from voice gen on 2026-05-04)."""
         mock_om.load_cities.return_value = []
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_firms.fetch_fires.return_value = []
@@ -608,8 +611,7 @@ class TestCO2AnnualCap:
             date="2026-04-19",
             event_id="co2_milestone_436ppm",
         )
-        mock_gen.generate_co2_milestone_tweet.return_value = "mock tweet"
-        mock_draft.return_value = True
+        mock_two_bot.return_value = True
 
         state = _fresh_state()
         # 3 tweets this year is well under cap — milestone should draft
@@ -618,7 +620,9 @@ class TestCO2AnnualCap:
         state["co2_annual_count"] = {str(date.today().year): 3}
 
         run_alerts(state)
-        mock_gen.generate_co2_milestone_tweet.assert_called_once()
+        # Voice gen no longer called; two-bot path is the live path.
+        mock_gen.generate_co2_milestone_tweet.assert_not_called()
+        mock_two_bot.assert_called_once()
 
 
 class TestPostApproved:
@@ -813,23 +817,18 @@ class TestRunAlerts:
         monkeypatch.setattr(main.river_gauges, "fetch_river_levels", lambda: [])
         monkeypatch.setattr(main.river_gauges, "detect_floods", lambda r: [])
 
-        from src.editorial.candidates import CandidateBundle, DraftCandidate, CandidateScore
-        stub_score = CandidateScore(
-            clarity=80, context=82, voice=78, punch=80, total=80,
-            reasons=("stubbed",),
-        )
-        stub_bundle = CandidateBundle(
-            category="marine_heatwave",
-            candidates=[DraftCandidate(
-                rank=1, text="Day 5 of record global SSTs.",
-                source="template", score=stub_score,
-            )],
-        )
-        monkeypatch.setattr(
-            main.generator,
-            "generate_marine_heatwave_tweet",
-            lambda **kwargs: stub_bundle,
-        )
+        # Stub the two-bot pipeline (live path post-2026-05-04 port) so
+        # we don't make real LLM calls. Side-effect: save a draft to
+        # state so the assertions below see the marine_heatwave draft.
+        def fake_try_two_bot(bundle, bot_state, score, *, legacy_type, event_id, review_context, **kwargs):
+            from src.main import save_draft
+            return save_draft(
+                "Day 5 of record global SSTs.",
+                bot_state, legacy_type, event_id,
+                score=score,
+                review_context=review_context,
+            )
+        monkeypatch.setattr(main, "_try_two_bot_draft", fake_try_two_bot)
 
         run_alerts(fresh_st)
 
@@ -842,11 +841,15 @@ class TestRunAlerts:
 class TestRunLeaderboard:
     @patch("src.main.save_draft")
     @patch("src.main.generator")
+    @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_computes_anomalies_and_drafts(
-        self, mock_state, mock_om, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_two_bot, mock_gen, mock_draft
     ):
+        """Hot 10 leaderboard: ported from voice gen to two-bot writer
+        on 2026-05-04. The voice generator's `generate_tweet` is no
+        longer reached for the hot10 category."""
         mock_om.load_cities.return_value = [
             {"city": "Phoenix", "country": "US", "lat": "33.45", "lon": "-112.07"}
         ]
@@ -860,8 +863,7 @@ class TestRunLeaderboard:
         mock_om.rank_hot10.return_value = [
             CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
         ]
-        mock_gen.generate_tweet.return_value = "Hot 10 today: Phoenix +15."
-        mock_draft.return_value = True
+        mock_two_bot.return_value = True
         mock_state.update_streaks.return_value = {}
 
         state = _fresh_state()
@@ -869,8 +871,8 @@ class TestRunLeaderboard:
 
         mock_om.compute_anomalies.assert_called_once()
         mock_om.rank_hot10.assert_called_once()
-        mock_gen.generate_tweet.assert_called_once()
-        mock_draft.assert_called_once()
+        mock_gen.generate_tweet.assert_not_called()
+        mock_two_bot.assert_called_once()
         assert result is not None
 
     @patch("src.main.save_draft")
@@ -1185,11 +1187,17 @@ class TestRunAlertsIceMass:
         monkeypatch.setattr(main.open_meteo, "load_cities", lambda *a, **k: [])
         monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities", lambda *a, **k: ([], []))
 
-        # Stub the generator — return a string (not a bundle) to avoid Gemini calls
-        monkeypatch.setattr(
-            main.generator, "generate_ice_mass_tweet",
-            lambda *a, **k: "Greenland lost 500 Gt. Largest monthly loss in GRACE record.",
-        )
+        # Stub the two-bot pipeline — ice_mass was ported on 2026-05-04.
+        # Returns a draft dict so save_draft is reached and state side-
+        # effects run.
+        def fake_try_two_bot(bundle, bot_state, score, *, legacy_type, event_id, review_context, **kwargs):
+            from src.main import save_draft
+            return save_draft(
+                "Greenland lost 500 Gt. Largest monthly loss in GRACE record.",
+                bot_state, legacy_type, event_id,
+                score=score, review_context=review_context,
+            )
+        monkeypatch.setattr(main, "_try_two_bot_draft", fake_try_two_bot)
 
         bot_state = {
             "last_hot10": {"date": None, "cities": []},
@@ -1267,6 +1275,7 @@ class TestRunAlertsIceMass:
 
 
 class TestFireFootprintIntegration:
+    @patch("src.main._try_two_bot_draft")
     @patch("src.main.save_draft")
     @patch("src.main.generator")
     @patch("src.main.co2")
@@ -1275,8 +1284,11 @@ class TestFireFootprintIntegration:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_tier_crossing_creates_draft_and_updates_state(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot
     ):
+        """Fire footprint ported to two-bot writer on 2026-05-04. The
+        FireComplex flows through `build_fire_footprint_bundle` →
+        `_try_two_bot_draft`, not the voice generator."""
         from src.data.fire_footprint import FireComplex
 
         complex = FireComplex(
@@ -1298,8 +1310,7 @@ class TestFireFootprintIntegration:
         mock_ff.detect_tier_crossings.return_value = [complex]
         mock_ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
         mock_state.is_duplicate.return_value = False
-        mock_gen.generate_fire_footprint_tweet.return_value = "mocked tweet"
-        mock_draft.return_value = True
+        mock_two_bot.return_value = True
 
         # Wire update_fire_complex_tier side_effect to actually write to state_dict
         def _real_update_tier(sd, complex_id, tier):
@@ -1310,10 +1321,13 @@ class TestFireFootprintIntegration:
         state_dict = _fresh_state()
         run_alerts(state_dict)
 
-        mock_gen.generate_fire_footprint_tweet.assert_called_once()
-        call_kwargs = mock_gen.generate_fire_footprint_tweet.call_args.kwargs
-        assert call_kwargs["hectares"] == 213_000
-        assert call_kwargs["tier_hectares"] == 250_000  # mock TIERS_HECTARES[3]
+        # Voice gen no longer reached.
+        mock_gen.generate_fire_footprint_tweet.assert_not_called()
+        # Two-bot is the live path. Inspect the bundle for shape + content.
+        mock_two_bot.assert_called_once()
+        bundle_arg = mock_two_bot.call_args.args[0]
+        assert bundle_arg.signal_kind == "fire_footprint"
+        assert bundle_arg.headline_metric["value"] == 213_000
 
         mock_state.update_fire_complex_tier.assert_called_once_with(state_dict, "GWIS_AAA", 3)
         # State updated with tier
@@ -1529,20 +1543,21 @@ class TestSynthesisStage:
         monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities",
                             lambda cities: ([], []))
         monkeypatch.setattr(main.firms, "fetch_fires", lambda: [])
-        # Force _save_generated_draft to return True so we see the synthesis call.
+        # Synthesis was ported to two-bot writer on 2026-05-04. Stub
+        # `_try_two_bot_draft` to capture the call without making real
+        # LLM requests.
         captured = {}
-        def fake_save(generated, state_, tweet_type, event_id, score, **kw):
-            captured["tweet_type"] = tweet_type
+        def fake_two_bot(bundle, bot_state_arg, score, *, legacy_type, event_id, review_context, **kwargs):
+            captured["legacy_type"] = legacy_type
             captured["event_id"] = event_id
+            captured["bundle_signal_kind"] = bundle.signal_kind
             return True
-        monkeypatch.setattr(main, "_save_generated_draft", fake_save)
-        # Avoid real Gemini calls.
-        monkeypatch.setattr(main.generator, "generate_synthesis_fire_drought_heat_tweet",
-                            lambda **kwargs: "fake synthesis tweet")
+        monkeypatch.setattr(main, "_try_two_bot_draft", fake_two_bot)
 
         main.run_alerts(bot_state)
 
-        assert captured.get("tweet_type") == "synthesis_fire_drought_heat"
+        assert captured.get("legacy_type") == "synthesis_fire_drought_heat"
+        assert captured.get("bundle_signal_kind") == "synthesis_fire_drought_heat"
         assert "california" in captured["event_id"]
         # Cooldown must have been recorded so a second cycle is suppressed.
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
