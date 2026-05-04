@@ -1,14 +1,14 @@
 # @theheat — Project Briefing
 
-**Last updated:** April 29, 2026
-**Status:** **POSTING PAUSED — quality below bar.** Bot is generating + grading drafts but not posting. Voice engine v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) shipped 2026-04-29. Humor research + corpus lens evaluation completed 2026-04-26. Daily plan-refinement agent runs 15:00 UTC.
-**Latest commit:** `cc360f2` voice engine v3 on `main`
-**Tests:** 566 passing
-**Cost:** Anthropic API ~$25–45/month (Sonnet 4.6 evaluator) + Google API ~$5–10/month (Gemini, was claimed free tier — `gemini-flash-latest` aliases to a paid preview model at $0.30/$2.50 per MTok). **Total stack: ~$30–55/month.** Set `EVALUATOR_ENABLED=false` to drop Anthropic to ~$0/mo. Pin `GEMINI_MODEL=gemini-2.5-flash` to drop Google to ~$0/mo (Apr 24 corpus on free-tier 2.5-flash was equivalent quality).
+**Last updated:** May 4, 2026
+**Status:** **TWO-BOT ARCHITECTURE LIVE.** Every audience-facing tweet is now drafted by Claude Sonnet 4.6 via the two-bot pipeline (intern → writer → claim-extractor → fact-check → memory). Gemini Flash never writes prose anymore — it only does claim extraction and fact-checking (structured JSON output). Voice generator (`src/voice/generator.py`) is no longer reached on any live signal path.
+**Latest merged commit:** `00f621a9` PR #25 (full voice→two-bot port + 9 codex review fixes)
+**Tests:** 637 passing
+**Cost:** Sonnet writer ~$0.014/draft × ~30 drafts/day ≈ **$13/month**. Sonnet evaluator pass (~$25–45/mo) is now redundant with `fact_check.py` and should be disabled via `EVALUATOR_ENABLED=false` in the GH Actions env (saves $25–45/mo). Gemini Flash for fact-check + claim-extract is sub-$2/month at our volume. **Net cost target: ~$13/month** once evaluator is killed.
 
 ## Posting resumption bar (set 2026-04-26)
 
-**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. Current state: **Apr 29 cycle = 0% A-grade (0 of 3).** Need >50% sustained. Voice engine v3 just shipped; next 3 cycles are the empirical signal on whether the era-anchor parking + addendum-mismatch fix + vehicle-agnostic prompt actually moved the needle. The voice work is what closes the gap; until it does, the bot generates and grades but doesn't ship. This is a deliberate quality pause, not an operational gap.
+**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. The voice→two-bot port (May 3–4, 2026) was triggered after a draft shipped saying *"75.9F in Riga today, the record for this date is 72.7F"* — no country, trivial signal. That's the failure mode this port is designed to eliminate. The next 2–3 cycles on Sonnet are the empirical signal. Editorial gate + fact-check still backstop bad drafts.
 
 ---
 
