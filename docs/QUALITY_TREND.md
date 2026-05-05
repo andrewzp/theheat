@@ -17,11 +17,12 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
+| 2026-05-05 | 0 | — | — | — | — | **N/A** | ✗ | No fresh drafts. First day after two-bot architecture port (PR #25, `00f621a9`, 2026-05-04): Sonnet 4.6 now generates prose, `generator.py` retired from live path. Queue empty — transitional period or all auto-published; unauthenticated API rate limit prevented run_history retrieval. No stale pending drafts to bulk-reject. All active proposals (P2–P6) now target dead code; see P7 in improvement plan. |
 
 **Trend interpretation:**
-The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
+The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). The May 5 cycle produced no gradeable drafts — the two-bot port (complete as of May 4) is the likely cause of the empty queue. The next data point with actual Sonnet-generated drafts will be the first real empirical signal for the new pipeline's voice quality.
 
-We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
+We've been in the 9-43% band for four cycles. The two-bot architecture resets the baseline — prior corpus observations (failure modes in Gemini's prose) may or may not persist under Sonnet. Need the first Sonnet corpus cycle to reestablish the trend.
 
 ## Rejection events
 

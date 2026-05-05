@@ -13,6 +13,50 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-05 — No fresh drafts (0 drafts, first day post two-bot port)
+
+**Context:** Zero pending drafts in queue at grading time (15:00 UTC). This is the
+first grading cycle after the two-bot architecture port completed 2026-05-04 (PR #25,
+commit `00f621a9`): every audience-facing tweet is now drafted by Claude Sonnet 4.6
+via the intern → writer → claim-extractor → fact-check → memory pipeline. Gemini Flash
+no longer generates prose. Voice generator (`src/voice/generator.py`) is confirmed off
+the live signal path.
+
+**Why the queue is empty (ordered by likelihood):** (1) Two-bot port is mid-settling —
+GH Actions environment or pipeline wiring may still be resolving, suppressing draft
+output from recent alert cycles. (2) All drafts from May 4–5 cycles were auto-published
+before this grading run. (3) Alert cycles have fired but produced no qualifying signals
+above threshold. GitHub API rate limit (unauthenticated IP exhausted on second call)
+prevented retrieval of `run_history` to confirm.
+
+**Grade distribution:** N/A. **A-rate: N/A (0/0).**
+
+**Patterns observed:** None — no drafts to grade. Cannot advance evidence counts on any
+active proposal (P1–P6). No proposals newly retire (3-cycle absence requires graded
+cycles, not empty-queue cycles).
+
+**Architectural note — impacts all active proposals:**
+`src/voice/generator.py::SYSTEM_PROMPT`, `_CATEGORY_PROMPTS`, and
+`_STOCK_FORMULA_PATTERNS` are no longer on the live draft path. P1's era-anchor gate
+(`_era_anchor_should_fire`) was implemented in `generator.py` and is now dead code — the
+1-in-10 gate may not be active in the two-bot pipeline. P2–P6 prompt and regex proposals
+all target `generator.py`. All proposals need retargeting to Sonnet's two-bot prompts
+before they can be evaluated or implemented. See new proposal P7 in
+`docs/IMPROVEMENT_PLAN.md`.
+
+**Followups:**
+1. Check GH Actions logs for alert cycles on 2026-05-04 and 2026-05-05: confirm the
+   two-bot pipeline is firing and producing drafts. If zero drafts generated, diagnose
+   pipeline.
+2. If drafts are being auto-published before this grader runs, check whether
+   `manual_only` approval policy is correctly wired in the new pipeline for fire/weather
+   drafts (which should require human review).
+3. Once the first Sonnet-drafted corpus cycle arrives, apply the humor-lens grading
+   against the two-bot output and identify which failure modes from P4 (Wodehouse),
+   P5 (stranded mechanics), P6 (move palette) persist under Sonnet vs Gemini.
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
