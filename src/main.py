@@ -14,7 +14,7 @@ import time
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
 from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
@@ -649,10 +649,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         except (ValueError, TypeError):
             continue
 
-    # 1. Extreme climate signals via Open-Meteo (unified fetch).
-    # One archive call per city yields: all-time, monthly, calendar-date, anomaly.
-    # Replaces separate records + record_lows sections.
-    print("[alerts] Checking extreme climate signals...")
+    # 1. Extreme climate signals — dispatched by THEHEAT_SIGNALS_PROVIDER.
+    # "open_meteo" (default): 638 curated cities via Open-Meteo archive API.
+    # "ghcn": ~9,449 active NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
+    # Hot 10 leaderboard (run_leaderboard) always uses Open-Meteo regardless of this flag.
+    _signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
+    print(f"[alerts] Checking extreme climate signals (provider={_signals_provider})...")
     signals_start = time.perf_counter()
     signal_counts = {"all_time": 0, "monthly": 0, "anomaly": 0, "calendar": 0, "streak": 0}
     # Per-station data for the simultaneous_records signal. Richer than
@@ -661,7 +663,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     # for the routing decision (flat summary vs. multi-station roll-call).
     simultaneous_record_stations: list[dict] = []
     try:
-        bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
+        if _signals_provider == "ghcn":
+            bundles, country_records = ghcn.check_extreme_signals_for_stations()
+        else:
+            bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
         source_promoted = 0
         source_drafted = 0
         for bundle in bundles:
@@ -862,8 +867,13 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             ),
                         },
                     )
+                _signal_source_label = (
+                    f"NOAA GHCN-Daily (station {bundle.station_id})"
+                    if _signals_provider == "ghcn"
+                    else "Open-Meteo forecast + archive"
+                )
                 review_context = _review_context(
-                    source="Open-Meteo forecast + archive",
+                    source=_signal_source_label,
                     source_key="open_meteo_extreme_signals",
                     headline=strongest_headline,
                     current_run=current_run,
@@ -903,7 +913,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     event_id=strongest_event_id,
                     review_context=review_context,
                     city=strongest_city,
-                    tweet_date=date.today().isoformat(),
+                    tweet_date=(bundle.signal_date or date.today()).isoformat(),
                     cooldown_exempt=elite,
                 )
                 voice_gen_saved = False  # voice gen no longer reachable
@@ -913,13 +923,16 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     source_drafted += 1
 
                 if two_bot_saved or voice_gen_saved:
-                    # Streak tracking — update on any calendar-date high record
+                    # Streak tracking — update on any calendar-date high record.
+                    # Key: station_id on GHCN path; city name on Open-Meteo path.
+                    # Old city-name entries prune naturally via prune_stale_record_streaks.
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
-                        state.update_record_streak(bot_state, ev_cd.city, ev_cd.new_temp_c)
-                        streak = state.get_record_streak(bot_state, ev_cd.city)
+                        streak_key = bundle.station_id if _signals_provider == "ghcn" and bundle.station_id else ev_cd.city
+                        state.update_record_streak(bot_state, streak_key, ev_cd.new_temp_c)
+                        streak = state.get_record_streak(bot_state, streak_key)
                         if streak and streak.get("days", 0) >= 3:
-                            streak_event_id = f"streak_{ev_cd.city.replace(' ', '_')}_{streak['last_date']}"
+                            streak_event_id = f"streak_{streak_key.replace(' ', '_')}_{streak['last_date']}"
                             if not state.is_duplicate(bot_state, streak_event_id):
                                 streak_score = score_record_streak(
                                     streak["days"], streak.get("peak_temp_c", ev_cd.new_temp_c),
@@ -953,7 +966,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                         event_id=streak_event_id,
                                         review_context=streak_ctx,
                                         city=ev_cd.city,
-                                        tweet_date=date.today().isoformat(),
+                                        tweet_date=(bundle.signal_date or date.today()).isoformat(),
                                         cooldown_exempt=True,
                                     ):
                                         state.record_event(bot_state, streak_event_id)
@@ -1091,15 +1104,22 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         # Prune stale streaks at cycle end
         state.prune_stale_record_streaks(bot_state)
 
+        state.reset_data_source_failure(bot_state, _signals_provider)
         total_observed = sum(signal_counts.values()) + country_count
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
             status="success", observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
-            note=f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']} country:{country_count}",
+            note=f"provider:{_signals_provider} all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']} country:{country_count}",
         )
     except Exception as e:
         print(f"[alerts] Extreme signals error: {e}")
+        fail_count = state.increment_data_source_failure(bot_state, _signals_provider)
+        try:
+            if fail_count >= 3:
+                print(f"[alerts] STRUCTURAL ALERT: {_signals_provider} has failed {fail_count} consecutive cycles")
+        except TypeError:
+            pass  # mock or unexpected return type — skip the alert
         state.log_error(bot_state, "open_meteo_extreme_signals", str(e))
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
