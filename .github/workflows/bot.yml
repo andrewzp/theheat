@@ -96,6 +96,10 @@ jobs:
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
+          # Extreme-signal data provider: "open_meteo" (default) or "ghcn"
+          # Set to "ghcn" after uploading data/station_thresholds.sqlite as a GH Release asset
+          # and adding the gh release download step below.
+          THEHEAT_SIGNALS_PROVIDER: open_meteo
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}

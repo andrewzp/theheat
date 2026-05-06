@@ -42,7 +42,10 @@ DEFAULT_STATE = {
     "city_monthly_max": {},
     "city_monthly_min": {},
     # Record-breaking streaks: consecutive days a city has broken its daily record.
-    "record_streaks": {},  # {city: {"days": int, "last_date": "YYYY-MM-DD", "start_date": "YYYY-MM-DD"}}
+    "record_streaks": {},  # {city_or_station_id: {"days": int, "last_date": "YYYY-MM-DD", "start_date": "YYYY-MM-DD"}}
+    # Consecutive fetch failures per data source (reset on success).
+    # Used to fire a structural alert when a source goes silent for 3+ cycles.
+    "data_source_failures": {},  # {source_key: consecutive_failure_count}
     # Global ocean SST archive-high streak. Two-field state:
     # seeded flips True after first observation (enables silent bootstrap);
     # last_milestone_fired tracks which milestone we last tweeted so
@@ -938,3 +941,25 @@ def prune_stale_synthesis_components(state: dict, ttl_days: int = 14) -> dict:
             else:
                 del bucket[region]
     return state
+
+
+# ---------------------------------------------------------------------------
+# Data-source failure tracking
+# ---------------------------------------------------------------------------
+
+
+def increment_data_source_failure(state: dict, source: str) -> int:
+    """Increment and return the consecutive failure count for ``source``."""
+    failures = state.setdefault("data_source_failures", {})
+    failures[source] = failures.get(source, 0) + 1
+    return failures[source]
+
+
+def reset_data_source_failure(state: dict, source: str) -> None:
+    """Reset the consecutive failure count for ``source`` to 0 on success."""
+    state.setdefault("data_source_failures", {})[source] = 0
+
+
+def get_data_source_failure_count(state: dict, source: str) -> int:
+    """Return current consecutive failure count for ``source`` (0 if unknown)."""
+    return state.get("data_source_failures", {}).get(source, 0)

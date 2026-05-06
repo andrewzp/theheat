@@ -37,6 +37,16 @@ _MONTH_NAMES = [
 ]
 
 
+def _resolve_when(event_date: date | None) -> str:
+    """Return an ISO date string for the observation.
+
+    Uses ``event_date`` when available (GHCN path, where readings carry a
+    24-48 hr lag and the observation date differs from today) and falls back
+    to today for the Open-Meteo path (where ``signal_date`` is always None).
+    """
+    return (event_date or date.today()).isoformat()
+
+
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
@@ -75,7 +85,7 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
     return StoryBundle(
         signal_kind=f"monthly_{ev.kind}",
         where=where,
-        when=date.today().isoformat(),
+        when=_resolve_when(ev.signal_date),
         event_id=ev.event_id,
         headline_metric={
             "label": metric_label,
@@ -105,7 +115,7 @@ def build_country_record_bundle(cr: CountryRecord) -> StoryBundle:
     return StoryBundle(
         signal_kind=f"country_{cr.kind}",
         where=cr.country,
-        when=date.today().isoformat(),
+        when=_resolve_when(cr.signal_date),
         event_id=cr.event_id,
         headline_metric={
             "label": "country_archive_peak_c",
@@ -143,10 +153,11 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
 
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
     where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    when = _resolve_when(ev.signal_date)
     return StoryBundle(
         signal_kind="calendar_record",
         where=where,
-        when=date.today().isoformat(),
+        when=when,
         event_id=ev.event_id,
         headline_metric={
             "label": "forecast_high_c",
@@ -156,7 +167,7 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
         current_facts=[
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
-            {"label": "calendar_date", "value": date.today().isoformat()},
+            {"label": "calendar_date", "value": when},
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -214,7 +225,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
     return StoryBundle(
         signal_kind=f"open_meteo_archive_{ev.kind}",
         where=where,
-        when=date.today().isoformat(),
+        when=_resolve_when(ev.signal_date),
         event_id=ev.event_id,
         headline_metric={
             "label": "forecast_high_c" if ev.kind == "high" else "forecast_low_c",
@@ -257,7 +268,7 @@ def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
     return StoryBundle(
         signal_kind=f"anomaly_{kind}",
         where=where,
-        when=date.today().isoformat(),
+        when=_resolve_when(ev.signal_date),
         event_id=ev.event_id,
         headline_metric={
             "label": "anomaly_c",
@@ -287,7 +298,7 @@ def build_record_streak_bundle(ev: RecordStreakEvent) -> StoryBundle:
     return StoryBundle(
         signal_kind="record_streak",
         where=where,
-        when=date.today().isoformat(),
+        when=_resolve_when(ev.signal_date),
         event_id=ev.event_id,
         headline_metric={
             "label": "consecutive_days",

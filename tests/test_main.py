@@ -702,6 +702,7 @@ class TestRunAlerts:
         self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
     ):
         mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_om.check_records_for_cities.return_value = [
             RecordEvent("Phoenix", "US", 48.0, 47.0, 2023, "record_phoenix_1"),
         ]
@@ -757,6 +758,7 @@ class TestRunAlerts:
         monkeypatch.setattr(_scoring, "date", _FixedAprilDate)
 
         mock_om.load_cities.return_value = []
+        mock_om.check_extreme_signals_for_cities.return_value = ([], [])
         mock_om.check_records_for_cities.return_value = []
         mock_firms.fetch_fires.return_value = [
             FireEvent(34.0, -118.0, 95, 250.0, "Southwestern US", "US", "fire_1"),
