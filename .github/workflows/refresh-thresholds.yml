@@ -1,0 +1,89 @@
+name: refresh-thresholds
+
+on:
+  schedule:
+    # Every Sunday at 02:00 UTC — well after NOAA's ~21 UTC daily publish
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Days to look back in superghcnd_diff'
+        required: false
+        default: '8'
+        type: string
+
+concurrency:
+  group: refresh-thresholds
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed for gh release upload
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Download station_thresholds.sqlite from latest release
+        env:
+          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+        run: |
+          gh release download --pattern "station_thresholds.sqlite" \
+            --dir data/ \
+            --clobber \
+            $(gh release list --limit 1 --json tagName -q '.[0].tagName') \
+          || echo "No existing release asset found; run build_station_thresholds.py locally first."
+
+      - name: Refresh station inventory
+        run: python -m scripts.refresh_station_inventory --db data/station_thresholds.sqlite
+
+      - name: Apply incremental threshold updates
+        run: |
+          DAYS=${{ github.event.inputs.days || '8' }}
+          python -m scripts.update_thresholds_incremental \
+            --db data/station_thresholds.sqlite \
+            --days $DAYS
+
+      - name: Show DB stats
+        run: |
+          python3 - <<'PYEOF'
+          import sqlite3
+          conn = sqlite3.connect("data/station_thresholds.sqlite")
+          stations = conn.execute("SELECT COUNT(*) FROM stations").fetchone()[0]
+          active   = conn.execute("SELECT COUNT(*) FROM stations WHERE is_active=1").fetchone()[0]
+          thresh   = conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+          watermark = conn.execute("SELECT value FROM meta WHERE key='last_diff_date'").fetchone()
+          print(f"Stations: {stations:,} ({active:,} active)")
+          print(f"Thresholds: {thresh:,}")
+          print(f"Watermark: {watermark[0] if watermark else 'not set'}")
+          conn.close()
+          PYEOF
+
+      - name: Upload updated SQLite as release asset
+        env:
+          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+        run: |
+          TAG="thresholds-$(date -u +%Y-%m-%d)"
+          # Create or overwrite the release for this tag
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "Station thresholds $TAG" \
+            --notes "Auto-updated by refresh-thresholds workflow." \
+            data/station_thresholds.sqlite
+          echo "Uploaded station_thresholds.sqlite as release $TAG"
+
+      - name: Commit updated stations.csv
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/stations.csv
+          git diff --cached --quiet || git commit -m "chore: refresh stations.csv [skip ci]"
+          git push origin HEAD:main || echo "Nothing to push"
