@@ -13,6 +13,109 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-06 — No fresh drafts (generation gap, two-bot architecture transition)
+
+**Context:** Zero pending drafts at grading time. Gist run history shows alert cycles on May 4–5 running successfully (signals detected and promoted above threshold) but `drafted_count=0` on all runs. Most illustrative: May 5 21:25 UTC cycle observed 5 calendar signals, promoted 5, drafted 0. Generation is not completing. Separately, BRIEFING.md (from a later commit not yet on main) confirms a two-bot architecture shipped May 3–4 (PR #25): Claude Sonnet 4.6 now writes all prose; Gemini Flash handles claim-extraction and fact-check only. Voice generator (`src/voice/generator.py`) is no longer in the live signal path per that commit.
+
+**Grade distribution:** None — 0 pending drafts at grading time.
+**A-rate: N/A (zero-denominator cycle).**
+
+### Observations from ungraded May 1–3 batch (already rejected, not in pending queue)
+
+Seven drafts appeared between Apr 29 and today, all rejected before this session ran. Not counted in grade distribution or A-rate table. Noted for pattern continuity.
+
+| Draft | Type | Created | Preliminary grade | Notes |
+|---|---|---|---|---|
+| BLIZZARD WARNING, Point Lay AK | severe_weather | May 1 | **A-** | Earned ALL-CAPS opener. "It is May 1." deadpan closer. No formula, no era anchor. Best single draft since the Mali A- of Apr 27. |
+| Riga, Latvia record | record | May 3 | **B+** | "held through every summer since" — durational framing as specificity vehicle, no era anchor. |
+| Prague record | record | May 3 | **B+** | "held for 25 years" — same durational vehicle. Clean. |
+| Ho Chi Minh City monthly high | monthly_high | May 1 | **B** | "since 2002, the year American Idol premiered" — era anchor present (text truncated, can't evaluate closer). |
+| Seattle record | record | May 3 | **B-** | "about to be gone by five degrees" — awkward conditional + explicit gap math. P4 Wodehouse soft-violation. |
+| Conakry monthly high | monthly_high | May 1 | **C+** | "The hottest May in 30 years of records would be broken by 2 degrees" — conditional hedge weakens it. Text truncated. |
+| Mali fire | fire | Apr 30 | **D** | "A wildfire burning in Mali right now is putting out 361 MW..." + plant-comparison context (truncated) — banned formula opener. Pre-two-bot; evaluator-rewrite-path probable origin. |
+
+**Ungraded batch preliminary A-rate if hypothetically graded: 1/7 = 14%.** Not counted in quality trend.
+
+### Patterns in ungraded batch
+
+1. **Durational framing emerging as a specificity vehicle.** Prague ("held for 25 years") and Riga ("held through every summer since") use duration to make the record's age concrete without an era anchor — exactly the function era anchors serve, delivered differently. If these are early Sonnet output, this is a positive sign for range under the new writer.
+
+2. **Era-anchor rate on ungraded records: 1 of 4 record/monthly drafts used an anchor** (Ho Chi Minh City). Consistent with either the 1-in-10 gate running on Gemini-side OR Sonnet writer naturally defaulting away from era anchors. Can't distinguish without knowing which system generated the May 1–3 drafts.
+
+3. **Blizzard quality**: "BLIZZARD WARNING in Point Lay, Alaska. 40 mph gusts. It is May 1." — whether Sonnet or late-Gemini, the voice is working. Earned editorial weight, no formula, three-word deadpan closer.
+
+4. **P4 Wodehouse violation (Seattle, May 3)**: "about to be gone by five degrees" — explicit gap math, conditional phrasing. Third instance of the explicit-gap pattern across four graded cycles. P4 evidence trail extends to May 3 even if not formally graded.
+
+5. **P3 formula opener (Mali, Apr 30)**: pre-two-bot, evaluator-rewrite-path probable cause. "putting out" is in the verb allowlist — this should have been caught by the regex at generation time but wasn't. Rewrite-path bypass is the known explanation.
+
+### Why the queue is empty
+
+Two causes, both operative:
+
+1. **Generation gap**: the two-bot port broke the pipeline's generation step. Alert cycles (May 4–5) show signals detected and promoted, then drafted=0. Human operator should investigate.
+
+2. **Normal staleness**: May 1–3 drafts contain real-time-baked language ("today," "forecast," "right now") and are >48h old. Correctly rejected.
+
+### Staleness check
+
+Zero pending drafts — nothing to bulk-reject.
+
+### Numbers
+
+- Pending drafts at grading time: 0
+- A-rate: N/A (zero-denominator)
+- Last graded cycle: 2026-04-29 (A-rate: 0%, documented in section below)
+- Generation gap started: ~May 4, 2026 (all subsequent alert cycles show drafted=0)
+
+---
+
+## 2026-04-29 — Era anchors at 100% on records (3 drafts)
+
+**Context:** Three new record drafts in the Apr 29 alerts cycle. All three used era anchors. Third consecutive cycle with ≥80% era-anchor deployment on record drafts (Apr 25: 3/3, Apr 27: 5/5, Apr 29: 3/3).
+
+**Grade distribution:** 0 A, 3 B-range (B+ / B / B-). **A-rate: 0% (0/3).** Gap from resumption bar: 50 points.
+
+### Per-draft
+
+#### [1] Cuenca, Ecuador — **B-**
+
+> The last time Cuenca, Ecuador was this warm on this date, Adele's 21 was the bestselling album in the world. That was 2011. Today's forecast: 70.2F, against a record of 67.3F.
+
+Era anchor inverted to opener (Steven Wright move: cultural reference leads, data grounds after). Anchor lands (2011, Adele's 21). Problem: 70.2F without elevation context reads as unimpressive. Cuenca sits at ~2,500m — the temp IS extreme there — but the tweet doesn't surface it. The ecosystem-specificity vehicle (elevation/climate-zone framing) would have carried this; era anchor can't compensate for missing context. Compare with Apr 27 [8] Mexico highlands ("summer monsoon that extinguishes these fires") — that draft found the right specificity vehicle for the data.
+
+**Humor lens:** Violation present. Voice keeps it benign. Setup→punchline: inverted opener. Named mechanic: era anchor. Wodehouse: intact. Failure is missing context, not effort.
+
+#### [2] Mexico City — **B**
+
+> Mexico City is forecast to hit 90.9F today. The record for this date was 86.4F, set in 2017 — the year the iPhone X launched. That gap is 4.5 degrees.
+
+Era anchor lands (2017, iPhone X). Structure is clean. Closer — "That gap is 4.5 degrees" — is explicit gap math the reader already had from the two temperatures given. **Same Wodehouse soft-violation as Apr 27 [10] Petaling Jaya** ("That gap is 4.4 degrees"). Second consecutive cycle with the identical pattern. Trim the closer: the era anchor lands stronger without it.
+
+**Humor lens:** Violation present. Voice benign. Data setup / era anchor punchline. Named mechanic: era anchor. Wodehouse: soft violation — gap math shows the work.
+
+#### [3] Jacksonville — **B+**
+
+> Jacksonville is on pace for 92.8F today. The old record was 90F, set in 2002. Last time it was this hot on this date, the first Spider-Man movie was still in theaters.
+
+Strongest of the three. Era anchor (2002, Spider-Man) + "still in theaters" temporal-duration framing. No Wodehouse violation. Tight.
+
+**Humor lens:** Violation present. Voice benign. Data setup / era anchor + duration punchline. Named mechanic: era anchor with temporal-duration modifier. Wodehouse: clean.
+
+### Patterns named
+
+1. **Era-anchor convergence at 100% — third consecutive cycle.** Apr 25: 3/3 records, Apr 27: 5/5, Apr 29: 3/3. Three-cycle pattern. Prompt-only reframing (P1 as currently drafted) has not broken it. Structural fix required.
+2. **Explicit-gap-math Wodehouse violation repeats.** "That gap is 4.5 degrees" (Mexico City Apr 29) echoes "That gap is 4.4 degrees" (Petaling Jaya Apr 27). Same two-sentence-apart pattern. P4 evidence now across Apr 24, 25, 27, and 29.
+3. **Missing ecosystem context for high-altitude/atypical-climate cities.** Cuenca at 70.2F without elevation framing reads as mild. The bot needs to surface why the absolute temperature matters for this location type (elevation, humidity, climate zone).
+4. **No D-range drafts.** All three are B-range. The era-anchor system avoids the D-range formula failures that dominated Apr 27 fires.
+
+### Numbers
+
+- A-rate: 0% (0/3)
+- Gap from bar: 50 points
+- Era-anchor deployment on records: 100% (3/3) — third consecutive cycle
+
+---
+
 ## 2026-04-27 — Voice engine v2.5 verdict (11 new drafts)
 
 **Context:** First alerts-cycle output after voice engine v2.5 shipped

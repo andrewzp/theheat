@@ -8,36 +8,76 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `f321be8` (running on origin/main) |
-| Voice engine version | v2.5 (era anchors + multi-station roll-call + recalibrated rules + opener-formula ban) |
-| Last cycle A-rate | 9% (Apr 27, 1 of 11 drafts graded A-) |
+| Bot commit | `f321be8` (origin/main) — **NOTE:** Gist run history + draft patterns indicate a two-bot architecture (Claude Sonnet 4.6 writer, Gemini Flash claim-extract/fact-check) has been live since ~May 4 in a later commit; voice generator (`src/voice/generator.py`) may be retired from live path. See A3. |
+| Voice engine version | v2.5 per main; Gist evidence suggests two-bot pipeline active since ~May 4 (all alert cycles show drafted=0 despite signals detected) |
+| Last cycle A-rate | 0% (Apr 29, 0/3) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 41 percentage points |
-| Posting | paused until bar cleared |
+| Gap | 50 percentage points (as of last graded cycle Apr 29) |
+| Posting | paused until bar cleared; additionally paused by generation gap |
 
 ## Active proposals
 
-Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage = (cycles observed) × (recency). Each entry tracks: observation count, last seen, proposed fix, expected impact, status.
 
-### P1 — Reframe era anchors as one specificity vehicle, not the default
+**Architectural note (May 6):** Gist run history indicates the two-bot pipeline (Sonnet 4.6 writer) may be live in a later commit. If so, P1 and P4–P6 target `SYSTEM_PROMPT` / `_CATEGORY_PROMPTS` in `src/voice/generator.py` which may be retired from the live path; P2 and P3 target `_STOCK_FORMULA_PATTERNS` (same file). Human operator should confirm which code is active before implementing any proposal. The principles in each proposal remain valid for any AI writer — only the target location changes.
 
-**Observed:** 5 of 5 record drafts in Apr 27 corpus used era anchors. The strongest record draft (Navi Mumbai, A-) used **accelerating-warming framing** (*"set just last year in 2024"*) — not an era anchor. Era anchors are over-deployed because they're the path of least resistance for Gemini.
+### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
 
-**Cycles observed:** Apr 25 (3/3 records used era anchors), Apr 27 (5/5).
+**Observed:** Wodehouse-rule violations are the single most predictive failure mode across all graded cycles. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / explicit gap math / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless. Confirmed across four consecutive cycles:
+- Apr 24: poetry-attempt closers ("It is burning") and restate patterns
+- Apr 25: "nearly 3 degrees" approximation when exact was available (Manchester)
+- Apr 27: [10] Petaling Jaya "That gap is 4.4 degrees" (same explicit-gap pattern)
+- Apr 29: [2] Mexico City "That gap is 4.5 degrees" — same pattern, second consecutive repeat
+
+**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29 (all four graded cycles).
+**Last seen:** Apr 29.
+**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
+
+> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), explicit gap math ("That gap is 4.5 degrees" — the reader can do this), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
+
+If the two-bot architecture is live, the analogous location is the Sonnet writer's system prompt (wherever the writer instructions live in the new pipeline).
+
+**Expected impact:** highest-leverage prompt change in the stack. Wodehouse violations cluster in every graded cycle; eliminating them moves several B drafts to B+/A- without changing structure.
+
+**Status:** drafted. Awaiting human implementation. Target code location to confirm if two-bot is live.
+
+### P1 — Reframe era anchors as one specificity vehicle — ESCALATE TO STRUCTURAL GATE
+
+**Observed:** Era-anchor over-deployment has persisted across every graded record cycle.
+- Apr 25: 3/3 records used era anchors
+- Apr 27: 5/5 records used era anchors
+- Apr 29: 3/3 records used era anchors — third consecutive cycle at 100%
+
+Prompt-only reframing (as currently drafted) has not broken the pattern after two cycles of evidence. Three consecutive cycles at 100% indicates the LLM defaults to era anchors regardless of prompt framing when they're available in the addendum context.
+
+**Cycles observed:** Apr 25, Apr 27, Apr 29 (3 cycles, 100% deployment each).
+**Last seen:** Apr 29.
+
+**Proposed fix — escalated from prompt reframe to structural gate:**
+
+Prompt reframe alone (listing vehicles equally) is insufficient evidence suggests. The fix needs a deterministic layer:
+
+Option A (code gate): add a `_era_anchor_should_fire(rate=0.10)` gate seeded by city+date. 90% of calls return a steer-away message that explicitly names the 5 alternative vehicles. 10% of calls return the era anchor content framed as "your 1-in-10 turn." This ensures the distribution in the LLM's context reflects intent, not prompt-text alone.
+
+Option B (addendum rewrite only): rewrite all record-type addenda to list the 6 specificity vehicles equally, and add to `_era_anchor_hint`: *"Era anchors used on every record tweet become the formula they were meant to escape. Pick a different vehicle unless the era anchor is genuinely the most striking move for this data."*
+
+Option A is the structural fix. Option B is lower-risk but lower-impact given 3 cycles of evidence it's insufficient.
+
+**Expected impact (A):** deterministic gate breaks the pattern structurally. Expected era-anchor rate drops to ~10% empirically within 2-3 cycles.
+
+**Status:** escalate to Option A. Awaiting human implementation. If two-bot is live, the gate location shifts to wherever the Sonnet writer receives era-anchor content.
+
+### P6 — Name humor moves as available tools (not requirements)
+
+**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently. Era anchors over-deployed because they're the most-explicit move in the prompt.
+
+**Cycles observed:** Apr 25, Apr 27 (2 cycles).
 **Last seen:** Apr 27.
-**Proposed fix:** rewrite per-category record addenda (`record`, `all_time_high`, `monthly_high`, `country_high`, `record_low`) to list specificity vehicles equally:
-- Era anchor (year → cultural moment)
-- Accelerating-warming (record set within last 1-3 years)
-- Past-tense personification ("used to define," "used to know when to quit")
-- Place-as-punchline (Anchorage period-and-restate)
-- Absolute scale (number does the work alone — Kuwait 53.2C)
-- Understatement closer ("It's April.")
+**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
 
-Add explicit guidance: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Era anchors used every record become the formula they were meant to escape."*
+**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
 
-**Expected impact:** breaks the convergence-on-era-anchors pattern. Gives Gemini a richer specificity palette. Should lift A-rate on records by 1-2 grade tiers based on Apr 25 corpus where 3 record drafts used different mechanics and all earned A-/B+.
-
-**Status:** drafted (HUMOR_RESEARCH.md §8.3 + §8.2 names the fix). Awaiting human implementation.
+**Status:** drafted. Awaiting human implementation. Target code location to confirm if two-bot is live.
 
 ### P2 — Widen plant-comparison regex adjective allowlist
 
@@ -64,20 +104,6 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 
 **Status:** decision point — pick (a) tactical or (b) structural. Awaiting human direction.
 
-### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
-
-**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless.
-
-**Cycles observed:** Apr 24, Apr 25, Apr 27 (consistent across all corpus cycles).
-**Last seen:** Apr 27.
-**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
-
-> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
-
-**Expected impact:** highest-leverage prompt change in the proposal stack. Wodehouse violations cluster across grades; eliminating them moves several B drafts to B+/A- without changing anything else.
-
-**Status:** drafted. Awaiting human implementation.
-
 ### P5 — Add stranded-mechanic warning to fire prompt addendum
 
 **Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), and [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing prose or over-explanation. The mechanics work; the surrounding text kills them.
@@ -90,19 +116,7 @@ Add explicit guidance: *"None of these are mandatory. When the number alone is s
 
 **Expected impact:** specifically targets the failure pattern that drove the Apr 27 fire regression. Should reduce stranded-mechanic D drafts.
 
-**Status:** drafted. Awaiting human implementation.
-
-### P6 — Name humor moves as available tools (not requirements)
-
-**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently.
-
-**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they're the most-explicit move in the prompt).
-**Last seen:** Apr 27.
-**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
-
-**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
-
-**Status:** drafted. Awaiting human implementation.
+**Status:** drafted. Awaiting human implementation. Target code location to confirm if two-bot is live.
 
 ## Awaiting evidence
 
@@ -110,15 +124,30 @@ These need more cycles before promotion to active proposals or retirement.
 
 ### A1 — Era_anchors prune impact (Apr 26)
 
-43 politically-charged / US-centric / mass-tragedy entries removed from `data/era_anchors.json` on 2026-04-26. The Apr 27 cycle had ONE draft that used a politically-charged anchor (Jacobabad / Elon Musk) — that anchor is no longer in the file. Whether the prune actually eliminates political/US-centric leakage from records needs the next cycle to confirm.
+43 politically-charged / US-centric / mass-tragedy entries removed from `data/era_anchors.json` on 2026-04-26. The Apr 27 cycle had ONE draft that used a politically-charged anchor (Jacobabad / Elon Musk) — that anchor is no longer in the file. The Apr 29 cycle's three era-anchor drafts (Cuenca/2011, Mexico City/2017, Jacksonville/2002) used non-political cultural anchors. No political-anchor regression observed in Apr 29.
 
-**Watch for:** record drafts that use era anchors. Note which year + which anchor. Compare against current `era_anchors.json`. If any anchor used isn't in the current file, that's a curation regression — different fix needed.
+**Status:** positive signal — prune appears to have worked for political anchors. The problem that remains is not political content but volume (100% deployment, not 100% inappropriate anchors).
+
+**Watch for:** any politically-charged or divisive anchor appearing in future cycles. If none appear in next 3 cycles, A1 can be resolved/archived.
 
 ### A2 — Voice engine v2.5 sample-size fragility
 
-Apr 25 corpus = 7 drafts (43% A-rate). Apr 27 corpus = 11 drafts (9% A-rate). Both small. The Apr 27 regression may be small-sample noise OR a real pattern. Need 3-4 more cycles at >15 drafts each to know.
+Apr 25 corpus = 7 drafts (43% A-rate). Apr 27 corpus = 11 drafts (9% A-rate). Apr 29 corpus = 3 drafts (0% A-rate). All small. The generation gap (May 4 onward) means this question is now moot for the Gemini-based pipeline — the two-bot architecture has superseded v2.5.
 
-**Watch for:** A-rate stability across larger corpora. If A-rate stays in 30-50% range over 3+ cycles, voice engine v2.5 is the new baseline. If it stays at 9-15%, v2.5 didn't generalize.
+**Status:** superseded by A3. If the two-bot pipeline stabilizes and resumes generation, A-rate stability analysis restarts from the new baseline.
+
+### A3 — Two-bot architecture transition and output quality baseline (May 2026)
+
+Gist run history shows all alert cycles from ~May 4 onward have `drafted_count=0` despite signals being detected and promoted above threshold. This indicates a pipeline break or major change at the generation step following a code update. BRIEFING.md in a later commit confirms a two-bot architecture (Sonnet 4.6 writer + Gemini Flash fact-check) was ported as PR #25. The voice generator is no longer in the live signal path per that commit.
+
+**Block on:** human operator must investigate and resolve the generation gap before any quality data can flow.
+
+**Watch for — once generation resumes:**
+- **Era-anchor rate**: P1 gate (if shipped) in generator.py may not apply to Sonnet writer. What does Sonnet produce naturally on records?
+- **Wodehouse violations (P4)**: do explicit-gap-math and restate-padding appear in Sonnet output?
+- **Formula openers (P2/P3)**: the regex is in generator.py. If Sonnet writer generates "A wildfire burning in X is radiating..." shapes, there's no regex gate unless it was ported or the new pipeline adds equivalent filtering.
+- **Stranded mechanics (P5)**: whether or not the fire prompt addendum was ported, does Sonnet strand punchlines in throat-clearing?
+- **New failure modes**: Sonnet may have entirely different voice failure modes. First graded cycle under the new system is the baseline.
 
 ## Resolved (archive)
 

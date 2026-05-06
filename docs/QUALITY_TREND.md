@@ -16,15 +16,21 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-24 | 35 | 3 | 6 | 6 | 20 | **9%** | ✗ | Pre-voice-engine-v2 baseline. Most rejects were continent-only locations + "powers N homes" formulas. |
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
+| 2026-04-29 | 3 | 0 | 3 | 0 | 0 | **0%** | ✗ | Three records, all era-anchored — third consecutive cycle at 100%. A-rate 0% because no draft reached A-; best was B+ (Jacksonville). Explicit-gap-math Wodehouse violation repeated (Mexico City). |
+| 2026-05-06 | 0 | — | — | — | — | **N/A** | N/A | Zero-denominator cycle. Queue empty: generation gap post-two-bot port (PR #25 per later commit), alert cycles show promoted>0 but drafted=0 since ~May 4. Seven ungraded May 1–3 drafts already rejected; preliminary A-rate if graded would be ~14% (1/7). |
 
 **Trend interpretation:**
-The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
+The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain. Apr 27 regressed (named causes: Sonnet rewrite path, verb-list gap, era-anchor over-deployment, political anchor curation error). Apr 29 continued at 0% A (all three records B-range, all era-anchored). May 6 is a zero-denominator cycle: a generation gap (drafted=0 across all May 4–5 alert runs) has halted new output, likely caused by a pipeline change (two-bot architecture port). Until the generation gap resolves, A-rate tracking is paused.
 
-We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
+Pre-gap trend: 9%–43%–9%–0% across four cycles. Era-anchor over-deployment (P1 / P4 Wodehouse are the two highest-leverage open proposals) is the consistent failure driver. Need to clear 50% sustained once generation resumes.
 
 ## Rejection events
 
 Drafts that got rejected, with dates. The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section logs the rejection EVENT (when, why, count) so the operational history is traceable.
+
+### 2026-05-06 — No bulk-reject (queue already empty)
+
+Zero pending drafts at grading time. The May 1–3 drafts (Blizzard AK, Conakry, Ho Chi Minh City, Riga, Prague, Seattle, Mali fire) were already rejected before this session ran; all contained real-time-baked language ("today," "forecast," "right now") and were >48h old at grading time. Apr 29 drafts (Cuenca, Mexico City, Jacksonville) similarly already rejected by session time.
 
 ### 2026-04-26 — Bulk-reject 14 stale pending drafts
 
