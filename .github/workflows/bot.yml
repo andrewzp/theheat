@@ -83,6 +83,37 @@ jobs:
             echo "mode=alerts" >> $GITHUB_OUTPUT
           fi
 
+      - name: Download station thresholds
+        if: steps.mode.outputs.mode == 'alerts' || steps.mode.outputs.mode == 'both'
+        # Required when THEHEAT_SIGNALS_PROVIDER=ghcn. The SQLite file is stored
+        # as a GH Release asset (not raw-committed) to avoid binary churn.
+        # Leaderboard and auto-publish runs do not touch the GHCN path.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data
+          for i in 1 2 3 4 5; do
+            if gh release download thresholds-latest \
+              --pattern "station_thresholds.sqlite" \
+              --dir data/ \
+              --clobber; then
+              break
+            fi
+            echo "[thresholds] download failed, retry $i/5"
+            sleep 20
+          done
+          test -s data/station_thresholds.sqlite
+          python3 - <<'PYEOF'
+          import sqlite3
+          conn = sqlite3.connect("data/station_thresholds.sqlite")
+          active = conn.execute("SELECT COUNT(*) FROM stations WHERE is_active=1").fetchone()[0]
+          thresh = conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+          if active < 1000 or thresh < 1000:
+              raise SystemExit(f"threshold DB failed sanity check: active={active}, thresholds={thresh}")
+          print(f"[thresholds] active={active:,} thresholds={thresh:,}")
+          conn.close()
+          PYEOF
+
       - name: Run bot
         env:
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
@@ -96,10 +127,9 @@ jobs:
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
-          # Extreme-signal data provider: "open_meteo" (default) or "ghcn"
-          # Set to "ghcn" after uploading data/station_thresholds.sqlite as a GH Release asset
-          # and adding the gh release download step below.
-          THEHEAT_SIGNALS_PROVIDER: open_meteo
+          # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
+          # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.
+          THEHEAT_SIGNALS_PROVIDER: ghcn
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}

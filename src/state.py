@@ -636,15 +636,20 @@ def check_daily_cap(state: dict, cap: int = 10) -> bool:
     return get_daily_count(state) < cap
 
 
-def update_record_streak(state: dict, city: str, today_temp_c: float) -> dict:
+def update_record_streak(
+    state: dict,
+    city: str,
+    today_temp_c: float,
+    event_date: date | None = None,
+) -> dict:
     """Update the record-breaking streak for a city.
 
     Called when a city has broken its daily calendar-date record.
     If the city already has a streak AND yesterday was also a record day,
     extend it. Otherwise start a new streak.
     """
-    from datetime import datetime as _dt
-    today = date.today()
+    today = event_date or date.today()
+    updated_at = date.today().isoformat()
     streaks = state.setdefault("record_streaks", {})
     entry = streaks.get(city)
 
@@ -658,21 +663,25 @@ def update_record_streak(state: dict, city: str, today_temp_c: float) -> dict:
             entry["days"] = int(entry.get("days", 0)) + 1
             entry["last_date"] = today.isoformat()
             entry["peak_temp_c"] = max(float(entry.get("peak_temp_c", -273.15)), today_temp_c)
+            entry["updated_at"] = updated_at
         elif gap == 0:
             # Same day re-entry (multi-run day) — no change
             entry["peak_temp_c"] = max(float(entry.get("peak_temp_c", -273.15)), today_temp_c)
+            entry["updated_at"] = updated_at
         else:
             # Gap > 1 day → streak broken, reset
             entry["days"] = 1
             entry["start_date"] = today.isoformat()
             entry["last_date"] = today.isoformat()
             entry["peak_temp_c"] = today_temp_c
+            entry["updated_at"] = updated_at
     else:
         streaks[city] = {
             "days": 1,
             "start_date": today.isoformat(),
             "last_date": today.isoformat(),
             "peak_temp_c": today_temp_c,
+            "updated_at": updated_at,
         }
 
     return state
@@ -695,7 +704,8 @@ def prune_stale_record_streaks(state: dict, max_gap_days: int = 2) -> dict:
     stale = []
     for city, entry in streaks.items():
         try:
-            last = date.fromisoformat(entry.get("last_date", ""))
+            prune_anchor = entry.get("updated_at") or entry.get("last_date", "")
+            last = date.fromisoformat(prune_anchor)
             if (today - last).days > max_gap_days:
                 stale.append(city)
         except (ValueError, TypeError):

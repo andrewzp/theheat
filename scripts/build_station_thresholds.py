@@ -8,12 +8,12 @@ asset and downloaded by CI at job start.
 What this does:
   1. Downloads ghcnd_all.tar.gz (~3.44 GB compressed) from NOAA NCEI.
   2. Streams through all per-station .dly files.
-  3. For each station with TMAX LASTYEAR >= active_cutoff, computes
+  3. For each station with TMAX/TMIN LASTYEAR >= active_cutoff, computes
      all-time / monthly / calendar-date records and climatological means.
   4. Writes everything to station_thresholds.sqlite.
 
 Runtime: ~30-60 minutes on M-series Mac with fast internet.
-Disk: ~5 GB temporary (tarball download); SQLite file ends up ~15-30 MB.
+Disk: ~5 GB temporary (tarball download); SQLite file ends up around 1 GB.
 
 Prerequisites:
   - Run refresh_station_inventory.py first (station rows must exist).
@@ -33,7 +33,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import collections
 import sys
 import time
 from pathlib import Path
@@ -45,8 +44,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.data.ghcn_db import DEFAULT_DB_PATH, open_db, load_active_stations, upsert_thresholds
 from src.data.ghcn_format import (
     compute_thresholds,
-    stream_dly_from_tar,
-    DailyObs,
+    stream_station_obs_from_tar,
 )
 
 TARBALL_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd_all.tar.gz"
@@ -127,50 +125,53 @@ def main() -> int:
         active_ids = frozenset(list(active_ids)[: args.max_stations])
         print(f"  [--max-stations] Capped at {len(active_ids)} stations")
 
-    # 3. Stream through tarball
-    print(f"\nStreaming {args.tarball} ...", flush=True)
-    t0 = time.monotonic()
-
-    # Accumulate obs per station
-    obs_by_station: dict[str, list[DailyObs]] = collections.defaultdict(list)
-    stations_seen = 0
-
-    with open(args.tarball, "rb") as f:
-        for obs in stream_dly_from_tar(f, station_ids=active_ids):
-            obs_by_station[obs.station_id].append(obs)
-
-    stations_seen = len(obs_by_station)
-    total_obs = sum(len(v) for v in obs_by_station.values())
-    elapsed = time.monotonic() - t0
-    print(f"  {stations_seen:,} stations, {total_obs:,} observations in {elapsed:.0f}s")
-
-    if args.dry_run:
-        print("\n[dry-run] Skipping DB writes.")
-        return 0
-
-    # 4. Compute thresholds and write to DB
-    print("\nComputing thresholds and writing to DB ...", flush=True)
+    # 3. Stream through tarball, computing thresholds one station at a time.
+    print(f"\nStreaming {args.tarball} and writing thresholds ...", flush=True)
     t0 = time.monotonic()
     written = 0
     skipped = 0
+    total_obs = 0
 
-    with open_db(args.db) as conn:
-        for i, (station_id, obs_list) in enumerate(obs_by_station.items(), 1):
-            t = compute_thresholds(obs_list)
-            if t is None:
-                skipped += 1
-                continue
-            upsert_thresholds(conn, t)
-            written += 1
-            if i % 500 == 0:
-                conn.commit()
-                elapsed = time.monotonic() - t0
-                print(f"  {i:,}/{stations_seen:,} written ({elapsed:.0f}s) ...", flush=True)
-        conn.commit()
+    db_context = open_db(args.db) if not args.dry_run else None
+    conn = db_context.__enter__() if db_context else None
+    try:
+        with open(args.tarball, "rb") as f:
+            for i, (_station_id, obs_list) in enumerate(
+                stream_station_obs_from_tar(f, station_ids=active_ids),
+                1,
+            ):
+                total_obs += len(obs_list)
+                t = compute_thresholds(obs_list)
+                if t is None:
+                    skipped += 1
+                    continue
+                if conn is not None:
+                    upsert_thresholds(conn, t)
+                    if i % 500 == 0:
+                        conn.commit()
+                written += 1
+                if i % 500 == 0:
+                    elapsed = time.monotonic() - t0
+                    print(f"  {i:,} stations processed ({elapsed:.0f}s) ...", flush=True)
+        if conn is not None:
+            conn.commit()
+    finally:
+        if db_context is not None:
+            db_context.__exit__(None, None, None)
+
+    if args.dry_run:
+        elapsed = time.monotonic() - t0
+        print(f"\n[dry-run] {written:,} stations parsed, {skipped} skipped, {total_obs:,} obs in {elapsed:.0f}s")
+        return 0
+
+    if written == 0:
+        print("ERROR: No station thresholds were written.", file=sys.stderr)
+        return 1
 
     elapsed = time.monotonic() - t0
     db_mb = args.db.stat().st_size / (1024 ** 2)
     print(f"  ✓ {written:,} stations written, {skipped} skipped in {elapsed:.0f}s")
+    print(f"  Observations parsed: {total_obs:,}")
     print(f"  DB size: {db_mb:.1f} MB")
 
     print("\n✓ Bootstrap complete.")

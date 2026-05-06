@@ -198,6 +198,29 @@ def test_build_record_bundle_falls_back_to_city_when_country_missing():
     assert bundle.where == "Reykjavik"
 
 
+def test_build_record_bundle_marks_calendar_low_records():
+    ev = RecordEvent(
+        city="Nome",
+        country="United States",
+        new_temp_c=-33.0,
+        old_record_c=-31.0,
+        old_record_year=1989,
+        event_id="record_low_Nome_2026-01-10",
+        kind="low",
+    )
+
+    bundle = build_record_bundle(ev)
+
+    assert bundle.signal_kind == "calendar_record_low"
+    assert bundle.headline_metric == {
+        "label": "observed_low_c",
+        "value": -33.0,
+        "unit": "C",
+    }
+    assert {"label": "kind", "value": "low"} in bundle.current_facts
+    assert bundle.historical_context["kind"] == "low"
+
+
 # ----------------------- batch 2: full port coverage -----------------------
 
 

@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS stations (
     tmax_last_year  INTEGER,
     tmin_first_year INTEGER,
     tmin_last_year  INTEGER,
+    tmax_archive_years INTEGER NOT NULL DEFAULT 0,
+    tmin_archive_years INTEGER NOT NULL DEFAULT 0,
     archive_years   INTEGER NOT NULL DEFAULT 0,
     is_active       INTEGER NOT NULL DEFAULT 0
 );
@@ -77,10 +79,23 @@ def open_db(path: Path | str = DEFAULT_DB_PATH) -> Generator[sqlite3.Connection,
     conn = sqlite3.connect(str(path))
     try:
         conn.executescript(_DDL)
+        _migrate_schema(conn)
         conn.commit()
         yield conn
     finally:
         conn.close()
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    """Apply additive schema fixes for existing threshold DB assets."""
+    cols = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(stations)").fetchall()
+    }
+    if "tmax_archive_years" not in cols:
+        conn.execute("ALTER TABLE stations ADD COLUMN tmax_archive_years INTEGER NOT NULL DEFAULT 0")
+    if "tmin_archive_years" not in cols:
+        conn.execute("ALTER TABLE stations ADD COLUMN tmin_archive_years INTEGER NOT NULL DEFAULT 0")
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +118,13 @@ def upsert_station(
     tmin_first = min((r.first_year for r in tmin_rows), default=None)
     tmin_last  = max((r.last_year  for r in tmin_rows), default=None)
 
-    archive_years = (tmax_last - tmax_first + 1) if (tmax_first and tmax_last) else 0
-    is_active = 1 if (tmax_last is not None and tmax_last >= active_year_cutoff) else 0
+    tmax_archive_years = (tmax_last - tmax_first + 1) if (tmax_first and tmax_last) else 0
+    tmin_archive_years = (tmin_last - tmin_first + 1) if (tmin_first and tmin_last) else 0
+    archive_years = max(tmax_archive_years, tmin_archive_years)
+    is_active = 1 if (
+        (tmax_last is not None and tmax_last >= active_year_cutoff)
+        or (tmin_last is not None and tmin_last >= active_year_cutoff)
+    ) else 0
 
     conn.execute(
         """
@@ -112,9 +132,9 @@ def upsert_station(
             (station_id, name, country_code, country_name, state, lat, lon,
              elevation_m, gsn_flag, hcn_crn_flag, wmo_id,
              tmax_first_year, tmax_last_year, tmin_first_year, tmin_last_year,
-             archive_years, is_active)
+             tmax_archive_years, tmin_archive_years, archive_years, is_active)
         VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(station_id) DO UPDATE SET
             name           = excluded.name,
             country_name   = excluded.country_name,
@@ -129,6 +149,8 @@ def upsert_station(
             tmax_last_year  = excluded.tmax_last_year,
             tmin_first_year = excluded.tmin_first_year,
             tmin_last_year  = excluded.tmin_last_year,
+            tmax_archive_years = excluded.tmax_archive_years,
+            tmin_archive_years = excluded.tmin_archive_years,
             archive_years   = excluded.archive_years,
             is_active       = excluded.is_active
         """,
@@ -146,6 +168,8 @@ def upsert_station(
             meta.wmo_id,
             tmax_first, tmax_last,
             tmin_first, tmin_last,
+            tmax_archive_years,
+            tmin_archive_years,
             archive_years,
             is_active,
         ),
@@ -164,6 +188,8 @@ def upsert_thresholds(
     rows: list[tuple] = []
     sid = t.station_id
 
+    conn.execute("DELETE FROM thresholds WHERE station_id = ?", (sid,))
+
     if t.all_time_max_c is not None:
         rows.append((sid, "all_time_max", None, None, t.all_time_max_c, t.all_time_max_year))
     if t.all_time_min_c is not None:
@@ -181,17 +207,17 @@ def upsert_thresholds(
 
     for m, mean_c in t.climatological_mean.items():
         rows.append((sid, "climatological_mean", m, None, mean_c, None))
+    for m, mean_c in t.climatological_mean_min.items():
+        rows.append((sid, "climatological_mean_min", m, None, mean_c, None))
 
-    conn.executemany(
-        """
-        INSERT INTO thresholds (station_id, kind, month, day, value_c, record_year)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(station_id, kind, month, day) DO UPDATE SET
-            value_c     = excluded.value_c,
-            record_year = excluded.record_year
-        """,
-        rows,
-    )
+    if rows:
+        conn.executemany(
+            """
+            INSERT INTO thresholds (station_id, kind, month, day, value_c, record_year)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
 
 
 def load_thresholds(
@@ -226,13 +252,21 @@ def load_thresholds(
             t.calendar_date_min[(month, day)] = (value_c, record_year)
         elif kind == "climatological_mean" and month is not None:
             t.climatological_mean[month] = value_c
+        elif kind == "climatological_mean_min" and month is not None:
+            t.climatological_mean_min[month] = value_c
 
-    # Best estimate of archive_years from the all_time_max record
     station_row = conn.execute(
-        "SELECT archive_years FROM stations WHERE station_id = ?", (station_id,)
+        """
+        SELECT archive_years, tmax_archive_years, tmin_archive_years
+        FROM stations
+        WHERE station_id = ?
+        """,
+        (station_id,),
     ).fetchone()
     if station_row:
         t.archive_years = station_row[0]
+        t.tmax_archive_years = station_row[1] or 0
+        t.tmin_archive_years = station_row[2] or 0
 
     return t
 
@@ -244,14 +278,16 @@ def load_active_stations(
     rows = conn.execute(
         """
         SELECT station_id, name, country_code, country_name, state,
-               lat, lon, elevation_m, archive_years
+               lat, lon, elevation_m, archive_years,
+               tmax_archive_years, tmin_archive_years
         FROM stations
         WHERE is_active = 1
         ORDER BY station_id
         """,
     ).fetchall()
     cols = ["station_id", "name", "country_code", "country_name", "state",
-            "lat", "lon", "elevation_m", "archive_years"]
+            "lat", "lon", "elevation_m", "archive_years",
+            "tmax_archive_years", "tmin_archive_years"]
     return [dict(zip(cols, row)) for row in rows]
 
 

@@ -27,19 +27,23 @@ from pathlib import Path
 
 import pytest
 
+from src.data import ghcn as ghcn_module
 from src.data.ghcn import (
     ANOMALY_HOT_THRESHOLD_C,
     _dedup_by_metro,
     _detect_signals_for_station,
+    _fetch_recent_obs,
     _has_signal,
     check_extreme_signals_for_stations,
 )
 from src.data.ghcn_db import (
+    load_thresholds,
     open_db,
     upsert_thresholds,
 )
 from src.data.ghcn_format import (
     DailyObs,
+    DiffRecord,
     StationThresholds,
 )
 from src.data.open_meteo import ExtremeSignalBundle
@@ -87,6 +91,7 @@ def _make_thresholds() -> StationThresholds:
     t.calendar_date_max[(7, 15)] = (23.0, 1990)
     t.calendar_date_min[(1, 10)] = (-64.0, 1945)
     t.climatological_mean[7] = 15.0
+    t.climatological_mean_min[1] = -50.0
     return t
 
 
@@ -164,15 +169,91 @@ def _obs(station_id: str, obs_date: date, element: str, value_c: float) -> Daily
 def _fetch_fn(obs_list: list[DailyObs]):
     """Build a fixture fetch function that returns the given obs list."""
     def fn(active_ids):
-        latest: dict[str, DailyObs] = {}
+        latest: dict[tuple[str, date], list[DailyObs]] = {}
         for o in obs_list:
             if o.station_id not in active_ids:
                 continue
-            existing = latest.get(o.station_id)
-            if existing is None or o.obs_date > existing.obs_date:
-                latest[o.station_id] = o
+            latest.setdefault((o.station_id, o.obs_date), []).append(o)
         return latest
     return fn
+
+
+# ---------------------------------------------------------------------------
+# ghcn_db threshold writes
+# ---------------------------------------------------------------------------
+
+def test_upsert_thresholds_replaces_existing_nullable_key_rows(tmp_path: Path):
+    db = tmp_path / "thresholds.sqlite"
+    first = _make_thresholds()
+    second = _make_thresholds()
+    second.all_time_max_c = 27.0
+    second.all_time_max_year = 2026
+
+    with open_db(db) as conn:
+        upsert_thresholds(conn, first)
+        initial_count = conn.execute(
+            "SELECT COUNT(*) FROM thresholds WHERE station_id = ?",
+            (first.station_id,),
+        ).fetchone()[0]
+        upsert_thresholds(conn, second)
+        replacement_count = conn.execute(
+            "SELECT COUNT(*) FROM thresholds WHERE station_id = ?",
+            (first.station_id,),
+        ).fetchone()[0]
+        loaded = load_thresholds(conn, first.station_id)
+
+    assert replacement_count == initial_count
+    assert loaded is not None
+    assert loaded.all_time_max_c == pytest.approx(27.0)
+    assert loaded.all_time_max_year == 2026
+
+
+# ---------------------------------------------------------------------------
+# _fetch_recent_obs
+# ---------------------------------------------------------------------------
+
+def test_fetch_recent_obs_delete_record_removes_prior_value(monkeypatch):
+    """A newer delete diff must clear an older insert from the lookback window."""
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 5, 5)
+
+    obs_date = date(2026, 5, 3)
+
+    def fake_fetch_diff(snapshot_date):
+        if snapshot_date == date(2026, 5, 3):
+            return b"insert"
+        if snapshot_date == date(2026, 5, 4):
+            return b"delete"
+        return None
+
+    def fake_parse_records(content):
+        if content == b"insert":
+            return [
+                DiffRecord("insert", "POLAR0000000", obs_date, "TMAX", 31.0),
+                DiffRecord("insert", "POLAR0000000", obs_date, "TMIN", -4.0),
+            ]
+        if content == b"delete":
+            return [
+                DiffRecord("delete", "POLAR0000000", obs_date, "TMAX", None),
+            ]
+        return []
+
+    monkeypatch.setattr(ghcn_module, "date", FixedDate)
+    monkeypatch.setattr(ghcn_module, "_fetch_diff", fake_fetch_diff)
+    monkeypatch.setattr(
+        ghcn_module,
+        "parse_superghcnd_diff_records_bytes",
+        fake_parse_records,
+    )
+
+    result = _fetch_recent_obs(frozenset({"POLAR0000000"}), lookback_days=2)
+
+    obs_list = result[("POLAR0000000", obs_date)]
+    assert [obs.element for obs in obs_list] == ["TMIN"]
+    assert obs_list[0].value_c == pytest.approx(-4.0)
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +320,8 @@ class TestDetectSignalsForStation:
         bundle = _detect_signals_for_station(STATION_META, obs, _make_thresholds())
         assert bundle is not None
         assert bundle.calendar_date_low is not None
+        assert bundle.calendar_date_low.kind == "low"
+        assert bundle.calendar_date_low.signal_date == date(2026, 1, 10)
 
     def test_anomaly_hot_fires(self):
         # clim_mean[7] = 15.0; threshold = 8.0; need value >= 23.0
@@ -254,6 +337,14 @@ class TestDetectSignalsForStation:
         bundle = _detect_signals_for_station(STATION_META, obs, _make_thresholds())
         assert bundle is not None
         assert bundle.anomaly_hot is None
+
+    def test_anomaly_cold_uses_tmin_mean(self):
+        # -60 - (-50) = -10 <= -8
+        obs = _obs("POLAR0000000", date(2026, 1, 11), "TMIN", -60.0)
+        bundle = _detect_signals_for_station(STATION_META, obs, _make_thresholds())
+        assert bundle is not None
+        assert bundle.anomaly_cold is not None
+        assert bundle.anomaly_cold.historical_mean_c == pytest.approx(-50.0)
 
     def test_multiple_signals_same_obs(self):
         """An extreme reading can fire all-time + monthly + calendar-date simultaneously."""
@@ -281,6 +372,30 @@ class TestDetectSignalsForStation:
         obs = _obs("POLAR0000000", date(2026, 7, 15), "TMAX", 30.0)
         bundle = _detect_signals_for_station(thin_meta, obs, thin_thresh)
         assert bundle is None
+
+    def test_tmin_only_station_uses_tmin_archive_years(self):
+        t = StationThresholds(station_id="TMINONLY000")
+        t.tmin_archive_years = 40
+        t.archive_years = 40
+        t.all_time_min_c = -20.0
+        t.all_time_min_year = 1990
+        t.monthly_min[1] = (-18.0, 2001)
+        t.calendar_date_min[(1, 10)] = (-17.5, 2005)
+
+        station = {
+            **STATION_META,
+            "station_id": "TMINONLY000",
+            "archive_years": 0,
+            "tmax_archive_years": 0,
+            "tmin_archive_years": 40,
+        }
+        obs = _obs("TMINONLY000", date(2026, 1, 10), "TMIN", -21.0)
+
+        bundle = _detect_signals_for_station(station, obs, t)
+
+        assert bundle is not None
+        assert bundle.all_time_low is not None
+        assert bundle.all_time_low.years_of_data == 40
 
     def test_station_name_and_id_populated(self):
         obs = _obs("POLAR0000000", date(2026, 7, 15), "TMAX", 20.0)
@@ -365,6 +480,20 @@ class TestCheckExtremeSignalsForStations:
         assert bundles[0].all_time_high is not None
         assert bundles[0].signal_date == date(2026, 7, 15)
 
+    def test_same_day_tmax_and_tmin_are_preserved(self, db_path: Path):
+        """A same-day TMAX must not mask a same-day TMIN cold record."""
+        obs_high = _obs("POLAR0000000", date(2026, 1, 10), "TMAX", 10.0)
+        obs_low = _obs("POLAR0000000", date(2026, 1, 10), "TMIN", -71.0)
+
+        bundles, _ = check_extreme_signals_for_stations(
+            db_path=db_path,
+            _fetch_obs_fn=_fetch_fn([obs_high, obs_low]),
+        )
+        assert len(bundles) == 1
+        assert bundles[0].today_max_c == pytest.approx(10.0)
+        assert bundles[0].today_min_c == pytest.approx(-71.0)
+        assert bundles[0].all_time_low is not None
+
     def test_returns_empty_when_no_signal_fires(self, db_path: Path):
         """A reading below all thresholds → no bundles, no country records."""
         obs = _obs("POLAR0000000", date(2026, 7, 15), "TMAX", 10.0)  # below everything
@@ -377,20 +506,18 @@ class TestCheckExtremeSignalsForStations:
         assert country_records == []
 
     def test_returns_empty_when_no_observations(self, db_path: Path):
-        bundles, country_records = check_extreme_signals_for_stations(
-            db_path=db_path,
-            _fetch_obs_fn=_fetch_fn([]),
-        )
-        assert bundles == []
-        assert country_records == []
+        with pytest.raises(RuntimeError):
+            check_extreme_signals_for_stations(
+                db_path=db_path,
+                _fetch_obs_fn=_fetch_fn([]),
+            )
 
     def test_returns_empty_when_db_missing(self, tmp_path: Path):
-        bundles, country_records = check_extreme_signals_for_stations(
-            db_path=tmp_path / "nonexistent.sqlite",
-            _fetch_obs_fn=_fetch_fn([]),
-        )
-        assert bundles == []
-        assert country_records == []
+        with pytest.raises(FileNotFoundError):
+            check_extreme_signals_for_stations(
+                db_path=tmp_path / "nonexistent.sqlite",
+                _fetch_obs_fn=_fetch_fn([]),
+            )
 
     def test_respects_max_checks(self, db_path: Path):
         """max_checks=0 → no stations processed → empty result."""

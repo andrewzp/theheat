@@ -34,6 +34,7 @@ class RecordEvent:
     old_record_year: int
     event_id: str
     signal_date: date | None = None  # date reading was observed; None → use date.today()
+    kind: str = "high"  # "high" or "low"; default preserves legacy positional calls
 
 
 @dataclass
@@ -314,6 +315,7 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
                 old_record_c=old_record_c,
                 old_record_year=old_record_year,
                 event_id=f"record_{city.replace(' ', '_')}_{today.isoformat()}",
+                kind="high",
             )
 
         return None
@@ -495,6 +497,7 @@ def detect_extreme_signals(
             new_temp_c=today_max, old_record_c=hist_max_calendar,
             old_record_year=hist_max_calendar_year,
             event_id=f"record_{city_key}_{today_iso}",
+            kind="high",
         )
     if today_min is not None and hist_min_calendar is not None and today_min < hist_min_calendar:
         bundle.calendar_date_low = RecordEvent(
@@ -502,6 +505,7 @@ def detect_extreme_signals(
             new_temp_c=today_min, old_record_c=hist_min_calendar,
             old_record_year=hist_min_calendar_year,
             event_id=f"record_low_{city_key}_{today_iso}",
+            kind="low",
         )
 
     # All-time records within our archive window
@@ -618,6 +622,7 @@ def detect_country_records(
     *,
     archive_years: int = 30,
     min_cities_per_country: int = 2,
+    record_date: date | None = None,
 ) -> list[CountryRecord]:
     """Aggregate per-city readings into country-level records.
 
@@ -629,7 +634,7 @@ def detect_country_records(
 
     Same logic for lows with the sign flipped.
     """
-    today = date.today()
+    today = record_date or date.today()
     today_iso = today.isoformat()
 
     by_country: dict[str, list[ExtremeSignalBundle]] = {}
@@ -665,6 +670,7 @@ def detect_country_records(
                     years_of_data=archive_years,
                     cities_sampled=len(group),
                     event_id=f"country_high_{country_key}_{today_iso}",
+                    signal_date=record_date,
                 ))
 
         # Lows
@@ -690,6 +696,7 @@ def detect_country_records(
                     years_of_data=archive_years,
                     cities_sampled=len(group),
                     event_id=f"country_low_{country_key}_{today_iso}",
+                    signal_date=record_date,
                 ))
 
     return records
@@ -780,6 +787,7 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
                 old_record_c=old_record_c,
                 old_record_year=old_record_year,
                 event_id=f"record_low_{city.replace(' ', '_')}_{today.isoformat()}",
+                kind="low",
             )
 
         return None

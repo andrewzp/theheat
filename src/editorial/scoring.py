@@ -124,14 +124,22 @@ def _build_score(
     )
 
 
-def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: int) -> EditorialScore:
-    delta = max(new_temp_c - old_record_c, 0.0)
+def score_record_event(
+    new_temp_c: float,
+    old_record_c: float,
+    old_record_year: int,
+    *,
+    kind: str = "high",
+) -> EditorialScore:
+    delta = max(new_temp_c - old_record_c, 0.0) if kind == "high" else max(old_record_c - new_temp_c, 0.0)
     record_age = max(date.today().year - old_record_year, 0)
-    severity = 56 + delta * 22 + max(new_temp_c - 40, 0) * 2.5
+    absolute_bonus = max(new_temp_c - 40, 0) * 2.5 if kind == "high" else max(-10 - new_temp_c, 0) * 2.0
+    severity = 56 + delta * 22 + absolute_bonus
     novelty = 45 + min(record_age, 100) * 0.45
     timeliness = 94
     confidence = 72
-    shareability = 52 + min(record_age, 80) * 0.30 + max(new_temp_c - 42, 0) * 1.5
+    shareability = 52 + min(record_age, 80) * 0.30
+    shareability += max(new_temp_c - 42, 0) * 1.5 if kind == "high" else max(-15 - new_temp_c, 0) * 1.2
     reasons = []
     if record_age >= 25:
         reasons.append(f"{record_age}-year-old record")
@@ -139,8 +147,10 @@ def score_record_event(new_temp_c: float, old_record_c: float, old_record_year: 
         reasons.append("fresh repeat record")
     if delta >= 1.0:
         reasons.append(f"beat prior record by {delta:.1f}C")
-    if new_temp_c >= 45:
+    if kind == "high" and new_temp_c >= 45:
         reasons.append("extreme absolute temperature")
+    if kind == "low" and new_temp_c <= -20:
+        reasons.append("extreme absolute cold")
     return _build_score(
         "record",
         severity=severity,

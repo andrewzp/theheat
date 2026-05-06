@@ -87,7 +87,7 @@ def main() -> int:
 
     print("=== GHCN-Daily station inventory refresh ===")
     print(f"DB:     {args.db}")
-    print(f"Active cutoff: TMAX LASTYEAR >= {active_cutoff}")
+    print(f"Active cutoff: TMAX/TMIN LASTYEAR >= {active_cutoff}")
 
     # 1. Fetch data
     stations_text  = _fetch_text(STATIONS_URL)
@@ -117,9 +117,9 @@ def main() -> int:
     active_count = sum(
         1
         for sid, rows in inv_by_station.items()
-        if any(r.element == "TMAX" and r.last_year >= active_cutoff for r in rows)
+        if any(r.element in {"TMAX", "TMIN"} and r.last_year >= active_cutoff for r in rows)
     )
-    print(f"  {active_count:,} stations have TMAX LASTYEAR >= {active_cutoff}")
+    print(f"  {active_count:,} stations have TMAX/TMIN LASTYEAR >= {active_cutoff}")
 
     if args.dry_run:
         print("\n[dry-run] Skipping DB and CSV writes.")
@@ -150,6 +150,8 @@ def main() -> int:
             """
             SELECT station_id, name, country_code, country_name, state,
                    lat, lon, elevation_m, tmax_first_year, tmax_last_year,
+                   tmin_first_year, tmin_last_year,
+                   tmax_archive_years, tmin_archive_years,
                    archive_years, is_active
             FROM stations
             ORDER BY country_code, station_id
@@ -161,6 +163,7 @@ def main() -> int:
         writer = csv.DictWriter(f, fieldnames=[
             "station_id", "name", "country_code", "country_name", "state",
             "lat", "lon", "elevation_m", "tmax_first_year", "tmax_last_year",
+            "tmin_first_year", "tmin_last_year", "tmax_archive_years", "tmin_archive_years",
             "archive_years", "is_active",
         ])
         writer.writeheader()
