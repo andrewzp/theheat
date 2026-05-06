@@ -2,7 +2,7 @@
 
 Handles two NOAA formats:
   .dly  — fixed-width per-station daily archive (all/{ID}.dly)
-  diff  — superghcnd_diff incremental delta records (same fixed-width layout)
+  diff  — superghcnd_diff CSV delta records inside tar.gz snapshots
 
 Spec refs:
   NCEI readme §III (station inventory), §IV (daily format):
@@ -23,8 +23,10 @@ This module is stdlib-only. Zero external dependencies.
 
 from __future__ import annotations
 
+import csv
 import gzip
 import io
+import tarfile
 from dataclasses import dataclass
 from datetime import date
 from typing import Generator, Iterable
@@ -281,8 +283,16 @@ def stream_dly_from_tar(
     Memory-efficient: reads one .dly member at a time. Suitable for the
     3.44 GB ghcnd_all.tar.gz bootstrap without loading everything into RAM.
     """
-    import tarfile
+    for _station_id, obs_list in stream_station_obs_from_tar(tar_fileobj, elements, station_ids):
+        yield from obs_list
 
+
+def stream_station_obs_from_tar(
+    tar_fileobj: io.IOBase,
+    elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+    station_ids: frozenset[str] | None = None,
+) -> Generator[tuple[str, list[DailyObs]], None, None]:
+    """Stream one station's parsed observations at a time from ghcnd_all.tar.gz."""
     with tarfile.open(fileobj=tar_fileobj, mode="r:gz") as tf:
         for member in tf:
             if not member.name.endswith(".dly"):
@@ -296,38 +306,215 @@ def stream_dly_from_tar(
             if f is None:
                 continue
             text = f.read().decode("ascii", errors="replace")
-            yield from (
+            obs_list = [
                 obs
                 for line in text.splitlines()
                 for obs in _parse_dly_line(line, elements)
-            )
+            ]
+            if obs_list:
+                yield stem, obs_list
 
 
 # ---------------------------------------------------------------------------
 # superghcnd_diff parser
 # ---------------------------------------------------------------------------
 
+@dataclass(frozen=True, slots=True)
+class DiffRecord:
+    """One record from NOAA's superghcnd_diff CSV tarballs."""
+    action: str  # insert, update, delete
+    station_id: str
+    obs_date: date
+    element: str
+    value_c: float | None
+    qflag: str = ""
+
+    def to_daily_obs(self) -> DailyObs | None:
+        """Return a valid observation, or None for deletes/missing/QC-failed rows."""
+        if self.action == "delete" or self.value_c is None or self.qflag.strip():
+            return None
+        return DailyObs(
+            station_id=self.station_id,
+            obs_date=self.obs_date,
+            element=self.element,
+            value_c=self.value_c,
+        )
+
+
+def _parse_diff_date(raw: str) -> date:
+    raw = raw.strip()
+    if len(raw) == 8 and raw.isdigit():
+        return date(int(raw[0:4]), int(raw[4:6]), int(raw[6:8]))
+    return date.fromisoformat(raw)
+
+
+def _parse_superghcnd_csv_text(
+    text: str,
+    *,
+    action: str,
+    elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+) -> list[DiffRecord]:
+    """Parse a superghcnd_diff CSV member.
+
+    NOAA publishes superghcnd diffs as tarballs containing insert/update/delete
+    CSV files with columns:
+      ID, DATE, ELEMENT, VALUE, MFLAG, QFLAG, SFLAG, OBS-TIME
+    """
+    out: list[DiffRecord] = []
+    malformed = 0
+    data_rows = 0
+
+    for row in csv.reader(text.splitlines()):
+        if not row or not any(cell.strip() for cell in row):
+            continue
+        if row[0].strip().upper() in {"ID", "STATION", "STATION_ID"}:
+            continue
+
+        data_rows += 1
+        if len(row) < 7:
+            malformed += 1
+            continue
+
+        station_id = row[0].strip()
+        element = row[2].strip()
+        if elements is not None and element not in elements:
+            continue
+
+        try:
+            obs_date = _parse_diff_date(row[1])
+            raw = int(row[3].strip())
+        except (ValueError, IndexError):
+            malformed += 1
+            continue
+
+        value_c = None if raw == _MISSING else raw / 10.0
+        out.append(DiffRecord(
+            action=action,
+            station_id=station_id,
+            obs_date=obs_date,
+            element=element,
+            value_c=value_c,
+            qflag=row[5],
+        ))
+
+    if malformed:
+        raise ValueError(f"Malformed superghcnd_diff CSV: {malformed}/{data_rows} data rows could not be parsed")
+    return out
+
+
+def parse_superghcnd_diff_records_text(
+    text: str,
+    elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+    *,
+    action: str = "update",
+) -> list[DiffRecord]:
+    """Parse a plain-text superghcnd_diff CSV payload.
+
+    Retains a small fixed-width fallback for tests/tools that pass .dly-shaped
+    text, but NOAA's live superghcnd_diff feed is CSV inside tar.gz.
+    """
+    first = next((line for line in text.splitlines() if line.strip()), "")
+    if first and "," not in first and len(first) >= 21:
+        return [
+            DiffRecord(
+                action=action,
+                station_id=o.station_id,
+                obs_date=o.obs_date,
+                element=o.element,
+                value_c=o.value_c,
+            )
+            for o in parse_dly_text(text, elements)
+        ]
+    if not first:
+        return []
+    return _parse_superghcnd_csv_text(text, action=action, elements=elements)
+
+
+def _action_from_member_name(name: str) -> str | None:
+    lower = name.rsplit("/", 1)[-1].lower()
+    if "insert" in lower:
+        return "insert"
+    if "update" in lower:
+        return "update"
+    if "delete" in lower:
+        return "delete"
+    return None
+
+
+def _parse_superghcnd_diff_tar_bytes(
+    data: bytes,
+    elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+) -> list[DiffRecord]:
+    records: list[DiffRecord] = []
+    recognized_members = 0
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tf:
+        for member in tf:
+            if not member.isfile() or not member.name.lower().endswith(".csv"):
+                continue
+            action = _action_from_member_name(member.name)
+            if action is None:
+                continue
+            recognized_members += 1
+            f = tf.extractfile(member)
+            if f is None:
+                continue
+            text = f.read().decode("utf-8", errors="replace")
+            records.extend(_parse_superghcnd_csv_text(text, action=action, elements=elements))
+    if recognized_members == 0:
+        raise ValueError("superghcnd_diff tarball did not contain insert/update/delete CSV members")
+    return records
+
 def parse_superghcnd_diff_text(
     text: str,
     elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
 ) -> list[DailyObs]:
-    """Parse a superghcnd_diff file.
+    """Parse plain-text superghcnd_diff data and return valid insert/update obs."""
+    return [
+        obs
+        for rec in parse_superghcnd_diff_records_text(text, elements)
+        if rec.action in {"insert", "update"}
+        for obs in [rec.to_daily_obs()]
+        if obs is not None
+    ]
 
-    superghcnd_diff files use the same fixed-width .dly record format.
-    Each line represents updated/inserted records for a station/month.
-    Parsing is identical to a regular .dly file.
+
+def parse_superghcnd_diff_records_bytes(
+    data: bytes,
+    elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
+) -> list[DiffRecord]:
+    """Parse NOAA superghcnd_diff bytes.
+
+    Live NOAA files are tar.gz archives of CSV members. Plain gzip/plain text is
+    accepted for fixture convenience.
     """
-    return parse_dly_text(text, elements)
+    if not data:
+        return []
+
+    try:
+        return _parse_superghcnd_diff_tar_bytes(data, elements)
+    except tarfile.TarError:
+        pass
+
+    if data[:2] == b"\x1f\x8b":
+        data = gzip.decompress(data)
+    return parse_superghcnd_diff_records_text(
+        data.decode("utf-8", errors="replace"),
+        elements,
+    )
 
 
 def parse_superghcnd_diff_bytes(
     data: bytes,
     elements: frozenset[str] | None = frozenset({"TMAX", "TMIN"}),
 ) -> list[DailyObs]:
-    """Parse raw bytes from a superghcnd_diff file (may be plain or gzip)."""
-    if data[:2] == b"\x1f\x8b":  # gzip magic bytes
-        data = gzip.decompress(data)
-    return parse_dly_bytes(data, elements)
+    """Parse raw bytes from a superghcnd_diff file into valid insert/update obs."""
+    return [
+        obs
+        for rec in parse_superghcnd_diff_records_bytes(data, elements)
+        if rec.action in {"insert", "update"}
+        for obs in [rec.to_daily_obs()]
+        if obs is not None
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +539,11 @@ class StationThresholds:
     calendar_date_min: dict[tuple[int, int], tuple[float, int]] = None  # type: ignore[assignment]
     # {month: mean_max_c}  (climatological mean of TMAX by month)
     climatological_mean: dict[int, float] = None  # type: ignore[assignment]
+    # {month: mean_min_c}  (climatological mean of TMIN by month)
+    climatological_mean_min: dict[int, float] = None  # type: ignore[assignment]
     archive_years: int = 0
+    tmax_archive_years: int = 0
+    tmin_archive_years: int = 0
 
     def __post_init__(self) -> None:
         if self.monthly_max is None:
@@ -365,6 +556,8 @@ class StationThresholds:
             self.calendar_date_min = {}
         if self.climatological_mean is None:
             self.climatological_mean = {}
+        if self.climatological_mean_min is None:
+            self.climatological_mean_min = {}
 
 
 def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
@@ -425,7 +618,7 @@ def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
         # Archive years = span from first to last obs
         first_year = min(o.obs_date.year for o in tmax_obs)
         last_year = max(o.obs_date.year for o in tmax_obs)
-        thresholds.archive_years = last_year - first_year + 1
+        thresholds.tmax_archive_years = last_year - first_year + 1
 
     # ---- TMIN thresholds ----
     if tmin_obs:
@@ -435,12 +628,14 @@ def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
 
         by_month_min: dict[int, list[DailyObs]] = {}
         by_month_day_min: dict[tuple[int, int], list[DailyObs]] = {}
+        monthly_min_sums: dict[int, list[float]] = {}
 
         for o in tmin_obs:
             m = o.obs_date.month
             md = (o.obs_date.month, o.obs_date.day)
             by_month_min.setdefault(m, []).append(o)
             by_month_day_min.setdefault(md, []).append(o)
+            monthly_min_sums.setdefault(m, []).append(o.value_c)
 
         for m, obs_list in by_month_min.items():
             worst_m = min(obs_list, key=lambda o: o.value_c)
@@ -449,6 +644,15 @@ def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
         for md, obs_list in by_month_day_min.items():
             worst_md = min(obs_list, key=lambda o: o.value_c)
             thresholds.calendar_date_min[md] = (worst_md.value_c, worst_md.obs_date.year)
+
+        for m, values in monthly_min_sums.items():
+            thresholds.climatological_mean_min[m] = sum(values) / len(values)
+
+        first_year = min(o.obs_date.year for o in tmin_obs)
+        last_year = max(o.obs_date.year for o in tmin_obs)
+        thresholds.tmin_archive_years = last_year - first_year + 1
+
+    thresholds.archive_years = max(thresholds.tmax_archive_years, thresholds.tmin_archive_years)
 
     return thresholds
 

@@ -502,7 +502,7 @@ def _two_bot_bundle_for_extreme_signal(strongest_type: str, strongest_signal):
     try:
         from src.two_bot import intern
 
-        if strongest_type == "record":
+        if strongest_type in ("record", "record_low"):
             return intern.build_record_bundle(strongest_signal)
         if strongest_type in ("monthly_high", "monthly_low"):
             return intern.build_monthly_high_bundle(strongest_signal)
@@ -663,6 +663,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     # for the routing decision (flat summary vs. multi-station roll-call).
     simultaneous_record_stations: list[dict] = []
     try:
+        if _signals_provider not in {"open_meteo", "ghcn"}:
+            raise ValueError(
+                "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo' or 'ghcn', "
+                f"got {_signals_provider!r}"
+            )
         if _signals_provider == "ghcn":
             bundles, country_records = ghcn.check_extreme_signals_for_stations()
         else:
@@ -680,9 +685,8 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             strongest_headline = ""
             strongest_facts = []
             strongest_type = ""
-            strongest_generator = None
-            strongest_country = ""
             strongest_city = ""
+            signal_year = (bundle.signal_date or date.today()).year
 
             if bundle.all_time_high:
                 ev = bundle.all_time_high
@@ -696,7 +700,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         strongest_score = score
                         strongest_event_id = ev.event_id
                         strongest_type = "all_time_high"
-                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_city = ev.city
                         strongest_headline = f"{ev.city} on pace for its hottest in {ev.years_of_data}yr archive"
                         strongest_facts = [
                             _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
@@ -705,38 +709,51 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Archive span", f"{ev.years_of_data} years"),
                             _fact("Country", ev.country),
                         ]
-                        def _gen_at(ev=ev):
-                            return generator.generate_all_time_record_tweet(
-                                city=ev.city, country=ev.country, kind="high",
-                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
-                                old_record_year=ev.old_record_year,
-                                years_of_data=ev.years_of_data,
-                                return_bundle=True,
-                            )
-                        strongest_generator = _gen_at
+                        signal_counts["all_time"] += 1
+
+            if strongest_signal is None and bundle.all_time_low:
+                ev = bundle.all_time_low
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_all_time_record(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev.years_of_data, kind="low",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "all_time_low"
+                        strongest_city = ev.city
+                        strongest_headline = f"{ev.city} hit its coldest reading in {ev.years_of_data}yr archive"
+                        strongest_facts = [
+                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
+                            _fact("Prior archive min", _temp_pair_c(ev.old_record_c)),
+                            _fact("Prior min year", ev.old_record_year),
+                            _fact("Archive span", f"{ev.years_of_data} years"),
+                            _fact("Country", ev.country),
+                        ]
                         signal_counts["all_time"] += 1
 
             if strongest_signal is None and bundle.monthly_high:
                 ev = bundle.monthly_high
-                # Suppress "hottest April ever — old record set in 2026"
-                # tweets. When the prior record was set this calendar year,
-                # the "hottest ever" framing reads as nonsense to a reader
-                # because the record being broken was set weeks ago.
+                # Suppress "hottest April ever - old record set in 2026"
+                # tweets. When the prior record was set in the same year as
+                # this reading, the "hottest ever" framing reads as nonsense.
                 if (
                     not state.is_duplicate(bot_state, ev.event_id)
-                    and ev.old_record_year != date.today().year
+                    and ev.old_record_year != signal_year
                 ):
                     score = score_monthly_record(
                         ev.new_temp_c, ev.old_record_c, ev.old_record_year,
                         ev.month, ev.years_of_data, kind="high",
                     )
                     if _should_draft(score, ev.event_id):
-                        month_name = ["", "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][ev.month]
+                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev.month]
                         strongest_signal = ev
                         strongest_score = score
                         strongest_event_id = ev.event_id
                         strongest_type = "monthly_high"
-                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_city = ev.city
                         strongest_headline = f"{ev.city} on pace for hottest {month_name} on record"
                         strongest_facts = [
                             _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
@@ -744,16 +761,32 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Prior year", ev.old_record_year),
                             _fact("Archive span", f"{ev.years_of_data} years"),
                         ]
-                        def _gen_m(ev=ev):
-                            return generator.generate_monthly_record_tweet(
-                                city=ev.city, country=ev.country, kind="high",
-                                month=ev.month,
-                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
-                                old_record_year=ev.old_record_year,
-                                years_of_data=ev.years_of_data,
-                                return_bundle=True,
-                            )
-                        strongest_generator = _gen_m
+                        signal_counts["monthly"] += 1
+
+            if strongest_signal is None and bundle.monthly_low:
+                ev = bundle.monthly_low
+                if (
+                    not state.is_duplicate(bot_state, ev.event_id)
+                    and ev.old_record_year != signal_year
+                ):
+                    score = score_monthly_record(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev.month, ev.years_of_data, kind="low",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev.month]
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "monthly_low"
+                        strongest_city = ev.city
+                        strongest_headline = f"{ev.city} hit its coldest {month_name} reading on record"
+                        strongest_facts = [
+                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
+                            _fact(f"Prior {month_name} min", _temp_pair_c(ev.old_record_c)),
+                            _fact("Prior year", ev.old_record_year),
+                            _fact("Archive span", f"{ev.years_of_data} years"),
+                        ]
                         signal_counts["monthly"] += 1
 
             if strongest_signal is None and bundle.anomaly_hot:
@@ -768,22 +801,34 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         strongest_score = score
                         strongest_event_id = ev.event_id
                         strongest_type = "anomaly_hot"
-                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_city = ev.city
                         strongest_headline = f"{ev.city}: +{ev.anomaly_c:.1f}C above normal"
                         strongest_facts = [
                             _fact("Today", _temp_pair_c(ev.today_temp_c)),
                             _fact("Historical mean", _temp_pair_c(ev.historical_mean_c)),
                             _fact("Anomaly", f"+{ev.anomaly_c:.1f}C"),
                         ]
-                        def _gen_a(ev=ev):
-                            return generator.generate_anomaly_tweet(
-                                city=ev.city, country=ev.country,
-                                today_temp_c=ev.today_temp_c,
-                                historical_mean_c=ev.historical_mean_c,
-                                anomaly_c=ev.anomaly_c,
-                                return_bundle=True,
-                            )
-                        strongest_generator = _gen_a
+                        signal_counts["anomaly"] += 1
+
+            if strongest_signal is None and bundle.anomaly_cold:
+                ev = bundle.anomaly_cold
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_anomaly(
+                        ev.today_temp_c, ev.historical_mean_c, ev.anomaly_c,
+                        kind="cold",
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "anomaly_cold"
+                        strongest_city = ev.city
+                        strongest_headline = f"{ev.city}: {ev.anomaly_c:.1f}C below normal"
+                        strongest_facts = [
+                            _fact("Observed low", _temp_pair_c(ev.today_temp_c)),
+                            _fact("Historical mean low", _temp_pair_c(ev.historical_mean_c)),
+                            _fact("Anomaly", f"{ev.anomaly_c:.1f}C"),
+                        ]
                         signal_counts["anomaly"] += 1
 
             if strongest_signal is None and bundle.calendar_date_high:
@@ -797,7 +842,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         strongest_score = score
                         strongest_event_id = ev.event_id
                         strongest_type = "record"
-                        strongest_city, strongest_country = ev.city, ev.country
+                        strongest_city = ev.city
                         strongest_headline = f"{ev.city} is forecast to challenge a heat record"
                         strongest_facts = [
                             _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
@@ -806,18 +851,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Record gap", f"+{ev.new_temp_c - ev.old_record_c:.1f}C"),
                             _fact("Country", ev.country),
                         ]
-                        def _gen_c(ev=ev):
-                            return generator.generate_record_tweet(
-                                city=ev.city, country=ev.country,
-                                new_temp_c=ev.new_temp_c, old_record_c=ev.old_record_c,
-                                old_record_year=ev.old_record_year,
-                                return_bundle=True,
-                            )
-                        strongest_generator = _gen_c
                         signal_counts["calendar"] += 1
-                        # Track for simultaneous records detection — keep the
-                        # full per-station shape so the roll-call format has
-                        # what it needs without re-fetching.
+                        # Track only heat records for the simultaneous-records
+                        # lane, preserving enough station detail for roll-call.
                         simultaneous_record_stations.append({
                             "city": ev.city,
                             "country": ev.country,
@@ -827,13 +863,38 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             "old_record_year": ev.old_record_year,
                             "margin_c": round(ev.new_temp_c - ev.old_record_c, 1),
                             "elevation_m": city_elevations.get((ev.city, ev.country)),
+                            "signal_date": (bundle.signal_date or date.today()).isoformat(),
                         })
 
-            if strongest_signal and strongest_generator:
+            if strongest_signal is None and bundle.calendar_date_low:
+                ev = bundle.calendar_date_low
+                if not state.is_duplicate(bot_state, ev.event_id):
+                    score = score_record_low_event(
+                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                    )
+                    if _should_draft(score, ev.event_id):
+                        strongest_signal = ev
+                        strongest_score = score
+                        strongest_event_id = ev.event_id
+                        strongest_type = "record_low"
+                        strongest_city = ev.city
+                        strongest_headline = f"{ev.city} hit a daily cold record"
+                        strongest_facts = [
+                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
+                            _fact("Previous record low", _temp_pair_c(ev.old_record_c)),
+                            _fact("Old record year", ev.old_record_year),
+                            _fact("Record gap", f"{ev.new_temp_c - ev.old_record_c:.1f}C"),
+                            _fact("Country", ev.country),
+                        ]
+                        signal_counts["calendar"] += 1
+
+            if strongest_signal:
                 source_promoted += 1
                 # Record synthesis component as soon as editorial gate passes:
                 syn_state = us_city_state_map.get(strongest_city)
-                if syn_state:
+                if syn_state and strongest_type in {
+                    "all_time_high", "monthly_high", "anomaly_hot", "record",
+                }:
                     value_c = getattr(strongest_signal, "new_temp_c", None)
                     if value_c is None:
                         value_c = getattr(strongest_signal, "today_temp_c", 0.0)
@@ -929,7 +990,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
                         streak_key = bundle.station_id if _signals_provider == "ghcn" and bundle.station_id else ev_cd.city
-                        state.update_record_streak(bot_state, streak_key, ev_cd.new_temp_c)
+                        state.update_record_streak(
+                            bot_state,
+                            streak_key,
+                            ev_cd.new_temp_c,
+                            event_date=bundle.signal_date,
+                        )
                         streak = state.get_record_streak(bot_state, streak_key)
                         if streak and streak.get("days", 0) >= 3:
                             streak_event_id = f"streak_{streak_key.replace(' ', '_')}_{streak['last_date']}"
@@ -947,6 +1013,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                         start_date=streak["start_date"],
                                         peak_temp_c=streak.get("peak_temp_c", ev_cd.new_temp_c),
                                         event_id=streak_event_id,
+                                        signal_date=bundle.signal_date,
                                     )
                                     streak_bundle = build_record_streak_bundle(streak_event)
                                     streak_ctx = _review_context(
@@ -977,15 +1044,20 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         # Two formats available; flat summary is the default. Roll-call (per-station list with
         # elevations) fires only when the cluster shape qualifies — same country with a
         # meaningful elevation spread. See src/editorial/simultaneous_format.py.
-        if len(simultaneous_record_stations) >= 5:
-            today_iso = date.today().isoformat()
+        simultaneous_groups: dict[str, list[dict]] = {}
+        for station_row in simultaneous_record_stations:
+            sim_date = station_row.get("signal_date") or date.today().isoformat()
+            simultaneous_groups.setdefault(sim_date, []).append(station_row)
+        for today_iso, simultaneous_group in simultaneous_groups.items():
+            if len(simultaneous_group) < 5:
+                continue
             sim_event_id = f"simultaneous_records_{today_iso}"
             if not state.is_duplicate(bot_state, sim_event_id):
-                city_names = [s["city"] for s in simultaneous_record_stations]
+                city_names = [s["city"] for s in simultaneous_group]
                 sim_score = score_simultaneous_records(len(city_names), city_names)
                 if _should_draft(sim_score, sim_event_id):
                     from src.two_bot.intern import build_simultaneous_records_bundle
-                    roll_call_subset = select_roll_call_subset(simultaneous_record_stations)
+                    roll_call_subset = select_roll_call_subset(simultaneous_group)
                     if roll_call_subset:
                         rc_country = roll_call_subset[0].get("country", "")
                         rc_elevs = [
@@ -996,7 +1068,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             _fact("Format", "roll-call"),
                             _fact("Country", rc_country),
                             _fact("Stations in subset", len(roll_call_subset)),
-                            _fact("Total simultaneous", len(simultaneous_record_stations)),
+                            _fact("Total simultaneous", len(simultaneous_group)),
                         ]
                         if rc_elevs:
                             rc_facts.append(
@@ -1006,7 +1078,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                 )
                             )
                         sim_ctx = _review_context(
-                            source="open_meteo_extreme_signals",
+                            source=(
+                                "NOAA GHCN-Daily"
+                                if _signals_provider == "ghcn"
+                                else "open_meteo_extreme_signals"
+                            ),
                             source_key="simultaneous_records",
                             headline=(
                                 f"{len(roll_call_subset)} stations across {rc_country} "
@@ -1018,7 +1094,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         sim_stations = roll_call_subset
                     else:
                         sim_ctx = _review_context(
-                            source="open_meteo_extreme_signals",
+                            source=(
+                                "NOAA GHCN-Daily"
+                                if _signals_provider == "ghcn"
+                                else "open_meteo_extreme_signals"
+                            ),
                             source_key="simultaneous_records",
                             headline=f"{len(city_names)} cities broke records on same day",
                             current_run=current_run,
@@ -1028,7 +1108,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                 _fact("Sample cities", ", ".join(city_names[:5])),
                             ],
                         )
-                        sim_stations = simultaneous_record_stations
+                        sim_stations = simultaneous_group
                     sim_bundle = build_simultaneous_records_bundle(
                         sim_stations, event_id=sim_event_id, when=today_iso,
                     )
@@ -1057,8 +1137,13 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 continue
             source_promoted += 1
             descriptor = "hottest" if cr.kind == "high" else "coldest"
+            country_source_label = (
+                "NOAA GHCN-Daily station aggregate"
+                if _signals_provider == "ghcn"
+                else "Open-Meteo archive (country-wide aggregate)"
+            )
             cr_ctx = _review_context(
-                source="Open-Meteo archive (country-wide aggregate)",
+                source=country_source_label,
                 source_key="country_record",
                 headline=f"{cr.country}: {descriptor} reading in {cr.years_of_data}-yr archive",
                 current_run=current_run,
@@ -1082,13 +1167,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 legacy_type=f"country_{cr.kind}",
                 event_id=cr.event_id,
                 review_context=cr_ctx,
+                tweet_date=(cr.signal_date or date.today()).isoformat(),
             ):
                 state.record_event(bot_state, cr.event_id)
                 drafted += 1
                 source_drafted += 1
                 country_count += 1
                 syn_state = us_city_state_map.get(cr.peak_city)
-                if syn_state:
+                if cr.kind == "high" and syn_state:
                     state.record_synthesis_component(
                         bot_state,
                         kind="heat",

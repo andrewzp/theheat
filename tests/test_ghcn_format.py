@@ -18,6 +18,8 @@ Fixture line format: 269 chars per line.
 
 from __future__ import annotations
 
+import io
+import tarfile
 import textwrap
 from datetime import date
 from pathlib import Path
@@ -32,6 +34,8 @@ from src.data.ghcn_format import (
     compute_thresholds,
     parse_countries_file,
     parse_dly_text,
+    parse_superghcnd_diff_bytes,
+    parse_superghcnd_diff_records_bytes,
     parse_inventory_file,
     parse_stations_file,
     parse_superghcnd_diff_text,
@@ -320,12 +324,53 @@ def test_fixture_contains_engineered_record():
 # ---------------------------------------------------------------------------
 
 def test_parse_superghcnd_diff_text_same_as_dly():
-    """superghcnd_diff uses the same format as .dly; output must match."""
+    """Fixed-width text fallback remains available for small local fixtures."""
     line = make_dly_line("USW00023183", 2024, 6, "TMAX", [440])
     obs_dly = parse_dly_text(line)
     obs_diff = parse_superghcnd_diff_text(line)
     assert len(obs_diff) == 1
     assert obs_diff[0].value_c == obs_dly[0].value_c
+
+
+def _make_diff_tar(members: dict[str, str]) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, text in members.items():
+            data = text.encode("utf-8")
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def test_parse_superghcnd_diff_tar_csv_insert_update_only():
+    """Live NOAA superghcnd_diff files are tar.gz archives of CSV members."""
+    payload = _make_diff_tar({
+        "insert.csv": "USW00023183,20260715,TMAX,00440,,,0700\n",
+        "update.csv": "USW00023183,20260715,TMIN,00250,,,0700\n",
+        "delete.csv": "USW00023183,20260714,TMAX,00400,,,0700\n",
+    })
+    obs = parse_superghcnd_diff_bytes(payload)
+    assert [(o.element, o.obs_date, o.value_c) for o in obs] == [
+        ("TMAX", date(2026, 7, 15), 44.0),
+        ("TMIN", date(2026, 7, 15), 25.0),
+    ]
+
+
+def test_parse_superghcnd_diff_records_include_delete_actions():
+    payload = _make_diff_tar({
+        "delete.csv": "USW00023183,20260714,TMAX,00400,,,0700\n",
+    })
+    records = parse_superghcnd_diff_records_bytes(payload)
+    assert len(records) == 1
+    assert records[0].action == "delete"
+    assert records[0].to_daily_obs() is None
+
+
+def test_parse_superghcnd_diff_rejects_malformed_csv():
+    payload = _make_diff_tar({"insert.csv": "USW00023183,20260715,TMAX\n"})
+    with pytest.raises(ValueError):
+        parse_superghcnd_diff_bytes(payload)
 
 
 # ---------------------------------------------------------------------------

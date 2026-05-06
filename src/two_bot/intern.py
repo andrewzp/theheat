@@ -151,16 +151,17 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
     whether it ships, not the absolute temperature.
     """
 
+    kind = getattr(ev, "kind", "high")
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
     where = f"{ev.city}, {ev.country}" if ev.country else ev.city
     when = _resolve_when(ev.signal_date)
     return StoryBundle(
-        signal_kind="calendar_record",
+        signal_kind="calendar_record" if kind == "high" else "calendar_record_low",
         where=where,
         when=when,
         event_id=ev.event_id,
         headline_metric={
-            "label": "forecast_high_c",
+            "label": "forecast_high_c" if kind == "high" else "observed_low_c",
             "value": ev.new_temp_c,
             "unit": "C",
         },
@@ -168,12 +169,14 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "calendar_date", "value": when},
+            {"label": "kind", "value": kind},
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
             "prior_record_year": ev.old_record_year,
             "margin_c": margin_c,
             "scope": "calendar_date_only",
+            "kind": kind,
         },
         raw_signal_dump=asdict(ev),
     )

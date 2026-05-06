@@ -138,6 +138,24 @@ class TestRecordStreaks:
         prune_stale_record_streaks(fresh_state, max_gap_days=2)
         assert get_record_streak(fresh_state, "Phoenix") is None
 
+    @patch("src.state.date")
+    def test_prune_keeps_recently_updated_lagged_station_streak(self, mock_date, fresh_state):
+        mock_date.fromisoformat = date.fromisoformat
+        mock_date.today.return_value = date(2026, 5, 5)
+        update_record_streak(
+            fresh_state,
+            "USW00023183",
+            42.0,
+            event_date=date(2026, 5, 1),
+        )
+
+        prune_stale_record_streaks(fresh_state, max_gap_days=2)
+        assert get_record_streak(fresh_state, "USW00023183") is not None
+
+        mock_date.today.return_value = date(2026, 5, 8)
+        prune_stale_record_streaks(fresh_state, max_gap_days=2)
+        assert get_record_streak(fresh_state, "USW00023183") is None
+
 
 class TestErrorLog:
     def test_log_error_appends(self, fresh_state):

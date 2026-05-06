@@ -33,7 +33,6 @@ Coverage notes:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -45,7 +44,6 @@ import requests
 
 from src.data.ghcn_db import (
     DEFAULT_DB_PATH,
-    get_meta,
     load_active_stations,
     load_thresholds,
     open_db,
@@ -53,7 +51,7 @@ from src.data.ghcn_db import (
 from src.data.ghcn_format import (
     DailyObs,
     StationThresholds,
-    parse_superghcnd_diff_bytes,
+    parse_superghcnd_diff_records_bytes,
 )
 from src.data.open_meteo import (
     AllTimeRecord,
@@ -103,35 +101,49 @@ def _db_path() -> Path:
 # Diff fetching
 # ---------------------------------------------------------------------------
 
-def _diff_url(d: date) -> str:
-    return f"{DIFF_BASE_URL}/superghcnd_diff_{d.strftime('%Y%m%d')}.gz"
+def _diff_urls_for_end_date(d: date, max_start_lag_days: int = 10) -> list[str]:
+    """Candidate diff tarballs whose second date is ``d``.
+
+    NOAA usually publishes previous-day-to-current-day diffs, but weekends and
+    processing gaps sometimes produce multi-day spans. Try the short span first,
+    then wider starts for the same target snapshot date.
+    """
+    end = d.strftime("%Y%m%d")
+    return [
+        f"{DIFF_BASE_URL}/superghcnd_diff_{(d - timedelta(days=lag)).strftime('%Y%m%d')}_to_{end}.tar.gz"
+        for lag in range(1, max_start_lag_days + 1)
+    ]
 
 
 def _fetch_diff(d: date, timeout: int = 60) -> bytes | None:
-    """Fetch one superghcnd_diff file. Returns None if not yet available."""
-    url = _diff_url(d)
-    try:
-        resp = requests.get(url, timeout=timeout)
-        if resp.status_code == 404:
-            return None
-        resp.raise_for_status()
-        return resp.content
-    except requests.RequestException as e:
-        log.warning("GHCN diff fetch failed for %s: %s", d, e)
-        return None
+    """Fetch one superghcnd_diff tarball ending on ``d``."""
+    last_error: Exception | None = None
+    for url in _diff_urls_for_end_date(d):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            if resp.status_code == 404:
+                continue
+            resp.raise_for_status()
+            return resp.content
+        except requests.RequestException as e:
+            last_error = e
+            log.warning("GHCN diff fetch failed for %s via %s: %s", d, url, e)
+    if last_error is None:
+        log.info("GHCN diff not available for snapshot date %s", d)
+    return None
 
 
 def _fetch_recent_obs(
     active_ids: frozenset[str],
     lookback_days: int = DIFF_LOOKBACK_DAYS,
-) -> dict[str, DailyObs]:
-    """Fetch the most recent TMAX observation per active station.
+) -> dict[tuple[str, date], list[DailyObs]]:
+    """Fetch recent TMAX/TMIN observations for active stations.
 
-    Returns a dict mapping station_id → most-recent DailyObs (TMAX preferred;
-    TMIN if no TMAX available on the most-recent date).
+    Returns a dict mapping (station_id, obs_date) → DailyObs list so same-day
+    TMAX and TMIN are preserved instead of one element masking the other.
 
-    Fetches the last ``lookback_days`` superghcnd_diff files in parallel.
-    Takes the observation with the latest date for each station.
+    Fetches recent superghcnd_diff tarballs in parallel and de-duplicates by
+    station/date/element, keeping the latest parsed value.
     """
     today = date.today()
     dates = [today - timedelta(days=i) for i in range(1, lookback_days + 1)]
@@ -147,32 +159,37 @@ def _fetch_recent_obs(
                 raw_by_date[d] = content
 
     if not raw_by_date:
-        log.warning("GHCN: no diff files available (NOAA endpoint may be down)")
-        return {}
+        raise RuntimeError("GHCN: no diff files available from NOAA")
 
-    # Parse all obs, keep only those for active stations
-    all_obs: list[DailyObs] = []
+    # Parse all records, keeping only the latest active station/date/element
+    # state. Delete records and QC-failed updates must remove any earlier
+    # value seen in the same lookback window.
+    obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
     for d in sorted(raw_by_date):
-        obs = parse_superghcnd_diff_bytes(raw_by_date[d])
-        all_obs.extend(o for o in obs if o.station_id in active_ids)
+        records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
+        for rec in records:
+            if rec.station_id not in active_ids:
+                continue
+            key = (rec.station_id, rec.obs_date, rec.element)
+            obs = rec.to_daily_obs()
+            if obs is None:
+                obs_by_key.pop(key, None)
+            else:
+                obs_by_key[key] = obs
 
-    # For each station, take the obs with the latest date
-    # Prefer TMAX over TMIN if both exist on the same day.
-    latest_by_station: dict[str, DailyObs] = {}
-    for o in all_obs:
-        existing = latest_by_station.get(o.station_id)
-        if existing is None:
-            latest_by_station[o.station_id] = o
-        elif o.obs_date > existing.obs_date:
-            latest_by_station[o.station_id] = o
-        elif o.obs_date == existing.obs_date and o.element == "TMAX" and existing.element != "TMAX":
-            latest_by_station[o.station_id] = o
+    by_station_date: dict[tuple[str, date], list[DailyObs]] = {}
+    for o in obs_by_key.values():
+        by_station_date.setdefault((o.station_id, o.obs_date), []).append(o)
+    for obs_list in by_station_date.values():
+        obs_list.sort(key=lambda o: 0 if o.element == "TMAX" else 1)
 
     log.info(
-        "GHCN: fetched diffs for %d/%d dates; %d active stations have recent readings",
-        len(raw_by_date), lookback_days, len(latest_by_station),
+        "GHCN: fetched diffs for %d/%d dates; %d active station/date groups have recent readings",
+        len(raw_by_date), lookback_days, len(by_station_date),
     )
-    return latest_by_station
+    if not by_station_date:
+        raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations")
+    return by_station_date
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +198,7 @@ def _fetch_recent_obs(
 
 def _detect_signals_for_station(
     station: dict,
-    obs: DailyObs,
+    obs: DailyObs | list[DailyObs],
     thresholds: StationThresholds,
 ) -> ExtremeSignalBundle | None:
     """Compare one observation against thresholds and return a bundle.
@@ -198,15 +215,18 @@ def _detect_signals_for_station(
     # Prefer country_name for display; fall back to code
     country = country_name or country_code
 
-    obs_date = obs.obs_date
-    obs_date_iso = obs_date.isoformat()
-    archive_years = thresholds.archive_years or station.get("archive_years", 0)
+    obs_list = [obs] if isinstance(obs, DailyObs) else list(obs)
+    if not obs_list:
+        return None
 
-    if archive_years < MIN_ARCHIVE_YEARS:
-        return None  # Too little history — skip
+    obs_dates = {o.obs_date for o in obs_list}
+    if len(obs_dates) != 1:
+        raise ValueError(f"GHCN station bundle received mixed observation dates: {sorted(obs_dates)}")
+
+    obs_date = obs_list[0].obs_date
+    obs_date_iso = obs_date.isoformat()
 
     sid_key = sid.replace(" ", "_")
-    value_c = obs.value_c
     month   = obs_date.month
     day     = obs_date.day
 
@@ -218,115 +238,139 @@ def _detect_signals_for_station(
         station_name=name,
     )
 
-    # ---- Populate raw readings for country aggregation ----
-    if obs.element == "TMAX":
-        bundle.today_max_c    = value_c
-        bundle.archive_max_c  = thresholds.all_time_max_c
-        bundle.archive_max_year = thresholds.all_time_max_year
-    elif obs.element == "TMIN":
-        bundle.today_min_c    = value_c
-        bundle.archive_min_c  = thresholds.all_time_min_c
-        bundle.archive_min_year = thresholds.all_time_min_year
-
-    # ---- All-time record ----
-    if obs.element == "TMAX" and thresholds.all_time_max_c is not None:
-        if value_c > thresholds.all_time_max_c + RECORD_MARGIN_C:
-            bundle.all_time_high = AllTimeRecord(
-                city=city, country=country, kind="high",
-                new_temp_c=value_c,
-                old_record_c=thresholds.all_time_max_c,
-                old_record_year=thresholds.all_time_max_year or 0,
-                years_of_data=archive_years,
-                event_id=f"all_time_high_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
-    elif obs.element == "TMIN" and thresholds.all_time_min_c is not None:
-        if value_c < thresholds.all_time_min_c - RECORD_MARGIN_C:
-            bundle.all_time_low = AllTimeRecord(
-                city=city, country=country, kind="low",
-                new_temp_c=value_c,
-                old_record_c=thresholds.all_time_min_c,
-                old_record_year=thresholds.all_time_min_year or 0,
-                years_of_data=archive_years,
-                event_id=f"all_time_low_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
-
-    # ---- Monthly record ----
-    if obs.element == "TMAX":
-        monthly_max = thresholds.monthly_max.get(month)
-        if monthly_max and value_c > monthly_max[0] + RECORD_MARGIN_C:
-            bundle.monthly_high = MonthlyRecord(
-                city=city, country=country, kind="high", month=month,
-                new_temp_c=value_c,
-                old_record_c=monthly_max[0],
-                old_record_year=monthly_max[1],
-                years_of_data=archive_years,
-                event_id=f"monthly_high_{sid_key}_{month:02d}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
-    elif obs.element == "TMIN":
-        monthly_min = thresholds.monthly_min.get(month)
-        if monthly_min and value_c < monthly_min[0] - RECORD_MARGIN_C:
-            bundle.monthly_low = MonthlyRecord(
-                city=city, country=country, kind="low", month=month,
-                new_temp_c=value_c,
-                old_record_c=monthly_min[0],
-                old_record_year=monthly_min[1],
-                years_of_data=archive_years,
-                event_id=f"monthly_low_{sid_key}_{month:02d}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
-
-    # ---- Calendar-date record ----
     md = (month, day)
-    if obs.element == "TMAX":
-        cal_max = thresholds.calendar_date_max.get(md)
-        if cal_max and value_c > cal_max[0] + RECORD_MARGIN_C:
-            bundle.calendar_date_high = RecordEvent(
-                city=city, country=country,
-                new_temp_c=value_c,
-                old_record_c=cal_max[0],
-                old_record_year=cal_max[1],
-                event_id=f"cal_high_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
-    elif obs.element == "TMIN":
-        cal_min = thresholds.calendar_date_min.get(md)
-        if cal_min and value_c < cal_min[0] - RECORD_MARGIN_C:
-            bundle.calendar_date_low = RecordEvent(
-                city=city, country=country,
-                new_temp_c=value_c,
-                old_record_c=cal_min[0],
-                old_record_year=cal_min[1],
-                event_id=f"cal_low_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
-            )
 
-    # ---- Anomaly (deviation from climatological mean) ----
-    clim_mean = thresholds.climatological_mean.get(month)
-    if clim_mean is not None and obs.element == "TMAX":
-        anomaly_c = value_c - clim_mean
-        if anomaly_c >= ANOMALY_HOT_THRESHOLD_C:
-            bundle.anomaly_hot = AnomalyEvent(
-                city=city, country=country,
-                today_temp_c=value_c,
-                historical_mean_c=clim_mean,
-                anomaly_c=anomaly_c,
-                years_of_data=archive_years,
-                event_id=f"anomaly_hot_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
+    usable = False
+    for o in obs_list:
+        value_c = o.value_c
+        if o.element == "TMAX":
+            archive_years = (
+                thresholds.tmax_archive_years
+                or station.get("tmax_archive_years", 0)
+                or thresholds.archive_years
+                or station.get("archive_years", 0)
             )
-        elif anomaly_c <= -ANOMALY_COLD_THRESHOLD_C:
-            bundle.anomaly_cold = AnomalyEvent(
-                city=city, country=country,
-                today_temp_c=value_c,
-                historical_mean_c=clim_mean,
-                anomaly_c=anomaly_c,
-                years_of_data=archive_years,
-                event_id=f"anomaly_cold_{sid_key}_{obs_date_iso}",
-                signal_date=obs_date,
+            if archive_years < MIN_ARCHIVE_YEARS:
+                continue
+            usable = True
+            bundle.today_max_c = value_c
+            bundle.archive_max_c = thresholds.all_time_max_c
+            bundle.archive_max_year = thresholds.all_time_max_year
+
+            if thresholds.all_time_max_c is not None and value_c > thresholds.all_time_max_c + RECORD_MARGIN_C:
+                bundle.all_time_high = AllTimeRecord(
+                    city=city, country=country, kind="high",
+                    new_temp_c=value_c,
+                    old_record_c=thresholds.all_time_max_c,
+                    old_record_year=thresholds.all_time_max_year or 0,
+                    years_of_data=archive_years,
+                    event_id=f"all_time_high_{sid_key}_{obs_date_iso}",
+                    signal_date=obs_date,
+                )
+
+            monthly_max = thresholds.monthly_max.get(month)
+            if monthly_max and value_c > monthly_max[0] + RECORD_MARGIN_C:
+                bundle.monthly_high = MonthlyRecord(
+                    city=city, country=country, kind="high", month=month,
+                    new_temp_c=value_c,
+                    old_record_c=monthly_max[0],
+                    old_record_year=monthly_max[1],
+                    years_of_data=archive_years,
+                    event_id=f"monthly_high_{sid_key}_{month:02d}_{obs_date_iso}",
+                    signal_date=obs_date,
+                )
+
+            cal_max = thresholds.calendar_date_max.get(md)
+            if cal_max and value_c > cal_max[0] + RECORD_MARGIN_C:
+                bundle.calendar_date_high = RecordEvent(
+                    city=city, country=country,
+                    new_temp_c=value_c,
+                    old_record_c=cal_max[0],
+                    old_record_year=cal_max[1],
+                    event_id=f"cal_high_{sid_key}_{obs_date_iso}",
+                    signal_date=obs_date,
+                    kind="high",
+                )
+
+            clim_mean = thresholds.climatological_mean.get(month)
+            if clim_mean is not None:
+                anomaly_c = value_c - clim_mean
+                if anomaly_c >= ANOMALY_HOT_THRESHOLD_C:
+                    bundle.anomaly_hot = AnomalyEvent(
+                        city=city, country=country,
+                        today_temp_c=value_c,
+                        historical_mean_c=clim_mean,
+                        anomaly_c=anomaly_c,
+                        years_of_data=archive_years,
+                        event_id=f"anomaly_hot_{sid_key}_{obs_date_iso}",
+                        signal_date=obs_date,
+                    )
+
+        elif o.element == "TMIN":
+            archive_years = (
+                thresholds.tmin_archive_years
+                or station.get("tmin_archive_years", 0)
+                or thresholds.archive_years
+                or station.get("archive_years", 0)
             )
+            if archive_years < MIN_ARCHIVE_YEARS:
+                continue
+            usable = True
+            bundle.today_min_c = value_c
+            bundle.archive_min_c = thresholds.all_time_min_c
+            bundle.archive_min_year = thresholds.all_time_min_year
+
+            if thresholds.all_time_min_c is not None and value_c < thresholds.all_time_min_c - RECORD_MARGIN_C:
+                bundle.all_time_low = AllTimeRecord(
+                    city=city, country=country, kind="low",
+                    new_temp_c=value_c,
+                    old_record_c=thresholds.all_time_min_c,
+                    old_record_year=thresholds.all_time_min_year or 0,
+                    years_of_data=archive_years,
+                    event_id=f"all_time_low_{sid_key}_{obs_date_iso}",
+                    signal_date=obs_date,
+                )
+
+            monthly_min = thresholds.monthly_min.get(month)
+            if monthly_min and value_c < monthly_min[0] - RECORD_MARGIN_C:
+                bundle.monthly_low = MonthlyRecord(
+                    city=city, country=country, kind="low", month=month,
+                    new_temp_c=value_c,
+                    old_record_c=monthly_min[0],
+                    old_record_year=monthly_min[1],
+                    years_of_data=archive_years,
+                    event_id=f"monthly_low_{sid_key}_{month:02d}_{obs_date_iso}",
+                    signal_date=obs_date,
+                )
+
+            cal_min = thresholds.calendar_date_min.get(md)
+            if cal_min and value_c < cal_min[0] - RECORD_MARGIN_C:
+                bundle.calendar_date_low = RecordEvent(
+                    city=city, country=country,
+                    new_temp_c=value_c,
+                    old_record_c=cal_min[0],
+                    old_record_year=cal_min[1],
+                    event_id=f"cal_low_{sid_key}_{obs_date_iso}",
+                    signal_date=obs_date,
+                    kind="low",
+                )
+
+            clim_mean = thresholds.climatological_mean_min.get(month)
+            if clim_mean is not None:
+                anomaly_c = value_c - clim_mean
+                if anomaly_c <= -ANOMALY_COLD_THRESHOLD_C:
+                    bundle.anomaly_cold = AnomalyEvent(
+                        city=city, country=country,
+                        today_temp_c=value_c,
+                        historical_mean_c=clim_mean,
+                        anomaly_c=anomaly_c,
+                        years_of_data=archive_years,
+                        event_id=f"anomaly_cold_{sid_key}_{obs_date_iso}",
+                        signal_date=obs_date,
+                    )
+
+    if not usable:
+        return None
 
     return bundle
 
@@ -410,12 +454,10 @@ def check_extreme_signals_for_stations(
     resolved_db = Path(db_path) if db_path else _db_path()
 
     if not resolved_db.exists():
-        log.error(
-            "GHCN threshold DB not found at %s. "
-            "Run scripts/build_station_thresholds.py first.",
-            resolved_db,
+        raise FileNotFoundError(
+            f"GHCN threshold DB not found at {resolved_db}. "
+            "Download the thresholds-latest release asset or run scripts/build_station_thresholds.py."
         )
-        return [], []
 
     # 1. Load active stations
     if stations is None:
@@ -425,6 +467,9 @@ def check_extreme_signals_for_stations(
     if max_checks is not None:
         stations = stations[:max_checks]
 
+    if not stations:
+        return [], []
+
     active_ids = frozenset(s["station_id"] for s in stations)
     station_by_id = {s["station_id"]: s for s in stations}
 
@@ -433,15 +478,14 @@ def check_extreme_signals_for_stations(
     latest_obs = fetch_fn(active_ids)
 
     if not latest_obs:
-        log.warning("GHCN: no observations returned; check NOAA diff endpoints")
-        return [], []
+        raise RuntimeError("GHCN: no observations returned; check NOAA diff endpoints")
 
     # 3. Load thresholds for stations that have new observations and compare
     all_bundles: list[ExtremeSignalBundle] = []
     signal_bundles: list[ExtremeSignalBundle] = []
 
     with open_db(resolved_db) as conn:
-        for station_id, obs in latest_obs.items():
+        for (station_id, _obs_date), obs_list in latest_obs.items():
             station = station_by_id.get(station_id)
             if station is None:
                 continue
@@ -450,7 +494,7 @@ def check_extreme_signals_for_stations(
             if thresholds is None:
                 continue
 
-            bundle = _detect_signals_for_station(station, obs, thresholds)
+            bundle = _detect_signals_for_station(station, obs_list, thresholds)
             if bundle is None:
                 continue
 
@@ -464,7 +508,15 @@ def check_extreme_signals_for_stations(
     )
 
     # 4. Country-level aggregation across ALL readings (not just signal ones)
-    country_records = detect_country_records(all_bundles, archive_years=archive_years)
+    country_records: list[CountryRecord] = []
+    by_signal_date: dict[date, list[ExtremeSignalBundle]] = {}
+    for bundle in all_bundles:
+        if bundle.signal_date is not None:
+            by_signal_date.setdefault(bundle.signal_date, []).append(bundle)
+    for signal_date, group in by_signal_date.items():
+        country_records.extend(
+            detect_country_records(group, archive_years=archive_years, record_date=signal_date)
+        )
 
     # 5. Dedup: cap at 2 signal-firing bundles per country
     deduped_signal_bundles = _dedup_by_metro(signal_bundles)
