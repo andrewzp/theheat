@@ -33,6 +33,7 @@ class RecordEvent:
     old_record_c: float
     old_record_year: int
     event_id: str
+    signal_date: date | None = None  # date reading was observed; None → use date.today()
 
 
 @dataclass
@@ -46,6 +47,7 @@ class AllTimeRecord:
     old_record_year: int
     years_of_data: int  # how many years back the archive goes
     event_id: str
+    signal_date: date | None = None
 
 
 @dataclass
@@ -60,6 +62,7 @@ class MonthlyRecord:
     old_record_year: int
     years_of_data: int
     event_id: str
+    signal_date: date | None = None
 
 
 @dataclass
@@ -72,6 +75,7 @@ class AnomalyEvent:
     anomaly_c: float  # today - mean, positive for hot, negative for cold
     years_of_data: int
     event_id: str
+    signal_date: date | None = None
 
 
 @dataclass
@@ -83,6 +87,7 @@ class RecordStreakEvent:
     start_date: str  # ISO date
     peak_temp_c: float
     event_id: str
+    signal_date: date | None = None
 
 
 @dataclass
@@ -96,6 +101,14 @@ class ExtremeSignalBundle:
     The ``today_*`` and ``archive_*`` fields are populated regardless of
     whether any record broke — downstream country-level aggregation needs
     every city's raw numbers, not just the ones that set records.
+
+    GHCN-path additions (all optional, backward-compatible):
+    - ``signal_date``: the date the reading was observed. None means
+      the Open-Meteo path; consumers fall back to date.today().
+    - ``station_id``: GHCN station ID (e.g. "USW00023183"). Empty for
+      the Open-Meteo path.
+    - ``station_name``: human-readable station name (e.g. "PHOENIX SKY
+      HARBOR INTL AP"). Empty for the Open-Meteo path.
     """
     city: str = ""
     country: str = ""
@@ -113,6 +126,9 @@ class ExtremeSignalBundle:
     archive_max_year: int | None = None
     archive_min_c: float | None = None
     archive_min_year: int | None = None
+    signal_date: date | None = None
+    station_id: str = ""
+    station_name: str = ""
 
 
 @dataclass
@@ -134,6 +150,7 @@ class CountryRecord:
     years_of_data: int
     cities_sampled: int
     event_id: str
+    signal_date: date | None = None
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
