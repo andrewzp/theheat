@@ -119,6 +119,7 @@ _METADATA_JSON_KEYS = (
     "fire_footprint_last_run",
     "synthesis_components",
     "synthesis_cooldown",
+    "suppressions",
 )
 
 

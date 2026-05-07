@@ -9,6 +9,7 @@ const DEFAULT_STATE = {
   drafts: [],
   run_history: [],
   errors: [],
+  suppressions: [],
 }
 
 const SQLITE_SCHEMA = `
@@ -94,6 +95,19 @@ CREATE TABLE IF NOT EXISTS errors (
   source TEXT,
   ts TEXT,
   msg TEXT,
+  payload_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS suppressions (
+  supp_id TEXT PRIMARY KEY,
+  seq INTEGER NOT NULL,
+  ts TEXT,
+  source TEXT,
+  run_id TEXT,
+  event_id TEXT,
+  category TEXT,
+  score_total INTEGER,
+  threshold INTEGER,
   payload_json TEXT NOT NULL
 );
 `
@@ -241,6 +255,25 @@ function mergeErrors(current = [], incoming = [], maxItems = 50) {
   return merged.slice(-maxItems)
 }
 
+function mergeSuppressions(current = [], incoming = [], maxItems = 200) {
+  const merged = new Map()
+  const anonymous = []
+  ;[...current, ...incoming].forEach((supp) => {
+    const copy = structuredClone(supp)
+    if (!copy.id) {
+      anonymous.push(copy)
+      return
+    }
+    const existing = merged.get(copy.id)
+    if (!existing || parseTimestamp(copy.ts) >= parseTimestamp(existing.ts)) {
+      merged.set(copy.id, copy)
+    }
+  })
+  const ordered = [...merged.values(), ...anonymous]
+  ordered.sort((a, b) => parseTimestamp(a.ts) - parseTimestamp(b.ts))
+  return ordered.length > maxItems ? ordered.slice(-maxItems) : ordered
+}
+
 function mergeState(current, incoming) {
   const base = normalizeState(current)
   const next = normalizeState(incoming)
@@ -256,6 +289,7 @@ function mergeState(current, incoming) {
     drafts: mergeDrafts(base.drafts, next.drafts),
     run_history: mergeRunHistory(base.run_history, next.run_history),
     errors: mergeErrors(base.errors, next.errors),
+    suppressions: mergeSuppressions(base.suppressions, next.suppressions),
   })
 }
 
@@ -317,6 +351,7 @@ function sqliteIsEmpty(db) {
     "drafts",
     "runs",
     "errors",
+    "suppressions",
   ].reduce((sum, table) => sum + tableCount(db, table), 0) === 0
 }
 
@@ -346,6 +381,11 @@ function writeSqliteState(db, state) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   const insertError = db.prepare("INSERT INTO errors (seq, source, ts, msg, payload_json) VALUES (?, ?, ?, ?, ?)")
+  const insertSuppression = db.prepare(`
+    INSERT INTO suppressions
+    (supp_id, seq, ts, source, run_id, event_id, category, score_total, threshold, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
   const insertMeta = db.prepare("INSERT INTO metadata (key, value_json) VALUES (?, ?)")
 
   db.exec("BEGIN")
@@ -440,6 +480,22 @@ function writeSqliteState(db, state) {
       )
     })
 
+    db.exec("DELETE FROM suppressions")
+    normalized.suppressions.forEach((supp, index) => {
+      insertSuppression.run(
+        supp.id,
+        index,
+        supp.ts ?? null,
+        supp.source ?? null,
+        supp.run_id ?? null,
+        supp.event_id ?? null,
+        supp.category ?? null,
+        Number.isFinite(supp.score_total) ? supp.score_total : null,
+        Number.isFinite(supp.threshold) ? supp.threshold : null,
+        JSON.stringify(supp)
+      )
+    })
+
     db.exec("COMMIT")
   } catch (error) {
     db.exec("ROLLBACK")
@@ -482,6 +538,7 @@ function readSqliteState(db) {
   })
 
   state.errors = db.prepare("SELECT payload_json FROM errors ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
+  state.suppressions = db.prepare("SELECT payload_json FROM suppressions ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
   return normalizeState(state)
 }
 
