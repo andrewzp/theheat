@@ -26,6 +26,11 @@ DEFAULT_STATE = {
     "drafts": [],
     "run_history": [],
     "errors": [],
+    # Suppressed signals: events the bot observed but the editorial gate killed
+    # before they could become drafts. Populated by _record_suppression() in
+    # main.py when score.total < score.threshold and the gap is small enough
+    # to be interesting (configurable near-miss filter).
+    "suppressions": [],
     "memory": {
         "ongoing_events": [],
         "used_era_anchors": [],
@@ -250,6 +255,28 @@ def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50
     return merged[-max_items:]
 
 
+def _merge_suppressions(current: list[dict], incoming: list[dict], max_items: int = 200) -> list[dict]:
+    """Merge suppression records. Dedupe by id (latest ts wins), then trim."""
+    merged: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for supp in [*(current or []), *(incoming or [])]:
+        supp_copy = deepcopy(supp)
+        supp_id = supp_copy.get("id")
+        if not supp_id:
+            anonymous.append(supp_copy)
+            continue
+        existing = merged.get(supp_id)
+        if existing is None:
+            merged[supp_id] = supp_copy
+            continue
+        if _parse_state_timestamp(supp_copy.get("ts")) >= _parse_state_timestamp(existing.get("ts")):
+            merged[supp_id] = supp_copy
+
+    ordered = list(merged.values()) + anonymous
+    ordered.sort(key=lambda supp: _parse_state_timestamp(supp.get("ts")))
+    return ordered[-max_items:]
+
+
 def _merge_memory(current: dict | None, incoming: dict | None) -> dict:
     base = deepcopy(DEFAULT_STATE["memory"])
     if isinstance(current, dict):
@@ -350,6 +377,9 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
+    merged["suppressions"] = _merge_suppressions(
+        base.get("suppressions", []), next_state.get("suppressions", [])
+    )
     merged["memory"] = _merge_memory(base.get("memory"), next_state.get("memory"))
     # Extreme record tracking — always take the incoming (most recent) dict
     # since detection functions only write when a new record is set.

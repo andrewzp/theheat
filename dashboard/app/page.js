@@ -16,19 +16,55 @@ function timeAgo(dateStr) {
 
 function RunStatus({ conclusion, status }) {
   if (status === "in_progress") return <span className="badge running">RUNNING</span>
-  if (status === "partial_failure") return <span className="badge neutral">PARTIAL</span>
-  if (status === "skipped") return <span className="badge neutral">SKIPPED</span>
   if (conclusion === "success") return <span className="badge success">OK</span>
   if (conclusion === "failure") return <span className="badge failure">FAIL</span>
-  if (status === "success") return <span className="badge success">OK</span>
-  if (status === "failed") return <span className="badge failure">FAIL</span>
   return <span className="badge neutral">{conclusion || status}</span>
 }
 
+function SourceStatusBadge({ status }) {
+  const map = {
+    success: ["success", "OK"],
+    failed: ["failure", "FAIL"],
+    skipped: ["running", "SKIPPED"],
+    partial_failure: ["running", "PARTIAL"],
+  }
+  const [cls, label] = map[status] || ["neutral", (status || "—").toUpperCase()]
+  return <span className={`badge ${cls}`}>{label}</span>
+}
+
 function formatDuration(ms) {
-  if (!ms && ms !== 0) return "—"
+  if (ms === undefined || ms === null) return "—"
   if (ms < 1000) return `${ms}ms`
   return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatUtcStamp(dateStr) {
+  if (!dateStr) return ""
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return ""
+  const hh = String(d.getUTCHours()).padStart(2, "0")
+  const mm = String(d.getUTCMinutes()).padStart(2, "0")
+  return `${hh}:${mm} UTC`
+}
+
+function draftOutcomeLabel(draft) {
+  if (draft?.status === "posted") return "posted"
+  if (draft?.status === "approved") return "approved"
+  if (draft?.status === "rejected") return "rejected"
+  if (draft?.auto_approve_at) return "auto-queued"
+  return draft?.status || "pending"
+}
+
+function draftOutcomeTone(draft) {
+  if (draft?.status === "posted") return "success"
+  if (draft?.status === "approved") return "running"
+  if (draft?.status === "rejected") return "failure"
+  return "neutral"
+}
+
+function clipText(text, max = 96) {
+  if (!text || text.length <= max) return text
+  return `${text.slice(0, max - 1)}…`
 }
 
 function countdownText(dateStr) {
@@ -59,9 +95,18 @@ function policySummary(draft) {
   return "manual review"
 }
 
-function clipText(text, max = 96) {
-  if (!text || text.length <= max) return text
-  return `${text.slice(0, max - 1)}…`
+function findDraftRun(draft, botRuns) {
+  const runId = draft?.review_context?.run_id
+  if (!runId) return null
+  return (botRuns || []).find((run) => run.id === runId) || null
+}
+
+function findDraftSourceRun(draft, botRuns) {
+  const run = findDraftRun(draft, botRuns)
+  if (!run) return null
+  const sourceKey = draft?.review_context?.source_key
+  if (!sourceKey) return null
+  return (run.sources || []).find((s) => s.source === sourceKey) || null
 }
 
 function ScoreMeter({ label, value, inverse = false }) {
@@ -80,100 +125,429 @@ function ScoreMeter({ label, value, inverse = false }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// SourceRow — expandable per-source telemetry with pipeline funnel + events
-// ---------------------------------------------------------------------------
+function WorkbenchView({
+  drafts,
+  selectedDraftId,
+  setSelectedDraftId,
+  editingId,
+  setEditingId,
+  editText,
+  setEditText,
+  draftAct,
+  draftAction,
+  draftFeedback,
+  botRuns,
+}) {
+  const selectedDraft = drafts.find((d) => d.id === selectedDraftId) || drafts[0] || null
+  const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
+  const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
+  const selectedCandidate =
+    selectedDraft?.candidates?.find((c) => c.text === selectedDraft?.text) ||
+    selectedDraft?.candidates?.[0]
 
-function PipelineFunnel({ metrics, provider }) {
-  const stages = [
-    { key: "stations_active", label: "Stations active", tone: "input" },
-    { key: "stations_with_obs", label: "Stations with fresh obs", tone: "input" },
-    { key: "stations_checked", label: "Stations checked", tone: "process" },
-    { key: "raw_signals", label: "Raw signals fired", tone: "process" },
-    { key: "bundles_after_dedup", label: "Bundles (post-dedup)", tone: "output" },
-    { key: "country_records", label: "Country records", tone: "output" },
-  ]
-  const present = stages.filter(s => typeof metrics[s.key] === "number")
-  const max = Math.max(...present.map(s => metrics[s.key] || 0), 1)
-  if (present.length === 0) return null
   return (
-    <div className="pipeline-funnel">
-      <div className="detail-title">
-        {provider ? `${provider} pipeline funnel` : "Pipeline funnel"}
-      </div>
-      {present.map(s => {
-        const value = metrics[s.key] || 0
-        const pct = (value / max) * 100
-        return (
-          <div className="funnel-row" key={s.key}>
-            <span className="funnel-label">{s.label}</span>
-            <div className="funnel-bar-wrap">
-              <div className={`funnel-bar tone-${s.tone}`} style={{ width: `${pct}%` }} />
-            </div>
-            <span className="funnel-value">{value.toLocaleString()}</span>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function EventsTable({ events }) {
-  if (!events || events.length === 0) return null
-  const decisionTone = {
-    drafted: "good",
-    rejected: "warn",
-    no_qualifying_signal: "neutral",
-  }
-  const visible = events.slice(0, 25)
-  return (
-    <div className="events-table">
-      <div className="detail-title">
-        Events evaluated ({events.length}{events.length > 25 ? ` — top 25 shown` : ""})
-      </div>
-      <div className="events-head">
-        <span>Decision</span>
-        <span>Station</span>
-        <span>Context</span>
-      </div>
-      {visible.map((ev, i) => (
-        <div className="event-row" key={ev.event_id || `${ev.station_id}-${i}`}>
-          <span className={`signal-badge ${decisionTone[ev.decision] || "neutral"}`}>
-            {(ev.decision || "—").replace(/_/g, " ")}
-          </span>
-          <span className="event-station">
-            <strong>{ev.station_name || ev.city || "—"}</strong>
-            {ev.station_id ? <span className="event-id"> ({ev.station_id})</span> : null}
-          </span>
-          <span className="event-meta">
-            {[
-              ev.country,
-              ev.signal_date,
-              ev.type ? ev.type.replace(/_/g, " ") : null,
-              typeof ev.score === "number" ? `score ${ev.score}` : null,
-              typeof ev.today_max_c === "number" ? `${ev.today_max_c}°C` : null,
-            ].filter(Boolean).join(" · ")}
-          </span>
+    <div className="card full desk-panel">
+      <div className="section-head">
+        <div>
+          <h2>Draft Workbench</h2>
+          <p className="card-kicker">
+            Review the queue with source facts, score context, alternate copy, and approval policy in one place.
+          </p>
         </div>
-      ))}
+        <span className="backend-pill">{drafts.length} pending drafts</span>
+      </div>
+
+      {drafts.length > 0 ? (
+        <div className="draft-desk">
+          <div className="draft-queue">
+            {drafts.map((draft) => (
+              <button
+                key={draft.id}
+                type="button"
+                className={`queue-item ${selectedDraft?.id === draft.id ? "selected" : ""}`}
+                onClick={() => {
+                  setSelectedDraftId(draft.id)
+                  setEditingId(null)
+                  setEditText("")
+                }}
+              >
+                <div className="queue-item-head">
+                  <span className="draft-type">{draft.type}</span>
+                  <span className="queue-score">
+                    S {draft.score?.total ?? "—"} · C {draft.candidate_score?.total ?? "—"}
+                  </span>
+                </div>
+                <div className="queue-text">{clipText(draft.text, 118)}</div>
+                <div className="queue-meta">
+                  <span>{timeAgo(draft.created_at)}</span>
+                  <span>{policySummary(draft)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="draft-workbench">
+            {selectedDraft && (
+              <>
+                <div className="draft-meta">
+                  <span className="draft-type">{selectedDraft.type}</span>
+                  <span className="draft-time">
+                    {selectedDraft.review_context?.source || "draft queue"}
+                    {" · "}
+                    {timeAgo(selectedDraft.created_at)}
+                  </span>
+                </div>
+
+                <div className="draft-status-row">
+                  <span className="workbench-pill">
+                    signal {selectedDraft.score?.total ?? "—"}
+                    {selectedDraft.score?.label ? ` · ${selectedDraft.score.label}` : ""}
+                  </span>
+                  <span className="workbench-pill">
+                    copy {selectedDraft.candidate_score?.total ?? "—"}
+                    {selectedCandidate?.source ? ` · ${selectedCandidate.source}` : ""}
+                  </span>
+                  {selectedDraft.auto_approve_at ? (
+                    <span className="workbench-pill alert">{countdownText(selectedDraft.auto_approve_at)}</span>
+                  ) : selectedDraft.approval_policy?.mode === "manual_only" ? (
+                    <span className="workbench-pill">manual only</span>
+                  ) : (
+                    <span className="workbench-pill">
+                      {selectedDraft.approval_policy?.recommended_delay_minutes
+                        ? `recommended ${delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)}`
+                        : "manual approval"}
+                    </span>
+                  )}
+                  {selectedDraft.review_context?.run_mode && (
+                    <span className="workbench-pill">{selectedDraft.review_context.run_mode}</span>
+                  )}
+                </div>
+
+                {editingId === selectedDraft.id ? (
+                  <>
+                    <textarea
+                      className="draft-edit-area"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={4}
+                    />
+                    <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
+                      {editText.length}/280
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="draft-text">{selectedDraft.text}</div>
+                    <div className="draft-chars">{selectedDraft.text.length}/280</div>
+                  </>
+                )}
+
+                {(selectedDraft.score?.reasons?.length > 0 ||
+                  selectedDraft.candidate_score?.reasons?.length > 0) && (
+                  <div className="draft-reason-block">
+                    {selectedDraft.score?.reasons?.length > 0 && (
+                      <div className="draft-reason-line">
+                        <strong>Signal:</strong> {selectedDraft.score.reasons.join(" · ")}
+                      </div>
+                    )}
+                    {selectedDraft.candidate_score?.reasons?.length > 0 && (
+                      <div className="draft-reason-line">
+                        <strong>Copy:</strong> {selectedDraft.candidate_score.reasons.join(" · ")}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedDraft.review_context?.shadow_two_bot?.text && (
+                  <div className="shadow-two-bot">
+                    <div className="shadow-label">SHADOW (TWO-BOT)</div>
+                    <div className="shadow-text">{selectedDraft.review_context.shadow_two_bot.text}</div>
+                    <div className="shadow-meta">
+                      <span>{selectedDraft.review_context.shadow_two_bot.text.length}/280</span>
+                      {selectedDraft.review_context.shadow_two_bot.angle_chosen && (
+                        <span>angle: {selectedDraft.review_context.shadow_two_bot.angle_chosen}</span>
+                      )}
+                      {selectedDraft.review_context.shadow_two_bot.writer_model && (
+                        <span>writer: {selectedDraft.review_context.shadow_two_bot.writer_model}</span>
+                      )}
+                      <button
+                        type="button"
+                        className="btn sm"
+                        onClick={() =>
+                          navigator.clipboard?.writeText(selectedDraft.review_context.shadow_two_bot.text)
+                        }
+                      >
+                        copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="workbench-grid">
+                  <div className="workbench-panel">
+                    <h3>Why This Exists</h3>
+                    <div className="workbench-headline">
+                      {selectedDraft.review_context?.headline || "Pending draft awaiting review"}
+                    </div>
+                    {selectedDraft.review_context?.facts?.length > 0 ? (
+                      <div className="fact-list">
+                        {selectedDraft.review_context.facts.map((fact) => (
+                          <div key={`${selectedDraft.id}-${fact.label}`} className="fact-row">
+                            <span className="fact-label">{fact.label}</span>
+                            <span className="fact-value">{fact.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="empty">no structured source facts saved</div>
+                    )}
+                  </div>
+
+                  <div className="workbench-panel">
+                    <h3>Signal Score</h3>
+                    {selectedDraft.score ? (
+                      <>
+                        <ScoreMeter label="severity" value={selectedDraft.score.severity} />
+                        <ScoreMeter label="novelty" value={selectedDraft.score.novelty} />
+                        <ScoreMeter label="timeliness" value={selectedDraft.score.timeliness} />
+                        <ScoreMeter label="confidence" value={selectedDraft.score.confidence} />
+                        <ScoreMeter label="shareability" value={selectedDraft.score.shareability} />
+                        <ScoreMeter label="sensitivity" value={selectedDraft.score.sensitivity} inverse />
+                      </>
+                    ) : (
+                      <div className="empty">no signal score available</div>
+                    )}
+                  </div>
+
+                  <div className="workbench-panel">
+                    <h3>Copy Score</h3>
+                    {selectedDraft.candidate_score ? (
+                      <>
+                        <ScoreMeter label="clarity" value={selectedDraft.candidate_score.clarity} />
+                        <ScoreMeter label="context" value={selectedDraft.candidate_score.context} />
+                        <ScoreMeter label="voice" value={selectedDraft.candidate_score.voice} />
+                        <ScoreMeter label="punch" value={selectedDraft.candidate_score.punch} />
+                      </>
+                    ) : (
+                      <div className="empty">single-candidate draft</div>
+                    )}
+                  </div>
+
+                  <div className="workbench-panel">
+                    <h3>Approval Policy</h3>
+                    <div className="workbench-headline">
+                      {selectedDraft.approval_policy?.mode === "armed_auto"
+                        ? "Policy armed this draft automatically."
+                        : selectedDraft.approval_policy?.mode === "suggested_auto"
+                        ? "Policy recommends a timed auto-approval."
+                        : "Policy requires explicit human approval."}
+                    </div>
+                    <div className="fact-list">
+                      <div className="fact-row">
+                        <span className="fact-label">Policy key</span>
+                        <span className="fact-value">{selectedDraft.approval_policy?.key || "—"}</span>
+                      </div>
+                      <div className="fact-row">
+                        <span className="fact-label">Mode</span>
+                        <span className="fact-value">{selectedDraft.approval_policy?.mode || "—"}</span>
+                      </div>
+                      <div className="fact-row">
+                        <span className="fact-label">Recommended window</span>
+                        <span className="fact-value">
+                          {selectedDraft.approval_policy?.recommended_delay_minutes
+                            ? delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)
+                            : "manual only"}
+                        </span>
+                      </div>
+                      <div className="fact-row">
+                        <span className="fact-label">Why</span>
+                        <span className="fact-value">{selectedDraft.approval_policy?.reason || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="workbench-panel">
+                    <h3>Run Trace</h3>
+                    <div className="run-trace">
+                      <div className="trace-line">
+                        <span>workflow run</span>
+                        <strong>{selectedDraftRun?.id || selectedDraft.review_context?.run_id || "—"}</strong>
+                      </div>
+                      <div className="trace-line">
+                        <span>source slot</span>
+                        <strong>{selectedDraft.review_context?.source_key || "—"}</strong>
+                      </div>
+                      <div className="trace-line">
+                        <span>source status</span>
+                        <strong>{selectedDraftSourceRun?.status || "—"}</strong>
+                      </div>
+                      <div className="trace-line">
+                        <span>observed / promoted</span>
+                        <strong>
+                          {selectedDraftSourceRun
+                            ? `${selectedDraftSourceRun.observed} / ${selectedDraftSourceRun.promoted}`
+                            : "—"}
+                        </strong>
+                      </div>
+                      <div className="trace-line">
+                        <span>source duration</span>
+                        <strong>
+                          {selectedDraftSourceRun ? formatDuration(selectedDraftSourceRun.duration_ms) : "—"}
+                        </strong>
+                      </div>
+                      <div className="trace-line">
+                        <span>event id</span>
+                        <strong>{selectedDraft.event_id || "manual"}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedDraft.candidates?.length > 1 && (
+                  <div className="candidate-list">
+                    {selectedDraft.candidates
+                      .filter((c) => c.text !== selectedDraft.text)
+                      .slice(0, 3)
+                      .map((c) => (
+                        <div key={`${selectedDraft.id}-${c.rank}`} className="candidate-item">
+                          <div className="candidate-head">
+                            <span>
+                              alt #{c.rank} · copy {c.score?.total || 0} · {c.source}
+                            </span>
+                            <button
+                              type="button"
+                              className="btn sm"
+                              disabled={!!draftAction}
+                              onClick={() =>
+                                draftAct(selectedDraft.id, "select_candidate", { candidateRank: c.rank })
+                              }
+                            >
+                              Use This
+                            </button>
+                          </div>
+                          <div className="candidate-text">{c.text}</div>
+                          {c.score?.reasons?.length > 0 && (
+                            <div className="candidate-meta">{c.score.reasons.join(" · ")}</div>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                )}
+
+                <div className="draft-actions">
+                  {editingId === selectedDraft.id ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn approve sm"
+                        disabled={draftAction === selectedDraft.id || editText.length > 280}
+                        onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText })}
+                      >
+                        Save
+                      </button>
+                      <button type="button" className="btn sm" onClick={() => setEditingId(null)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn approve sm"
+                        disabled={!!draftAction}
+                        onClick={() => draftAct(selectedDraft.id, "approve")}
+                      >
+                        {draftAction === selectedDraft.id ? "..." : "Approve + Post"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn sm"
+                        onClick={() => {
+                          setEditingId(selectedDraft.id)
+                          setEditText(selectedDraft.text)
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn reject sm"
+                        disabled={!!draftAction}
+                        onClick={() => draftAct(selectedDraft.id, "reject")}
+                      >
+                        Reject
+                      </button>
+                      {selectedDraft.auto_approve_at ? (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          disabled={!!draftAction}
+                          onClick={() => draftAct(selectedDraft.id, "cancel_auto_approve")}
+                        >
+                          Cancel {countdownText(selectedDraft.auto_approve_at)}
+                        </button>
+                      ) : selectedDraft.approval_policy?.can_auto_approve === false ? (
+                        <button type="button" className="btn sm" disabled>
+                          Review Only
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn sm"
+                          disabled={!!draftAction}
+                          onClick={() =>
+                            draftAct(selectedDraft.id, "auto_approve", {
+                              delayMinutes: selectedDraft.approval_policy?.recommended_delay_minutes,
+                            })
+                          }
+                        >
+                          Auto {delayLabel(selectedDraft.approval_policy?.recommended_delay_minutes || 30)}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+                {draftFeedback && (
+                  <div className={`draft-feedback ${draftFeedback.type}`}>{draftFeedback.text}</div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="draft-empty">
+          No drafts waiting. Trigger a run on the Pipeline tab or compose one manually.
+        </div>
+      )}
     </div>
   )
 }
 
-function SourceRow({ source, runId }) {
+function PipelineHero() {
+  return (
+    <div className="card full hero-card" style={{ marginBottom: 16 }}>
+      <div className="hero-eyebrow">Live Ops</div>
+      <h1 className="hero-headline">Operational truth, not workflow vibes.</h1>
+      <p className="hero-sub">
+        Source health, funnel quality, queue state, and publishing outcomes — measured in signal
+        quality, not just cron completion.
+      </p>
+    </div>
+  )
+}
+
+function RichSourceRow({ source }) {
   const [expanded, setExpanded] = useState(false)
   const details = source.details
   const hasFunnel = details?.pipeline_metrics &&
-    Object.values(details.pipeline_metrics).some(v => typeof v === "number" && v > 0)
+    Object.values(details.pipeline_metrics).some((v) => typeof v === "number" && v > 0)
   const hasEvents = Array.isArray(details?.events) && details.events.length > 0
   const expandable = hasFunnel || hasEvents
   return (
     <div className="source-row">
       <div className="source-head">
         <strong>{source.source}</strong>
-        <span className={`signal-badge ${toneForStatus(source.status)}`}>
-          {labelForStatus(source.status)}
-        </span>
+        <SourceStatusBadge status={source.status} />
         {expandable && (
           <button
             type="button"
@@ -185,83 +559,426 @@ function SourceRow({ source, runId }) {
           </button>
         )}
       </div>
-      <div className="meta">
-        <span>{source.observed || 0} observed</span>
-        <span>{source.promoted || 0} promoted</span>
-        <span>{source.drafted || 0} drafted</span>
+      <div className="source-meta">
+        <span>{source.observed ?? 0} observed</span>
+        <span>{source.promoted ?? 0} promoted</span>
+        <span className={source.drafted > 0 ? "drafted-num" : ""}>{source.drafted ?? 0} drafted</span>
         <span>{formatDuration(source.duration_ms)} latency</span>
       </div>
-      {source.note && <div className="source-run-note">{source.note}</div>}
-      {source.error && <div className="source-run-error">{source.error}</div>}
+      {source.note && <div className="source-note">{source.note}</div>}
+      {source.error && <div className="source-error">{source.error}</div>}
       {expandable && expanded && (
         <div className="source-detail">
-          {hasFunnel && (
-            <PipelineFunnel
-              metrics={details.pipeline_metrics}
-              provider={details.provider}
-            />
-          )}
-          {hasEvents && <EventsTable events={details.events} />}
+          {hasFunnel && <SourceFunnelInline metrics={details.pipeline_metrics} provider={details.provider} />}
+          {hasEvents && <EventsTableInline events={details.events} />}
         </div>
       )}
     </div>
   )
 }
 
-function findDraftRun(draft, botRuns) {
-  const runId = draft?.review_context?.run_id
-  if (!runId) return null
-  return botRuns.find((run) => run.id === runId) || null
+function SourceFunnelInline({ metrics, provider }) {
+  const stages = [
+    { key: "stations_active", label: "Stations active" },
+    { key: "stations_with_obs", label: "Stations with fresh obs" },
+    { key: "stations_checked", label: "Stations checked" },
+    { key: "raw_signals", label: "Raw signals fired" },
+    { key: "bundles", label: "Bundles (post-dedup)" },
+    { key: "bundles_after_dedup", label: "Bundles (post-dedup)" },
+    { key: "country_records", label: "Country records" },
+    { key: "drafted", label: "Drafted" },
+  ]
+  const present = stages.filter((s) => typeof metrics[s.key] === "number")
+  const max = Math.max(...present.map((s) => metrics[s.key] || 0), 1)
+  if (present.length === 0) return null
+  return (
+    <div className="inline-funnel">
+      <div className="inline-funnel-title">{provider ? `${provider} funnel` : "pipeline funnel"}</div>
+      {present.map((s) => {
+        const value = metrics[s.key] || 0
+        const pct = (value / max) * 100
+        return (
+          <div className="inline-funnel-row" key={s.key}>
+            <span className="inline-funnel-label">{s.label}</span>
+            <div className="inline-funnel-track">
+              <div className="inline-funnel-fill" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="inline-funnel-val">{value.toLocaleString()}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
-function findDraftSourceRun(draft, botRuns) {
-  const run = findDraftRun(draft, botRuns)
-  const sourceKey = draft?.review_context?.source_key
-  if (!run || !sourceKey) return null
-  return run.sources?.find((source) => source.source === sourceKey) || null
+function EventsTableInline({ events }) {
+  const visible = events.slice(0, 12)
+  return (
+    <div className="inline-events">
+      <div className="inline-events-title">
+        Events evaluated ({events.length}{events.length > 12 ? " — top 12 shown" : ""})
+      </div>
+      {visible.map((ev, i) => {
+        const decTone = ev.decision === "drafted" ? "success" : ev.decision === "rejected" ? "failure" : "neutral"
+        return (
+          <div className="inline-event-row" key={ev.event_id || `${ev.station_id}-${i}`}>
+            <span className={`badge ${decTone}`}>{(ev.decision || "—").replace(/_/g, " ")}</span>
+            <span className="inline-event-station">
+              <strong>{ev.station_name || ev.city || "—"}</strong>
+              {ev.station_id ? <span className="inline-event-id"> ({ev.station_id})</span> : null}
+            </span>
+            <span className="inline-event-meta">
+              {[ev.country, ev.signal_date, ev.type ? ev.type.replace(/_/g, " ") : null, typeof ev.score === "number" ? `score ${ev.score}` : null].filter(Boolean).join(" · ")}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
-function toneForStatus(status, conclusion) {
-  if (status === "success" || conclusion === "success") return "good"
-  if (status === "in_progress") return "warn"
-  if (status === "partial_failure" || status === "skipped") return "warn"
-  if (status === "failed" || conclusion === "failure") return "bad"
-  return "neutral"
+function FunnelStagesCard({ run, drafts }) {
+  const sources = run?.sources || []
+  const totalObserved = sources.reduce((sum, s) => sum + (s.observed || 0), 0)
+  const totalPromoted = sources.reduce((sum, s) => sum + (s.promoted || 0), 0)
+  const candidatesCount = (drafts || []).reduce((sum, d) => sum + (d.candidates?.length || 1), 0)
+  const queueLen = (drafts || []).length
+  const stages = [
+    { label: "Observations ingested", value: totalObserved, desc: "raw payloads normalized into canonical facts", tone: "success" },
+    { label: "Events created", value: totalPromoted, desc: "duplicates clustered and low-confidence items suppressed", tone: "success" },
+    { label: "Draft candidates generated", value: candidatesCount, desc: "3-5 variants per high-scoring event when available", tone: "success" },
+    { label: "Queue-ready drafts", value: queueLen, desc: "best candidates that survived quality gates and policy rules", tone: queueLen > 0 ? "running" : "neutral" },
+  ]
+  return (
+    <div className="card full">
+      <h2>Funnel</h2>
+      {stages.map((s) => (
+        <div className="source-row" key={s.label}>
+          <div className="source-head">
+            <strong>{s.label}</strong>
+            <span className={`badge ${s.tone}`}>{s.value.toLocaleString()}</span>
+          </div>
+          <div className="source-meta">
+            <span>{s.desc}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
-function labelForStatus(status, conclusion) {
-  if (status === "in_progress") return "running"
-  if (status === "partial_failure") return "partial"
-  if (status === "skipped") return "skipped"
-  if (status === "success" || conclusion === "success") return "healthy"
-  if (status === "failed" || conclusion === "failure") return "failed"
-  return conclusion || status || "unknown"
+function SourceHealthRichCard({ run }) {
+  const sources = run?.sources || []
+  return (
+    <div className="card full">
+      <h2>Source Health</h2>
+      {sources.length > 0 ? (
+        sources.map((s, i) => <RichSourceRow key={`${s.source}-${i}`} source={s} />)
+      ) : (
+        <div className="empty">No source telemetry yet.</div>
+      )}
+    </div>
+  )
 }
 
-function formatUtcStamp(dateStr) {
-  if (!dateStr) return "—"
-  const date = new Date(dateStr)
-  return `${date.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "UTC",
-  })} UTC`
+function RunTimelineRichCard({ run, drafts }) {
+  if (!run) return null
+  const sources = run.sources || []
+  const autoQueued = (drafts || []).filter((d) => !!d.auto_approve_at).length
+  const manualOnly = (drafts || []).filter((d) => d.approval_policy?.can_auto_approve === false).length
+  const sourceTone = (status) => (status === "success" ? "success" : status === "failed" ? "failure" : "running")
+  const rows = [
+    {
+      key: `${run.id}-start`,
+      time: run.started_at,
+      tone: run.failure_count ? "failure" : "success",
+      label: "run started",
+      text: `${run.mode || "run"} created ${run.id} and opened ${sources.length || run.source_count || 0} source slots.`,
+    },
+    ...sources
+      .filter((s) => s.observed || s.promoted || s.drafted || s.note || s.error)
+      .slice(0, 4)
+      .map((s) => ({
+        key: `${run.id}-${s.source}`,
+        time: run.ended_at || run.started_at,
+        tone: sourceTone(s.status),
+        label: s.source,
+        text: s.error
+          ? `${s.source} failed after ${formatDuration(s.duration_ms)}. ${s.error}`
+          : `${s.observed ?? 0} observations, ${s.promoted ?? 0} promoted, ${s.drafted ?? 0} drafts in ${formatDuration(s.duration_ms)}.`,
+      })),
+    {
+      key: `${run.id}-queue`,
+      time: run.ended_at || run.started_at,
+      tone: autoQueued ? "running" : "success",
+      label: "queue updated",
+      text: `${(drafts || []).length} drafts are waiting. ${autoQueued} timed auto-approvals and ${manualOnly} manual-only reviews remain in the queue.`,
+    },
+  ]
+  return (
+    <div className="card full">
+      <h2>Run Timeline</h2>
+      {rows.length > 0 ? (
+        rows.map((entry) => (
+          <div className="timeline-row" key={entry.key}>
+            <div className="timeline-head">
+              <strong>{formatUtcStamp(entry.time)}</strong>
+              <span className={`badge ${entry.tone}`}>{entry.label}</span>
+            </div>
+            <p className="timeline-text">{entry.text}</p>
+          </div>
+        ))
+      ) : (
+        <div className="empty">No run timeline yet.</div>
+      )}
+    </div>
+  )
 }
 
-function draftOutcomeTone(draft) {
-  if (draft?.status === "posted") return "good"
-  if (draft?.status === "rejected") return "bad"
-  if (draft?.auto_approve_at) return "warn"
-  return "neutral"
+function PublishingOutcomesCard({ drafts }) {
+  const recent = [...(drafts || [])]
+    .sort(
+      (a, b) =>
+        new Date(b.updated_at || b.posted_at || b.created_at || 0) -
+        new Date(a.updated_at || a.posted_at || a.created_at || 0)
+    )
+    .slice(0, 5)
+  return (
+    <div className="card full">
+      <h2>Recent Publishing Outcomes</h2>
+      {recent.length > 0 ? (
+        recent.map((d) => (
+          <div className="outcome-row" key={`outcome-${d.id}`}>
+            <div className="outcome-head">
+              <strong>{`${d.type || "draft"} / ${draftOutcomeLabel(d)}`}</strong>
+              <span className={`badge ${draftOutcomeTone(d)}`}>{draftOutcomeLabel(d)}</span>
+            </div>
+            <div className="outcome-meta">
+              <span>{clipText(d.text, 80)}</span>
+              <span className="outcome-time">{timeAgo(d.updated_at || d.posted_at || d.created_at)}</span>
+              {d.post_error && <span className="outcome-err">{d.post_error}</span>}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="empty">No publishing outcomes yet.</div>
+      )}
+    </div>
+  )
 }
 
-function draftOutcomeLabel(draft) {
-  if (draft?.status === "posted") return "posted"
-  if (draft?.status === "approved") return "approved"
-  if (draft?.status === "rejected") return "rejected"
-  if (draft?.auto_approve_at) return countdownText(draft.auto_approve_at)
-  return draft?.status || "pending"
+function CommandDeckCard({ trigger, triggering, triggerResult }) {
+  return (
+    <div className="card full">
+      <h2>Command Deck</h2>
+      <p className="card-kicker">
+        Trigger the pipeline, watch the queue, and keep manual intervention close without leaving the run view.
+      </p>
+      <div className="trigger-bar">
+        <button className="btn primary" disabled={!!triggering} onClick={() => trigger("both")}>
+          {triggering === "both" ? "Running..." : "Run Both"}
+        </button>
+        <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
+          {triggering === "alerts" ? "Running..." : "Alerts Only"}
+        </button>
+        <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
+          {triggering === "leaderboard" ? "Running..." : "Leaderboard Only"}
+        </button>
+      </div>
+      {triggerResult && (
+        <div className={`status-banner ${triggerResult.startsWith("Error") ? "error" : "success"}`}>
+          {triggerResult}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModelConfigCard({ config }) {
+  if (!config) return null
+  const rows = [
+    { label: "writer", value: config.writer_model },
+    { label: "fact-check", value: config.fact_check_model },
+    { label: "claim-extract", value: config.claim_extract_model },
+    { label: "voice-gen", value: config.voice_gen_model },
+    { label: "evaluator", value: config.evaluator_enabled ? "enabled" : "disabled" },
+    { label: "shadow A/B", value: config.shadow_ab_enabled ? "enabled" : "disabled" },
+  ]
+  return (
+    <div className="card full" style={{ marginBottom: 16 }}>
+      <h2>Model Config</h2>
+      <div className="model-grid">
+        {rows.map((r) => (
+          <div className="model-row" key={r.label}>
+            <span>{r.label}</span>
+            <strong>{r.value}</strong>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function RunSummaryStats({ run, drafts }) {
+  if (!run) return null
+  const sources = run.sources || []
+  const succeeded = sources.filter((s) => s.status === "success").length
+  const skipped = sources.filter((s) => s.status === "skipped").length
+  // Skipped lanes are intentionally idle (Mondays-only, Fridays-only,
+  // 1st-of-month, "already ran today" caps). They are not failures.
+  const healthy = succeeded + skipped
+  const total = sources.length || 1
+  const totalObserved = sources.reduce((sum, s) => sum + (s.observed || 0), 0)
+  const totalPromoted = sources.reduce((sum, s) => sum + (s.promoted || 0), 0)
+  const failures = run.failure_count ?? sources.filter((s) => s.status === "failed").length
+  const pendingDrafts = (drafts || []).length
+  return (
+    <div className="grid stats-grid">
+      <div className="card">
+        <h2>Current Run</h2>
+        <div className="stat">{Math.round((healthy / total) * 100)}%</div>
+        <div className="stat-label">
+          {healthy} of {sources.length} sources healthy
+          {skipped > 0 ? ` · ${skipped} scheduled idle` : ""}
+        </div>
+      </div>
+      <div className="card">
+        <h2>Signals</h2>
+        <div className="stat">{totalObserved.toLocaleString()}</div>
+        <div className="stat-label">{totalPromoted.toLocaleString()} promoted, {run.drafted_count ?? 0} drafted</div>
+      </div>
+      <div className="card">
+        <h2>Failures</h2>
+        <div className={`stat ${failures > 0 ? "alert" : ""}`}>{failures}</div>
+        <div className="stat-label">{failures > 0 ? "source failure" : "no source failures"}</div>
+      </div>
+      <div className="card">
+        <h2>Queue</h2>
+        <div className="stat">{pendingDrafts}</div>
+        <div className="stat-label">drafts waiting for review</div>
+      </div>
+    </div>
+  )
+}
+
+function PipelineView({ run, runs, config, drafts, trigger, triggering, triggerResult }) {
+  return (
+    <>
+      <PipelineHero />
+      <RunSummaryStats run={run} drafts={drafts} />
+      <div className="grid">
+        <SourceHealthRichCard run={run} />
+        <FunnelStagesCard run={run} drafts={drafts} />
+      </div>
+      <RunTimelineRichCard run={run} drafts={drafts} />
+      <div className="grid">
+        <PublishingOutcomesCard drafts={drafts} />
+        <CommandDeckCard trigger={trigger} triggering={triggering} triggerResult={triggerResult} />
+      </div>
+      <ModelConfigCard config={config} />
+    </>
+  )
+}
+
+function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) {
+  const sourceCounts = stats?.source_counts || {}
+  const sourceEntries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])
+
+  return (
+    <>
+      <div className="grid">
+        <div className="card">
+          <h2>Last 24h</h2>
+          <div className="stat">{stats?.last24h ?? 0}</div>
+          <div className="stat-label">near-misses</div>
+        </div>
+        <div className="card">
+          <h2>Last 7 Days</h2>
+          <div className="stat">{stats?.last7d ?? 0}</div>
+          <div className="stat-label">cumulative</div>
+        </div>
+      </div>
+
+      <div className="grid">
+        <div className="card">
+          <h2>Top Source</h2>
+          <div className="stat" style={{ fontSize: 20 }}>{stats?.top_source || "—"}</div>
+          <div className="stat-label">most-suppressed loop</div>
+        </div>
+        <div className="card">
+          <h2>Total in View</h2>
+          <div className="stat">{stats?.total ?? 0}</div>
+          <div className="stat-label">matches filter</div>
+        </div>
+      </div>
+
+      {sourceEntries.length > 0 && (
+        <div className="card full" style={{ marginBottom: 16 }}>
+          <h2>Filter by Source</h2>
+          <div className="streak-list">
+            <span
+              className={`streak-chip clickable ${!sourceFilter ? "selected" : ""}`}
+              onClick={() => setSourceFilter("")}
+            >
+              all
+            </span>
+            {sourceEntries.map(([src, count]) => (
+              <span
+                key={src}
+                className={`streak-chip clickable ${sourceFilter === src ? "selected" : ""}`}
+                onClick={() => setSourceFilter(sourceFilter === src ? "" : src)}
+              >
+                {src} <span className="days">{count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card full">
+        <h2>Suppressed Signals ({suppressions.length})</h2>
+        <p className="card-kicker">
+          Events the editorial gate killed before they reached the draft queue. Tight gaps (0–5 below
+          threshold) suggest the bar may be slightly high; far gaps mean the bot is correctly cutting noise.
+        </p>
+        {suppressions.length > 0 ? (
+          suppressions.map((s) => {
+            const total = Number(s.score_total ?? 0)
+            const threshold = Number(s.threshold ?? 0)
+            const gap = threshold - total
+            const tone = gap <= 5 ? "tight" : gap <= 15 ? "near" : "far"
+            return (
+              <div key={s.id} className="supp-item">
+                <div className="supp-meta">
+                  <span className="supp-time">{timeAgo(s.ts)}</span>
+                  <span className="draft-type">{s.source || "—"}</span>
+                  <span className={`supp-score ${tone}`}>
+                    {total}/{threshold} <span className="supp-gap">−{gap}</span>
+                  </span>
+                  {s.category && <span className="supp-cat">{s.category}</span>}
+                </div>
+                <div className="supp-summary">
+                  {s.summary || s.event_id || "(no summary)"}
+                </div>
+                {Array.isArray(s.reasons) && s.reasons.length > 0 && (
+                  <div className="supp-reasons">
+                    {s.reasons.map((r, i) => (
+                      <span key={`${s.id}-r-${i}`} className="supp-reason">{r}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        ) : (
+          <div className="draft-empty">
+            No suppressions logged yet. Once the bot runs with this build deployed, near-miss signals
+            will appear here.
+          </div>
+        )}
+      </div>
+    </>
+  )
 }
 
 export default function Dashboard() {
@@ -284,18 +1001,37 @@ export default function Dashboard() {
   const [generating, setGenerating] = useState(false)
   const [posting, setPosting] = useState(false)
   const [composeStatus, setComposeStatus] = useState(null)
+
+  // Suppressed signals
+  const [suppressions, setSuppressions] = useState([])
+  const [suppressionsStats, setSuppressionsStats] = useState(null)
+  const [suppressionsSourceFilter, setSuppressionsSourceFilter] = useState("")
+
+  // Model config
   const [modelConfig, setModelConfig] = useState(null)
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState("dashboard")
 
   const fetchData = useCallback(async () => {
     try {
-      const [stateRes, draftsRes, configRes] = await Promise.all([
+      const suppQuery = suppressionsSourceFilter
+        ? `/api/suppressions?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
+        : "/api/suppressions?limit=50"
+      const [stateRes, draftsRes, suppRes, configRes] = await Promise.all([
         fetch("/api/state"),
         fetch("/api/drafts"),
+        fetch(suppQuery),
         fetch("/api/config"),
       ])
       setData(await stateRes.json())
       const d = await draftsRes.json()
       setDrafts(d.drafts || [])
+      if (suppRes.ok) {
+        const s = await suppRes.json()
+        setSuppressions(s.suppressions || [])
+        setSuppressionsStats(s.stats || null)
+      }
       if (configRes.ok) {
         setModelConfig(await configRes.json())
       }
@@ -304,23 +1040,13 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [suppressionsSourceFilter])
 
   useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
-
-  useEffect(() => {
-    if (!drafts.length) {
-      setSelectedDraftId(null)
-      return
-    }
-    if (!drafts.some((draft) => draft.id === selectedDraftId)) {
-      setSelectedDraftId(drafts[0].id)
-    }
-  }, [drafts, selectedDraftId])
 
   async function trigger(mode) {
     setTriggering(mode)
@@ -342,6 +1068,8 @@ export default function Dashboard() {
   }
 
   async function draftAct(draftId, action, payload = {}) {
+    // Backward-compat: if a string is passed (legacy 'edit' callers), treat as editedText
+    if (typeof payload === "string") payload = { editedText: payload }
     setDraftAction(draftId)
     setDraftFeedback(null)
     try {
@@ -352,10 +1080,7 @@ export default function Dashboard() {
       })
       const result = await res.json()
       if (!res.ok || result.ok === false) {
-        setDraftFeedback({
-          type: "error",
-          text: result.error || "Draft action failed",
-        })
+        setDraftFeedback({ type: "error", text: result.error || "Draft action failed" })
         return
       }
       setEditingId(null)
@@ -423,1550 +1148,831 @@ export default function Dashboard() {
 
   const state = data?.state
   const runs = data?.runs || []
-  const botRuns = state?.run_history || []
   const hot10 = state?.last_hot10 || {}
   const streaks = state?.streaks || {}
   const errors = state?.errors || []
-  const latestCountDate = state?.daily_tweet_count
-    ? Object.keys(state.daily_tweet_count).sort().at(-1)
-    : null
-  const todayCount = latestCountDate
-    ? state.daily_tweet_count[latestCountDate] || 0
+  const todayCount = state?.daily_tweet_count
+    ? Object.values(state.daily_tweet_count)[0] || 0
     : 0
 
   const sortedStreaks = Object.entries(streaks)
     .sort((a, b) => b[1].consecutive_days - a[1].consecutive_days)
     .slice(0, 10)
-  const latestBotRun = botRuns[0]
-  const latestSourceRuns = latestBotRun?.sources || []
-  const failedSourceRuns = latestSourceRuns.filter((source) => source.status === "failed")
-  const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) || drafts[0] || null
-  const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
-  const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
-  const selectedCandidate = selectedDraft?.candidates?.find((candidate) => candidate.text === selectedDraft?.text)
-    || selectedDraft?.candidates?.[0]
-  const healthySourceRuns = latestSourceRuns.filter((source) => source.status === "success")
-  const totalObserved = latestSourceRuns.reduce((sum, source) => sum + (source.observed || 0), 0)
-  const totalPromoted = latestSourceRuns.reduce((sum, source) => sum + (source.promoted || 0), 0)
-  const totalDrafted = latestSourceRuns.reduce((sum, source) => sum + (source.drafted || 0), 0)
-  const runHealth = latestSourceRuns.length
-    ? Math.round((healthySourceRuns.length / latestSourceRuns.length) * 100)
-    : 0
-  const autoQueuedDrafts = drafts.filter((draft) => !!draft.auto_approve_at).length
-  const manualOnlyDrafts = drafts.filter((draft) => draft.approval_policy?.can_auto_approve === false).length
-  const recentDraftOutcomes = [...(state?.drafts || [])]
-    .sort((a, b) => new Date(b.updated_at || b.posted_at || b.created_at || 0) - new Date(a.updated_at || a.posted_at || a.created_at || 0))
-    .slice(0, 3)
-  const timelineRows = latestBotRun
-    ? [
-        {
-          key: `${latestBotRun.id}-start`,
-          time: latestBotRun.started_at,
-          tone: latestBotRun.failure_count ? "warn" : "good",
-          label: "run started",
-          text: `${latestBotRun.mode} created ${latestBotRun.id} and opened ${latestSourceRuns.length || latestBotRun.source_count || 0} source slots.`,
-        },
-        ...latestSourceRuns
-          .filter((source) => source.observed || source.promoted || source.drafted || source.note || source.error)
-          .slice(0, 3)
-          .map((source) => ({
-            key: `${latestBotRun.id}-${source.source}`,
-            time: latestBotRun.ended_at || latestBotRun.started_at,
-            tone: toneForStatus(source.status),
-            label: source.source,
-            text: source.error
-              ? `${source.source} failed after ${formatDuration(source.duration_ms)}. ${source.error}`
-              : `${source.observed || 0} observations, ${source.promoted || 0} promoted, ${source.drafted || 0} drafts in ${formatDuration(source.duration_ms)}.`,
-          })),
-        {
-          key: `${latestBotRun.id}-queue`,
-          time: latestBotRun.ended_at || latestBotRun.started_at,
-          tone: autoQueuedDrafts ? "warn" : "good",
-          label: "queue updated",
-          text: `${drafts.length} drafts are waiting. ${autoQueuedDrafts} timed auto-approvals and ${manualOnlyDrafts} manual-only reviews remain in the queue.`,
-        },
-      ]
-    : []
+
+  // Latest internal bot run for Source Health / Funnel / Timeline.
+  // Prefer the most recent `alerts` mode run because it sweeps every data
+  // source; `auto_publish_due` is a single-source bookkeeping run that
+  // would otherwise hide the rest of the pipeline. Fall back to any
+  // multi-source run, then to whatever's most recent.
+  const runHistory = state?.run_history || []
+  const latestRichRun =
+    runHistory.find((r) => r.mode === "alerts" && (r.sources || []).length > 0) ||
+    runHistory.find((r) => (r.sources || []).length > 1) ||
+    runHistory.find((r) => (r.sources || []).length > 0) ||
+    runHistory[0] ||
+    null
 
   return (
     <>
       <style jsx global>{`
-        :root {
-          --bg: #0c0f14;
-          --bg-soft: #111722;
-          --panel: rgba(19, 24, 32, 0.9);
-          --panel-alt: rgba(16, 21, 29, 0.86);
-          --line: rgba(103, 148, 255, 0.14);
-          --line-strong: rgba(143, 176, 255, 0.3);
-          --text: #eef4ff;
-          --muted: #9aa8bf;
-          --soft: #6f7d93;
-          --accent: #8fb0ff;
-          --accent-2: #d5e1ff;
-          --good: #86d796;
-          --warn: #ffd266;
-          --bad: #ff8f8f;
-        }
-
-        * { box-sizing: border-box; }
-        html, body { margin: 0; min-height: 100%; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
+          font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+          background: #0a0a0a;
+          color: #e0e0e0;
           min-height: 100vh;
-          color: var(--text);
-          background:
-            radial-gradient(circle at top right, rgba(143, 176, 255, 0.18), transparent 24%),
-            linear-gradient(180deg, #0a0d12 0%, #0d1117 100%);
-          font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
         }
-        button, input, textarea { font: inherit; }
-        a { color: inherit; }
+        .dash { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+        header {
+          display: flex; justify-content: space-between; align-items: center;
+          margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #222;
+        }
+        h1 { font-size: 20px; font-weight: 600; color: #ff4d00; }
+        h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
+        .refresh-btn {
+          background: none; border: 1px solid #333; color: #888;
+          padding: 6px 12px; border-radius: 4px; cursor: pointer;
+          font-family: inherit; font-size: 12px;
+        }
+        .refresh-btn:hover { border-color: #555; color: #ccc; }
 
-        .shell {
-          width: min(1440px, calc(100% - 32px));
-          margin: 24px auto 40px;
-          display: grid;
-          gap: 18px;
-        }
-        .panel {
-          border-radius: 24px;
-          border: 1px solid var(--line);
-          background: var(--panel);
-          padding: 24px;
-          box-shadow: 0 24px 90px rgba(0, 0, 0, 0.3);
-          backdrop-filter: blur(16px);
-        }
-        .topbar {
+        /* Tabs — match simple aesthetic */
+        .tabs {
           display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          align-items: flex-start;
+          gap: 4px;
+          margin-bottom: 20px;
+          border-bottom: 1px solid #222;
         }
-        .eyebrow {
-          color: var(--accent);
-          text-transform: uppercase;
-          letter-spacing: 0.16em;
+        .tab {
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          color: #666;
+          padding: 10px 14px;
+          font-family: inherit;
           font-size: 11px;
-          margin-bottom: 10px;
-        }
-        .brand-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12px;
-          align-items: baseline;
-          margin-bottom: 12px;
-        }
-        h1, h2, h3, p { margin: 0; }
-        h1 {
-          font-size: clamp(34px, 5vw, 58px);
-          line-height: 0.98;
-          font-family: "Iowan Old Style", "Book Antiqua", serif;
-          letter-spacing: -0.03em;
-        }
-        .subhead {
-          color: var(--soft);
+          font-weight: 600;
           text-transform: uppercase;
-          letter-spacing: 0.18em;
-          font-size: 11px;
-        }
-        .lede {
-          color: var(--muted);
-          font-size: 15px;
-          line-height: 1.6;
-          max-width: 62ch;
-        }
-        .top-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-          align-items: center;
-        }
-        .backend-pill, .signal-badge, .workbench-pill, .badge {
+          letter-spacing: 1px;
+          cursor: pointer;
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          border-radius: 999px;
-          border: 1px solid var(--line);
-          font-size: 11px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: var(--accent-2);
-          background: rgba(255, 255, 255, 0.025);
+          gap: 8px;
+          margin-bottom: -1px;
         }
-        .backend-pill { color: var(--accent); }
-        .signal-badge.good, .badge.success { color: var(--good); }
-        .signal-badge.warn, .badge.running { color: var(--warn); }
-        .signal-badge.bad, .badge.failure { color: var(--bad); }
-        .signal-badge.neutral { color: var(--soft); }
-        .badge.neutral { color: var(--soft); }
-        .refresh-btn, .btn {
-          appearance: none;
-          border: 1px solid var(--line-strong);
-          background: rgba(255, 255, 255, 0.04);
-          color: var(--text);
-          cursor: pointer;
-          transition: 120ms ease;
+        .tab:hover { color: #ccc; }
+        .tab.active {
+          color: #ff4d00;
+          border-bottom-color: #ff4d00;
         }
-        .refresh-btn {
-          padding: 10px 14px;
-          border-radius: 999px;
-          font-size: 12px;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-        }
-        .refresh-btn:hover, .btn:hover {
-          border-color: rgba(143, 176, 255, 0.5);
-          background: rgba(143, 176, 255, 0.08);
-        }
-        .hero {
-          display: grid;
-          grid-template-columns: 1.18fr 0.82fr;
-          gap: 18px;
-          align-items: stretch;
-        }
-        .hero h2 {
-          font-size: clamp(32px, 4.6vw, 54px);
-          line-height: 0.98;
-          font-family: "Iowan Old Style", "Book Antiqua", serif;
-          letter-spacing: -0.03em;
-          margin-bottom: 14px;
-        }
-        .hero-copy {
-          color: var(--muted);
-          font-size: 15px;
-          line-height: 1.6;
-          max-width: 60ch;
-        }
-        .hero-metrics {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-        .metric {
-          padding: 18px;
-          border-radius: 20px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.03);
-        }
-        .metric span {
-          display: block;
-          color: var(--soft);
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
+        .tab-count {
+          background: #1a1a1a;
+          color: #ff4d00;
           font-size: 10px;
-          margin-bottom: 10px;
+          padding: 1px 7px;
+          border-radius: 999px;
+          font-weight: 700;
+          letter-spacing: 0;
         }
-        .metric strong {
-          display: block;
-          font-size: clamp(28px, 4vw, 36px);
-          margin-bottom: 8px;
+        .tab-count.alert { background: #2a0a0a; color: #f87171; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+        .card {
+          background: #111; border: 1px solid #222; border-radius: 8px; padding: 16px;
         }
-        .metric p {
-          color: var(--muted);
-          font-size: 13px;
-          line-height: 1.45;
+        .card h2 {
+          font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+          color: #666; margin-bottom: 12px;
         }
-        .two-up {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px;
+        .card.full { grid-column: 1 / -1; }
+        .card-kicker {
+          color: #555; font-size: 11px; line-height: 1.5;
+          margin-top: -6px; margin-bottom: 14px;
         }
-        .section-title {
-          font-size: 13px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--accent-2);
-          margin-bottom: 18px;
+        .stat { font-size: 28px; font-weight: 700; color: #ff4d00; }
+        .stat.alert { color: #f87171; }
+        .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+        .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 480px) { .stats-grid { grid-template-columns: 1fr; } }
+
+        /* Drafts */
+        .draft-item {
+          background: #0a0a0a; border: 1px solid #222; border-radius: 6px;
+          padding: 14px; margin-bottom: 10px;
         }
-        .section-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: flex-start;
-          margin-bottom: 18px;
+        .draft-item.highlight { border-color: #ff4d00; }
+        .draft-meta {
+          display: flex; justify-content: space-between; align-items: center;
+          margin-bottom: 8px; font-size: 11px;
         }
-        .section-kicker {
-          color: var(--soft);
-          font-size: 13px;
-          line-height: 1.5;
-          max-width: 56ch;
+        .draft-type {
+          background: #1a1a1a; color: #888; padding: 2px 8px;
+          border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .source-row, .timeline-row, .table-row {
-          display: grid;
-          gap: 10px;
-          padding: 14px 0;
-          border-top: 1px solid var(--line);
+        .draft-time { color: #444; }
+        .draft-text { font-size: 15px; line-height: 1.5; color: #fff; margin-bottom: 10px; }
+        .draft-chars { font-size: 11px; color: #666; margin-bottom: 10px; }
+        .draft-chars.over { color: #f87171; }
+        .draft-actions { display: flex; gap: 8px; }
+        .draft-edit-area {
+          width: 100%; background: #111; border: 1px solid #333; border-radius: 4px;
+          color: #fff; font-family: inherit; font-size: 14px; padding: 10px;
+          resize: vertical; margin-bottom: 8px;
         }
-        .source-row:first-of-type,
-        .timeline-row:first-of-type,
-        .table-row:first-of-type {
-          border-top: none;
-          padding-top: 0;
+        .draft-edit-area:focus { outline: none; border-color: #ff4d00; }
+        .draft-empty { color: #333; font-size: 13px; font-style: italic; padding: 20px 0; }
+
+        /* Suppressed */
+        .supp-item {
+          background: #0a0a0a; border: 1px solid #222; border-radius: 6px;
+          padding: 14px; margin-bottom: 10px;
         }
-        .source-head, .table-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: center;
+        .supp-meta {
+          display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+          margin-bottom: 8px; font-size: 11px;
         }
-        .source-head strong, .table-head strong {
-          font-size: 15px;
+        .supp-time { color: #444; min-width: 60px; }
+        .supp-score {
+          font-weight: 700; font-size: 12px;
         }
-        .meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px 18px;
-          color: var(--muted);
-          font-size: 13px;
+        .supp-score.tight { color: #f87171; }
+        .supp-score.near { color: #facc15; }
+        .supp-score.far { color: #666; }
+        .supp-gap { color: #555; font-weight: 400; margin-left: 4px; }
+        .supp-cat {
+          background: #1a1a1a; color: #888; padding: 2px 8px;
+          border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px;
+          font-size: 10px;
         }
-        .timeline-panel p,
-        .table-panel p {
-          color: var(--muted);
-          font-size: 14px;
-          line-height: 1.55;
+        .supp-summary {
+          font-size: 14px; line-height: 1.5; color: #fff; margin-bottom: 8px;
         }
-        .source-run-error, .error-source { color: var(--bad); }
-        .source-run-note {
-          color: var(--soft);
-          font-family: "JetBrains Mono", "Menlo", monospace;
-          font-size: 12px;
-          word-break: break-word;
+        .supp-reasons {
+          display: flex; flex-wrap: wrap; gap: 6px;
+        }
+        .supp-reason {
+          background: #1a1a1a; color: #888; font-size: 10px;
+          padding: 2px 8px; border-radius: 3px; letter-spacing: 0.3px;
+        }
+
+        /* Buttons */
+        .trigger-bar { display: flex; gap: 8px; align-items: center; }
+        .btn {
+          background: #1a1a1a; border: 1px solid #333; color: #e0e0e0;
+          padding: 8px 16px; border-radius: 4px; cursor: pointer;
+          font-family: inherit; font-size: 12px; font-weight: 600;
+        }
+        .btn:hover { border-color: #ff4d00; color: #ff4d00; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn.primary { background: #ff4d00; border-color: #ff4d00; color: #000; }
+        .btn.primary:hover { background: #ff6620; }
+        .btn.approve { background: #0a2a0a; border-color: #4ade80; color: #4ade80; }
+        .btn.approve:hover { background: #0f3a0f; }
+        .btn.reject { background: #1a1010; border-color: #666; color: #888; }
+        .btn.sm { padding: 5px 10px; font-size: 11px; }
+        .trigger-result { font-size: 12px; color: #4ade80; }
+
+        /* Compose */
+        .compose { display: flex; flex-direction: column; gap: 10px; }
+        .compose-input {
+          background: #0a0a0a; border: 1px solid #333; border-radius: 4px;
+          color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 10px;
+          resize: vertical;
+        }
+        .compose-input:focus { outline: none; border-color: #ff4d00; }
+        .preview-box {
+          background: #0a0a0a; border: 1px solid #ff4d00; border-radius: 6px; padding: 12px;
+        }
+        .preview-label {
+          font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+          color: #ff4d00; margin-bottom: 8px; display: flex; justify-content: space-between;
+        }
+        .char-count { color: #4ade80; }
+        .char-count.over { color: #f87171; }
+        .preview-tweet {
+          background: transparent; border: none; color: #fff; font-family: inherit;
+          font-size: 15px; line-height: 1.5; width: 100%; resize: vertical;
+          padding: 0; margin-bottom: 10px;
+        }
+        .preview-tweet:focus { outline: none; }
+        .preview-actions { display: flex; gap: 8px; }
+        .compose-status { font-size: 12px; color: #4ade80; }
+
+        /* Tables / lists */
+        .hot10-list { list-style: none; }
+        .hot10-list li {
+          display: flex; justify-content: space-between; padding: 4px 0;
+          border-bottom: 1px solid #1a1a1a; font-size: 13px;
+        }
+        .hot10-list li:last-child { border-bottom: none; }
+        .rank { color: #666; width: 24px; }
+        .city { flex: 1; }
+        .streak-list { display: flex; flex-wrap: wrap; gap: 8px; }
+        .streak-chip {
+          background: #1a1a1a; padding: 4px 10px; border-radius: 4px;
+          font-size: 12px; border: 1px solid transparent;
+        }
+        .streak-chip.clickable { cursor: pointer; }
+        .streak-chip.clickable:hover { border-color: #444; }
+        .streak-chip.selected {
+          background: #1a0a00; border-color: #ff4d00; color: #ff4d00;
+        }
+        .streak-chip.selected .days { color: #ff4d00; }
+        .streak-chip .days { color: #ff4d00; font-weight: 600; }
+        .runs-table { width: 100%; font-size: 12px; }
+        .runs-table th { text-align: left; color: #444; font-weight: 400; padding: 4px 8px 8px 0; }
+        .runs-table th.num-h { text-align: right; }
+        .runs-table td { padding: 6px 8px 6px 0; border-top: 1px solid #1a1a1a; vertical-align: middle; }
+        .runs-table td.num { text-align: right; color: #666; font-variant-numeric: tabular-nums; }
+        .runs-table td.num.drafted { color: #4ade80; font-weight: 600; }
+        .runs-table td.num.fail { color: #f87171; font-weight: 600; }
+        .runs-table td.src-name { color: #ccc; font-weight: 600; }
+        .runs-table td.mode { color: #ff4d00; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .runs-table a { color: #888; text-decoration: none; }
+        .runs-table a:hover { color: #ff4d00; }
+
+        /* Hero */
+        .hero-card { border-color: #2a1a0a; }
+        .hero-eyebrow {
+          color: #ff4d00; text-transform: uppercase; letter-spacing: 1.5px;
+          font-size: 11px; font-weight: 700; margin-bottom: 14px;
+        }
+        .hero-headline {
+          font-size: clamp(22px, 3.5vw, 36px); font-weight: 700; color: #fff;
+          line-height: 1.1; margin-bottom: 14px; letter-spacing: -0.5px;
+        }
+        .hero-sub {
+          color: #888; font-size: 13px; line-height: 1.6; max-width: 70ch;
+        }
+
+        /* Source Health (rich expandable) */
+        .source-row {
+          padding: 14px 0; border-bottom: 1px solid #1a1a1a;
+        }
+        .source-row:last-child { border-bottom: none; }
+        .source-row:first-child { padding-top: 0; }
+        .source-head {
+          display: flex; gap: 12px; align-items: center; margin-bottom: 6px;
+        }
+        .source-head strong {
+          color: #fff; font-size: 14px; font-weight: 600;
+          flex: 1; min-width: 0; word-break: break-word;
         }
         .expand-btn {
-          margin-left: auto;
-          background: rgba(143, 176, 255, 0.06);
-          border: 1px solid var(--line);
-          color: var(--muted);
-          padding: 2px 10px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 11px;
-          letter-spacing: 0.04em;
-          transition: background 0.15s, color 0.15s;
+          background: none; border: 1px solid #333; color: #888;
+          padding: 3px 10px; border-radius: 999px; cursor: pointer;
+          font-family: inherit; font-size: 10px; letter-spacing: 0.5px;
         }
-        .expand-btn:hover { background: rgba(143, 176, 255, 0.14); color: var(--text); }
+        .expand-btn:hover { border-color: #555; color: #ccc; }
+        .source-meta {
+          display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #888;
+        }
+        .source-meta .drafted-num { color: #4ade80; font-weight: 600; }
+        .source-note {
+          margin-top: 6px; font-size: 12px; color: #666; font-style: italic;
+        }
+        .source-error {
+          margin-top: 6px; font-size: 12px; color: #f87171;
+          background: #1a1010; border: 1px solid #3a1010;
+          padding: 6px 10px; border-radius: 4px;
+        }
         .source-detail {
-          margin-top: 14px;
-          padding: 14px;
-          border: 1px solid var(--line);
-          border-radius: 10px;
-          background: rgba(143, 176, 255, 0.03);
-          display: grid;
-          gap: 18px;
+          margin-top: 12px; padding-top: 12px; border-top: 1px solid #1a1a1a;
+          display: grid; gap: 14px;
         }
-        .detail-title {
-          font-size: 11px;
-          color: var(--soft);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          margin-bottom: 6px;
+
+        /* Inline funnel inside source detail */
+        .inline-funnel { display: grid; gap: 8px; }
+        .inline-funnel-title {
+          color: #666; text-transform: uppercase; letter-spacing: 0.5px;
+          font-size: 10px; margin-bottom: 4px;
         }
-        .pipeline-funnel { display: grid; gap: 6px; }
-        .funnel-row {
-          display: grid;
-          grid-template-columns: 200px 1fr 70px;
-          gap: 12px;
-          align-items: center;
-          font-size: 13px;
+        .inline-funnel-row {
+          display: grid; grid-template-columns: 1fr 100px 50px; gap: 10px;
+          align-items: center; font-size: 11px;
         }
-        .funnel-label { color: var(--muted); }
-        .funnel-bar-wrap {
-          background: rgba(143, 176, 255, 0.07);
-          border-radius: 4px;
-          height: 8px;
-          overflow: hidden;
+        @media (max-width: 640px) {
+          .inline-funnel-row { grid-template-columns: 1fr 60px 40px; }
         }
-        .funnel-bar {
-          height: 100%;
-          border-radius: 4px;
-          transition: width 0.4s ease-out;
+        .inline-funnel-label { color: #888; }
+        .inline-funnel-track {
+          height: 6px; background: #1a1a1a; border-radius: 999px; overflow: hidden;
         }
-        .funnel-bar.tone-input  { background: linear-gradient(90deg, #5b86c2, #8fb0ff); }
-        .funnel-bar.tone-process{ background: linear-gradient(90deg, #c79b3f, #ffd266); }
-        .funnel-bar.tone-output { background: linear-gradient(90deg, #4d9466, #86d796); }
-        .funnel-value {
-          text-align: right;
-          color: var(--text);
+        .inline-funnel-fill {
+          height: 100%; background: #ff4d00; border-radius: 999px;
+          transition: width 0.3s ease;
+        }
+        .inline-funnel-val {
+          color: #ff4d00; font-weight: 700; text-align: right;
           font-variant-numeric: tabular-nums;
-          font-size: 13px;
         }
-        .events-table { display: grid; gap: 0; }
-        .events-head {
-          display: grid;
-          grid-template-columns: 100px 1fr 1.4fr;
-          gap: 10px;
-          font-size: 11px;
-          color: var(--soft);
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
-          padding-bottom: 6px;
-          border-bottom: 1px solid var(--line);
+
+        /* Inline events table */
+        .inline-events { display: grid; gap: 4px; }
+        .inline-events-title {
+          color: #666; text-transform: uppercase; letter-spacing: 0.5px;
+          font-size: 10px; margin-bottom: 4px;
         }
-        .event-row {
-          display: grid;
-          grid-template-columns: 100px 1fr 1.4fr;
-          gap: 10px;
-          align-items: center;
-          padding: 6px 0;
-          border-bottom: 1px dashed var(--line);
-          font-size: 13px;
+        .inline-event-row {
+          display: grid; grid-template-columns: 80px 1fr 1.4fr; gap: 10px;
+          align-items: baseline; font-size: 11px;
+          padding: 4px 0; border-top: 1px solid #1a1a1a;
         }
-        .event-row:last-of-type { border-bottom: none; }
-        .event-station strong { color: var(--text); }
-        .event-id { color: var(--soft); font-size: 11px; }
-        .event-meta { color: var(--soft); font-size: 12px; }
-        .desk-panel { padding: 26px; }
+        @media (max-width: 720px) {
+          .inline-event-row { grid-template-columns: 80px 1fr; grid-row-gap: 2px; }
+          .inline-event-meta { grid-column: 2; }
+        }
+        .inline-event-station strong { color: #ccc; }
+        .inline-event-id { color: #555; font-size: 10px; }
+        .inline-event-meta { color: #666; }
+
+        /* Run Timeline (event log) */
+        .timeline-row {
+          padding: 12px 0; border-bottom: 1px solid #1a1a1a;
+        }
+        .timeline-row:last-child { border-bottom: none; }
+        .timeline-row:first-child { padding-top: 0; }
+        .timeline-head {
+          display: flex; gap: 12px; align-items: center;
+          justify-content: space-between; margin-bottom: 4px;
+        }
+        .timeline-head strong {
+          color: #fff; font-family: inherit; font-size: 13px; letter-spacing: 0.5px;
+        }
+        .timeline-text { color: #888; font-size: 12px; line-height: 1.5; margin: 0; }
+
+        /* Recent publishing outcomes */
+        .outcome-row {
+          padding: 12px 0; border-bottom: 1px solid #1a1a1a;
+        }
+        .outcome-row:last-child { border-bottom: none; }
+        .outcome-row:first-child { padding-top: 0; }
+        .outcome-head {
+          display: flex; gap: 12px; align-items: center;
+          justify-content: space-between; margin-bottom: 4px;
+        }
+        .outcome-head strong {
+          color: #ccc; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .outcome-meta {
+          display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
+          font-size: 12px; color: #888;
+        }
+        .outcome-meta .outcome-time { color: #555; }
+        .outcome-meta .outcome-err { color: #f87171; }
+
+        /* Status banner */
+        .status-banner {
+          margin-top: 10px; padding: 8px 12px; border-radius: 4px;
+          font-size: 12px; border: 1px solid;
+        }
+        .status-banner.success { background: #0a2a0a; color: #4ade80; border-color: #1a4a1a; }
+        .status-banner.error { background: #2a0a0a; color: #f87171; border-color: #4a1a1a; }
+
+        /* Section head + backend pill */
+        .section-head {
+          display: flex; justify-content: space-between; align-items: flex-start;
+          gap: 16px; margin-bottom: 12px;
+        }
+        .section-head .card-kicker { margin-bottom: 0; }
+        .backend-pill {
+          background: #1a1a1a; color: #ff4d00; border: 1px solid #3a2010;
+          padding: 4px 10px; border-radius: 999px;
+          font-size: 11px; letter-spacing: 0.04em; white-space: nowrap;
+        }
+
+        /* Draft Workbench */
+        .desk-panel { padding: 20px; }
         .draft-desk {
-          display: grid;
-          grid-template-columns: 320px minmax(0, 1fr);
-          gap: 18px;
-          align-items: start;
+          display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 18px;
+        }
+        @media (max-width: 1100px) {
+          .draft-desk { grid-template-columns: 1fr; }
         }
         .draft-queue {
-          display: grid;
-          gap: 10px;
-          align-content: start;
-          max-height: 920px;
-          overflow: auto;
+          display: grid; gap: 8px; max-height: 720px; overflow-y: auto;
           padding-right: 4px;
         }
         .queue-item {
-          width: 100%;
-          text-align: left;
-          border-radius: 18px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.03);
-          padding: 14px;
-          color: inherit;
-          cursor: pointer;
-          transition: 140ms ease;
+          background: #0f0f0f; border: 1px solid #222; border-radius: 6px;
+          padding: 12px; cursor: pointer; text-align: left;
+          display: grid; gap: 6px; font-family: inherit; color: #e0e0e0;
         }
-        .queue-item:hover,
-        .queue-item.selected {
-          border-color: rgba(143, 176, 255, 0.5);
-          background: rgba(143, 176, 255, 0.08);
-          transform: translateY(-1px);
-        }
+        .queue-item:hover { border-color: #444; }
+        .queue-item.selected { border-color: #ff4d00; background: #1a0a00; }
         .queue-item-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          align-items: center;
-          margin-bottom: 8px;
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 11px;
         }
-        .queue-score {
-          color: var(--soft);
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-        }
-        .draft-type {
-          display: inline-flex;
-          align-items: center;
-          border-radius: 999px;
-          border: 1px solid var(--line);
-          padding: 5px 10px;
-          color: var(--accent-2);
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          background: rgba(255, 255, 255, 0.03);
-        }
+        .queue-score { color: #888; font-variant-numeric: tabular-nums; }
         .queue-text {
-          color: var(--text);
-          font-size: 14px;
-          line-height: 1.5;
-          margin-bottom: 10px;
-        }
-        .queue-meta {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          color: var(--soft);
-          font-size: 11px;
-        }
-        .draft-workbench {
-          border-radius: 22px;
-          border: 1px solid var(--line);
-          background: linear-gradient(180deg, rgba(16, 21, 29, 0.94), rgba(12, 17, 24, 0.9));
-          padding: 20px;
-        }
-        .draft-meta {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 12px;
-          font-size: 12px;
-        }
-        .draft-time { color: var(--soft); }
-        .draft-status-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 14px;
-        }
-        .workbench-pill { color: var(--muted); }
-        .draft-text {
-          font-size: 22px;
-          line-height: 1.45;
-          color: var(--text);
-          margin-bottom: 10px;
-          font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
-        }
-        .draft-chars {
-          font-size: 11px;
-          color: var(--soft);
-          margin-bottom: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-        }
-        .draft-chars.over { color: var(--bad); }
-        .draft-reason-block { display: grid; gap: 4px; margin-bottom: 12px; }
-        .draft-reason-line { font-size: 12px; color: var(--muted); }
-        .draft-reason-line strong { color: var(--accent-2); font-weight: 600; }
-        .draft-edit-area,
-        .compose-input,
-        .preview-tweet {
-          width: 100%;
-          border-radius: 18px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.03);
-          color: var(--text);
-          padding: 14px 16px;
-          font-size: 14px;
-          line-height: 1.6;
-          resize: vertical;
-        }
-        .draft-edit-area:focus,
-        .compose-input:focus,
-        .preview-tweet:focus {
-          outline: none;
-          border-color: rgba(143, 176, 255, 0.5);
-        }
-        .workbench-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-          margin: 18px 0;
-        }
-        .workbench-panel {
-          border-radius: 18px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.02);
-          padding: 14px;
-        }
-        .workbench-panel h3 {
-          font-size: 10px;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
-          color: var(--accent-2);
-          margin-bottom: 10px;
-        }
-        .workbench-headline {
-          color: var(--text);
-          font-size: 15px;
-          line-height: 1.45;
-          margin-bottom: 10px;
-        }
-        .fact-list { display: grid; gap: 8px; }
-        .fact-row {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid var(--line);
-        }
-        .fact-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .fact-label { color: var(--soft); font-size: 12px; }
-        .fact-value { color: var(--text); font-size: 12px; text-align: right; }
-        .run-trace { display: grid; gap: 8px; }
-        .trace-line {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          color: var(--muted);
-          font-size: 12px;
-        }
-        .trace-line strong { color: var(--text); font-weight: 600; }
-        .score-meter { margin-bottom: 12px; }
-        .score-meter:last-child { margin-bottom: 0; }
-        .score-meter-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          color: var(--soft);
-          font-size: 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          margin-bottom: 6px;
-        }
-        .score-meter-track {
-          height: 8px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.05);
+          font-size: 12px; color: #ccc; line-height: 1.4;
+          display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
           overflow: hidden;
         }
-        .score-meter-fill {
-          height: 100%;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #8fb0ff, #d5e1ff);
+        .queue-meta {
+          display: flex; justify-content: space-between;
+          color: #555; font-size: 10px; letter-spacing: 0.4px;
         }
-        .score-meter-fill.inverse {
-          background: linear-gradient(90deg, #86d796, #ffd266);
+
+        .draft-workbench {
+          display: grid; gap: 14px;
         }
-        .candidate-list {
-          display: grid;
-          gap: 10px;
-          padding-top: 16px;
-          border-top: 1px solid var(--line);
+        .workbench-pill {
+          display: inline-flex; align-items: center; gap: 4px;
+          background: #1a1a1a; color: #ccc; border: 1px solid #2a2a2a;
+          padding: 4px 10px; border-radius: 999px;
+          font-size: 11px; letter-spacing: 0.04em;
         }
-        .candidate-item {
-          border-radius: 18px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.03);
+        .workbench-pill.alert { background: #1a0a00; color: #ffaa66; border-color: #ff4d00; }
+        .draft-status-row { display: flex; flex-wrap: wrap; gap: 6px; }
+        .draft-reason-block {
+          background: #0f0f0f; border: 1px solid #222; border-radius: 6px;
+          padding: 10px 12px; font-size: 12px; color: #888;
+          display: grid; gap: 4px;
+        }
+        .draft-reason-line strong { color: #ff4d00; margin-right: 6px; }
+
+        /* Shadow two-bot panel */
+        .shadow-two-bot {
+          background: #0f0f0f; border: 1px solid #2a2a2a; border-radius: 6px;
           padding: 12px;
         }
-        .candidate-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          align-items: center;
-          margin-bottom: 8px;
-          font-size: 10px;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--soft);
+        .shadow-label {
+          font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+          color: #888; margin-bottom: 8px;
         }
-        .candidate-text { color: var(--text); font-size: 14px; line-height: 1.55; margin-bottom: 8px; }
-        .candidate-meta { color: var(--muted); font-size: 11px; }
-        .draft-actions, .trigger-bar, .preview-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          align-items: center;
+        .shadow-text {
+          white-space: pre-wrap; font-family: inherit;
+          font-size: 14px; line-height: 1.5; color: #fff;
         }
-        .btn {
-          border-radius: 999px;
-          padding: 10px 15px;
-          font-size: 12px;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
+        .shadow-meta {
+          font-size: 11px; color: #666; margin-top: 8px;
+          display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
         }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; }
-        .btn.primary {
-          background: rgba(143, 176, 255, 0.16);
-          color: var(--accent-2);
-        }
-        .btn.approve {
-          background: rgba(134, 215, 150, 0.1);
-          color: var(--good);
-          border-color: rgba(134, 215, 150, 0.3);
-        }
-        .btn.reject {
-          background: rgba(255, 143, 143, 0.08);
-          color: var(--bad);
-          border-color: rgba(255, 143, 143, 0.2);
-        }
-        .btn.sm {
-          padding: 8px 12px;
-          font-size: 11px;
-        }
-        .draft-feedback, .status-banner {
-          margin-top: 12px;
-          padding: 12px 14px;
-          border-radius: 16px;
-          border: 1px solid var(--line);
-          font-size: 13px;
-        }
-        .draft-feedback.success, .status-banner.success {
-          color: var(--good);
-          background: rgba(134, 215, 150, 0.08);
-        }
-        .draft-feedback.error, .status-banner.error {
-          color: var(--bad);
-          background: rgba(255, 143, 143, 0.08);
-        }
-        .compose {
-          display: grid;
-          gap: 12px;
-        }
-        .preview-box {
-          border-radius: 20px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.025);
-          padding: 16px;
-        }
-        .preview-label {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 10px;
-          color: var(--accent);
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-          font-size: 11px;
-        }
-        .char-count { color: var(--good); }
-        .char-count.over { color: var(--bad); }
-        .card-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px;
-        }
-        .stat-block {
-          border-radius: 18px;
-          border: 1px solid var(--line);
-          background: rgba(255, 255, 255, 0.025);
-          padding: 16px;
-          margin-bottom: 12px;
-        }
-        .stat-block:last-child { margin-bottom: 0; }
-        .stat-label {
-          color: var(--soft);
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          font-size: 10px;
-          margin-bottom: 8px;
-        }
-        .stat {
-          font-size: 26px;
-          margin-bottom: 8px;
-          font-family: "Iowan Old Style", "Book Antiqua", serif;
-        }
-        .stat-copy {
-          color: var(--muted);
-          font-size: 13px;
-          line-height: 1.5;
-        }
-        .hot10-list, .error-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-        .hot10-list li, .error-list li {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 12px 0;
-          border-top: 1px solid var(--line);
-          font-size: 13px;
-        }
-        .hot10-list li:first-child, .error-list li:first-child { border-top: none; padding-top: 0; }
-        .rank { color: var(--soft); width: 28px; }
-        .city { flex: 1; }
-        .streak-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .streak-chip {
-          border-radius: 999px;
-          border: 1px solid var(--line);
-          padding: 8px 12px;
-          font-size: 12px;
-          color: var(--muted);
-          background: rgba(255, 255, 255, 0.03);
-        }
-        .streak-chip .days { color: var(--accent-2); font-weight: 600; }
-        .runs-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 13px;
-        }
-        .runs-table th {
-          text-align: left;
-          color: var(--soft);
-          font-weight: 500;
-          padding: 0 0 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          font-size: 10px;
-        }
-        .runs-table td {
-          padding: 12px 10px 12px 0;
-          border-top: 1px solid var(--line);
-          color: var(--muted);
-        }
-        .runs-table a {
-          color: var(--accent);
-          text-decoration: none;
-        }
-        .runs-table a:hover { color: var(--accent-2); }
-        .error-source { font-weight: 600; }
-        .error-msg {
-          color: var(--muted);
-          display: block;
-          margin-top: 4px;
-          line-height: 1.5;
-        }
-        .error-ts { color: var(--soft); }
-        .empty {
-          color: var(--soft);
-          font-size: 13px;
-          font-style: italic;
-        }
-        .draft-empty {
-          color: var(--soft);
-          font-size: 14px;
-          font-style: italic;
-          padding: 16px 0;
-        }
-        .loading {
-          padding: 120px 0;
-          text-align: center;
-          color: var(--soft);
-          font-size: 14px;
-        }
+        .shadow-meta .btn.sm { margin-left: auto; }
 
-        @media (max-width: 1120px) {
-          .hero, .two-up, .card-grid, .draft-desk, .workbench-grid {
-            grid-template-columns: 1fr;
-          }
-          .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        /* Workbench panel grid */
+        .workbench-grid {
+          display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;
         }
         @media (max-width: 720px) {
-          .shell {
-            width: min(100% - 16px, 100%);
-            margin: 12px auto 28px;
-          }
-          .panel { padding: 18px; border-radius: 20px; }
-          .topbar, .section-head, .draft-meta, .source-head, .table-head {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-          .hero-metrics { grid-template-columns: 1fr; }
+          .workbench-grid { grid-template-columns: 1fr; }
         }
+        .workbench-panel {
+          background: #0f0f0f; border: 1px solid #222; border-radius: 6px;
+          padding: 14px; display: grid; gap: 10px;
+        }
+        .workbench-panel h3 {
+          font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+          color: #888; font-weight: 600;
+        }
+        .workbench-headline {
+          font-size: 13px; color: #ccc; line-height: 1.5;
+        }
+        .fact-list { display: grid; gap: 4px; }
+        .fact-row {
+          display: flex; justify-content: space-between; align-items: baseline;
+          gap: 12px; font-size: 11px;
+          padding: 4px 0; border-top: 1px solid #1a1a1a;
+        }
+        .fact-row:first-child { border-top: none; padding-top: 0; }
+        .fact-label { color: #666; flex-shrink: 0; }
+        .fact-value {
+          color: #ccc; text-align: right; word-break: break-word;
+          font-variant-numeric: tabular-nums;
+        }
+
+        /* Score meter */
+        .score-meter { display: grid; gap: 4px; }
+        .score-meter-head {
+          display: flex; justify-content: space-between;
+          font-size: 11px; color: #888;
+        }
+        .score-meter-head span:last-child { color: #ff4d00; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .score-meter-track {
+          height: 5px; background: #1a1a1a; border-radius: 999px; overflow: hidden;
+        }
+        .score-meter-fill {
+          height: 100%; background: #ff4d00; border-radius: 999px;
+          transition: width 0.3s ease;
+        }
+        .score-meter-fill.inverse { background: #facc15; }
+
+        /* Run trace */
+        .run-trace { display: grid; gap: 4px; }
+        .trace-line {
+          display: flex; justify-content: space-between; align-items: baseline;
+          gap: 12px; font-size: 11px;
+          padding: 4px 0; border-top: 1px solid #1a1a1a;
+        }
+        .trace-line:first-child { border-top: none; padding-top: 0; }
+        .trace-line span { color: #666; }
+        .trace-line strong {
+          color: #ccc; font-weight: 600; font-family: inherit;
+          font-variant-numeric: tabular-nums; word-break: break-all; text-align: right;
+        }
+
+        /* Candidate list */
+        .candidate-list { display: grid; gap: 10px; }
+        .candidate-item {
+          background: #0f0f0f; border: 1px solid #222; border-radius: 6px;
+          padding: 12px; display: grid; gap: 8px;
+        }
+        .candidate-head {
+          display: flex; justify-content: space-between; align-items: center;
+          font-size: 11px; color: #888; letter-spacing: 0.04em;
+        }
+        .candidate-text { font-size: 13px; color: #ccc; line-height: 1.5; }
+        .candidate-meta { font-size: 11px; color: #666; }
+
+        /* Draft feedback */
+        .draft-feedback {
+          margin-top: 10px; padding: 8px 12px; border-radius: 4px;
+          font-size: 12px; border: 1px solid;
+        }
+        .draft-feedback.success { background: #0a2a0a; color: #4ade80; border-color: #1a4a1a; }
+        .draft-feedback.error { background: #2a0a0a; color: #f87171; border-color: #4a1a1a; }
+
+        /* Model config */
+        .model-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+        @media (max-width: 640px) { .model-grid { grid-template-columns: 1fr; } }
+        .model-row {
+          display: flex; justify-content: space-between; align-items: baseline;
+          padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 12px;
+        }
+        .model-row span { color: #666; text-transform: uppercase; letter-spacing: 0.5px; font-size: 11px; }
+        .model-row strong { color: #ccc; font-weight: 600; }
+        .badge {
+          display: inline-block; padding: 2px 8px; border-radius: 3px;
+          font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .badge.success { background: #0a2a0a; color: #4ade80; }
+        .badge.failure { background: #2a0a0a; color: #f87171; }
+        .badge.running { background: #1a1a0a; color: #facc15; }
+        .badge.neutral { background: #1a1a1a; color: #888; }
+        .error-list { list-style: none; max-height: 200px; overflow-y: auto; }
+        .error-list li { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #1a1a1a; }
+        .error-source { color: #f87171; font-weight: 600; }
+        .error-ts { color: #444; margin-left: 8px; }
+        .error-msg { color: #888; display: block; margin-top: 2px; }
+        .empty { color: #333; font-size: 13px; font-style: italic; }
+        .loading { text-align: center; color: #333; padding: 60px; font-size: 14px; }
       `}</style>
 
-      <div className="shell">
-        <header className="topbar">
-          <div>
-            <div className="eyebrow">Run Center</div>
-            <div className="brand-row">
-              <h1>@theheat</h1>
-              <span className="subhead">editorial desk</span>
-            </div>
-            <p className="lede">
-              Operational truth, not workflow vibes. The dashboard now treats source health, funnel quality,
-              queue state, and publishing outcomes as the product instead of hiding everything behind a green
-              GitHub Actions check.
-            </p>
-          </div>
-          <div className="top-actions">
-            <span className="backend-pill">{(data?.stateBackend || "gist").toUpperCase()} backend</span>
-            <button className="refresh-btn" onClick={fetchData}>Refresh</button>
-          </div>
+      <div className="dash">
+        <header>
+          <h1>@theheat <span>control panel</span></h1>
+          <button className="refresh-btn" onClick={fetchData}>refresh</button>
         </header>
+
+        <div className="tabs">
+          <button
+            className={`tab ${activeTab === "dashboard" ? "active" : ""}`}
+            onClick={() => setActiveTab("dashboard")}
+          >
+            Dashboard
+          </button>
+          <button
+            className={`tab ${activeTab === "pipeline" ? "active" : ""}`}
+            onClick={() => setActiveTab("pipeline")}
+          >
+            Pipeline
+            {latestRichRun?.failure_count > 0 ? (
+              <span className="tab-count alert">{latestRichRun.failure_count}</span>
+            ) : null}
+          </button>
+          <button
+            className={`tab ${activeTab === "workbench" ? "active" : ""}`}
+            onClick={() => setActiveTab("workbench")}
+          >
+            Workbench
+            {drafts.length > 0 ? <span className="tab-count">{drafts.length}</span> : null}
+          </button>
+          <button
+            className={`tab ${activeTab === "suppressed" ? "active" : ""}`}
+            onClick={() => setActiveTab("suppressed")}
+          >
+            Suppressed
+            {suppressionsStats?.last24h ? (
+              <span className="tab-count">{suppressionsStats.last24h}</span>
+            ) : null}
+          </button>
+        </div>
 
         {loading ? (
           <div className="loading">loading...</div>
+        ) : activeTab === "suppressed" ? (
+          <SuppressedView
+            suppressions={suppressions}
+            stats={suppressionsStats}
+            sourceFilter={suppressionsSourceFilter}
+            setSourceFilter={setSuppressionsSourceFilter}
+          />
+        ) : activeTab === "pipeline" ? (
+          <PipelineView
+            run={latestRichRun}
+            runs={runHistory}
+            config={modelConfig}
+            drafts={drafts}
+            trigger={trigger}
+            triggering={triggering}
+            triggerResult={triggerResult}
+          />
+        ) : activeTab === "workbench" ? (
+          <WorkbenchView
+            drafts={drafts}
+            selectedDraftId={selectedDraftId}
+            setSelectedDraftId={setSelectedDraftId}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            editText={editText}
+            setEditText={setEditText}
+            draftAct={draftAct}
+            draftAction={draftAction}
+            draftFeedback={draftFeedback}
+            botRuns={runHistory}
+          />
         ) : (
           <>
-            <section className="hero panel">
-              <div>
-                <div className="eyebrow">Live Ops</div>
-                <h2>Operational truth, not workflow vibes.</h2>
-                <p className="hero-copy">
-                  The current run view tells you what each source returned, what got filtered out, what cleared
-                  editorial scoring, what made it into the queue, and what failed. Success is measured in signal
-                  quality and publishing safety, not just cron completion.
-                </p>
-              </div>
-              <div className="hero-metrics">
-                <div className="metric">
-                  <span>Current run</span>
-                  <strong>{latestBotRun ? `${runHealth}%` : "—"}</strong>
-                  <p>
-                    {latestBotRun
-                      ? `${healthySourceRuns.length} of ${latestSourceRuns.length || latestBotRun.source_count || 0} sources finished healthy.`
-                      : "No run telemetry yet."}
-                  </p>
-                </div>
-                <div className="metric">
-                  <span>Signals</span>
-                  <strong>{latestBotRun ? totalObserved : drafts.length}</strong>
-                  <p>
-                    {latestBotRun
-                      ? `${totalPromoted} promoted events, ${totalDrafted} queue-ready drafts.`
-                      : `${drafts.length} drafts waiting for review.`}
-                  </p>
-                </div>
-                <div className="metric">
-                  <span>Failures</span>
-                  <strong>{failedSourceRuns.length}</strong>
-                  <p>
-                    {failedSourceRuns.length
-                      ? `${failedSourceRuns.length} source slots need attention.`
-                      : "No source failures in the latest run."}
-                  </p>
-                </div>
-                <div className="metric">
-                  <span>Queue</span>
-                  <strong>{drafts.length}</strong>
-                  <p>{autoQueuedDrafts} auto-timed drafts. {manualOnlyDrafts} review-only items.</p>
-                </div>
-              </div>
-            </section>
-
-            {modelConfig && (
-              <section className="panel" style={{ marginBottom: 16 }}>
-                <h2 className="section-title">Model Config</h2>
-                <div className="meta" style={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 16, rowGap: 4, fontFamily: "ui-monospace, monospace", fontSize: 13 }}>
-                  <span style={{ color: "#9aa0a6" }}>writer</span>
-                  <strong>{modelConfig.writer_model}</strong>
-                  <span style={{ color: "#9aa0a6" }}>fact-check</span>
-                  <strong>{modelConfig.fact_check_model}</strong>
-                  <span style={{ color: "#9aa0a6" }}>claim-extract</span>
-                  <strong>{modelConfig.claim_extract_model}</strong>
-                  <span style={{ color: "#9aa0a6" }}>voice-gen</span>
-                  <strong>{modelConfig.voice_gen_model}</strong>
-                  <span style={{ color: "#9aa0a6" }}>evaluator</span>
-                  <strong style={{ color: modelConfig.evaluator_enabled ? "#7fbf7f" : "#9aa0a6" }}>
-                    {modelConfig.evaluator_enabled ? "enabled" : "disabled"}
-                  </strong>
-                  <span style={{ color: "#9aa0a6" }}>shadow A/B</span>
-                  <strong style={{ color: modelConfig.shadow_ab_enabled ? "#7fbf7f" : "#9aa0a6" }}>
-                    {modelConfig.shadow_ab_enabled ? "enabled" : "disabled"}
-                  </strong>
-                </div>
-              </section>
-            )}
-
-            <section className="two-up">
-              <article className="panel">
-                <h2 className="section-title">Source Health</h2>
-                {latestSourceRuns.length > 0 ? (
-                  latestSourceRuns.map((source) => (
-                    <SourceRow
-                      key={`${latestBotRun.id}-${source.source}`}
-                      source={source}
-                      runId={latestBotRun.id}
-                    />
-                  ))
-                ) : (
-                  <div className="empty">No source telemetry yet.</div>
-                )}
-              </article>
-
-              <article className="panel">
-                <h2 className="section-title">Funnel</h2>
-                <div className="source-row">
-                  <div className="source-head">
-                    <strong>Observations ingested</strong>
-                    <span className="signal-badge good">{totalObserved}</span>
-                  </div>
-                  <div className="meta">
-                    <span>raw payloads normalized into canonical facts</span>
-                  </div>
-                </div>
-                <div className="source-row">
-                  <div className="source-head">
-                    <strong>Events created</strong>
-                    <span className="signal-badge good">{totalPromoted}</span>
-                  </div>
-                  <div className="meta">
-                    <span>duplicates clustered and low-confidence items suppressed</span>
-                  </div>
-                </div>
-                <div className="source-row">
-                  <div className="source-head">
-                    <strong>Draft candidates generated</strong>
-                    <span className="signal-badge good">
-                      {drafts.reduce((sum, draft) => sum + (draft.candidates?.length || 1), 0)}
-                    </span>
-                  </div>
-                  <div className="meta">
-                    <span>3-5 variants per high-scoring event when available</span>
-                  </div>
-                </div>
-                <div className="source-row">
-                  <div className="source-head">
-                    <strong>Queue-ready drafts</strong>
-                    <span className={`signal-badge ${drafts.length ? "warn" : "neutral"}`}>{drafts.length}</span>
-                  </div>
-                  <div className="meta">
-                    <span>best candidates that survived quality gates and policy rules</span>
-                  </div>
-                </div>
-              </article>
-            </section>
-
-            <section className="panel timeline-panel">
-              <h2 className="section-title">Run Timeline</h2>
-              {timelineRows.length > 0 ? (
-                timelineRows.map((entry) => (
-                  <div className="timeline-row" key={entry.key}>
-                    <div className="table-head">
-                      <strong>{formatUtcStamp(entry.time)}</strong>
-                      <span className={`signal-badge ${entry.tone}`}>{entry.label}</span>
-                    </div>
-                    <p>{entry.text}</p>
-                  </div>
-                ))
-              ) : (
-                <div className="empty">No run timeline yet.</div>
-              )}
-            </section>
-
-            <section className="two-up">
-              <article className="panel table-panel">
-                <h2 className="section-title">Recent Publishing Outcomes</h2>
-                {recentDraftOutcomes.length > 0 ? (
-                  recentDraftOutcomes.map((draft) => (
-                    <div className="table-row" key={`outcome-${draft.id}`}>
-                      <div className="table-head">
-                        <strong>{`${draft.type || "draft"} / ${draftOutcomeLabel(draft)}`}</strong>
-                        <span className={`signal-badge ${draftOutcomeTone(draft)}`}>{draftOutcomeLabel(draft)}</span>
-                      </div>
-                      <div className="meta">
-                        <span>{clipText(draft.text, 72)}</span>
-                        <span>{timeAgo(draft.updated_at || draft.posted_at || draft.created_at)}</span>
-                        {draft.post_error && <span>{draft.post_error}</span>}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty">No publishing outcomes yet.</div>
-                )}
-              </article>
-
-              <article className="panel">
-                <div className="section-head">
-                  <div>
-                    <h2 className="section-title">Command Deck</h2>
-                    <p className="section-kicker">
-                      Trigger the pipeline, watch the queue, and keep manual intervention close without leaving the run view.
-                    </p>
-                  </div>
-                </div>
-                <div className="trigger-bar">
-                  <button
-                    className="btn primary"
-                    disabled={!!triggering}
-                    onClick={() => trigger("both")}
-                  >
-                    {triggering === "both" ? "Running..." : "Run Both"}
-                  </button>
-                  <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
-                    {triggering === "alerts" ? "Running..." : "Alerts Only"}
-                  </button>
-                  <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
-                    {triggering === "leaderboard" ? "Running..." : "Leaderboard Only"}
-                  </button>
-                </div>
-                {triggerResult && (
-                  <div className={`status-banner ${triggerResult.startsWith("Error") ? "error" : "success"}`}>
-                    {triggerResult}
-                  </div>
-                )}
-                {data?.stateError && <div className="status-banner error">{data.stateError}</div>}
-                {data?.runsError && <div className="status-banner error">{data.runsError}</div>}
-              </article>
-            </section>
-
-            <section className="panel desk-panel">
-              <div className="section-head">
-                <div>
-                  <h2 className="section-title">Draft Workbench</h2>
-                  <p className="section-kicker">
-                    Review the queue with source facts, score context, alternate copy, and approval policy all in one place.
-                  </p>
-                </div>
-                <span className="backend-pill">{drafts.length} pending drafts</span>
-              </div>
+            {/* DRAFTS — primary view */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Drafts to Review ({drafts.length})</h2>
               {drafts.length > 0 ? (
-                <div className="draft-desk">
-                  <div className="draft-queue">
-                    {drafts.map((draft) => (
-                      <button
-                        key={draft.id}
-                        className={`queue-item ${selectedDraft?.id === draft.id ? "selected" : ""}`}
-                        onClick={() => {
-                          setSelectedDraftId(draft.id)
-                          setEditingId(null)
-                          setEditText("")
-                        }}
-                      >
-                        <div className="queue-item-head">
-                          <span className="draft-type">{draft.type}</span>
-                          <span className="queue-score">
-                            S {draft.score?.total ?? "—"} · C {draft.candidate_score?.total ?? "—"}
-                          </span>
-                        </div>
-                        <div className="queue-text">{clipText(draft.text, 118)}</div>
-                        <div className="queue-meta">
-                          <span>{timeAgo(draft.created_at)}</span>
-                          <span>{policySummary(draft)}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                drafts.map((d) => (
+                  <div key={d.id} className={`draft-item ${editingId === d.id ? "highlight" : ""}`}>
+                    <div className="draft-meta">
+                      <span className="draft-type">{d.type}</span>
+                      <span className="draft-time">{timeAgo(d.created_at)}</span>
+                    </div>
 
-                  <div className="draft-workbench">
-                    {selectedDraft && (
+                    {editingId === d.id ? (
                       <>
-                        <div className="draft-meta">
-                          <span className="draft-type">{selectedDraft.type}</span>
-                          <span className="draft-time">
-                            {selectedDraft.review_context?.source || "draft queue"}
-                            {" · "}
-                            {timeAgo(selectedDraft.created_at)}
-                          </span>
+                        <textarea
+                          className="draft-edit-area"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          rows={3}
+                        />
+                        <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
+                          {editText.length}/280
                         </div>
-
-                        <div className="draft-status-row">
-                          <span className="workbench-pill">
-                            signal {selectedDraft.score?.total ?? "—"}
-                            {selectedDraft.score?.label ? ` · ${selectedDraft.score.label}` : ""}
-                          </span>
-                          <span className="workbench-pill">
-                            copy {selectedDraft.candidate_score?.total ?? "—"}
-                            {selectedCandidate?.source ? ` · ${selectedCandidate.source}` : ""}
-                          </span>
-                          {selectedDraft.auto_approve_at ? (
-                            <span className="workbench-pill">{countdownText(selectedDraft.auto_approve_at)}</span>
-                          ) : selectedDraft.approval_policy?.mode === "manual_only" ? (
-                            <span className="workbench-pill">manual only</span>
-                          ) : (
-                            <span className="workbench-pill">
-                              {selectedDraft.approval_policy?.recommended_delay_minutes
-                                ? `recommended ${delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)}`
-                                : "manual approval"}
-                            </span>
-                          )}
-                          {selectedDraft.review_context?.run_mode && (
-                            <span className="workbench-pill">{selectedDraft.review_context.run_mode}</span>
-                          )}
-                        </div>
-
-                        {editingId === selectedDraft.id ? (
-                          <>
-                            <textarea
-                              className="draft-edit-area"
-                              value={editText}
-                              onChange={(e) => setEditText(e.target.value)}
-                              rows={4}
-                            />
-                            <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
-                              {editText.length}/280
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <div className="draft-text">{selectedDraft.text}</div>
-                            <div className="draft-chars">{selectedDraft.text.length}/280</div>
-                          </>
-                        )}
-
-                        {(selectedDraft.score?.reasons?.length > 0 || selectedDraft.candidate_score?.reasons?.length > 0) && (
-                          <div className="draft-reason-block">
-                            {selectedDraft.score?.reasons?.length > 0 && (
-                              <div className="draft-reason-line">
-                                <strong>Signal:</strong> {selectedDraft.score.reasons.join(" · ")}
-                              </div>
-                            )}
-                            {selectedDraft.candidate_score?.reasons?.length > 0 && (
-                              <div className="draft-reason-line">
-                                <strong>Copy:</strong> {selectedDraft.candidate_score.reasons.join(" · ")}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {selectedDraft.review_context?.shadow_two_bot?.text && (
-                          <div className="shadow-two-bot-panel" style={{
-                            border: "1px solid #3a3a3a",
-                            borderRadius: 6,
-                            padding: 12,
-                            marginTop: 12,
-                            background: "#1a1a1a",
-                          }}>
-                            <div style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              letterSpacing: "0.05em",
-                              color: "#9aa0a6",
-                              marginBottom: 8,
-                            }}>
-                              SHADOW (TWO-BOT)
-                            </div>
-                            <div style={{
-                              whiteSpace: "pre-wrap",
-                              fontFamily: "ui-monospace, monospace",
-                              fontSize: 14,
-                              lineHeight: 1.5,
-                              color: "#e8eaed",
-                            }}>
-                              {selectedDraft.review_context.shadow_two_bot.text}
-                            </div>
-                            <div style={{
-                              fontSize: 11,
-                              color: "#9aa0a6",
-                              marginTop: 6,
-                              display: "flex",
-                              gap: 12,
-                              flexWrap: "wrap",
-                            }}>
-                              <span>{selectedDraft.review_context.shadow_two_bot.text.length}/280</span>
-                              {selectedDraft.review_context.shadow_two_bot.angle_chosen && (
-                                <span>angle: {selectedDraft.review_context.shadow_two_bot.angle_chosen}</span>
-                              )}
-                              {selectedDraft.review_context.shadow_two_bot.writer_model && (
-                                <span>writer: {selectedDraft.review_context.shadow_two_bot.writer_model}</span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => navigator.clipboard?.writeText(selectedDraft.review_context.shadow_two_bot.text)}
-                                style={{
-                                  marginLeft: "auto",
-                                  fontSize: 11,
-                                  padding: "2px 8px",
-                                  background: "#2a2a2a",
-                                  border: "1px solid #3a3a3a",
-                                  borderRadius: 4,
-                                  color: "#e8eaed",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                copy
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="workbench-grid">
-                          <div className="workbench-panel">
-                            <h3>Why This Exists</h3>
-                            <div className="workbench-headline">
-                              {selectedDraft.review_context?.headline || "Pending draft awaiting review"}
-                            </div>
-                            {selectedDraft.review_context?.facts?.length > 0 ? (
-                              <div className="fact-list">
-                                {selectedDraft.review_context.facts.map((fact) => (
-                                  <div key={`${selectedDraft.id}-${fact.label}`} className="fact-row">
-                                    <span className="fact-label">{fact.label}</span>
-                                    <span className="fact-value">{fact.value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="empty">no structured source facts saved</div>
-                            )}
-                          </div>
-
-                          <div className="workbench-panel">
-                            <h3>Signal Score</h3>
-                            {selectedDraft.score ? (
-                              <>
-                                <ScoreMeter label="severity" value={selectedDraft.score.severity} />
-                                <ScoreMeter label="novelty" value={selectedDraft.score.novelty} />
-                                <ScoreMeter label="timeliness" value={selectedDraft.score.timeliness} />
-                                <ScoreMeter label="confidence" value={selectedDraft.score.confidence} />
-                                <ScoreMeter label="shareability" value={selectedDraft.score.shareability} />
-                                <ScoreMeter label="sensitivity" value={selectedDraft.score.sensitivity} inverse />
-                              </>
-                            ) : (
-                              <div className="empty">no signal score available</div>
-                            )}
-                          </div>
-
-                          <div className="workbench-panel">
-                            <h3>Copy Score</h3>
-                            {selectedDraft.candidate_score ? (
-                              <>
-                                <ScoreMeter label="clarity" value={selectedDraft.candidate_score.clarity} />
-                                <ScoreMeter label="context" value={selectedDraft.candidate_score.context} />
-                                <ScoreMeter label="voice" value={selectedDraft.candidate_score.voice} />
-                                <ScoreMeter label="punch" value={selectedDraft.candidate_score.punch} />
-                              </>
-                            ) : (
-                              <div className="empty">single-candidate draft</div>
-                            )}
-                          </div>
-
-                          <div className="workbench-panel">
-                            <h3>Approval Policy</h3>
-                            <div className="workbench-headline">
-                              {selectedDraft.approval_policy?.mode === "armed_auto"
-                                ? "Policy armed this draft automatically."
-                                : selectedDraft.approval_policy?.mode === "suggested_auto"
-                                  ? "Policy recommends a timed auto-approval."
-                                  : "Policy requires explicit human approval."}
-                            </div>
-                            <div className="fact-list">
-                              <div className="fact-row">
-                                <span className="fact-label">Policy key</span>
-                                <span className="fact-value">{selectedDraft.approval_policy?.key || "—"}</span>
-                              </div>
-                              <div className="fact-row">
-                                <span className="fact-label">Mode</span>
-                                <span className="fact-value">{selectedDraft.approval_policy?.mode || "—"}</span>
-                              </div>
-                              <div className="fact-row">
-                                <span className="fact-label">Recommended window</span>
-                                <span className="fact-value">
-                                  {selectedDraft.approval_policy?.recommended_delay_minutes
-                                    ? delayLabel(selectedDraft.approval_policy.recommended_delay_minutes)
-                                    : "manual only"}
-                                </span>
-                              </div>
-                              <div className="fact-row">
-                                <span className="fact-label">Why</span>
-                                <span className="fact-value">{selectedDraft.approval_policy?.reason || "—"}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="workbench-panel">
-                            <h3>Run Trace</h3>
-                            <div className="run-trace">
-                              <div className="trace-line">
-                                <span>workflow run</span>
-                                <strong>{selectedDraftRun?.id || selectedDraft.review_context?.run_id || "—"}</strong>
-                              </div>
-                              <div className="trace-line">
-                                <span>source slot</span>
-                                <strong>{selectedDraft.review_context?.source_key || "—"}</strong>
-                              </div>
-                              <div className="trace-line">
-                                <span>source status</span>
-                                <strong>{selectedDraftSourceRun?.status || "—"}</strong>
-                              </div>
-                              <div className="trace-line">
-                                <span>observed / promoted</span>
-                                <strong>
-                                  {selectedDraftSourceRun
-                                    ? `${selectedDraftSourceRun.observed} / ${selectedDraftSourceRun.promoted}`
-                                    : "—"}
-                                </strong>
-                              </div>
-                              <div className="trace-line">
-                                <span>source duration</span>
-                                <strong>{selectedDraftSourceRun ? formatDuration(selectedDraftSourceRun.duration_ms) : "—"}</strong>
-                              </div>
-                              <div className="trace-line">
-                                <span>event id</span>
-                                <strong>{selectedDraft.event_id || "manual"}</strong>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {selectedDraft.candidates?.length > 1 && (
-                          <div className="candidate-list">
-                            {selectedDraft.candidates
-                              .filter((candidate) => candidate.text !== selectedDraft.text)
-                              .slice(0, 3)
-                              .map((candidate) => (
-                                <div key={`${selectedDraft.id}-${candidate.rank}`} className="candidate-item">
-                                  <div className="candidate-head">
-                                    <span>
-                                      alt #{candidate.rank} · copy {candidate.score?.total || 0} · {candidate.source}
-                                    </span>
-                                    <button
-                                      className="btn sm"
-                                      disabled={!!draftAction}
-                                      onClick={() => draftAct(selectedDraft.id, "select_candidate", { candidateRank: candidate.rank })}
-                                    >
-                                      Use This
-                                    </button>
-                                  </div>
-                                  <div className="candidate-text">{candidate.text}</div>
-                                  {candidate.score?.reasons?.length > 0 && (
-                                    <div className="candidate-meta">{candidate.score.reasons.join(" · ")}</div>
-                                  )}
-                                </div>
-                              ))}
-                          </div>
-                        )}
-
                         <div className="draft-actions">
-                          {editingId === selectedDraft.id ? (
-                            <>
-                              <button
-                                className="btn approve sm"
-                                disabled={draftAction === selectedDraft.id || editText.length > 280}
-                                onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText })}
-                              >
-                                Save
-                              </button>
-                              <button className="btn sm" onClick={() => setEditingId(null)}>
-                                Cancel
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                className="btn approve sm"
-                                disabled={!!draftAction}
-                                onClick={() => draftAct(selectedDraft.id, "approve")}
-                              >
-                                {draftAction === selectedDraft.id ? "..." : "Approve + Post"}
-                              </button>
-                              <button
-                                className="btn sm"
-                                onClick={() => {
-                                  setEditingId(selectedDraft.id)
-                                  setEditText(selectedDraft.text)
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="btn reject sm"
-                                disabled={!!draftAction}
-                                onClick={() => draftAct(selectedDraft.id, "reject")}
-                              >
-                                Reject
-                              </button>
-                              {selectedDraft.auto_approve_at ? (
-                                <button
-                                  className="btn sm"
-                                  disabled={!!draftAction}
-                                  onClick={() => draftAct(selectedDraft.id, "cancel_auto_approve")}
-                                >
-                                  Cancel {countdownText(selectedDraft.auto_approve_at)}
-                                </button>
-                              ) : selectedDraft.approval_policy?.can_auto_approve === false ? (
-                                <button className="btn sm" disabled>
-                                  Review Only
-                                </button>
-                              ) : (
-                                <button
-                                  className="btn sm"
-                                  disabled={!!draftAction}
-                                  onClick={() => draftAct(selectedDraft.id, "auto_approve", {
-                                    delayMinutes: selectedDraft.approval_policy?.recommended_delay_minutes,
-                                  })}
-                                >
-                                  Auto {delayLabel(selectedDraft.approval_policy?.recommended_delay_minutes || 30)}
-                                </button>
-                              )}
-                            </>
-                          )}
+                          <button
+                            className="btn approve sm"
+                            disabled={draftAction === d.id || editText.length > 280}
+                            onClick={() => draftAct(d.id, "edit", editText)}
+                          >
+                            Save
+                          </button>
+                          <button className="btn sm" onClick={() => setEditingId(null)}>
+                            Cancel
+                          </button>
                         </div>
-                        {draftFeedback && (
-                          <div className={`draft-feedback ${draftFeedback.type}`}>
-                            {draftFeedback.text}
-                          </div>
-                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="draft-text">{d.text}</div>
+                        <div className="draft-chars">{d.text.length}/280</div>
+                        <div className="draft-actions">
+                          <button
+                            className="btn approve sm"
+                            disabled={!!draftAction}
+                            onClick={() => draftAct(d.id, "approve")}
+                          >
+                            {draftAction === d.id ? "..." : "Approve + Post"}
+                          </button>
+                          <button
+                            className="btn sm"
+                            onClick={() => { setEditingId(d.id); setEditText(d.text) }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn reject sm"
+                            disabled={!!draftAction}
+                            onClick={() => draftAct(d.id, "reject")}
+                          >
+                            Reject
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
-                </div>
+                ))
               ) : (
                 <div className="draft-empty">
                   No drafts waiting. Trigger a run below or compose one manually.
                 </div>
               )}
-            </section>
+            </div>
 
-            <section className="two-up">
-              <article className="panel">
-                <div className="section-head">
-                  <div>
-                    <h2 className="section-title">Compose Tweet</h2>
-                    <p className="section-kicker">
-                      Manually write or generate a tweet, then send it through the same review and posting pathway.
-                    </p>
-                  </div>
-                </div>
-                <div className="compose">
-                  <textarea
-                    className="compose-input"
-                    placeholder="Describe the data (e.g. Phoenix hit 122F today, old record 121F from 2024)..."
-                    value={composePrompt}
-                    onChange={(e) => setComposePrompt(e.target.value)}
-                    rows={3}
-                  />
-                  <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
-                    {generating ? "Generating..." : "Generate Preview"}
-                  </button>
-                  {composeTweet && (
-                    <div className="preview-box">
-                      <div className="preview-label">
-                        <span>Preview</span>
-                        <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
-                          {composeTweet.length}/280
-                        </span>
-                      </div>
-                      <textarea
-                        className="preview-tweet"
-                        value={composeTweet}
-                        onChange={(e) => setComposeTweet(e.target.value)}
-                        rows={4}
-                      />
-                      <div className="preview-actions">
-                        <button
-                          className="btn approve"
-                          disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
-                          onClick={postComposed}
-                        >
-                          {posting ? "Sending..." : "Approve + Post"}
-                        </button>
-                        <button className="btn" disabled={generating} onClick={generateTweet}>
-                          Regenerate
-                        </button>
-                        <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
-                          Discard
-                        </button>
-                      </div>
+            {/* Generate Drafts */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Generate Drafts</h2>
+              <div className="trigger-bar">
+                <button
+                  className="btn primary"
+                  disabled={!!triggering}
+                  onClick={() => trigger("both")}
+                >
+                  {triggering === "both" ? "..." : "Run Both"}
+                </button>
+                <button className="btn" disabled={!!triggering} onClick={() => trigger("alerts")}>
+                  {triggering === "alerts" ? "..." : "Alerts Only"}
+                </button>
+                <button className="btn" disabled={!!triggering} onClick={() => trigger("leaderboard")}>
+                  {triggering === "leaderboard" ? "..." : "Leaderboard Only"}
+                </button>
+                {triggerResult && <span className="trigger-result">{triggerResult}</span>}
+              </div>
+            </div>
+
+            {/* Compose */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Compose Tweet</h2>
+              <div className="compose">
+                <textarea
+                  className="compose-input"
+                  placeholder="Describe the data (e.g. 'Phoenix hit 122F today, old record 121F from 2024')..."
+                  value={composePrompt}
+                  onChange={(e) => setComposePrompt(e.target.value)}
+                  rows={2}
+                />
+                <button className="btn" disabled={generating || !composePrompt.trim()} onClick={generateTweet}>
+                  {generating ? "generating..." : "Generate Preview"}
+                </button>
+                {composeTweet && (
+                  <div className="preview-box">
+                    <div className="preview-label">
+                      PREVIEW
+                      <span className={`char-count ${composeTweet.length > 280 ? "over" : ""}`}>
+                        {composeTweet.length}/280
+                      </span>
                     </div>
-                  )}
-                  {composeStatus && (
-                    <div className={`status-banner ${composeStatus.startsWith("Error") ? "error" : "success"}`}>
-                      {composeStatus}
+                    <textarea
+                      className="preview-tweet"
+                      value={composeTweet}
+                      onChange={(e) => setComposeTweet(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="preview-actions">
+                      <button
+                        className="btn approve"
+                        disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
+                        onClick={postComposed}
+                      >
+                        {posting ? "..." : "Approve + Post"}
+                      </button>
+                      <button className="btn" disabled={generating} onClick={generateTweet}>
+                        Regenerate
+                      </button>
+                      <button className="btn" onClick={() => { setComposeTweet(""); setComposeStatus(null) }}>
+                        Discard
+                      </button>
                     </div>
-                  )}
-                </div>
-              </article>
-
-              <article className="panel">
-                <h2 className="section-title">Desk Stats</h2>
-                <div className="stat-block">
-                  <div className="stat-label">Tweets today</div>
-                  <div className="stat">{todayCount}</div>
-                  <div className="stat-copy">of the 10-post daily cap</div>
-                </div>
-                <div className="stat-block">
-                  <div className="stat-label">Last Hot 10</div>
-                  <div className="stat">{hot10.date || "—"}</div>
-                  <div className="stat-copy">
-                    {hot10.date ? `${hot10.cities?.[0] || "Leader"} led ${timeAgo(`${hot10.date}T12:00:00Z`)}` : "No leaderboard yet."}
                   </div>
-                </div>
-                <div className="stat-block">
-                  <div className="stat-label">Streak leader</div>
-                  <div className="stat">{sortedStreaks[0]?.[0] || "—"}</div>
-                  <div className="stat-copy">
-                    {sortedStreaks[0] ? `${sortedStreaks[0][1].consecutive_days} consecutive days in the Hot 10.` : "No active streaks."}
-                  </div>
-                </div>
-              </article>
-            </section>
+                )}
+                {composeStatus && <div className="compose-status">{composeStatus}</div>}
+              </div>
+            </div>
 
-            <section className="two-up">
-              <article className="panel">
-                <h2 className="section-title">Hot 10 Leaderboard</h2>
+            {/* Stats */}
+            <div className="grid">
+              <div className="card">
+                <h2>Tweets Today</h2>
+                <div className="stat">{todayCount}</div>
+                <div className="stat-label">of 10 daily cap</div>
+              </div>
+              <div className="card">
+                <h2>Last Hot 10</h2>
+                <div className="stat">{hot10.date || "—"}</div>
+                <div className="stat-label">
+                  {hot10.date ? timeAgo(hot10.date + "T12:00:00Z") : "no data yet"}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid">
+              <div className="card">
+                <h2>Hot 10 Leaderboard</h2>
                 {hot10.cities?.length > 0 ? (
                   <ul className="hot10-list">
                     {hot10.cities.map((city, i) => (
                       <li key={city}>
                         <span className="rank">{i + 1}.</span>
                         <span className="city">{city}</span>
-                        <span className="error-ts">{i === 0 ? "leader" : "tracking"}</span>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <div className="empty">No leaderboard data yet.</div>
+                  <div className="empty">no leaderboard data yet</div>
                 )}
-              </article>
-
-              <article className="panel">
-                <h2 className="section-title">Streaks</h2>
+              </div>
+              <div className="card">
+                <h2>Streaks</h2>
                 {sortedStreaks.length > 0 ? (
                   <div className="streak-list">
                     {sortedStreaks.map(([city, s]) => (
@@ -1976,52 +1982,52 @@ export default function Dashboard() {
                     ))}
                   </div>
                 ) : (
-                  <div className="empty">No active streaks.</div>
+                  <div className="empty">no active streaks</div>
                 )}
-              </article>
-            </section>
+              </div>
+            </div>
 
-            <section className="two-up">
-              <article className="panel">
-                <h2 className="section-title">Recent Workflow Runs</h2>
-                {runs.length > 0 ? (
-                  <table className="runs-table">
-                    <thead>
-                      <tr><th>Status</th><th>Trigger</th><th>When</th><th>Link</th></tr>
-                    </thead>
-                    <tbody>
-                      {runs.map((r) => (
-                        <tr key={r.id}>
-                          <td><RunStatus conclusion={r.conclusion} status={r.status} /></td>
-                          <td>{r.event === "schedule" ? "cron" : r.event}</td>
-                          <td>{timeAgo(r.created_at)}</td>
-                          <td><a href={r.html_url} target="_blank" rel="noopener">logs</a></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="empty">No workflow runs yet.</div>
-                )}
-              </article>
-
-              <article className="panel">
-                <h2 className="section-title">Recent Errors</h2>
-                {errors.length > 0 ? (
-                  <ul className="error-list">
-                    {errors.slice(-10).reverse().map((e, i) => (
-                      <li key={`${e.source}-${e.ts}-${i}`}>
-                        <span className="error-source">{e.source}</span>
-                        <span className="error-ts">{timeAgo(e.ts)}</span>
-                        <span className="error-msg">{e.msg}</span>
-                      </li>
+            {/* Recent GitHub Workflow Runs (cron sanity check) */}
+            <div className="card full" style={{ marginBottom: 16 }}>
+              <h2>Recent Runs</h2>
+              {runs.length > 0 ? (
+                <table className="runs-table">
+                  <thead>
+                    <tr><th>Status</th><th>Trigger</th><th>When</th><th>Link</th></tr>
+                  </thead>
+                  <tbody>
+                    {runs.map((r) => (
+                      <tr key={r.id}>
+                        <td><RunStatus conclusion={r.conclusion} status={r.status} /></td>
+                        <td>{r.event === "schedule" ? "cron" : r.event}</td>
+                        <td>{timeAgo(r.created_at)}</td>
+                        <td><a href={r.html_url} target="_blank" rel="noopener">logs</a></td>
+                      </tr>
                     ))}
-                  </ul>
-                ) : (
-                  <div className="empty">No recent errors. Suspicious in a good way.</div>
-                )}
-              </article>
-            </section>
+                  </tbody>
+                </table>
+              ) : (
+                <div className="empty">no runs yet</div>
+              )}
+            </div>
+
+            {/* Errors */}
+            <div className="card full">
+              <h2>Recent Errors</h2>
+              {errors.length > 0 ? (
+                <ul className="error-list">
+                  {errors.slice(-10).reverse().map((e, i) => (
+                    <li key={i}>
+                      <span className="error-source">{e.source}</span>
+                      <span className="error-ts">{timeAgo(e.ts)}</span>
+                      <span className="error-msg">{e.msg}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="empty">no errors. suspicious.</div>
+              )}
+            </div>
           </>
         )}
       </div>

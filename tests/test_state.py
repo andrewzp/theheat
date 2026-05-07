@@ -596,3 +596,163 @@ class TestSqliteRoundTripLaneKeys:
         out = self._sqlite_round_trip(state_in)
         assert out["city_all_time_max"]["Phoenix"]["temp_c"] == 48.2
         assert out["record_streaks"]["Phoenix"]["days"] == 4
+
+
+class TestSuppressions:
+    """Schema + merge for the suppression ledger added 2026-05-06."""
+
+    def test_default_state_has_suppressions(self):
+        from src.state import _fresh_state
+        s = _fresh_state()
+        assert s["suppressions"] == []
+
+    def test_merge_dedupes_by_id_latest_ts_wins(self):
+        from src.state import _merge_state
+        base = {
+            "suppressions": [
+                {"id": "supp_a", "ts": "2026-05-06T10:00:00Z", "summary": "old"},
+                {"id": "supp_b", "ts": "2026-05-06T11:00:00Z", "summary": "kept"},
+            ]
+        }
+        incoming = {
+            "suppressions": [
+                {"id": "supp_a", "ts": "2026-05-06T12:00:00Z", "summary": "new"},
+            ]
+        }
+        merged = _merge_state(base, incoming)
+        ids = {s["id"]: s for s in merged["suppressions"]}
+        assert ids["supp_a"]["summary"] == "new"
+        assert ids["supp_a"]["ts"] == "2026-05-06T12:00:00Z"
+        assert ids["supp_b"]["summary"] == "kept"
+
+    def test_merge_caps_at_200(self):
+        from src.state import _merge_suppressions
+        many = [
+            {"id": f"supp_{i}", "ts": f"2026-05-06T{i:02d}:00:00Z"}
+            for i in range(0, 24)
+        ]
+        # Pad to 250 by varying minute
+        many += [
+            {"id": f"supp_pad_{i}", "ts": f"2026-05-07T00:{i:02d}:00Z"}
+            for i in range(0, 250)
+        ]
+        merged = _merge_suppressions([], many)
+        assert len(merged) == 200
+
+    def test_merge_sorts_by_ts(self):
+        from src.state import _merge_suppressions
+        merged = _merge_suppressions(
+            [],
+            [
+                {"id": "c", "ts": "2026-05-06T03:00:00Z"},
+                {"id": "a", "ts": "2026-05-06T01:00:00Z"},
+                {"id": "b", "ts": "2026-05-06T02:00:00Z"},
+            ],
+        )
+        assert [s["id"] for s in merged] == ["a", "b", "c"]
+
+    def test_round_trip_preserves_suppressions(self):
+        from src.storage import sqlite_store
+        from src.state import DEFAULT_STATE
+        import tempfile, os
+        state_in = {
+            "suppressions": [
+                {
+                    "id": "supp_2026-05-06T10:00:00Z_abcd",
+                    "ts": "2026-05-06T10:00:00Z",
+                    "run_id": "run_abc",
+                    "source": "alerts",
+                    "event_id": "open_meteo_records_2026-05-06_navimumbai",
+                    "category": "record_high",
+                    "score_total": 64,
+                    "threshold": 72,
+                    "reasons": ["margin_small", "old_record_recent"],
+                    "summary": "Navi Mumbai forecast 102.4F",
+                }
+            ]
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "theheat.sqlite")
+            assert sqlite_store.write_state(db_path, state_in)
+            out = sqlite_store.read_state(db_path, DEFAULT_STATE)
+        assert out["suppressions"][0]["score_total"] == 64
+        assert out["suppressions"][0]["threshold"] == 72
+        assert out["suppressions"][0]["reasons"] == ["margin_small", "old_record_recent"]
+        assert out["suppressions"][0]["summary"] == "Navi Mumbai forecast 102.4F"
+
+
+class TestShouldDraftSuppressionCapture:
+    """The _should_draft() context-driven capture wired into main.py."""
+
+    def teardown_method(self, method):
+        from src.main import _clear_suppression_ctx
+        _clear_suppression_ctx()
+
+    def _make_score(self, *, total, threshold, category="record_high", reasons=("margin_small",)):
+        from src.editorial.scoring import EditorialScore
+        return EditorialScore(
+            category=category,
+            severity=0,
+            novelty=0,
+            timeliness=0,
+            confidence=0,
+            shareability=0,
+            sensitivity=0,
+            total=total,
+            threshold=threshold,
+            reasons=list(reasons),
+        )
+
+    def test_passes_score_returns_true_no_capture(self):
+        from src.main import _should_draft, _activate_suppression_ctx
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        score = self._make_score(total=80, threshold=72)
+        assert _should_draft(score, "ev_1") is True
+        assert bot_state.get("suppressions", []) == []
+
+    def test_below_threshold_within_near_miss_captured(self, monkeypatch):
+        from src.main import _should_draft, _activate_suppression_ctx
+        monkeypatch.setenv("SUPPRESSION_NEAR_MISS_GAP", "15")
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts", run_id="run_1")
+        score = self._make_score(total=64, threshold=72)
+        assert _should_draft(score, "open_meteo_records_2026-05-06_navimumbai") is False
+        suppressions = bot_state["suppressions"]
+        assert len(suppressions) == 1
+        rec = suppressions[0]
+        assert rec["source"] == "alerts"
+        assert rec["run_id"] == "run_1"
+        assert rec["event_id"] == "open_meteo_records_2026-05-06_navimumbai"
+        assert rec["score_total"] == 64
+        assert rec["threshold"] == 72
+        assert rec["category"] == "record_high"
+        assert rec["reasons"] == ["margin_small"]
+        assert rec["id"].startswith("supp_")
+        assert rec["ts"]
+
+    def test_below_threshold_outside_near_miss_not_captured(self, monkeypatch):
+        from src.main import _should_draft, _activate_suppression_ctx
+        monkeypatch.setenv("SUPPRESSION_NEAR_MISS_GAP", "5")
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        score = self._make_score(total=40, threshold=72)
+        assert _should_draft(score, "ev_far") is False
+        assert bot_state.get("suppressions", []) == []
+
+    def test_no_active_context_no_capture(self):
+        from src.main import _should_draft, _clear_suppression_ctx
+        _clear_suppression_ctx()
+        bot_state = {}
+        score = self._make_score(total=64, threshold=72)
+        assert _should_draft(score, "ev_x") is False
+        assert bot_state.get("suppressions", []) == []
+
+    def test_capture_caps_at_200(self, monkeypatch):
+        from src.main import _should_draft, _activate_suppression_ctx
+        monkeypatch.setenv("SUPPRESSION_NEAR_MISS_GAP", "100")
+        bot_state = {"suppressions": [{"id": f"old_{i}", "ts": "2026-05-01T00:00:00Z"} for i in range(190)]}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        for i in range(15):
+            _should_draft(self._make_score(total=60, threshold=72), f"ev_{i}")
+        assert len(bot_state["suppressions"]) == 200

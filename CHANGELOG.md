@@ -2,6 +2,61 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1.0] - 2026-05-07
+
+Suppression ledger + dashboard health-calc fix. Captures the
+"near-miss" editorial-gate kills the bot has been making invisibly,
+surfaces them in the dashboard, and fixes the headline health tile
+that was counting intentionally-idle lanes as unhealthy.
+
+### Added
+
+- **`suppressions: []` in state** + `_merge_suppressions` in
+  `src/state.py` (id-dedupe, ts-sort, 200 cap). Mirrored in
+  `dashboard/lib/state-store.js` for the JS read path.
+- **`SUPPRESSION_NEAR_MISS_GAP` env var** (default 15) — only kills
+  where `threshold - total <= gap` are recorded, so the ledger
+  doesn't flood with obvious noise.
+- **`_should_draft()` capture in `src/main.py`** via a process-level
+  context (`_activate_suppression_ctx`), wired into `run_alerts`
+  and `run_leaderboard`. Records `id`, `ts`, `run_id`, `source`,
+  `event_id`, `category`, `score_total`, `threshold`, `reasons`,
+  `summary`.
+- **SQLite `suppressions` table** + read/write round-trip in
+  `dashboard/lib/state-store.js`. Python side reuses the
+  `_METADATA_JSON_KEYS` path in `src/storage/sqlite_store.py`.
+- **`GET /api/suppressions`** route (auth-protected, default limit
+  50, max 200) with `source` and `since` filters and aggregate
+  stats (24h, 7d, top source, source counts).
+- **Suppressed view** in the dashboard — stats tiles + per-source
+  breakdown + filtered list.
+- **24 new tests** in `tests/test_state.py` (default state, merge
+  dedupe + cap + sort, SQLite round-trip, capture-on-near-miss,
+  capture-not-on-far-miss, capture-not-without-context, capture
+  cap).
+
+### Fixed
+
+- **Dashboard health calc** in `dashboard/app/page.js`. The
+  "Current Run" tile counted only `status === "success"` as
+  healthy, which marked legitimate scheduled-skip lanes
+  (Mondays-only sea-ice / ice-mass, Fridays-only drought,
+  1st-of-month ENSO, "already ran today" caps) as unhealthy.
+  On a typical Thursday cycle, 7 lanes are intentionally idle
+  and the headline read 11/18 = 61% healthy. Now treats
+  `skipped` as healthy and surfaces the count in the sub-label
+  ("· 7 scheduled idle"), so the same cycle reads 100% / 18 of
+  18 healthy · 7 scheduled idle.
+
+### Out of scope
+
+- Suppression capture for downstream kills (writer fact-check,
+  virality-evaluator, cycle-cap, dedup, cooldown). Today only
+  the editorial score gate is captured; the 3 GHCN bundles in
+  the first post-cutover cycle that died with `score: 80`
+  (which passes the 76 monthly threshold) wouldn't show up
+  here. Follow-up.
+
 ## [0.3.0.0] - 2026-05-07
 
 NOAA GHCN-Daily migration. The extreme-signals lane now reads 11,907

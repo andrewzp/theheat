@@ -8,7 +8,9 @@ weather) always require manual approval via the dashboard.
 """
 
 import argparse
+import contextlib
 import os
+import secrets
 import sys
 import time
 from datetime import UTC, date, datetime, timedelta
@@ -141,7 +143,94 @@ def _previous_drafts_for_event(bot_state: dict, event_base: str) -> list[str]:
     return matches[-5:]
 
 
-def _should_draft(score: EditorialScore, event_id: str = "") -> bool:
+# ---------------------------------------------------------------------------
+# Suppression capture: when _should_draft() returns False, optionally persist
+# a record of *what* almost-shipped and *why* it got cut. Lets the dashboard
+# surface the "near-miss" distribution so the editorial bar can be tuned with
+# evidence rather than vibes.
+#
+# Activated by wrapping a source loop in `with _suppression_context(bot_state,
+# source="..."):`. Only suppressions where the score gap is within the
+# near-miss window (env var SUPPRESSION_NEAR_MISS_GAP, default 15) are kept,
+# to prevent the ledger from flooding with obvious noise.
+# ---------------------------------------------------------------------------
+
+_CURRENT_SUPPRESSION_CTX: dict | None = None
+
+
+def _near_miss_gap() -> int:
+    """Max (threshold - total) gap to record. Smaller = stricter."""
+    try:
+        return int(os.environ.get("SUPPRESSION_NEAR_MISS_GAP", "15"))
+    except (TypeError, ValueError):
+        return 15
+
+
+@contextlib.contextmanager
+def _suppression_context(bot_state: dict, *, source: str, run_id: str | None = None):
+    """Activate suppression capture for `_should_draft()` calls inside the block."""
+    global _CURRENT_SUPPRESSION_CTX
+    prev = _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    try:
+        yield
+    finally:
+        _CURRENT_SUPPRESSION_CTX = prev
+
+
+def _activate_suppression_ctx(bot_state: dict, *, source: str, run_id: str | None = None) -> None:
+    """Set the suppression context for the rest of the process.
+
+    Used at the top of each top-level run function (run_alerts, run_leaderboard,
+    etc.) so all `_should_draft()` calls during the run capture suppressions.
+    No auto-cleanup — relies on the bot exiting after each invocation. Tests
+    should call `_clear_suppression_ctx()` between cases.
+    """
+    global _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+
+
+def _clear_suppression_ctx() -> None:
+    """Clear the current suppression context. Mainly for tests."""
+    global _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = None
+
+
+def _record_suppression(
+    *,
+    bot_state: dict,
+    source: str | None,
+    run_id: str | None,
+    event_id: str,
+    score: EditorialScore,
+    summary: str | None,
+) -> None:
+    """Append a suppression record to bot_state, capped to last 200."""
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": run_id,
+        "source": source,
+        "event_id": event_id or None,
+        "category": getattr(score, "category", None),
+        "score_total": int(getattr(score, "total", 0) or 0),
+        "threshold": int(getattr(score, "threshold", 0) or 0),
+        "reasons": list(getattr(score, "reasons", []) or []),
+        "summary": summary,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
+
+def _should_draft(
+    score: EditorialScore,
+    event_id: str = "",
+    *,
+    summary: str | None = None,
+) -> bool:
     """Decide whether an event is strong enough to enter the draft queue."""
     if score.passes:
         return True
@@ -150,6 +239,18 @@ def _should_draft(score: EditorialScore, event_id: str = "") -> bool:
         f"[score] Suppressed{event_desc}: {score.category} "
         f"{score.total} < {score.threshold} ({', '.join(score.reasons)})"
     )
+    ctx = _CURRENT_SUPPRESSION_CTX
+    if ctx is not None:
+        gap = int(getattr(score, "threshold", 0) or 0) - int(getattr(score, "total", 0) or 0)
+        if gap <= _near_miss_gap():
+            _record_suppression(
+                bot_state=ctx["bot_state"],
+                source=ctx.get("source"),
+                run_id=ctx.get("run_id"),
+                event_id=event_id,
+                score=score,
+                summary=summary,
+            )
     return False
 
 
@@ -614,6 +715,11 @@ MAX_DRAFTS_PER_CYCLE = 3
 
 def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     """Check all alert data sources and save drafts."""
+    _activate_suppression_ctx(
+        bot_state,
+        source="alerts",
+        run_id=(current_run or {}).get("id"),
+    )
     drafted = 0
     drafts_before = len(bot_state.get("drafts", []))
     us_city_state_map: dict[str, str] = {}
@@ -2322,6 +2428,11 @@ def _prune_weakest_cycle_drafts(
 
 def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
     """Generate the daily Hot 10 leaderboard as a draft."""
+    _activate_suppression_ctx(
+        bot_state,
+        source="leaderboard",
+        run_id=(current_run or {}).get("id"),
+    )
     print("[leaderboard] Generating Hot 10...")
     leaderboard_start = time.perf_counter()
     try:
