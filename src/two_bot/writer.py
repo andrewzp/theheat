@@ -73,11 +73,8 @@ _FENCE_CLOSE_RE = re.compile(r"\n?\s*```\s*$")
 
 
 def _strip_markdown_fences(raw: str) -> str:
-    """Strip ```json ... ``` wrappers some models emit despite a "no
-    code fences" instruction in the prompt. Sonnet 4.6 ignores the
-    instruction in practice (observed 2026-05-07: every monthly_low and
-    fire writer call wrapped output in ```json fences). Defensive
-    parsing here is more reliable than prompt strictness alone.
+    """Strip ```json ... ``` wrappers some models emit. Kept as a
+    public-ish helper so callers can compose with other cleanup.
     """
     text = raw.strip()
     text = _FENCE_OPEN_RE.sub("", text, count=1)
@@ -85,8 +82,42 @@ def _strip_markdown_fences(raw: str) -> str:
     return text.strip()
 
 
+def _extract_json_payload(raw: str) -> str:
+    """Best-effort JSON-object extraction from a writer response.
+
+    Sonnet 4.6 ignores the prompt's "No markdown. No code fences. No
+    prose outside the JSON." instruction in two distinct ways:
+
+    1. Wrapping in ```json ... ``` fences (run 25525862349)
+    2. Emitting a chain-of-thought preamble like "Let me think about
+       this carefully." or "Here's my analysis:" *before* the JSON
+       object (run 25526974586)
+
+    Strict prompting alone doesn't fix this. Defensive parsing does.
+
+    Strategy:
+    - Strip leading/trailing markdown fences first
+    - Locate the first '{' and the last '}'
+    - Return the substring between them (inclusive)
+
+    The writer response is a flat object — no top-level array, no
+    multiple objects — so first-{ to last-} is unambiguous even with
+    nested raw_signal_dump-style dicts inside.
+
+    If no balanced object is found, returns the cleaned text so
+    json.loads fails with a clear error message that includes the
+    raw response for debugging.
+    """
+    text = _strip_markdown_fences(raw)
+    first = text.find("{")
+    last = text.rfind("}")
+    if first == -1 or last == -1 or last <= first:
+        return text
+    return text[first : last + 1]
+
+
 def _parse_writer_json(raw: str) -> WriterResult:
-    cleaned = _strip_markdown_fences(raw)
+    cleaned = _extract_json_payload(raw)
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError as exc:
@@ -113,7 +144,12 @@ def _call_anthropic(user_prompt: str) -> str:
         raise RuntimeError("ANTHROPIC_API_KEY is required for the Anthropic writer")
     import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key, timeout=90.0)
+    # 180s (was 90s). Observed 2026-05-07 in run 25526974586:
+    # every monthly_low + 1 fire bundle hit ReadTimeout under the 90s
+    # cap. Sonnet 4.6's variance under load is wider than 90s; 180s is
+    # well-tolerated by GitHub Actions cron headroom and prevents the
+    # "drafts vanish on slow API days" failure mode.
+    client = anthropic.Anthropic(api_key=api_key, timeout=180.0)
     response = client.messages.create(
         model=WRITER_MODEL,
         max_tokens=1024,

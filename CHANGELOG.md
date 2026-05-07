@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4.0] - 2026-05-07
+
+Tolerant writer-response parsing + larger Anthropic timeout. After the
+fence-stripping fix in 0.3.3.0, the next alerts cycle revealed two
+more failure modes: ``ReadTimeout`` at the 90s client cap, and
+chain-of-thought preamble (`"Let me think about this carefully."`)
+emitted *before* the JSON object — neither matched by the fence
+stripper.
+
+### Fixed
+
+- **Anthropic client timeout 90s → 180s** in
+  [src/two_bot/writer.py](src/two_bot/writer.py). Sonnet 4.6's
+  variance under load exceeds 90s for some bundles. 180s is well
+  within GitHub Actions cron headroom.
+- **Robust JSON extraction** via new ``_extract_json_payload``: locates
+  the first ``{`` and last ``}`` in the (de-fenced) response and
+  parses the substring between them. Handles preamble, postamble, and
+  nested ``raw_signal_dump`` objects without false positives. 7 new
+  tests cover preamble stripping, postamble stripping, combined
+  preamble + fences, nested-object handling, clean-response
+  passthrough, no-braces fail-loud, and the full
+  ``_parse_writer_json`` path on a realistic Sonnet preamble response.
+
 ## [0.3.3.0] - 2026-05-07
 
 Strip markdown code fences from writer output. Sonnet 4.6 wraps its
