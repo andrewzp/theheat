@@ -205,7 +205,9 @@ def _record_suppression(
     score: EditorialScore,
     summary: str | None,
 ) -> None:
-    """Append a suppression record to bot_state, capped to last 200."""
+    """Append an editorial-gate near-miss suppression record (stage=score_gate),
+    capped to last 200.
+    """
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
@@ -214,11 +216,49 @@ def _record_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
+        "stage": "score_gate",
         "event_id": event_id or None,
         "category": getattr(score, "category", None),
         "score_total": int(getattr(score, "total", 0) or 0),
         "threshold": int(getattr(score, "threshold", 0) or 0),
         "reasons": list(getattr(score, "reasons", []) or []),
+        "summary": summary,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
+
+def _record_downstream_suppression(
+    *,
+    bot_state: dict,
+    source: str | None,
+    run_id: str | None,
+    event_id: str,
+    score,
+    kill_stage: str,
+    kill_reason: str,
+    summary: str | None,
+) -> None:
+    """Append a downstream-kill suppression — a bundle that passed the
+    editorial score gate but died in the two-bot pipeline (writer kill,
+    fact-check rejection, or pipeline exception). Stage discriminates
+    from score-gate near-misses; ``score_total`` is preserved so the
+    dashboard can show "passing score 80, killed in writer".
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": run_id,
+        "source": source,
+        "stage": kill_stage,  # "writer" | "fact_check" | "pipeline_error" | "unknown"
+        "event_id": event_id or None,
+        "category": getattr(score, "category", None),
+        "score_total": int(getattr(score, "total", 0) or 0),
+        "threshold": int(getattr(score, "threshold", 0) or 0),
+        "reasons": [kill_reason] if kill_reason else [],
         "summary": summary,
     })
     if len(suppressions) > 200:
@@ -643,11 +683,29 @@ def _try_two_bot_draft(
     state. The bundle.signal_kind may differ slightly (e.g.
     "calendar_record" vs "record") to give the writer better semantic
     cues, but the saved draft uses the legacy label for compatibility.
+
+    On a None return from the pipeline (writer kill, fact-check rejection,
+    or pipeline exception), records a downstream suppression so the
+    dashboard surfaces it. These are *post-score* kills, distinct from
+    the editorial-gate near-misses captured by ``_should_draft``.
     """
     from src.two_bot.pipeline import generate_draft
 
-    draft = generate_draft(bundle, bot_state)
+    pipeline_result: dict = {}
+    draft = generate_draft(bundle, bot_state, result_out=pipeline_result)
     if draft is None:
+        ctx = _CURRENT_SUPPRESSION_CTX
+        if ctx is not None:
+            _record_downstream_suppression(
+                bot_state=ctx["bot_state"],
+                source=ctx.get("source"),
+                run_id=ctx.get("run_id"),
+                event_id=event_id,
+                score=score,
+                kill_stage=pipeline_result.get("kill_stage", "unknown"),
+                kill_reason=pipeline_result.get("kill_reason", "unknown"),
+                summary=getattr(bundle, "where", None) or city or None,
+            )
         return False
     review_context["two_bot"] = draft["two_bot_metadata"]
     return save_draft(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 
@@ -11,6 +12,26 @@ from src.two_bot.prompts.writer_prompt import (
     WRITER_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.types import MemorySlice, StoryBundle, WriterResult
+
+
+def _json_default(obj):
+    """Serialize types json.dumps doesn't handle natively.
+
+    Bundles built from GHCN events carry a ``signal_date`` field
+    (date object) inside ``raw_signal_dump`` — added in PR #32. Without
+    this hook, json.dumps raises ``TypeError: Object of type date is
+    not JSON serializable`` and the entire two-bot pipeline aborts via
+    the catch-all in pipeline.py, killing every GHCN draft silently.
+
+    Coerce date/datetime to ISO 8601 strings (which is what the writer
+    LLM expects to see anyway). Raise loudly on truly unknown types so
+    we don't silently coerce future surprises via str().
+    """
+    if isinstance(obj, (datetime.date, datetime.datetime)):
+        return obj.isoformat()
+    raise TypeError(
+        f"Object of type {type(obj).__name__} is not JSON serializable"
+    )
 
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", _DEFAULT_WRITER_MODEL)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -39,11 +60,11 @@ WRITER_PROVIDER = _resolve_provider(WRITER_MODEL)
 
 
 def _bundle_json(bundle: StoryBundle) -> str:
-    return json.dumps(bundle.to_dict(), sort_keys=True)
+    return json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default)
 
 
 def _memory_json(memory: MemorySlice) -> str:
-    return json.dumps(memory.to_dict(), sort_keys=True)
+    return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default)
 
 
 def _parse_writer_json(raw: str) -> WriterResult:
