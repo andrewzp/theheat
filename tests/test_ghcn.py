@@ -208,9 +208,69 @@ def test_upsert_thresholds_replaces_existing_nullable_key_rows(tmp_path: Path):
     assert loaded.all_time_max_year == 2026
 
 
+def test_upsert_thresholds_persists_climatological_mean_min(tmp_path: Path):
+    """Regression: TMIN climatological mean must round-trip through SQLite.
+
+    If `climatological_mean_min` is dropped during persistence, cold-anomaly
+    detection cannot fire — the comparator has no baseline for TMIN observations.
+    See _detect_signals_for_station: cold anomaly path reads
+    thresholds.climatological_mean_min[month].
+    """
+    th = _make_thresholds()
+    # _make_thresholds populates climatological_mean_min[1] = -50.0; verify the
+    # full TMIN climatology matrix survives a write/read round-trip.
+    th.climatological_mean_min = {m: -10.0 - m for m in range(1, 13)}
+
+    with open_db(tmp_path / "thresholds.sqlite") as conn:
+        upsert_thresholds(conn, th)
+        loaded = load_thresholds(conn, th.station_id)
+
+    assert loaded is not None
+    for m in range(1, 13):
+        assert loaded.climatological_mean_min[m] == pytest.approx(-10.0 - m), (
+            f"TMIN climatology month={m} not persisted correctly"
+        )
+
+
 # ---------------------------------------------------------------------------
 # _fetch_recent_obs
 # ---------------------------------------------------------------------------
+
+def test_fetch_recent_obs_skips_late_arriving_backfill(monkeypatch):
+    """Observations with obs_date older than max_obs_age_days must be filtered out.
+
+    `superghcnd_diff` files routinely contain late-arriving observations from
+    1-2 weeks earlier (a station finally uploads its old readings). Those are
+    not "fresh news" and must not be surfaced as current signals.
+    """
+
+    today = date(2026, 5, 6)
+    fresh_date = date(2026, 5, 4)        # 2 days ago — within cutoff
+    stale_date = date(2026, 4, 24)       # 12 days ago — backfill, must be skipped
+
+    def fake_fetch_diff(snapshot_date):
+        return b"diff" if snapshot_date == date(2026, 5, 5) else None
+
+    def fake_parse_records(content):
+        return [
+            DiffRecord("insert", "POLAR0000000", fresh_date, "TMAX", 12.0),
+            DiffRecord("insert", "POLAR0000000", stale_date, "TMAX", 19.5),
+        ]
+
+    monkeypatch.setattr(ghcn_module, "_fetch_diff", fake_fetch_diff)
+    monkeypatch.setattr(
+        ghcn_module, "parse_superghcnd_diff_records_bytes", fake_parse_records,
+    )
+
+    result = _fetch_recent_obs(
+        frozenset({"POLAR0000000"}), lookback_days=2,
+        max_obs_age_days=4, today=today,
+    )
+
+    assert (("POLAR0000000", fresh_date)) in result
+    assert (("POLAR0000000", stale_date)) not in result
+    assert result[("POLAR0000000", fresh_date)][0].value_c == pytest.approx(12.0)
+
 
 def test_fetch_recent_obs_delete_record_removes_prior_value(monkeypatch):
     """A newer delete diff must clear an older insert from the lookback window."""

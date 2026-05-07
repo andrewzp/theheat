@@ -76,6 +76,15 @@ DIFF_BASE_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/superghcnd"
 # on weekends or holidays when processing may be slow.
 DIFF_LOOKBACK_DAYS = int(os.environ.get("THEHEAT_GHCN_DIFF_LOOKBACK_DAYS", "3"))
 
+# Maximum age (in days) of an observation we treat as "current news".
+# `superghcnd_diff` files contain late-arriving observations from arbitrary
+# earlier dates — a station that uploaded its April 24 reading on May 5 will
+# appear in the May 5 diff. We do NOT want to surface week-old readings as
+# fresh signals; the editorial bar is "what happened recently," not "what was
+# uploaded recently". 4 days = today, 1-, 2-, 3-day lag (covers a 24-72 hr
+# publish window plus weekend slack). Tunable for backfill / replay scenarios.
+MAX_OBS_AGE_DAYS = int(os.environ.get("THEHEAT_GHCN_MAX_OBS_AGE_DAYS", "4"))
+
 # Minimum margin above the existing record to fire a signal (tenths-of-°C
 # converted to °C). Prevents noisy ties from the same day re-firing.
 RECORD_MARGIN_C = 0.0
@@ -136,6 +145,9 @@ def _fetch_diff(d: date, timeout: int = 60) -> bytes | None:
 def _fetch_recent_obs(
     active_ids: frozenset[str],
     lookback_days: int = DIFF_LOOKBACK_DAYS,
+    *,
+    max_obs_age_days: int = MAX_OBS_AGE_DAYS,
+    today: date | None = None,
 ) -> dict[tuple[str, date], list[DailyObs]]:
     """Fetch recent TMAX/TMIN observations for active stations.
 
@@ -144,9 +156,16 @@ def _fetch_recent_obs(
 
     Fetches recent superghcnd_diff tarballs in parallel and de-duplicates by
     station/date/element, keeping the latest parsed value.
+
+    Late-arriving observations are filtered: any record with obs_date older than
+    ``today - max_obs_age_days`` is discarded. ``superghcnd_diff`` regularly
+    contains obs from 1-2 weeks ago that just got uploaded; surfacing those as
+    fresh signals would be wrong (the bot reports current weather, not data-pipeline
+    backfills).
     """
-    today = date.today()
+    today = today or date.today()
     dates = [today - timedelta(days=i) for i in range(1, lookback_days + 1)]
+    obs_age_cutoff = today - timedelta(days=max_obs_age_days)
 
     # Fetch diffs in parallel (3 requests, lightweight)
     raw_by_date: dict[date, bytes] = {}
@@ -163,12 +182,17 @@ def _fetch_recent_obs(
 
     # Parse all records, keeping only the latest active station/date/element
     # state. Delete records and QC-failed updates must remove any earlier
-    # value seen in the same lookback window.
+    # value seen in the same lookback window. Records older than the obs-age
+    # cutoff are skipped entirely (they're backfill, not news).
     obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
+    skipped_stale = 0
     for d in sorted(raw_by_date):
         records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
         for rec in records:
             if rec.station_id not in active_ids:
+                continue
+            if rec.obs_date < obs_age_cutoff:
+                skipped_stale += 1
                 continue
             key = (rec.station_id, rec.obs_date, rec.element)
             obs = rec.to_daily_obs()
@@ -184,11 +208,11 @@ def _fetch_recent_obs(
         obs_list.sort(key=lambda o: 0 if o.element == "TMAX" else 1)
 
     log.info(
-        "GHCN: fetched diffs for %d/%d dates; %d active station/date groups have recent readings",
-        len(raw_by_date), lookback_days, len(by_station_date),
+        "GHCN: fetched diffs for %d/%d dates; %d active station/date groups have fresh readings (%d backfill records skipped, cutoff=%s)",
+        len(raw_by_date), lookback_days, len(by_station_date), skipped_stale, obs_age_cutoff.isoformat(),
     )
     if not by_station_date:
-        raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations")
+        raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations within obs-age cutoff")
     return by_station_date
 
 
