@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import re
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
@@ -67,9 +68,27 @@ def _memory_json(memory: MemorySlice) -> str:
     return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default)
 
 
+_FENCE_OPEN_RE = re.compile(r"^\s*```(?:json|JSON)?\s*\n?")
+_FENCE_CLOSE_RE = re.compile(r"\n?\s*```\s*$")
+
+
+def _strip_markdown_fences(raw: str) -> str:
+    """Strip ```json ... ``` wrappers some models emit despite a "no
+    code fences" instruction in the prompt. Sonnet 4.6 ignores the
+    instruction in practice (observed 2026-05-07: every monthly_low and
+    fire writer call wrapped output in ```json fences). Defensive
+    parsing here is more reliable than prompt strictness alone.
+    """
+    text = raw.strip()
+    text = _FENCE_OPEN_RE.sub("", text, count=1)
+    text = _FENCE_CLOSE_RE.sub("", text, count=1)
+    return text.strip()
+
+
 def _parse_writer_json(raw: str) -> WriterResult:
+    cleaned = _strip_markdown_fences(raw)
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(cleaned)
     except json.JSONDecodeError as exc:
         print(f"[two_bot.writer] Invalid JSON response: {raw}")
         raise ValueError("Writer returned invalid JSON") from exc

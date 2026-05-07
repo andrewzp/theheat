@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3.0] - 2026-05-07
+
+Strip markdown code fences from writer output. Sonnet 4.6 wraps its
+JSON in ```json fences despite the prompt explicitly forbidding them
+("No markdown. No code fences. No prose outside the JSON."). After the
+date-serialization fix landed in 0.3.2.0, the very next alerts cycle
+revealed this is the next layer: 2 monthly_low + 2 fire bundles still
+died with ``ValueError: Writer returned invalid JSON``. The
+suppression ledger captured all 4 with ``stage: pipeline_error`` so we
+could see the kill — that's the loop closing.
+
+### Fixed
+
+- **Tolerant writer-response parsing** in
+  [src/two_bot/writer.py](src/two_bot/writer.py). New
+  ``_strip_markdown_fences`` pre-processor handles ``\`\`\`json``,
+  ``\`\`\`JSON``, plain ``\`\`\``, and any of the above with leading or
+  trailing whitespace. Strict prompting wasn't enough; defensive
+  parsing is the durable fix. 7 new tests cover the variants plus the
+  full ``_parse_writer_json`` happy path on a fenced response and the
+  loud-fail contract for genuinely malformed JSON.
+
 ## [0.3.2.0] - 2026-05-07
 
 Unblock GHCN drafts. Today's first 3 post-cutover monthly_low bundles

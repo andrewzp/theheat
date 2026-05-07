@@ -93,6 +93,63 @@ def test_writer_provider_resolved_at_import(monkeypatch):
     importlib.reload(writer_module)
 
 
+class TestStripMarkdownFences:
+    """Regression: Sonnet 4.6 wraps writer output in ```json fences despite
+    the prompt explicitly forbidding them. Observed in run 25525862349
+    (2026-05-07 22:58Z): every monthly_low + fire writer call returned
+    fenced JSON, ``json.loads()`` raised, the catch-all swallowed the
+    error, all drafts silently died.
+    """
+
+    def test_strips_fences_with_json_lang_tag(self):
+        from src.two_bot.writer import _strip_markdown_fences
+        raw = '```json\n{"tweet": "x", "kill_reason": null}\n```'
+        assert _strip_markdown_fences(raw) == '{"tweet": "x", "kill_reason": null}'
+
+    def test_strips_fences_without_lang_tag(self):
+        from src.two_bot.writer import _strip_markdown_fences
+        raw = '```\n{"tweet": "x"}\n```'
+        assert _strip_markdown_fences(raw) == '{"tweet": "x"}'
+
+    def test_strips_uppercase_lang_tag(self):
+        from src.two_bot.writer import _strip_markdown_fences
+        raw = '```JSON\n{"a": 1}\n```'
+        assert _strip_markdown_fences(raw) == '{"a": 1}'
+
+    def test_handles_leading_trailing_whitespace(self):
+        from src.two_bot.writer import _strip_markdown_fences
+        raw = '   \n\n  ```json\n{"a": 1}\n```  \n  '
+        assert _strip_markdown_fences(raw) == '{"a": 1}'
+
+    def test_passthrough_when_no_fences(self):
+        from src.two_bot.writer import _strip_markdown_fences
+        raw = '{"tweet": "already raw json"}'
+        assert _strip_markdown_fences(raw) == '{"tweet": "already raw json"}'
+
+    def test_parse_writer_json_accepts_fenced_response(self):
+        from src.two_bot.writer import _parse_writer_json
+        raw = """```json
+{
+  "tweet": "Sissonville hit -2.2C overnight, the coldest May reading since 1995.",
+  "kill_reason": null,
+  "angle_chosen": "monthly_record_rarity",
+  "era_anchor_used": null,
+  "peer_comparison_used": null,
+  "reasoning": "monthly_low rarity in 30y archive"
+}
+```"""
+        result = _parse_writer_json(raw)
+        assert result.tweet is not None
+        assert result.tweet.startswith("Sissonville")
+        assert result.kill_reason is None
+
+    def test_parse_writer_json_rejects_truly_invalid_json(self):
+        import pytest
+        from src.two_bot.writer import _parse_writer_json
+        with pytest.raises(ValueError, match="invalid JSON"):
+            _parse_writer_json("```json\nnot actually json\n```")
+
+
 class TestBundleJsonHandlesDates:
     """Regression: GHCN bundles carry signal_date (date) inside raw_signal_dump.
 
