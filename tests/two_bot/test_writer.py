@@ -150,6 +150,78 @@ class TestStripMarkdownFences:
             _parse_writer_json("```json\nnot actually json\n```")
 
 
+class TestExtractJsonPayload:
+    """Regression: Sonnet 4.6 emits a chain-of-thought preamble before
+    the JSON ('Let me think about this carefully.') in run 25526974586,
+    even though the prompt says 'No prose outside the JSON.' The fence
+    stripper alone doesn't catch this — there's no fence. Solution:
+    extract the substring between the first '{' and the last '}'.
+    """
+
+    def test_strips_chain_of_thought_preamble(self):
+        from src.two_bot.writer import _extract_json_payload
+        raw = 'Let me think about this carefully.\n\n{"tweet": "x", "kill_reason": null}'
+        assert _extract_json_payload(raw) == '{"tweet": "x", "kill_reason": null}'
+
+    def test_strips_postamble_explanation(self):
+        from src.two_bot.writer import _extract_json_payload
+        raw = '{"tweet": "x"}\n\nThe reasoning behind this choice is...'
+        assert _extract_json_payload(raw) == '{"tweet": "x"}'
+
+    def test_strips_preamble_and_fences_combined(self):
+        from src.two_bot.writer import _extract_json_payload
+        raw = '```json\nLet me reason about this signal.\n{"a": 1}\n```'
+        assert _extract_json_payload(raw) == '{"a": 1}'
+
+    def test_handles_nested_raw_signal_dump_object(self):
+        """Bundle response has nested dicts inside raw_signal_dump.
+        rfind('}') should still find the OUTER closing brace."""
+        from src.two_bot.writer import _extract_json_payload
+        raw = 'Here is the response: {"tweet": "x", "raw_signal_dump": {"city": "Sissonville", "nested": {"a": 1}}}'
+        result = _extract_json_payload(raw)
+        import json
+        parsed = json.loads(result)
+        assert parsed["raw_signal_dump"]["nested"]["a"] == 1
+
+    def test_passthrough_clean_response(self):
+        from src.two_bot.writer import _extract_json_payload
+        raw = '{"tweet": "clean response"}'
+        assert _extract_json_payload(raw) == '{"tweet": "clean response"}'
+
+    def test_no_braces_at_all_returns_cleaned_text(self):
+        """Genuine garbage from the model — let json.loads fail loudly
+        with the raw text in the error log, not silently swallow."""
+        from src.two_bot.writer import _extract_json_payload
+        raw = "I cannot help with this signal."
+        # Returned as-is (no extraction possible). json.loads() in the
+        # caller will raise ValueError, which gets logged.
+        assert _extract_json_payload(raw) == "I cannot help with this signal."
+
+    def test_parse_writer_json_accepts_preamble_response(self):
+        """End-to-end: a Sonnet response with chain-of-thought
+        preamble parses correctly through the full _parse_writer_json
+        path — exactly the failure mode in run 25526974586."""
+        from src.two_bot.writer import _parse_writer_json
+        raw = """Let me think about this signal carefully.
+
+The bundle shows a monthly_low for Sissonville at -2.2C. The prior
+record was 1.0C in 1995. That's a significant 3-degree margin.
+
+{
+  "tweet": "Sissonville WV hit -2.2C overnight, three degrees below the previous May low set in 1995.",
+  "kill_reason": null,
+  "angle_chosen": "monthly_record_margin",
+  "era_anchor_used": null,
+  "peer_comparison_used": null,
+  "reasoning": "monthly low with strong margin against archive"
+}"""
+        result = _parse_writer_json(raw)
+        assert result.tweet is not None
+        assert result.tweet.startswith("Sissonville WV")
+        assert result.kill_reason is None
+        assert result.angle_chosen == "monthly_record_margin"
+
+
 class TestBundleJsonHandlesDates:
     """Regression: GHCN bundles carry signal_date (date) inside raw_signal_dump.
 
