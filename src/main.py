@@ -102,6 +102,7 @@ def _record_source_run(
     drafted: int = 0,
     error: str | None = None,
     note: str | None = None,
+    details: dict | None = None,
 ) -> None:
     """Track a source result when run telemetry is enabled."""
     if current_run is None:
@@ -118,6 +119,7 @@ def _record_source_run(
         drafted=drafted,
         error=error,
         note=note,
+        details=details,
     )
 
 
@@ -663,6 +665,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     # for the routing decision (flat summary vs. multi-station roll-call).
     simultaneous_record_stations: list[dict] = []
     ghcn_pipeline_metrics: dict = {}
+    # Per-bundle decision log for the dashboard drill-down. Each row records
+    # which bundle was processed, what its strongest signal was (if any), and
+    # whether it ended up as a draft, rejection, duplicate, or no-signal.
+    ghcn_event_log: list[dict] = []
     try:
         if _signals_provider not in {"open_meteo", "ghcn"}:
             raise ValueError(
@@ -690,6 +696,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             strongest_type = ""
             strongest_city = ""
             signal_year = (bundle.signal_date or date.today()).year
+            # Default these so the bottom-of-loop event-log capture
+            # works whether or not the if-cascade fires.
+            two_bot_saved = False
 
             if bundle.all_time_high:
                 ev = bundle.all_time_high
@@ -1043,6 +1052,36 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                         drafted += 1
                                         signal_counts["streak"] += 1
 
+            # Append a per-bundle row to the dashboard event log. Captured
+            # for every bundle iterated regardless of decision so the UI can
+            # show "X considered, Y drafted, Z rejected, W no-signal".
+            # Only the GHCN provider exposes station_id; rows from the
+            # Open-Meteo provider get an empty station_id and the city instead.
+            if _signals_provider == "ghcn":
+                if strongest_event_id and not two_bot_saved:
+                    decision = "rejected"
+                elif two_bot_saved:
+                    decision = "drafted"
+                else:
+                    decision = "no_qualifying_signal"
+                ghcn_event_log.append({
+                    "station_id": bundle.station_id,
+                    "station_name": bundle.station_name,
+                    "country": bundle.country,
+                    "city": bundle.city,
+                    "signal_date": (
+                        bundle.signal_date.isoformat() if bundle.signal_date else None
+                    ),
+                    "decision": decision,
+                    "type": strongest_type or None,
+                    "event_id": strongest_event_id,
+                    "score": (
+                        round(strongest_score.total, 2) if strongest_score else None
+                    ),
+                    "today_max_c": bundle.today_max_c,
+                    "today_min_c": bundle.today_min_c,
+                })
+
         # Simultaneous records detection — fire one summary signal if many cities broke records.
         # Two formats available; flat summary is the default. Roll-call (per-station list with
         # elevations) fires only when the cluster shape qualifies — same country with a
@@ -1203,6 +1242,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             f"anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} "
             f"streak:{signal_counts['streak']} country:{country_count}"
         )
+        details: dict | None = None
         if _signals_provider == "ghcn" and ghcn_pipeline_metrics:
             funnel = (
                 f"stations_active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
@@ -1213,13 +1253,21 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 f"drafted:{source_drafted}"
             )
             note = f"provider:ghcn {funnel} | {signal_breakdown}"
+            details = {
+                "provider": "ghcn",
+                "pipeline_metrics": dict(ghcn_pipeline_metrics),
+                # Cap the events list so a single noisy cycle (thousands of
+                # raw signals dedup-survived to dozens of bundles) doesn't
+                # bloat the run record.
+                "events": ghcn_event_log[:200],
+            }
         else:
             note = f"provider:{_signals_provider} {signal_breakdown}"
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
             status="success", observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
-            note=note,
+            note=note, details=details,
         )
     except Exception as e:
         print(f"[alerts] Extreme signals error: {e}")

@@ -794,9 +794,21 @@ def add_source_run(
     drafted: int = 0,
     error: str | None = None,
     note: str | None = None,
+    details: dict | None = None,
 ) -> dict:
-    """Append a source-level result to an in-progress run record."""
-    run.setdefault("sources", []).append({
+    """Append a source-level result to an in-progress run record.
+
+    ``details`` is an optional structured payload for dashboard drill-down.
+    Conventional keys (best-effort, source-specific):
+      - ``pipeline_metrics``: dict of stage counts (e.g. for the GHCN path:
+        stations_active, stations_with_obs, stations_checked, raw_signals,
+        bundles_after_dedup, country_records).
+      - ``events``: list of per-event decision rows
+        ({event_id, kind, decision, score, reason, station_id?, ...}).
+      - ``fetch_meta``: dict of input metadata (urls, byte counts, lookback).
+    The schema is intentionally loose — sources add what's useful for them.
+    """
+    entry = {
         "source": source,
         "status": status,
         "duration_ms": duration_ms,
@@ -805,7 +817,10 @@ def add_source_run(
         "drafted": drafted,
         "error": error,
         "note": note,
-    })
+    }
+    if details:
+        entry["details"] = details
+    run.setdefault("sources", []).append(entry)
     return run
 
 

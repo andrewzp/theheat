@@ -183,6 +183,31 @@ class TestRunHistory:
         assert run["sources"][0]["source"] == "firms"
         assert run["sources"][0]["drafted"] == 1
 
+    def test_add_source_run_persists_optional_details(self):
+        """Dashboard drill-down: details dict (pipeline_metrics + events) must
+        round-trip through add_source_run when supplied."""
+        run = init_run("alerts")
+        add_source_run(
+            run, source="open_meteo_extreme_signals", status="success",
+            details={
+                "provider": "ghcn",
+                "pipeline_metrics": {"stations_active": 11907, "raw_signals": 2},
+                "events": [
+                    {"station_id": "USC0001", "decision": "rejected", "type": "anomaly_cold"},
+                ],
+            },
+        )
+        entry = run["sources"][0]
+        assert entry["details"]["provider"] == "ghcn"
+        assert entry["details"]["pipeline_metrics"]["stations_active"] == 11907
+        assert entry["details"]["events"][0]["station_id"] == "USC0001"
+
+    def test_add_source_run_omits_details_key_when_unset(self):
+        """No details payload → no `details` key in the source row (smaller state file)."""
+        run = init_run("alerts")
+        add_source_run(run, source="firms", status="success")
+        assert "details" not in run["sources"][0]
+
     def test_finalize_run_prepends_to_history(self, fresh_state):
         run = init_run("alerts")
         add_source_run(run, source="firms", status="success", drafted=1)
