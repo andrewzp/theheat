@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Heat — Brand Book v1.0</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16181B; --ink2:#3A3D43; --ash:#6B6E75; --ash2:#9A9CA1;
+    --paper:#FAFAF7; --paper2:#F2F1EC; --rule:#E5E3DC;
+    --accent:#C2410C;
+    --green:#1F7A4D; --red:#B0301C;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#d6d4cd;color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 1,'lnum' 1}
+  .page{
+    width:8.5in; height:11in; margin:24px auto; background:var(--paper);
+    padding:.55in .6in; position:relative; overflow:hidden;
+    box-shadow:0 1px 0 rgba(0,0,0,.04), 0 18px 60px rgba(0,0,0,.08);
+    page-break-after:always;
+  }
+  .num{font-feature-settings:'tnum' 1,'lnum' 1}
+
+  /* Page chrome */
+  .mast{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink);font-weight:600}
+  .mast .r{color:var(--ash);font-weight:500}
+  .mast-rule{border-top:1px solid var(--ink);margin:7px 0 5px}
+  .mast-sub{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--ash);letter-spacing:.05em}
+  .foot{position:absolute;left:.6in;right:.6in;bottom:.4in;display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--ash);letter-spacing:.06em;border-top:1px solid var(--rule);padding-top:8px}
+
+  /* Section heading */
+  .sec-num{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600;letter-spacing:.1em}
+  h1{font-size:38px;line-height:1.02;letter-spacing:-.022em;font-weight:600;margin:14px 0 6px}
+  h2{font-size:14px;letter-spacing:-.005em;font-weight:600;margin:18px 0 8px}
+  .deck{font-size:13px;color:var(--ash);max-width:64ch;margin:0 0 18px;line-height:1.5}
+  p,li{font-size:11.5px;line-height:1.55;color:var(--ink2);margin:0 0 6px}
+  ul{margin:4px 0;padding-left:14px}
+  .mono{font-family:var(--mono);font-size:10px;letter-spacing:.02em}
+  strong{color:var(--ink)}
+
+  /* Lockup atom */
+  .lockup{display:inline-flex;align-items:center;gap:14px;line-height:1}
+  .lockup .wm{font-weight:600;letter-spacing:-.022em}
+
+  /* Cover page */
+  .cover{display:flex;flex-direction:column;justify-content:space-between;height:100%}
+  .cover .hero{display:flex;flex-direction:column;justify-content:center;flex:1}
+  .cover .hero .lockup .wm{font-size:64px}
+  .cover .hero .tagline{font-size:18px;color:var(--ink2);max-width:50ch;margin-top:24px;line-height:1.4;letter-spacing:-.005em}
+  .cover .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;font-family:var(--mono);font-size:10px;color:var(--ash);letter-spacing:.06em;text-transform:uppercase;border-top:1px solid var(--ink);padding-top:14px}
+  .cover .meta b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+
+  /* TOC */
+  .toc-row{display:grid;grid-template-columns:40px 1fr 60px;gap:12px;padding:12px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+  .toc-row .n{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:600}
+  .toc-row .ttl{font-size:14px;color:var(--ink);letter-spacing:-.005em;font-weight:500}
+  .toc-row .ttl em{font-style:normal;color:var(--ash);font-weight:400}
+  .toc-row .pg{font-family:var(--mono);font-size:11px;color:var(--ash);text-align:right}
+
+  /* Section header */
+  .sec-head{margin-bottom:18px}
+
+  /* Color chips */
+  .chips{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0 16px}
+  .chip{aspect-ratio:1/1.05;border-radius:3px;display:flex;flex-direction:column;justify-content:flex-end;padding:7px;font-family:var(--mono);font-size:8.5px;border:1px solid rgba(0,0,0,.06);position:relative}
+  .chip .name{color:rgba(255,255,255,.85);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+  .chip .hex{color:rgba(255,255,255,.65);margin-top:2px}
+  .chip.lt .name{color:var(--ink)} .chip.lt .hex{color:var(--ash)}
+
+  /* Reading sample */
+  .reading{display:flex;align-items:flex-start;gap:6px;line-height:.92;font-feature-settings:'tnum' 1,'lnum' 1}
+  .reading .int{font-weight:600;color:var(--accent);letter-spacing:-.026em}
+  .reading .dec{font-weight:500;color:var(--accent);letter-spacing:-.012em}
+  .reading .unit{font-weight:500;color:var(--ink2);font-size:.32em;margin-left:8px;margin-top:.06em}
+
+  /* Do/Don't */
+  .dd{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .dd .cell{padding:12px;border:1px solid var(--rule);border-radius:3px;background:var(--paper)}
+  .dd .label{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;font-weight:600;margin-bottom:6px}
+  .dd .ok{color:var(--green)} .dd .no{color:var(--red)}
+
+  /* Mark grid */
+  .mark-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:8px}
+  .mark-grid .cell{border:1px solid var(--rule);padding:14px 8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;min-height:120px;background:var(--paper)}
+  .mark-grid .cap{font-family:var(--mono);font-size:9px;color:var(--ash);letter-spacing:.06em;margin-top:10px}
+
+  /* Twitter mock */
+  .tweet{border:1px solid var(--rule);background:var(--paper);padding:14px 16px;border-radius:3px;font-size:12px;line-height:1.5;color:var(--ink2)}
+  .tweet .h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .tweet .av{width:32px;height:32px;border-radius:999px;background:var(--paper2);display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule)}
+  .tweet .name{font-size:12.5px;color:var(--ink);font-weight:600}
+  .tweet .handle{font-size:11px;color:var(--ash)}
+  .tweet .body{color:var(--ink)}
+  .tweet .body .acc{color:var(--accent);font-weight:600}
+  .tweet .meta{margin-top:10px;padding-top:8px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:9px;color:var(--ash-soft);letter-spacing:.06em}
+
+  /* Two-col compare */
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .compare .col{}
+  .compare .lab{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ash);margin-bottom:6px;text-transform:uppercase}
+
+  /* Phone */
+  .phone{width:100%;max-width:280px;margin:0 auto;border:8px solid var(--ink);border-radius:28px;background:#fff;padding:14px 12px;font-family:var(--sans);font-size:12px;color:#0F1419}
+  .phone .h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .phone .av{width:36px;height:36px;border-radius:999px;background:var(--paper2);border:1px solid var(--rule);display:inline-flex;align-items:center;justify-content:center}
+  .phone .name{font-weight:700;font-size:13px}
+  .phone .handle{color:#536471;font-size:12px}
+  .phone .body{color:#0F1419;font-size:14px;line-height:1.36}
+
+  /* Dashboard mini */
+  .dash{border:1px solid var(--ink);background:var(--paper);font-size:9.5px}
+  .dash .row{display:grid;grid-template-columns:60px 56px 70px 1fr 50px 60px;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rule);align-items:start}
+  .dash .row.head{background:var(--paper2);font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ash)}
+  .dash .id, .dash .t{font-family:var(--mono);font-size:9px;color:var(--ash)}
+  .dash .tier{font-family:var(--mono);font-size:9px;text-transform:uppercase;color:var(--ink2);letter-spacing:.04em}
+  .dash .body{font-size:10px;line-height:1.45;color:var(--ink)}
+  .dash .body .acc{color:var(--accent);font-weight:600}
+  .dash .score{font-weight:600;color:var(--ink);text-align:right;font-size:11px}
+  .dash .act{font-family:var(--mono);font-size:8.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ash);text-align:center}
+  .dash .act.btn{background:var(--ink);color:var(--paper);padding:4px 0;border-radius:2px}
+  .dash .mini-mast{padding:8px 12px;border-bottom:1px solid var(--ink);background:var(--paper2);display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:var(--ink);font-weight:600}
+
+  @media print{
+    @page{size:letter;margin:0}
+    body{background:#fff}
+    .page{margin:0;box-shadow:none;page-break-after:always}
+  }
+  @media print { .no-print { display:none !important; } }
+
+  .print-bar{position:fixed;top:12px;right:12px;background:var(--ink);color:var(--paper);padding:10px 14px;border-radius:3px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:none;z-index:99}
+</style>
+</head>
+<body>
+  <button class="print-bar no-print" onclick="window.print()">Save as PDF →</button>
+
+  <!-- COVER -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>OWNER · ANDREW</div><div>26 APR 2026 · LETTER · PRINT-READY</div></div>
+    </header>
+    <div class="cover">
+      <div class="hero">
+        <div class="lockup">
+          <svg viewBox="0 0 60 96" width="56" height="90" aria-hidden="true">
+            <rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/>
+            <circle cx="30" cy="76" r="14" fill="#16181B"/>
+            <circle cx="30" cy="76" r="7" fill="#C2410C"/>
+          </svg>
+          <svg class="wm wm-outlined" viewBox="0 0 296 80" width="236.80" height="64" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
+        </div>
+        <p class="tagline">A climate data wire. The brand is the reading: extraordinary numbers, plainly reported, sourced. Not amber. Not a dashboard. A logbook of a planet running a fever.</p>
+      </div>
+      <div class="meta">
+        <div><b>Format</b>9 pages · letter</div>
+        <div><b>Use</b>The canonical reference</div>
+        <div><b>Companion</b>Usage Guide (one-page)</div>
+      </div>
+    </div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>COVER</div><div class="num">01 / 09</div></div>
+  </article>
+
+  <!-- §01 WORDMARK -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§01 · WORDMARK</div><div>INTER SEMIBOLD · LOCKUP · CLEAR-SPACE · MIN SIZE</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§01</div>
+      <h1>Wordmark</h1>
+      <p class="deck">Inter SemiBold, set tight (&minus;0.022em). The wordmark is a masthead, not a logo &mdash; it sits at the top of the publication, sets type for the readings below it, and gets out of the way.</p>
+    </div>
+
+    <div class="lockup" style="margin:20px 0 22px">
+      <svg viewBox="0 0 60 96" width="44" height="70"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+      <svg class="wm wm-outlined" viewBox="0 0 296 80" width="177.60" height="48" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
+    </div>
+
+    <h2>Construction</h2>
+    <ul>
+      <li><strong>Wordmark.</strong> Inter SemiBold (600). Tracking &minus;0.022em. Capital T &amp; H, lowercase otherwise. Never all-caps. Never italic.</li>
+      <li><strong>Mark.</strong> Thermometer + accent bulb. Mark height = wordmark cap-height &times; 1.6.</li>
+      <li><strong>Gap.</strong> Mark-to-wordmark = wordmark cap-height &times; 0.55.</li>
+      <li><strong>Clear space.</strong> Equal to bulb diameter on every side. Nothing else can enter.</li>
+      <li><strong>Min size.</strong> Lockup &ge; 80px wide / 0.85" print. Below that, the mark stands alone.</li>
+    </ul>
+
+    <h2>Outline file</h2>
+    <p><span class="mono">handoff/svg/wordmark-outlined.svg</span> ships glyph paths &mdash; renders correctly without Inter loaded externally. Same for <span class="mono">lockup-outlined.svg</span> and <span class="mono">lockup-mono-outlined.svg</span>.</p>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§01 WORDMARK</div><div class="num">02 / 09</div></div>
+  </article>
+
+  <!-- §02 COLOR -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§02 · COLOR</div><div>NEUTRAL PALETTE · ACCENT CONTRACT · DO / DON'T</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§02</div>
+      <h1>Color</h1>
+      <p class="deck">Mostly neutral. One warm accent, applied only where a number needs emphasis. The page is a logbook, not a dashboard &mdash; if you find yourself adding a second hue, the layout is wrong.</p>
+    </div>
+
+    <div class="chips" style="grid-template-columns:repeat(6,1fr)">
+      <div class="chip lt" style="background:#FAFAF7"><div class="name">Paper</div><div class="hex">#FAFAF7</div></div>
+      <div class="chip lt" style="background:#F2F1EC"><div class="name">Paper-2</div><div class="hex">#F2F1EC</div></div>
+      <div class="chip" style="background:#16181B"><div class="name">Ink</div><div class="hex">#16181B</div></div>
+      <div class="chip" style="background:#3A3D43"><div class="name">Ink-2</div><div class="hex">#3A3D43</div></div>
+      <div class="chip" style="background:#6B6E75"><div class="name">Ash</div><div class="hex">#6B6E75</div></div>
+      <div class="chip" style="background:#C2410C"><div class="name">Accent</div><div class="hex">#C2410C</div></div>
+    </div>
+
+    <h2>The accent contract</h2>
+    <ul>
+      <li><strong>One accent.</strong> <span class="mono">#C2410C</span>. Integer + decimal both ride it &mdash; size and weight create the hierarchy, not a second hue.</li>
+      <li><strong>Unit stays neutral.</strong> &deg;C, ppm, MW in ink-2.</li>
+      <li><strong>+&Delta;C callouts</strong> in accent.</li>
+      <li><strong>One accent per surface.</strong> If you find yourself adding a second hue, the layout is wrong.</li>
+      <li><strong>No gradients, no glows, no amber.</strong></li>
+    </ul>
+
+    <div class="dd">
+      <div class="cell"><div class="label ok">DO</div>
+        <div class="reading" style="font-size:42px;margin:6px 0 4px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+        <p style="margin:6px 0 0;font-size:10.5px;color:var(--ash)">One earned accent on the integer.</p>
+      </div>
+      <div class="cell"><div class="label no">DON'T</div>
+        <div style="display:flex;gap:6px;align-items:flex-start;margin:6px 0 4px">
+          <span style="background:#C2410C;color:#fff;padding:1px 6px;border-radius:2px;font-family:var(--mono);font-size:9px;letter-spacing:.05em">EXTREME</span>
+          <span class="reading" style="font-size:32px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></span>
+          <span style="color:var(--accent);font-size:11px;border:1px solid var(--accent);padding:1px 5px;border-radius:2px">Sahel</span>
+        </div>
+        <p style="margin:6px 0 0;font-size:10.5px;color:var(--ash)">Three accents. Now nothing's emphasized.</p>
+      </div>
+    </div>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§02 COLOR</div><div class="num">03 / 09</div></div>
+  </article>
+
+  <!-- §03 NUMBER -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§03 · NUMBER</div><div>THE HERO · INT/DEC/UNIT · TABULAR · SCALE BEHAVIORS</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§03</div>
+      <h1>Number &mdash; the hero</h1>
+      <p class="deck">The way <span class="num">42.1&deg;C</span> is set <em>is</em> the brand. This is the most-rendered, most-screenshotted unit in the system.</p>
+    </div>
+
+    <div style="background:var(--paper2);border:1px solid var(--rule);padding:28px 24px 22px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="reading" style="font-size:104px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+      <div style="text-align:right">
+        <div style="color:var(--accent);font-weight:600;font-size:13px">+2.7&deg;C above prev. record</div>
+        <div style="color:var(--ash);font-size:11px;margin-top:4px">Old record: 39.4&deg;C, 1929 · Buenos Aires</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:160px 1fr;gap:16px;font-size:11px;border-top:1px solid var(--rule)">
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash);text-transform:uppercase">INTEGER</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);color:var(--ink2)">Inter SemiBold · accent <span class="mono">#C2410C</span> · tracking &minus;0.026em</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash);text-transform:uppercase">DECIMAL</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);color:var(--ink2)">Inter Medium · accent <span class="mono">#C2410C</span> · 56% of integer size</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash);text-transform:uppercase">UNIT</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);color:var(--ink2)">Inter Medium · ink-2 · 30% of integer · superscript, baseline-aligned to integer top</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash);text-transform:uppercase">FIGURES</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);color:var(--ink2)">Tabular · lining · <span class="mono">font-feature-settings:'tnum' 1, 'lnum' 1</span></div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash);text-transform:uppercase">DELTA</div>
+      <div style="padding:8px 0;border-bottom:1px solid var(--rule);color:var(--ink2)">Required. <span class="mono">+1.4&deg;C above prev. record</span> in accent. No delta &rarr; no post.</div>
+    </div>
+
+    <h2>Scale behaviors</h2>
+    <div style="display:flex;align-items:flex-end;gap:24px;margin-top:6px">
+      <div class="reading" style="font-size:72px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+      <div class="reading" style="font-size:36px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+      <div class="reading" style="font-size:18px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+      <div class="reading" style="font-size:12px"><span class="int">42</span><span class="dec">.1</span><span class="unit">&deg;C</span></div>
+    </div>
+
+    <h2>Other units</h2>
+    <div style="display:flex;gap:24px;margin-top:6px">
+      <div class="reading" style="font-size:36px"><span class="int">435</span><span class="dec">.11</span><span class="unit" style="font-size:.34em">ppm</span></div>
+      <div class="reading" style="font-size:36px"><span class="int">4,200</span><span class="unit" style="font-size:.34em">MW</span></div>
+      <div class="reading" style="font-size:36px"><span class="int">1.5</span><span class="dec">2</span><span class="unit" style="font-size:.34em">&deg;C anom</span></div>
+    </div>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§03 NUMBER</div><div class="num">04 / 09</div></div>
+  </article>
+
+  <!-- §04 MARK -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§04 · MARK</div><div>THERMOMETER + BULB · 400/200/96/48/24/16 · FAVICON RULE</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§04</div>
+      <h1>Mark</h1>
+      <p class="deck">Thermometer with a single accent bulb. The only mark that appears next to the wordmark; the rest of the icon kit (degree, isotherm, station-pin) is semantic, never identity.</p>
+    </div>
+
+    <div class="mark-grid">
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="64" height="96"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        <div class="cap">400</div>
+      </div>
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="48" height="76"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        <div class="cap">200</div>
+      </div>
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="32" height="50"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        <div class="cap">96</div>
+      </div>
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="22" height="35"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        <div class="cap">48</div>
+      </div>
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="14" height="22"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#C2410C"/></svg>
+        <div class="cap">24 · solid</div>
+      </div>
+      <div class="cell">
+        <svg viewBox="0 0 60 96" width="10" height="16"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#C2410C"/></svg>
+        <div class="cap">16 · solid</div>
+      </div>
+    </div>
+
+    <h2>Sub-24px rule</h2>
+    <ul>
+      <li><strong>At &lt; 24px,</strong> the inner accent dot is dropped &mdash; the entire bulb fills with accent. Two-color reduction is illegible at favicon sizes.</li>
+      <li><strong>Mono fallback.</strong> When a single ink is required (print, embossing, mono channels), the bulb fills with ink. See <span class="mono">mark-thermometer-mono.svg</span>.</li>
+      <li><strong>Reverse.</strong> On dark surfaces, stem and bulb-ring become Paper-2; accent dot stays. See <span class="mono">mark-thermometer-reverse.svg</span>.</li>
+    </ul>
+
+    <h2>Icon kit (semantic, not identity)</h2>
+    <p>Thermometer = mark. Degree, isotherm, station-pin, mercury-bulb stay in <span class="mono">handoff/svg/</span> as semantic helpers used inline in the dashboard, sidebar lists, and tweet meta. Never substituted for the mark.</p>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§04 MARK</div><div class="num">05 / 09</div></div>
+  </article>
+
+  <!-- §05 LOCKUP -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§05 · LOCKUP</div><div>POSITIONS · CLEAR-SPACE · MIN SIZE · LIGHT + REVERSE</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§05</div>
+      <h1>Lockup</h1>
+      <p class="deck">Mark + wordmark, locked horizontal. There is no vertical lockup. There is no stacked lockup. The masthead reads as a line.</p>
+    </div>
+
+    <div class="compare">
+      <div class="col">
+        <div class="lab">LIGHT — DEFAULT</div>
+        <div style="border:1px solid var(--rule);padding:32px 24px;background:var(--paper)">
+          <div class="lockup">
+            <svg viewBox="0 0 60 96" width="40" height="64"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+            <svg class="wm wm-outlined" viewBox="0 0 296 80" width="140.60" height="38" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="lab">REVERSE — INK FIELD</div>
+        <div style="border:1px solid var(--ink);padding:32px 24px;background:var(--ink)">
+          <div class="lockup">
+            <svg viewBox="0 0 60 96" width="40" height="64"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#F2F1EC"/><circle cx="30" cy="76" r="14" fill="#F2F1EC"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+            <svg class="wm wm-outlined" viewBox="0 0 296 80" width="140.60" height="38" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#F2F1EC"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>Rules</h2>
+    <ul>
+      <li><strong>Position</strong>. Mark left, wordmark right. Always. Bulb sits below x-height baseline.</li>
+      <li><strong>Clear space</strong>. Equal to bulb diameter (mark-height &times; 0.29) on every side.</li>
+      <li><strong>Min size</strong>. Lockup &ge; 80px / 0.85". Below that &rarr; mark only.</li>
+      <li><strong>Mono</strong>. <span class="mono">lockup-mono.svg</span> &mdash; ink only, accent dropped. Use on second-color print runs and embossed surfaces.</li>
+      <li><strong>Outlined</strong>. <span class="mono">lockup-outlined.svg</span>, <span class="mono">lockup-mono-outlined.svg</span> &mdash; glyphs as paths, no font dependency.</li>
+    </ul>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§05 LOCKUP</div><div class="num">06 / 09</div></div>
+  </article>
+
+  <!-- §06 ACCENT RULE -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§06 · ACCENT RULE</div><div>ONE-PAGE CONTRACT · OWNED VS. UNOWNED SURFACES</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§06</div>
+      <h1>The accent rule</h1>
+      <p class="deck">Accent (<span class="num mono">#C2410C</span>) is the only color outside the neutral palette. It earns its place once per surface, on a number that matters.</p>
+    </div>
+
+    <h2>Where accent applies</h2>
+    <ul>
+      <li><strong>The headline reading.</strong> Integer + decimal = accent. Unit = ink-2.</li>
+      <li><strong>The delta line.</strong> &ldquo;+1.4&deg;C above prev. record&rdquo; in accent.</li>
+      <li><strong>The avatar bulb.</strong> The single dot of color in the mark.</li>
+      <li><strong>The dashboard headline.</strong> Inside each draft body &mdash; same rule, just inside the editor.</li>
+    </ul>
+
+    <h2>Where accent <em>doesn't</em></h2>
+    <ul>
+      <li>Chrome, badges, dividers, status pills, source lines, mastheads, page numbers, scores.</li>
+      <li>Backgrounds. Ever.</li>
+      <li>Body text or links.</li>
+      <li>Multi-accent rows. If two readings appear on one surface, only the lead one earns the accent.</li>
+    </ul>
+
+    <h2 style="margin-top:18px;color:var(--red)">The Twitter timeline caveat</h2>
+    <div style="border:1px solid var(--rule);background:var(--paper2);padding:14px 18px;border-radius:3px;font-size:11.5px;line-height:1.5;color:var(--ink2)">
+      <p style="margin:0 0 6px"><strong>Inside the timeline, tweets render as plain text.</strong> Twitter strips the typographic system: no integer/decimal contrast, no tabular figures, no accent color. The number reads in body weight, body size, body color.</p>
+      <p style="margin:0">Owned surfaces (avatar, banner, OG card, screenshots, the wire desk) keep the brand. The feed itself is a plain-text channel &mdash; design copy that survives without the system. <em>If the post needs the typography to land, the post is wrong.</em></p>
+    </div>
+
+    <h2>Owned vs. unowned</h2>
+    <div class="compare">
+      <div class="col">
+        <div class="lab">OWNED — ACCENT RENDERS</div>
+        <ul style="font-size:11px">
+          <li>Avatar &amp; banner</li>
+          <li>OG / share card</li>
+          <li>Screenshots, embeds, quote-cards</li>
+          <li>Wire-desk dashboard</li>
+          <li>Brand book, usage guide, web</li>
+        </ul>
+      </div>
+      <div class="col">
+        <div class="lab">UNOWNED — PLAIN TEXT</div>
+        <ul style="font-size:11px">
+          <li>Twitter timeline body</li>
+          <li>Threads, replies, quote-tweets</li>
+          <li>Mentions, search results</li>
+          <li>RSS, push notifications</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§06 ACCENT RULE</div><div class="num">07 / 09</div></div>
+  </article>
+
+  <!-- §07 TWITTER APPLICATION -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§07 · TWITTER APPLICATION</div><div>AVATAR · BANNER · BIO · PINNED</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§07</div>
+      <h1>Twitter &mdash; @theheat</h1>
+      <p class="deck">Profile composite. The brand fights for the thumb-stop on the avatar and banner; the body fights with copy alone.</p>
+    </div>
+
+    <!-- profile composite -->
+    <div style="border:1px solid var(--rule);background:var(--paper);position:relative;margin-bottom:14px">
+      <!-- banner -->
+      <div style="height:140px;background:var(--paper2);position:relative;border-bottom:1px solid var(--rule);padding:14px 20px;display:flex;flex-direction:column;justify-content:space-between">
+        <div class="mast" style="font-size:9.5px"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r" style="font-size:9px">VOL. I · NO. 138 · 26 APR 2026</div></div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+          <div class="lockup">
+            <svg viewBox="0 0 60 96" width="22" height="36"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+            <svg class="wm wm-outlined" viewBox="0 0 296 80" width="88.80" height="24" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
+          </div>
+          <div class="reading" style="font-size:22px"><span class="int">54</span><span class="dec">.4</span><span class="unit" style="font-size:.4em">&deg;C</span></div>
+        </div>
+      </div>
+      <!-- profile body -->
+      <div style="padding:0 20px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:-30px">
+          <div style="width:60px;height:60px;border-radius:999px;background:var(--paper);border:3px solid var(--paper);display:flex;align-items:center;justify-content:center">
+            <svg viewBox="0 0 60 96" width="30" height="48"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+          </div>
+          <div style="border:1px solid var(--ink);padding:4px 12px;border-radius:999px;font-size:11px;color:var(--ink);font-weight:600;margin-top:8px">Follow</div>
+        </div>
+        <div style="margin-top:8px">
+          <div style="font-size:14px;font-weight:700;color:var(--ink)">The Heat</div>
+          <div style="font-size:11.5px;color:var(--ash)">@theheat</div>
+          <p style="margin:8px 0 4px;font-size:11.5px;line-height:1.45;color:var(--ink)">Climate data, on the wire. Records, anomalies, &amp; readings &mdash; from <span class="num">11,907</span> stations &amp; satellite data. Every post sourced. UTC times.</p>
+          <div class="mono" style="color:var(--ash);font-size:9.5px">SOURCES · NOAA · NASA · ECMWF · USGS · GDACS · 9 MORE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pinned -->
+    <div class="lab" style="font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ash);margin-bottom:6px">PINNED TWEET</div>
+    <div class="tweet">
+      <div class="h">
+        <div class="av">
+          <svg viewBox="0 0 60 96" width="14" height="22"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        </div>
+        <div><div class="name">The Heat</div><div class="handle">@theheat</div></div>
+      </div>
+      <div class="body">A wire service for a planet running a fever. Every post is a record, an anomaly, or a reading that crossed a line — sourced, time-stamped, in plain language. Quiet by default. Loud when the data is.</div>
+      <div class="meta">SOURCES · NOAA · NASA · ECMWF · USGS · GDACS · 9 MORE · UTC TIMES · CONFIDENCE TAGS ON EVERY POST</div>
+    </div>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§07 TWITTER</div><div class="num">08 / 09</div></div>
+  </article>
+
+  <!-- §08 OPERATOR DASHBOARD -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§08 · OPERATOR DASHBOARD</div><div>WIRE DESK · MASTHEAD · DATELINE · SOURCE-LINE</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§08</div>
+      <h1>Operator dashboard</h1>
+      <p class="deck">Andrew uses this every day. Same masthead, same dateline, same source-line conventions as the public-facing brand &mdash; the brand <em>is</em> the workflow.</p>
+    </div>
+
+    <div class="dash">
+      <div class="mini-mast"><div>THE HEAT · CLIMATE DATA WIRE</div><div style="color:var(--ash);font-weight:500">VOL. I · NO. 138 · 2026-04-26</div></div>
+      <div class="row head"><span>id</span><span>time</span><span>tier</span><span>draft · data + impact</span><span style="text-align:right">score</span><span>action</span></div>
+      <div class="row">
+        <span class="id">WIRE-0142</span><span class="t">06:42 UTC</span><span class="tier">extreme</span>
+        <div class="body">EXTRAORDINARY heat in the Sahel. <span class="acc num">47.2&deg;C</span> in Kayes, Mali — hottest reading in 28 years. Survival outdoors is measured in hours, not days.</div>
+        <span class="score">97</span><span class="act btn">Post</span>
+      </div>
+      <div class="row">
+        <span class="id">WIRE-0141</span><span class="t">06:38 UTC</span><span class="tier">all-time-high</span>
+        <div class="body">Buenos Aires hit <span class="acc num">42.1&deg;C</span> today. Old record: 41.3&deg;C, 1929. ER visits in 2022 spell at this level: ~1,300 city-wide.</div>
+        <span class="score">84</span><span class="act btn">Post</span>
+      </div>
+      <div class="row">
+        <span class="id">WIRE-0140</span><span class="t">04:00 UTC</span><span class="tier">co2</span>
+        <div class="body">CO&#8322; at Mauna Loa: <span class="acc num">435.11 ppm</span>. Last time the atmosphere held this much — 4.5M years ago — seas sat ~25m higher.</div>
+        <span class="score">78</span><span class="act">In review</span>
+      </div>
+      <div class="row" style="opacity:.65">
+        <span class="id">WIRE-0138</span><span class="t">22:08 UTC</span><span class="tier">severe</span>
+        <div class="body">Tornado warning, central Oklahoma. Radar-confirmed, 2 mi WSW El Reno, NE at 35 mph. Median lead time: 13 minutes.</div>
+        <span class="score">66</span><span class="act">✓ Posted</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--ink);background:var(--paper2);font-family:var(--mono);font-size:8.5px;color:var(--ash);letter-spacing:.06em">
+        <span>Daily quota · 14 / 24 posts</span><span>11,907 stations · nominal</span><span>Last refresh · 06:43 UTC</span>
+      </div>
+    </div>
+
+    <h2>Workflow rules</h2>
+    <ul>
+      <li><strong>Impact-beat gate.</strong> Drafts blocked if date-anchored without a human-impact beat.</li>
+      <li><strong>Tiered queue.</strong> Extreme &middot; all-time-high &middot; CO&#8322; &middot; wildfire &middot; severe-weather &middot; outlook.</li>
+      <li><strong>Score &ge; 70</strong> to surface for posting; below that, edit or kill.</li>
+      <li><strong>Daily quota</strong>. 24 posts max. Silence is on-brand.</li>
+    </ul>
+    <p style="margin-top:8px"><strong>Standalone reference:</strong> <span class="mono">handoff/Operator Dashboard.html</span> &mdash; full 1440px implementation.</p>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§08 DASHBOARD</div><div class="num">09 / 09</div></div>
+  </article>
+
+  <!-- §09 TWEET SYSTEM -->
+  <article class="page">
+    <header>
+      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast-rule"></div>
+      <div class="mast-sub"><div>§09 · TWEET SYSTEM</div><div>BRAND-RENDER · TIMELINE-RENDER · 8 SAMPLES</div></div>
+    </header>
+    <div class="sec-head">
+      <div class="sec-num">§09</div>
+      <h1>Tweet system</h1>
+      <p class="deck">Every tweet has both beats: the <em>data point</em> and one sentence of <em>real consequence</em> — body, infrastructure, ecosystem, future. Each shown two ways: brand-render (left, owned surface) vs. timeline-render (right, plain text).</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="lab" style="font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ash)">BRAND-RENDER · OWNED SURFACE</div>
+      <div class="lab" style="font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--ash)">TIMELINE-RENDER · PLAIN TEXT</div>
+
+      <!-- 1 brand -->
+      <div class="tweet">
+        <div class="h"><div class="av"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
+        <div class="body"><strong>EXTRAORDINARY.</strong> Kayes, Mali hit <span class="acc num">47.2&deg;C</span>. Hottest in 28 years there. At 47&deg;C the body can&rsquo;t shed heat fast enough to hold core temperature; survival outdoors is hours, not days.</div>
+        <div class="meta">SOURCE · MALI-MÉTÉO · OGIMET 11907 · 2026-04-26 06:42 UTC · CONF=HIGH</div>
+      </div>
+      <!-- 1 plain -->
+      <div class="tweet" style="background:#fff">
+        <div class="h"><div class="av" style="background:#16181B"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#F2F1EC"/><circle cx="30" cy="76" r="14" fill="#F2F1EC"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
+        <div class="body" style="color:#0F1419">EXTRAORDINARY. Kayes, Mali hit 47.2&deg;C. Hottest in 28 years there. At 47&deg;C the body can&rsquo;t shed heat fast enough to hold core temperature; survival outdoors is hours, not days.</div>
+        <div class="meta">Source: Mali-Météo · OGIMET 11907 · 06:42 UTC · conf=high</div>
+      </div>
+
+      <!-- 2 brand -->
+      <div class="tweet">
+        <div class="h"><div class="av"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
+        <div class="body">CO&#8322; at Mauna Loa: <span class="acc num">435.11 ppm</span>. Pre-industrial: 280. Last time the atmosphere held this much &mdash; about 4.5M years ago &mdash; Greenland was largely ice-free and seas sat ~25m higher.</div>
+        <div class="meta">SOURCE · NOAA GML · NOAA MLO · 2026-04-26 04:00 UTC · CONF=HIGH</div>
+      </div>
+      <!-- 2 plain -->
+      <div class="tweet" style="background:#fff">
+        <div class="h"><div class="av" style="background:#16181B"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#F2F1EC"/><circle cx="30" cy="76" r="14" fill="#F2F1EC"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
+        <div class="body" style="color:#0F1419">CO&#8322; at Mauna Loa: 435.11 ppm. Pre-industrial: 280. Last time the atmosphere held this much &mdash; about 4.5M years ago &mdash; Greenland was largely ice-free and seas sat ~25m higher.</div>
+        <div class="meta">Source: NOAA GML · MLO · 04:00 UTC · conf=high</div>
+      </div>
+    </div>
+
+    <p style="font-size:11px;color:var(--ash);margin-top:8px">Six more samples in <span class="mono">The Heat - Brand Directions Round 3 v4.html</span> §06.</p>
+
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§09 TWEET SYSTEM</div><div class="num">10 / 10</div></div>
+  </article>
+</body>
+</html>

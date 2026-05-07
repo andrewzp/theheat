@@ -1,14 +1,14 @@
 # @theheat — Project Briefing
 
-**Last updated:** May 4, 2026
-**Status:** **TWO-BOT ARCHITECTURE LIVE.** Every audience-facing tweet is now drafted by Claude Sonnet 4.6 via the two-bot pipeline (intern → writer → claim-extractor → fact-check → memory). Gemini Flash never writes prose anymore — it only does claim extraction and fact-checking (structured JSON output). Voice generator (`src/voice/generator.py`) is no longer reached on any live signal path.
-**Latest merged commit:** `00f621a9` PR #25 (full voice→two-bot port + 9 codex review fixes)
-**Tests:** 637 passing
-**Cost:** Sonnet writer ~$0.014/draft × ~30 drafts/day ≈ **$13/month**. Sonnet evaluator pass (~$25–45/mo) is now redundant with `fact_check.py` and should be disabled via `EVALUATOR_ENABLED=false` in the GH Actions env (saves $25–45/mo). Gemini Flash for fact-check + claim-extract is sub-$2/month at our volume. **Net cost target: ~$13/month** once evaluator is killed.
+**Last updated:** May 7, 2026
+**Status:** **GHCN-DAILY MIGRATION LIVE + IDENTITY LOCKED.** Extreme-signals lane now reads **11,907 active NOAA GHCN-Daily stations** (up from 638 curated cities — a 19× expansion of coverage at $0/month). Hot 10 leaderboard stays on Open-Meteo. Two-bot writing pipeline (Sonnet 4.6) unchanged. Brand system locked at R3 v4 with handoff at `brand/handoff/`.
+**Latest merged commits:** `bad21be` PR #33 (GHCN P4 cutover) → PR #35 (stale-obs filter + TMIN regression) → PR #36 (dashboard funnel/events drill-down).
+**Tests:** 709 passing (679 baseline + 30 new GHCN tests, 0 regressions).
+**Cost:** GHCN-Daily is free, no auth, no rate limit. Sonnet writer ~$13/month unchanged. Net stays at ~$13/mo target.
 
 ## Posting resumption bar (set 2026-04-26)
 
-**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. The voice→two-bot port (May 3–4, 2026) was triggered after a draft shipped saying *"75.9F in Riga today, the record for this date is 72.7F"* — no country, trivial signal. That's the failure mode this port is designed to eliminate. The next 2–3 cycles on Sonnet are the empirical signal. Editorial gate + fact-check still backstop bad drafts.
+**Posting is paused until the majority of corpus-graded drafts in a cycle earn A grades.** Track in `docs/QUALITY_TREND.md`. The voice→two-bot port (May 3–4) was triggered after a draft shipped *"75.9F in Riga today, the record for this date is 72.7F"* — no country, trivial signal. The May 7 GHCN migration adds the *signal-side* fix: instead of polling 638 cities (which missed station-level records like Verkhoyansk, Phalodi, Death Valley), the bot now sees the full 11,907-station population. The two-bot writer + station-level coverage are the bet that closes the quality gap. Editorial gate + fact-check still backstop.
 
 ---
 

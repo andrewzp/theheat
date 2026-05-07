@@ -2,6 +2,139 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0.0] - 2026-05-07
+
+NOAA GHCN-Daily migration. The extreme-signals lane now reads 11,907
+active stations instead of 638 curated cities — a 19× expansion of
+coverage, at $0/month operating cost. Hot 10 leaderboard stays on
+Open-Meteo. Identity layer (brand) locked.
+
+### Added (PRs #30, #31, #32)
+
+- **`src/data/ghcn_format.py`** — pure stdlib parser for NOAA `.dly`
+  fixed-width files and `superghcnd_diff` tar archives (insert/update/
+  delete CSV members). Compute_thresholds builds all-time/monthly/
+  calendar-date max+min plus climatological_mean for TMAX and TMIN.
+- **`src/data/ghcn_db.py`** — SQLite schema (`stations`, `thresholds`,
+  `meta`) with upsert/load helpers. Bootstrap database is ~913 MB,
+  9.28M threshold rows, distributed as a GitHub Release asset
+  (`thresholds-latest`).
+- **`src/data/ghcn.py`** — `check_extreme_signals_for_stations()`
+  mirrors the Open-Meteo entry-point contract. Fetches recent
+  `superghcnd_diff` tarballs in parallel via `ThreadPoolExecutor`,
+  filters out stale backfill (older than `MAX_OBS_AGE_DAYS`),
+  detects all-time / monthly / calendar-date / anomaly signals,
+  dedups to top-2 per country.
+- **`scripts/refresh_station_inventory.py`** — pulls
+  `ghcnd-stations.txt`, `ghcnd-inventory.txt`, `ghcnd-countries.txt`
+  and seeds the `stations` table.
+- **`scripts/build_station_thresholds.py`** — one-time local bootstrap
+  (downloads 3.44 GB `ghcnd_all.tar.gz`, computes thresholds, writes
+  the SQLite, ~6 min on M-series). Re-runnable without re-download.
+- **`scripts/update_thresholds_incremental.py`** — weekly CI script
+  fetches `superghcnd_diff` since `last_synced` watermark, updates
+  affected stations.
+- **`.github/workflows/refresh-thresholds.yml`** — weekly cron that
+  runs the incremental update and re-uploads the asset.
+- **Feature flag `THEHEAT_SIGNALS_PROVIDER`** — `open_meteo` (default
+  fallback) or `ghcn` (default in production). Single env var flip
+  for rollback.
+- **`signal_date: date | None` field** on every extreme-signal
+  dataclass (`RecordEvent`, `AllTimeRecord`, `MonthlyRecord`,
+  `AnomalyEvent`, `RecordStreakEvent`, `CountryRecord`,
+  `ExtremeSignalBundle`). Plus `station_id: str` and `station_name: str`
+  on `ExtremeSignalBundle`. None defaults preserve backward compat.
+- **`_resolve_when` helper** in `src/two_bot/intern.py` — applied to
+  all 6 extreme-temperature `build_*_bundle` functions so the writer's
+  `when` field reflects the actual obs date on the GHCN path (24-48 hr
+  lag) and falls back to `date.today()` on Open-Meteo.
+- **`data_source_failures: dict` in `DEFAULT_STATE`** + helpers in
+  `src/state.py` (`increment_data_source_failure`,
+  `reset_data_source_failure`, `get_data_source_failure_count`).
+  Three consecutive failures emits `[alerts] STRUCTURAL ALERT`.
+- **CI threshold-DB sanity check** in `bot.yml` — refuses to run the
+  bot if the SQLite has fewer than 1,000 active stations or 1,000
+  thresholds. Fails loud on a corrupt asset rather than silently
+  zero-coverage.
+
+### Added (PR #36 — dashboard drill-down)
+
+- **`details: dict` field on `source_run`** records (`src/state.py`).
+  Schema is loose; conventional keys: `pipeline_metrics`, `events`,
+  `fetch_meta`. Each source can populate what's useful.
+- **`metrics_out: dict` parameter** on
+  `check_extreme_signals_for_stations()` — caller can inspect the
+  funnel without changing the public return contract.
+- **Per-bundle event log** captured by the GHCN dispatch in
+  `src/main.py`. Each row records station, decision (`drafted` /
+  `rejected` / `no_qualifying_signal`), score, signal_date, observed
+  temps. Top 200 events shipped to source_run details.
+- **Dashboard `SourceRow` component** with click-to-expand. Renders
+  `PipelineFunnel` (bar chart of stage drop-off) + `EventsTable`
+  (per-bundle decisions with badges). Visible on the `Source Health`
+  panel of the latest bot run.
+
+### Fixed (PR #35 — post-cutover diagnostic findings)
+
+- **Stale-obs filter** in `src/data/ghcn.py`. `superghcnd_diff` files
+  routinely contain late-arriving observations from 1–2 weeks earlier
+  (a station finally uploads its old readings). Treating those as
+  fresh signals would surface week-old weather as "today's news."
+  New constant `MAX_OBS_AGE_DAYS` (env-tunable, default 4) sets a
+  freshness floor; older records are dropped with a logged count.
+- **TMIN climatology persistence regression test**
+  (`test_upsert_thresholds_persists_climatological_mean_min`). The
+  shipped 2026-05-05 SQLite asset had no `climatological_mean_min`
+  rows, blocking all cold-anomaly detection. Fixed in the bootstrap
+  code (Codex review pass) and now backed by a test that asserts
+  TMIN climatology round-trips through SQLite.
+
+### Codex review pass (in PR #33)
+
+- Corrected `superghcnd_diff` handling to the live tar/CSV format
+  (insert.csv / update.csv / delete.csv inside the tarball, not the
+  flat `.dly`-shaped text the original implementation assumed).
+- Same-day TMAX and TMIN preserved instead of one element masking
+  the other.
+- Delete records and QC-failed updates correctly remove any earlier
+  value seen in the lookback window.
+- TMIN-only stations now eligible for cold-anomaly detection.
+- Missing/no-observation GHCN cycles fail closed (raise +
+  data_source_failures increment) rather than silently emitting nothing.
+- Threshold DB replacement hardened against partial-write races.
+
+### Coverage scope (deferred to a future hybrid-feeds PR)
+
+GHCN-Daily covers most but not all @extremetemps records. Verified
+present: Phoenix Sky Harbor, MSP, Verkhoyansk, Oymyakon, Phalodi,
+Death Valley. **Verified missing:** Tokashiki/Okinawa, Troodos/Cyprus
+(Japan + Cyprus have sparse station coverage in GHCN). Closing those
+gaps requires hybrid feeds (JMA AMeDAS, Cyprus DoMS) — separate PR
+when/if a station-level Japan or Cyprus event surfaces and we miss it.
+
+### Brand identity (separate work, parallel)
+
+Brand system locked at R3 v4. Production handoff at
+`brand/handoff/` (single canonical location after consolidation):
+
+- Wordmark: Inter SemiBold mixed case, -0.020em letterspacing
+- Mark: thermometer + accent bulb (`#C2410C`)
+- Color system: paper/ink palette + single accent on headline numbers
+- Number typography: integer + decimal in accent, unit in ink-2,
+  superscript °C, tabular figures
+- Avatar (rebuilt locally, mark fills 65% of the circle), banners
+  (rebuilt locally, no fake live data, no newspaper-masthead LARP),
+  favicons, Apple touch icon, OG card, Brand Book, Operator Dashboard
+  treatment, Usage Guide
+
+### Out of scope this release
+
+- Hot 10 leaderboard migration (locked: stays on Open-Meteo).
+- Hybrid feeds for Japan / Cyprus / small-island gaps.
+- Theheat.ai website design.
+- Open-Meteo dead-code removal — kept dormant behind the feature flag
+  for at least one quarter as rollback path.
+
 ## [0.2.0.0] - 2026-05-04
 
 The two-bot architecture is now THE pipeline. Gemini Flash retired from

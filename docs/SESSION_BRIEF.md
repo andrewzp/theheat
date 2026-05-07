@@ -4,6 +4,44 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-06 → 2026-05-07 — GHCN-Daily migration + brand identity locked
+
+## Where we landed
+
+`main` is on `bad21be` and forward through PRs #30 → #31 → #32 → #33 → #35 → #36. **709 tests passing** (was 679 at session start). Posting still paused. The signal-side migration is shipped; identity layer is locked.
+
+## The big shifts this session
+
+1. **Extreme-signals lane migrated from Open-Meteo to NOAA GHCN-Daily.** The bot now reads 11,907 active stations instead of 638 curated cities — 19× population expansion at $0/month. Hot 10 leaderboard explicitly stays on Open-Meteo. Feature-flagged via `THEHEAT_SIGNALS_PROVIDER` (default `ghcn` in production, `open_meteo` for fallback). Five-PR sequence: P1 foundation (parser + scripts + weekly CI workflow) → P2 detection module + 30 tests → P3 wire-up + signal_date threading + record_streaks key migration → P4 cutover + Codex fix pass → P5 stale-obs filter (post-cutover diagnostic finding) → dashboard drill-down. See CHANGELOG [0.3.0.0].
+
+2. **The bug pile that actually mattered.**
+   - **`superghcnd_diff` format misread.** Original implementation assumed flat `.dly`-shaped text; live NOAA ships a tar archive of insert/update/delete CSV members. Codex review pass (PR #33) corrected.
+   - **`climatological_mean_min` missing from shipped SQLite.** The 2026-05-05 bootstrap was run before the persistence fix landed, so the asset had `climatological_mean` (TMAX) rows but no TMIN climatology — silently blocking all cold-anomaly detection. Fixed by re-bootstrap and uploaded as `thresholds-latest`. Now backed by a regression test that asserts TMIN climatology round-trips through SQLite.
+   - **Stale-obs filter** (PR #35). `superghcnd_diff` files routinely contain late-arriving observations from 1-2 weeks earlier. Live diagnostic on 2026-05-06 showed every firing bundle was anomaly_hot on observations from April 24-30. Editorial age penalty correctly killed all 55 of them, producing 0 drafts — but the bot was running on noise, not news. New constant `MAX_OBS_AGE_DAYS` (default 4) sets a freshness floor.
+
+3. **Dashboard drill-down (PR #36).** Each row in the Source Health panel now has a `▶ details` button. Click expands to: pipeline funnel (bar chart of stage drop-off — stations active → with obs → checked → raw signals → bundles → drafts) + events table (per-bundle decision rows with badges: drafted / rejected / no_qualifying_signal). Powered by a new `details: dict` field on `source_run` records. Schema is loose; conventional keys: `pipeline_metrics`, `events`, `fetch_meta`. Each source can populate what's useful.
+
+4. **Brand identity locked at R3 v4.** Painful path: 4 rounds of designer work, several rounds of my overcorrection ("visceral fever," melting wordmarks, station-pin debate, horizon-rule signature), then back to a thermometer-bulb mark + clean Inter SemiBold wordmark + paper/ink palette + single accent (`#C2410C`) on headline numbers. Production handoff at `brand/handoff/` (consolidated to one canonical location). Includes Brand Book.html, Operator Dashboard.html, Usage Guide.html, all production PNGs (avatars, banners, favicons, OG card), all SVGs (full-color, mono, reverse, outlined). The Twitter banner the designer shipped had broken typography (font-fallback failure) AND strategic problems (newspaper masthead, "REFRESHED HOURLY" lie, fake live reading). Replaced both PNGs locally using the outlined SVGs + Chrome headless render — clean now.
+
+5. **Coverage honesty.** GHCN-Daily covers most but not all @extremetemps records. Verified present: Phoenix Sky Harbor, MSP, Verkhoyansk, Oymyakon, Phalodi, Death Valley. **Verified missing:** Tokashiki/Okinawa, Troodos/Cyprus (Japan + Cyprus have sparse station coverage in GHCN). Closing those gaps requires hybrid feeds (JMA AMeDAS, Cyprus DoMS) — deferred to a future PR if/when a station-level Japan or Cyprus event surfaces and the bot misses it.
+
+6. **PR housekeeping.** Closed 10 stale daily-plan / pre-GHCN refinement PRs (#11, #12, #13, #15, #18, #20, #24, #27, #28, #34). Only #29 (`expand-cities-25`) remains open — likely superseded by GHCN's 11,907-station population, but left for the user to close after deciding whether any of its 25 stations are still distinctive (Tokashiki / Troodos territory).
+
+## Open at session end
+
+1. **Twitter profile NOT yet updated** with the new brand assets. The user has the avatar and banner files at `brand/handoff/png/` and will upload manually when ready.
+2. **#29 expand-cities-25** still open on GitHub — user's call whether to close as superseded.
+3. **Watch list for first 10 alert cycles** (per the lock-in PR description): lag framing reads cleanly ("on May 4," not "today"), at least one previously-missed event class fires, `data_source_failures["ghcn"]` stays at 0, dashboard funnel shows healthy stage progression.
+
+## What is OFF the table going into next session
+
+- Brand identity iteration. R3 v4 is locked. Don't reopen unless something is genuinely broken.
+- Hot 10 leaderboard migration to GHCN. Stays on Open-Meteo.
+- The Open-Meteo dead-code removal. Kept dormant behind the feature flag for at least one quarter as the rollback path.
+- The "wire service" / "publication of record" framing for the Twitter banner. Twitter banners are static images that sit for months; anything implying live data ages into a lie within 24 hours. The brand voice (in tweet copy) carries the editorial register; the static chrome stays restrained.
+
+---
+
 # 2026-04-26 → 2026-04-29 — Voice engine v3 + research grounding + posting paused
 
 ## Where we landed
