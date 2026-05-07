@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2.0] - 2026-05-07
+
+Unblock GHCN drafts. Today's first 3 post-cutover monthly_low bundles
+(SISSONVILLE 1SW, ATKA ISLAND, WFO SAN JUAN) all passed the editorial
+score gate (score 80, monthly threshold 76) and died downstream with
+``TypeError: Object of type date is not JSON serializable``. The
+two-bot pipeline's catch-all swallowed the stack trace, so the
+dashboard showed "0 drafts" with no surfaced cause for ~13 hours.
+Cause: the ``signal_date: date | None`` field added in PR #32 leaks
+through ``asdict(ev)`` into ``raw_signal_dump`` and chokes
+``json.dumps()`` in the writer + fact-check stages.
+
+### Fixed
+
+- **Date serialization** at the LLM API boundary in
+  [src/two_bot/writer.py](src/two_bot/writer.py) and
+  [src/two_bot/fact_check.py](src/two_bot/fact_check.py). New shared
+  ``_json_default`` hook coerces ``date``/``datetime`` to ISO 8601
+  strings (which is the format the writer prompt expects anyway) and
+  raises ``TypeError`` loudly on any other unknown type — no silent
+  ``str()`` coercion of future surprises. 4 new tests cover bundle +
+  memory + fact-check JSON paths and the loud-failure contract.
+
+### Added
+
+- **Downstream suppression capture**. The ``suppressions`` ledger now
+  records kills that happen *after* the editorial score gate — writer
+  kills, fact-check rejections, and pipeline exceptions. Each record
+  carries a ``stage`` discriminator (``score_gate`` |  ``writer`` |
+  ``fact_check`` | ``pipeline_error``) and the actual ``kill_reason``
+  string surfaced through a new ``result_out`` parameter on
+  ``generate_draft()``. Today's bug would have been visible in the
+  dashboard within minutes if this had existed; future variants will
+  be. 5 new tests cover all four kill paths plus the success and
+  no-active-context cases.
+
+### Out of scope (still)
+
+- Cycle-cap and per-city-cooldown kills. These happen in main.py
+  before ``_try_two_bot_draft`` runs and would need their own capture
+  hooks. Lower priority — they're already visible in cycle_dropped
+  events and the source_run notes.
+
 ## [0.3.1.0] - 2026-05-07
 
 Suppression ledger + dashboard health-calc fix. Captures the

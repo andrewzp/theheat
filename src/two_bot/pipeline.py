@@ -8,7 +8,12 @@ from src.two_bot.intern import build_fire_bundle
 from src.two_bot.types import StoryBundle
 
 
-def generate_draft(bundle: StoryBundle, state: dict) -> dict | None:
+def generate_draft(
+    bundle: StoryBundle,
+    state: dict,
+    *,
+    result_out: dict | None = None,
+) -> dict | None:
     """Run the full pipeline (writer → claim extract → fact-check) and
     record memory on success. Returns a save_draft-ready dict, or
     ``None`` if the writer kills, fact-check rejects, or anything raises.
@@ -22,8 +27,21 @@ def generate_draft(bundle: StoryBundle, state: dict) -> dict | None:
         ``{"text": str, "event_id": str, "type": str, "two_bot_metadata": dict}``
         on success. None otherwise.
 
+    If ``result_out`` is provided, on every None-return path it will be
+    populated with ``{"kill_stage": str, "kill_reason": str}`` so callers
+    can record a suppression with the actual cause. Without this hook
+    pipeline errors are visible only in stdout — invisible to the
+    dashboard. (Found 2026-05-07: GHCN bundles dying with
+    ``Object of type date is not JSON serializable`` for ~13 hours
+    before anyone noticed, because the catch-all swallowed the stack.)
+
     Never raises.
     """
+
+    def _record_kill(stage: str, reason: str) -> None:
+        if result_out is not None:
+            result_out["kill_stage"] = stage
+            result_out["kill_reason"] = reason
 
     try:
         memory_slice = memory.build_memory_slice(state, bundle)
@@ -33,6 +51,7 @@ def generate_draft(bundle: StoryBundle, state: dict) -> dict | None:
                 f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: "
                 f"{writer_result.kill_reason}"
             )
+            _record_kill("writer", writer_result.kill_reason or "unknown")
             return None
 
         extracted = claim_extractor.extract_claims(writer_result.tweet)
@@ -40,10 +59,12 @@ def generate_draft(bundle: StoryBundle, state: dict) -> dict | None:
             writer_result.tweet, extracted, bundle, state
         )
         if not fact_result.passed:
+            failures_str = "; ".join(fact_result.failures)
             print(
                 f"[two_bot.pipeline] Fact-check rejected {bundle.signal_kind} "
-                f"draft: " + "; ".join(fact_result.failures)
+                f"draft: {failures_str}"
             )
+            _record_kill("fact_check", failures_str or "unknown")
             return None
 
         canonical_claims = fact_result.extracted_claims or extracted
@@ -67,6 +88,7 @@ def generate_draft(bundle: StoryBundle, state: dict) -> dict | None:
         print(
             f"[two_bot.pipeline] Pipeline error ({bundle.signal_kind}): {exc}"
         )
+        _record_kill("pipeline_error", f"{type(exc).__name__}: {exc}")
         return None
 
 

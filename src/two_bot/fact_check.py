@@ -12,6 +12,7 @@ from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
+from src.two_bot.writer import _json_default
 
 FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -55,7 +56,7 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
     client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
     user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
         tweet=tweet,
-        bundle_json=json.dumps(bundle.to_dict(), sort_keys=True),
+        bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
     )
     response = client.models.generate_content(
         model=FACT_CHECKER_MODEL,

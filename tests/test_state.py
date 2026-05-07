@@ -756,3 +756,156 @@ class TestShouldDraftSuppressionCapture:
         for i in range(15):
             _should_draft(self._make_score(total=60, threshold=72), f"ev_{i}")
         assert len(bot_state["suppressions"]) == 200
+
+    def test_score_gate_record_has_stage_field(self, monkeypatch):
+        from src.main import _should_draft, _activate_suppression_ctx
+        monkeypatch.setenv("SUPPRESSION_NEAR_MISS_GAP", "15")
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        _should_draft(self._make_score(total=64, threshold=72), "ev_x")
+        assert bot_state["suppressions"][0]["stage"] == "score_gate"
+
+
+class TestDownstreamSuppressionCapture:
+    """Suppression records for kills *after* the editorial score gate —
+    writer kills, fact-check rejections, pipeline exceptions. These are
+    the kills that swallowed today's GHCN bundles (signal_date date
+    object → JSON serialization error → silent pipeline_error)."""
+
+    def teardown_method(self, method):
+        from src.main import _clear_suppression_ctx
+        _clear_suppression_ctx()
+
+    def _make_score(self, *, total=80, threshold=76, category="monthly_record"):
+        from src.editorial.scoring import EditorialScore
+        return EditorialScore(
+            category=category,
+            severity=0, novelty=0, timeliness=0, confidence=0,
+            shareability=0, sensitivity=0,
+            total=total, threshold=threshold, reasons=[],
+        )
+
+    def _bundle_stub(self, where="SISSONVILLE 1SW, United States"):
+        class _Stub:
+            pass
+        b = _Stub()
+        b.where = where
+        b.signal_kind = "monthly_low"
+        b.event_id = "monthly_low_USC00468191_05_2026-05-04"
+        return b
+
+    def test_pipeline_error_recorded_with_stage_and_reason(self, monkeypatch):
+        from src.main import _try_two_bot_draft, _activate_suppression_ctx
+        from src.two_bot import pipeline as pipeline_mod
+
+        # Force a pipeline exception (mimics today's date-serialization bug).
+        def boom(bundle, state, *, result_out=None):
+            if result_out is not None:
+                result_out["kill_stage"] = "pipeline_error"
+                result_out["kill_reason"] = "TypeError: Object of type date is not JSON serializable"
+            return None
+        monkeypatch.setattr(pipeline_mod, "generate_draft", boom)
+
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts", run_id="run_xyz")
+        score = self._make_score(total=80, threshold=76)
+        result = _try_two_bot_draft(
+            self._bundle_stub(), bot_state, score,
+            legacy_type="monthly_low",
+            event_id="monthly_low_USC00468191_05_2026-05-04",
+            review_context={},
+        )
+        assert result is False
+        supps = bot_state["suppressions"]
+        assert len(supps) == 1
+        rec = supps[0]
+        assert rec["stage"] == "pipeline_error"
+        assert rec["score_total"] == 80
+        assert rec["threshold"] == 76
+        assert rec["category"] == "monthly_record"
+        assert "JSON serializable" in rec["reasons"][0]
+        assert rec["summary"] == "SISSONVILLE 1SW, United States"
+        assert rec["run_id"] == "run_xyz"
+
+    def test_writer_kill_recorded_with_writer_stage(self, monkeypatch):
+        from src.main import _try_two_bot_draft, _activate_suppression_ctx
+        from src.two_bot import pipeline as pipeline_mod
+
+        def writer_kill(bundle, state, *, result_out=None):
+            if result_out is not None:
+                result_out["kill_stage"] = "writer"
+                result_out["kill_reason"] = "no historical_context available"
+            return None
+        monkeypatch.setattr(pipeline_mod, "generate_draft", writer_kill)
+
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        score = self._make_score()
+        _try_two_bot_draft(
+            self._bundle_stub(), bot_state, score,
+            legacy_type="monthly_low", event_id="ev_1",
+            review_context={},
+        )
+        rec = bot_state["suppressions"][0]
+        assert rec["stage"] == "writer"
+        assert rec["reasons"] == ["no historical_context available"]
+
+    def test_fact_check_rejection_recorded(self, monkeypatch):
+        from src.main import _try_two_bot_draft, _activate_suppression_ctx
+        from src.two_bot import pipeline as pipeline_mod
+
+        def fc_reject(bundle, state, *, result_out=None):
+            if result_out is not None:
+                result_out["kill_stage"] = "fact_check"
+                result_out["kill_reason"] = "tweet_says_record_year_does_not_match_bundle"
+            return None
+        monkeypatch.setattr(pipeline_mod, "generate_draft", fc_reject)
+
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        _try_two_bot_draft(
+            self._bundle_stub(), bot_state, self._make_score(),
+            legacy_type="monthly_low", event_id="ev_2",
+            review_context={},
+        )
+        rec = bot_state["suppressions"][0]
+        assert rec["stage"] == "fact_check"
+
+    def test_success_does_not_record_suppression(self, monkeypatch):
+        from src.main import _try_two_bot_draft, _activate_suppression_ctx
+        from src.two_bot import pipeline as pipeline_mod
+
+        def success(bundle, state, *, result_out=None):
+            return {
+                "type": "monthly_low",
+                "text": "Sissonville hit -2.2C overnight",
+                "event_id": "ev_3",
+                "two_bot_metadata": {},
+            }
+        monkeypatch.setattr(pipeline_mod, "generate_draft", success)
+
+        bot_state = {}
+        _activate_suppression_ctx(bot_state, source="alerts")
+        _try_two_bot_draft(
+            self._bundle_stub(), bot_state, self._make_score(),
+            legacy_type="monthly_low", event_id="ev_3",
+            review_context={},
+        )
+        assert bot_state.get("suppressions", []) == []
+
+    def test_no_active_context_no_capture_on_kill(self, monkeypatch):
+        from src.main import _try_two_bot_draft, _clear_suppression_ctx
+        from src.two_bot import pipeline as pipeline_mod
+        _clear_suppression_ctx()
+
+        def boom(bundle, state, *, result_out=None):
+            return None
+        monkeypatch.setattr(pipeline_mod, "generate_draft", boom)
+
+        bot_state = {}
+        _try_two_bot_draft(
+            self._bundle_stub(), bot_state, self._make_score(),
+            legacy_type="monthly_low", event_id="ev_4",
+            review_context={},
+        )
+        assert bot_state.get("suppressions", []) == []
