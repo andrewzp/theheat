@@ -13,6 +13,70 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-07 — No fresh drafts (two-bot architecture transition)
+
+**Context:** Queue empty at grading time. 0 pending drafts in state.json. Eight days since the
+last grading cycle (2026-04-29). Major architectural change between the two runs:
+`src/voice/generator.py` was retired 2026-05-03/04 (PR #25, commit `00f621a9`) and replaced by
+a Claude Sonnet 4.6 two-bot pipeline (intern → writer → Gemini claim-extractor → Gemini
+fact-check → memory). Gemini Flash no longer writes prose; Sonnet 4.6 does. Tests: 637 passing
+(up from 566 at last grading cycle).
+
+**Why the queue is empty:** Three candidate explanations.
+
+1. **Architecture port disruption.** The May 3–4 two-bot port may have left a gap in the
+   Gist-write path. Pipeline cycles fired but output didn't surface in `state.json`. Most likely
+   if `run_history` shows completed runs with no drafts saved.
+2. **No qualifying signals.** ~18 pipeline cycles since May 4 across 613 cities with no event
+   crossing editorial thresholds (62–82 depending on type). Statistically unlikely but possible.
+3. **New pipeline's editorial gate filtering more aggressively.** Fact-check or claim-extractor
+   killing drafts before Gist save. If so, pipeline is working but effective bar is higher than
+   Gemini's was.
+
+Human operator: check `run_history` in state.json and recent GitHub Actions logs to distinguish
+these.
+
+**Grade distribution:** N/A. **A-rate: N/A (0 drafts graded).**
+
+### Per-draft: none.
+
+### Patterns named in this batch: none.
+
+### Architecture flag for the human operator
+
+All active proposals (P1–P6) in `docs/IMPROVEMENT_PLAN.md` target `src/voice/generator.py`,
+which is retired. Specifically:
+
+- **P1** (era-anchor gate) — `_era_anchor_should_fire` was implemented in `generator.py`. The
+  gate is dead on the live path. The 3-cycle empirical confirmation (≤30% era-anchor rate on
+  records) cannot be gathered. Gate's behavioral impact: unconfirmed.
+- **P2** (plant-comparison regex adjective allowlist) — targets `_STOCK_FORMULA_PATTERNS` in
+  `generator.py`. Dead code.
+- **P3** (opener-formula verb list) — same regex, same file. Dead code.
+- **P4** (Wodehouse rule in SYSTEM_PROMPT) — targets `SYSTEM_PROMPT` in `generator.py`. Dead
+  code.
+- **P5** (stranded-mechanic warning in fire prompt) — targets `_CATEGORY_PROMPTS["fire"]` in
+  `generator.py`. Dead code.
+- **P6** (humor moves named in prompt) — same file. Dead code.
+
+The Sonnet two-bot pipeline uses different prompts, no era-anchor gate, and no per-category
+addenda from `generator.py`. Once the Sonnet pipeline produces pending drafts, this agent will
+grade them on the same A–F rubric and surface new failure modes.
+
+### Staleness check
+
+0 pending drafts. No stale-reject action taken.
+
+### Numbers
+
+- Pending drafts: 0
+- A-rate: N/A
+- Gap from bar: N/A (no gradable data)
+- Architecture: Sonnet 4.6 two-bot pipeline live since 2026-05-04
+- Active proposals targeting live code: 0 of 6
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All

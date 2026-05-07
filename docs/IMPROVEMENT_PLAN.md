@@ -8,12 +8,14 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
-| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
-| Last cycle A-rate | 0% (Apr 29, 0 of 3) |
+| Bot commit | `00f621a9` (two-bot port, PR #25, shipped 2026-05-03/04) |
+| Voice engine version | **Retired** — `src/voice/generator.py` no longer on live signal path. Sonnet 4.6 two-bot pipeline (intern → writer → Gemini claim-extractor → Gemini fact-check) now generates all prose. |
+| Last cycle A-rate | N/A (May 7, 0 drafts — queue empty) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 percentage points |
+| Gap | N/A (no gradable data) |
 | Posting | paused until bar cleared |
+
+> **Architecture note (2026-05-07):** All active proposals (P1–P6) target `src/voice/generator.py`, which was retired 2026-05-04 (PR #25). They are targeting dead code. P1's era-anchor gate (`_era_anchor_should_fire`) never ran on the new signal path; P2/P3's regex (`_STOCK_FORMULA_PATTERNS`) is unreachable; P4/P5/P6's prompt strings (`SYSTEM_PROMPT`, `_CATEGORY_PROMPTS`) are unused. The Sonnet two-bot pipeline uses different prompts not yet observed by this agent. **Human operator action required:** decide whether to (a) formally archive all six as superseded by the architecture change, (b) reframe them as Sonnet-pipeline equivalents, or (c) hold until the first Sonnet-pipeline draft corpus is graded. This agent will surface new failure modes once pending drafts appear in the queue.
 
 ## Active proposals
 
@@ -113,6 +115,21 @@ These need more cycles before promotion to active proposals or retirement.
 43 politically-charged / US-centric / mass-tragedy entries removed from `data/era_anchors.json` on 2026-04-26. The Apr 27 cycle had ONE draft that used a politically-charged anchor (Jacobabad / Elon Musk) — that anchor is no longer in the file. Whether the prune actually eliminates political/US-centric leakage from records needs the next cycle to confirm.
 
 **Watch for:** record drafts that use era anchors. Note which year + which anchor. Compare against current `era_anchors.json`. If any anchor used isn't in the current file, that's a curation regression — different fix needed.
+
+### A3 — Sonnet two-bot pipeline: failure modes unknown (May 2026)
+
+Two-bot architecture (PR #25) went live 2026-05-04. Claude Sonnet 4.6 now writes all prose.
+No Sonnet-pipeline drafts have appeared in the pending queue yet (May 7 run: 0 drafts). Once the
+new pipeline produces pending drafts, this agent will grade them on the same A–F rubric.
+
+**Watch for (first Sonnet-pipeline corpus):**
+- Era-anchor over-reliance — known risk from Gemini; Sonnet may replicate it without the gate.
+- Wodehouse violations — most predictive failure mode across all prior corpora.
+- Stranded mechanics — real humor moves buried in throat-clearing or over-explanation.
+- Plant-comparison formula variants — banned shape, may re-emerge under new writer.
+- Flat data delivery quality — whether Sonnet produces cleaner pure-data tweets than Gemini did.
+
+**Promote to active proposal if:** first corpus shows ≥2 drafts sharing a failure mode.
 
 ### A2 — Voice engine v2.5 sample-size fragility
 
