@@ -80,6 +80,134 @@ function ScoreMeter({ label, value, inverse = false }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// SourceRow — expandable per-source telemetry with pipeline funnel + events
+// ---------------------------------------------------------------------------
+
+function PipelineFunnel({ metrics, provider }) {
+  const stages = [
+    { key: "stations_active", label: "Stations active", tone: "input" },
+    { key: "stations_with_obs", label: "Stations with fresh obs", tone: "input" },
+    { key: "stations_checked", label: "Stations checked", tone: "process" },
+    { key: "raw_signals", label: "Raw signals fired", tone: "process" },
+    { key: "bundles_after_dedup", label: "Bundles (post-dedup)", tone: "output" },
+    { key: "country_records", label: "Country records", tone: "output" },
+  ]
+  const present = stages.filter(s => typeof metrics[s.key] === "number")
+  const max = Math.max(...present.map(s => metrics[s.key] || 0), 1)
+  if (present.length === 0) return null
+  return (
+    <div className="pipeline-funnel">
+      <div className="detail-title">
+        {provider ? `${provider} pipeline funnel` : "Pipeline funnel"}
+      </div>
+      {present.map(s => {
+        const value = metrics[s.key] || 0
+        const pct = (value / max) * 100
+        return (
+          <div className="funnel-row" key={s.key}>
+            <span className="funnel-label">{s.label}</span>
+            <div className="funnel-bar-wrap">
+              <div className={`funnel-bar tone-${s.tone}`} style={{ width: `${pct}%` }} />
+            </div>
+            <span className="funnel-value">{value.toLocaleString()}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function EventsTable({ events }) {
+  if (!events || events.length === 0) return null
+  const decisionTone = {
+    drafted: "good",
+    rejected: "warn",
+    no_qualifying_signal: "neutral",
+  }
+  const visible = events.slice(0, 25)
+  return (
+    <div className="events-table">
+      <div className="detail-title">
+        Events evaluated ({events.length}{events.length > 25 ? ` — top 25 shown` : ""})
+      </div>
+      <div className="events-head">
+        <span>Decision</span>
+        <span>Station</span>
+        <span>Context</span>
+      </div>
+      {visible.map((ev, i) => (
+        <div className="event-row" key={ev.event_id || `${ev.station_id}-${i}`}>
+          <span className={`signal-badge ${decisionTone[ev.decision] || "neutral"}`}>
+            {(ev.decision || "—").replace(/_/g, " ")}
+          </span>
+          <span className="event-station">
+            <strong>{ev.station_name || ev.city || "—"}</strong>
+            {ev.station_id ? <span className="event-id"> ({ev.station_id})</span> : null}
+          </span>
+          <span className="event-meta">
+            {[
+              ev.country,
+              ev.signal_date,
+              ev.type ? ev.type.replace(/_/g, " ") : null,
+              typeof ev.score === "number" ? `score ${ev.score}` : null,
+              typeof ev.today_max_c === "number" ? `${ev.today_max_c}°C` : null,
+            ].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SourceRow({ source, runId }) {
+  const [expanded, setExpanded] = useState(false)
+  const details = source.details
+  const hasFunnel = details?.pipeline_metrics &&
+    Object.values(details.pipeline_metrics).some(v => typeof v === "number" && v > 0)
+  const hasEvents = Array.isArray(details?.events) && details.events.length > 0
+  const expandable = hasFunnel || hasEvents
+  return (
+    <div className="source-row">
+      <div className="source-head">
+        <strong>{source.source}</strong>
+        <span className={`signal-badge ${toneForStatus(source.status)}`}>
+          {labelForStatus(source.status)}
+        </span>
+        {expandable && (
+          <button
+            type="button"
+            className="expand-btn"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            {expanded ? "▼ hide" : "▶ details"}
+          </button>
+        )}
+      </div>
+      <div className="meta">
+        <span>{source.observed || 0} observed</span>
+        <span>{source.promoted || 0} promoted</span>
+        <span>{source.drafted || 0} drafted</span>
+        <span>{formatDuration(source.duration_ms)} latency</span>
+      </div>
+      {source.note && <div className="source-run-note">{source.note}</div>}
+      {source.error && <div className="source-run-error">{source.error}</div>}
+      {expandable && expanded && (
+        <div className="source-detail">
+          {hasFunnel && (
+            <PipelineFunnel
+              metrics={details.pipeline_metrics}
+              provider={details.provider}
+            />
+          )}
+          {hasEvents && <EventsTable events={details.events} />}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function findDraftRun(draft, botRuns) {
   const runId = draft?.review_context?.run_id
   if (!runId) return null
@@ -599,7 +727,95 @@ export default function Dashboard() {
           line-height: 1.55;
         }
         .source-run-error, .error-source { color: var(--bad); }
-        .source-run-note { color: var(--soft); }
+        .source-run-note {
+          color: var(--soft);
+          font-family: "JetBrains Mono", "Menlo", monospace;
+          font-size: 12px;
+          word-break: break-word;
+        }
+        .expand-btn {
+          margin-left: auto;
+          background: rgba(143, 176, 255, 0.06);
+          border: 1px solid var(--line);
+          color: var(--muted);
+          padding: 2px 10px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 11px;
+          letter-spacing: 0.04em;
+          transition: background 0.15s, color 0.15s;
+        }
+        .expand-btn:hover { background: rgba(143, 176, 255, 0.14); color: var(--text); }
+        .source-detail {
+          margin-top: 14px;
+          padding: 14px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: rgba(143, 176, 255, 0.03);
+          display: grid;
+          gap: 18px;
+        }
+        .detail-title {
+          font-size: 11px;
+          color: var(--soft);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin-bottom: 6px;
+        }
+        .pipeline-funnel { display: grid; gap: 6px; }
+        .funnel-row {
+          display: grid;
+          grid-template-columns: 200px 1fr 70px;
+          gap: 12px;
+          align-items: center;
+          font-size: 13px;
+        }
+        .funnel-label { color: var(--muted); }
+        .funnel-bar-wrap {
+          background: rgba(143, 176, 255, 0.07);
+          border-radius: 4px;
+          height: 8px;
+          overflow: hidden;
+        }
+        .funnel-bar {
+          height: 100%;
+          border-radius: 4px;
+          transition: width 0.4s ease-out;
+        }
+        .funnel-bar.tone-input  { background: linear-gradient(90deg, #5b86c2, #8fb0ff); }
+        .funnel-bar.tone-process{ background: linear-gradient(90deg, #c79b3f, #ffd266); }
+        .funnel-bar.tone-output { background: linear-gradient(90deg, #4d9466, #86d796); }
+        .funnel-value {
+          text-align: right;
+          color: var(--text);
+          font-variant-numeric: tabular-nums;
+          font-size: 13px;
+        }
+        .events-table { display: grid; gap: 0; }
+        .events-head {
+          display: grid;
+          grid-template-columns: 100px 1fr 1.4fr;
+          gap: 10px;
+          font-size: 11px;
+          color: var(--soft);
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          padding-bottom: 6px;
+          border-bottom: 1px solid var(--line);
+        }
+        .event-row {
+          display: grid;
+          grid-template-columns: 100px 1fr 1.4fr;
+          gap: 10px;
+          align-items: center;
+          padding: 6px 0;
+          border-bottom: 1px dashed var(--line);
+          font-size: 13px;
+        }
+        .event-row:last-of-type { border-bottom: none; }
+        .event-station strong { color: var(--text); }
+        .event-id { color: var(--soft); font-size: 11px; }
+        .event-meta { color: var(--soft); font-size: 12px; }
         .desk-panel { padding: 26px; }
         .draft-desk {
           display: grid;
@@ -1123,22 +1339,11 @@ export default function Dashboard() {
                 <h2 className="section-title">Source Health</h2>
                 {latestSourceRuns.length > 0 ? (
                   latestSourceRuns.map((source) => (
-                    <div className="source-row" key={`${latestBotRun.id}-${source.source}`}>
-                      <div className="source-head">
-                        <strong>{source.source}</strong>
-                        <span className={`signal-badge ${toneForStatus(source.status)}`}>
-                          {labelForStatus(source.status)}
-                        </span>
-                      </div>
-                      <div className="meta">
-                        <span>{source.observed || 0} observed</span>
-                        <span>{source.promoted || 0} promoted</span>
-                        <span>{source.drafted || 0} drafted</span>
-                        <span>{formatDuration(source.duration_ms)} latency</span>
-                      </div>
-                      {source.note && <div className="source-run-note">{source.note}</div>}
-                      {source.error && <div className="source-run-error">{source.error}</div>}
-                    </div>
+                    <SourceRow
+                      key={`${latestBotRun.id}-${source.source}`}
+                      source={source}
+                      runId={latestBotRun.id}
+                    />
                   ))
                 ) : (
                   <div className="empty">No source telemetry yet.</div>
