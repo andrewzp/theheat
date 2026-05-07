@@ -458,6 +458,7 @@ def check_extreme_signals_for_stations(
     archive_years: int = 30,
     db_path: Path | str | None = None,
     _fetch_obs_fn: Callable | None = None,  # injectable for tests
+    metrics_out: dict | None = None,
 ) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
     """Check active GHCN-Daily stations for extreme signals.
 
@@ -474,6 +475,11 @@ def check_extreme_signals_for_stations(
                        passed through to country aggregation for label text.
         db_path: override the default SQLite path.
         _fetch_obs_fn: injectable for testing; replaces _fetch_recent_obs().
+        metrics_out: if provided, populated in-place with funnel counts
+            (stations_active, stations_with_obs, station_obs_pairs,
+            stations_checked, raw_signals, bundles_after_dedup,
+            country_records). Lets the caller surface pipeline visibility
+            in telemetry/dashboards without breaking the return contract.
     """
     resolved_db = Path(db_path) if db_path else _db_path()
 
@@ -492,6 +498,8 @@ def check_extreme_signals_for_stations(
         stations = stations[:max_checks]
 
     if not stations:
+        if metrics_out is not None:
+            metrics_out.update(_empty_pipeline_metrics())
         return [], []
 
     active_ids = frozenset(s["station_id"] for s in stations)
@@ -502,6 +510,10 @@ def check_extreme_signals_for_stations(
     latest_obs = fetch_fn(active_ids)
 
     if not latest_obs:
+        if metrics_out is not None:
+            metrics_out.update(_empty_pipeline_metrics() | {
+                "stations_active": len(stations),
+            })
         raise RuntimeError("GHCN: no observations returned; check NOAA diff endpoints")
 
     # 3. Load thresholds for stations that have new observations and compare
@@ -545,4 +557,27 @@ def check_extreme_signals_for_stations(
     # 5. Dedup: cap at 2 signal-firing bundles per country
     deduped_signal_bundles = _dedup_by_metro(signal_bundles)
 
+    if metrics_out is not None:
+        metrics_out.update({
+            "stations_active": len(stations),
+            "stations_with_obs": len({k[0] for k in latest_obs}),
+            "station_obs_pairs": len(latest_obs),
+            "stations_checked": len(all_bundles),
+            "raw_signals": len(signal_bundles),
+            "bundles_after_dedup": len(deduped_signal_bundles),
+            "country_records": len(country_records),
+        })
+
     return deduped_signal_bundles, country_records
+
+
+def _empty_pipeline_metrics() -> dict:
+    return {
+        "stations_active": 0,
+        "stations_with_obs": 0,
+        "station_obs_pairs": 0,
+        "stations_checked": 0,
+        "raw_signals": 0,
+        "bundles_after_dedup": 0,
+        "country_records": 0,
+    }

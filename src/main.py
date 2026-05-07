@@ -662,6 +662,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     # margins, and elevations. See src/editorial/simultaneous_format.py
     # for the routing decision (flat summary vs. multi-station roll-call).
     simultaneous_record_stations: list[dict] = []
+    ghcn_pipeline_metrics: dict = {}
     try:
         if _signals_provider not in {"open_meteo", "ghcn"}:
             raise ValueError(
@@ -669,7 +670,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 f"got {_signals_provider!r}"
             )
         if _signals_provider == "ghcn":
-            bundles, country_records = ghcn.check_extreme_signals_for_stations()
+            bundles, country_records = ghcn.check_extreme_signals_for_stations(
+                metrics_out=ghcn_pipeline_metrics,
+            )
         else:
             bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
         source_promoted = 0
@@ -1192,11 +1195,31 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
 
         state.reset_data_source_failure(bot_state, _signals_provider)
         total_observed = sum(signal_counts.values()) + country_count
+        # Build a structured note. For GHCN: surface the funnel
+        # (active → with-obs → checked → raw_signals → bundles → drafted)
+        # so the dashboard can render pipeline visibility.
+        signal_breakdown = (
+            f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} "
+            f"anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} "
+            f"streak:{signal_counts['streak']} country:{country_count}"
+        )
+        if _signals_provider == "ghcn" and ghcn_pipeline_metrics:
+            funnel = (
+                f"stations_active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
+                f"stations_with_obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
+                f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
+                f"raw_signals:{ghcn_pipeline_metrics.get('raw_signals', '-')} "
+                f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')} "
+                f"drafted:{source_drafted}"
+            )
+            note = f"provider:ghcn {funnel} | {signal_breakdown}"
+        else:
+            note = f"provider:{_signals_provider} {signal_breakdown}"
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
             status="success", observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
-            note=f"provider:{_signals_provider} all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} streak:{signal_counts['streak']} country:{country_count}",
+            note=note,
         )
     except Exception as e:
         print(f"[alerts] Extreme signals error: {e}")
