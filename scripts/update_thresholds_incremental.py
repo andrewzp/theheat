@@ -88,6 +88,30 @@ def _fetch_station_thresholds(station_id: str, timeout: int = 120):
     return compute_thresholds(parse_dly_bytes(resp.content))
 
 
+def _resolve_new_watermark(
+    *,
+    dates_to_fetch: list[date],
+    successful_dates: list[date],
+    current_watermark: date | None,
+) -> date | None:
+    """Advance only across contiguous successful diff dates.
+
+    If a middle date is missing but a later date succeeded, do not skip the
+    gap forever by jumping the watermark over it.
+    """
+
+    if not successful_dates:
+        return current_watermark
+    successful = set(successful_dates)
+    latest_contiguous = current_watermark
+    for d in sorted(dates_to_fetch):
+        if d in successful:
+            latest_contiguous = d
+            continue
+        break
+    return latest_contiguous
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Incremental GHCN threshold update via superghcnd_diff.")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
@@ -218,10 +242,20 @@ def main() -> int:
                 conn.commit()
                 print(f"  {i:,}/{len(new_obs_by_station):,} processed ...", flush=True)
 
-        new_watermark = max(successful_dates) if successful_dates else watermark
+        new_watermark = _resolve_new_watermark(
+            dates_to_fetch=dates_to_fetch,
+            successful_dates=successful_dates,
+            current_watermark=watermark,
+        )
         if new_watermark is None:
             print("ERROR: No successful diff date available for watermark.", file=sys.stderr)
             return 1
+        if successful_dates and new_watermark < max(successful_dates):
+            print(
+                "WARNING: Not advancing watermark past missing diff date; "
+                f"safe watermark is {new_watermark}",
+                file=sys.stderr,
+            )
         set_meta(conn, META_WATERMARK_KEY, new_watermark.isoformat())
         conn.commit()
 

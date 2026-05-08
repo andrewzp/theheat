@@ -19,6 +19,8 @@ import requests
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
+from src.data.source_status import SourceFetchError
+
 # Hectare thresholds for per-fire-complex tweet dedup. A complex is
 # eligible for a draft each time it crosses into a higher tier. Integer
 # indices (not hectare values) are stored in state so we can tune the
@@ -93,7 +95,7 @@ def _parse_start_date(raw) -> date | None:
         return None
 
 
-def fetch_active_fire_perimeters() -> list["FireComplex"]:
+def fetch_active_fire_perimeters(*, strict: bool = False) -> list["FireComplex"]:
     """Fetch active wildfire complexes from NIFC WFIGS with burn area >= floor.
 
     Source: NIFC (National Interagency Fire Center) WFIGS ArcGIS Feature
@@ -106,7 +108,9 @@ def fetch_active_fire_perimeters() -> list["FireComplex"]:
         resp = requests.get(GWIS_URL, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-    except Exception:
+    except Exception as exc:
+        if strict:
+            raise SourceFetchError(f"Fire footprint fetch failed: {exc}") from exc
         return []
 
     if data.get("exceededTransferLimit"):
@@ -155,7 +159,9 @@ def fetch_active_fire_perimeters() -> list["FireComplex"]:
                 tier=tier,
                 event_id=f"fire_footprint_{complex_id}_tier{tier}",
             ))
-        except Exception:
+        except Exception as exc:
+            if strict:
+                print(f"[fire_footprint] Row skipped: {exc}")
             continue
 
     return complexes

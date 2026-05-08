@@ -148,6 +148,7 @@ def _fetch_recent_obs(
     *,
     max_obs_age_days: int = MAX_OBS_AGE_DAYS,
     today: date | None = None,
+    metrics_out: dict | None = None,
 ) -> dict[tuple[str, date], list[DailyObs]]:
     """Fetch recent TMAX/TMIN observations for active stations.
 
@@ -176,6 +177,16 @@ def _fetch_recent_obs(
             content = fut.result()
             if content is not None:
                 raw_by_date[d] = content
+
+    if metrics_out is not None:
+        metrics_out.update({
+            "diff_dates_attempted": len(dates),
+            "diff_dates_fetched": len(raw_by_date),
+            "diff_dates_missing": len(dates) - len(raw_by_date),
+            "diff_missing_dates": [
+                d.isoformat() for d in dates if d not in raw_by_date
+            ],
+        })
 
     if not raw_by_date:
         raise RuntimeError("GHCN: no diff files available from NOAA")
@@ -507,7 +518,11 @@ def check_extreme_signals_for_stations(
 
     # 2. Fetch recent observations
     fetch_fn = _fetch_obs_fn or _fetch_recent_obs
-    latest_obs = fetch_fn(active_ids)
+    fetch_metrics: dict = {}
+    if _fetch_obs_fn is None:
+        latest_obs = fetch_fn(active_ids, metrics_out=fetch_metrics)
+    else:
+        latest_obs = fetch_fn(active_ids)
 
     if not latest_obs:
         if metrics_out is not None:
@@ -566,6 +581,7 @@ def check_extreme_signals_for_stations(
             "raw_signals": len(signal_bundles),
             "bundles_after_dedup": len(deduped_signal_bundles),
             "country_records": len(country_records),
+            **fetch_metrics,
         })
 
     return deduped_signal_bundles, country_records

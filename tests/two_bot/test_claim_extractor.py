@@ -32,6 +32,22 @@ def test_extract_claims_returns_list(mock_gemini):
     assert claims[2].text == "Spider-Man 2002"
 
 
+def test_extract_claims_accepts_fenced_preamble_response(mock_gemini):
+    mock_gemini.return_value = """Here is the JSON:
+
+```json
+[
+  {"text": "361 MW", "kind": "number"},
+  {"text": "Mali", "kind": "named_entity"}
+]
+```
+"""
+
+    claims = extract_claims("Mali fire is 361 MW.")
+
+    assert [claim.text for claim in claims] == ["361 MW", "Mali"]
+
+
 def test_extract_claims_raises_on_invalid_json(mock_gemini):
     mock_gemini.return_value = "not json"
 
@@ -44,4 +60,3 @@ def test_claim_extractor_prompt_requires_canonical_anchor():
 
     assert "SHORTEST substring" in CLAIM_EXTRACT_SYSTEM_PROMPT
     assert "Spider-Man 2002" in CLAIM_EXTRACT_SYSTEM_PROMPT
-

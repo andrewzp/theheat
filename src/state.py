@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 import requests
 
 from src.storage import sqlite_store
+from src.two_bot.json_utils import json_default
 
 GIST_ID = os.environ.get("GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -593,12 +594,18 @@ def _write_gist_state(state: dict) -> bool:
         resp = requests.patch(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),
-            json={"files": {STATE_FILENAME: {"content": json.dumps(normalized, indent=2)}}},
+            json={
+                "files": {
+                    STATE_FILENAME: {
+                        "content": json.dumps(normalized, indent=2, default=json_default)
+                    }
+                }
+            },
             timeout=15,
         )
         resp.raise_for_status()
         return True
-    except requests.RequestException:
+    except (requests.RequestException, TypeError, ValueError):
         return False
 
 
@@ -626,12 +633,18 @@ def write_state(state: dict) -> bool:
             current = sqlite_store.read_state(DB_PATH, DEFAULT_STATE)
         except Exception:
             return False
-        return sqlite_store.write_state(DB_PATH, _merge_state(current, normalized))
+        try:
+            return sqlite_store.write_state(DB_PATH, _merge_state(current, normalized))
+        except (TypeError, ValueError):
+            return False
     try:
         current = _read_gist_state(strict=True)
     except StateReadError:
         return False
-    return _write_gist_state(_merge_state(current, normalized))
+    try:
+        return _write_gist_state(_merge_state(current, normalized))
+    except (TypeError, ValueError):
+        return False
 
 
 def is_duplicate(state: dict, event_id: str) -> bool:

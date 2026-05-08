@@ -92,7 +92,12 @@ def generate_draft(
         return None
 
 
-def generate_fire_draft(fire: FireEvent, state: dict) -> dict | None:
+def generate_fire_draft(
+    fire: FireEvent,
+    state: dict,
+    *,
+    result_out: dict | None = None,
+) -> dict | None:
     """Convenience wrapper: build a fire bundle and run the live pipeline.
 
     Kept for backwards-compat with main.py's existing fire integration.
@@ -101,7 +106,7 @@ def generate_fire_draft(fire: FireEvent, state: dict) -> dict | None:
     """
 
     bundle = build_fire_bundle(fire)
-    draft = generate_draft(bundle, state)
+    draft = generate_draft(bundle, state, result_out=result_out)
     if draft is not None:
         # Preserve the legacy "fire" type tag instead of "fire" coming
         # from bundle.signal_kind (which is already "fire", but be

@@ -7,6 +7,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 # NOAA GML provides daily CO2 readings as a public CSV
 CO2_URL = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_daily_mlo.csv"
 
@@ -26,7 +28,7 @@ class CO2Milestone:
     event_id: str
 
 
-def fetch_co2_data() -> list[CO2Reading]:
+def fetch_co2_data(*, strict: bool = False) -> list[CO2Reading]:
     """Fetch recent CO2 readings from NOAA GML."""
     try:
         resp = requests.get(CO2_URL, timeout=15)
@@ -58,7 +60,9 @@ def fetch_co2_data() -> list[CO2Reading]:
 
         return readings
 
-    except requests.RequestException:
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"CO2 fetch failed: {exc}") from exc
         return []
 
 

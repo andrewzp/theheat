@@ -12,6 +12,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 USGS_URL = "https://waterservices.usgs.gov/nwis/iv/"
 FLOOD_URL = "https://waterwatch.usgs.gov/webservices/floodstage"
 
@@ -59,7 +61,7 @@ class FloodEvent:
     event_id: str
 
 
-def _fetch_flood_stages() -> dict[str, float]:
+def _fetch_flood_stages(*, strict: bool = False) -> dict[str, float]:
     """Fetch flood stage thresholds for USGS stations."""
     try:
         resp = requests.get(
@@ -81,11 +83,13 @@ def _fetch_flood_stages() -> dict[str, float]:
                     continue
         return stages
 
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"Flood stage fetch failed: {exc}") from exc
         return {}
 
 
-def fetch_river_levels() -> list[RiverReading]:
+def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
     """Fetch current gauge heights for major river stations."""
     site_ids = ",".join(s[0] for s in MAJOR_STATIONS)
     site_map = {s[0]: (s[1], s[2]) for s in MAJOR_STATIONS}
@@ -104,7 +108,7 @@ def fetch_river_levels() -> list[RiverReading]:
         resp.raise_for_status()
         data = resp.json()
 
-        flood_stages = _fetch_flood_stages()
+        flood_stages = _fetch_flood_stages(strict=strict)
         readings = []
         today = date.today().isoformat()
 
@@ -147,7 +151,9 @@ def fetch_river_levels() -> list[RiverReading]:
 
         return readings
 
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"River gauge fetch failed: {exc}") from exc
         return []
 
 

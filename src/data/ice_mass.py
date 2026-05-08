@@ -16,6 +16,8 @@ import os
 
 import requests
 
+from src.data.source_status import SourceFetchError, SourceSkipped
+
 # Pinned product URLs. Update constants when the product version bumps.
 GREENLAND_URL = (
     "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
@@ -65,7 +67,7 @@ class IceMassRecord:
     event_id: str
 
 
-def fetch_grace_mass(region: str) -> list[IceMassReading]:
+def fetch_grace_mass(region: str, *, strict: bool = False) -> list[IceMassReading]:
     """Fetch the PODAAC Level-4 mass anomaly time series for a region.
 
     Returns readings sorted oldest → newest. Returns [] on any failure
@@ -73,11 +75,15 @@ def fetch_grace_mass(region: str) -> list[IceMassReading]:
     lane as skipped rather than crashing.
     """
     if region not in REGION_URLS:
+        if strict:
+            raise SourceSkipped(f"Unknown ice-mass region: {region}")
         return []
 
     token = os.environ.get("EARTHDATA_TOKEN", "")
     if not token:
         print("[ice_mass] EARTHDATA_TOKEN not configured — skipping")
+        if strict:
+            raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
 
     try:
@@ -89,6 +95,8 @@ def fetch_grace_mass(region: str) -> list[IceMassReading]:
         resp.raise_for_status()
     except requests.RequestException as e:
         print(f"[ice_mass] {region} fetch error: {e}")
+        if strict:
+            raise SourceFetchError(f"Ice mass fetch failed for {region}: {e}") from e
         return []
 
     readings: list[IceMassReading] = []
@@ -114,6 +122,8 @@ def fetch_grace_mass(region: str) -> list[IceMassReading]:
             event_id=f"ice_mass_{region}_{month}",
         ))
     readings.sort(key=lambda r: r.month)
+    if strict and not readings:
+        raise SourceFetchError(f"Ice mass fetch failed for {region}: no valid readings")
     return readings
 
 

@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.5.0] - 2026-05-07
+
+Codex bug-hunt sweep. After today's reactive PR ladder (#38-#41) failed
+to converge, ran a systematic sweep against the six-pattern rubric in
+`docs/codex-bug-hunt-2026-05-07.md`. Codex found 13 findings (0
+blocker, 7 high, 6 medium) and applied fixes in one pass. Findings
+report at `docs/codex-bug-hunt-findings-2026-05-07.md`.
+
+### Added
+
+- **`src/two_bot/json_utils.py`** — shared boundary helpers used by
+  every LLM parser and state writer. ``json_default`` covers
+  date/datetime, Decimal, set/frozenset, dataclass, and bytes (raises
+  loudly on truly unknown types). ``extract_json_payload`` finds the
+  first balanced top-level object or array span, ignoring braces
+  inside quoted strings (more robust than the first-`{` / last-`}`
+  approach). ``loads_model_json`` falls back to comment- and
+  trailing-comma-tolerant parsing on a `JSONDecodeError`.
+- **`src/two_bot/retry.py`** — bounded retry helper with exponential
+  backoff. Wraps every LLM call (writer, fact-check, claim extraction)
+  so a single 529 / ReadTimeout / transient blip doesn't kill the
+  draft. Default 3 attempts, 1s base sleep, doubles each attempt.
+- **`src/data/source_status.py`** — typed exceptions for
+  source-fetch failures: `SourceFetchError` (transport/schema) and
+  `SourceSkipped` (intentional skip, e.g. missing optional config).
+  Replaces "return empty list and pretend success" pattern in FIRMS
+  + fire_footprint.
+
+### Changed
+
+- **Writer / fact-check / claim-extractor** all now use the shared
+  ``loads_model_json`` and ``call_with_retries``. Removes ~100 lines
+  of duplicated parsing / serialization / retry code from the writer.
+- **State persistence** (`src/state.py`, `src/storage/sqlite_store.py`)
+  now uses ``json_default`` so any future date/dataclass/Decimal slip
+  into state can't crash the Gist write.
+- **FIRMS** raises `SourceSkipped` when API key is missing,
+  `SourceFetchError` on transport/schema failures. `main.py` catches
+  these and records `status="skipped"` or `status="failed"` instead
+  of "success with 0 fires."
+- **Fire footprint** raises `SourceFetchError` on fetch failure and
+  no longer advances `fire_footprint_last_run` until a confirmed
+  successful fetch — failed runs can retry rather than waiting until
+  tomorrow.
+
+### Visibility
+
+The downstream-suppression hooks shipped in 0.3.2.0 now cover more
+ground because failures that previously vanished into "success with 0
+items" now surface as proper source-level `failed`/`skipped` status,
+or as suppression records when individual items die. The dashboard
+funnel keeps its existing schema; the `Suppressed` tab gets richer
+content automatically.
+
+### Tests
+
+- 31 new tests across `tests/test_source_failures.py`,
+  `tests/test_threshold_update_script.py`, `tests/two_bot/test_retry.py`,
+  and additions to `test_open_meteo.py`, `test_state.py`,
+  `test_claim_extractor.py`, `test_fact_check.py`, `test_pipeline.py`.
+- Suite total: **774 passed** (was 743 after #41).
+
+### Out of scope (deferred)
+
+- Cycle-cap / city-cooldown / same-day-dedup suppression stages.
+  Documented in findings as medium / likely; left for a follow-up
+  PR because they require a bigger main.py refactor and the
+  visibility today goes through editorial-gate + writer/fact-check
+  /pipeline-error stages first.
+- LLM tool-use / response_format mode. Defensive parsing is
+  sufficient for now; tool-use is a larger architectural decision.
+
 ## [0.3.4.0] - 2026-05-07
 
 Tolerant writer-response parsing + larger Anthropic timeout. After the

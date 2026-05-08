@@ -11,6 +11,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 ONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
 
 # ENSO thresholds (standard NOAA definitions)
@@ -27,7 +29,7 @@ class ENSOReading:
     event_id: str
 
 
-def fetch_enso_data() -> list[ENSOReading]:
+def fetch_enso_data(*, strict: bool = False) -> list[ENSOReading]:
     """Fetch ONI time series data."""
     try:
         resp = requests.get(ONI_URL, timeout=30)
@@ -65,7 +67,9 @@ def fetch_enso_data() -> list[ENSOReading]:
 
         return readings
 
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError) as exc:
+        if strict:
+            raise SourceFetchError(f"ENSO fetch failed: {exc}") from exc
         return []
 
 

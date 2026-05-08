@@ -11,8 +11,9 @@ from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_SYSTEM_PROMPT,
     FACT_CHECK_USER_PROMPT_TEMPLATE,
 )
+from src.two_bot.retry import call_with_retries
 from src.two_bot.types import ExtractedClaim, FactCheckResult, StoryBundle
-from src.two_bot.writer import _json_default
+from src.two_bot.json_utils import json_default as _json_default, loads_model_json
 
 FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -32,7 +33,7 @@ def _format_failure(item) -> str:
 
 def _parse_fact_check_json(raw: str) -> tuple[bool, list[str]]:
     try:
-        parsed = json.loads(raw)
+        parsed = loads_model_json(raw, expected="object")
     except json.JSONDecodeError as exc:
         print(f"[two_bot.fact_check] Invalid JSON response: {raw}")
         raise ValueError("Fact-checker returned invalid JSON") from exc
@@ -58,9 +59,12 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
         tweet=tweet,
         bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
     )
-    response = client.models.generate_content(
-        model=FACT_CHECKER_MODEL,
-        contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}",
+    response = call_with_retries(
+        "gemini fact-check",
+        lambda: client.models.generate_content(
+            model=FACT_CHECKER_MODEL,
+            contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}",
+        ),
     )
     return response.text
 
@@ -100,4 +104,3 @@ def fact_check(
         raw_response=raw,
         extracted_claims=extracted,
     )
-

@@ -289,6 +289,32 @@ class TestSqliteBackend:
             assert loaded["drafts"][0]["id"] == "draft_1"
             assert loaded["run_history"][0]["id"] == "run_1"
 
+    def test_write_state_serializes_date_values_via_sqlite_backend(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "drafts": [{
+                    "id": "draft_with_date",
+                    "text": "date payload",
+                    "status": "pending",
+                    "type": "record",
+                    "review_context": {"facts": [{"label": "Observed", "value": date(2026, 5, 7)}]},
+                }],
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["drafts"][0]["review_context"]["facts"][0]["value"] == "2026-05-07"
+
     def test_write_state_preserves_newer_draft_versions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/theheat.sqlite"
@@ -892,6 +918,94 @@ class TestDownstreamSuppressionCapture:
             review_context={},
         )
         assert bot_state.get("suppressions", []) == []
+
+    def test_city_cooldown_records_suppression(self):
+        from src.editorial.scoring import EditorialScore
+        from src.main import _activate_suppression_ctx, _utc_now_iso, save_draft
+
+        bot_state = {
+            "drafts": [
+                {
+                    "event_id": "old_ev",
+                    "city": "Phoenix",
+                    "tweet_date": "2026-05-06",
+                    "status": "posted",
+                    "posted_at": _utc_now_iso(),
+                }
+            ]
+        }
+        _activate_suppression_ctx(bot_state, source="alerts", run_id="run_1")
+        score = EditorialScore(
+            category="record_event",
+            severity=80,
+            novelty=80,
+            timeliness=80,
+            confidence=80,
+            shareability=80,
+            sensitivity=20,
+            total=82,
+            threshold=70,
+            reasons=["calendar record"],
+        )
+
+        saved = save_draft(
+            "Phoenix is challenging another record.",
+            bot_state,
+            "record",
+            event_id="new_ev",
+            score=score,
+            city="Phoenix",
+            tweet_date="2026-05-07",
+        )
+
+        assert saved is False
+        rec = bot_state["suppressions"][0]
+        assert rec["stage"] == "city_cooldown"
+        assert rec["event_id"] == "new_ev"
+        assert rec["score_total"] == 82
+        assert rec["run_id"] == "run_1"
+
+    def test_cycle_cap_prune_records_suppression(self):
+        from src.main import _activate_suppression_ctx, _prune_weakest_cycle_drafts
+
+        bot_state = {
+            "drafts": [
+                {
+                    "event_id": f"ev_{score}",
+                    "type": "record",
+                    "text": f"Draft {score}",
+                    "status": "pending",
+                    "score": {
+                        "category": "record_event",
+                        "total": score,
+                        "threshold": 70,
+                        "reasons": ["passed"],
+                    },
+                }
+                for score in (100, 95, 90, 75)
+            ],
+            "posted_events": ["ev_100", "ev_95", "ev_90", "ev_75"],
+        }
+        _activate_suppression_ctx(bot_state, source="alerts", run_id="run_2")
+
+        drafted = _prune_weakest_cycle_drafts(
+            bot_state,
+            drafts_before=0,
+            current_run={"sources": []},
+            drafted=4,
+        )
+
+        assert drafted == 3
+        assert [d["event_id"] for d in bot_state["drafts"]] == [
+            "ev_100",
+            "ev_95",
+            "ev_90",
+        ]
+        assert "ev_75" not in bot_state["posted_events"]
+        rec = bot_state["suppressions"][0]
+        assert rec["stage"] == "cycle_cap"
+        assert rec["event_id"] == "ev_75"
+        assert rec["score_total"] == 75
 
     def test_no_active_context_no_capture_on_kill(self, monkeypatch):
         from src.main import _try_two_bot_draft, _clear_suppression_ctx

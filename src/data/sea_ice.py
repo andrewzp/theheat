@@ -14,6 +14,8 @@ import io
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 ARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv"
 ANTARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v3.0.csv"
 
@@ -37,7 +39,11 @@ class SeaIceRecord:
     event_id: str
 
 
-def fetch_sea_ice(hemisphere: str = "Arctic") -> list[SeaIceReading]:
+def fetch_sea_ice(
+    hemisphere: str = "Arctic",
+    *,
+    strict: bool = False,
+) -> list[SeaIceReading]:
     """Fetch sea ice extent data for a hemisphere."""
     url = ARCTIC_URL if hemisphere == "Arctic" else ANTARCTIC_URL
 
@@ -78,7 +84,9 @@ def fetch_sea_ice(hemisphere: str = "Arctic") -> list[SeaIceReading]:
 
         return readings
 
-    except (requests.RequestException, csv.Error):
+    except (requests.RequestException, csv.Error) as exc:
+        if strict:
+            raise SourceFetchError(f"Sea ice fetch failed for {hemisphere}: {exc}") from exc
         return []
 
 

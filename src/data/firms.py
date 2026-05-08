@@ -8,6 +8,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError, SourceSkipped
+
 FIRMS_API_KEY = os.environ.get("NASA_FIRMS_API_KEY", "")
 FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 
@@ -60,6 +62,8 @@ def fetch_fires(
     frp_min: float = 250.0,
     source: str = "VIIRS_SNPP_NRT",
     days: int = 1,
+    *,
+    strict: bool = False,
 ) -> list[FireEvent]:
     """Fetch active fires from NASA FIRMS, filtered by confidence and FRP.
 
@@ -71,6 +75,8 @@ def fetch_fires(
     fire that reads as a real incident, not noise near a farmer's burn.
     """
     if not FIRMS_API_KEY:
+        if strict:
+            raise SourceSkipped("NASA_FIRMS_API_KEY is not configured")
         return []
 
     try:
@@ -111,7 +117,13 @@ def fetch_fires(
 
         return fires
 
-    except (requests.RequestException, csv.Error, KeyError):
+    except (requests.RequestException, csv.Error, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
+        return []
+    except Exception as exc:
+        if strict:
+            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
         return []
 
 
