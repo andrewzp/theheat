@@ -54,7 +54,13 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
     from google import genai
     from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
+    # NB: google-genai HttpOptions.timeout is MILLISECONDS, not seconds.
+    # (Confirmed against googleapis/python-genai/google/genai/types.py 2026-05-08.)
+    # Prior value of `timeout=90` meant 90ms — every fact-check call failed
+    # with ReadTimeout in <300ms total across 3 retry attempts, silently
+    # killing every draft from 2026-05-03 onward (4-day production outage).
+    # 90000 = 90 seconds, the original intent.
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
     user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
         tweet=tweet,
         bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),

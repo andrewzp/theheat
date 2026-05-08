@@ -734,11 +734,13 @@ def generate_tweet_bundle(
             from google import genai
             from google.genai import types as genai_types
 
-            # 180s, not 90s. Voice-gen calls a 12K-char system prompt and
-            # ask for 4 distinct tweet candidates, which is a much heavier
-            # workload than fact_check.py (1K prompt, single JSON output).
-            # 90s was empirically too aggressive — see PR rationale.
-            client = genai.Client(api_key=GEMINI_API_KEY, http_options=genai_types.HttpOptions(timeout=180))
+            # 180000ms = 180s. google-genai HttpOptions.timeout is in
+            # MILLISECONDS, not seconds (confirmed 2026-05-08 against
+            # googleapis/python-genai). Prior value of 180 meant 180ms,
+            # which is enough time for a TLS handshake and not much else.
+            # Voice-gen is dead code (slated for deletion) but fix the
+            # unit-of-measure bug for parity in case it's ever re-imported.
+            client = genai.Client(api_key=GEMINI_API_KEY, http_options=genai_types.HttpOptions(timeout=180000))
         except Exception as e:
             print(f"[generator] WARNING: Gemini client init failed ({e}) — using template fallback")
     else:
