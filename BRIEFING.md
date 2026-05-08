@@ -1,10 +1,25 @@
 # @theheat — Project Briefing
 
-**Last updated:** May 7, 2026
-**Status:** **GHCN-DAILY MIGRATION LIVE + IDENTITY LOCKED.** Extreme-signals lane now reads **11,907 active NOAA GHCN-Daily stations** (up from 638 curated cities — a 19× expansion of coverage at $0/month). Hot 10 leaderboard stays on Open-Meteo. Two-bot writing pipeline (Sonnet 4.6) unchanged. Brand system locked at R3 v4 with handoff at `brand/handoff/`.
-**Latest merged commits:** `bad21be` PR #33 (GHCN P4 cutover) → PR #35 (stale-obs filter + TMIN regression) → PR #36 (dashboard funnel/events drill-down).
-**Tests:** 709 passing (679 baseline + 30 new GHCN tests, 0 regressions).
-**Cost:** GHCN-Daily is free, no auth, no rate limit. Sonnet writer ~$13/month unchanged. Net stays at ~$13/mo target.
+**Last updated:** May 8, 2026 (post-debugging-marathon)
+**Status:** **PIPELINE WORKING END-TO-END.** A 4-day production outage (every two-bot draft silently dying since 2026-05-03) was fully diagnosed and resolved over a 13-hour debugging session on 2026-05-08. Root cause was a unit-of-measure bug in the Gemini SDK timeout config (`HttpOptions.timeout` is milliseconds, not seconds — the code passed `90` meaning 90s, but the SDK read it as 90ms and every fact-check timed out in <300ms). The fix layered on top of: structured suppression-ledger visibility, defensive JSON parsing for Sonnet's wrapper variations, station-name normalization, US-state + observation-kind bundle enrichment, F-first / C-parens audience-aware temperature formatting, and Codex's high-severity batch (dashboard data-loss prevention, sqlite missing keys, claim-extractor unbounded timeout).
+**Latest merged commits:** `f96f4cb` (#38 suppression ledger) → `b941506` (#39 date serialization) → `d869b2d` (#40 fence stripping) → `62cbb11` (#41 preamble + timeout) → `5d3e5cf` (#42 Codex sweep) → `da9093f` (#43 **the actual root cause: Gemini ms-vs-s**) → `bdbf845` (#44 station-name normalization) → `34459dc` (#45 state + observation_kind enrichment) → `6a068dc` (#46 Fahrenheit-first for US) → `d9c84ff` (#47 Codex review high-severity batch).
+**Tests:** ~813 passing (was 709 at session start, +~104 new across the day).
+**Cost:** GHCN-Daily free. Sonnet writer ~$13/mo. Gemini Flash usage unchanged. Net ~$13/mo target unchanged.
+
+## What changed structurally on 2026-05-08
+
+- **Suppression ledger** (`bot_state.suppressions`) — every editorial-gate near-miss AND every downstream kill (writer / fact-check / pipeline-error) now records `id` + `ts` + `run_id` + `source` + `stage` + `event_id` + `category` + `score_total` + `threshold` + `reasons` + `summary`. Surfaced via `GET /api/suppressions` (auth-protected) and the dashboard's `Suppressed` tab.
+- **Shared boundary helpers** (`src/two_bot/json_utils.py`, `src/two_bot/retry.py`, `src/data/source_status.py`) — one `json_default` covers date/datetime/Decimal/set/dataclass/bytes; one `loads_model_json` handles fences + preamble + comments + trailing commas; one `call_with_retries` wraps every LLM call with bounded exponential backoff; typed `SourceFetchError` / `SourceSkipped` distinguish transport failure from "legitimately quiet."
+- **Bundle enrichment** for GHCN-touching builders (`build_monthly_high_bundle`, `build_record_bundle`, `build_all_time_record_bundle`, `build_anomaly_bundle`):
+  - Station name normalized: `SISSONVILLE 1SW` → `Sissonville`, `MIAMI INTL AP` → `Miami`, `WFO SAN JUAN` → `San Juan`.
+  - US state name expanded: `WV` → `West Virginia`, included in bundle's `where` and `current_facts`.
+  - `observation_kind` fact: `"overnight low"` for TMIN-based, `"afternoon high"` for TMAX-based — lets writer say "May night" without fact-check rejecting "night" as not-in-bundle.
+  - Integer Fahrenheit pre-computed alongside Celsius. `audience_unit` fact tells writer `"fahrenheit_first"` for US locations, `"celsius_first"` elsewhere.
+- **Writer prompt** (`src/two_bot/prompts/writer_prompt.py`) gains a `TEMPERATURE FORMATTING` section: lead with `°F` for `audience_unit=fahrenheit_first`, `°C` elsewhere. Forbids ad-hoc conversions; must use bundle's pre-rounded values.
+- **Anthropic writer client** timeout 90s → 180s (PR #41); the SDK auto-retries on 529s but our `call_with_retries` wraps externally too.
+- **Gemini timeout values** corrected: `fact_check.py` 90 → 90000ms (90s), `writer.py` Gemini fallback 90 → 180000ms, `claim_extractor.py` (was unbounded) → 90000ms (PR #43 + #47). Regression test introspects source for `HttpOptions(timeout=NNN)` and asserts ≥5000.
+- **Dashboard `mergeState()`** in `dashboard/lib/state-store.js` now spreads `{...base, ...next}` before explicit per-key merges so Python-owned keys (`memory`, `record_streaks`, `data_source_failures`, `ocean_sst_streak`, `ice_mass_*`, `fire_complex_tiers`, `synthesis_*`) survive every dashboard write. Was silently erasing them on every approve/reject click.
+- **SQLite `_METADATA_JSON_KEYS`** now includes `memory` and `data_source_failures` — were lost on every sqlite-backed round-trip.
 
 ## Posting resumption bar (set 2026-04-26)
 
@@ -118,21 +133,31 @@ CRON (GitHub Actions free tier, 6x/day alerts + hourly auto-approval)
 
 ```
 theheat/
-├── src/                              ~7,179 lines Python
-│   ├── main.py                       Orchestrator (1,610 lines)
-│   ├── state.py                      GitHub Gist state + record-streak helpers (540 lines)
+├── src/                              ~7,800 lines Python
+│   ├── main.py                       Orchestrator (~1,900 lines; +suppression hooks +SourceSkipped catch)
+│   ├── state.py                      Gist state + json_default + suppression merge (560 lines)
+│   ├── config.py                     Central model config (CHEAP_MODEL / WRITER_MODEL)
 │   ├── data/                         Data source modules
 │   │   ├── open_meteo.py             Unified extreme signal detection + country aggregation
-│   │   ├── firms.py                  NASA FIRMS wildfires (VIIRS letter-confidence aware)
-│   │   ├── fire_footprint.py         NIFC WFIGS named fire complexes, acreage tier dedup
+│   │   │                               (event dataclasses now carry signal_date + state)
+│   │   ├── ghcn.py                   NOAA GHCN-Daily detection — 11,907 stations.
+│   │   │                               normalize_station_name() + expand_us_state() upstream
+│   │   │                               of bundle creation so writer + fact-check see clean names
+│   │   ├── ghcn_db.py                SQLite threshold cache schema + upsert helpers
+│   │   ├── ghcn_format.py            Pure-stdlib parser for NOAA .dly + superghcnd_diff
+│   │   ├── source_status.py          NEW (#42). Typed errors:
+│   │   │                               - SourceFetchError (transport/schema)
+│   │   │                               - SourceSkipped (intentional, e.g. missing optional config)
+│   │   ├── firms.py                  NASA FIRMS wildfires (raises SourceSkipped/FetchError)
+│   │   ├── fire_footprint.py         NIFC WFIGS (raises SourceFetchError on partial fetch)
 │   │   ├── co2.py                    Mauna Loa CO2 milestones (12/yr cap)
 │   │   ├── nws_alerts.py             NWS — 9 extreme-tier event types
 │   │   ├── gdacs.py                  GDACS — Red-tier only, intensity-tier dedup
-│   │   ├── sea_ice.py                Arctic/Antarctic sea ice
+│   │   ├── sea_ice.py                Arctic/Antarctic sea ice (Mondays only)
 │   │   ├── ice_mass.py               GRACE-FO Greenland + Antarctica (Mondays, Earthdata)
 │   │   ├── ocean_sst.py              NOAA OISST v2.1 global-mean streaks
-│   │   ├── drought.py                US Drought Monitor
-│   │   ├── enso.py                   ENSO transitions
+│   │   ├── drought.py                US Drought Monitor (Fridays only)
+│   │   ├── enso.py                   ENSO transitions (1st of month)
 │   │   ├── ocean.py                  Extreme waves (location-aware thresholds)
 │   │   ├── water_levels.py           NOAA CO-OPS storm surge
 │   │   └── river_gauges.py           USGS river flood stages
@@ -144,15 +169,39 @@ theheat/
 │   │   ├── synthesis.py              Cross-source synthesis rules (fire×drought×heat)
 │   │   ├── regions.py                Lat/lon → US state + city → state helpers
 │   │   └── _util.py                  Shared clamp utility
+│   ├── two_bot/                      Live writer pipeline (since 2026-05-04 port)
+│   │   ├── pipeline.py               generate_draft(bundle, state, result_out=...) → draft|None
+│   │   │                               populates kill_stage + kill_reason in result_out
+│   │   ├── intern.py                 23 build_*_bundle functions (one per signal source)
+│   │   │                               +helpers: _format_where, _ghcn_observation_facts,
+│   │   │                                          _c_to_f, _is_us_country, _audience_unit_facts
+│   │   ├── writer.py                 Sonnet 4.6 writer.
+│   │   │                               180s Anthropic timeout. Imports from json_utils + retry.
+│   │   ├── fact_check.py             Gemini Flash fact-checker (90000ms = 90s timeout)
+│   │   ├── claim_extractor.py        Gemini Flash claim extractor (90000ms timeout — fixed #47)
+│   │   ├── memory.py                 Two-bot reuse memory (banned moves, era anchors, etc.)
+│   │   ├── types.py                  StoryBundle / WriterResult / FactCheckResult dataclasses
+│   │   ├── json_utils.py             NEW (#42). Shared boundary helpers:
+│   │   │                               - json_default: date/datetime/Decimal/set/dataclass/bytes
+│   │   │                               - extract_json_payload: balanced span finder, string-aware
+│   │   │                               - loads_model_json: fence + preamble + comments + commas
+│   │   ├── retry.py                  NEW (#42). call_with_retries — bounded exp-backoff
+│   │   │                               around every LLM call (writer, fact-check, claim-extract)
+│   │   └── prompts/
+│   │       ├── writer_prompt.py      System prompt + TEMPERATURE FORMATTING section (#46)
+│   │       ├── fact_check_prompt.py  Strict entity-match contract
+│   │       └── claim_extractor_prompt.py
 │   ├── voice/
-│   │   ├── generator.py              Gemini Flash generation + 19 generator fns (880 lines)
+│   │   ├── generator.py              Dead since 2026-05-04 (slated for deletion).
+│   │   │                               No live call sites in main.py. 1,730 lines.
 │   │   ├── templates.py              Fallback templates (no AI needed)
 │   │   └── safety.py                 Two-layer safety pipeline (179 lines)
 │   ├── posting/
 │   │   ├── twitter.py                Tweepy (rate-limit aware)
 │   │   └── bluesky.py                AT Protocol cross-posting
 │   └── storage/
-│       └── sqlite_store.py           SQLite backend (exists but unused in prod)
+│       └── sqlite_store.py           SQLite backend (PRESERVES memory + data_source_failures
+│                                       since #47; was previously lossy on those keys)
 │
 ├── tests/                            500+ tests across signal, scoring,
 │                                     generator, safety, state, synthesis,
@@ -339,6 +388,13 @@ compound story on top.
 - Archive goes back ~30 years, not "all time"
 - All-time record tweets must say "hottest in 30 years of archive data" or "hottest since 1995" — NEVER "hottest ever"
 
+**Temperature formatting (added 2026-05-08, PR #46):**
+- Bundles now carry both Celsius (`*_c`) and integer-rounded Fahrenheit (`*_f`).
+- `current_facts.audience_unit` field tells the writer:
+  - `"fahrenheit_first"` for US locations — write `28°F (-2.2°C)`, F primary, C in parens.
+  - `"celsius_first"` for everywhere else — write `-15°C` primary; F is optional.
+- Writer prompt forbids ad-hoc conversions mid-tweet — must use the bundle's pre-rounded values (otherwise fact-checker rejects rounding mismatches).
+
 ---
 
 ## Safety Pipeline (40+ regex + LLM)
@@ -360,23 +416,58 @@ Single JSON file in GitHub Gist, read/written via GitHub API each run.
 
 ```json
 {
-  "last_hot10":    { "date": "...", "cities": [...] },
-  "streaks":       { "Miami": { "consecutive_days": 14, "last_seen": "..." } },
-  "posted_events": [ "record_PHX_20260407", ... ],
-  "daily_tweet_count": { "2026-04-18": 3 },
-  "co2_annual_count": { "2026": 2 },
-  "drafts": [ ... full draft records with score, candidates, approval_policy, review_context, evaluator_pass ... ],
-  "run_history": [ { "id": "...", "mode": "alerts", "sources": [...] } ],
-  "errors": [ ... ],
+  "last_hot10":           { "date": "...", "cities": [...] },
+  "streaks":              { "Miami": { "consecutive_days": 14, "last_seen": "..." } },
+  "posted_events":        [ "record_PHX_20260407", ... ],
+  "daily_tweet_count":    { "2026-04-18": 3 },
+  "co2_annual_count":     { "2026": 2 },
+  "drafts":               [ ... draft records with score, candidates, approval_policy, review_context ... ],
+  "run_history":          [ { "id": "...", "mode": "alerts", "sources": [...], "source_runs": [...] } ],
+  "errors":               [ ... ],
+  "data_source_failures": { "ghcn": 0, "firms": 0, ... },
+  "memory": {
+    "ongoing_events":         [ ... ],
+    "used_era_anchors":       [ ... ],
+    "used_peer_comparisons":  [ ... ],
+    "used_framings":          [ ... ],
+    "shipped_tweet_texts":    [ ... ]
+  },
+  "suppressions": [
+    {
+      "id":          "supp_2026-05-08T01:32:09.290851Z_a1b2c3d4",
+      "ts":          "2026-05-08T01:32:09.290851Z",
+      "run_id":      "run_alerts_20260508T013240Z",
+      "source":      "alerts",
+      "stage":       "score_gate" | "writer" | "fact_check" | "pipeline_error",
+      "event_id":    "monthly_low_USC00468191_05_2026-05-04",
+      "category":    "monthly_record",
+      "score_total": 80,
+      "threshold":   76,
+      "reasons":     [ "Frost in May is not unusual here;: UNVERIFIABLE: ..." ],
+      "summary":     "Sissonville, West Virginia"
+    }
+  ],
   "city_all_time_max": { "Phoenix": {"temp_c": 48.2, "year": 2018} },
   "city_all_time_min": { ... },
-  "city_monthly_max": { "Phoenix": { "4": {"temp_c": 44.0, "year": 2024} } },
-  "city_monthly_min": { ... },
-  "record_streaks":   { "Phoenix": { "days": 11, "start_date": "...", "last_date": "...", "peak_temp_c": 45.0 } }
+  "city_monthly_max":  { "Phoenix": { "4": {"temp_c": 44.0, "year": 2024} } },
+  "city_monthly_min":  { ... },
+  "record_streaks":    { "Phoenix": { "days": 11, "start_date": "...", "last_date": "...", "peak_temp_c": 45.0 } },
+  "ocean_sst_streak":  { ... },
+  "ice_mass_max_loss": { ... },
+  "fire_complex_tiers": { ... },
+  "synthesis_components": { ... },
+  "synthesis_cooldown":   { ... }
 }
 ```
 
-**Caps:** 500 event IDs, 200 drafts (pruned oldest non-pending), 50 errors, 10 tweets/day, 3 drafts/cycle.
+**Caps:** 500 event IDs, 200 drafts (pruned oldest non-pending), 50 errors, 200 suppression records, 10 tweets/day, 3 drafts/cycle.
+
+### Suppression stage discriminator
+
+- **`score_gate`** — editorial scoring failed (`score.total < score.threshold`). Captured only when the gap is within `SUPPRESSION_NEAR_MISS_GAP` (default 15) so the ledger doesn't flood with obvious noise.
+- **`writer`** — Sonnet 4.6 returned `tweet=null` with a `kill_reason` (e.g. "no historical_context available; nothing else earned extraordinary").
+- **`fact_check`** — Gemini fact-checker found one or more UNVERIFIABLE / BUNDLE_FACT mismatches.
+- **`pipeline_error`** — exception caught by `generate_draft`'s try/except. Today's saga had this fire repeatedly with `ReadTimeout` (root: Gemini ms-vs-s timeout bug, fixed in #43).
 
 ---
 
@@ -439,13 +530,33 @@ responses>=0.25
 
 ## Known Issues & Growth Levers
 
-### Issues
-1. **Sequential API calls** — 613 cities checked sequentially. Alert cycle ~30 min.
-2. **Dashboard deployment** — may be behind latest main.
-3. **Archive span** — Open-Meteo only goes back ~30 years reliably. "All-time" framing must say "in 30 years of records." Enforced in the generator system prompt.
-4. **SQLite store** — lane-added keys now round-trip correctly via the metadata table (fixed 2026-04-22). Still not the default prod backend (Gist is), but no longer silently lossy if enabled.
-5. **Stray worktree artifact** — `theheat/theheat/` duplicate subdir from a Conductor worktree; untracked, safe to `rm -rf` when convenient. Causes `ImportPathMismatchError` on repo-root pytest.
-6. **13 cities missing elevations** — bulk fetch on 2026-04-24 hit Open-Meteo elevation API rate limit on the last batch. Easy retry for whoever picks this up next.
+### Issues (current — 2026-05-08)
+
+**Open from Codex review (medium / low — see `docs/codex-review-findings-2026-05-08.md`):**
+1. **Suppression `stage` not surfaced in dashboard UI** (medium / certain). Schema is wired, API returns it, but `dashboard/app/page.js::SuppressedView` groups by `source` only and the card copy still says "editorial gate kills" (no longer accurate — stage covers writer / fact_check / pipeline_error / score_gate). Render `stage` as primary pill + add stage filter.
+2. **`observation_kind` says "overnight low" / "afternoon high"** but TMIN/TMAX are 24-hour extrema, not timestamped. A cold front past sunrise can set the daily min; a warm overnight event can set the max. Acceptable imprecision today; worth `daily_minimum` / `24h_low` framing if hourly data ever lands.
+3. **GHCN observed records still labeled `forecast_*_c`** in the bundle's headline_metric (medium / likely). Same event dataclasses serve both Open-Meteo forecasts AND GHCN observed station readings — but the metric label says "forecast." Should split into `observed_*_c` for GHCN, keep `forecast_*_c` for Open-Meteo.
+4. **`loads_model_json` trailing-comma fallback isn't string-aware** (low / edge). A payload like `{"tweet":"a,}","kill_reason":null,}` silently becomes `{"tweet": "a}"}`. Replace the regex with a string-aware character walker.
+5. **Station normalization mangles `JFK INTL AP`** → `Jfk` via `text.title()`. Cosmetic; the live station inventory has acronym-style names.
+
+**Open from earlier:**
+6. **Sequential API calls** — 613 cities checked sequentially on the Open-Meteo path (Hot 10). Alert cycle ~30 min worst-case.
+7. **Dashboard auto-deploy not firing** — Vercel GitHub integration appears inactive; deploys go through manual `vercel --prod` from `dashboard/`. Worth investigating.
+8. **Stray worktree artifact** — `theheat/theheat/` duplicate subdir from a Conductor worktree; untracked, safe to `rm -rf` when convenient. Causes `ImportPathMismatchError` on repo-root pytest.
+9. **13 cities missing elevations** — bulk fetch on 2026-04-24 hit Open-Meteo elevation API rate limit on the last batch. Easy retry.
+
+### Resolved 2026-05-08 (just for the record — DO NOT reopen these)
+
+- ✅ **Drafts not flowing** — root cause was `HttpOptions(timeout=90)` meaning 90ms not 90s in google-genai (#43).
+- ✅ **Pipeline kills invisible** — suppression ledger surfaces every kill stage (#38, #39, #42).
+- ✅ **Dashboard merge erasing Python state** — preserved via `{...base, ...next}` spread (#47).
+- ✅ **Sonnet emitting `\`\`\`json` fences and "Let me think..." preambles** — `_extract_json_payload` handles both (#40, #41).
+- ✅ **Date in `raw_signal_dump` choking `json.dumps`** — `json_default` ISO-coerces (#39).
+- ✅ **`_METADATA_JSON_KEYS` dropping `memory` + `data_source_failures`** — added (#47).
+- ✅ **Claim extractor unbounded Gemini timeout** — `HttpOptions(timeout=90000)` (#47).
+- ✅ **Station-name suffixes like "1SW" rejected by fact-check** — `normalize_station_name` strips them (#44).
+- ✅ **Fact-check rejecting "West Virginia" / "night"** — bundle now carries `state` + `observation_kind` (#45).
+- ✅ **All-Celsius drafts unfriendly to US readers** — `audience_unit=fahrenheit_first` for US, F-first formatting (#46).
 
 ### Growth levers (deferred by session owner)
 1. **Visual cards** — research says images 28× engagement. User rejected: "not if the facts are lame." Revisit once fact quality is proven.
@@ -460,7 +571,8 @@ responses>=0.25
 ## Repo
 
 - **GitHub:** `github.com/andrewzp/theheat`
-- **Branch:** `main` (latest: `0be88fc`)
+- **Branch:** `main` (latest: `d9c84ff` — PR #47 codex high-severity batch)
 - **Gist ID:** `06c02c97ffc0d11458687f1ed998d9e5`
 - **Dashboard:** https://dashboard-phi-beryl-65.vercel.app
 - **X:** @theheat (Premium tier — 4x/2x algo boost already active)
+- **CHANGELOG:** through 0.3.10.0 (2026-05-08); ten releases shipped on 2026-05-08 alone (#38 through #47).

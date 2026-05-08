@@ -1,8 +1,14 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
+**Last updated:** 2026-05-08 (post-port + suppression ledger).
+
 A manufacturing-style flowchart showing how climate data becomes a tweet.
 
 Each stage has a specific job; failure at any stage kills the draft rather than compromising quality. "Quality over volume" is enforced at multiple stages.
+
+**Two-bot writer is live since 2026-05-04** (CHANGELOG 0.2.0.0). The voice generator is no longer reached on any live signal path — Sonnet 4.6 writes every audience-facing tweet, Gemini Flash runs claim extraction + fact-check.
+
+**Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate` | `writer` | `fact_check` | `pipeline_error`) — the dashboard's `Suppressed` tab surfaces them in real time.
 
 ---
 
@@ -47,33 +53,27 @@ flowchart TD
 
     SCORE --> GATE1{"Signal score<br/>passes threshold?<br/>all-time: 80<br/>monthly: 76<br/>anomaly: 76<br/>streak: 74<br/>simultaneous: 78<br/>calendar-date: 72<br/>fires: 64<br/>fire footprint: 72<br/>disasters: 62"}:::gate
 
-    GATE1 -.->|no| SKIP2[/"Suppress —<br/>not extraordinary enough"/]:::kill
+    GATE1 -.->|near-miss<br/>gap ≤ 15| SUPP1[("suppressions<br/>stage=score_gate")]:::state
+    GATE1 -.->|far-miss| SKIP2[/"Suppress —<br/>not extraordinary enough"/]:::kill
 
-    GATE1 -->|yes| CTX["Build data description<br/>+ pull previous drafts<br/>about this event<br/>(prevents repeated comparisons)"]:::gen
+    GATE1 -->|yes| INTERN["Intern (build_*_bundle)<br/>StoryBundle assembly:<br/>• state-name expansion (US)<br/>• station-name normalization (GHCN)<br/>• observation_kind: overnight/afternoon<br/>• audience_unit: F-first US, C-first else<br/>• temp_c + temp_f pre-computed"]:::gen
 
-    CTX --> FLASH["Gemini 2.5 Flash<br/>Generate 4 candidates"]:::gen
+    INTERN --> WRITER["Sonnet 4.6 Writer<br/>(call_with_retries 3×, 180s timeout)<br/>JSON output via loads_model_json:<br/>• fence-tolerant<br/>• preamble-tolerant<br/>• balanced-span extraction"]:::gen
 
-    FLASH --> SAFETY1{"Safety Pipeline<br/>40+ regex patterns<br/>+ LLM harm check"}:::gate
+    WRITER -.->|tweet=null<br/>+ kill_reason| SUPP2[("suppressions<br/>stage=writer")]:::state
+    WRITER -->|tweet text| EXTRACT["Gemini Flash<br/>Claim extractor<br/>(90s timeout)"]:::gen
 
-    SAFETY1 -.->|fails 3×| FBACK["Template fallback<br/>hand-written per type"]:::gen
+    EXTRACT --> FACTCHECK["Gemini Flash<br/>Fact-checker<br/>(90s timeout)<br/>strict entity match vs bundle"]:::gen
 
-    SAFETY1 -->|passes| RANK["Heuristic Ranking<br/>clarity × 0.30<br/>context × 0.28<br/>voice × 0.22<br/>punch × 0.20"]:::gen
+    FACTCHECK -.->|UNVERIFIABLE / mismatch| SUPP3[("suppressions<br/>stage=fact_check")]:::state
+    FACTCHECK -->|passed=true| MEMORY["Record in memory<br/>(banned moves, era anchors,<br/>shipped texts)"]:::gen
 
-    FBACK --> RANK
+    %% Pipeline-error capture: any exception in writer / extractor / fact-check
+    WRITER -.->|exception| SUPP4[("suppressions<br/>stage=pipeline_error<br/>+ kill_reason")]:::state
+    EXTRACT -.->|exception| SUPP4
+    FACTCHECK -.->|exception| SUPP4
 
-    RANK --> SONNET["Claude Sonnet 4.6<br/>Virality Evaluator<br/>scores 0-10 on:<br/>• awe<br/>• comparison<br/>• social currency<br/>• opener<br/>• show-not-tell"]:::gen
-
-    SONNET -->|PASS<br/>7+ on 4 of 5| CAP
-    SONNET -->|FAIL<br/>no rewrite| KILL1[/"Kill draft<br/>not worth tweeting"/]:::kill
-    SONNET -->|FAIL<br/>with rewrite| SAFETY2{"Rewrite passes<br/>safety pipeline?"}:::gate
-
-    SAFETY2 -.->|no| KILL2[/"Kill draft<br/>rewrite unsafe"/]:::kill
-    SAFETY2 -->|yes| REGRESS{"Rewrite scores<br/>higher than original?"}:::gate
-
-    REGRESS -.->|no| KILL3[/"Kill draft<br/>rewrite is worse"/]:::kill
-    REGRESS -->|yes| CAP
-
-    CAP["Per-cycle cap<br/>max 3 drafts<br/>keep top by signal score"]:::gate
+    MEMORY --> CAP["Per-cycle cap<br/>max 3 drafts<br/>keep top by signal score"]:::gate
 
     CAP --> SYNTHESIS["Cross-Source Synthesis<br/>rules fire when multiple<br/>sources converge<br/>• fire×drought×heat (US state)<br/>• 14-day window + cooldown<br/>• threshold 82"]:::gen
 

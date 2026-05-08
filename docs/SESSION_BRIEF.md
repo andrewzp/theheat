@@ -4,6 +4,73 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-08 — 13-hour debugging marathon: 4-day outage diagnosed, root-caused, fixed
+
+## Where we landed
+
+`main` is on `d9c84ff` (PR #47). **~813 tests passing** (was 709 at session start). Pipeline working end-to-end for the first time since 2026-05-03. **2 pending drafts in queue** (Sissonville WV + Dayton WY monthly_lows — graded B and C+ respectively). Posting still paused per the resumption-bar invariant.
+
+**The session began with**: "we still aren't seeing drafts!"
+
+**The session ended with**: 10 PRs landed (#38–#47), 11 CHANGELOG releases (0.3.0.0 → 0.3.10.0), structural visibility for every kill stage, and the bot generating real factually-grounded prose again.
+
+## The bug ladder (each layer revealed by the previous fix's diagnostic surface)
+
+| PR | What it fixed | Bug exposed by the fix |
+|---|---|---|
+| **#38** | Suppression ledger v1 + dashboard health-calc fix (`success` + `skipped` count as healthy) | (visibility infrastructure — no bug exposed yet) |
+| **#39** | `signal_date` choking `json.dumps()` in writer/fact-check via `_json_default` ISO coercion + downstream suppression capture (`stage` field discriminator) | First post-fix run: ledger surfaces `Pipeline error: Writer returned invalid JSON` for monthly_low bundles |
+| **#40** | Sonnet wraps JSON in `\`\`\`json` fences despite the prompt explicitly forbidding them — defensive parser strips them | Next run: ledger surfaces `Invalid JSON response: Let me think about this carefully.` (chain-of-thought preamble before the JSON object) |
+| **#41** | `_extract_json_payload` finds first `{` and last `}` — robust to preamble + postamble + nested objects. Anthropic timeout 90s → 180s | Next run: 22-second `ReadTimeout` on monthly_low — way under 180s, so timeout-cap isn't the issue |
+| **#42** | Codex bug-hunt sweep (13 findings, 0 blocker, 7 high, 6 medium, all addressed). Three new shared modules: `json_utils.py` (default + balanced extraction + comment/comma fallback), `retry.py` (`call_with_retries` exp-backoff around every LLM call), `source_status.py` (typed `SourceFetchError` / `SourceSkipped`). Wired into writer / fact-check / claim-extractor / FIRMS / fire-footprint / state.py / sqlite_store.py | Next run: retry helper logs surface `[two_bot.retry] gemini fact-check attempt 1/3 failed: ReadTimeout` — three retries failed in <300ms total. Way too fast for a 90s timeout |
+| **#43** | **Root cause: `google-genai` `HttpOptions.timeout` is MILLISECONDS, not seconds.** Three sites passing `90` (= 90ms) and `180` (= 180ms) bumped to `90000` / `180000`. Confirmed against `googleapis/python-genai/google/genai/types.py`: *"Timeout for the request in milliseconds."* Regression test introspects source for any `HttpOptions(timeout=NNN)` and asserts ≥ 5000 with a loud failure message about the ms-vs-s trap | Next run: writer + fact-check now succeed end-to-end. Fact-checker rejects `"Sissonville: UNVERIFIABLE: 'Sissonville' (without '1SW') does not appear exactly in the bundle. The bundle refers to 'SISSONVILLE 1SW'"` |
+| **#44** | `normalize_station_name()` in ghcn.py strips CoCoRaHS suffixes (`1SW`, `2NE`, `0.5W`), airport suffixes (`INTL AP`, `MUNI AP`), and WFO prefixes. Applied at the data-source boundary so writer + fact-check both see clean place names | Next run: fact-check accepts the normalized name but rejects new claims: `"the state 'Washington' is not in the bundle"`, `"the word 'night' is not explicitly mentioned"`, `"flowers are already up — UNVERIFIABLE"` |
+| **#45** | Bundle enrichment: `state` field on event dataclasses + `expand_us_state()` (`WV` → `West Virginia`) + `_format_where()` includes state for US (`"Sissonville, West Virginia, United States"`) + `_ghcn_observation_facts()` adds `observation_kind` (`"overnight low"` / `"afternoon high"`) | Next run: **TWO PENDING DRAFTS APPEAR** (Sissonville WV + Dayton WY). Pipeline working end-to-end |
+| **#46** | Fahrenheit-first audience-aware temperature formatting. `_c_to_f()` integer conversion. `_audience_unit_facts()` adds `"fahrenheit_first"` for US, `"celsius_first"` elsewhere. Bundle headline_metric carries both `value` (C) and `value_f` (integer F). Writer prompt gains a `TEMPERATURE FORMATTING` section. Anomaly delta uses 9/5 scaling only (no +32 offset) | (no new bug — verification cycle showed structural cleanliness, no new pipeline_error records) |
+| **#47** | Codex review of #38–#46 caught 3 high-severity bugs the author missed: dashboard `mergeState()` was erasing Python-owned state on every approve/reject click (data loss), SQLite `_METADATA_JSON_KEYS` was dropping `memory` + `data_source_failures` on every round-trip (state loss), claim_extractor had no Gemini timeout (unbounded hang risk). All three fixed | (final) |
+
+## The actual root cause
+
+**`google-genai` `HttpOptions.timeout` is documented as milliseconds.** The codebase migrated from the older `google-generativeai` SDK (timeout in seconds) to `google-genai` (timeout in milliseconds) around 2026-05-03 — same window the outage started. The values didn't change but the unit did. Three sites passed bare integers (`timeout=90`, `timeout=180`) believing they were seconds; they were 90ms and 180ms — barely enough for a TLS handshake. Every Gemini fact-check call failed with `ReadTimeout` in <300ms across 3 retry attempts, silently killing every two-bot draft for **4 days** (last successful draft 2026-05-03).
+
+The diagnostic infrastructure shipped in #38 + #42 is what made the bug findable. Without the suppression ledger and the retry helper's diagnostic prints, this would have stayed invisible indefinitely.
+
+## What's in queue
+
+```
+2 pending drafts (graded B and C+):
+
+1. Sissonville, West Virginia hit -2.2 °C overnight on May 4th — breaking the
+   previous May low of -1.7 °C set in 2020. Coldest May night in 16 years of
+   records there. Fruit trees in the Kanawha Valley were not consulted.
+   --> B-grade. Voice is good (Wodehouse-passing closer), signal is borderline
+       (16-yr archive, 0.5°C margin).
+
+2. Dayton, Wyoming dropped to -9.4 °C overnight on May 5th — breaking the
+   previous May low of -8.3 °C set in 2010. Coldest May night in 21 years of
+   records there, by 1.1 degrees.
+   --> C+ grade. Quantifies the margin but voice is flat. No hook.
+```
+
+Both pre-date PR #46 (they're locked to old `°C`-only format because event_id is in `posted_events` dedup). New signals will use F-first formatting from the start.
+
+## Open at session end
+
+1. **Codex review medium/low findings** — all explicitly deferred. Documented in `docs/codex-review-findings-2026-05-08.md`. See BRIEFING.md "Known Issues" section.
+2. **Suppression `stage` UI rendering** — schema is wired but dashboard groups by `source` only. Highest-leverage cleanup.
+3. **GHCN observed records still labeled `forecast_*_c`** in `headline_metric.label` — semantically wrong since the same dataclasses now serve both Open-Meteo (forecast) and GHCN (observed). Should split.
+4. **Writer prompt tightening for speculative claims** ("Flowers are already up", "the ground froze") — these are pure hallucinations the writer should be told not to add. Bundle enrichment can't fix them.
+5. **Vercel GitHub auto-deploy not firing** on pushes to main — deploys go through manual `vercel --prod`. Worth investigating.
+
+## What is OFF the table
+
+- Brand identity (locked at R3 v4 since 2026-05-07).
+- Hot 10 leaderboard migration to GHCN (stays on Open-Meteo).
+- Open-Meteo dead-code removal (kept as rollback path for at least one quarter).
+- Posting unpaused (resumption bar still: majority A-grade per cycle).
+
+---
+
 # 2026-05-06 → 2026-05-07 — GHCN-Daily migration + brand identity locked
 
 ## Where we landed
