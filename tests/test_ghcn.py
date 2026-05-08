@@ -739,3 +739,92 @@ class TestNormalizeStationName:
         # So this just title-cases through.
         result = normalize_station_name("1SW")
         assert result  # not empty
+
+
+class TestNormalizeStationNameAcronyms:
+    """Codex finding #6 (low/possible): title-casing mangles all-caps acronym
+    station names like JFK, LAX, DCA.
+
+    Rule: if the entire post-strip text is a single all-caps token of length
+    2-3 (IATA codes and 2-letter abbreviations), return it as-is without
+    title-casing.
+
+    Length 4+ single-token names (RENO, ATKA) and all multi-word names
+    (SAN JUAN, ATKA ISLAND) title-case normally — this avoids false positives
+    on 4-char place names like RENO and 3-char fragments like SAN.
+    """
+
+    # --- regression: existing stripping behavior must not change ---
+
+    def test_regression_sissonville(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("SISSONVILLE 1SW") == "Sissonville"
+
+    def test_regression_miami_intl_ap(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("MIAMI INTL AP") == "Miami"
+
+    def test_regression_wfo_san_juan(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("WFO SAN JUAN") == "San Juan"
+
+    # --- new behavior: 2-4-char all-caps tokens survive title-casing ---
+
+    def test_jfk_intl_ap(self):
+        """JFK (3-char IATA) must not become Jfk."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("JFK INTL AP") == "JFK"
+
+    def test_lax_intl_ap(self):
+        """LAX (3-char IATA) must not become Lax."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("LAX INTL AP") == "LAX"
+
+    def test_dca_standalone(self):
+        """DCA with no suffix — already 3-char all-caps, should stay DCA."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("DCA") == "DCA"
+
+    def test_boston_logan_intl_ap(self):
+        """Logan is a 5-char word — should title-case normally.
+        INTL AP suffix is stripped; BOSTON is 6 chars, title-cases to Boston.
+        """
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("BOSTON LOGAN INTL AP") == "Boston Logan"
+
+    def test_san_francisco_intl_ap(self):
+        """Multi-word city with long words — no acronym tokens."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("SAN FRANCISCO INTL AP") == "San Francisco"
+
+    def test_l_a_downtown_usc(self):
+        """L and A are 1-char; USC is 3-char embedded in a multi-word name.
+        The single-token rule only preserves whole-name acronyms (JFK, LAX),
+        not embedded ones, so USC title-cases to Usc here.  This is the
+        accepted trade-off for avoiding false positives on place words like
+        SAN, RENO, ATKA.  Single-char L and A survive .title() correctly.
+        """
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("L A DOWNTOWN USC") == "L A Downtown Usc"
+
+    # --- false-positive guard: 4+ char tokens must title-case normally ---
+
+    def test_reno_title_cases(self):
+        """RENO is 4 chars — must become Reno, not RENO (4-char place name guard)."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("RENO") == "Reno"
+
+    def test_akron_title_cases(self):
+        """AKRON is 5 chars — must become Akron, not AKRON."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("AKRON") == "Akron"
+
+    def test_miami_title_cases(self):
+        """MIAMI is 5 chars — must become Miami."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("MIAMI") == "Miami"
+
+    def test_verkhoyansk_title_cases(self):
+        """Long mixed-case place name must not be touched."""
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("VERKHOYANSK") == "Verkhoyansk"
