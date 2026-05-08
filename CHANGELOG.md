@@ -2,6 +2,78 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.9.0] - 2026-05-08
+
+Bilingual temperature units (Fahrenheit-first for US, Celsius-first
+elsewhere). The bot's primary audience is American; until now every
+draft was Celsius-only, which means a Sissonville reading of `-2.2°C`
+forced US readers to do mental math. The pre-PR drafts were correct
+but unfriendly.
+
+The fix is a US-audience-first convention: lead with `°F` (integer-rounded)
+and put `°C` in parens when `country = "United States"`. Everywhere else
+stays Celsius-primary. Both values are pre-computed in the bundle so the
+fact-checker accepts whichever the writer leads with — no rounding-mismatch
+rejections.
+
+### Added
+
+- **`_c_to_f()`** in `src/two_bot/intern.py` — Celsius → Fahrenheit, rounded
+  to integer. Matches how a US reader speaks the number ("28°F", not
+  "28.04°F"). Passes `None` through.
+- **`_is_us_country()`** — recognizes "United States" / "USA" / "US" /
+  "U.S." (and case variants). Conservative: "Puerto Rico [United States]"
+  and "Guam" are NOT US for unit-priority purposes — territory name
+  comes first in tweets, and PR uses metric anyway.
+- **`_audience_unit_facts()`** — adds `{"label": "audience_unit", "value":
+  "fahrenheit_first" | "celsius_first"}` to the bundle's `current_facts`.
+
+### Changed
+
+- **4 GHCN-touching builders** (`build_monthly_high_bundle`,
+  `build_record_bundle`, `build_all_time_record_bundle`,
+  `build_anomaly_bundle`) now surface:
+  - `headline_metric.value_f` — integer Fahrenheit alongside the Celsius `value`
+  - `current_facts.today_temp_f` (or `today_f` for anomalies)
+  - `current_facts.audience_unit`
+  - `historical_context.prior_record_f` and `historical_context.margin_f`
+- The anomaly delta is converted with **9/5 scaling only** (no +32 offset)
+  because a temperature *delta* converts differently from an absolute
+  temperature. `-9.5°C` anomaly = `-17°F` anomaly, not `-49°F`.
+- **Writer prompt** in `src/two_bot/prompts/writer_prompt.py` gains a
+  TEMPERATURE FORMATTING section explaining when to lead with F vs C
+  and forbidding the writer from computing its own conversions
+  mid-tweet (must use the bundle's pre-rounded values).
+
+### Tests
+
+- 7 new tests in `tests/two_bot/test_intern.py::TestFahrenheitConversion`
+  cover known-value conversions (freezing / Phoenix / Verkhoyansk),
+  US-country recognition, the territory-bracket exclusion, US vs non-US
+  bundle differences, and the anomaly-delta scaling-only rule.
+- Adjusted 4 existing tests that asserted `headline_metric == {exact dict}`
+  to use field-by-field assertions, accommodating the new `value_f` field
+  without forcing every test to know about it.
+- Suite passes 308 across `test_ghcn / test_main / test_state /
+  two_bot / test_open_meteo`.
+
+### What this means in production
+
+The Sissonville draft from yesterday's verification cycle would now
+read:
+
+> Sissonville, West Virginia hit **28°F (-2.2°C)** overnight on May 4th —
+> breaking the previous May low of **29°F (-1.7°C)** set in 2020...
+
+Dayton WY:
+
+> Dayton, Wyoming dropped to **15°F (-9.4°C)** overnight on May 5th —
+> breaking the previous May low of **17°F (-8.3°C)** set in 2010...
+
+A Verkhoyansk reading would still read `-15°C` primary. The writer
+gets to choose; the bundle contract makes both acceptable to the
+fact-checker.
+
 ## [0.3.8.0] - 2026-05-08
 
 Bundle enrichment to ground writer prose in bundle facts. After 0.3.7.0
