@@ -50,11 +50,16 @@ export async function GET(request) {
     const last7d = filtered.filter((s) => now - tsValue(s) < 7 * day).length
 
     const sourceCounts = {}
+    const stageCounts = {}
     for (const s of filtered) {
-      const key = s.source || "unknown"
-      sourceCounts[key] = (sourceCounts[key] || 0) + 1
+      const sourceKey = s.source || "unknown"
+      sourceCounts[sourceKey] = (sourceCounts[sourceKey] || 0) + 1
+
+      const stageKey = s.stage || "unknown"
+      stageCounts[stageKey] = (stageCounts[stageKey] || 0) + 1
     }
     const topSource = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+    const topStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
 
     return Response.json({
       suppressions,
@@ -64,6 +69,8 @@ export async function GET(request) {
         last7d,
         top_source: topSource,
         source_counts: sourceCounts,
+        top_stage: topStage,
+        stage_counts: stageCounts,
       },
     })
   } catch (e) {
