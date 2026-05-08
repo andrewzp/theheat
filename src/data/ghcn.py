@@ -35,12 +35,67 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
 import requests
+
+
+# GHCN station names follow ops conventions ("SISSONVILLE 1SW" = 1 mile
+# southwest of Sissonville; "WFO SAN JUAN" = NWS Weather Forecast Office;
+# "JFK INTL AP" = airport). These suffixes/prefixes don't belong in
+# audience-facing prose and they break the Gemini fact-checker, which
+# rejected the SISSONVILLE 1SW draft on 2026-05-08 because the writer
+# correctly shortened the name to "Sissonville" and the fact-checker
+# treated the dropped "1SW" as an unverifiable named-entity claim.
+
+# CoCoRaHS-style direction-distance suffix: trailing whitespace +
+# optional decimal number + 1-3 cardinal direction letters. Examples:
+# "1SW", "0.5N", "2NE", "3WSW".
+_COOP_SUFFIX_RE = re.compile(r"\s+\d+(?:\.\d+)?[NSEW]{1,3}$", re.IGNORECASE)
+
+# Airport suffix: optional "INTL" / "INTERNATIONAL" / "MUNI" / etc.
+# Then "AP" at the end. Examples: "INTL AP", "MUNI AP", "AP".
+_AIRPORT_SUFFIX_RE = re.compile(
+    r"\s+(?:INTL|INTERNATIONAL|MUNI|MUNICIPAL|REGIONAL|REGNL|NATIONAL)?\s*AP$",
+    re.IGNORECASE,
+)
+
+# Weather Forecast Office prefix: "WFO X Y Z" -> "X Y Z".
+_WFO_PREFIX_RE = re.compile(r"^WFO\s+", re.IGNORECASE)
+
+
+def normalize_station_name(raw: str) -> str:
+    """Convert a GHCN station name to a human-readable place name.
+
+    Strips the bureaucratic prefix/suffix and title-cases the result.
+    Used to populate the ``city`` field on bundles so writer + fact-check
+    both see a clean place name. The raw GHCN name is preserved on
+    ``bundle.station_name`` for ops traceability.
+
+    Examples:
+      "SISSONVILLE 1SW"        -> "Sissonville"
+      "WFO SAN JUAN"           -> "San Juan"
+      "ATKA ISLAND"            -> "Atka Island"
+      "MIAMI INTL AP"          -> "Miami"
+      "DEATH VALLEY"           -> "Death Valley"
+
+    Returns the raw input unchanged if it's empty or stripping leaves
+    nothing useful.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return text
+    text = _WFO_PREFIX_RE.sub("", text)
+    text = _COOP_SUFFIX_RE.sub("", text)
+    text = _AIRPORT_SUFFIX_RE.sub("", text)
+    text = text.strip()
+    if not text:
+        return raw
+    return text.title()
 
 from src.data.ghcn_db import (
     DEFAULT_DB_PATH,
@@ -243,8 +298,11 @@ def _detect_signals_for_station(
     today_max_c / archive_max_c for country-level aggregation.
     """
     sid    = station["station_id"]
-    name   = station.get("name", "")
-    city   = station.get("name", sid)   # use station name as display city
+    name   = station.get("name", "")  # raw GHCN name, kept for traceability
+    # Normalize for human-facing display — strips "1SW"/"INTL AP"/"WFO" etc.
+    # so both writer prompt and fact-checker see the same clean place name.
+    # Falls back to station_id if normalization yields empty (rare).
+    city   = normalize_station_name(name) or sid
     country_name = station.get("country_name", "")
     country_code = station.get("country_code", "")
     # Prefer country_name for display; fall back to code

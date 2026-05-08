@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.7.0] - 2026-05-08
+
+GHCN station-name normalization. After 0.3.6.0 unblocked the
+fact-check timeout, the SISSONVILLE 1SW bundle made it through writer
++ fact-check successfully but the fact-checker rejected the draft on
+editorial grounds:
+
+> "Sissonville: UNVERIFIABLE: The specific named entity 'Sissonville'
+> (without '1SW') does not appear exactly in the bundle. The bundle
+> refers to 'SISSONVILLE 1SW'."
+
+The writer correctly shortened the GHCN station name to "Sissonville"
+(`1SW` is a CoCoRaHS direction-distance suffix meaning "1 mile
+southwest"). The fact-checker treated the missing suffix as an
+unverifiable named-entity claim.
+
+Fix: normalize at the data-source boundary so writer + fact-check
+both see the same clean place name. Raw GHCN name preserved on
+``bundle.station_name`` for ops traceability.
+
+### Added
+
+- ``normalize_station_name()`` in [src/data/ghcn.py](src/data/ghcn.py).
+  Strips three GHCN naming patterns:
+  - CoCoRaHS suffix: `"SISSONVILLE 1SW"` → `"Sissonville"`
+  - Airport suffix: `"MIAMI INTL AP"` → `"Miami"` (also "INTERNATIONAL", "MUNI", "REGIONAL", "NATIONAL")
+  - WFO prefix: `"WFO SAN JUAN"` → `"San Juan"`
+- Title-cases the result. 7 new tests in `tests/test_ghcn.py`.
+
+### Changed
+
+- `_detect_signals_for_station()` now uses the normalized name for
+  ``bundle.city`` (and downstream events). ``bundle.station_name``
+  keeps the raw GHCN form because it's only used for logging and
+  doesn't reach the LLM.
+
 ## [0.3.6.0] - 2026-05-08
 
 **The actual root cause of the 4-day outage.** After the codex sweep

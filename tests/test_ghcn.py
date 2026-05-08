@@ -680,3 +680,62 @@ class TestCheckExtremeSignalsForStations:
         assert b.monthly_high.signal_date == obs_date
         assert b.calendar_date_high is not None
         assert b.calendar_date_high.signal_date == obs_date
+
+
+class TestNormalizeStationName:
+    """GHCN station names follow ops conventions ("1SW" / "INTL AP" /
+    "WFO X") that don't belong in audience-facing prose. The fact-checker
+    rejected SISSONVILLE 1SW on 2026-05-08 because the writer correctly
+    shortened to "Sissonville" — the dropped suffix tripped the
+    UNVERIFIABLE entity check. Normalize at the data-source boundary so
+    writer + fact-check both see the same clean place name.
+    """
+
+    def test_strips_cocorahs_direction_distance_suffix(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("SISSONVILLE 1SW") == "Sissonville"
+        assert normalize_station_name("CHEYENNE 2NE") == "Cheyenne"
+        assert normalize_station_name("SOMEWHERE 0.5N") == "Somewhere"
+        assert normalize_station_name("PLACE 3WSW") == "Place"
+
+    def test_strips_airport_suffix(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("MIAMI INTL AP") == "Miami"
+        assert normalize_station_name("DENVER INTERNATIONAL AP") == "Denver"
+        assert normalize_station_name("PHOENIX MUNI AP") == "Phoenix"
+        assert normalize_station_name("RENO REGIONAL AP") == "Reno"
+        assert normalize_station_name("BANGOR AP") == "Bangor"
+
+    def test_strips_wfo_prefix(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("WFO SAN JUAN") == "San Juan"
+        assert normalize_station_name("WFO MIAMI") == "Miami"
+
+    def test_passes_clean_names_through(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("ATKA ISLAND") == "Atka Island"
+        assert normalize_station_name("DEATH VALLEY") == "Death Valley"
+        assert normalize_station_name("VERKHOYANSK") == "Verkhoyansk"
+        assert normalize_station_name("PHOENIX SKY HARBOR") == "Phoenix Sky Harbor"
+
+    def test_handles_empty_and_whitespace(self):
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("") == ""
+        # All-whitespace strips to empty (callers fall back to station_id).
+        assert normalize_station_name("   ") == ""
+
+    def test_idempotent_on_already_clean(self):
+        from src.data.ghcn import normalize_station_name
+        once = normalize_station_name("SISSONVILLE 1SW")
+        twice = normalize_station_name(once)
+        assert once == twice == "Sissonville"
+
+    def test_preserves_original_when_strip_leaves_nothing(self):
+        """Edge case: a name like just '1SW' (no place) shouldn't return
+        an empty string — preserve the raw input as fallback."""
+        from src.data.ghcn import normalize_station_name
+        # "1SW" alone (no leading place) — the COOP regex won't match
+        # because it requires a leading whitespace before the digit.
+        # So this just title-cases through.
+        result = normalize_station_name("1SW")
+        assert result  # not empty
