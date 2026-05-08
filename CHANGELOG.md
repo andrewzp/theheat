@@ -2,6 +2,64 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.8.0] - 2026-05-08
+
+Bundle enrichment to ground writer prose in bundle facts. After 0.3.7.0
+landed station-name normalization, the fact-checker started catching a
+new class of writer hallucinations:
+
+- `"Dayton, Washington"` — writer guessed the state from world knowledge
+- `"coldest May night"` — writer assumed TMIN observation was at night
+- `"May in the inland Pacific Northwest"` — writer added regional context
+
+These are correct rejections (the bundle didn't say those things) but
+the *facts themselves* are right — Dayton IS in Washington, TMIN IS the
+overnight low. The fix is to put those facts in the bundle so the writer
+can ground in them and the fact-checker accepts the resulting prose.
+
+### Added
+
+- **`state` field** on RecordEvent / MonthlyRecord / AllTimeRecord /
+  AnomalyEvent. Default None for backward compatibility.
+- **`expand_us_state()`** in `src/data/ghcn.py` — maps 2-letter US state
+  codes to full names (`"WV"` → `"West Virginia"`). Only expands for
+  US country code; foreign 2-letter codes pass through as None so a
+  Canadian "BC" doesn't get mis-expanded.
+- **`_format_where()`** helper in `src/two_bot/intern.py` — composes
+  `"{city}, {state}, {country}"` when state is set, falls back to
+  `"{city}, {country}"` otherwise.
+- **`_ghcn_observation_facts()`** helper in `src/two_bot/intern.py` —
+  returns extra `current_facts` entries for `state` and
+  `observation_kind` (`"overnight low"` for TMIN-based bundles,
+  `"afternoon high"` for TMAX-based). Both no-op when inputs are None,
+  so non-GHCN paths get an empty list.
+
+### Changed
+
+- `_detect_signals_for_station()` in ghcn.py extracts `state` once at
+  the top and passes it to all 8 event constructors (4 high, 4 low).
+- 4 bundle builders (`build_monthly_high_bundle`, `build_record_bundle`,
+  `build_all_time_record_bundle`, `build_anomaly_bundle`) now use the
+  helpers to surface state + observation_kind in `current_facts` and
+  include the state in the bundle's `where` field.
+
+### Tests
+
+- 14 new tests in `tests/two_bot/test_intern.py::TestStateAndObservationKindEnrichment` and
+  `TestExpandUsState` cover all four builders, US/non-US paths,
+  case-insensitive state codes, US territories (PR/DC), and the
+  observation_kind mapping.
+- Suite passes 299 across `tests/test_ghcn.py tests/test_main.py
+  tests/test_state.py tests/two_bot/ tests/test_open_meteo.py`.
+
+### Out of scope (still)
+
+- Regional descriptors ("Pacific Northwest", "Sahel", "Eastern Siberia").
+  Requires a lat/lon → region geographic mapping table. Separate effort.
+- Pure speculative hallucinations ("Flowers are already up", "the ground
+  froze"). These aren't fixable via bundle enrichment — they need writer
+  prompt tightening to forbid claims not grounded in bundle data.
+
 ## [0.3.7.0] - 2026-05-08
 
 GHCN station-name normalization. After 0.3.6.0 unblocked the
