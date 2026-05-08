@@ -12,6 +12,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 
 # Monitoring points: major ocean buoy-equivalent locations
@@ -72,9 +74,10 @@ class ExtremeWaveEvent:
     event_id: str
 
 
-def fetch_ocean_conditions() -> list[OceanReading]:
+def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
     """Fetch marine conditions for all monitoring points."""
     readings = []
+    failures: list[str] = []
     for lat, lon, name, ocean in OCEAN_POINTS:
         try:
             resp = requests.get(
@@ -111,9 +114,12 @@ def fetch_ocean_conditions() -> list[OceanReading]:
                 date=reading_date,
                 event_id=event_id,
             ))
-        except (requests.RequestException, KeyError, IndexError):
+        except (requests.RequestException, KeyError, IndexError, ValueError) as exc:
+            failures.append(f"{name}: {exc}")
             continue
 
+    if strict and failures and not readings:
+        raise SourceFetchError(f"Ocean fetch failed for all monitoring points: {failures[0]}")
     return readings
 
 

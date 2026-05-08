@@ -6,10 +6,12 @@ import json
 import os
 
 from src.config import CHEAP_MODEL
+from src.two_bot.json_utils import loads_model_json
 from src.two_bot.prompts.claim_extract_prompt import (
     CLAIM_EXTRACT_SYSTEM_PROMPT,
     CLAIM_EXTRACT_USER_PROMPT_TEMPLATE,
 )
+from src.two_bot.retry import call_with_retries
 from src.two_bot.types import ExtractedClaim
 
 CLAIM_EXTRACT_MODEL = os.environ.get("THEHEAT_CLAIM_EXTRACT_MODEL", CHEAP_MODEL)
@@ -26,7 +28,7 @@ _VALID_KINDS = {
 
 def _parse_claims_json(raw: str) -> list[ExtractedClaim]:
     try:
-        parsed = json.loads(raw)
+        parsed = loads_model_json(raw, expected="array")
     except json.JSONDecodeError as exc:
         print(f"[two_bot.claim_extractor] Invalid JSON response: {raw}")
         raise ValueError("Claim extractor returned invalid JSON") from exc
@@ -55,9 +57,12 @@ def _call_gemini(tweet: str) -> str:
 
     client = genai.Client(api_key=api_key)
     user_prompt = CLAIM_EXTRACT_USER_PROMPT_TEMPLATE.format(tweet=tweet)
-    response = client.models.generate_content(
-        model=CLAIM_EXTRACT_MODEL,
-        contents=f"{CLAIM_EXTRACT_SYSTEM_PROMPT}\n\n{user_prompt}",
+    response = call_with_retries(
+        "gemini claim extraction",
+        lambda: client.models.generate_content(
+            model=CLAIM_EXTRACT_MODEL,
+            contents=f"{CLAIM_EXTRACT_SYSTEM_PROMPT}\n\n{user_prompt}",
+        ),
     )
     return response.text
 
@@ -66,4 +71,3 @@ def extract_claims(tweet: str) -> list[ExtractedClaim]:
     """Extract concrete claims from tweet text via Gemini Flash."""
 
     return _parse_claims_json(_call_gemini(tweet))
-

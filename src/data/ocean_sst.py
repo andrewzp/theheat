@@ -16,6 +16,8 @@ from datetime import date, timedelta
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 SST_URL = (
     "https://climatereanalyzer.org/clim/sst_daily/json/"
     "oisst2.1_world_sst_day.json"
@@ -160,24 +162,30 @@ def _walk_streak_backward(
     return streak_days, streak_start_year, streak_start_doy, peak
 
 
-def fetch_global_sst() -> GlobalSSTObservation | None:
+def fetch_global_sst(*, strict: bool = False) -> GlobalSSTObservation | None:
     """Fetch global-mean SST from ClimateReanalyzer and derive the current streak.
 
-    Returns None on any fetch/validation failure. Never raises.
+    Returns None on any fetch/validation failure unless ``strict=True``.
     """
     try:
         resp = requests.get(SST_URL, timeout=15)
         resp.raise_for_status()
         payload = resp.json()
-    except (requests.RequestException, ValueError):
+    except (requests.RequestException, ValueError) as exc:
+        if strict:
+            raise SourceFetchError(f"Ocean SST fetch failed: {exc}") from exc
         return None
 
     if not isinstance(payload, dict):
+        if strict:
+            raise SourceFetchError("Ocean SST fetch failed: response was not a JSON object")
         return None
 
     current_year, today_doy = _today_year_doy()
     cur_arr = payload.get(str(current_year))
     if not isinstance(cur_arr, list) or not cur_arr:
+        if strict:
+            raise SourceFetchError(f"Ocean SST fetch failed: missing {current_year} data")
         return None
 
     # Find most recent non-null index at or before today_doy.
@@ -187,6 +195,8 @@ def fetch_global_sst() -> GlobalSSTObservation | None:
             today_idx = idx
             break
     if today_idx is None:
+        if strict:
+            raise SourceFetchError("Ocean SST fetch failed: no current-year valid readings")
         return None
     today_doy = today_idx + 1
     today_c = float(cur_arr[today_idx])
@@ -203,13 +213,19 @@ def fetch_global_sst() -> GlobalSSTObservation | None:
             prior_arrs[y] = val
 
     if not prior_arrs:
+        if strict:
+            raise SourceFetchError("Ocean SST fetch failed: missing prior-year archive")
         return None
 
     if len(prior_arrs) < 30:
+        if strict:
+            raise SourceFetchError("Ocean SST fetch failed: archive shorter than 30 years")
         return None
 
     amax = _archive_max_for_doy(prior_arrs, today_doy)
     if amax is None:
+        if strict:
+            raise SourceFetchError("Ocean SST fetch failed: no archive max for current day")
         return None
     archive_max_c, archive_max_year = amax
 

@@ -52,6 +52,22 @@ def test_fact_check_calls_llm_when_local_passes(mock_gemini):
     assert mock_gemini.called
 
 
+def test_fact_check_accepts_fenced_preamble_response(mock_gemini):
+    mock_gemini.return_value = """Looking at the supplied bundle, this passes.
+
+```json
+{
+  "passed": true,
+  "failures": []
+}
+```
+"""
+
+    result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+    assert result.passed
+
+
 def test_fact_check_propagates_llm_failure(mock_gemini):
     mock_gemini.return_value = json.dumps(
         {
@@ -70,4 +86,3 @@ def test_fact_check_propagates_llm_failure(mock_gemini):
 
     assert not result.passed
     assert any("since 2012" in failure for failure in result.failures)
-

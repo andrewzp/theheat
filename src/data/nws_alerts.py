@@ -14,6 +14,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 NWS_URL = "https://api.weather.gov/alerts/active"
 
 # ONLY truly rare, always-newsworthy events. If it happens every week in
@@ -49,7 +51,7 @@ class SevereWeatherAlert:
     sender_name: str = ""     # e.g. "NWS Topeka KS"
 
 
-def fetch_alerts() -> list[SevereWeatherAlert]:
+def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
     """Fetch active severe weather alerts from NWS."""
     try:
         resp = requests.get(
@@ -114,7 +116,9 @@ def fetch_alerts() -> list[SevereWeatherAlert]:
 
         return alerts
 
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"NWS alerts fetch failed: {exc}") from exc
         return []
 
 

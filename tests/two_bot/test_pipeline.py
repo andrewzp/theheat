@@ -83,13 +83,16 @@ def test_pipeline_fact_check_fails(mock_writer, mock_extract, mock_fact_check):
 def test_pipeline_writer_raises(mock_writer, mock_extract, mock_fact_check):
     mock_writer.side_effect = RuntimeError("api down")
     state = _state_with_memory()
+    result_out = {}
 
-    draft = generate_fire_draft(_fire_event(), state)
+    draft = generate_fire_draft(_fire_event(), state, result_out=result_out)
 
     assert draft is None
     assert state["memory"]["shipped_tweets"] == []
     assert not mock_extract.called
     assert not mock_fact_check.called
+    assert result_out["kill_stage"] == "pipeline_error"
+    assert "api down" in result_out["kill_reason"]
 
 
 def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_check):
@@ -343,4 +346,3 @@ def test_generate_draft_swallows_exceptions(mock_writer):
     result = generate_draft(_monthly_high_bundle(), state)
 
     assert result is None  # never raises
-

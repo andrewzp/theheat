@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import datetime
 import json
 import os
-import re
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
@@ -13,26 +11,14 @@ from src.two_bot.prompts.writer_prompt import (
     WRITER_USER_PROMPT_TEMPLATE,
 )
 from src.two_bot.types import MemorySlice, StoryBundle, WriterResult
+from src.two_bot.json_utils import (
+    extract_json_payload as _extract_json_payload,
+    json_default as _json_default,
+    loads_model_json,
+    strip_markdown_fences as _strip_markdown_fences,
+)
+from src.two_bot.retry import call_with_retries
 
-
-def _json_default(obj):
-    """Serialize types json.dumps doesn't handle natively.
-
-    Bundles built from GHCN events carry a ``signal_date`` field
-    (date object) inside ``raw_signal_dump`` — added in PR #32. Without
-    this hook, json.dumps raises ``TypeError: Object of type date is
-    not JSON serializable`` and the entire two-bot pipeline aborts via
-    the catch-all in pipeline.py, killing every GHCN draft silently.
-
-    Coerce date/datetime to ISO 8601 strings (which is what the writer
-    LLM expects to see anyway). Raise loudly on truly unknown types so
-    we don't silently coerce future surprises via str().
-    """
-    if isinstance(obj, (datetime.date, datetime.datetime)):
-        return obj.isoformat()
-    raise TypeError(
-        f"Object of type {type(obj).__name__} is not JSON serializable"
-    )
 
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", _DEFAULT_WRITER_MODEL)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -68,58 +54,9 @@ def _memory_json(memory: MemorySlice) -> str:
     return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default)
 
 
-_FENCE_OPEN_RE = re.compile(r"^\s*```(?:json|JSON)?\s*\n?")
-_FENCE_CLOSE_RE = re.compile(r"\n?\s*```\s*$")
-
-
-def _strip_markdown_fences(raw: str) -> str:
-    """Strip ```json ... ``` wrappers some models emit. Kept as a
-    public-ish helper so callers can compose with other cleanup.
-    """
-    text = raw.strip()
-    text = _FENCE_OPEN_RE.sub("", text, count=1)
-    text = _FENCE_CLOSE_RE.sub("", text, count=1)
-    return text.strip()
-
-
-def _extract_json_payload(raw: str) -> str:
-    """Best-effort JSON-object extraction from a writer response.
-
-    Sonnet 4.6 ignores the prompt's "No markdown. No code fences. No
-    prose outside the JSON." instruction in two distinct ways:
-
-    1. Wrapping in ```json ... ``` fences (run 25525862349)
-    2. Emitting a chain-of-thought preamble like "Let me think about
-       this carefully." or "Here's my analysis:" *before* the JSON
-       object (run 25526974586)
-
-    Strict prompting alone doesn't fix this. Defensive parsing does.
-
-    Strategy:
-    - Strip leading/trailing markdown fences first
-    - Locate the first '{' and the last '}'
-    - Return the substring between them (inclusive)
-
-    The writer response is a flat object — no top-level array, no
-    multiple objects — so first-{ to last-} is unambiguous even with
-    nested raw_signal_dump-style dicts inside.
-
-    If no balanced object is found, returns the cleaned text so
-    json.loads fails with a clear error message that includes the
-    raw response for debugging.
-    """
-    text = _strip_markdown_fences(raw)
-    first = text.find("{")
-    last = text.rfind("}")
-    if first == -1 or last == -1 or last <= first:
-        return text
-    return text[first : last + 1]
-
-
 def _parse_writer_json(raw: str) -> WriterResult:
-    cleaned = _extract_json_payload(raw)
     try:
-        parsed = json.loads(cleaned)
+        parsed = loads_model_json(raw, expected="object")
     except json.JSONDecodeError as exc:
         print(f"[two_bot.writer] Invalid JSON response: {raw}")
         raise ValueError("Writer returned invalid JSON") from exc
@@ -150,11 +87,14 @@ def _call_anthropic(user_prompt: str) -> str:
     # well-tolerated by GitHub Actions cron headroom and prevents the
     # "drafts vanish on slow API days" failure mode.
     client = anthropic.Anthropic(api_key=api_key, timeout=180.0)
-    response = client.messages.create(
-        model=WRITER_MODEL,
-        max_tokens=1024,
-        system=WRITER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
+    response = call_with_retries(
+        "anthropic writer",
+        lambda: client.messages.create(
+            model=WRITER_MODEL,
+            max_tokens=1024,
+            system=WRITER_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        ),
     )
     return response.content[0].text
 
@@ -167,9 +107,12 @@ def _call_google(user_prompt: str) -> str:
     from google.genai import types as genai_types
 
     client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
-    response = client.models.generate_content(
-        model=WRITER_MODEL,
-        contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
+    response = call_with_retries(
+        "gemini writer",
+        lambda: client.models.generate_content(
+            model=WRITER_MODEL,
+            contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
+        ),
     )
     return response.text
 
@@ -200,4 +143,3 @@ def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
 # Backwards-compat alias. The writer is signal-agnostic; legacy callers
 # reference ``write_fire_tweet``.
 write_fire_tweet = write_tweet
-

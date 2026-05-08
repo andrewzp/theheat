@@ -17,6 +17,7 @@ from src.data.open_meteo import (
     detect_country_records,
     ExtremeSignalBundle,
     ANOMALY_HOT_THRESHOLD_C,
+    check_extreme_signals_for_cities,
 )
 
 
@@ -142,6 +143,31 @@ class TestPrioritizeCities:
 
     def test_priority_cold_cities_exist(self):
         assert len(PRIORITY_COLD_CITIES) >= 15
+
+
+class TestCheckExtremeSignalsForCitiesTelemetry:
+    def test_metrics_count_per_city_fetch_failures(self, monkeypatch):
+        cities = [
+            {"city": "Ok", "country": "US", "lat": "1", "lon": "2"},
+            {"city": "Failed", "country": "US", "lat": "3", "lon": "4"},
+        ]
+        good_bundle = ExtremeSignalBundle(city="Ok", country="US")
+
+        def fake_detect(*, city, **kwargs):
+            if city == "Failed":
+                return None
+            return good_bundle
+
+        monkeypatch.setattr(_open_meteo_module, "detect_extreme_signals", fake_detect)
+        metrics = {}
+
+        bundles, country_records = check_extreme_signals_for_cities(cities, metrics_out=metrics)
+
+        assert bundles == []
+        assert country_records == []
+        assert metrics["cities_attempted"] == 2
+        assert metrics["city_fetch_failures"] == 1
+        assert metrics["city_readings"] == 1
 
 
 class TestDetectExtremeSignals:

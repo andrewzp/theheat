@@ -10,6 +10,8 @@ from datetime import date, timedelta
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 DROUGHT_URL = "https://usdmdataservices.unl.edu/api/StateStatistics/GetDroughtSeverityStatisticsByAreaPercent"
 
 
@@ -22,7 +24,7 @@ class DroughtUpdate:
     event_id: str
 
 
-def fetch_drought_data() -> list[DroughtUpdate]:
+def fetch_drought_data(*, strict: bool = False) -> list[DroughtUpdate]:
     """Fetch current drought conditions by state."""
     # Get data for the most recent Thursday
     today = date.today()
@@ -75,5 +77,7 @@ def fetch_drought_data() -> list[DroughtUpdate]:
         updates.sort(key=lambda u: u.d3_pct + u.d4_pct, reverse=True)
         return updates[:5]  # Top 5 worst states
 
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"Drought fetch failed: {exc}") from exc
         return []

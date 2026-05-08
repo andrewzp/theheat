@@ -10,6 +10,8 @@ from datetime import date
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
 
 # Event types GDACS tracks
@@ -75,7 +77,11 @@ def _safe_int(value) -> int:
         return 0
 
 
-def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
+def fetch_disasters(
+    min_severity: str = "Red",
+    *,
+    strict: bool = False,
+) -> list[GlobalDisasterEvent]:
     """Fetch active global disaster events from GDACS.
 
     Only Red alerts by default — Orange is medium severity, not extraordinary.
@@ -140,5 +146,7 @@ def fetch_disasters(min_severity: str = "Red") -> list[GlobalDisasterEvent]:
 
         return events
 
-    except (requests.RequestException, ValueError, KeyError):
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        if strict:
+            raise SourceFetchError(f"GDACS fetch failed: {exc}") from exc
         return []

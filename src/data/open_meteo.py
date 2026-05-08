@@ -580,6 +580,7 @@ def check_extreme_signals_for_cities(
     max_checks: int | None = None,
     *,
     archive_years: int = 30,
+    metrics_out: dict | None = None,
 ) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
     """Check cities for extreme signals. Returns ``(bundles, country_records)``.
 
@@ -593,6 +594,7 @@ def check_extreme_signals_for_cities(
     to_check = ordered if max_checks is None else ordered[:max_checks]
     bundles = []
     all_readings: list[ExtremeSignalBundle] = []
+    failures = 0
     for city in to_check:
         bundle = detect_extreme_signals(
             lat=float(city["lat"]),
@@ -602,6 +604,7 @@ def check_extreme_signals_for_cities(
             archive_years=archive_years,
         )
         if bundle is None:
+            failures += 1
             continue
         all_readings.append(bundle)
         # Only include bundles with at least one per-city signal
@@ -614,6 +617,14 @@ def check_extreme_signals_for_cities(
             bundles.append(bundle)
 
     country_records = detect_country_records(all_readings, archive_years=archive_years)
+    if metrics_out is not None:
+        metrics_out.update({
+            "cities_attempted": len(to_check),
+            "city_readings": len(all_readings),
+            "city_fetch_failures": failures,
+            "signal_bundles": len(bundles),
+            "country_records": len(country_records),
+        })
     return bundles, country_records
 
 

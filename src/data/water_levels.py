@@ -12,6 +12,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import requests
 
+from src.data.source_status import SourceFetchError
+
 COOPS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
 
 # Key coastal stations: (station_id, name, state)
@@ -59,9 +61,10 @@ class StormSurgeEvent:
     event_id: str
 
 
-def fetch_water_levels() -> list[WaterLevelReading]:
+def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
     """Fetch latest water level readings for all monitored stations."""
     readings = []
+    failures: list[str] = []
     today = date.today()
     now = datetime.now(UTC)
     begin = (now - timedelta(hours=6)).strftime("%Y%m%d %H:%M")
@@ -139,9 +142,12 @@ def fetch_water_levels() -> list[WaterLevelReading]:
                 event_id=event_id,
             ))
 
-        except (requests.RequestException, ValueError, KeyError, IndexError):
+        except (requests.RequestException, ValueError, KeyError, IndexError) as exc:
+            failures.append(f"{station_id}: {exc}")
             continue
 
+    if strict and failures and not readings:
+        raise SourceFetchError(f"Water levels fetch failed for all stations: {failures[0]}")
     return readings
 
 

@@ -6,6 +6,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+from src.two_bot.json_utils import json_default
+
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -95,7 +97,7 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 
 def _json(value) -> str:
-    return json.dumps(value, separators=(",", ":"))
+    return json.dumps(value, separators=(",", ":"), default=json_default)
 
 
 # Lane-added state keys that weren't in the original sqlite schema.
@@ -141,7 +143,7 @@ def is_empty(db_path: str) -> bool:
 
 
 def read_state(db_path: str, default_state: dict) -> dict:
-    state = json.loads(json.dumps(default_state))
+    state = json.loads(json.dumps(default_state, default=json_default))
     with _connect(db_path) as conn:
         last_hot10_row = conn.execute(
             "SELECT value_json FROM metadata WHERE key = 'last_hot10'"
@@ -351,5 +353,5 @@ def write_state(db_path: str, state: dict) -> bool:
 
             conn.commit()
         return True
-    except sqlite3.Error:
+    except (sqlite3.Error, TypeError, ValueError):
         return False

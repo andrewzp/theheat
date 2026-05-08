@@ -17,6 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from src import state
 from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data.source_status import SourceSkipped
 from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
@@ -196,6 +197,26 @@ def _clear_suppression_ctx() -> None:
     _CURRENT_SUPPRESSION_CTX = None
 
 
+def _score_field(score, key: str, default=None):
+    if isinstance(score, dict):
+        return score.get(key, default)
+    return getattr(score, key, default)
+
+
+def _score_int(score, key: str) -> int:
+    try:
+        return int(_score_field(score, key, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _score_reasons(score) -> list[str]:
+    raw = _score_field(score, "reasons", []) or []
+    if not isinstance(raw, list):
+        return [str(raw)]
+    return [str(item) for item in raw]
+
+
 def _record_suppression(
     *,
     bot_state: dict,
@@ -218,10 +239,10 @@ def _record_suppression(
         "source": source,
         "stage": "score_gate",
         "event_id": event_id or None,
-        "category": getattr(score, "category", None),
-        "score_total": int(getattr(score, "total", 0) or 0),
-        "threshold": int(getattr(score, "threshold", 0) or 0),
-        "reasons": list(getattr(score, "reasons", []) or []),
+        "category": _score_field(score, "category"),
+        "score_total": _score_int(score, "total"),
+        "threshold": _score_int(score, "threshold"),
+        "reasons": _score_reasons(score),
         "summary": summary,
     })
     if len(suppressions) > 200:
@@ -255,14 +276,41 @@ def _record_downstream_suppression(
         "source": source,
         "stage": kill_stage,  # "writer" | "fact_check" | "pipeline_error" | "unknown"
         "event_id": event_id or None,
-        "category": getattr(score, "category", None),
-        "score_total": int(getattr(score, "total", 0) or 0),
-        "threshold": int(getattr(score, "threshold", 0) or 0),
+        "category": _score_field(score, "category"),
+        "score_total": _score_int(score, "total"),
+        "threshold": _score_int(score, "threshold"),
         "reasons": [kill_reason] if kill_reason else [],
         "summary": summary,
     })
     if len(suppressions) > 200:
         bot_state["suppressions"] = suppressions[-200:]
+
+
+def _record_save_rejection(
+    *,
+    bot_state: dict,
+    event_id: str,
+    score,
+    kill_stage: str,
+    kill_reason: str,
+    summary: str | None,
+) -> None:
+    """Record a post-score draft-save gate as a suppression row."""
+    if score is None:
+        return
+    ctx = _CURRENT_SUPPRESSION_CTX
+    if ctx is None:
+        return
+    _record_downstream_suppression(
+        bot_state=bot_state,
+        source=ctx.get("source"),
+        run_id=ctx.get("run_id"),
+        event_id=event_id,
+        score=score,
+        kill_stage=kill_stage,
+        kill_reason=kill_reason,
+        summary=summary,
+    )
 
 
 def _should_draft(
@@ -355,6 +403,29 @@ def _fact(label: str, value: str | int | float | None) -> dict | None:
     if not text:
         return None
     return {"label": label, "value": text}
+
+
+def _fetch_strict(fetch_fn, *args, **kwargs):
+    """Call a source fetch helper in strict mode, with old test-double fallback."""
+    try:
+        return fetch_fn(*args, strict=True, **kwargs)
+    except TypeError as exc:
+        if "unexpected keyword argument 'strict'" not in str(exc):
+            raise
+        return fetch_fn(*args, **kwargs)
+
+
+def _check_city_extreme_signals(cities: list[dict], metrics_out: dict):
+    """Call Open-Meteo city signal scan with metrics, tolerating old test doubles."""
+    try:
+        return open_meteo.check_extreme_signals_for_cities(
+            cities,
+            metrics_out=metrics_out,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument 'metrics_out'" not in str(exc):
+            raise
+        return open_meteo.check_extreme_signals_for_cities(cities)
 
 
 def _temp_pair_c(temp_c: float) -> str:
@@ -511,12 +582,28 @@ def save_draft(
     # Don't duplicate drafts for the same event
     if event_id and any(d.get("event_id") == event_id for d in drafts):
         print(f"[draft] Already drafted: {event_id}")
+        _record_save_rejection(
+            bot_state=bot_state,
+            event_id=event_id,
+            score=score,
+            kill_stage="duplicate_draft",
+            kill_reason="Event already has a draft",
+            summary=tweet_text[:120] or event_id,
+        )
         return False
 
     # (city, date) dedup — highest signal wins
     if city and tweet_date:
         if _same_day_already_posted(drafts, city, tweet_date):
             print(f"[draft] Already posted for {city} on {tweet_date}, skipping")
+            _record_save_rejection(
+                bot_state=bot_state,
+                event_id=event_id,
+                score=score,
+                kill_stage="same_day_posted",
+                kill_reason=f"Already posted for {city} on {tweet_date}",
+                summary=city,
+            )
             return False
 
         collision = _same_day_pending_collision(drafts, city, tweet_date)
@@ -529,7 +616,29 @@ def save_draft(
                     f"[draft] Weaker signal for {city} on {tweet_date} "
                     f"({new_total} ≤ {other_total}), skipping"
                 )
+                _record_save_rejection(
+                    bot_state=bot_state,
+                    event_id=event_id,
+                    score=score,
+                    kill_stage="same_day_dedup",
+                    kill_reason=(
+                        f"Weaker same-day signal for {city} "
+                        f"({new_total} <= {other_total})"
+                    ),
+                    summary=city,
+                )
                 return False
+            _record_save_rejection(
+                bot_state=bot_state,
+                event_id=other.get("event_id", ""),
+                score=other.get("score"),
+                kill_stage="same_day_superseded",
+                kill_reason=(
+                    f"Superseded by stronger same-day signal "
+                    f"({new_total} > {other_total})"
+                ),
+                summary=city,
+            )
             drafts.pop(idx)
             print(
                 f"[draft] Superseded pending {city} draft "
@@ -551,6 +660,14 @@ def save_draft(
         and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS)
     ):
         print(f"[draft] {city} in {CITY_COOLDOWN_DAYS}-day cooldown, skipping")
+        _record_save_rejection(
+            bot_state=bot_state,
+            event_id=event_id,
+            score=score,
+            kill_stage="city_cooldown",
+            kill_reason=f"{city} in {CITY_COOLDOWN_DAYS}-day cooldown",
+            summary=city,
+        )
         return False
 
     # Prune oldest non-pending drafts to prevent unbounded growth
@@ -634,7 +751,12 @@ def _save_generated_draft(
     )
 
 
-def _two_bot_bundle_for_extreme_signal(strongest_type: str, strongest_signal):
+def _two_bot_bundle_for_extreme_signal(
+    strongest_type: str,
+    strongest_signal,
+    *,
+    result_out: dict | None = None,
+):
     """Return a StoryBundle for the extreme_signals dispatch loop.
 
     All extreme_signals types now have bundle builders (full port,
@@ -655,6 +777,13 @@ def _two_bot_bundle_for_extreme_signal(strongest_type: str, strongest_signal):
             return intern.build_anomaly_bundle(strongest_signal)
     except Exception as exc:
         print(f"[two_bot.dispatch] Bundle build failed for {strongest_type}: {exc}")
+        if result_out is not None:
+            result_out["kill_stage"] = "bundle_build"
+            result_out["kill_reason"] = f"{type(exc).__name__}: {exc}"
+        return None
+    if result_out is not None:
+        result_out["kill_stage"] = "bundle_build"
+        result_out["kill_reason"] = f"No bundle builder for {strongest_type!r}"
     return None
 
 
@@ -829,6 +958,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     # for the routing decision (flat summary vs. multi-station roll-call).
     simultaneous_record_stations: list[dict] = []
     ghcn_pipeline_metrics: dict = {}
+    open_meteo_pipeline_metrics: dict = {}
     # Per-bundle decision log for the dashboard drill-down. Each row records
     # which bundle was processed, what its strongest signal was (if any), and
     # whether it ended up as a draft, rejection, duplicate, or no-signal.
@@ -844,7 +974,10 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 metrics_out=ghcn_pipeline_metrics,
             )
         else:
-            bundles, country_records = open_meteo.check_extreme_signals_for_cities(cities)
+            bundles, country_records = _check_city_extreme_signals(
+                cities,
+                open_meteo_pipeline_metrics,
+            )
         source_promoted = 0
         source_drafted = 0
         for bundle in bundles:
@@ -1133,8 +1266,11 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 # doesn't have a bundle builder, we DROP the signal
                 # rather than fall through to voice gen — a missed
                 # tweet is better than a Gemini-Flash-written tweet.
+                bundle_result: dict = {}
                 two_bot_bundle = _two_bot_bundle_for_extreme_signal(
-                    strongest_type, strongest_signal,
+                    strongest_type,
+                    strongest_signal,
+                    result_out=bundle_result,
                 )
                 if two_bot_bundle is None:
                     print(
@@ -1142,6 +1278,20 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         f"extreme-signal type {strongest_type!r}; "
                         f"dropping {strongest_event_id}"
                     )
+                    ctx = _CURRENT_SUPPRESSION_CTX
+                    if ctx is not None:
+                        _record_downstream_suppression(
+                            bot_state=ctx["bot_state"],
+                            source=ctx.get("source"),
+                            run_id=ctx.get("run_id"),
+                            event_id=strongest_event_id,
+                            score=strongest_score,
+                            kill_stage=bundle_result.get("kill_stage", "bundle_build"),
+                            kill_reason=bundle_result.get(
+                                "kill_reason", "Bundle build failed"
+                            ),
+                            summary=strongest_city or strongest_headline or None,
+                        )
                     continue
 
                 two_bot_saved = _try_two_bot_draft(
@@ -1396,7 +1546,6 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         # Prune stale streaks at cycle end
         state.prune_stale_record_streaks(bot_state)
 
-        state.reset_data_source_failure(bot_state, _signals_provider)
         total_observed = sum(signal_counts.values()) + country_count
         # Build a structured note. For GHCN: surface the funnel
         # (active → with-obs → checked → raw_signals → bundles → drafted)
@@ -1406,8 +1555,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             f"anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} "
             f"streak:{signal_counts['streak']} country:{country_count}"
         )
+        source_status = "success"
         details: dict | None = None
         if _signals_provider == "ghcn" and ghcn_pipeline_metrics:
+            diff_missing = int(ghcn_pipeline_metrics.get("diff_dates_missing", 0) or 0)
+            if diff_missing:
+                source_status = "degraded"
             funnel = (
                 f"stations_active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
                 f"stations_with_obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
@@ -1426,10 +1579,33 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 "events": ghcn_event_log[:200],
             }
         else:
+            city_failures = int(open_meteo_pipeline_metrics.get("city_fetch_failures", 0) or 0)
+            city_readings = int(open_meteo_pipeline_metrics.get("city_readings", 0) or 0)
+            if city_failures and city_readings:
+                source_status = "degraded"
+            elif city_failures and not city_readings:
+                source_status = "failed"
             note = f"provider:{_signals_provider} {signal_breakdown}"
+            if open_meteo_pipeline_metrics:
+                details = {
+                    "provider": "open_meteo",
+                    "pipeline_metrics": dict(open_meteo_pipeline_metrics),
+                }
+        if source_status == "failed":
+            fail_count = state.increment_data_source_failure(bot_state, _signals_provider)
+            try:
+                if fail_count >= 3:
+                    print(
+                        f"[alerts] STRUCTURAL ALERT: {_signals_provider} "
+                        f"has failed {fail_count} consecutive cycles"
+                    )
+            except TypeError:
+                pass
+        else:
+            state.reset_data_source_failure(bot_state, _signals_provider)
         _record_source_run(
             current_run, "open_meteo_extreme_signals", signals_start,
-            status="success", observed=total_observed,
+            status=source_status, observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
             note=note, details=details,
         )
@@ -1451,7 +1627,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking wildfires...")
     firms_start = time.perf_counter()
     try:
-        fires = firms.fetch_fires()
+        fires = _fetch_strict(firms.fetch_fires)
         source_promoted = 0
         source_drafted = 0
         for fire in fires:
@@ -1492,8 +1668,25 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             # persistence.
             from src.two_bot.pipeline import generate_fire_draft
 
-            draft = generate_fire_draft(fire, bot_state)
+            pipeline_result: dict = {}
+            draft = generate_fire_draft(
+                fire,
+                bot_state,
+                result_out=pipeline_result,
+            )
             if draft is None:
+                ctx = _CURRENT_SUPPRESSION_CTX
+                if ctx is not None:
+                    _record_downstream_suppression(
+                        bot_state=ctx["bot_state"],
+                        source=ctx.get("source"),
+                        run_id=ctx.get("run_id"),
+                        event_id=fire.event_id,
+                        score=score,
+                        kill_stage=pipeline_result.get("kill_stage", "unknown"),
+                        kill_reason=pipeline_result.get("kill_reason", "unknown"),
+                        summary=fire.nearest_city or fire.country or None,
+                    )
                 continue
             review_context["two_bot"] = draft["two_bot_metadata"]
             if save_draft(
@@ -1511,6 +1704,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             current_run, "firms", firms_start,
             status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted
         )
+    except SourceSkipped as e:
+        print(f"[alerts] FIRMS skipped: {e}")
+        _record_source_run(
+            current_run, "firms", firms_start,
+            status="skipped", note=str(e),
+        )
     except Exception as e:
         print(f"[alerts] FIRMS error: {e}")
         state.log_error(bot_state, "firms", str(e))
@@ -1527,7 +1726,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         source_promoted = 0
         source_drafted = 0
         try:
-            complexes = fire_footprint.fetch_active_fire_perimeters()
+            complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters)
             crossings = fire_footprint.detect_tier_crossings(complexes, bot_state)
             for fc in crossings:
                 try:
@@ -1608,7 +1807,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     )
     co2_start = time.perf_counter()
     try:
-        readings = co2.fetch_co2_data()
+        readings = _fetch_strict(co2.fetch_co2_data)
         milestone = co2.detect_milestone(readings)
         source_promoted = 0
         source_drafted = 0
@@ -1661,7 +1860,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking NWS severe weather...")
     nws_start = time.perf_counter()
     try:
-        alerts = nws_alerts.fetch_alerts()
+        alerts = _fetch_strict(nws_alerts.fetch_alerts)
         source_promoted = 0
         source_drafted = 0
         for alert in alerts:
@@ -1715,7 +1914,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking GDACS global disasters...")
     gdacs_start = time.perf_counter()
     try:
-        disasters = gdacs.fetch_disasters(min_severity="Red")
+        disasters = _fetch_strict(gdacs.fetch_disasters, min_severity="Red")
         source_promoted = 0
         source_drafted = 0
         for disaster in disasters:
@@ -1768,7 +1967,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         for hemisphere in ("Arctic", "Antarctic"):
             sea_ice_start = time.perf_counter()
             try:
-                readings = sea_ice.fetch_sea_ice(hemisphere=hemisphere)
+                readings = _fetch_strict(sea_ice.fetch_sea_ice, hemisphere=hemisphere)
                 record = sea_ice.detect_record_low(readings)
                 score = None
                 if record and not state.is_duplicate(bot_state, record.event_id):
@@ -1827,7 +2026,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         print("[alerts] Checking US drought conditions...")
         drought_start = time.perf_counter()
         try:
-            drought_updates = drought.fetch_drought_data()
+            drought_updates = _fetch_strict(drought.fetch_drought_data)
             source_promoted = 0
             source_drafted = 0
             if drought_updates:
@@ -1903,7 +2102,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         print("[alerts] Checking ENSO status...")
         enso_start = time.perf_counter()
         try:
-            enso_readings = enso.fetch_enso_data()
+            enso_readings = _fetch_strict(enso.fetch_enso_data)
             transition = enso.detect_transition(enso_readings)
             score = None
             if transition and not state.is_duplicate(bot_state, transition["event_id"]):
@@ -1959,7 +2158,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking ocean conditions...")
     ocean_start = time.perf_counter()
     try:
-        ocean_readings = ocean.fetch_ocean_conditions()
+        ocean_readings = _fetch_strict(ocean.fetch_ocean_conditions)
         extreme_waves = ocean.detect_extreme_waves(ocean_readings)
         source_promoted = 0
         source_drafted = 0
@@ -2008,7 +2207,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking global ocean SST...")
     sst_start = time.perf_counter()
     try:
-        obs = ocean_sst.fetch_global_sst()
+        obs = _fetch_strict(ocean_sst.fetch_global_sst)
         source_promoted = 0
         source_drafted = 0
         event = None
@@ -2069,7 +2268,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking coastal water levels...")
     water_levels_start = time.perf_counter()
     try:
-        wl_readings = water_levels.fetch_water_levels()
+        wl_readings = _fetch_strict(water_levels.fetch_water_levels)
         surges = water_levels.detect_storm_surge(wl_readings)
         source_promoted = 0
         source_drafted = 0
@@ -2119,7 +2318,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     print("[alerts] Checking river flood stages...")
     river_start = time.perf_counter()
     try:
-        river_readings = river_gauges.fetch_river_levels()
+        river_readings = _fetch_strict(river_gauges.fetch_river_levels)
         floods = river_gauges.detect_floods(river_readings)
         source_promoted = 0
         source_drafted = 0
@@ -2181,7 +2380,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         status="skipped", note="annual cap reached",
                     )
                     continue
-                readings = ice_mass.fetch_grace_mass(region=region)
+                readings = _fetch_strict(ice_mass.fetch_grace_mass, region=region)
                 if not readings:
                     _record_source_run(
                         current_run, region_key, im_start,
@@ -2284,6 +2483,12 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     current_run, region_key, im_start,
                     status="success", observed=len(readings),
                     promoted=source_promoted, drafted=source_drafted,
+                )
+            except SourceSkipped as e:
+                print(f"[alerts] ice_mass {region} skipped: {e}")
+                _record_source_run(
+                    current_run, region_key, im_start,
+                    status="skipped", note=str(e),
                 )
             except Exception as e:
                 print(f"[alerts] ice_mass {region} error: {e}")
@@ -2481,6 +2686,18 @@ def _prune_weakest_cycle_drafts(
     print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
     for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
         print(f"[alerts]   Pruned: score={s} {d.get('text', '')[:50]}...")
+        ctx = _CURRENT_SUPPRESSION_CTX
+        if ctx is not None:
+            _record_downstream_suppression(
+                bot_state=bot_state,
+                source=ctx.get("source"),
+                run_id=ctx.get("run_id"),
+                event_id=d.get("event_id", ""),
+                score=d.get("score") or {},
+                kill_stage="cycle_cap",
+                kill_reason=f"Pruned by MAX_DRAFTS_PER_CYCLE={MAX_DRAFTS_PER_CYCLE}",
+                summary=d.get("text", "")[:120] or d.get("event_id"),
+            )
     return MAX_DRAFTS_PER_CYCLE
 
 
