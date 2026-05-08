@@ -494,3 +494,153 @@ def test_build_hot10_bundle_centers_on_leader():
     assert bundle.signal_kind == "hot10"
     assert bundle.where == "Phoenix, US"
     assert bundle.headline_metric["value"] == 9.2
+
+
+class TestStateAndObservationKindEnrichment:
+    """Regression: writer hallucinations on 2026-05-08 added "Washington"
+    (state) and "night" / "afternoon" (observation kind) that weren't
+    in the bundle. Fact-check correctly rejected them. Surfacing both
+    grounds the writer + lets the fact-check pass entity claims."""
+
+    def test_monthly_low_bundle_includes_state_and_overnight_low(self):
+        from src.data.open_meteo import MonthlyRecord
+        from src.two_bot.intern import build_monthly_high_bundle
+
+        ev = MonthlyRecord(
+            city="Sissonville",
+            country="United States",
+            kind="low",
+            month=5,
+            new_temp_c=-2.2,
+            old_record_c=1.0,
+            old_record_year=1995,
+            years_of_data=30,
+            event_id="monthly_low_USC00468191_05_2026-05-04",
+            state="West Virginia",
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("state") == "West Virginia"
+        assert labels.get("observation_kind") == "overnight low"
+        # where now includes the state
+        assert bundle.where == "Sissonville, West Virginia, United States"
+
+    def test_monthly_high_bundle_includes_state_and_afternoon_high(self):
+        from src.data.open_meteo import MonthlyRecord
+        from src.two_bot.intern import build_monthly_high_bundle
+
+        ev = MonthlyRecord(
+            city="Phoenix",
+            country="United States",
+            kind="high",
+            month=5,
+            new_temp_c=46.0,
+            old_record_c=44.0,
+            old_record_year=2018,
+            years_of_data=30,
+            event_id="monthly_high_X_05_2026-05-04",
+            state="Arizona",
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("state") == "Arizona"
+        assert labels.get("observation_kind") == "afternoon high"
+
+    def test_anomaly_cold_bundle_uses_overnight_low(self):
+        from src.data.open_meteo import AnomalyEvent
+        from src.two_bot.intern import build_anomaly_bundle
+
+        ev = AnomalyEvent(
+            city="Apalachicola",
+            country="United States",
+            today_temp_c=9.4,
+            historical_mean_c=18.9,
+            anomaly_c=-9.5,
+            years_of_data=30,
+            event_id="anomaly_cold_X_2026-05-04",
+            state="Florida",
+        )
+        bundle = build_anomaly_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("state") == "Florida"
+        assert labels.get("observation_kind") == "overnight low"
+
+    def test_calendar_record_bundle_with_state_and_kind(self):
+        from src.data.open_meteo import RecordEvent
+        from src.two_bot.intern import build_record_bundle
+
+        ev = RecordEvent(
+            city="Dayton",
+            country="United States",
+            new_temp_c=-2.0,
+            old_record_c=2.0,
+            old_record_year=2010,
+            event_id="cal_low_X_2026-05-08",
+            kind="low",
+            state="Washington",
+        )
+        bundle = build_record_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("state") == "Washington"
+        assert labels.get("observation_kind") == "overnight low"
+        assert bundle.where == "Dayton, Washington, United States"
+
+    def test_no_state_no_state_fact(self):
+        """Open-Meteo path / non-US stations: state is None, no state fact."""
+        from src.data.open_meteo import MonthlyRecord
+        from src.two_bot.intern import build_monthly_high_bundle
+
+        ev = MonthlyRecord(
+            city="Verkhoyansk",
+            country="Russia",
+            kind="low",
+            month=5,
+            new_temp_c=-15.0,
+            old_record_c=-12.0,
+            old_record_year=1990,
+            years_of_data=30,
+            event_id="monthly_low_X_05",
+            state=None,
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert "state" not in labels
+        # observation_kind still set based on kind
+        assert labels.get("observation_kind") == "overnight low"
+        assert bundle.where == "Verkhoyansk, Russia"
+
+
+class TestExpandUsState:
+    """The state-code → full-name mapping for US stations."""
+
+    def test_expands_known_us_states(self):
+        from src.data.ghcn import expand_us_state
+        assert expand_us_state("WV", "US") == "West Virginia"
+        assert expand_us_state("WA", "US") == "Washington"
+        assert expand_us_state("FL", "US") == "Florida"
+        assert expand_us_state("MN", "US") == "Minnesota"
+
+    def test_handles_lowercase_input(self):
+        from src.data.ghcn import expand_us_state
+        assert expand_us_state("wv", "US") == "West Virginia"
+        assert expand_us_state(" CA ", "US") == "California"
+
+    def test_returns_none_for_non_us(self):
+        from src.data.ghcn import expand_us_state
+        # Canadian provinces have 2-letter codes but we don't expand them
+        # because the mapping is US-specific.
+        assert expand_us_state("ON", "CA") is None  # Ontario
+        assert expand_us_state("BC", "CA") is None  # British Columbia
+
+    def test_returns_none_for_unknown_codes(self):
+        from src.data.ghcn import expand_us_state
+        assert expand_us_state("ZZ", "US") is None
+        assert expand_us_state("", "US") is None
+        assert expand_us_state(None, "US") is None
+        assert expand_us_state("WA", None) is None
+
+    def test_handles_us_territories(self):
+        from src.data.ghcn import expand_us_state
+        # Per GHCN, US territories use the US country prefix in some cases
+        assert expand_us_state("PR", "US") == "Puerto Rico"
+        assert expand_us_state("DC", "US") == "District of Columbia"

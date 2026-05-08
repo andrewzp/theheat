@@ -68,6 +68,48 @@ _AIRPORT_SUFFIX_RE = re.compile(
 _WFO_PREFIX_RE = re.compile(r"^WFO\s+", re.IGNORECASE)
 
 
+# US state code -> full name. GHCN station inventory uses 2-letter codes;
+# the writer needs the full name to write naturally ("West Virginia" not
+# "WV") and the fact-checker needs the same form to pass entity checks.
+# Observed 2026-05-08: writer was guessing state from world knowledge
+# ("Dayton, Washington") and fact-checker rejected because state wasn't
+# in the bundle.
+_US_STATE_NAMES: dict[str, str] = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut",
+    "DE": "Delaware", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii",
+    "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine",
+    "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan",
+    "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri",
+    "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
+    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico",
+    "NY": "New York", "NC": "North Carolina", "ND": "North Dakota",
+    "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas",
+    "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+    "DC": "District of Columbia",
+    "PR": "Puerto Rico", "VI": "U.S. Virgin Islands", "GU": "Guam",
+    "AS": "American Samoa", "MP": "Northern Mariana Islands",
+}
+
+
+def expand_us_state(code: str | None, country_code: str | None) -> str | None:
+    """Map a 2-letter state/territory code to its full name.
+
+    Only applied for US stations (country_code starts with "US"). Returns
+    None for foreign stations (Canadian provinces, etc.) so the writer
+    doesn't get a misleading "WA = Washington" expansion for, say, Canada.
+    """
+    if not code or not country_code:
+        return None
+    if not country_code.upper().startswith("US"):
+        return None
+    return _US_STATE_NAMES.get(code.strip().upper())
+
+
 def normalize_station_name(raw: str) -> str:
     """Convert a GHCN station name to a human-readable place name.
 
@@ -307,6 +349,10 @@ def _detect_signals_for_station(
     country_code = station.get("country_code", "")
     # Prefer country_name for display; fall back to code
     country = country_name or country_code
+    # Full state name for US stations ("West Virginia", not "WV"). None for
+    # foreign stations (Canadian provinces don't get expanded — we don't
+    # have that mapping and "WA" being Washington is a US-specific safe bet).
+    state = expand_us_state(station.get("state"), country_code)
 
     obs_list = [obs] if isinstance(obs, DailyObs) else list(obs)
     if not obs_list:
@@ -359,6 +405,7 @@ def _detect_signals_for_station(
                     years_of_data=archive_years,
                     event_id=f"all_time_high_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
+                    state=state,
                 )
 
             monthly_max = thresholds.monthly_max.get(month)
@@ -371,6 +418,7 @@ def _detect_signals_for_station(
                     years_of_data=archive_years,
                     event_id=f"monthly_high_{sid_key}_{month:02d}_{obs_date_iso}",
                     signal_date=obs_date,
+                    state=state,
                 )
 
             cal_max = thresholds.calendar_date_max.get(md)
@@ -383,6 +431,7 @@ def _detect_signals_for_station(
                     event_id=f"cal_high_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
                     kind="high",
+                    state=state,
                 )
 
             clim_mean = thresholds.climatological_mean.get(month)
@@ -397,6 +446,7 @@ def _detect_signals_for_station(
                         years_of_data=archive_years,
                         event_id=f"anomaly_hot_{sid_key}_{obs_date_iso}",
                         signal_date=obs_date,
+                        state=state,
                     )
 
         elif o.element == "TMIN":
@@ -422,6 +472,7 @@ def _detect_signals_for_station(
                     years_of_data=archive_years,
                     event_id=f"all_time_low_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
+                    state=state,
                 )
 
             monthly_min = thresholds.monthly_min.get(month)
@@ -434,6 +485,7 @@ def _detect_signals_for_station(
                     years_of_data=archive_years,
                     event_id=f"monthly_low_{sid_key}_{month:02d}_{obs_date_iso}",
                     signal_date=obs_date,
+                    state=state,
                 )
 
             cal_min = thresholds.calendar_date_min.get(md)
@@ -446,6 +498,7 @@ def _detect_signals_for_station(
                     event_id=f"cal_low_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
                     kind="low",
+                    state=state,
                 )
 
             clim_mean = thresholds.climatological_mean_min.get(month)
@@ -460,6 +513,7 @@ def _detect_signals_for_station(
                         years_of_data=archive_years,
                         event_id=f"anomaly_cold_{sid_key}_{obs_date_iso}",
                         signal_date=obs_date,
+                        state=state,
                     )
 
     if not usable:

@@ -35,6 +35,7 @@ class RecordEvent:
     event_id: str
     signal_date: date | None = None  # date reading was observed; None → use date.today()
     kind: str = "high"  # "high" or "low"; default preserves legacy positional calls
+    state: str | None = None  # full state name (e.g. "West Virginia") for US stations; None elsewhere
 
 
 @dataclass
@@ -49,6 +50,7 @@ class AllTimeRecord:
     years_of_data: int  # how many years back the archive goes
     event_id: str
     signal_date: date | None = None
+    state: str | None = None
 
 
 @dataclass
@@ -64,6 +66,7 @@ class MonthlyRecord:
     years_of_data: int
     event_id: str
     signal_date: date | None = None
+    state: str | None = None
 
 
 @dataclass
@@ -77,6 +80,7 @@ class AnomalyEvent:
     years_of_data: int
     event_id: str
     signal_date: date | None = None
+    state: str | None = None
 
 
 @dataclass

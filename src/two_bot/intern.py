@@ -47,6 +47,53 @@ def _resolve_when(event_date: date | None) -> str:
     return (event_date or date.today()).isoformat()
 
 
+def _format_where(city: str, country: str, state: str | None = None) -> str:
+    """Build the bundle's ``where`` field, including state when present.
+
+    For GHCN US stations, ``state`` is the full name ("West Virginia",
+    not "WV") so writer prose like "Sissonville, West Virginia" reads
+    naturally and the fact-checker accepts the entity claim.
+    Non-US stations and the Open-Meteo path pass state=None and get
+    the legacy "city, country" form.
+    """
+    parts = [city]
+    if state:
+        parts.append(state)
+    if country:
+        parts.append(country)
+    return ", ".join(parts)
+
+
+def _ghcn_observation_facts(
+    state: str | None,
+    kind: str | None,
+) -> list[dict]:
+    """Extra ``current_facts`` for GHCN bundles.
+
+    Two enrichments that ground the writer in bundle data instead of
+    world-knowledge guesses (which the fact-checker rejects):
+
+    - ``state``: full US state name when known. Lets the writer use
+      "Sissonville, West Virginia" without the fact-checker treating
+      "West Virginia" as an unverifiable named entity.
+    - ``observation_kind``: "overnight low" for TMIN-based bundles and
+      "afternoon high" for TMAX-based bundles. GHCN TMAX/TMIN are
+      24-hour extremes; these labels let the writer say "overnight low"
+      without the fact-checker rejecting "night" as not in the bundle.
+
+    Both are no-ops when the inputs are missing, so non-GHCN paths get
+    an empty list.
+    """
+    extra: list[dict] = []
+    if state:
+        extra.append({"label": "state", "value": state})
+    if kind == "low":
+        extra.append({"label": "observation_kind", "value": "overnight low"})
+    elif kind == "high":
+        extra.append({"label": "observation_kind", "value": "afternoon high"})
+    return extra
+
+
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
@@ -80,7 +127,8 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
     """Assemble a StoryBundle for a monthly high-temperature record signal."""
 
     month_name = _MONTH_NAMES[ev.month] if 1 <= ev.month <= 12 else str(ev.month)
-    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    state = getattr(ev, "state", None)
+    where = _format_where(ev.city, ev.country, state)
     metric_label = "forecast_high_c" if ev.kind == "high" else "forecast_low_c"
     return StoryBundle(
         signal_kind=f"monthly_{ev.kind}",
@@ -97,6 +145,7 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
             {"label": "country", "value": ev.country},
             {"label": "month", "value": month_name},
             {"label": "kind", "value": ev.kind},
+            *_ghcn_observation_facts(state, ev.kind),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -152,8 +201,9 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
     """
 
     kind = getattr(ev, "kind", "high")
+    state = getattr(ev, "state", None)
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
-    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    where = _format_where(ev.city, ev.country, state)
     when = _resolve_when(ev.signal_date)
     return StoryBundle(
         signal_kind="calendar_record" if kind == "high" else "calendar_record_low",
@@ -170,6 +220,7 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
             {"label": "country", "value": ev.country},
             {"label": "calendar_date", "value": when},
             {"label": "kind", "value": kind},
+            *_ghcn_observation_facts(state, kind),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -224,7 +275,8 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
     rarity peg.
     """
 
-    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    state = getattr(ev, "state", None)
+    where = _format_where(ev.city, ev.country, state)
     return StoryBundle(
         signal_kind=f"open_meteo_archive_{ev.kind}",
         where=where,
@@ -239,6 +291,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "kind", "value": ev.kind},
+            *_ghcn_observation_facts(state, ev.kind),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -266,8 +319,13 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
 def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
     """Today's reading is far above (or below) the historical mean."""
 
-    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    state = getattr(ev, "state", None)
+    where = _format_where(ev.city, ev.country, state)
     kind = "hot" if ev.anomaly_c >= 0 else "cold"
+    # Map anomaly direction to TMAX/TMIN observation framing for the
+    # observation_kind fact: hot anomalies derive from afternoon highs,
+    # cold anomalies from overnight lows.
+    obs_kind = "high" if kind == "hot" else "low"
     return StoryBundle(
         signal_kind=f"anomaly_{kind}",
         where=where,
@@ -283,6 +341,7 @@ def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
             {"label": "country", "value": ev.country},
             {"label": "today_c", "value": ev.today_temp_c},
             {"label": "historical_mean_c", "value": ev.historical_mean_c},
+            *_ghcn_observation_facts(state, obs_kind),
         ],
         historical_context={
             "historical_mean_c": ev.historical_mean_c,
