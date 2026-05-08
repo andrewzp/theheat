@@ -330,3 +330,51 @@ class TestBundleJsonHandlesDates:
         assert result.passed is True
         assert "2026-05-04" in captured["prompt"]
 
+
+class TestWriterPromptAntiSpeculation:
+    """Regression: writer was inventing temporal and seasonal framing not in the
+    bundle, causing fact-check kills. Two confirmed kills on 2026-05-08 (Dayton WY):
+    - 'January reading' — invented seasonal framing
+    - 'three weeks into meteorological spring' — invented + factually wrong
+
+    The HARD RULES now carry an explicit anti-fabricated-context bullet. These
+    tests assert the prompt contains the guard and does NOT contain blanket
+    anti-voice phrases that would kill legitimate editorial flourish like
+    'Fruit trees in the Kanawha Valley were not consulted.'
+    """
+
+    def _get_system_prompt(self):
+        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+        return WRITER_SYSTEM_PROMPT
+
+    def test_anti_speculation_bullet_present(self):
+        """The HARD RULES section must contain the fabricated-context guard."""
+        prompt = self._get_system_prompt()
+        assert "NO FABRICATED CONTEXT" in prompt
+
+    def test_bullet_names_temporal_framing_examples(self):
+        """Bullet must call out specific temporal-framing failure patterns."""
+        prompt = self._get_system_prompt()
+        assert "three weeks into meteorological spring" in prompt
+        assert "January reading" in prompt
+
+    def test_bullet_names_seasonal_biological_examples(self):
+        """Bullet must call out seasonal/biological invented context."""
+        prompt = self._get_system_prompt()
+        assert "flowers are already up" in prompt
+        assert "the ground froze" in prompt
+
+    def test_bullet_explicitly_permits_anthropomorphic_flourish(self):
+        """The Sissonville regression guard: anthropomorphic voice must be
+        explicitly exempted so the model doesn't over-correct and kill
+        editorial lines like 'Fruit trees...were not consulted.'"""
+        prompt = self._get_system_prompt()
+        assert "Anthropomorphic flourish" in prompt
+        assert "not consulted" in prompt  # the canonical example is in the prompt
+
+    def test_prompt_does_not_contain_blanket_anti_voice_ban(self):
+        """Confirm no blunt 'no anthropomorphism' rule was accidentally added."""
+        prompt = self._get_system_prompt()
+        assert "no anthropomorphism" not in prompt.lower()
+        assert "no anthropomorphic" not in prompt.lower()
+
