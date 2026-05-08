@@ -195,6 +195,10 @@ def test_build_record_bundle_falls_back_to_city_when_country_missing():
 
 
 def test_build_record_bundle_marks_calendar_low_records():
+    # Open-Meteo path (default source): forecast_low_c, no state passed.
+    # (The pre-existing code had a bug: low used "observed_low_c" while
+    # high used "forecast_high_c". Both now go through _headline_temp_label
+    # which emits "forecast_*_c" for Open-Meteo and "observed_*_c" for GHCN.)
     ev = RecordEvent(
         city="Nome",
         country="United States",
@@ -208,7 +212,7 @@ def test_build_record_bundle_marks_calendar_low_records():
     bundle = build_record_bundle(ev)
 
     assert bundle.signal_kind == "calendar_record_low"
-    assert bundle.headline_metric["label"] == "observed_low_c"
+    assert bundle.headline_metric["label"] == "forecast_low_c"
     assert bundle.headline_metric["value"] == -33.0
     assert bundle.headline_metric["unit"] == "C"
     assert {"label": "kind", "value": "low"} in bundle.current_facts
@@ -490,11 +494,16 @@ def test_build_hot10_bundle_centers_on_leader():
 
 class TestStateAndObservationKindEnrichment:
     """Regression: writer hallucinations on 2026-05-08 added "Washington"
-    (state) and "night" / "afternoon" (observation kind) that weren't
-    in the bundle. Fact-check correctly rejected them. Surfacing both
-    grounds the writer + lets the fact-check pass entity claims."""
+    (state) and time-of-day prose ("night" / "afternoon") that weren't
+    in the bundle. Fact-check correctly rejected them. Surfacing state
+    grounds the writer + lets the fact-check pass entity claims.
 
-    def test_monthly_low_bundle_includes_state_and_overnight_low(self):
+    Updated (Codex findings #2 + #3): observation_kind now uses
+    source-neutral daily-extrema labels (``daily_minimum`` /
+    ``daily_maximum``) and is only emitted when ``state`` is present.
+    """
+
+    def test_monthly_low_bundle_includes_state_and_daily_minimum(self):
         from src.data.open_meteo import MonthlyRecord
         from src.two_bot.intern import build_monthly_high_bundle
 
@@ -513,11 +522,11 @@ class TestStateAndObservationKindEnrichment:
         bundle = build_monthly_high_bundle(ev)
         labels = {f["label"]: f["value"] for f in bundle.current_facts}
         assert labels.get("state") == "West Virginia"
-        assert labels.get("observation_kind") == "overnight low"
+        assert labels.get("observation_kind") == "daily_minimum"
         # where now includes the state
         assert bundle.where == "Sissonville, West Virginia, United States"
 
-    def test_monthly_high_bundle_includes_state_and_afternoon_high(self):
+    def test_monthly_high_bundle_includes_state_and_daily_maximum(self):
         from src.data.open_meteo import MonthlyRecord
         from src.two_bot.intern import build_monthly_high_bundle
 
@@ -536,9 +545,9 @@ class TestStateAndObservationKindEnrichment:
         bundle = build_monthly_high_bundle(ev)
         labels = {f["label"]: f["value"] for f in bundle.current_facts}
         assert labels.get("state") == "Arizona"
-        assert labels.get("observation_kind") == "afternoon high"
+        assert labels.get("observation_kind") == "daily_maximum"
 
-    def test_anomaly_cold_bundle_uses_overnight_low(self):
+    def test_anomaly_cold_bundle_uses_daily_minimum(self):
         from src.data.open_meteo import AnomalyEvent
         from src.two_bot.intern import build_anomaly_bundle
 
@@ -555,7 +564,7 @@ class TestStateAndObservationKindEnrichment:
         bundle = build_anomaly_bundle(ev)
         labels = {f["label"]: f["value"] for f in bundle.current_facts}
         assert labels.get("state") == "Florida"
-        assert labels.get("observation_kind") == "overnight low"
+        assert labels.get("observation_kind") == "daily_minimum"
 
     def test_calendar_record_bundle_with_state_and_kind(self):
         from src.data.open_meteo import RecordEvent
@@ -574,11 +583,12 @@ class TestStateAndObservationKindEnrichment:
         bundle = build_record_bundle(ev)
         labels = {f["label"]: f["value"] for f in bundle.current_facts}
         assert labels.get("state") == "Washington"
-        assert labels.get("observation_kind") == "overnight low"
+        assert labels.get("observation_kind") == "daily_minimum"
         assert bundle.where == "Dayton, Washington, United States"
 
-    def test_no_state_no_state_fact(self):
-        """Open-Meteo path / non-US stations: state is None, no state fact."""
+    def test_no_state_no_state_or_observation_kind_fact(self):
+        """Open-Meteo path / non-US stations: state is None → no state fact
+        and no observation_kind fact (guard is on state presence)."""
         from src.data.open_meteo import MonthlyRecord
         from src.two_bot.intern import build_monthly_high_bundle
 
@@ -597,9 +607,90 @@ class TestStateAndObservationKindEnrichment:
         bundle = build_monthly_high_bundle(ev)
         labels = {f["label"]: f["value"] for f in bundle.current_facts}
         assert "state" not in labels
-        # observation_kind still set based on kind
-        assert labels.get("observation_kind") == "overnight low"
+        # observation_kind must NOT appear when state is absent
+        assert "observation_kind" not in labels
         assert bundle.where == "Verkhoyansk, Russia"
+
+
+class TestCodexFindingsObservedLabels:
+    """Codex findings #2 + #3 (both medium severity).
+
+    A) GHCN bundle builders must emit ``observed_*_c`` in headline_metric,
+       not ``forecast_*_c``.  Open-Meteo builders must still emit
+       ``forecast_*_c``.
+
+    B) ``observation_kind`` must use source-neutral daily extrema labels
+       (``daily_minimum`` / ``daily_maximum``) not time-of-day prose.
+       It must only be emitted when ``state`` is present (GHCN path).
+    """
+
+    def test_ghcn_monthly_bundle_emits_observed_label(self):
+        """GHCN monthly-high/low builder → observed_*_c in headline_metric."""
+        ev = MonthlyRecord(
+            city="Sissonville",
+            country="United States",
+            kind="low",
+            month=5,
+            new_temp_c=-2.2,
+            old_record_c=1.0,
+            old_record_year=1995,
+            years_of_data=30,
+            event_id="monthly_low_GHCN_05",
+            state="West Virginia",
+        )
+        bundle = build_monthly_high_bundle(ev, source="ghcn")
+        assert bundle.headline_metric["label"] == "observed_low_c"
+
+    def test_open_meteo_monthly_bundle_still_emits_forecast_label(self):
+        """Open-Meteo monthly builder → forecast_*_c in headline_metric."""
+        ev = MonthlyRecord(
+            city="Conakry",
+            country="Guinea",
+            kind="high",
+            month=5,
+            new_temp_c=35.4,
+            old_record_c=34.3,
+            old_record_year=2022,
+            years_of_data=30,
+            event_id="meteo_monthly_Conakry_2026-05-01",
+        )
+        bundle = build_monthly_high_bundle(ev)
+        assert bundle.headline_metric["label"] == "forecast_high_c"
+
+    def test_ghcn_bundle_observation_kind_is_daily_minimum_when_state_present(self):
+        """GHCN low bundle with state → observation_kind=daily_minimum."""
+        ev = MonthlyRecord(
+            city="Sissonville",
+            country="United States",
+            kind="low",
+            month=5,
+            new_temp_c=-2.2,
+            old_record_c=1.0,
+            old_record_year=1995,
+            years_of_data=30,
+            event_id="monthly_low_GHCN_05_obs",
+            state="West Virginia",
+        )
+        bundle = build_monthly_high_bundle(ev, source="ghcn")
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("observation_kind") == "daily_minimum"
+
+    def test_no_observation_kind_when_state_absent(self):
+        """When state is None, observation_kind must NOT appear in bundle."""
+        ev = MonthlyRecord(
+            city="Conakry",
+            country="Guinea",
+            kind="low",
+            month=5,
+            new_temp_c=22.1,
+            old_record_c=23.0,
+            old_record_year=2010,
+            years_of_data=30,
+            event_id="monthly_low_Conakry_no_state",
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"] for f in bundle.current_facts}
+        assert "observation_kind" not in labels
 
 
 class TestExpandUsState:

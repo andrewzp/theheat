@@ -76,10 +76,12 @@ def _ghcn_observation_facts(
     - ``state``: full US state name when known. Lets the writer use
       "Sissonville, West Virginia" without the fact-checker treating
       "West Virginia" as an unverifiable named entity.
-    - ``observation_kind``: "overnight low" for TMIN-based bundles and
-      "afternoon high" for TMAX-based bundles. GHCN TMAX/TMIN are
-      24-hour extremes; these labels let the writer say "overnight low"
-      without the fact-checker rejecting "night" as not in the bundle.
+    - ``observation_kind``: source-neutral label for the daily extremum.
+      GHCN TMIN/TMAX are 24-hour extrema, not timestamped observations —
+      a cold front past sunrise can set the daily min; a warm overnight
+      event can set the max. Using ``daily_minimum`` / ``daily_maximum``
+      avoids implying time-of-day that the data does not prove.
+      Only emitted when ``state`` is present (i.e. confirmed GHCN path).
 
     Both are no-ops when the inputs are missing, so non-GHCN paths get
     an empty list.
@@ -87,11 +89,28 @@ def _ghcn_observation_facts(
     extra: list[dict] = []
     if state:
         extra.append({"label": "state", "value": state})
-    if kind == "low":
-        extra.append({"label": "observation_kind", "value": "overnight low"})
-    elif kind == "high":
-        extra.append({"label": "observation_kind", "value": "afternoon high"})
+        if kind == "low":
+            extra.append({"label": "observation_kind", "value": "daily_minimum"})
+        elif kind == "high":
+            extra.append({"label": "observation_kind", "value": "daily_maximum"})
     return extra
+
+
+def _headline_temp_label(kind: str, source: str) -> str:
+    """Return the correct headline_metric label for a temperature record.
+
+    GHCN records are already-observed station readings; Open-Meteo records
+    are model forecasts. Using ``observed_*_c`` for GHCN prevents the writer
+    from generating "forecast" prose for data that has already happened.
+
+    Args:
+        kind:   ``"high"`` or ``"low"``.
+        source: ``"ghcn"`` for GHCN station readings;
+                ``"open_meteo"`` (or any other value) for forecasts.
+    """
+    if source == "ghcn":
+        return "observed_high_c" if kind == "high" else "observed_low_c"
+    return "forecast_high_c" if kind == "high" else "forecast_low_c"
 
 
 def _c_to_f(temp_c: float | None) -> int | None:
@@ -166,13 +185,20 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     )
 
 
-def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
-    """Assemble a StoryBundle for a monthly high-temperature record signal."""
+def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") -> StoryBundle:
+    """Assemble a StoryBundle for a monthly high-temperature record signal.
+
+    Args:
+        ev:     The ``MonthlyRecord`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed station records (emits
+                ``observed_*_c``); ``"open_meteo"`` (default) for forecast
+                data (emits ``forecast_*_c``).
+    """
 
     month_name = _MONTH_NAMES[ev.month] if 1 <= ev.month <= 12 else str(ev.month)
     state = getattr(ev, "state", None)
     where = _format_where(ev.city, ev.country, state)
-    metric_label = "forecast_high_c" if ev.kind == "high" else "forecast_low_c"
+    metric_label = _headline_temp_label(ev.kind, source)
     new_temp_f = _c_to_f(ev.new_temp_c)
     old_record_f = _c_to_f(ev.old_record_c)
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
@@ -244,7 +270,7 @@ def build_country_record_bundle(cr: CountryRecord) -> StoryBundle:
     )
 
 
-def build_record_bundle(ev: RecordEvent) -> StoryBundle:
+def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> StoryBundle:
     """Assemble a StoryBundle for a calendar-day record signal.
 
     "Calendar-day record" means a city is forecast to break the previous
@@ -252,6 +278,11 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
     routinely in temperate climates, so the editorial bar should be high
     — the writer's discipline (and the empty-margin guard) decides
     whether it ships, not the absolute temperature.
+
+    Args:
+        ev:     The ``RecordEvent`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data.
     """
 
     kind = getattr(ev, "kind", "high")
@@ -267,7 +298,7 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
         when=when,
         event_id=ev.event_id,
         headline_metric={
-            "label": "forecast_high_c" if kind == "high" else "observed_low_c",
+            "label": _headline_temp_label(kind, source),
             "value": ev.new_temp_c,
             "unit": "C",
             "value_f": new_temp_f,
@@ -331,12 +362,17 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
 # =====================================================================
 
 
-def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
+def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo") -> StoryBundle:
     """City broke (or is forecast to break) its archive-record temperature.
 
     Highest-tier temperature signal — a ``+0.5C over a 50-year archive``
     is a real headline. The writer should treat the archive span as the
     rarity peg.
+
+    Args:
+        ev:     The ``AllTimeRecord`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data.
     """
 
     state = getattr(ev, "state", None)
@@ -350,7 +386,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
         when=_resolve_when(ev.signal_date),
         event_id=ev.event_id,
         headline_metric={
-            "label": "forecast_high_c" if ev.kind == "high" else "forecast_low_c",
+            "label": _headline_temp_label(ev.kind, source),
             "value": ev.new_temp_c,
             "unit": "C",
             "value_f": new_temp_f,
@@ -391,8 +427,16 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
     )
 
 
-def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
-    """Today's reading is far above (or below) the historical mean."""
+def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> StoryBundle:
+    """Today's reading is far above (or below) the historical mean.
+
+    Args:
+        ev:     The ``AnomalyEvent`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data. Passed through so callers are
+                consistent; anomaly headline_metric uses ``anomaly_c`` label
+                regardless of source.
+    """
 
     state = getattr(ev, "state", None)
     where = _format_where(ev.city, ev.country, state)
