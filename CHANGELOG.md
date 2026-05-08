@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.10.0] - 2026-05-08
+
+Three high-severity fixes flagged by Codex review of PRs #38-#46.
+Findings report at `docs/codex-review-findings-2026-05-08.md`.
+
+### Fixed
+
+- **Dashboard mergeState data-loss** in
+  [dashboard/lib/state-store.js](dashboard/lib/state-store.js).
+  Every dashboard approve/reject/edit click was rewriting `state.json`
+  through a fixed dashboard-era key whitelist, erasing Python-owned
+  keys: `memory` (two-bot repetition guard), `record_streaks`,
+  `data_source_failures`, `ocean_sst_streak`, `ice_mass_*`,
+  `fire_complex_tiers`, `synthesis_*`. Fix: spread base + incoming
+  before applying explicit merge logic, so unknown top-level keys
+  pass through.
+
+- **SQLite round-trip dropped `memory` and `data_source_failures`**
+  in [src/storage/sqlite_store.py](src/storage/sqlite_store.py).
+  Both were live keys in `src/state.py` but absent from
+  `_METADATA_JSON_KEYS`. On a sqlite-backed run, the two-bot
+  repetition guard and the consecutive-source-failure counters
+  reset every cycle. Added both keys + sqlite round-trip tests
+  for each.
+
+- **Claim extractor had no Gemini timeout** in
+  [src/two_bot/claim_extractor.py](src/two_bot/claim_extractor.py).
+  Missed in PR #43's timeout-unit fix. SDK default is `None` (=
+  unbounded), so a stuck Gemini call could hang the cron run
+  indefinitely. Now passes `HttpOptions(timeout=90000)` (90s) for
+  parity with fact-check. Extended
+  `TestGeminiTimeoutUnit::test_claim_extractor_gemini_timeout_is_in_milliseconds_range`
+  to cover this path so the next regression fails loudly.
+
+### Out of scope (still — punted to follow-ups)
+
+- Suppression `stage` field rendering in dashboard (medium / certain) —
+  schema is wired but the UI groups by `source` only, hiding the
+  score_gate / writer / fact_check / pipeline_error distinction.
+- `observation_kind` accuracy (medium / possible) — TMIN/TMAX are
+  24-hour extrema, not strictly "overnight" / "afternoon." Acceptable
+  imprecision for now; consider `daily_minimum` / `24h_low` framing
+  if hourly data ever lands.
+- GHCN observed records still labeled `forecast_*_c` (medium / likely)
+  — semantically wrong for NOAA observed data. Should split into
+  `observed_*_c` for GHCN, keep `forecast_*_c` for Open-Meteo. Lint-
+  level concern; doesn't break the pipeline.
+- JSON cleanup fallback isn't string-aware (low / edge) — trailing-
+  comma regex could corrupt strings containing `,}` patterns. Edge
+  case, but worth a string-aware walker upgrade.
+- `JFK INTL AP` → `Jfk` (low / possible) — `text.title()` mangles
+  IATA codes. Cosmetic; live station inventory has the case.
+
 ## [0.3.9.0] - 2026-05-08
 
 Bilingual temperature units (Fahrenheit-first for US, Celsius-first

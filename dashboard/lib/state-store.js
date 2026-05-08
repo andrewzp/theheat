@@ -277,7 +277,16 @@ function mergeSuppressions(current = [], incoming = [], maxItems = 200) {
 function mergeState(current, incoming) {
   const base = normalizeState(current)
   const next = normalizeState(incoming)
+  // Preserve Python-owned top-level state keys that the dashboard never
+  // sets but must not overwrite. Without the spread, every dashboard
+  // approve/reject/edit click was rewriting state.json with only this
+  // dashboard-era subset, erasing memory / record_streaks /
+  // data_source_failures / ocean_sst_streak / ice_mass_* /
+  // fire_complex_tiers / synthesis_*. Found 2026-05-08 via codex review.
   return normalizeState({
+    ...base,
+    ...next,
+    // Explicit merge logic for keys the dashboard does manage:
     last_hot10: structuredClone(next.last_hot10 || base.last_hot10),
     streaks: structuredClone(next.streaks || base.streaks),
     posted_events: mergeOrderedUnique(base.posted_events, next.posted_events, 500),

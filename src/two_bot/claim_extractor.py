@@ -54,8 +54,16 @@ def _call_gemini(tweet: str) -> str:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for claim extraction")
     from google import genai
+    from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key)
+    # google-genai HttpOptions.timeout is in MILLISECONDS — see fact_check.py.
+    # Without an explicit timeout, the SDK passes None through, which is
+    # unbounded per-request and a real hang risk on a stuck Gemini call.
+    # 90000 = 90 seconds, parity with fact_check.
+    client = genai.Client(
+        api_key=api_key,
+        http_options=genai_types.HttpOptions(timeout=90000),
+    )
     user_prompt = CLAIM_EXTRACT_USER_PROMPT_TEMPLATE.format(tweet=tweet)
     response = call_with_retries(
         "gemini claim extraction",

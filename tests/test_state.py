@@ -1023,3 +1023,53 @@ class TestDownstreamSuppressionCapture:
             review_context={},
         )
         assert bot_state.get("suppressions", []) == []
+
+
+class TestSqliteRoundTripPreservesPythonOnlyKeys:
+    """Regression: sqlite_store dropped 'memory' and 'data_source_failures'
+    on every round-trip — the two-bot repetition guard and the structural
+    source-failure history were lost on any sqlite-backed bot run. Found
+    2026-05-08 via codex review of PRs #38-#45."""
+
+    def _sqlite_round_trip(self, state_in: dict) -> dict:
+        from src.storage import sqlite_store
+        from src.state import DEFAULT_STATE
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "theheat.sqlite")
+            assert sqlite_store.write_state(db_path, state_in)
+            return sqlite_store.read_state(db_path, DEFAULT_STATE)
+
+    def test_round_trip_preserves_memory(self):
+        state_in = {
+            "memory": {
+                "ongoing_events": [{"event_id": "ev1", "first_seen": "2026-05-08"}],
+                "used_era_anchors": ["1989 Berlin Wall fell"],
+                "used_peer_comparisons": ["1.4x average gas plant"],
+                "used_framings": ["off_season_irony"],
+                "shipped_tweet_texts": ["Sissonville hit -2.2C overnight..."],
+            }
+        }
+        out = self._sqlite_round_trip(state_in)
+        # Without preservation, memory was lost: shipped_tweet_texts / etc
+        # came back empty, breaking the bot's reuse guard.
+        assert out["memory"]["shipped_tweet_texts"] == ["Sissonville hit -2.2C overnight..."]
+        assert out["memory"]["used_era_anchors"] == ["1989 Berlin Wall fell"]
+        assert out["memory"]["used_peer_comparisons"] == ["1.4x average gas plant"]
+        assert out["memory"]["used_framings"] == ["off_season_irony"]
+        assert out["memory"]["ongoing_events"][0]["event_id"] == "ev1"
+
+    def test_round_trip_preserves_data_source_failures(self):
+        state_in = {
+            "data_source_failures": {
+                "ghcn": 2,
+                "firms": 5,
+                "ocean_sst": 1,
+            }
+        }
+        out = self._sqlite_round_trip(state_in)
+        # Without preservation, the consecutive-failure counters reset
+        # every run — never tripping the 3-in-a-row STRUCTURAL ALERT.
+        assert out["data_source_failures"]["ghcn"] == 2
+        assert out["data_source_failures"]["firms"] == 5
+        assert out["data_source_failures"]["ocean_sst"] == 1
