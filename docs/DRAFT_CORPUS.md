@@ -13,6 +13,80 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-08 — No fresh drafts (pipeline restoration day, 0 drafts)
+
+**Context:** Zero pending drafts in the queue. State.json last updated 2026-04-12 — a 26-day
+gap with no new pending drafts visible. Two compounding causes per BRIEFING.md:
+
+1. **voice→two-bot port (2026-05-03/04).** `src/voice/generator.py` was retired and replaced
+   by `src/two_bot/pipeline.py` (Sonnet 4.6 writer + Gemini Flash fact-checker). No call
+   sites remain for generator.py in main.py as of May 4.
+
+2. **4-day pipeline outage (2026-05-03–07).** Every two-bot draft died silently due to a
+   unit-of-measure bug in the Gemini SDK timeout config — `HttpOptions(timeout=90)` read
+   as 90ms rather than 90 seconds; every fact-check timed out in <300ms. Root cause
+   diagnosed and fixed 2026-05-08 in commit `da9093f`.
+
+No grading cycles produced pending drafts between 2026-04-29 and today. The fix restores
+the pipeline; first post-fix cycles are in-flight or have not yet fired.
+
+**Grade distribution:** N/A — 0 drafts graded.
+**A-rate: — (undefined). Gap from bar: 50 points (unchanged from Apr 29).**
+
+### Operational findings
+
+1. **generator.py is dead.** All active improvement proposals (P1–P6) reference code in
+   `src/voice/generator.py` (`SYSTEM_PROMPT`, `_STOCK_FORMULA_PATTERNS`,
+   `_CATEGORY_PROMPTS`). That module has no live call sites in main.py since May 4.
+   Implementation targets for all voice/prompt proposals must shift to
+   `src/two_bot/prompts/writer_prompt.py`.
+
+2. **P1 era-anchor gate status uncertain in the new pipeline.** The
+   `_era_anchor_should_fire` gate (shipped 2026-04-29) lived in generator.py. Whether
+   the two-bot pipeline carries an equivalent gate is unknown. `src/two_bot/memory.py`
+   is described as tracking "era anchors" — this may be the successor mechanism, but the
+   rate-cap logic is unverified. First post-fix cycle output is the diagnostic.
+
+3. **_STOCK_FORMULA_PATTERNS checks (P2, P3) may now be running nowhere.** The opener-
+   formula verb list and plant-comparison adjective allowlist lived in generator.py's
+   `_detect_stock_formula`. That function was called at generation time on Gemini output.
+   Now that the writer is Sonnet, the analogous check would need to be in `safety.py` (the
+   regex pipeline that still runs) or in the writer prompt itself. `safety.py` has 40+
+   patterns but it's unclear whether it replicates the stock-formula detector. Needs
+   verification against the new pipeline.
+
+4. **No staleness-retirements triggered.** Zero grading cycles since Apr 29. No proposal
+   has accumulated 3 consecutive cycles without observation — the prerequisite for
+   retirement. All proposals remain active pending first two-bot corpus data.
+
+5. **Suppression ledger not yet visible in Gist.** State.json lacks the `suppressions`
+   array added in commit #38 (suppression ledger). Either cycles haven't written back to
+   the Gist since the schema update, or the Gist wasn't flushed post-fix. Post-fix cycles
+   should populate it and the quality-trend data from the suppression ledger will be
+   usable in future grading runs.
+
+6. **The writer is now Sonnet, not Gemini.** The Apr 27 finding that "Gemini finds new
+   verbs once known ones are blocked" (verb-list whack-a-mole) may not generalize to
+   Sonnet. Sonnet may exhibit different convergence patterns on opener formulas. Watch
+   first two-bot corpus closely for whether the same failure modes appear.
+
+### Bulk-reject check
+
+No pending drafts — no stale real-time-baked content to reject.
+
+### Followups
+
+1. **First two-bot cycle output is the next corpus grading target.** Key watch metrics:
+   era-anchor deployment rate on records; opener-formula shape on fires; Wodehouse
+   violations. The failure modes may differ because the generator is now Sonnet.
+2. **Verify `src/two_bot/prompts/writer_prompt.py` vs. old generator.py proposals.**
+   Does the new prompt inherit the Wodehouse rule? The stranded-mechanic warning? The
+   era-anchor guidance? If not, P4/P5/P6 apply immediately.
+3. **Verify `safety.py` has a stock-formula check** equivalent to `_detect_stock_formula`
+   in dead generator.py. If not, P2/P3 failure modes have no gate.
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
