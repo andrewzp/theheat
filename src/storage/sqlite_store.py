@@ -122,6 +122,12 @@ _METADATA_JSON_KEYS = (
     "synthesis_components",
     "synthesis_cooldown",
     "suppressions",
+    # The two-bot repetition guard (memory.shipped_tweet_texts +
+    # used_era_anchors + used_peer_comparisons) AND the structural
+    # source-failure counters were both lost on every sqlite-backed
+    # round-trip. Found 2026-05-08 via codex review.
+    "memory",
+    "data_source_failures",
 )
 
 

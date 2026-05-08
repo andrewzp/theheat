@@ -131,3 +131,26 @@ class TestGeminiTimeoutUnit:
             f"google-genai HttpOptions.timeout is in MILLISECONDS — values "
             f"under 5000ms break the fallback writer."
         )
+
+    def test_claim_extractor_gemini_timeout_is_in_milliseconds_range(self):
+        """Regression: the SDK default timeout is None (= unbounded) — a
+        stuck Gemini call would hang the cron run indefinitely. Found
+        2026-05-08 via codex review of PR #43, where the timeout-unit
+        fix only covered fact-check and writer-fallback, not the
+        mandatory claim-extractor stage."""
+        import inspect
+        from src.two_bot import claim_extractor
+
+        source = inspect.getsource(claim_extractor._call_gemini)
+        import re
+        match = re.search(r"HttpOptions\([^)]*timeout=(\d+)", source)
+        assert match is not None, (
+            "_call_gemini in claim_extractor must configure "
+            "HttpOptions(timeout=...) — the SDK default is unbounded"
+        )
+        timeout_value = int(match.group(1))
+        assert timeout_value >= 5000, (
+            f"Gemini claim-extractor timeout is {timeout_value} (ms). "
+            f"google-genai HttpOptions.timeout is in MILLISECONDS — "
+            f"values under 5000ms hang the pipeline on every call."
+        )
