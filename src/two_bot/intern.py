@@ -94,6 +94,49 @@ def _ghcn_observation_facts(
     return extra
 
 
+def _c_to_f(temp_c: float | None) -> int | None:
+    """Convert Celsius to Fahrenheit, rounded to nearest integer.
+
+    Integer rounding matches how a US reader speaks the number: "28°F",
+    not "28.0°F" or "28.04°F". Pre-computed in the bundle so writer +
+    fact-check both see the same value (avoids rounding-mismatch
+    rejections in the entity check).
+    """
+    if temp_c is None:
+        return None
+    return round(temp_c * 9 / 5 + 32)
+
+
+_US_COUNTRY_TOKENS = {
+    "united states", "usa", "u.s.", "us", "u.s.a.",
+}
+
+
+def _is_us_country(country: str | None) -> bool:
+    """Detect US locations so the writer can lead with Fahrenheit.
+
+    Conservative: only the exact tokens above match. Doesn't try to
+    guess based on partial substrings (e.g. "Puerto Rico [United States]"
+    is NOT US for unit-priority purposes — the territory name comes
+    first in tweets, and PR is mostly metric anyway).
+    """
+    if not country:
+        return False
+    return country.strip().lower() in _US_COUNTRY_TOKENS
+
+
+def _audience_unit_facts(country: str | None) -> list[dict]:
+    """``audience_unit`` fact: tells the writer which unit to lead with.
+
+    "fahrenheit_first" for US (= US audience expects °F primary, °C
+    parenthetical). "celsius_first" elsewhere (= the rest of the world
+    plus weather nerds).
+    """
+    if _is_us_country(country):
+        return [{"label": "audience_unit", "value": "fahrenheit_first"}]
+    return [{"label": "audience_unit", "value": "celsius_first"}]
+
+
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
@@ -130,6 +173,9 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
     state = getattr(ev, "state", None)
     where = _format_where(ev.city, ev.country, state)
     metric_label = "forecast_high_c" if ev.kind == "high" else "forecast_low_c"
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
     return StoryBundle(
         signal_kind=f"monthly_{ev.kind}",
         where=where,
@@ -139,20 +185,28 @@ def build_monthly_high_bundle(ev: MonthlyRecord) -> StoryBundle:
             "label": metric_label,
             "value": ev.new_temp_c,
             "unit": "C",
+            "value_f": new_temp_f,
         },
         current_facts=[
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "month", "value": month_name},
             {"label": "kind", "value": ev.kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, ev.kind),
+            *_audience_unit_facts(ev.country),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
             "prior_record_year": ev.old_record_year,
             "archive_years": ev.years_of_data,
             "month": month_name,
-            "margin_c": round(ev.new_temp_c - ev.old_record_c, 2),
+            "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
         },
         raw_signal_dump=asdict(ev),
     )
@@ -203,6 +257,8 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
     kind = getattr(ev, "kind", "high")
     state = getattr(ev, "state", None)
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
     where = _format_where(ev.city, ev.country, state)
     when = _resolve_when(ev.signal_date)
     return StoryBundle(
@@ -214,18 +270,26 @@ def build_record_bundle(ev: RecordEvent) -> StoryBundle:
             "label": "forecast_high_c" if kind == "high" else "observed_low_c",
             "value": ev.new_temp_c,
             "unit": "C",
+            "value_f": new_temp_f,
         },
         current_facts=[
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "calendar_date", "value": when},
             {"label": "kind", "value": kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, kind),
+            *_audience_unit_facts(ev.country),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
             "prior_record_year": ev.old_record_year,
             "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
             "scope": "calendar_date_only",
             "kind": kind,
         },
@@ -277,6 +341,9 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
 
     state = getattr(ev, "state", None)
     where = _format_where(ev.city, ev.country, state)
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
     return StoryBundle(
         signal_kind=f"open_meteo_archive_{ev.kind}",
         where=where,
@@ -286,21 +353,29 @@ def build_all_time_record_bundle(ev: AllTimeRecord) -> StoryBundle:
             "label": "forecast_high_c" if ev.kind == "high" else "forecast_low_c",
             "value": ev.new_temp_c,
             "unit": "C",
+            "value_f": new_temp_f,
         },
         current_facts=[
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "kind", "value": ev.kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, ev.kind),
+            *_audience_unit_facts(ev.country),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
             "prior_record_year": ev.old_record_year,
             "archive_years": ev.years_of_data,
             "archive_start_year": date.today().year - ev.years_of_data,
             "archive_window_only": True,
             "kind": ev.kind,
-            "margin_c": round(ev.new_temp_c - ev.old_record_c, 2),
+            "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
             "scope": "archive_history",
             "forbidden_claims": [
                 "all-time high",
@@ -326,6 +401,14 @@ def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
     # observation_kind fact: hot anomalies derive from afternoon highs,
     # cold anomalies from overnight lows.
     obs_kind = "high" if kind == "hot" else "low"
+    today_temp_f = _c_to_f(ev.today_temp_c)
+    historical_mean_f = _c_to_f(ev.historical_mean_c)
+    # Anomaly itself is a delta — convert via 9/5 scaling, no offset.
+    anomaly_f = (
+        round(ev.anomaly_c * 9 / 5)
+        if ev.anomaly_c is not None
+        else None
+    )
     return StoryBundle(
         signal_kind=f"anomaly_{kind}",
         where=where,
@@ -335,13 +418,19 @@ def build_anomaly_bundle(ev: AnomalyEvent) -> StoryBundle:
             "label": "anomaly_c",
             "value": ev.anomaly_c,
             "unit": "C",
+            "value_f": anomaly_f,
         },
         current_facts=[
             {"label": "city", "value": ev.city},
             {"label": "country", "value": ev.country},
             {"label": "today_c", "value": ev.today_temp_c},
+            {"label": "today_f", "value": today_temp_f},
             {"label": "historical_mean_c", "value": ev.historical_mean_c},
+            {"label": "historical_mean_f", "value": historical_mean_f},
+            {"label": "anomaly_c", "value": ev.anomaly_c},
+            {"label": "anomaly_f", "value": anomaly_f},
             *_ghcn_observation_facts(state, obs_kind),
+            *_audience_unit_facts(ev.country),
         ],
         historical_context={
             "historical_mean_c": ev.historical_mean_c,

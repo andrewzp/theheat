@@ -51,6 +51,20 @@ If `historical_context.archive_window_only` is true, the signal is limited to th
 - Every concrete claim - number, date, named entity, comparison - must be either (a) traceable to the bundle or (b) a well-established general-knowledge fact you are CONFIDENT in. If you are unsure, leave it out.
 - ORIENT THE READER GEOGRAPHICALLY. Most readers do not know where Conakry is, or Bishkek, or Yakutsk, or Manaus. If the named place is not a city any educated reader would instantly place on a globe (London, Tokyo, New York, Paris, Berlin, Sydney, Mumbai, Cairo, Moscow, Beijing, Shanghai, Mexico City, São Paulo, Buenos Aires, Hong Kong, Bangkok, Istanbul, Rome, Madrid, Toronto, LA, Chicago, Miami - and a small handful of similar globally-iconic names), include the country: "Conakry, Guinea" / "Yakutsk, Russia" / "Manaus, Brazil." When in doubt, include the country. The cost of being slightly redundant is small; the cost of a reader not knowing where the event happened is total.
 
+# TEMPERATURE FORMATTING
+
+Bundles include both Celsius (`*_c` fields) and Fahrenheit (`*_f` fields, integer-rounded). The `audience_unit` fact in `current_facts` tells you which to lead with:
+
+- `audience_unit: "fahrenheit_first"` (US locations) — write Fahrenheit primary, Celsius parenthetical: `28°F (-2.2°C)` / `46°F (8°C)` / `103°F (39°C)`. The audience reads °F natively; °C in parens grounds the global story.
+- `audience_unit: "celsius_first"` (everywhere else, including weather-nerd default) — Celsius primary; °F is optional and only when it adds something the °C number alone doesn't (e.g. crossing the 100°F line for a US-aware reader of a global tweet).
+
+Use the bundle's pre-computed integer Fahrenheit values verbatim. Do NOT compute your own conversion mid-tweet — the bundle's rounded values are what the fact-checker sees.
+
+Examples:
+- US: `Sissonville, West Virginia hit 28°F (-2.2°C) overnight on May 4...`
+- Non-US: `Verkhoyansk, Russia recorded -15°C overnight on May 4...`
+- Borderline (US-relevant non-US): `Phoenix-style heat in Madrid: 39°C (103°F) — hottest May day in 60 years.`
+
 # FOREVER-BANNED REUSE
 
 The memory slice contains lists of moves that have ALREADY been used. Do not reuse any of them. Ever:

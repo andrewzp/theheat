@@ -85,11 +85,9 @@ def test_build_monthly_high_bundle_populates_historical_context():
     assert bundle.signal_kind == "monthly_high"
     assert bundle.where == "Conakry, Guinea"
     assert bundle.event_id == "meteo_monthly_Conakry_2026-05-01"
-    assert bundle.headline_metric == {
-        "label": "forecast_high_c",
-        "value": 35.4,
-        "unit": "C",
-    }
+    assert bundle.headline_metric["label"] == "forecast_high_c"
+    assert bundle.headline_metric["value"] == 35.4
+    assert bundle.headline_metric["unit"] == "C"
     assert bundle.historical_context["prior_record_c"] == 34.3
     assert bundle.historical_context["prior_record_year"] == 2022
     assert bundle.historical_context["archive_years"] == 30
@@ -169,11 +167,9 @@ def test_build_record_bundle_includes_country_in_where():
     assert bundle.signal_kind == "calendar_record"
     assert bundle.where == "Riga, Latvia"
     assert bundle.event_id == "record_Riga_2026-05-03"
-    assert bundle.headline_metric == {
-        "label": "forecast_high_c",
-        "value": 24.4,
-        "unit": "C",
-    }
+    assert bundle.headline_metric["label"] == "forecast_high_c"
+    assert bundle.headline_metric["value"] == 24.4
+    assert bundle.headline_metric["unit"] == "C"
     assert bundle.historical_context["prior_record_c"] == 22.6
     assert bundle.historical_context["prior_record_year"] == 1996
     assert bundle.historical_context["scope"] == "calendar_date_only"
@@ -212,11 +208,9 @@ def test_build_record_bundle_marks_calendar_low_records():
     bundle = build_record_bundle(ev)
 
     assert bundle.signal_kind == "calendar_record_low"
-    assert bundle.headline_metric == {
-        "label": "observed_low_c",
-        "value": -33.0,
-        "unit": "C",
-    }
+    assert bundle.headline_metric["label"] == "observed_low_c"
+    assert bundle.headline_metric["value"] == -33.0
+    assert bundle.headline_metric["unit"] == "C"
     assert {"label": "kind", "value": "low"} in bundle.current_facts
     assert bundle.historical_context["kind"] == "low"
 
@@ -251,11 +245,9 @@ def test_build_monthly_low_bundle_uses_low_semantics():
     )
     bundle = build_monthly_high_bundle(ev)
     assert bundle.signal_kind == "monthly_low"
-    assert bundle.headline_metric == {
-        "label": "forecast_low_c",
-        "value": -8.0,
-        "unit": "C",
-    }
+    assert bundle.headline_metric["label"] == "forecast_low_c"
+    assert bundle.headline_metric["value"] == -8.0
+    assert bundle.headline_metric["unit"] == "C"
     assert bundle.historical_context["margin_c"] == -1.5
 
 
@@ -644,3 +636,109 @@ class TestExpandUsState:
         # Per GHCN, US territories use the US country prefix in some cases
         assert expand_us_state("PR", "US") == "Puerto Rico"
         assert expand_us_state("DC", "US") == "District of Columbia"
+
+
+class TestFahrenheitConversion:
+    """Bundle enrichment for US-audience-first formatting (PR landed
+    2026-05-08). All GHCN-touching builders surface integer-rounded
+    Fahrenheit alongside Celsius and an audience_unit fact telling
+    the writer which to lead with."""
+
+    def test_c_to_f_roundtrip_known_values(self):
+        from src.two_bot.intern import _c_to_f
+        assert _c_to_f(0) == 32
+        assert _c_to_f(37) == 99
+        assert _c_to_f(-2.2) == 28
+        assert _c_to_f(40) == 104
+        assert _c_to_f(-50) == -58
+
+    def test_c_to_f_passes_none(self):
+        from src.two_bot.intern import _c_to_f
+        assert _c_to_f(None) is None
+
+    def test_is_us_country_recognizes_canonical_forms(self):
+        from src.two_bot.intern import _is_us_country
+        assert _is_us_country("United States") is True
+        assert _is_us_country("USA") is True
+        assert _is_us_country("US") is True
+        assert _is_us_country("U.S.") is True
+        assert _is_us_country("united states") is True
+
+    def test_is_us_country_rejects_territories_with_brackets(self):
+        from src.two_bot.intern import _is_us_country
+        assert _is_us_country("Puerto Rico [United States]") is False
+        assert _is_us_country("Guam") is False
+
+    def test_is_us_country_rejects_non_us(self):
+        from src.two_bot.intern import _is_us_country
+        assert _is_us_country("Canada") is False
+        assert _is_us_country("United Kingdom") is False
+        assert _is_us_country("") is False
+        assert _is_us_country(None) is False
+
+    def test_monthly_low_us_bundle_has_fahrenheit_first(self):
+        from src.data.open_meteo import MonthlyRecord
+        from src.two_bot.intern import build_monthly_high_bundle
+
+        ev = MonthlyRecord(
+            city="Sissonville", country="United States", kind="low", month=5,
+            new_temp_c=-2.2, old_record_c=-1.7, old_record_year=2020,
+            years_of_data=16, event_id="monthly_low_X_05",
+            state="West Virginia",
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("today_temp_c") == -2.2
+        assert labels.get("today_temp_f") == 28
+        assert labels.get("audience_unit") == "fahrenheit_first"
+        assert bundle.headline_metric["value_f"] == 28
+        assert bundle.historical_context["prior_record_f"] == 29
+        assert bundle.historical_context["margin_f"] == -1
+
+    def test_non_us_bundle_has_celsius_first(self):
+        from src.data.open_meteo import MonthlyRecord
+        from src.two_bot.intern import build_monthly_high_bundle
+
+        ev = MonthlyRecord(
+            city="Verkhoyansk", country="Russia", kind="low", month=5,
+            new_temp_c=-15.0, old_record_c=-12.0, old_record_year=1990,
+            years_of_data=30, event_id="monthly_low_X", state=None,
+        )
+        bundle = build_monthly_high_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("audience_unit") == "celsius_first"
+        assert labels.get("today_temp_c") == -15.0
+        assert labels.get("today_temp_f") == 5
+
+    def test_anomaly_delta_uses_scaling_only_no_offset(self):
+        """anomaly_c is a DELTA, so F conversion uses 9/5 scaling only,
+        no +32 offset. -9.5C anomaly = -17F anomaly, not -49."""
+        from src.data.open_meteo import AnomalyEvent
+        from src.two_bot.intern import build_anomaly_bundle
+
+        ev = AnomalyEvent(
+            city="Apalachicola", country="United States",
+            today_temp_c=9.4, historical_mean_c=18.9, anomaly_c=-9.5,
+            years_of_data=30, event_id="anomaly_cold_X", state="Florida",
+        )
+        bundle = build_anomaly_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("anomaly_f") == -17
+        assert labels.get("today_f") == 49
+        assert labels.get("historical_mean_f") == 66
+
+    def test_calendar_record_us_bundle(self):
+        from src.data.open_meteo import RecordEvent
+        from src.two_bot.intern import build_record_bundle
+
+        ev = RecordEvent(
+            city="Phoenix", country="United States",
+            new_temp_c=46.0, old_record_c=44.0, old_record_year=2018,
+            event_id="cal_high_X", kind="high", state="Arizona",
+        )
+        bundle = build_record_bundle(ev)
+        labels = {f["label"]: f["value"] for f in bundle.current_facts}
+        assert labels.get("today_temp_f") == 115
+        assert labels.get("audience_unit") == "fahrenheit_first"
+        assert bundle.historical_context["prior_record_f"] == 111
+        assert bundle.historical_context["margin_f"] == 4
