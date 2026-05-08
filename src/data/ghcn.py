@@ -118,12 +118,27 @@ def normalize_station_name(raw: str) -> str:
     both see a clean place name. The raw GHCN name is preserved on
     ``bundle.station_name`` for ops traceability.
 
+    When the entire name after prefix/suffix stripping is a single all-caps
+    token of length 2-4 (e.g. an IATA airport code: JFK, LAX, DCA), the
+    token is returned as-is without title-casing.  This prevents ``JFK INTL AP``
+    from becoming ``Jfk``.
+
+    Tokens of length 5+ are real place words (AKRON, MIAMI, LOGAN) and
+    title-case normally.  Multi-word post-strip results (e.g. ``SAN JUAN``,
+    ``ATKA ISLAND``) are always title-cased; embedded short-token acronyms in
+    those names (e.g. ``USC`` in ``L A DOWNTOWN USC``) are not specially
+    preserved — doing so would produce false positives on common 3-char
+    place-name fragments like SAN, RENO (4 chars), and ATKA (4 chars).
+
     Examples:
       "SISSONVILLE 1SW"        -> "Sissonville"
       "WFO SAN JUAN"           -> "San Juan"
       "ATKA ISLAND"            -> "Atka Island"
       "MIAMI INTL AP"          -> "Miami"
       "DEATH VALLEY"           -> "Death Valley"
+      "JFK INTL AP"            -> "JFK"
+      "LAX INTL AP"            -> "LAX"
+      "DCA"                    -> "DCA"
 
     Returns the raw input unchanged if it's empty or stripping leaves
     nothing useful.
@@ -137,6 +152,15 @@ def normalize_station_name(raw: str) -> str:
     text = text.strip()
     if not text:
         return raw
+
+    # If the entire remaining text is a single all-caps token of length 2-3
+    # (e.g. an IATA code like JFK, LAX, DCA), return it as-is.  Length 4+
+    # tokens include real 4-char city names (RENO, ATKA) that should
+    # title-case normally, so we only protect 2- and 3-char pure-acronym
+    # station names.
+    if re.fullmatch(r"[A-Z]{2,3}", text):
+        return text
+
     return text.title()
 
 from src.data.ghcn_db import (
