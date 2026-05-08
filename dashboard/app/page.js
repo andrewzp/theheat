@@ -880,9 +880,16 @@ function PipelineView({ run, runs, config, drafts, trigger, triggering, triggerR
   )
 }
 
-function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) {
+function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter, stageFilter, setStageFilter }) {
   const sourceCounts = stats?.source_counts || {}
   const sourceEntries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])
+  const stageCounts = stats?.stage_counts || {}
+  const stageEntries = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])
+
+  // Client-side stage filter applied on top of the server-side source filter.
+  const visible = stageFilter
+    ? suppressions.filter((s) => (s.stage || "unknown") === stageFilter)
+    : suppressions
 
   return (
     <>
@@ -890,7 +897,7 @@ function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) 
         <div className="card">
           <h2>Last 24h</h2>
           <div className="stat">{stats?.last24h ?? 0}</div>
-          <div className="stat-label">near-misses</div>
+          <div className="stat-label">pipeline kills</div>
         </div>
         <div className="card">
           <h2>Last 7 Days</h2>
@@ -906,11 +913,34 @@ function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) 
           <div className="stat-label">most-suppressed loop</div>
         </div>
         <div className="card">
-          <h2>Total in View</h2>
-          <div className="stat">{stats?.total ?? 0}</div>
-          <div className="stat-label">matches filter</div>
+          <h2>Top Stage</h2>
+          <div className="stat" style={{ fontSize: 20 }}>{stats?.top_stage || "—"}</div>
+          <div className="stat-label">kill stage with most hits</div>
         </div>
       </div>
+
+      {stageEntries.length > 0 && (
+        <div className="card full" style={{ marginBottom: 16 }}>
+          <h2>Filter by Stage</h2>
+          <div className="streak-list">
+            <span
+              className={`streak-chip clickable ${!stageFilter ? "selected" : ""}`}
+              onClick={() => setStageFilter("")}
+            >
+              all stages
+            </span>
+            {stageEntries.map(([stage, count]) => (
+              <span
+                key={stage}
+                className={`streak-chip clickable supp-stage-chip ${stageFilter === stage ? "selected" : ""}`}
+                onClick={() => setStageFilter(stageFilter === stage ? "" : stage)}
+              >
+                {stage} <span className="days">{count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {sourceEntries.length > 0 && (
         <div className="card full" style={{ marginBottom: 16 }}>
@@ -920,7 +950,7 @@ function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) 
               className={`streak-chip clickable ${!sourceFilter ? "selected" : ""}`}
               onClick={() => setSourceFilter("")}
             >
-              all
+              all sources
             </span>
             {sourceEntries.map(([src, count]) => (
               <span
@@ -936,25 +966,30 @@ function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter }) 
       )}
 
       <div className="card full">
-        <h2>Suppressed Signals ({suppressions.length})</h2>
+        <h2>Suppressed Signals ({visible.length})</h2>
         <p className="card-kicker">
-          Events the editorial gate killed before they reached the draft queue. Tight gaps (0–5 below
-          threshold) suggest the bar may be slightly high; far gaps mean the bot is correctly cutting noise.
+          Signals killed at any pipeline stage — score gate, writer, fact-check, cooldown, dedup, cycle cap,
+          or pipeline error. Stage pill (primary) shows where in the pipeline the kill happened; tight score
+          gaps (0–5 below threshold) suggest the bar may be slightly high.
         </p>
-        {suppressions.length > 0 ? (
-          suppressions.map((s) => {
+        {visible.length > 0 ? (
+          visible.map((s) => {
             const total = Number(s.score_total ?? 0)
             const threshold = Number(s.threshold ?? 0)
             const gap = threshold - total
             const tone = gap <= 5 ? "tight" : gap <= 15 ? "near" : "far"
+            const stage = s.stage || "unknown"
             return (
               <div key={s.id} className="supp-item">
                 <div className="supp-meta">
                   <span className="supp-time">{timeAgo(s.ts)}</span>
+                  <span className={`supp-stage supp-stage--${stage.replace(/_/g, "-")}`}>{stage}</span>
                   <span className="draft-type">{s.source || "—"}</span>
-                  <span className={`supp-score ${tone}`}>
-                    {total}/{threshold} <span className="supp-gap">−{gap}</span>
-                  </span>
+                  {threshold > 0 && (
+                    <span className={`supp-score ${tone}`}>
+                      {total}/{threshold} <span className="supp-gap">−{gap}</span>
+                    </span>
+                  )}
                   {s.category && <span className="supp-cat">{s.category}</span>}
                 </div>
                 <div className="supp-summary">
@@ -1006,6 +1041,7 @@ export default function Dashboard() {
   const [suppressions, setSuppressions] = useState([])
   const [suppressionsStats, setSuppressionsStats] = useState(null)
   const [suppressionsSourceFilter, setSuppressionsSourceFilter] = useState("")
+  const [suppressionsStageFilter, setSuppressionsStageFilter] = useState("")
 
   // Model config
   const [modelConfig, setModelConfig] = useState(null)
@@ -1316,6 +1352,23 @@ export default function Dashboard() {
           background: #1a1a1a; color: #888; font-size: 10px;
           padding: 2px 8px; border-radius: 3px; letter-spacing: 0.3px;
         }
+        /* Stage pill — primary discriminator */
+        .supp-stage {
+          font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 3px;
+          text-transform: uppercase; letter-spacing: 0.5px;
+          background: #1a1a1a; color: #aaa; border: 1px solid #333;
+        }
+        .supp-stage--score-gate   { color: #facc15; border-color: #6b5a00; }
+        .supp-stage--writer       { color: #fb923c; border-color: #6b2d00; }
+        .supp-stage--fact-check   { color: #fb923c; border-color: #6b2d00; }
+        .supp-stage--pipeline-error { color: #f87171; border-color: #6b0000; }
+        .supp-stage--city-cooldown,
+        .supp-stage--cycle-cap    { color: #94a3b8; border-color: #2a2a3a; }
+        .supp-stage--same-day-dedup,
+        .supp-stage--same-day-posted,
+        .supp-stage--same-day-superseded,
+        .supp-stage--duplicate-draft { color: #64748b; border-color: #1e2a3a; }
+        .supp-stage-chip { font-size: 10px; }
 
         /* Buttons */
         .trigger-bar { display: flex; gap: 8px; align-items: center; }
@@ -1770,6 +1823,8 @@ export default function Dashboard() {
             stats={suppressionsStats}
             sourceFilter={suppressionsSourceFilter}
             setSourceFilter={setSuppressionsSourceFilter}
+            stageFilter={suppressionsStageFilter}
+            setStageFilter={setSuppressionsStageFilter}
           />
         ) : activeTab === "pipeline" ? (
           <PipelineView
