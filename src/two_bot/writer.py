@@ -106,7 +106,10 @@ def _call_google(user_prompt: str) -> str:
     from google import genai
     from google.genai import types as genai_types
 
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90))
+    # google-genai HttpOptions.timeout is in MILLISECONDS — see fact_check.py.
+    # 180000 = 180 seconds, matching the Anthropic writer timeout for parity
+    # in case the writer ever falls through to the Gemini path.
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=180000))
     response = call_with_retries(
         "gemini writer",
         lambda: client.models.generate_content(

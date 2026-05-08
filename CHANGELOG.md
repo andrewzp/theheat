@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6.0] - 2026-05-08
+
+**The actual root cause of the 4-day outage.** After the codex sweep
+(0.3.5.0) added retry logic to LLM calls, the new
+`[two_bot.retry]` diagnostic lines finally surfaced what was
+killing drafts: every Gemini fact-check call was timing out in
+<300ms across 3 retry attempts.
+
+The bug: `google-genai` SDK's ``HttpOptions.timeout`` is in
+**milliseconds**, not seconds. (Confirmed against
+googleapis/python-genai/google/genai/types.py — field docstring
+"Timeout for the request in milliseconds.") Three sites in the
+codebase were passing bare integers (``timeout=90``,
+``timeout=180``) believing they were seconds; they were 90ms and
+180ms — barely enough for a TLS handshake.
+
+Likely introduced when the codebase migrated from the older
+``google-generativeai`` SDK (timeout in seconds) to the newer
+``google-genai`` SDK (timeout in milliseconds). The unit changed,
+the values didn't.
+
+### Fixed
+
+- `src/two_bot/fact_check.py:63` — ``timeout=90`` → ``timeout=90000``
+  (90 seconds, the original intent).
+- `src/two_bot/writer.py:112` — ``timeout=90`` → ``timeout=180000``
+  (Gemini fallback writer, parity with the Anthropic writer's 180s).
+- `src/voice/generator.py:743` — ``timeout=180`` → ``timeout=180000``
+  (voice-gen is dead code but fix the unit-of-measure bug for
+  parity in case it's ever re-imported).
+
+### Added
+
+- 2 regression tests in `tests/two_bot/test_fact_check.py` that
+  introspect the source of `_call_gemini` and `_call_google` to
+  assert any HttpOptions timeout is >= 5000 (5 seconds in ms).
+  Anything smaller fails loudly with a message explaining the
+  millisecond-vs-second trap.
+
 ## [0.3.5.0] - 2026-05-07
 
 Codex bug-hunt sweep. After today's reactive PR ladder (#38-#41) failed
