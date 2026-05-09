@@ -55,7 +55,10 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: python -m pytest tests/ -v
+      # `voice_replay` tests live in tests/voice_regression/ and call the
+      # real Anthropic writer. They run in voice-regression.yml on a
+      # daily schedule, not on every PR.
+      - run: python -m pytest tests/ -v -m "not voice_replay"
 
   run:
     needs: test
