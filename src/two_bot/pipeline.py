@@ -6,6 +6,7 @@ from src.data.firms import FireEvent
 from src.two_bot import claim_extractor, fact_check, memory, writer
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.types import StoryBundle
+from src.voice.safety import run_safety_pipeline
 
 
 def generate_draft(
@@ -52,6 +53,21 @@ def generate_draft(
                 f"{writer_result.kill_reason}"
             )
             _record_kill("writer", writer_result.kill_reason or "unknown")
+            return None
+
+        # Safety gate at draft-time. Historically run_safety_pipeline was
+        # only called at post-time (main.py:2874, 2956), so a banned-pattern
+        # tweet could sit in the queue waiting for a human to notice. Now
+        # the writer output is checked before fact-check — saves an LLM
+        # call on the obvious kills and surfaces the failure in the
+        # suppression dashboard with stage="safety".
+        safety_passed, safety_reason = run_safety_pipeline(writer_result.tweet)
+        if not safety_passed:
+            print(
+                f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
+                f"draft: {safety_reason}"
+            )
+            _record_kill("safety", safety_reason or "unknown")
             return None
 
         extracted = claim_extractor.extract_claims(writer_result.tweet)
@@ -140,6 +156,14 @@ def generate_shadow_draft(bundle: StoryBundle, state: dict) -> dict | None:
             print(
                 f"[two_bot.pipeline] Shadow writer killed "
                 f"{bundle.signal_kind} draft: {writer_result.kill_reason}"
+            )
+            return None
+
+        safety_passed, safety_reason = run_safety_pipeline(writer_result.tweet)
+        if not safety_passed:
+            print(
+                f"[two_bot.pipeline] Shadow safety rejected "
+                f"{bundle.signal_kind} draft: {safety_reason}"
             )
             return None
 

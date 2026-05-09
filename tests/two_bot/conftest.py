@@ -168,6 +168,21 @@ def mock_fact_check(monkeypatch):
     return mock
 
 
+@pytest.fixture
+def mock_safety(monkeypatch):
+    """Patch the in-pipeline safety call. Default: passes.
+
+    Existing pipeline tests don't need this — their writer outputs are
+    clean and don't trip BANNED_PATTERNS. Use this fixture to force a
+    safety rejection: ``mock_safety.return_value = (False, 'reason')``.
+    """
+    from src.two_bot import pipeline
+
+    mock = MagicMock(return_value=(True, None))
+    monkeypatch.setattr(pipeline, "run_safety_pipeline", mock)
+    return mock
+
+
 def _writer_result(tweet: str = "Mali fire test") -> WriterResult:
     return WriterResult(
         tweet=tweet,

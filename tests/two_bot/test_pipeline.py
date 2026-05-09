@@ -346,3 +346,88 @@ def test_generate_draft_swallows_exceptions(mock_writer):
     result = generate_draft(_monthly_high_bundle(), state)
 
     assert result is None  # never raises
+
+
+# ----------------------- safety stage tests --------------------------------
+
+
+def test_pipeline_safety_rejects_writer_output(
+    mock_writer, mock_extract, mock_fact_check, mock_safety
+):
+    """Safety gate runs between writer-success and fact-check. When safety
+    rejects, fact-check is NOT called (saves an LLM cost) and the
+    suppression is recorded with stage='safety' so the dashboard can
+    distinguish from writer / fact_check / pipeline_error kills."""
+    mock_writer.return_value = WriterResult(
+        tweet="Severity: Severe. Hottest May!",
+        kill_reason=None,
+        angle_chosen="plain_number",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    mock_safety.return_value = (False, "Banned pattern: 'Severity: Severe'")
+    state = _state_with_memory()
+    result_out = {}
+
+    result = generate_draft(_monthly_high_bundle(), state, result_out=result_out)
+
+    assert result is None
+    assert result_out["kill_stage"] == "safety"
+    assert "Severity" in result_out["kill_reason"]
+    # Fact-check must NOT have been called — safety short-circuits to save cost.
+    assert not mock_fact_check.called
+    # Memory must not be written — only the happy path records.
+    assert state["memory"]["shipped_tweets"] == []
+
+
+def test_shadow_pipeline_safety_rejects(
+    mock_writer, mock_extract, mock_fact_check, mock_safety
+):
+    """Shadow pipeline mirrors live pipeline's safety gate. Even though
+    shadow doesn't post, voice regression in the shadow path is still a
+    signal worth catching."""
+    mock_writer.return_value = WriterResult(
+        tweet="Severity: Severe.",
+        kill_reason=None,
+        angle_chosen="plain_number",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    mock_safety.return_value = (False, "Banned pattern: 'Severity: Severe'")
+    state = _state_with_memory()
+
+    result = generate_shadow_draft(_monthly_high_bundle(), state)
+
+    assert result is None
+    assert not mock_fact_check.called
+    assert state["memory"]["shipped_tweets"] == []
+
+
+def test_pipeline_safety_passes_through_to_fact_check(
+    mock_writer, mock_extract, mock_fact_check, mock_safety
+):
+    """Sanity: when safety passes, fact-check runs as before."""
+    mock_writer.return_value = WriterResult(
+        tweet="Conakry, Guinea hit 39C in May. Hottest in 12 years.",
+        kill_reason=None,
+        angle_chosen="rarity",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning="test",
+    )
+    mock_safety.return_value = (True, None)
+    mock_extract.return_value = []
+    mock_fact_check.return_value = FactCheckResult(
+        passed=True, failures=[], raw_response="ok", extracted_claims=[],
+    )
+    state = _state_with_memory()
+
+    result = generate_draft(_monthly_high_bundle(), state)
+
+    assert result is not None
+    assert mock_safety.called
+    assert mock_fact_check.called
+    # Safety was called once with the writer output verbatim.
+    mock_safety.assert_called_once_with("Conakry, Guinea hit 39C in May. Hottest in 12 years.")
