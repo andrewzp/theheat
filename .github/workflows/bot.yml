@@ -9,6 +9,8 @@ on:
     # Alert polling: every 4 hours
     - cron: '0 0,4,8,16,20 * * *'
     # Note: the 12:00 UTC slot handles both leaderboard + alerts
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
@@ -44,9 +46,9 @@ jobs:
     if: github.event_name != 'schedule' || github.event.schedule != '30 * * * *'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -57,12 +59,17 @@ jobs:
 
   run:
     needs: test
-    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    # Run job posts tweets, writes gist, consumes API quota — skip on PRs
+    # so the test job alone gates the merge. PRs from forks also lack secrets.
+    if: |
+      always()
+      && (needs.test.result == 'success' || needs.test.result == 'skipped')
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: 'pip'
