@@ -19,9 +19,14 @@ def _fresh_state():
 
 @pytest.fixture
 def mock_alerts_pipeline_sources(mocker):
-    """Clamp every-run data sources in run_alerts to empty/no-result.
+    """Clamp the run_alerts data sources that test classes typically leave unmocked.
 
-    run_alerts has ~18 _try_two_bot_draft call sites, one per signal-type
+    Covers nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst,
+    water_levels, river_gauges, ice_mass, synthesis, ghcn, and
+    fire_footprint. Callers must still mock `src.main.open_meteo`,
+    `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
+
+    run_alerts has 18 _try_two_bot_draft call sites, one per signal-type
     branch. Tests that exercise a single branch and assert call counts on
     `_try_two_bot_draft` need every other branch's data source mocked away,
     or real network responses occasionally trigger extra draft attempts and
