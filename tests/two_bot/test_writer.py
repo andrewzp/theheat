@@ -378,3 +378,89 @@ class TestWriterPromptAntiSpeculation:
         assert "no anthropomorphism" not in prompt.lower()
         assert "no anthropomorphic" not in prompt.lower()
 
+
+class TestWriterPromptHardRules:
+    """Each HARD RULE bullet in WRITER_SYSTEM_PROMPT is load-bearing.
+
+    These tests fail if a bullet is accidentally deleted or weakened during
+    a prompt edit. They check for canonical concept anchors per rule, not
+    exact wording, so minor rephrasing doesn't break them. The intent is
+    "did the rule get dropped from the prompt?", not "is the wording
+    pixel-perfect?"
+    """
+
+    def _get_system_prompt(self):
+        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+        return WRITER_SYSTEM_PROMPT
+
+    def test_length_cap_present(self):
+        prompt = self._get_system_prompt()
+        assert "280" in prompt
+
+    def test_no_first_person_rule(self):
+        """Rule must enumerate the specific banned pronouns so the model
+        can't paraphrase its way around 'no first person.'"""
+        prompt = self._get_system_prompt()
+        assert "No first person" in prompt
+        assert '"we"' in prompt
+        assert '"I"' in prompt
+        assert '"us"' in prompt
+
+    def test_no_hedging_rule(self):
+        prompt = self._get_system_prompt()
+        assert "No hedging" in prompt
+        # At least one canonical hedging example must remain
+        assert '"seems"' in prompt or '"may"' in prompt or '"appears to be"' in prompt
+
+    def test_no_restate_padding_rule(self):
+        prompt = self._get_system_prompt()
+        assert "restate-padding" in prompt or "restate padding" in prompt
+
+    def test_no_poetry_closers_rule(self):
+        """The named example anchors the shape — model needs to see what's banned."""
+        prompt = self._get_system_prompt()
+        assert "poetry" in prompt.lower()
+        # The canonical "doesn't know" example must remain
+        assert "doesn't know" in prompt or "doesn’t know" in prompt
+
+    def test_no_named_power_plant_formula_rule(self):
+        """The single most-violated stock-formula ban — must enumerate the
+        adjectives so the model can't slip in 'mid-sized commercial reactor.'"""
+        prompt = self._get_system_prompt()
+        assert "power plant" in prompt
+        assert "SPECIFIC" in prompt or "NAMED" in prompt
+
+    def test_no_throat_clearing_openers_rule(self):
+        prompt = self._get_system_prompt()
+        assert "throat-clearing" in prompt or "throat clearing" in prompt
+
+    def test_concrete_claim_traceability_rule(self):
+        """Every concrete claim must trace to bundle or general knowledge."""
+        prompt = self._get_system_prompt()
+        assert "traceable to the bundle" in prompt or "trace to" in prompt
+        assert "bundle" in prompt
+
+    def test_geographic_orientation_rule(self):
+        """Must remain with named-city examples; this rule was a recurring
+        regression target — readers need 'Conakry, Guinea' not just 'Conakry.'"""
+        prompt = self._get_system_prompt()
+        assert "ORIENT THE READER GEOGRAPHICALLY" in prompt
+        # Specific anchor cities that motivated the rule
+        assert "Conakry" in prompt
+        assert "Yakutsk" in prompt
+
+    def test_temperature_formatting_rules_present(self):
+        """audience_unit / Fahrenheit-first routing — added in PR #46."""
+        prompt = self._get_system_prompt()
+        assert "audience_unit" in prompt
+        assert "fahrenheit_first" in prompt
+        assert "celsius_first" in prompt
+
+    def test_archive_window_only_rule_present(self):
+        """When historical_context.archive_window_only is true, model must
+        NOT call it 'all-time' / 'ever' / 'in recorded history.'"""
+        prompt = self._get_system_prompt()
+        assert "archive_window_only" in prompt
+        # The substitute phrasing must be enumerated so the model has a path
+        assert "in N years" in prompt or "in the N-year" in prompt or "since" in prompt
+

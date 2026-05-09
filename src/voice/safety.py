@@ -74,6 +74,17 @@ BANNED_PATTERNS = [
     re.compile(r"\bextreme wind warning\b", re.IGNORECASE),
     # Bureaucratic noise in event names
     re.compile(r"-\d{2,4}\b"),  # -26, -2026 suffixes
+    # Fabricated temporal/seasonal/biological context — primary defense is the
+    # writer prompt's HARD RULES bullet ("NO FABRICATED CONTEXT") in
+    # src/two_bot/prompts/writer_prompt.py. These regexes are the fail-safe
+    # if the writer disobeys (model swap, retraining, prompt drift). Each
+    # phrase below is one of the verbatim examples called out in the prompt
+    # and was a confirmed fact-check kill in production prior to PR #50.
+    re.compile(r"three weeks into meteorological spring", re.IGNORECASE),
+    re.compile(r"\bJanuary reading\b", re.IGNORECASE),
+    re.compile(r"flowers are already up", re.IGNORECASE),
+    re.compile(r"the ground froze", re.IGNORECASE),
+    re.compile(r"fruit trees blooming early", re.IGNORECASE),
 ]
 
 

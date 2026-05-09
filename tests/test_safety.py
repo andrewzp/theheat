@@ -309,3 +309,76 @@ class TestSafetyPipeline:
             "It just got bumped to the top GDACS tier."
         )
         assert passed, f"Should pass, got: {reason}"
+
+
+class TestFabricatedContext:
+    """Anti-fabrication banned phrases mirror the writer prompt's HARD RULES.
+
+    The writer prompt at src/two_bot/prompts/writer_prompt.py is the primary
+    defense against fabricated temporal/seasonal/biological framing — the
+    "NO FABRICATED CONTEXT" bullet was added in PR #50 after two confirmed
+    fact-check kills on Dayton WY (2026-05-08) for invented context like
+    "January reading" and "three weeks into meteorological spring."
+
+    safety.py mirrors the specific examples so a runaway model (swapped,
+    retrained, prompt-drifted) can't ship a fabricated tweet even if the
+    prompt is ignored. Tests below assert each banned phrase is caught and
+    that nearby legitimate phrases (anthropomorphic flourish, genuine
+    seasonal references) are NOT caught.
+    """
+
+    def test_three_weeks_into_meteorological_spring_rejected(self):
+        passed, reason = check_regex(
+            "Cold snap in Texas, three weeks into meteorological spring."
+        )
+        assert not passed
+        assert reason is not None
+
+    def test_january_reading_rejected(self):
+        passed, reason = check_regex(
+            "Phoenix at 121F. A January reading on a May day."
+        )
+        assert not passed
+
+    def test_flowers_are_already_up_rejected(self):
+        passed, reason = check_regex(
+            "Hard freeze in Iowa, where flowers are already up."
+        )
+        assert not passed
+
+    def test_the_ground_froze_rejected(self):
+        passed, reason = check_regex(
+            "Late frost in Maine; the ground froze overnight."
+        )
+        assert not passed
+
+    def test_fruit_trees_blooming_early_rejected(self):
+        passed, reason = check_regex(
+            "Hard freeze in West Virginia with fruit trees blooming early."
+        )
+        assert not passed
+
+    def test_anthropomorphic_flourish_passes(self):
+        """Sissonville regression: the canonical 'Fruit trees were not
+        consulted' line is voice, not fabrication. Must NOT match."""
+        passed, reason = check_regex(
+            "Fruit trees in the Kanawha Valley were not consulted."
+        )
+        assert passed, f"Legitimate flourish was rejected: {reason}"
+
+    def test_supposed_to_be_spring_passes(self):
+        """A genuine seasonal reference grounded in the calendar is voice;
+        the bot ships these legitimately. Must NOT match."""
+        passed, reason = check_regex(
+            "Cold snap in Wyoming in a month that is supposed to be spring."
+        )
+        assert passed, f"Legitimate seasonal reference was rejected: {reason}"
+
+    def test_three_springs_later_passes(self):
+        """Shipped tweet about Sissonville used 'three springs later' as
+        an echo of 'three years.' Must NOT match the meteorological-spring
+        rule (rule targets the exact phrase, not all spring mentions)."""
+        passed, reason = check_regex(
+            "A hard freeze, in the Appalachian foothills, three springs later."
+        )
+        assert passed, f"Legitimate 'three springs later' echo was rejected: {reason}"
