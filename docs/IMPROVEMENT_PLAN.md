@@ -8,9 +8,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
-| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
-| Last cycle A-rate | 0% (Apr 29, 0 of 3) |
+| Bot commit | `d9c84ff` (two-bot pipeline live — #47 Codex high-severity batch) |
+| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples). **NOTE: `src/voice/generator.py` is DEAD since 2026-05-04** — no live call sites. The active writer is `src/two_bot/prompts/writer_prompt.py`. All proposal code pointers below that reference `generator.py` target dead code and must be redirected to `writer_prompt.py` before implementation. |
+| Last cycle A-rate | 0% (May 9, 0 of 3) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | 50 percentage points |
 | Posting | paused until bar cleared |
@@ -37,72 +37,128 @@ Ordered by leverage. Each entry tracks: observation count (cycles where the fail
 
 **Tests:** 23 era_anchor tests pass (up from 18 — added 5 gate tests). Full suite 566 passing.
 
-**Status:** SHIPPED. Now awaiting 3+ cycles to confirm era-anchor deployment drops to ~10% empirically. If next 3 cycles show ≤30% era-anchor rate on records, P1 promotes to Resolved (archive).
-
-### P2 — Widen plant-comparison regex adjective allowlist
-
-**Observed:** Apr 27 draft [4] (re-graded D) used *"a commercial nuclear reactor outputs around 3,000 MW"* — the existing regex misses this because "commercial" isn't in the adjective allowlist (`typical|standard|average|large|small|usual`).
-
-**Cycles observed:** Apr 27 (1 draft).
-**Last seen:** Apr 27.
-**Proposed fix:** add `commercial|industrial|mid-sized|high-capacity` to the adjective allowlist in `src/voice/generator.py::_STOCK_FORMULA_PATTERNS`. OR drop the adjective slot entirely (regex matches plant comparison regardless of adjective).
-
-**Expected impact:** kills variant plant-comparison openers at parse time. Pure tactical; corpus-grounded. Note: per-user direction (Apr 27), evaluator-rewrite path bypass is intentional, so this regex catches Gemini-side only.
-
-**Status:** ready to implement. Awaiting human greenlight.
-
-### P3 — Widen opener-formula verb list (or rewrite as shape match)
-
-**Observed:** Apr 27 draft [11] (D) used *"A single wildfire in central India is **pushing** 297 MW"* — `pushing` isn't in the regex's verb allowlist (`radiating | releasing | generating | putting out | emitting | producing`).
-
-**Cycles observed:** Apr 27 (1 draft, but the pattern "Gemini finds new verbs once known ones are blocked" is structural).
-**Last seen:** Apr 27.
-**Proposed fix:** two options — (a) add common synonyms (`pushing | spewing | pumping out | throwing off | sending up`) — incremental, ongoing maintenance. (b) rewrite the regex to match shape rather than verb (`is\s+\w+(?:ing|s)\s+\d`) — bigger blast radius, risk of false positives.
-
-**Expected impact (a):** blocks the named variants. May surface new ones next cycle.
-**Expected impact (b):** structural fix; needs false-positive analysis before shipping.
-
-**Status:** decision point — pick (a) tactical or (b) structural. Awaiting human direction.
+**Status:** SHIPPED. Awaiting 3 cycles of empirical confirmation. **May 9 update:** 0/3 drafts used era anchors (first cycle of post-gate data — no record-type drafts in this batch, so strict comparison is difficult, but the absence of era anchors in a mixed batch is consistent with the gate). 1 of 3 confirmation cycles complete. 2 more cycles needed before promoting to Resolved.
 
 ### P4 — Add Wodehouse rule top-of-SYSTEM_PROMPT
 
-**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are the single most predictive failure mode. Drafts that try too hard ("pointed at the sky" / "nearly 3 degrees" approximation / restate-padding) graded D-/C+/B regardless of mechanics. Drafts that don't try graded B+/A- regardless. Apr 29 [2] Mexico City repeated the explicit-gap-math violation ("That gap is 4.5 degrees" — same pattern as Apr 27 [10] Petaling Jaya). Two consecutive cycles with the same violation.
+**Observed:** Wodehouse-rule violations are the single most predictive failure mode
+across every corpus cycle. Drafts that try too hard (restate-padding, explicit-gap
+math, poetry-attempt closers, authority-gloss after punchline) grade D–C regardless
+of mechanics. Drafts that don't try grade B+/A- regardless of structure. May 9 [2]
+Phoenix EHW: "NWS rates the risk as Major." appended after "May, not July." — same
+topology as restate-padding ([5] Bukit Rahman Putra) and gap-math ([2] Mexico City,
+[10] Petaling Jaya). Bot adds an extra beat after the punchline because it doesn't
+trust the punchline alone.
 
-**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29 (consistent across all corpus cycles).
-**Last seen:** Apr 29.
-**Proposed fix:** add as rule #0 (above the existing "WHAT MAKES A TWEET VIRAL" section) in `src/voice/generator.py::SYSTEM_PROMPT`:
+**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29, May 9 (5 of 5 corpus cycles —
+every single batch has had a Wodehouse violation).
+**Last seen:** May 9.
+**Proposed fix:** add as rule #0 (above the existing top section) in
+`src/two_bot/prompts/writer_prompt.py` (**NOT** `generator.py` — dead since
+2026-05-04):
 
-> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky") — all show effort, all kill the joke before it lands.
+> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the
+> voice is its straight man. The Wodehouse rule: trying too hard breaks the spell.
+> Specific violations to avoid: approximation when exact is available ("nearly 3
+> degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one:
+> 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky"),
+> authority-gloss after a punchline ("NWS rates the risk as Major." after "May, not
+> July." — this tells the reader how to feel instead of letting the data show it).
+> All show effort; all kill the joke before it lands.
 
-**Expected impact:** highest-leverage prompt change in the proposal stack. Wodehouse violations cluster across grades; eliminating them moves several B drafts to B+/A- without changing anything else.
+**Expected impact:** highest-leverage prompt change in the active stack. Five cycles
+of evidence, zero false negatives — every batch has had at least one violation.
+Eliminating this pattern moves several C+/B- drafts to B without any other change.
 
-**Status:** drafted. Awaiting human implementation.
+**Status:** drafted. Awaiting human implementation. Implement in `writer_prompt.py`.
 
-### P5 — Add stranded-mechanic warning to fire prompt addendum
+### P5 — Add stranded-mechanic warning to prompt
 
-**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), and [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing prose or over-explanation. The mechanics work; the surrounding text kills them.
+**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*),
+[12] (*"That was 6 months ago"*) — real humor moves stranded inside throat-clearing.
+May 9 [2] — "May, not July." is a genuine idiom-flip closer, then overridden by
+"NWS rates the risk as Major." The mechanic lands; the surrounding text buries it.
+May 9 [3] — "May 9th." deployed as a closer by shape-matching the "It is April 26."
+pattern without the incongruity that makes the move land (date-as-punchline only
+works when the date names the mismatch; here it names nothing).
 
-**Cycles observed:** Apr 27 (3 drafts).
-**Last seen:** Apr 27.
-**Proposed fix:** add to `_CATEGORY_PROMPTS["fire"]`:
+**Cycles observed:** Apr 27, May 9 (2 cycles).
+**Last seen:** May 9.
+**Proposed fix:** add to the general prompt section in
+`src/two_bot/prompts/writer_prompt.py` (**NOT** `_CATEGORY_PROMPTS["fire"]` in
+`generator.py` — dead since 2026-05-04):
 
-> If you write a punchline, leave it alone. Don't pre-explain it ("for reference, a power plant runs at..."), don't post-explain it ("that's roughly one-eighth of that"), don't restate the data ("The new high: X. The old one: Y."). The data is the setup. The closer is the punchline. No math out loud.
+> If you write a punchline, leave it alone. Don't pre-explain it, don't
+> post-explain it, don't append an authority rating after it. The data is the setup.
+> The closer is the punchline. No math out loud. And only use a date-as-closer when
+> the date names a violation — "It is April." works for a Mali fire because April
+> is the wrong season; "May 9th." doesn't work as a Phoenix heat closer because May
+> in Phoenix is expected to be hot.
 
-**Expected impact:** specifically targets the failure pattern that drove the Apr 27 fire regression. Should reduce stranded-mechanic D drafts.
+**Expected impact:** targets the two distinct failure patterns in this batch — the
+override-after-punchline failure ([2]) and the shape-match-without-logic failure ([3]).
 
 **Status:** drafted. Awaiting human implementation.
 
 ### P6 — Name humor moves as available tools (not requirements)
 
-**Observed:** SYSTEM_PROMPT names some moves ("HISTORICAL WEIGHT" in #1, "VARY YOUR STRUCTURE" in voice section) but doesn't enumerate the full mechanic palette. Gemini reaches for whichever moves are explicitly named; unnamed mechanics get used inconsistently.
+**Observed:** SYSTEM_PROMPT names some moves but doesn't enumerate the full mechanic
+palette. Writer reaches for whichever moves are explicitly named; unnamed mechanics
+get used inconsistently.
 
-**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they're the most-explicit move in the prompt).
+**Cycles observed:** Apr 25, Apr 27 (era anchors over-deployed because they were the
+most-explicit move in the prompt).
 **Last seen:** Apr 27.
-**Proposed fix:** add a "Voice moves available" section after the hard rules. List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+**Proposed fix:** add a "Voice moves available" section in
+`src/two_bot/prompts/writer_prompt.py`. List: comic triple (period-stop), idiom-flip
+(Steven Wright), understatement closer (British dry), period-and-restate (Anchorage
+move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific
+specificity. Conclude: *"None of these are mandatory. When the number alone is
+striking, deliver the data plainly. Forced humor breaks the spell."*
 
-**Expected impact:** richer move palette → more variety across drafts → less convergence on the easy moves (era anchors, throat-clearing).
+**Expected impact:** richer move palette → more variety across drafts → less
+convergence on easy moves (era anchors, authority-gloss).
 
-**Status:** drafted. Awaiting human implementation.
+**Status:** drafted. Awaiting human implementation. Note: P4 should ship first —
+naming more moves is less useful if the Wodehouse rule violation pattern persists.
+
+### P2 — Widen plant-comparison regex adjective allowlist
+
+**Observed:** Apr 27 draft [4] (re-graded D) used *"a commercial nuclear reactor
+outputs around 3,000 MW"* — the existing regex misses this because "commercial" isn't
+in the adjective allowlist (`typical|standard|average|large|small|usual`).
+
+**Cycles observed:** Apr 27 (1 draft).
+**Last seen:** Apr 27.
+**Note:** 2 cycles without re-observation (Apr 29, May 9). One more cycle without
+evidence → retires to archive.
+**Proposed fix:** add `commercial|industrial|mid-sized|high-capacity` to the adjective
+allowlist in `src/two_bot/` safety layer (**NOT** `generator.py::_STOCK_FORMULA_PATTERNS`
+— dead since 2026-05-04; trace the live regex path before implementing).
+
+**Expected impact:** kills variant plant-comparison openers. Per-user direction (Apr
+27): evaluator-rewrite bypass is intentional; this regex catches writer-side only.
+
+**Status:** ready to implement. Awaiting human greenlight. Low priority until
+re-observed.
+
+### P3 — Widen opener-formula verb list (or rewrite as shape match)
+
+**Observed:** Apr 27 draft [11] (D) used *"A single wildfire in central India is
+**pushing** 297 MW"* — `pushing` isn't in the regex's verb allowlist.
+
+**Cycles observed:** Apr 27 (1 draft).
+**Last seen:** Apr 27.
+**Note:** 2 cycles without re-observation (Apr 29, May 9). One more cycle without
+evidence → retires to archive. (No fire drafts in May 9 batch, so absence is
+inconclusive for this fire-specific pattern.)
+**Proposed fix:** two options — (a) add common synonyms (`pushing | spewing | pumping
+out | throwing off | sending up`) — incremental. (b) rewrite the regex to match shape
+rather than verb (`is\s+\w+(?:ing|s)\s+\d`) — structural; needs false-positive
+analysis. Implement in the live safety layer, **not** `generator.py`.
+
+**Status:** decision point — (a) tactical or (b) structural. Awaiting human direction.
+Low priority until re-observed.
 
 ## Awaiting evidence
 

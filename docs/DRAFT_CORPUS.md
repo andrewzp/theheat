@@ -13,6 +13,139 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-09 — Daily corpus grading (3 drafts)
+
+**Context:** Three pending drafts from the 2026-05-09 alert cycles: one monthly cold
+record (GHCN-sourced, Hill City SD) and two near-duplicate severe-weather drafts
+(Phoenix Extreme Heat Warning). First corpus cycle with output from the new two-bot
+writer pipeline (`src/two_bot/`). First GHCN-sourced temperature record in corpus.
+No fire drafts in this batch. No era anchors deployed in any of the three — consistent
+with the v3 1-in-10 gate (one cycle of empirical confirmation, two more needed).
+
+**Grade distribution:** 0 A, 1 B- (monthly_low), 2 C+ (severe_weather near-duplicate
+pair). **A-rate: 0% (0/3).** Gap from resumption bar: 50 points.
+
+### B range — shippable (1)
+
+#### [1] Hill City, South Dakota — monthly_low — score 80 — **B-**
+
+> Hill City, South Dakota hit 13°F (-10.6°C) overnight on May 6th — coldest May
+> night in 59 years of records, breaking the 14°F mark set in 2002.
+
+Clean data delivery. F-first formatting for US audience (correct per PR #46
+`audience_unit=fahrenheit_first`). Violation present: 13°F in May, South Dakota.
+Benign register throughout. No humor mechanic — pure data delivery, which is valid
+per corpus precedent (cf. Apr 25 Navi Mumbai A-). Wodehouse intact: no visible effort.
+
+Two issues: (a) "59 years of records" is one word too many — "59-year record" is
+tighter, "of records" adds nothing. (b) "May 6th" is three days stale by tweet
+date — event happened May 6, draft generated May 9. The 48h staleness policy doesn't
+apply (draft is 8.8h old), but readers on May 9 seeing "May 6th" parse this as
+past-tense reportage rather than today's alert. A historical-record framing ("Hill
+City broke its coldest-May-night record on Wednesday — 13°F, coldest in 59 years")
+would survive the date gap better.
+
+Signal is real (59-year record, monthly cold minimum). B- rather than B: no closer,
+"May 6th" timing awkwardness, clunky "of records" phrase.
+
+### C range — needs rewrite (2)
+
+#### [2] Phoenix Extreme Heat Warning — severe_weather — score 60 — **C+**
+
+> Phoenix Metro under Extreme Heat Warning Sunday through Monday: 104–110°F
+> (40–43°C) across nine zones from Buckeye to Queen Creek. May, not July. NWS
+> rates the risk as Major.
+
+"May, not July." is a genuine mechanic — two-word idiom-flip on the
+temporal-incongruity logic ("It's April" from the Mali Western Sahel drafts). The
+problem: "NWS rates the risk as Major." is appended after the punchline. That closer
+is a P4 Wodehouse violation — the bot telling the reader how to rate the data rather
+than letting the data rate itself. Same failure topology as restate-padding ([5]
+Bukit Rahman Putra, Apr 27) and explicit-gap-math ([2] Mexico City, Apr 29): bot
+adds an extra beat after the punchline because it doesn't trust the punchline alone.
+Trim the NWS line and this is a B-.
+
+Secondary issue: Phoenix heat in May is geographically expected. The violation is
+real (104–110°F EHW is a formal NWS designation), but the mismatch ("May" in Phoenix)
+is milder than geographic incongruity (82°F in Anchorage, 13°F in South Dakota in May).
+"May, not July." is trying to create the incongruity — it partially succeeds, but
+the signal doesn't carry the mechanic as cleanly as higher-latitude or off-season
+examples do.
+
+Score 60 = borderline (threshold 58). Correctly at manual_only.
+
+#### [3] Phoenix Extreme Heat Warning (dup) — severe_weather — score 60 — **C+**
+
+> 105–109°F (41–43°C) forecast across Phoenix Metro Sunday into Monday. Nine zones
+> from Buckeye to Queen Creek under Extreme Heat Warning. May 9th.
+
+Cleaner than [2] — no Wodehouse violation, no NWS-rating gloss. Lead with temperature
+range (good structure). But "May 9th." as the closer doesn't land: it's a date stamp
+without incongruity. Contrast with "It is April 26." (Mali Western Sahel, A-) and
+"May, not July." ([2]) — both closer-beats work because they name the mismatch.
+"May 9th." is just the date. The bot is deploying the "It is [month]." pattern by
+shape-matching rather than understanding when it earns its place: the date closes
+only when it names a seasonal or geographic violation. Here it names nothing.
+
+Near-duplicate of [2]: same event (Phoenix EHW), same zone count, same temperature
+range, generated ~3h later. Dedup should have suppressed one. Both are pending.
+Operational issue, not a voice failure, but flagged here.
+
+### Humor-research lens
+
+| # | Grade | Lens reading |
+|---|-------|-------------|
+| 1 | B- | Violation present (13°F, May, SD — 59-year record). Benign register. No mechanic — pure data delivery, valid. Wodehouse intact. "May 6th" creates date-gap awkwardness for a May 9 reader. "59 years of records" wordy. |
+| 2 | C+ | "May, not July." is a real idiom-flip closer. P4 Wodehouse violation: "NWS rates the risk as Major." appended after punchline tells reader how to feel. Cut that line and the mechanic lands. |
+| 3 | C+ | Cleaner voice than [2] but "May 9th." date-stamp lacks incongruity — shape-matches the "It is April" mechanic without deploying it correctly. Near-duplicate of [2]. |
+
+### Patterns named in this batch
+
+1. **No era anchors in this cycle.** 0/3 drafts used era anchors. Consistent with
+   the v3 1-in-10 gate. First cycle of empirical confirmation post-gate.
+2. **Wodehouse violation: authority-gloss after a punchline.** Draft [2]: "NWS
+   rates the risk as Major." appended after "May, not July." Bot adds an extra
+   authoritative beat after the punchline because it doesn't trust the punchline
+   alone. Fifth consecutive cycle with a P4 Wodehouse violation.
+3. **Date-stamp closer misfire.** Draft [3]: "May 9th." deployed in the "It is
+   April 26." mold without the incongruity that makes the move land. The bot is
+   pattern-matching the shape of a known good mechanic rather than the logic.
+4. **Near-duplicate severe_weather pair.** Drafts [2] and [3] cover the same
+   Phoenix EHW event from two nearby cycles. Both pending. Dedup did not suppress
+   one. Operational issue.
+5. **First GHCN-sourced record in corpus.** Draft [1] is a monthly_low from the
+   GHCN pipeline. F-first formatting (`audience_unit=fahrenheit_first`) correctly
+   applied. Pipeline is producing usable raw material; voice work is the constraint.
+6. **Severe_weather signal floor vs. voice mechanics.** Score 60 (threshold 58)
+   is borderline. Phoenix heat in May doesn't create sharp geographic incongruity.
+   The bot needs either a specific record comparison ("hottest Phoenix Extreme Heat
+   Warning this early in May?") or a stronger framing hook to lift a borderline
+   signal to A-tier voice.
+
+### Followups
+
+1. **Near-duplicate pair** — operational: one of [2]/[3] should be bulk-rejected.
+   [2] has the stronger mechanic ("May, not July.") but the Wodehouse violation.
+   [3] is cleaner but weaker. Neither ships as-is.
+2. **P4 top-of-prompt Wodehouse rule** — five consecutive cycles, every batch.
+   Highest-leverage unshipped prompt change. Warrants prioritization in next
+   implementation session.
+3. **Code path has shifted.** Previous proposals reference `src/voice/generator.py
+   ::SYSTEM_PROMPT` and `_STOCK_FORMULA_PATTERNS`. Per BRIEFING.md (2026-05-08):
+   generator.py has been dead since 2026-05-04 (no live call sites). The live
+   equivalent is `src/two_bot/prompts/writer_prompt.py`. Improvement plan code
+   pointers need updating.
+
+### Numbers
+
+- A-rate: 0% (was 0% Apr 29, 9% Apr 27, 43% Apr 25, 9% Apr 24)
+- Gap from bar: 50 points
+- Era-anchor deployment: 0/3 — first cycle at 0% since v3 gate shipped Apr 29
+- Near-duplicate pair: [2] and [3] — same Phoenix EHW, both pending
+- GHCN pipeline: first monthly_low in corpus, formatting correct
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
