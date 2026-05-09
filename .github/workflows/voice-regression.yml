@@ -1,0 +1,50 @@
+name: voice-regression
+
+# Live writer-replay regression. Runs the real Anthropic writer against a
+# fixed set of bundle fixtures and asserts the output passes the safety
+# pipeline. Catches voice/quality regressions when the writer prompt or
+# model changes.
+#
+# Cost: ~30 invocations × ~2K tokens each at Sonnet pricing ≈ $0.20 per run.
+# Daily ≈ $6/month. Acceptable on the existing Anthropic budget.
+#
+# Triggers:
+#   - schedule: daily at 09:00 UTC (5am ET) so the report is ready before
+#     a US-morning PR review.
+#   - workflow_dispatch: manual run for ad-hoc verification after a prompt
+#     change.
+#   - pull_request with label `voice-check`: opt-in PR gate when a prompt
+#     change is being reviewed.
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch: {}
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: voice-regression
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    # PR trigger only fires when the `voice-check` label is added, not on
+    # every label event.
+    if: github.event_name != 'pull_request' || github.event.label.name == 'voice-check'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Run voice-regression replay
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m pytest tests/voice_regression/ -v -m voice_replay
