@@ -4,6 +4,8 @@ from copy import deepcopy
 from unittest.mock import patch, MagicMock
 from datetime import date
 
+import pytest
+
 from src.state import DEFAULT_STATE
 from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet, process_due_drafts
 from src.data.open_meteo import CityTemp, RecordEvent
@@ -13,6 +15,72 @@ from src.data.co2 import CO2Reading, CO2Milestone
 
 def _fresh_state():
     return deepcopy(DEFAULT_STATE)
+
+
+@pytest.fixture
+def mock_alerts_pipeline_sources(mocker):
+    """Clamp the run_alerts data sources that test classes typically leave unmocked.
+
+    Covers nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst,
+    water_levels, river_gauges, ice_mass, synthesis, ghcn, and
+    fire_footprint. Callers must still mock `src.main.open_meteo`,
+    `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
+
+    run_alerts has 18 _try_two_bot_draft call sites, one per signal-type
+    branch. Tests that exercise a single branch and assert call counts on
+    `_try_two_bot_draft` need every other branch's data source mocked away,
+    or real network responses occasionally trigger extra draft attempts and
+    break `assert_called_once`. See test_run_alerts_ocean_sst_drafts_on_day_5
+    for the canonical inline equivalent.
+    """
+    nws = mocker.patch("src.main.nws_alerts")
+    nws.fetch_alerts.return_value = []
+
+    gdacs = mocker.patch("src.main.gdacs")
+    gdacs.fetch_disasters.return_value = []
+
+    sea_ice = mocker.patch("src.main.sea_ice")
+    sea_ice.fetch_sea_ice.return_value = []
+    sea_ice.detect_record_low.return_value = None
+
+    drought = mocker.patch("src.main.drought")
+    drought.fetch_drought_data.return_value = []
+
+    enso = mocker.patch("src.main.enso")
+    enso.fetch_enso_data.return_value = []
+    enso.detect_transition.return_value = None
+
+    ocean = mocker.patch("src.main.ocean")
+    ocean.fetch_ocean_conditions.return_value = []
+    ocean.detect_extreme_waves.return_value = []
+
+    ocean_sst = mocker.patch("src.main.ocean_sst")
+    ocean_sst.fetch_global_sst.return_value = None
+    ocean_sst.detect_streak_milestone.return_value = (None, None)
+
+    water = mocker.patch("src.main.water_levels")
+    water.fetch_water_levels.return_value = []
+    water.detect_storm_surge.return_value = []
+
+    river = mocker.patch("src.main.river_gauges")
+    river.fetch_river_levels.return_value = []
+    river.detect_floods.return_value = []
+
+    ice = mocker.patch("src.main.ice_mass")
+    ice.fetch_grace_mass.return_value = []
+    ice.detect_monthly_record.return_value = None
+    ice.detect_cumulative_milestone.return_value = None
+
+    synth = mocker.patch("src.main.synthesis")
+    synth.detect_fire_drought_heat.return_value = []
+
+    ghcn = mocker.patch("src.main.ghcn")
+    ghcn.check_extreme_signals_for_stations.return_value = ([], [])
+
+    ff = mocker.patch("src.main.fire_footprint")
+    ff.fetch_active_fire_perimeters.return_value = []
+    ff.detect_tier_crossings.return_value = []
+    ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
 
 
 class TestSaveDraft:
@@ -460,7 +528,8 @@ class TestMonthlyRecordSameYearSuppression:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_suppresses_monthly_when_old_record_this_year(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         from src.data.open_meteo import ExtremeSignalBundle, MonthlyRecord
         from datetime import date
@@ -501,7 +570,8 @@ class TestMonthlyRecordSameYearSuppression:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_allows_monthly_when_old_record_prior_year(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot,
+        mock_alerts_pipeline_sources,
     ):
         """When the prior record was set in a prior year, the signal
         should be allowed through — and it should hit the two-bot
@@ -567,7 +637,8 @@ class TestCO2AnnualCap:
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     def test_skips_milestone_when_cap_reached(
-        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         from src.main import CO2_ANNUAL_CAP
         from datetime import date
@@ -597,7 +668,8 @@ class TestCO2AnnualCap:
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     def test_allows_milestone_below_cap(
-        self, mock_om, mock_firms, mock_co2, mock_two_bot, mock_gen, mock_draft
+        self, mock_om, mock_firms, mock_co2, mock_two_bot, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         """Below the annual CO2 cap, a fresh milestone should reach the
         two-bot pipeline (ported from voice gen on 2026-05-04)."""
@@ -675,7 +747,8 @@ class TestRunAlerts:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_calls_all_data_sources(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
@@ -699,7 +772,8 @@ class TestRunAlerts:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_deduplicates_events(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
@@ -723,7 +797,8 @@ class TestRunAlerts:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_handles_data_source_errors_gracefully(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.side_effect = Exception("API down")
         mock_firms.fetch_fires.return_value = []
@@ -746,6 +821,7 @@ class TestRunAlerts:
         self, mock_state, mock_om, mock_firms, mock_co2, mock_gen,
         mock_generate_fire_draft, mock_draft,
         monkeypatch,
+        mock_alerts_pipeline_sources,
     ):
         # Pin scoring.date.today() to mid-April so the shoulder-season novelty
         # boost keeps the synthetic fire above the editorial threshold across
@@ -1297,7 +1373,8 @@ class TestFireFootprintIntegration:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_tier_crossing_creates_draft_and_updates_state(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot,
+        mock_alerts_pipeline_sources,
     ):
         """Fire footprint ported to two-bot writer on 2026-05-04. The
         FireComplex flows through `build_fire_footprint_bundle` →
@@ -1354,7 +1431,8 @@ class TestFireFootprintIntegration:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_same_day_second_run_gated_out(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
@@ -1378,7 +1456,8 @@ class TestFireFootprintIntegration:
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_fetch_error_is_logged_not_fatal(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft
+        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft,
+        mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
         mock_om.check_extreme_signals_for_cities.return_value = ([], [])
