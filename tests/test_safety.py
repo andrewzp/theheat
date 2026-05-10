@@ -246,6 +246,18 @@ class TestTruncatedTemperature:
         )
         assert passed
 
+    def test_single_digit_celsius_cold_record_passes(self):
+        passed, reason = check_truncated_temperature(
+            "Dayton reached 4C this morning. Coldest May reading in the station archive."
+        )
+        assert passed, f"Single-digit C can be valid for cold records, got: {reason}"
+
+    def test_single_digit_celsius_opener_passes(self):
+        passed, reason = check_truncated_temperature(
+            "4C in Dayton this morning. Coldest May reading in the station archive."
+        )
+        assert passed, f"Single-digit C opener can be valid for cold records, got: {reason}"
+
     def test_no_temperature_passes(self):
         passed, _ = check_truncated_temperature("Arctic sea ice at record low extent.")
         assert passed
@@ -253,16 +265,22 @@ class TestTruncatedTemperature:
 
 class TestMonthRepetition:
     def test_month_said_twice_rejected(self):
+        # Canonical original failure mode: explicit "It's April." after the
+        # date already established the month.
         tweet = "NWS issued a warning for Chuuk. April 10, 2026. It's April."
         passed, reason = check_month_repetition(tweet)
         assert not passed
         assert "april" in reason.lower()
 
     def test_month_said_once_passes(self):
+        # "It's April." standalone with no prior date reference is still a
+        # bureaucratic standalone — and we want it flagged. (Edge case
+        # preserved from original test.)
         passed, reason = check_month_repetition(
             "Phoenix hit 121F today. It's April."
         )
-        assert passed
+        assert not passed
+        assert "april" in (reason or "").lower()
 
     def test_no_month_passes(self):
         passed, reason = check_month_repetition("Phoenix hit 121F today.")
@@ -274,6 +292,57 @@ class TestMonthRepetition:
             "Phoenix at 121F in April. May average is only 95F."
         )
         assert passed
+
+    def test_year_anchored_restatement_rejected(self):
+        # Year-anchored restatement: "April 2026. April..." is the variant
+        # where the writer prints a full date then opens the next sentence
+        # with the same month for no reason.
+        passed, reason = check_month_repetition(
+            "Heat dome over Phoenix. April 2026. April records have already fallen."
+        )
+        assert not passed
+
+    # -- Regression tests: monthly_low/high tweets that the prior rule
+    #    rejected as false positives. The voice-regression cron flagged
+    #    all three on 2026-05-10.
+
+    def test_monthly_low_date_and_record_class_passes(self):
+        # The Sissonville pattern: month as date AND as record class.
+        passed, reason = check_month_repetition(
+            "Sissonville, West Virginia hit 28°F (-2.2°C) overnight on May 4 "
+            "— a new May cold record in 16 years of data, undercutting the "
+            "previous mark of 29°F (-1.7°C) set in 2020. Hard frost, in spring."
+        )
+        assert passed, f"Should pass, got: {reason}"
+
+    def test_monthly_low_dayton_pattern_passes(self):
+        # The Dayton pattern: same date-plus-record-class shape, cleaner.
+        passed, reason = check_month_repetition(
+            "Dayton, Wyoming hit 15°F (-9.4°C) on May 5 — the coldest May "
+            "night in 21 years of records there, snapping a mark set in 2010 "
+            "by 2°F."
+        )
+        assert passed, f"Should pass, got: {reason}"
+
+    def test_monthly_high_three_mentions_with_voice_flourish_passes(self):
+        # The Verkhoyansk pattern: 3 April mentions, none of them
+        # bureaucratic — date, record class, and a poetic "still belongs to
+        # winter" framing. The safety-net threshold (≥4) allows this.
+        passed, reason = check_month_repetition(
+            "Verkhoyansk, Russia — one of the coldest cities on Earth — hit "
+            "14.8°C (59°F) in April, smashing its previous April record of "
+            "12.3°C set in 2018 by 2.5°C. That margin, in a 30-year archive "
+            "for a place where April still belongs to winter, is not subtle."
+        )
+        assert passed, f"Should pass, got: {reason}"
+
+    def test_four_plus_mentions_rejected_as_padding(self):
+        # Safety net: any single month appearing 4+ times is padding.
+        passed, reason = check_month_repetition(
+            "April April April April records are falling."
+        )
+        assert not passed
+        assert "padding" in (reason or "").lower()
 
 
 class TestSafetyPipeline:

@@ -93,34 +93,66 @@ def check_truncated_temperature(tweet: str) -> tuple[bool, str | None]:
 
     Gemini sometimes drops the leading digit: "1F forecast for Singapore"
     when it should be "91F". A real weather record tweet will never have
-    single-digit F or sub-10C temperatures — those aren't records, they're
-    errors. Rejects tweets that start with or prominently feature a
-    standalone 1-digit temperature.
+    single-digit F temperatures — those aren't credible record-heat values
+    for this bot and have repeatedly meant the writer dropped a leading digit.
+    Single-digit C can be valid for cold-record drafts, so Celsius is left for
+    the bundle fact-checker instead of being killed by this text-only guard.
     """
     # Standalone 1-digit Fahrenheit near the start of the tweet, not preceded
     # by another digit (so "91F" passes, "1F" fails).
-    if re.match(r"^\s*\d(?:F\b|C\b)", tweet):
+    if re.match(r"^\s*\dF\b", tweet):
         return False, "Tweet starts with a 1-digit temperature (likely truncated)"
     # Also catch "hit 2F" style mid-sentence after a common verb
     if re.search(r"\b(hit|forecast|forecast to hit|reached|at|record|dropped) \dF\b", tweet):
         return False, "Truncated temperature (single digit F) after a temperature verb"
-    if re.search(r"\b(hit|forecast|forecast to hit|reached|at|record|dropped) \dC\b", tweet):
-        return False, "Truncated temperature (single digit C) after a temperature verb"
     return True, None
 
 
-def check_month_repetition(tweet: str) -> tuple[bool, str | None]:
-    """Flag tweets that mention the same month twice in close proximity.
+_MONTHS_PATTERN = "|".join(MONTHS)
 
-    Catches failures like:
+# Bureaucratic date-restatement patterns. The earlier blanket "count >= 2"
+# rule false-positived on the now-standard monthly_low/high tweet shape
+# ("hit X on May 4 — new May cold record in N years") where the month is
+# load-bearing twice: once as a date, once as the record class.
+_REDUNDANT_DATE_PATTERNS = [
+    # "It's April." — standalone restatement after the date is already on screen.
+    # The original failure mode that motivated this gate.
+    re.compile(rf"\bit'?s ({_MONTHS_PATTERN})\b\.?", re.IGNORECASE),
+    # "April 2026. April" — year-anchored restatement. Catches the variant
+    # where the writer says the full date and then opens the next sentence
+    # with the same month for no reason.
+    re.compile(
+        rf"\b({_MONTHS_PATTERN})\s+\d{{4}}\.\s+(?:{_MONTHS_PATTERN})\b",
+        re.IGNORECASE,
+    ),
+]
+
+
+def check_month_repetition(tweet: str) -> tuple[bool, str | None]:
+    """Flag tweets that bureaucratically restate the date.
+
+    Targets the original failure mode where the writer prints a full date
+    and then redundantly re-states the month as standalone padding:
       "NWS issued a Tropical Storm Warning. April 10, 2026. It's April."
+
+    Does NOT fail on legitimate two-time mentions where the month appears
+    once as a date and once as the record class — the now-standard shape
+    for monthly_low / monthly_high signals:
+      "Sissonville hit 28°F on May 4 — coldest May night in 16 years"
+
+    Safety net: any single month appearing 4+ times is padding regardless
+    of context.
     """
+    for pattern in _REDUNDANT_DATE_PATTERNS:
+        match = pattern.search(tweet)
+        if match:
+            return False, f"Redundant date restatement: {match.group()!r}"
+
     lowered = tweet.lower()
     for month in MONTHS:
-        # Count occurrences of the month word, ignoring it appearing inside a longer word.
         count = len(re.findall(rf"\b{month}\b", lowered))
-        if count >= 2:
-            return False, f"Month '{month}' mentioned {count} times — redundant date"
+        if count >= 4:
+            return False, f"Month '{month}' mentioned {count} times — padding"
     return True, None
 
 
