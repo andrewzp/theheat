@@ -117,12 +117,22 @@ _MONTHS_PATTERN = "|".join(MONTHS)
 _REDUNDANT_DATE_PATTERNS = [
     # "It's April." — standalone restatement after the date is already on screen.
     # The original failure mode that motivated this gate.
-    re.compile(rf"\bit'?s ({_MONTHS_PATTERN})\b\.?", re.IGNORECASE),
+    #
+    # Apostrophe is REQUIRED (straight or curly). Without it, the pattern
+    # also matches the possessive "its May" — which is legitimate voice in
+    # phrasings like "Phoenix broke its May record by 2°F" (Codex review of
+    # PR #67 flagged this false positive).
+    re.compile(rf"\bit[’']s ({_MONTHS_PATTERN})\b\.?", re.IGNORECASE),
     # "April 2026. April" — year-anchored restatement. Catches the variant
     # where the writer says the full date and then opens the next sentence
     # with the same month for no reason.
+    #
+    # The second occurrence is a BACKREFERENCE to the first month, so this
+    # only fires when the same month repeats. "April 2026. May records..."
+    # is a legitimate cross-month comparison and must pass (Codex review of
+    # PR #67 flagged this false positive).
     re.compile(
-        rf"\b({_MONTHS_PATTERN})\s+\d{{4}}\.\s+(?:{_MONTHS_PATTERN})\b",
+        rf"\b({_MONTHS_PATTERN})\s+\d{{4}}\.\s+\1\b",
         re.IGNORECASE,
     ),
 ]
