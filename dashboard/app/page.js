@@ -880,6 +880,139 @@ function PipelineView({ run, runs, config, drafts, trigger, triggering, triggerR
   )
 }
 
+function SourcesView({ sources, stats }) {
+  if (!sources || sources.length === 0) {
+    return (
+      <div className="card full">
+        <h2>Source Health</h2>
+        <p style={{ color: "#888" }}>No run history yet.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="card full">
+      <div className="section-head">
+        <div>
+          <h2>Source Health</h2>
+          <p style={{ color: "#888", fontSize: 12 }}>
+            Aggregated over the last {stats?.runs_analyzed ?? 0} runs.
+            {stats?.unhealthy_count > 0 && (
+              <span style={{ color: "#f87171", marginLeft: 8 }}>
+                {stats.unhealthy_count} unhealthy
+              </span>
+            )}
+            {stats?.degraded_count > 0 && (
+              <span style={{ color: "#fbbf24", marginLeft: 8 }}>
+                {stats.degraded_count} degraded
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+      <div className="source-health-table" style={{ marginTop: 16 }}>
+        <div className="source-row source-header">
+          <span>Source</span>
+          <span>Health</span>
+          <span>Success rate</span>
+          <span>Observed</span>
+          <span>Drafted</span>
+          <span>Last run</span>
+        </div>
+        {sources.map((s) => (
+          <div key={s.source} className="source-row">
+            <span className="source-name">{s.source}</span>
+            <span className={`badge source-${s.health}`}>{s.health}</span>
+            <span className="source-rate">
+              {s.success_rate != null ? `${Math.round(s.success_rate * 100)}%` : "—"}
+              <span style={{ color: "#555", marginLeft: 8, fontSize: 11 }}>
+                ({s.successes}/{s.runs})
+              </span>
+            </span>
+            <span className="source-num">{s.total_observed}</span>
+            <span className="source-num">{s.total_drafted}</span>
+            <span className="source-time">
+              {s.last_run_at ? timeAgo(s.last_run_at) : "—"}
+              {s.last_run_status === "failed" && (
+                <span style={{ color: "#f87171", marginLeft: 4 }}>(failed)</span>
+              )}
+            </span>
+            {s.last_error && (
+              <div
+                className="source-error"
+                style={{
+                  gridColumn: "1 / -1",
+                  color: "#f87171",
+                  fontSize: 11,
+                  marginTop: 4,
+                  paddingLeft: 12,
+                }}
+              >
+                last error ({s.last_error_at ? timeAgo(s.last_error_at) : "—"}): {s.last_error}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <style jsx>{`
+        .source-health-table {
+          display: grid;
+          gap: 0;
+        }
+        .source-row {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1.2fr 1fr 1fr 1.4fr;
+          gap: 12px;
+          padding: 10px 0;
+          border-bottom: 1px solid #1a1a1a;
+          font-size: 12px;
+          align-items: center;
+        }
+        .source-row.source-header {
+          color: #555;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          font-size: 10px;
+          padding-bottom: 6px;
+        }
+        .source-name {
+          color: #ccc;
+          font-family: inherit;
+        }
+        .source-rate {
+          color: #888;
+        }
+        .source-num {
+          color: #888;
+          font-variant-numeric: tabular-nums;
+        }
+        .source-time {
+          color: #555;
+        }
+        .badge.source-healthy {
+          background: #0a2a0a;
+          color: #4ade80;
+          border: 1px solid #1a4a1a;
+        }
+        .badge.source-degraded {
+          background: #2a1a0a;
+          color: #fbbf24;
+          border: 1px solid #4a3a1a;
+        }
+        .badge.source-unhealthy {
+          background: #2a0a0a;
+          color: #f87171;
+          border: 1px solid #4a1a1a;
+        }
+        .badge.source-idle {
+          background: #1a1a1a;
+          color: #555;
+          border: 1px solid #333;
+        }
+      `}</style>
+    </div>
+  )
+}
+
 function SuppressedView({ suppressions, stats, sourceFilter, setSourceFilter, stageFilter, setStageFilter }) {
   const sourceCounts = stats?.source_counts || {}
   const sourceEntries = Object.entries(sourceCounts).sort((a, b) => b[1] - a[1])
@@ -1043,6 +1176,9 @@ export default function Dashboard() {
   const [suppressionsSourceFilter, setSuppressionsSourceFilter] = useState("")
   const [suppressionsStageFilter, setSuppressionsStageFilter] = useState("")
 
+  const [sources, setSources] = useState([])
+  const [sourcesStats, setSourcesStats] = useState(null)
+
   // Model config
   const [modelConfig, setModelConfig] = useState(null)
 
@@ -1054,11 +1190,12 @@ export default function Dashboard() {
       const suppQuery = suppressionsSourceFilter
         ? `/api/suppressions?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
         : "/api/suppressions?limit=50"
-      const [stateRes, draftsRes, suppRes, configRes] = await Promise.all([
+      const [stateRes, draftsRes, suppRes, configRes, sourcesRes] = await Promise.all([
         fetch("/api/state"),
         fetch("/api/drafts"),
         fetch(suppQuery),
         fetch("/api/config"),
+        fetch("/api/source-health"),
       ])
       setData(await stateRes.json())
       const d = await draftsRes.json()
@@ -1070,6 +1207,11 @@ export default function Dashboard() {
       }
       if (configRes.ok) {
         setModelConfig(await configRes.json())
+      }
+      if (sourcesRes.ok) {
+        const sh = await sourcesRes.json()
+        setSources(sh.sources || [])
+        setSourcesStats(sh.stats || null)
       }
     } catch (e) {
       console.error(e)
@@ -1813,6 +1955,17 @@ export default function Dashboard() {
               <span className="tab-count">{suppressionsStats.last24h}</span>
             ) : null}
           </button>
+          <button
+            className={`tab ${activeTab === "sources" ? "active" : ""}`}
+            onClick={() => setActiveTab("sources")}
+          >
+            Sources
+            {sourcesStats?.unhealthy_count > 0 ? (
+              <span className="tab-count alert">{sourcesStats.unhealthy_count}</span>
+            ) : sourcesStats?.degraded_count > 0 ? (
+              <span className="tab-count">{sourcesStats.degraded_count}</span>
+            ) : null}
+          </button>
         </div>
 
         {loading ? (
@@ -1826,6 +1979,8 @@ export default function Dashboard() {
             stageFilter={suppressionsStageFilter}
             setStageFilter={setSuppressionsStageFilter}
           />
+        ) : activeTab === "sources" ? (
+          <SourcesView sources={sources} stats={sourcesStats} />
         ) : activeTab === "pipeline" ? (
           <PipelineView
             run={latestRichRun}
