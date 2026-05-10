@@ -8,12 +8,14 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
-| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
-| Last cycle A-rate | 0% (Apr 29, 0 of 3) |
+| Bot commit | `0fdec6c` (#65 BRIEFING + CHANGELOG refresh, 2026-05-09) |
+| Voice engine version | **Two-bot pipeline** (Sonnet 4.6 writer + Gemini Flash fact-checker, shipped 2026-05-04). `src/voice/generator.py` (voice engine v3) is dead code — no live call sites. |
+| Last graded cycle A-rate | 0% (Apr 29, 0 of 3) |
+| Last grading attempt | 2026-05-10 — access failure (GitHub API rate-limited, no GH_GIST_TOKEN in agent env). Zero drafts pulled. |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 percentage points |
+| Gap | 50 percentage points (last graded baseline; two-bot quality unknown) |
 | Posting | paused until bar cleared |
+| Architecture gap | All P2–P6 proposals were calibrated against generator.py / Gemini Flash alone. The two-bot writer (Sonnet 4.6) changes the generation layer substantially. Some proposals may transfer directly; others (regex fixes in generator.py, per-category prompt addenda) may no longer apply if two-bot uses different prompt structure. Next graded cycle will determine which proposals remain active. |
 
 ## Active proposals
 
@@ -104,9 +106,54 @@ Ordered by leverage. Each entry tracks: observation count (cycles where the fail
 
 **Status:** drafted. Awaiting human implementation.
 
+### P7 — Fix grading agent Gist access (infra, not voice)
+
+**Observed:** 2026-05-10 grading run returned zero drafts. Root cause:
+unauthenticated GitHub API rate-limited (60 req/hr per IP) by the time
+the agent fires; `GH_GIST_TOKEN` / `GH_PAT` not exported into agent
+execution environment. The staleness bulk-reject step also could not
+run.
+
+**Cycles observed:** 1 (2026-05-10).
+**Last seen:** 2026-05-10.
+
+**Proposed fix:** Export `GH_GIST_TOKEN` as an environment variable in
+the agent launch context (same PAT already used by the alerts cron in
+GitHub Actions). The read call is a single authenticated `GET
+/gists/{id}` — no extra scope beyond `gist:read`. The staleness PATCH
+call needs `gist` write scope. Both are already satisfied by the
+existing PAT.
+
+**Expected impact:** agent recovers full Gist access on next run.
+Staleness bulk-reject also resumes. One-line fix in the agent launch
+script.
+
+**Status:** infra blocker. Human operator must action before next
+scheduled run.
+
 ## Awaiting evidence
 
 These need more cycles before promotion to active proposals or retirement.
+
+### A3 — Two-bot pipeline quality calibration (pending first corpus)
+
+The two-bot port (2026-05-04) replaced Gemini Flash generator.py with
+a Sonnet 4.6 writer + Gemini Flash fact-checker pipeline. All active
+proposals (P2–P6) were written against the old pipeline. Until the
+grading agent can pull and grade actual two-bot output, we don't know:
+
+- Whether the opener-formula pattern (P2, P3) recurs under Sonnet
+  writing style.
+- Whether Wodehouse violations (P4) are more or less common from
+  Sonnet 4.6.
+- Whether stranded mechanics (P5) survive the fact-check pass.
+- Whether the era-anchor 1-in-10 gate (shipped in generator.py v3)
+  transferred to the two-bot prompt, or needs re-implementing in
+  `src/two_bot/prompts/writer_prompt.py`.
+
+**Watch for:** First batch of two-bot pending drafts. Grade with full
+humor-research lens. Re-evaluate each active proposal against actual
+two-bot output before implementing any.
 
 ### A1 — Era_anchors prune impact (Apr 26)
 

@@ -13,6 +13,49 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-10 — No fresh drafts (Gist API access failure)
+
+**Context:** Daily grading agent fired 2026-05-10. Attempted to pull
+pending drafts from Gist `06c02c97ffc0d11458687f1ed998d9e5` via the
+unauthenticated GitHub API. Response: `403 API rate limit exceeded for
+34.121.238.53`. No `gh` CLI available in this execution environment;
+no `GH_GIST_TOKEN` present in environment variables. Local repo
+contains no cached state.json.
+
+**Root cause:** The grading agent runs without a GitHub PAT in scope.
+The GitHub API's unauthenticated rate limit (60 req/hr per IP) is
+exhausted by the time this agent fires, likely because the alerts
+cron also runs against the same egress IP on the same instance.
+
+**Draft count graded: 0. A-rate: N/A (access failure — not a quality
+signal).**
+
+**Staleness check:** Cannot run without Gist access. Any drafts older
+than 48 hours with real-time-baked content (pending from Apr 29 cycle)
+remain unprocessed by this run. Human operator should bulk-reject via
+the dashboard.
+
+**Patterns / new proposals:** None surfaced — no corpus material to
+evaluate. No active-proposal evidence counts updated this cycle.
+
+**Secondary note — architecture change since last corpus run (Apr 29):**
+BRIEFING.md documents that the two-bot pipeline (Sonnet 4.6 writer +
+Gemini fact-checker) shipped 2026-05-04, replacing `src/voice/generator.py`
+(Gemini Flash alone). The old voice engine is now dead code. The next
+corpus cycle will be the **first graded output from the two-bot pipeline**.
+The Apr 25 / Apr 27 / Apr 29 quality benchmarks and active proposals
+(P2–P6) were all calibrated against generator.py; it is unclear how
+directly they transfer. Agent should note this context gap at the top
+of the next grading section.
+
+**Action required:**
+1. Ensure `GH_GIST_TOKEN` (or a GitHub PAT with `gist` read scope) is
+   available in the grading agent's execution environment. The simplest
+   fix: add the PAT as a secret and export it before agent launch.
+2. Dashboard bulk-reject any Apr 29-era pending drafts with baked dates.
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All

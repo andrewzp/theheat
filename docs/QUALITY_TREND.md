@@ -17,11 +17,14 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
+| 2026-05-10 | 0 | — | — | — | — | **N/A** | — | Access failure: GitHub API rate-limited (unauthenticated). No GH_GIST_TOKEN in agent env. Zero drafts pulled; zero graded. Not a quality signal. Separate infra note: two-bot pipeline (Sonnet writer + Gemini fact-check) replaced generator.py 2026-05-04 — next graded cycle will be first two-bot output. |
 
 **Trend interpretation:**
-The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
+The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Apr 29 dropped to 0% — era anchors still at 100% on records pre-gate; voice engine v3 shipped same day.
 
-We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
+**Two-bot context gap:** All quality benchmarks (9%→43%→9%→0%) reflect the old generator.py pipeline. The two-bot port (2026-05-04) is a substantive change to the generation layer. The P2–P6 proposals are calibrated against Gemini Flash alone; some may no longer apply, some may need recalibration. The next graded corpus cycle is the first signal on two-bot output quality.
+
+We've been in the 9-43% band for three graded cycles. Need to clear 50% sustained. First two-bot graded cycle is the next milestone.
 
 ## Rejection events
 
