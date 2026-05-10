@@ -35,12 +35,12 @@ def _label(total: int) -> str:
 
 def _compute_total(
     *,
-    severity: int,
-    novelty: int,
-    timeliness: int,
-    confidence: int,
-    shareability: int,
-    sensitivity: int,
+    severity: float,
+    novelty: float,
+    timeliness: float,
+    confidence: float,
+    shareability: float,
+    sensitivity: float,
 ) -> int:
     base = (
         0.28 * severity
@@ -94,15 +94,23 @@ class EditorialScore:
 def _build_score(
     category: str,
     *,
-    severity: int,
-    novelty: int,
-    timeliness: int,
-    confidence: int,
-    shareability: int,
-    sensitivity: int,
+    severity: float,
+    novelty: float,
+    timeliness: float,
+    confidence: float,
+    shareability: float,
+    sensitivity: float,
     threshold: int,
     reasons: list[str],
 ) -> EditorialScore:
+    """Construct an EditorialScore from raw arithmetic metrics.
+
+    Metric params accept ``float`` so callers can pass results of
+    weighted-sum formulas without manual ``int()`` casts. ``_clamp``
+    (from ``editorial/_util``) coerces back to ``int`` before the
+    EditorialScore dataclass enforces ``int`` storage — wire format
+    unchanged.
+    """
     return EditorialScore(
         category=category,
         severity=_clamp(severity),
