@@ -53,7 +53,17 @@ jobs:
           python-version: '3.12'
           cache: 'pip'
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
       - run: pip install -r requirements.txt
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
 
       # Lint via ruff. Config lives in pyproject.toml. Catches unused imports,
       # syntax issues, basic style. Fails fast before pytest so a broken-import
@@ -69,6 +79,14 @@ jobs:
       # real Anthropic writer. They run in voice-regression.yml on a
       # daily schedule, not on every PR.
       - run: python -m pytest tests/ -v -m "not voice_replay"
+
+      - name: Test dashboard
+        working-directory: dashboard
+        run: npm test
+
+      - name: Build dashboard
+        working-directory: dashboard
+        run: npm run build
 
   run:
     needs: test

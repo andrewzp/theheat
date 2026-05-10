@@ -152,6 +152,63 @@ test("source-health stats counts unhealthy and degraded sources", async () => {
   }
 })
 
+test("source-health treats degraded source runs as active problems", async () => {
+  setupEnv()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    gistResponse({
+      ...RUN_HISTORY_STATE,
+      run_history: [
+        {
+          id: "run_degraded_1",
+          mode: "alerts",
+          started_at: NOW,
+          ended_at: NOW,
+          sources: [
+            {
+              source: "open_meteo_extreme_signals",
+              status: "degraded",
+              observed: 11907,
+              promoted: 4,
+              drafted: 0,
+              note: "provider:ghcn diff_dates_missing:4",
+            },
+            {
+              source: "auto_publish_due",
+              status: "partial_failure",
+              observed: 3,
+              promoted: 3,
+              drafted: 1,
+              error: "draft_a: rate limited",
+            },
+          ],
+        },
+      ],
+    })
+
+  try {
+    const { GET } = await importFresh("app/api/source-health/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/source-health", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      })
+    )
+
+    const payload = await response.json()
+    const byKey = Object.fromEntries(payload.sources.map((s) => [s.source, s]))
+    const source = byKey.open_meteo_extreme_signals
+    assert.equal(source.degraded, 1)
+    assert.equal(source.health, "degraded")
+    assert.equal(source.success_rate, 0)
+    assert.equal(byKey.auto_publish_due.partial_failures, 1)
+    assert.notEqual(byKey.auto_publish_due.health, "idle")
+    assert.equal(payload.stats.degraded_count, 1)
+    assert.equal(payload.stats.idle_count, 0)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("source-health sorts worst-first so problem sources surface", async () => {
   setupEnv()
   const originalFetch = globalThis.fetch

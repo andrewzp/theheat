@@ -9,4 +9,3 @@ class SourceFetchError(RuntimeError):
 
 class SourceSkipped(RuntimeError):
     """A source was intentionally skipped, usually missing optional config."""
-

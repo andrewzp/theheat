@@ -73,7 +73,7 @@ FIX SKETCH:
 - from google import genai
 + from google import genai
 + from google.genai import types as genai_types
- 
+
 - client = genai.Client(api_key=api_key)
 + client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
 ```
