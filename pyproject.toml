@@ -45,29 +45,10 @@ exclude = [
     "data/",
 ]
 
-# Per-module overrides — currently checked-in baseline. Goal is to remove
-# these one at a time as we convert module state schemas to TypedDict and
-# tighten Optional handling in the orchestrator.
-[[tool.mypy.overrides]]
-module = "src.main"
-# 47 errors after the SeaIceRecord rename — orchestrator with dynamic state
-# access patterns (state["key"] returns Union[various]). Needs a TypedDict
-# pass on bot_state to fix cleanly. Tracked as follow-up.
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.state"
-# 68 errors — DEFAULT_STATE is a plain dict; mypy can't narrow its many
-# nested keys. Convert to TypedDict in a dedicated PR; that fixes most.
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "src.editorial.scoring"
-# 47 errors — score_* helpers receive optional fields and call .get() on
-# them without explicit narrowing. Mostly Optional-handling; safe to
-# tighten one helper at a time.
-ignore_errors = true
-
+# Per-module overrides. The ignore_errors blocks for src.main /
+# src.state / src.editorial.scoring were removed in the BotState
+# TypedDict pass; those modules now type-check cleanly via the
+# nested TypedDicts in src/state_schema.py.
 [[tool.mypy.overrides]]
 module = "src.voice.generator"
 # Voice generator has many template helpers with primitive arg types;

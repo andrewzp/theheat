@@ -6,6 +6,7 @@ import json
 import os
 
 from src.config import CHEAP_MODEL
+from src.state_schema import BotState
 from src.two_bot import memory
 from src.two_bot.prompts.fact_check_prompt import (
     FACT_CHECK_SYSTEM_PROMPT,
@@ -82,7 +83,7 @@ def fact_check(
     tweet: str,
     extracted: list[ExtractedClaim],
     bundle: StoryBundle,
-    state: dict,
+    state: BotState,
 ) -> FactCheckResult:
     """Run strict local reuse checks, then LLM verification."""
 

@@ -826,7 +826,7 @@ def _try_two_bot_draft(
     from src.two_bot.pipeline import generate_draft
 
     pipeline_result: dict = {}
-    draft = generate_draft(bundle, cast(dict, bot_state), result_out=pipeline_result)
+    draft = generate_draft(bundle, bot_state, result_out=pipeline_result)
     if draft is None:
         ctx = _CURRENT_SUPPRESSION_CTX
         if ctx is not None:
@@ -869,7 +869,7 @@ def _maybe_shadow_two_bot(bundle, bot_state: BotState, review_context: dict) -> 
     try:
         from src.two_bot.pipeline import generate_shadow_draft
 
-        shadow = generate_shadow_draft(bundle, cast(dict, bot_state))
+        shadow = generate_shadow_draft(bundle, bot_state)
         if shadow:
             review_context["shadow_two_bot"] = {
                 "text": shadow["text"],
@@ -1680,7 +1680,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             pipeline_result: dict = {}
             draft = generate_fire_draft(
                 fire,
-                cast(dict, bot_state),
+                bot_state,
                 result_out=pipeline_result,
             )
             if draft is None:
@@ -2534,7 +2534,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     synthesis_promoted = 0
     synthesis_drafted = 0
     try:
-        signals = synthesis.detect_fire_drought_heat(cast(dict, bot_state))
+        signals = synthesis.detect_fire_drought_heat(bot_state)
         synthesis_observed = len(signals)
         for sig in signals:
             if state.is_duplicate(bot_state, sig.event_id):

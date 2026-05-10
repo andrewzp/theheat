@@ -14,6 +14,7 @@ from src.state import (
     get_synthesis_drought_snapshot,
     is_synthesis_on_cooldown,
 )
+from src.state_schema import BotState, DroughtSnapshot
 
 RULE_FIRE_DROUGHT_HEAT = "fire_drought_heat"
 WINDOW_DAYS = 14
@@ -41,7 +42,7 @@ def _iso_week(today: date | None = None) -> str:
     return f"{y}-W{w:02d}"
 
 
-def _snapshot_is_fresh(snapshot: dict, ttl_days: int = SNAPSHOT_TTL_DAYS) -> bool:
+def _snapshot_is_fresh(snapshot: DroughtSnapshot | dict, ttl_days: int = SNAPSHOT_TTL_DAYS) -> bool:
     updated_at = snapshot.get("updated_at") if snapshot else None
     if not updated_at:
         return False
@@ -52,7 +53,7 @@ def _snapshot_is_fresh(snapshot: dict, ttl_days: int = SNAPSHOT_TTL_DAYS) -> boo
     return (datetime.now(UTC) - dt) < timedelta(days=ttl_days)
 
 
-def detect_fire_drought_heat(bot_state: dict) -> list[SynthesisSignal]:
+def detect_fire_drought_heat(bot_state: BotState) -> list[SynthesisSignal]:
     """Emit one SynthesisSignal per US state where D4 drought, a qualifying
     fire, and a qualifying heat record all converge in the last 14 days and
     the rule isn't on cooldown for that state."""
