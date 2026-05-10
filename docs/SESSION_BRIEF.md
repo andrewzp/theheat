@@ -4,6 +4,82 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-10 — Cron feedback loop: voice-regression caught real signal on first scheduled run
+
+## Where we landed
+
+`main` is on `1ed7e2c` (PR #68). **876 tests passing** locally (was 866 at end of 2026-05-09). Pipeline working end-to-end; voice-regression harness fully validated by catching three real false-positives. Daily-plan grading-agent routine repaired out-of-tree.
+
+## The signal that drove the session
+
+The voice-regression workflow shipped 2026-05-09 fired its first real cron at **2026-05-10 10:06 UTC** and rejected 3 of 12 fixtures, all with the same root cause:
+
+| Fixture | Output | Reject reason |
+|---|---|---|
+| sissonville_monthly_low | "…overnight on May 4 — a new May cold record in 16 years…" | Month 'may' mentioned 2 times |
+| dayton_monthly_low | "…on May 5 — the coldest May night in 21 years…" | Month 'may' mentioned 2 times |
+| verkhoyansk_monthly_high | "…in April, smashing its previous April record… where April still belongs to winter" | Month 'april' mentioned 3 times |
+
+All three are good tweets. The safety rule was over-tight.
+
+## What landed today
+
+### PR #67 — false-positive elimination + Celsius relaxation
+
+Two related changes in `src/voice/safety.py`:
+
+1. **`check_month_repetition` rewrite.** Old rule `count >= 2` blocked legitimate "May date + May record-class" prose. New rule: literal `"It's <Month>"` standalone + same-month year-anchored restatement + safety net at count ≥ 4. The canonical anti-pattern `"April 10, 2026. It's April."` still rejects.
+2. **`check_truncated_temperature` single-digit Celsius dropped.** Andrew's parallel-session WIP. Sub-10°C is normal for cold-record signals (Dayton hit 4°C); Celsius left to the fact-checker. Single-digit F still rejected (`91F → 1F` is the writer dropping a leading digit).
+
+5 new tests:
+- 3 regression tests with the verbatim cron-rejected tweets
+- 1 for year-anchored restatement
+- 1 for 4+ padding safety net
+
+### PR #68 — Codex review follow-up
+
+Codex flagged two precision bugs in #67:
+
+1. `\bit'?s ({month})\b` with **optional** apostrophe rejected possessive `"Phoenix broke its May record"`. Fixed: apostrophe required, accepts both straight (`'`) and curly (`’`).
+2. `({month})\s+\d{4}\.\s+(?:{month})` rejected cross-month comparisons like `"April 2026. May records..."`. Fixed: second occurrence is now backreference `\1`.
+
+3 new regression tests covering Codex's exact examples.
+
+### Grading-agent routine repair (out-of-tree)
+
+PR #66 (auto-opened by the agent at 15:06 UTC) reported zero drafts graded because the routine's Step 2 used `curl https://api.github.com/gists/<id>` unauthenticated → hit GitHub's 60/hr IP rate limit → 403.
+
+Updated the routine ([trig_016PGeHZgEYWmeQhx1xGmYg6](https://claude.ai/code/routines/trig_016PGeHZgEYWmeQhx1xGmYg6)) prompt:
+- Step 2 now `git clone https://gist.github.com/<id>.git` first (public gists are git repos — no auth, no rate limit). Falls back to `gh api` if clone fails.
+- Step 7 (gist write for staleness rejection) now degrades gracefully if `gist:write` scope is missing — logs skip note instead of aborting.
+- Global "DO NOT abort on infra failures" constraint added.
+- Validates on next cron at **2026-05-11 15:03 UTC**.
+
+## Defense-in-depth state (post-today)
+
+```
+writer prompt (HARD RULES tests — #58)
+  ↓
+inline safety regex (#60) + precision tuning (#67/#68)
+  ↓
+fact-check (existing)
+  ↓
+post-time safety regex (existing)
+  ↓
+nightly Sonnet replay (#61) — caught 3 false positives on first run, fixed
+  ↓
+source health visibility (#64)
+  ↓
+daily quality grading (repaired today)
+```
+
+## What's NOT done
+
+- Parallel-session WIP still uncommitted in working tree (bot.yml additions for Node + dashboard test/build steps, dashboard/lib/state-store.js improvements, voice_regression/test_writer_replay.py tightening, source_status.py). Belongs to another session/lane — left untouched.
+- The 09:00 UTC voice-regression cron tomorrow (2026-05-11) will be the verification of PR #67/#68 fix on the real harness.
+
+---
+
 # 2026-05-08 — 13-hour debugging marathon: 4-day outage diagnosed, root-caused, fixed
 
 ## Where we landed

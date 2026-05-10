@@ -2,6 +2,70 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1.0] - 2026-05-10
+
+Cron-feedback-loop session. The voice-regression harness shipped yesterday
+(#61) fired on its first scheduled run 2026-05-10 10:06 UTC and caught
+three real safety false-positives — exactly the silent-drift gap it was
+built for. Two PRs (#67, #68) tightened the regexes; the daily-plan
+grading-agent routine was repaired out-of-tree.
+
+### Fixed
+
+- **`check_month_repetition` false-positives on monthly_low/high (#67).**
+  The 10:06 UTC voice-regression cron rejected three otherwise-good
+  tweets (Sissonville WV, Dayton WY, Verkhoyansk RU) with `Month '<x>'
+  mentioned N times — redundant date`. The old `count >= 2` rule
+  targeted the bureaucratic `"April 10, 2026. It's April."` shape but
+  false-positived on the now-standard `"hit X on May 4 — new May cold
+  record"` pattern where the month is load-bearing twice (date + record
+  class). Replaced with two targeted patterns:
+  - Literal `"It's <Month>"` standalone (apostrophe REQUIRED — see #68)
+  - Same-month year-anchored restatement (backreference — see #68)
+  Plus a safety net at count ≥ 4 for egregious padding.
+
+- **`check_truncated_temperature` single-digit Celsius relaxation (#67).**
+  Picked up from Andrew's parallel-session WIP. Single-digit C (1°C, 4°C,
+  5°C) is valid for cold-record signals — Dayton's 4°C reading was a
+  real cold-record. Celsius branch dropped; left to the bundle fact-checker.
+  Single-digit F still rejected (those reliably mean the writer dropped a
+  leading digit, e.g. 91F → 1F).
+
+- **Codex review of #67: regex precision (#68).**
+  - `\bit'?s ({month})\b` made apostrophe optional, false-positiving on
+    possessive `"Phoenix broke its May record"`. Apostrophe now required
+    (straight `'` and curly `’` both accepted).
+  - `({month})\s+\d{4}\.\s+(?:{month})` matched any month after a
+    `Month YYYY.` sentence, false-positiving on cross-month comparisons
+    like `"April 2026. May records have already fallen."` Second
+    occurrence is now `\1` — only same-month repeats trigger.
+  - 3 regression tests covering Codex's exact examples.
+
+### Changed (out-of-tree)
+
+- **Grading-agent routine prompt repaired** (routine `trig_016PGeHZgEYWmeQhx1xGmYg6`,
+  "TheHeat daily plan refinement (15:00 UTC)"). PR #66 (auto-opened
+  2026-05-10 by the failing agent) reported zero drafts graded due to
+  `403 API rate limit exceeded` on the unauthenticated REST API path.
+  - Step 2 (gist read) now uses `git clone https://gist.github.com/<id>.git`
+    first — public gists are git repos, no auth needed for reads, no REST
+    rate limit. Falls back to `gh api gists/<id>` if clone fails.
+  - Step 7 (gist write for staleness rejection) now degrades gracefully
+    — logs a skip note in the PR body if `gist:write` scope is missing,
+    instead of aborting the entire run.
+  - Added global "DO NOT abort on infra failures" hard constraint so the
+    routine always produces useful output even with one degraded layer.
+  - Validates on next cron at 2026-05-11 15:03 UTC.
+
+### Verification
+
+- 876 tests passing locally (was 866 at end of 2026-05-09; +10 across
+  PR #67 and PR #68).
+- `ruff check src/ tests/` clean; `mypy src/` clean (37 files, 0 errors).
+- End-to-end `run_safety_pipeline` smoke on the 3 cron-rejected tweets:
+  all 3 now PASS. Must-fail cases (canonical "It's April." + 4× padding)
+  still REJECT.
+
 ## [0.4.0.0] - 2026-05-09
 
 Ship-quality session — locked in defenses against silent test/CI gaps,
