@@ -302,6 +302,34 @@ class TestMonthRepetition:
         )
         assert not passed
 
+    def test_different_month_after_year_anchor_passes(self):
+        # Codex review of PR #67: "April 2026. May records..." is a legitimate
+        # cross-month comparison, not a redundant April restatement. The
+        # year-anchored pattern uses a backreference so only same-month
+        # repeats trigger.
+        passed, reason = check_month_repetition(
+            "Heat dome over Phoenix. April 2026. May records have already fallen."
+        )
+        assert passed, f"Cross-month comparison was rejected: {reason}"
+
+    def test_possessive_its_month_passes(self):
+        # Codex review of PR #67: "Phoenix broke its May record" uses
+        # possessive "its" + month as record class. The standalone "It's
+        # April." pattern now requires an apostrophe; possessive "its" has
+        # no apostrophe and must pass.
+        passed, reason = check_month_repetition(
+            "Phoenix broke its May record by 2°F overnight on May 4."
+        )
+        assert passed, f"Possessive 'its May' was rejected: {reason}"
+
+    def test_curly_apostrophe_its_month_rejected(self):
+        # Some writers (and curly-quotes autoconverters) emit "It’s May."
+        # with a unicode apostrophe. The pattern accepts both.
+        passed, reason = check_month_repetition(
+            "Phoenix hit 121F. It’s May."
+        )
+        assert not passed
+
     # -- Regression tests: monthly_low/high tweets that the prior rule
     #    rejected as false positives. The voice-regression cron flagged
     #    all three on 2026-05-10.
