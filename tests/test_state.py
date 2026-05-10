@@ -557,7 +557,8 @@ class TestSqliteRoundTripLaneKeys:
     def _sqlite_round_trip(self, state_in: dict) -> dict:
         from src.storage import sqlite_store
         from src.state import DEFAULT_STATE
-        import tempfile, os
+        import tempfile
+        import os
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "theheat.sqlite")
             assert sqlite_store.write_state(db_path, state_in)
@@ -680,7 +681,8 @@ class TestSuppressions:
     def test_round_trip_preserves_suppressions(self):
         from src.storage import sqlite_store
         from src.state import DEFAULT_STATE
-        import tempfile, os
+        import tempfile
+        import os
         state_in = {
             "suppressions": [
                 {
@@ -1034,7 +1036,8 @@ class TestSqliteRoundTripPreservesPythonOnlyKeys:
     def _sqlite_round_trip(self, state_in: dict) -> dict:
         from src.storage import sqlite_store
         from src.state import DEFAULT_STATE
-        import tempfile, os
+        import tempfile
+        import os
         with tempfile.TemporaryDirectory() as tmp:
             db_path = os.path.join(tmp, "theheat.sqlite")
             assert sqlite_store.write_state(db_path, state_in)

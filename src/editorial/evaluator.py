@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 from src.editorial.candidates import (
     CandidateBundle,
-    CandidateScore,
+    CandidateScore,  # noqa: F401 — re-exported for downstream callers
     DraftCandidate,
     score_candidate_text,
 )

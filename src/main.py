@@ -49,7 +49,7 @@ from src.editorial.scoring import (
     score_storm_surge,
     score_synthesis_fire_drought_heat,
 )
-from src.voice import generator
+from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
 from src.voice.safety import run_safety_pipeline
 from src.posting.bluesky import post_to_bluesky
 from src.posting.twitter import post_tweet

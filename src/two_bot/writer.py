@@ -12,10 +12,10 @@ from src.two_bot.prompts.writer_prompt import (
 )
 from src.two_bot.types import MemorySlice, StoryBundle, WriterResult
 from src.two_bot.json_utils import (
-    extract_json_payload as _extract_json_payload,
+    extract_json_payload as _extract_json_payload,  # noqa: F401 — re-exported for tests
     json_default as _json_default,
     loads_model_json,
-    strip_markdown_fences as _strip_markdown_fences,
+    strip_markdown_fences as _strip_markdown_fences,  # noqa: F401 — re-exported for tests
 )
 from src.two_bot.retry import call_with_retries
 
