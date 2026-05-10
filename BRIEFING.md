@@ -1,11 +1,36 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-09 (post-ship-quality session).
-**Status:** **PIPELINE WORKING END-TO-END.** Yesterday's debug marathon brought the bot back; today's session locked in defenses against a regression of the same class (silent test/CI gaps, voice/prompt drift, safety only at post-time, no PR pre-flight). Ten ship-quality PRs landed today on top of yesterday's stack.
-**Latest merged commits (2026-05-09):** `4cb1eba` (#55 fix flaky tests — mock every-run data sources in run_alerts) → `3f92b9d` (#56 CI on PRs + Node 24 actions) → `15469b9` (#57 hermeticity gate in conftest) → `84c7d9f` (#58 anti-fabrication safety regex + writer-prompt HARD RULES tests) → `7015e01` (#60 safety gate inline in two-bot generate_draft / shadow) → `03ba309` (#61 nightly writer-replay regression suite + workflow) → `1d3e490` (#62 ruff lint in CI) → `13480a2` (#63 mypy permissive baseline + Optional fixes) → `69f2fcf` (#64 dashboard per-source health view + API rollup).
-**Branch protection:** required `test` status check on `main` (admin can bypass for emergencies). Direct pushes to main blocked; every change is a PR with green CI.
-**Tests:** **866 passing** (was 813 at start-of-session). +12 voice-replay tests gated by marker run nightly via `voice-regression.yml`.
+**Last updated:** 2026-05-10 (post-cron-feedback-loop session).
+**Status:** **PIPELINE WORKING END-TO-END.** The voice-regression harness shipped 2026-05-09 (#61) fired on its first scheduled cron 2026-05-10 10:06 UTC and **caught three real safety false-positives** — exactly the silent-drift gap it was built for. Both regexes tightened, both false positives now pass clean, and the daily-plan grading-agent routine was repaired (PR #66 had flagged it was failing on a public-API rate limit).
+**Latest merged commits (2026-05-10):** `8ab835c` (#67 month-repetition false-positives + Andrew's single-digit Celsius cold-record relaxation) → `1ed7e2c` (#68 Codex follow-up: tighten both regexes — required apostrophe, backreference on year-anchored restatement).
+**Earlier this stack (2026-05-09):** `4cb1eba` (#55 flaky tests) → `3f92b9d` (#56 CI on PRs + Node 24) → `15469b9` (#57 hermeticity gate) → `84c7d9f` (#58 anti-fabrication safety) → `7015e01` (#60 safety gate inline in pipeline) → `03ba309` (#61 voice-replay regression suite) → `1d3e490` (#62 ruff) → `13480a2` (#63 mypy) → `69f2fcf` (#64 dashboard source-health) → `0fdec6c` (#65 doc sweep).
+**Branch protection:** required `test` status check on `main` (admin bypass for emergencies). Every change is a PR with green CI.
+**Tests:** **876 passing** locally (was 866 at end of 2026-05-09; +10 across PR #67-#68). +12 voice-replay tests run nightly via `voice-regression.yml`.
 **Cost:** GHCN-Daily free. Sonnet writer ~$13/mo + ~$6/mo nightly voice-regression replay = ~$19/mo Anthropic on top of the existing Sonnet evaluator (~$60-90/mo per memory). Gemini Flash usage unchanged.
+
+## What changed structurally on 2026-05-10 (cron-feedback-loop session)
+
+Two PRs and one out-of-tree routine fix, all driven by the new voice-regression harness's first run catching real signal:
+
+- **PR #67 — `check_month_repetition` rewrite + single-digit Celsius cold-record relaxation.** Voice-regression cron at 10:06 UTC rejected three otherwise-good monthly_low/high tweets (Sissonville, Dayton, Verkhoyansk) with `Month '<x>' mentioned N times — redundant date`. The old `count >= 2` rule was tuned for the bureaucratic restatement `"NWS issued… April 10, 2026. It's April."` but false-positived on the now-standard `"hit X on May 4 — new May cold record"` shape where the month is load-bearing twice (date + record class). Replaced with two targeted patterns: literal `"It's <Month>"` standalone, and same-month year-anchored restatement. Safety net at 4+ mentions for egregious padding. Also picked up Andrew's parallel-session WIP for `check_truncated_temperature` — single-digit Celsius is valid for cold-record signals (Dayton's 4°C is a real reading), so the Celsius branch was dropped and Celsius is now fact-checker territory.
+
+- **PR #68 — Codex review follow-up.** Codex flagged two precision bugs in #67's regexes: (1) the `it'?s` pattern made apostrophe optional, false-positiving on possessive `"its May record"`; (2) the year-anchored pattern used a non-capturing group `(?:Month)` for the second occurrence instead of a backreference, false-positiving on cross-month comparisons like `"April 2026. May records..."`. Fixed: apostrophe now required (straight + curly), second occurrence now `\1`. Three regression tests covering the exact Codex examples.
+
+- **Grading-agent routine repaired (out-of-tree, via [routine UI](https://claude.ai/code/routines/trig_016PGeHZgEYWmeQhx1xGmYg6)).** PR #66 (auto-opened by the agent at 15:06 UTC) reported zero drafts graded due to `403 API rate limit exceeded` on the unauthenticated `curl https://api.github.com/gists/<id>`. Updated the routine prompt: Step 2 now does `git clone https://gist.github.com/<id>.git` first (public gists are git repos, no auth needed for reads, no REST rate limit) with `gh api` as fallback. Step 7 (gist write for staleness rejection) now degrades gracefully — logs a skip note in the PR body if `gist:write` scope is missing, instead of aborting the whole run. Added a global "DO NOT abort on infra failures" hard constraint. Validates on next cron at 2026-05-11 15:03 UTC.
+
+### What today's session proved
+
+The voice-regression harness is **earning its $6/mo**. PR #67 + #68 closed a feedback loop that would otherwise have only been visible after live posting resumed and a fact-check kill cascade made it into production. Net effect on the regression surface from yesterday's stack:
+
+| Layer | Status |
+|---|---|
+| Writer prompt (HARD RULES) | Tested via #58's prompt-content tests |
+| Safety regex at draft-time | #60 inline + #67/#68 now precision-tuned |
+| Fact-checker | Existing |
+| Safety regex at post-time | Existing |
+| Nightly Sonnet replay | **#61 firing daily; caught 3 false positives on first run** |
+| Source health visibility | #64 Sources tab |
+| Daily quality grading | Repaired today (post-rate-limit fix) |
 
 ## What changed structurally on 2026-05-09 (ship-quality session)
 
