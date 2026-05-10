@@ -87,7 +87,19 @@ export async function GET(request) {
           agg.last_run_at = runStartedAt
           agg.last_run_status = s.status || null
         }
-        if (agg.last_error_at == null && s.status === "failed") {
+        // Capture the latest actionable error for ANY problem status, not
+        // just "failed". Codex review of PR #70 flagged that
+        // `partial_failure` (e.g. auto_publish_due hitting a per-draft rate
+        // limit) was being classified as a problem but leaving last_error
+        // null — hiding the actual rate-limit / downstream failure message
+        // the operator needs to see. Same applies to "degraded" runs
+        // whose note carries the diagnostic ("provider:ghcn
+        // diff_dates_missing:4").
+        const isProblemStatus =
+          s.status === "failed" ||
+          s.status === "partial_failure" ||
+          s.status === "degraded"
+        if (agg.last_error_at == null && isProblemStatus) {
           agg.last_error_at = runStartedAt
           agg.last_error = s.error || s.note || null
         }
