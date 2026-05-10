@@ -1,0 +1,28 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [
+    ".venv",
+    "data",
+    "dashboard/.next",
+    "dashboard/node_modules",
+]
+
+[tool.ruff.lint]
+# Start permissive — pyflakes (F) catches real bugs (unused imports, undefined
+# names), pycodestyle (E, W) catches obvious style issues. Add bugbear (B)
+# and pyupgrade (UP) once the baseline is clean.
+select = ["E", "F", "W"]
+ignore = [
+    # Long lines (E501) — handled by formatter, no need to police separately.
+    "E501",
+    # Module-level imports not at top (E402) — codebase intentionally puts
+    # `from __future__ import annotations` before the docstring across ~18
+    # files. Mass-reordering would bloat this PR; revisit when we add UP rules.
+    "E402",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests legitimately use unused imports for fixture side effects, and
+# import * style assertions.
+"tests/**/*.py" = ["F401", "F403", "F405"]

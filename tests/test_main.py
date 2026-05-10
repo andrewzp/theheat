@@ -1617,7 +1617,9 @@ class TestSynthesisStage:
 
         bot_state = deepcopy(DEFAULT_STATE)
         now = datetime.now(UTC)
-        iso = lambda d: (now - timedelta(days=d)).isoformat().replace("+00:00", "Z")
+
+        def iso(d):
+            return (now - timedelta(days=d)).isoformat().replace("+00:00", "Z")
 
         record_synthesis_drought_snapshot(bot_state, [
             {"state": "California", "d3_pct": 25.0, "d4_pct": 10.0, "total_drought_pct": 85.0},

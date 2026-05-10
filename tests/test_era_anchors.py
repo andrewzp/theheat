@@ -109,10 +109,8 @@ class TestPickAnchors:
         assert a == b
 
     def test_different_seeds_pick_different_subsets(self):
-        a = pick_anchors(1999, k=4, seed="seed-A")
-        b = pick_anchors(1999, k=4, seed="seed-B")
-        # Statistically unlikely but possible — re-seed enough that the
-        # chance of false positive is negligible.
+        # Statistically unlikely but possible for any 2 seeds to coincide —
+        # sample 20 seeds and assert at least 2 distinct subsets exist.
         attempts = [pick_anchors(1999, k=4, seed=f"seed-{i}") for i in range(20)]
         unique_subsets = {tuple(sorted(x)) for x in attempts}
         assert len(unique_subsets) >= 2  # at least 2 distinct subsets across 20 seeds

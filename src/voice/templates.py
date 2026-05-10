@@ -114,7 +114,6 @@ def enso_template(status: str, oni: float, duration: int) -> str:
 def record_low_template(city: str, country: str, temp_c: float, old_temp_c: float, old_year: int) -> str:
     temp_f = round(temp_c * 9 / 5 + 32, 1)
     old_f = round(old_temp_c * 9 / 5 + 32, 1)
-    years_ago = datetime.date.today().year - old_year
     variants = [
         f"{city} is forecast to drop to {temp_f}F overnight. If that verifies, it's a new record low. Previous: {old_f}F from {old_year}.",
         f"{city}, {country}: forecast low {temp_f}F. That would be the coldest for this date since {old_year}. Previous record: {old_f}F.",

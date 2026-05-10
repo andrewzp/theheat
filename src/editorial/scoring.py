@@ -636,7 +636,6 @@ def score_all_time_record(new_temp_c: float, old_record_c: float, old_record_yea
 def score_monthly_record(new_temp_c: float, old_record_c: float, old_record_year: int, month: int, years_of_data: int, *, kind: str = "high") -> EditorialScore:
     """Hottest/coldest reading ever observed for this month of year."""
     delta = abs(new_temp_c - old_record_c)
-    age = max(date.today().year - old_record_year, 0)
     month_name = ["", "January","February","March","April","May","June",
                   "July","August","September","October","November","December"][month]
     reasons = [

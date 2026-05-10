@@ -55,6 +55,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # Lint via ruff. Config lives in pyproject.toml. Catches unused imports,
+      # syntax issues, basic style. Fails fast before pytest so a broken-import
+      # PR doesn't burn the full test budget.
+      - run: ruff check src/ tests/
+
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml on a
       # daily schedule, not on every PR.

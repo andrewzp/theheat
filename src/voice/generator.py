@@ -1466,7 +1466,7 @@ def generate_drought_tweet(
         d4 = s.d4_pct if hasattr(s, "d4_pct") else s["d4_pct"]
         lines.append(f"{name}: {d3 + d4:.0f}% extreme/exceptional drought")
     data = (
-        f"US Drought Monitor update. Worst drought conditions this week:\n"
+        "US Drought Monitor update. Worst drought conditions this week:\n"
         + "\n".join(lines)
     )
     return generate_tweet(
