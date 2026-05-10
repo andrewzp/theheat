@@ -204,6 +204,60 @@ test("source-health treats degraded source runs as active problems", async () =>
     assert.notEqual(byKey.auto_publish_due.health, "idle")
     assert.equal(payload.stats.degraded_count, 1)
     assert.equal(payload.stats.idle_count, 0)
+
+    // Codex PR #70: last_error must surface for problem statuses beyond
+    // just "failed", otherwise the dashboard hides actionable error text
+    // for partial_failure / degraded runs.
+    assert.equal(byKey.auto_publish_due.last_error, "draft_a: rate limited")
+    assert.equal(byKey.auto_publish_due.last_error_at, NOW)
+    assert.equal(source.last_error, "provider:ghcn diff_dates_missing:4")
+    assert.equal(source.last_error_at, NOW)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("source-health last_error stays null when only success/skipped runs exist", async () => {
+  // Negative case: a healthy source should NOT get a phantom last_error
+  // populated from a note on a successful run.
+  setupEnv()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    gistResponse({
+      ...RUN_HISTORY_STATE,
+      run_history: [
+        {
+          id: "run_healthy_1",
+          mode: "alerts",
+          started_at: NOW,
+          ended_at: NOW,
+          sources: [
+            {
+              source: "nws_alerts",
+              status: "success",
+              observed: 10,
+              promoted: 1,
+              drafted: 1,
+              note: "informational success note that must NOT surface as error",
+            },
+          ],
+        },
+      ],
+    })
+
+  try {
+    const { GET } = await importFresh("app/api/source-health/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/source-health", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      })
+    )
+
+    const payload = await response.json()
+    const nws = payload.sources.find((s) => s.source === "nws_alerts")
+    assert.equal(nws.health, "healthy")
+    assert.equal(nws.last_error, null, "healthy run note must not populate last_error")
+    assert.equal(nws.last_error_at, null)
   } finally {
     globalThis.fetch = originalFetch
   }
