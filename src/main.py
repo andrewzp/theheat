@@ -2397,53 +2397,53 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     )
                     continue
 
-                record = ice_mass.detect_monthly_record(readings, bot_state)
-                if record is None:
-                    record = ice_mass.detect_cumulative_milestone(readings, bot_state)
+                ice_record = ice_mass.detect_monthly_record(readings, bot_state)
+                if ice_record is None:
+                    ice_record = ice_mass.detect_cumulative_milestone(readings, bot_state)
 
                 source_promoted = 0
                 source_drafted = 0
-                if record and not state.is_duplicate(bot_state, record.event_id):
+                if ice_record and not state.is_duplicate(bot_state, ice_record.event_id):
                     score = score_ice_mass_event(
-                        region=record.region,
-                        kind=record.kind,
-                        monthly_delta_gt=record.monthly_delta_gt,
-                        previous_worst_gt=record.previous_worst_gt,
-                        threshold_gt=record.threshold_gt,
+                        region=ice_record.region,
+                        kind=ice_record.kind,
+                        monthly_delta_gt=ice_record.monthly_delta_gt,
+                        previous_worst_gt=ice_record.previous_worst_gt,
+                        threshold_gt=ice_record.threshold_gt,
                     )
-                    if _should_draft(score, record.event_id):
+                    if _should_draft(score, ice_record.event_id):
                         source_promoted = 1
                         earliest = readings[0].month
                         earliest_year = int(earliest.split("-")[0])
                         years_of_record = date.today().year - earliest_year
                         headline = (
-                            f"{record.region.title()}: largest monthly ice loss on record"
-                            if record.kind == "monthly_loss_record"
-                            else f"{record.region.title()}: cumulative loss crosses {abs(int(record.threshold_gt))} Gt"
+                            f"{ice_record.region.title()}: largest monthly ice loss on ice_record"
+                            if ice_record.kind == "monthly_loss_record"
+                            else f"{ice_record.region.title()}: cumulative loss crosses {abs(int(ice_record.threshold_gt))} Gt"
                         )
                         facts = [
-                            _fact("Region", record.region.title()),
-                            _fact("Latest month", record.month or latest_month),
+                            _fact("Region", ice_record.region.title()),
+                            _fact("Latest month", ice_record.month or latest_month),
                         ]
-                        if record.kind == "monthly_loss_record":
+                        if ice_record.kind == "monthly_loss_record":
                             facts.append(_fact(
                                 "Monthly loss",
-                                f"{abs(record.monthly_delta_gt):.0f} Gt",
+                                f"{abs(ice_record.monthly_delta_gt):.0f} Gt",
                             ))
-                            if record.previous_worst_gt is not None:
+                            if ice_record.previous_worst_gt is not None:
                                 facts.append(_fact(
                                     "Previous worst",
-                                    f"{abs(record.previous_worst_gt):.0f} Gt "
-                                    f"({record.previous_worst_month})",
+                                    f"{abs(ice_record.previous_worst_gt):.0f} Gt "
+                                    f"({ice_record.previous_worst_month})",
                                 ))
                         else:
                             facts.append(_fact(
                                 "Cumulative threshold",
-                                f"{abs(int(record.threshold_gt))} Gt",
+                                f"{abs(int(ice_record.threshold_gt))} Gt",
                             ))
                             facts.append(_fact(
                                 "Current anomaly",
-                                f"{abs(record.current_mass_gt):.0f} Gt below 2002 baseline",
+                                f"{abs(ice_record.current_mass_gt):.0f} Gt below 2002 baseline",
                             ))
                         review_context = _review_context(
                             source="NASA GRACE-FO / JPL PODAAC",
@@ -2454,28 +2454,28 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         )
                         from src.two_bot.intern import build_ice_mass_bundle
                         ice_bundle = build_ice_mass_bundle(
-                            record,
+                            ice_record,
                             years_of_record=years_of_record,
                             archive_start_year=earliest_year,
                         )
                         if _try_two_bot_draft(
                             ice_bundle, bot_state, score,
                             legacy_type="ice_mass_record",
-                            event_id=record.event_id,
+                            event_id=ice_record.event_id,
                             review_context=review_context,
                         ):
-                            state.record_event(bot_state, record.event_id)
+                            state.record_event(bot_state, ice_record.event_id)
                             _increment_ice_annual_count(bot_state)
                             drafted += 1
                             source_drafted = 1
                             # Update the extreme trackers on success.
-                            if record.kind == "monthly_loss_record":
-                                bot_state.setdefault("ice_mass_max_loss", {})[record.region] = {
-                                    "gt": record.monthly_delta_gt,
-                                    "month": record.month,
+                            if ice_record.kind == "monthly_loss_record":
+                                bot_state.setdefault("ice_mass_max_loss", {})[ice_record.region] = {
+                                    "gt": ice_record.monthly_delta_gt,
+                                    "month": ice_record.month,
                                 }
                             else:
-                                bot_state.setdefault("ice_mass_last_milestone", {})[record.region] = record.threshold_gt
+                                bot_state.setdefault("ice_mass_last_milestone", {})[ice_record.region] = ice_record.threshold_gt
 
                 # Always mark the month as seen so we don't reprocess until data updates.
                 bot_state.setdefault("ice_mass_last_seen", {})[region] = latest_month

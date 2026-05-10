@@ -60,6 +60,11 @@ jobs:
       # PR doesn't burn the full test budget.
       - run: ruff check src/ tests/
 
+      # Type-check via mypy. Config in pyproject.toml. Three modules are
+      # currently overridden (main, state, editorial.scoring) pending a
+      # TypedDict refactor; remove overrides as files get cleaned up.
+      - run: mypy src/
+
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml on a
       # daily schedule, not on every PR.

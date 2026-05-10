@@ -72,7 +72,11 @@ def _call_gemini(tweet: str) -> str:
             contents=f"{CLAIM_EXTRACT_SYSTEM_PROMPT}\n\n{user_prompt}",
         ),
     )
-    return response.text
+    # google-genai's response.text is Optional — empty when no candidates
+    # come back. Empty string falls through to the JSON parser as a
+    # parse error, which the caller handles consistently with other
+    # API failure modes.
+    return response.text or ""
 
 
 def extract_claims(tweet: str) -> list[ExtractedClaim]:
