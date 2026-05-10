@@ -2,6 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0.0] - 2026-05-09
+
+Ship-quality session — locked in defenses against silent test/CI gaps,
+voice/prompt drift, and the kind of regression that took 4 days to
+notice yesterday. Ten PRs (#55-#64) plus branch protection on `main`.
+
+### Added
+
+- **CI on PRs (#56)** — `bot.yml` `pull_request: { branches: [main] }`
+  trigger so the `test` job runs on every PR. The `run` job stays
+  scheduled-only; no tweet posting / gist writes / API quota burn on
+  PRs. `actions/checkout@v4` → `@v6` and `actions/setup-python@v5` →
+  `@v6` (Node 24-native, clears the deprecation warning).
+- **Branch protection on `main`** — required `test` status check, no
+  force-push, no deletions. Admin (Andrew) can bypass for emergencies.
+  Direct pushes blocked; every change is a green-CI PR.
+- **Hermeticity gate (#57)** — autouse fixture in `tests/conftest.py`
+  blocks non-localhost `socket.connect` during tests. Pure stdlib.
+  Any test that forgets to mock the network layer fails immediately
+  with an actionable error pointing at the missing mock.
+- **Anti-fabrication safety regex (#58)** — five new `BANNED_PATTERNS`
+  in `src/voice/safety.py` mirror the writer prompt's verbatim banned
+  examples. `TestFabricatedContext` (8 tests) and
+  `TestWriterPromptHardRules` (11 tests, one per HARD RULE bullet)
+  catch prompt drift at PR time.
+- **Safety inline in `pipeline.generate_draft` (#60)** — was post-time
+  only; now kills bad drafts at write-time.
+- **Nightly voice-replay regression suite (#61)** —
+  `tests/voice_regression/` with `StoryBundle` fixtures and a writer-
+  replay harness. New `.github/workflows/voice-regression.yml` runs
+  daily at 09:00 UTC + `workflow_dispatch` + `pull_request: labeled`
+  with `voice-check`. Cost: ~$0.20/run × daily ≈ $6/mo.
+- **Ruff lint in CI (#62)** — `pyproject.toml` E/F/W with `E402`
+  ignore. Fail-fast lint step before pytest.
+- **Mypy permissive baseline (#63)** — `check_untyped_defs`,
+  `no_implicit_optional`, `ignore_missing_imports`. Three modules use
+  `ignore_errors = true` pending a `bot_state` TypedDict refactor:
+  `src.main` (47 errors), `src.state` (68), `src.editorial.scoring`
+  (47).
+- **Dashboard per-source health view (#64)** — new `Sources` tab
+  aggregates per-source success rate, last error, and observation
+  totals across the last 20 runs. New `GET /api/source-health`
+  endpoint. Worst-first sort. Health tiers: `idle` / `healthy` /
+  `degraded` / `unhealthy`, computed over **active** runs (skipped
+  sources don't count as failures).
+
+### Fixed
+
+- **Flaky `test_main.py` tests (#55)** — three tests asserted
+  `_try_two_bot_draft` called once but saw 3 calls under-mocked
+  pipelines. Real CI network occasionally returned qualifying data on
+  unmocked branches (`nws_alerts`, `gdacs`, `sea_ice`, `drought`,
+  `enso`, `ocean`, `ocean_sst`, `water_levels`, `river_gauges`,
+  `ice_mass`, `synthesis`, `ghcn`, `fire_footprint`). Added
+  `mock_alerts_pipeline_sources` fixture and applied to 11 tests.
+- **`record` variable type-confusion in `src/main.py` (#63)** — same
+  name reused for `SeaIceRecord | None` (line 1971) and
+  `IceMassRecord | None` (line 2400). Mypy locked the static type to
+  the first assignment, hiding ~30 latent attribute-error
+  possibilities. Renamed the IceMass-block variable to `ice_record`
+  in lines 2400-2480.
+- **Six small Optional unwraps (#63)** in LLM-response handlers —
+  `response.text` is Optional in google-genai but was treated as
+  plain `str` in `claim_extractor.py`, `fact_check.py`, `writer.py`
+  (Gemini path), `voice/safety.py`, `voice/generator.py`. Anthropic's
+  `response.content[0]` narrowed via `isinstance(block, TextBlock)`
+  with explicit `RuntimeError` on unexpected block types. Empty-text
+  fallbacks route through existing JSON-parse error path.
+- **Five pre-existing lint issues (#62)** — dead `age` /
+  `years_ago` variables, lambda-assignment in test, dead `a`/`b` in
+  `test_era_anchors.py`. Plus 8 auto-fixed (unused imports, multi-
+  imports, missing f-string placeholder). 4 imports that LOOKED
+  unused were actually accessed via test patching (`@patch
+  ("src.main.generator")`, etc.) — restored each with `# noqa: F401`.
+
+### Pending follow-ups
+
+- **Bot-state TypedDict refactor** — would unlock removing the three
+  mypy ignores (`src.main`, `src.state`, `src.editorial.scoring`) and
+  catch dict-key typos at static time. Largest single-PR effort
+  available.
+- **Bundle payload in suppression records** — would let real-killed
+  bundles drive the voice-regression corpus beyond the hand-curated
+  fixtures.
+
 ## [0.3.10.0] - 2026-05-08
 
 Three high-severity fixes flagged by Codex review of PRs #38-#46.
