@@ -26,3 +26,50 @@ ignore = [
 # Tests legitimately use unused imports for fixture side effects, and
 # import * style assertions.
 "tests/**/*.py" = ["F401", "F403", "F405"]
+
+[tool.mypy]
+# Permissive baseline. Goal: catch boundary-layer bugs (the "verify the wire"
+# class) and obvious type errors WITHOUT requiring full type annotation of
+# every function. Tighten over time.
+python_version = "3.12"
+ignore_missing_imports = true       # third-party libs (tweepy, atproto, etc.) ship no stubs
+check_untyped_defs = true           # type-check the body of unannotated functions
+warn_unused_ignores = true          # surfaces stale `# type: ignore` comments
+warn_redundant_casts = true
+no_implicit_optional = true         # require explicit Optional[T] for default-None args
+follow_imports = "silent"           # don't crash on missing imports inside imported modules
+exclude = [
+    "tests/",                       # test code is intentionally loose; revisit later
+    "dashboard/",                   # JS/TS, not Python
+    "scripts/",                     # one-off operational scripts
+    "data/",
+]
+
+# Per-module overrides — currently checked-in baseline. Goal is to remove
+# these one at a time as we convert module state schemas to TypedDict and
+# tighten Optional handling in the orchestrator.
+[[tool.mypy.overrides]]
+module = "src.main"
+# 47 errors after the SeaIceRecord rename — orchestrator with dynamic state
+# access patterns (state["key"] returns Union[various]). Needs a TypedDict
+# pass on bot_state to fix cleanly. Tracked as follow-up.
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.state"
+# 68 errors — DEFAULT_STATE is a plain dict; mypy can't narrow its many
+# nested keys. Convert to TypedDict in a dedicated PR; that fixes most.
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.editorial.scoring"
+# 47 errors — score_* helpers receive optional fields and call .get() on
+# them without explicit narrowing. Mostly Optional-handling; safe to
+# tighten one helper at a time.
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "src.voice.generator"
+# Voice generator has many template helpers with primitive arg types;
+# most don't need annotations.
+disallow_untyped_defs = false

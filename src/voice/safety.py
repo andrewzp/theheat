@@ -160,7 +160,9 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
             model=GEMINI_SAFETY_MODEL,
             contents=prompt,
         )
-        answer = response.text.strip().upper()
+        # response.text is Optional — empty answer routes to NO (allow through;
+        # regex pipeline already did the deterministic gating).
+        answer = (response.text or "").strip().upper()
 
         if answer.startswith("YES"):
             return False, "LLM flagged as potentially harmful"

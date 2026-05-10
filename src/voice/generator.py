@@ -761,7 +761,7 @@ def generate_tweet_bundle(
                     model=GEMINI_MODEL,
                     contents=prompt,
                 )
-                parsed = _parse_candidate_response(response.text)
+                parsed = _parse_candidate_response(response.text or "")
                 accepted_this_attempt = 0
                 for candidate in parsed:
                     formula_reason = _detect_stock_formula(candidate)

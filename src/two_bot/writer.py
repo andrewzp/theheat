@@ -96,7 +96,16 @@ def _call_anthropic(user_prompt: str) -> str:
             messages=[{"role": "user", "content": user_prompt}],
         ),
     )
-    return response.content[0].text
+    # response.content is a list of block types — narrow to TextBlock.
+    # We don't request thinking / tool use, so the first block is always text;
+    # the explicit check is for static type safety + future-proofing.
+    from anthropic.types import TextBlock
+    block = response.content[0]
+    if not isinstance(block, TextBlock):
+        raise RuntimeError(
+            f"Unexpected Anthropic response block type: {type(block).__name__}"
+        )
+    return block.text
 
 
 def _call_google(user_prompt: str) -> str:
@@ -117,7 +126,9 @@ def _call_google(user_prompt: str) -> str:
             contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
         ),
     )
-    return response.text
+    # google-genai response.text is Optional — empty falls through to the
+    # JSON parser as a parse error, which the caller handles.
+    return response.text or ""
 
 
 def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:

@@ -72,7 +72,10 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
             contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}",
         ),
     )
-    return response.text
+    # google-genai's response.text is Optional — empty when no candidates
+    # come back. Empty string falls through to the JSON parser as a parse
+    # error, which the caller handles consistently with other failure modes.
+    return response.text or ""
 
 
 def fact_check(
