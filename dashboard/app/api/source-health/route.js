@@ -8,17 +8,19 @@ const DEFAULT_RUNS = 20
 function classifyHealth(s) {
   // No runs OR every run was a skip (e.g. drought on a non-Friday) → idle.
   // Skipped is a deliberate "this source isn't due today," not a failure.
-  const active = s.successes + s.failures
+  const degradedRuns = s.degraded + s.partial_failures
+  const active = s.successes + s.failures + degradedRuns
   if (s.runs === 0 || active === 0) return "idle"
 
   const successRate = s.successes / active
 
   // Most recent run failed — at minimum "degraded", "unhealthy" if pattern is consistent
-  if (s.last_run_status === "failed") {
+  if (s.last_run_status === "failed" || s.last_run_status === "partial_failure") {
     return successRate < 0.5 ? "unhealthy" : "degraded"
   }
-  if (successRate < 0.7) return "unhealthy"
-  if (successRate < 0.95) return "degraded"
+  if (s.last_run_status === "degraded") return "degraded"
+  if (s.failures / active >= 0.5) return "unhealthy"
+  if (degradedRuns > 0 || successRate < 0.95) return "degraded"
   return "healthy"
 }
 
@@ -57,6 +59,8 @@ export async function GET(request) {
             runs: 0,
             successes: 0,
             failures: 0,
+            degraded: 0,
+            partial_failures: 0,
             skipped: 0,
             total_observed: 0,
             total_promoted: 0,
@@ -75,6 +79,8 @@ export async function GET(request) {
 
         if (s.status === "success") agg.successes += 1
         else if (s.status === "failed") agg.failures += 1
+        else if (s.status === "degraded") agg.degraded += 1
+        else if (s.status === "partial_failure") agg.partial_failures += 1
         else if (s.status === "skipped") agg.skipped += 1
 
         if (agg.last_run_at == null) {
@@ -91,9 +97,9 @@ export async function GET(request) {
     const order = { unhealthy: 0, degraded: 1, healthy: 2, idle: 3 }
     const sources = [...bySource.values()]
       .map((s) => {
-        // success_rate denominator is "active" runs (success + failed),
+        // success_rate denominator is active runs (success + problem),
         // not including skipped — matches the health classifier.
-        const active = s.successes + s.failures
+        const active = s.successes + s.failures + s.degraded + s.partial_failures
         return {
           ...s,
           success_rate: active > 0 ? s.successes / active : null,

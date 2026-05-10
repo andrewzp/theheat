@@ -10,5 +10,13 @@ build/
 .gstack/
 # GHCN-Daily bootstrap artifacts — large binaries stored as GH Release assets
 data/station_thresholds.sqlite
+data/station_thresholds.sqlite-shm
+data/station_thresholds.sqlite-wal
 data/_ghcnd_all.tar.gz
 data/stations.csv
+
+# Finder/iCloud "keep both files" duplicates
+*" 2.js"
+*" 2.ts"
+*" 2.py"
+*" 2.md"

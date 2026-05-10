@@ -71,13 +71,10 @@ def test_writer_output_passes_safety_pipeline(
     bundle = request.getfixturevalue(bundle_fixture_name)
     result = write_tweet(bundle, fresh_memory_slice)
 
-    # The writer is allowed to kill — but if it produces a tweet, the
-    # tweet must pass safety.
-    if result.tweet is None:
-        pytest.skip(
-            f"Writer killed {bundle_fixture_name} ({result.kill_reason}); "
-            "this test only validates the post-write path."
-        )
+    assert result.tweet is not None, (
+        f"Writer killed {bundle_fixture_name} ({result.kill_reason}); "
+        "voice replay must fail when the writer stops producing copy."
+    )
 
     assert len(result.tweet) <= 280, (
         f"Tweet exceeds 280 char cap: {len(result.tweet)} chars\n"
@@ -118,8 +115,9 @@ def test_archive_window_only_no_absolute_claims(
     )
 
     result = write_tweet(bundle, fresh_memory_slice)
-    if result.tweet is None:
-        pytest.skip(f"Writer killed {bundle_fixture_name}: {result.kill_reason}")
+    assert result.tweet is not None, (
+        f"Writer killed {bundle_fixture_name}: {result.kill_reason}"
+    )
 
     lowered = result.tweet.lower()
     forbidden_absolutes = ["all-time", "all time", " ever ", "in recorded history"]
@@ -145,8 +143,9 @@ def test_no_fabricated_context_phrases(
 
     bundle = request.getfixturevalue(bundle_fixture_name)
     result = write_tweet(bundle, fresh_memory_slice)
-    if result.tweet is None:
-        pytest.skip(f"Writer killed {bundle_fixture_name}: {result.kill_reason}")
+    assert result.tweet is not None, (
+        f"Writer killed {bundle_fixture_name}: {result.kill_reason}"
+    )
 
     lowered = result.tweet.lower()
     forbidden_phrases = [

@@ -5,11 +5,41 @@ const DEFAULT_STATE = {
   streaks: {},
   posted_events: [],
   daily_tweet_count: {},
+  co2_annual_count: {},
   pending_confirmations: [],
   drafts: [],
   run_history: [],
   errors: [],
   suppressions: [],
+  memory: {
+    ongoing_events: [],
+    used_era_anchors: [],
+    used_peer_comparisons: [],
+    used_framings: [],
+    shipped_tweets: [],
+  },
+  city_all_time_max: {},
+  city_all_time_min: {},
+  city_monthly_max: {},
+  city_monthly_min: {},
+  record_streaks: {},
+  data_source_failures: {},
+  ocean_sst_streak: {
+    seeded: false,
+    last_milestone_fired: null,
+  },
+  ice_mass_max_loss: {},
+  ice_mass_last_milestone: {},
+  ice_mass_last_seen: {},
+  ice_annual_count: {},
+  fire_complex_tiers: {},
+  fire_footprint_last_run: null,
+  synthesis_components: {
+    fires: {},
+    heats: {},
+    drought_snapshot: null,
+  },
+  synthesis_cooldown: {},
 }
 
 const SQLITE_SCHEMA = `
@@ -111,6 +141,29 @@ CREATE TABLE IF NOT EXISTS suppressions (
   payload_json TEXT NOT NULL
 );
 `
+
+const METADATA_JSON_KEYS = [
+  "co2_annual_count",
+  "city_all_time_max",
+  "city_all_time_min",
+  "city_monthly_max",
+  "city_monthly_min",
+  "record_streaks",
+  "ocean_sst_streak",
+  "ice_mass_max_loss",
+  "ice_mass_last_milestone",
+  "ice_mass_last_seen",
+  "ice_annual_count",
+  "fire_complex_tiers",
+  "fire_footprint_last_run",
+  "synthesis_components",
+  "synthesis_cooldown",
+  "suppressions",
+  "memory",
+  "data_source_failures",
+]
+
+const PYTHON_OWNED_METADATA_KEYS = METADATA_JSON_KEYS.filter((key) => key !== "suppressions")
 
 function gistHeaders() {
   const headers = { Accept: "application/vnd.github.v3+json" }
@@ -277,6 +330,17 @@ function mergeSuppressions(current = [], incoming = [], maxItems = 200) {
 function mergeState(current, incoming) {
   const base = normalizeState(current)
   const next = normalizeState(incoming)
+  const rawIncoming = incoming || {}
+  const pythonOwnedMetadata = Object.fromEntries(
+    PYTHON_OWNED_METADATA_KEYS.map((key) => [
+      key,
+      structuredClone(
+        Object.prototype.hasOwnProperty.call(rawIncoming, key)
+          ? rawIncoming[key]
+          : base[key]
+      ),
+    ])
+  )
   // Preserve Python-owned top-level state keys that the dashboard never
   // sets but must not overwrite. Without the spread, every dashboard
   // approve/reject/edit click was rewriting state.json with only this
@@ -299,6 +363,7 @@ function mergeState(current, incoming) {
     run_history: mergeRunHistory(base.run_history, next.run_history),
     errors: mergeErrors(base.errors, next.errors),
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
+    ...pythonOwnedMetadata,
   })
 }
 
@@ -401,6 +466,11 @@ function writeSqliteState(db, state) {
   try {
     db.exec("DELETE FROM metadata")
     insertMeta.run("last_hot10", JSON.stringify(normalized.last_hot10 || DEFAULT_STATE.last_hot10))
+    METADATA_JSON_KEYS.forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(normalized, key)) {
+        insertMeta.run(key, JSON.stringify(normalized[key]))
+      }
+    })
 
     db.exec("DELETE FROM posted_events")
     normalized.posted_events.forEach((eventId, index) => insertPosted.run(index, eventId))
@@ -518,6 +588,12 @@ function readSqliteState(db) {
   if (lastHot10?.value_json) {
     state.last_hot10 = JSON.parse(lastHot10.value_json)
   }
+  for (const key of METADATA_JSON_KEYS) {
+    const row = db.prepare("SELECT value_json FROM metadata WHERE key = ?").get(key)
+    if (row?.value_json) {
+      state[key] = JSON.parse(row.value_json)
+    }
+  }
 
   state.posted_events = db.prepare("SELECT event_id FROM posted_events ORDER BY seq ASC").all().map((row) => row.event_id)
   state.pending_confirmations = db.prepare("SELECT payload_json FROM pending_confirmations ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
@@ -547,7 +623,8 @@ function readSqliteState(db) {
   })
 
   state.errors = db.prepare("SELECT payload_json FROM errors ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
-  state.suppressions = db.prepare("SELECT payload_json FROM suppressions ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
+  const tableSuppressions = db.prepare("SELECT payload_json FROM suppressions ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
+  state.suppressions = mergeSuppressions(state.suppressions, tableSuppressions)
   return normalizeState(state)
 }
 
@@ -612,19 +689,18 @@ export async function readStateStore() {
 }
 
 export async function writeStateStore(state) {
-  const normalized = normalizeState(state)
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
       await bootstrapSqliteFromGist(db)
-      const merged = mergeState(readSqliteState(db), normalized)
+      const merged = mergeState(readSqliteState(db), state)
       writeSqliteState(db, merged)
       return
     } finally {
       db.close()
     }
   }
-  const merged = mergeState(await readGistState(), normalized)
+  const merged = mergeState(await readGistState(), state)
   await writeGistState(merged)
 }
 
