@@ -1,10 +1,40 @@
 # @theheat — Project Briefing
 
-**Last updated:** May 8, 2026 (post-debugging-marathon)
-**Status:** **PIPELINE WORKING END-TO-END.** A 4-day production outage (every two-bot draft silently dying since 2026-05-03) was fully diagnosed and resolved over a 13-hour debugging session on 2026-05-08. Root cause was a unit-of-measure bug in the Gemini SDK timeout config (`HttpOptions.timeout` is milliseconds, not seconds — the code passed `90` meaning 90s, but the SDK read it as 90ms and every fact-check timed out in <300ms). The fix layered on top of: structured suppression-ledger visibility, defensive JSON parsing for Sonnet's wrapper variations, station-name normalization, US-state + observation-kind bundle enrichment, F-first / C-parens audience-aware temperature formatting, and Codex's high-severity batch (dashboard data-loss prevention, sqlite missing keys, claim-extractor unbounded timeout).
-**Latest merged commits:** `f96f4cb` (#38 suppression ledger) → `b941506` (#39 date serialization) → `d869b2d` (#40 fence stripping) → `62cbb11` (#41 preamble + timeout) → `5d3e5cf` (#42 Codex sweep) → `da9093f` (#43 **the actual root cause: Gemini ms-vs-s**) → `bdbf845` (#44 station-name normalization) → `34459dc` (#45 state + observation_kind enrichment) → `6a068dc` (#46 Fahrenheit-first for US) → `d9c84ff` (#47 Codex review high-severity batch).
-**Tests:** ~813 passing (was 709 at session start, +~104 new across the day).
-**Cost:** GHCN-Daily free. Sonnet writer ~$13/mo. Gemini Flash usage unchanged. Net ~$13/mo target unchanged.
+**Last updated:** 2026-05-09 (post-ship-quality session).
+**Status:** **PIPELINE WORKING END-TO-END.** Yesterday's debug marathon brought the bot back; today's session locked in defenses against a regression of the same class (silent test/CI gaps, voice/prompt drift, safety only at post-time, no PR pre-flight). Ten ship-quality PRs landed today on top of yesterday's stack.
+**Latest merged commits (2026-05-09):** `4cb1eba` (#55 fix flaky tests — mock every-run data sources in run_alerts) → `3f92b9d` (#56 CI on PRs + Node 24 actions) → `15469b9` (#57 hermeticity gate in conftest) → `84c7d9f` (#58 anti-fabrication safety regex + writer-prompt HARD RULES tests) → `7015e01` (#60 safety gate inline in two-bot generate_draft / shadow) → `03ba309` (#61 nightly writer-replay regression suite + workflow) → `1d3e490` (#62 ruff lint in CI) → `13480a2` (#63 mypy permissive baseline + Optional fixes) → `69f2fcf` (#64 dashboard per-source health view + API rollup).
+**Branch protection:** required `test` status check on `main` (admin can bypass for emergencies). Direct pushes to main blocked; every change is a PR with green CI.
+**Tests:** **866 passing** (was 813 at start-of-session). +12 voice-replay tests gated by marker run nightly via `voice-regression.yml`.
+**Cost:** GHCN-Daily free. Sonnet writer ~$13/mo + ~$6/mo nightly voice-regression replay = ~$19/mo Anthropic on top of the existing Sonnet evaluator (~$60-90/mo per memory). Gemini Flash usage unchanged.
+
+## What changed structurally on 2026-05-09 (ship-quality session)
+
+Five distinct streams, each its own PR, each verified by the new pre-merge CI gate:
+
+- **CI on PRs (#56).** `bot.yml` now triggers on `pull_request: { branches: [main] }` so the `test` job runs on every PR. The `run` job stays scheduled-only (`github.event_name != 'pull_request'`) — no tweet posting / gist writes / API quota burn on PRs. `actions/checkout@v4` → `@v6` and `actions/setup-python@v5` → `@v6` (Node 24-native, clears the deprecation warning).
+- **Hermeticity gate (#57).** Autouse fixture in `tests/conftest.py` monkey-patches `socket.socket.connect` to refuse non-localhost connections during test execution. Pure stdlib (`unittest.mock`), no new pip dep. Any test that forgets to mock the network layer fails immediately with an actionable error pointing at the missing mock. This closes the class of bug that caused PR #55's flake.
+- **Anti-fabrication safety + HARD RULES tests (#58).** Five new `BANNED_PATTERNS` in `src/voice/safety.py` mirror the writer prompt's verbatim banned-phrase examples (`"three weeks into meteorological spring"`, `"January reading"`, `"flowers are already up"`, `"the ground froze"`, `"fruit trees blooming early"`). New `TestFabricatedContext` class in `tests/test_safety.py` (8 tests, including 3 negative tests protecting `"Fruit trees were not consulted"` flourish + `"three springs later"` echo). New `TestWriterPromptHardRules` class in `tests/two_bot/test_writer.py` (11 tests, one per HARD RULE bullet asserting canonical anchor is present so a future prompt edit that drops a bullet fails at PR time).
+- **Safety inline in `pipeline.generate_draft` (#60).** `run_safety_pipeline` was previously only invoked at post-time; the inline integration kills bad drafts at write-time. Combined with #58, the safety regex catches anti-fabrication phrases at the earliest possible point.
+- **Nightly voice-replay regression suite (#61).** New `tests/voice_regression/` directory with `StoryBundle` fixtures and a writer-replay harness. New workflow `.github/workflows/voice-regression.yml` runs daily at 09:00 UTC against the real Anthropic writer + Gemini fact-checker, asserting every output passes the safety pipeline. Triggers: `schedule` daily, `workflow_dispatch` manual, `pull_request: labeled` with `voice-check` label for opt-in PR gating. Cost: ~$0.20/run × daily ≈ $6/mo.
+- **Ruff lint in CI (#62).** New `pyproject.toml` config selects E/F/W with project-wide `E402` ignore (codebase puts `from __future__` before docstring across 18 files). New CI step runs `ruff check src/ tests/`. Caught and fixed 5 pre-existing issues (dead `age` / `years_ago` variables, lambda-assignment in test, dead `a`/`b` in `test_era_anchors.py`). Auto-fix removed 4 imports that LOOKED unused but were accessed via test patching — restored each with `# noqa: F401` and a comment.
+- **Mypy permissive baseline (#63).** Permissive (`check_untyped_defs`, `no_implicit_optional`, `ignore_missing_imports`). Wired into CI test job. Three modules use `ignore_errors = true` pending a `bot_state` TypedDict refactor: `src.main` (47 errors after rename), `src.state` (68), `src.editorial.scoring` (47). **Real bug found:** variable `record` was reassigned across two type domains in `src/main.py` (`SeaIceRecord | None` from `sea_ice.detect_record_low` at line 1971; `IceMassRecord | None` from `ice_mass.detect_monthly_record` at line 2400). Functionally safe but a real maintenance hazard — renamed the IceMass variable to `ice_record` in lines 2400-2480. Plus 6 small Optional unwrap fixes across LLM-response handlers (`response.text or ""` and an isinstance narrowing for Anthropic content blocks).
+- **Dashboard per-source health view (#64).** New `Sources` tab in the dashboard aggregates per-source success rate, last error, and observation/draft totals across the last 20 runs (`bot_state.run_history`). Sorted worst-first so problem sources surface immediately. New `GET /api/source-health` endpoint with a 4-tier health classifier (`idle` / `healthy` / `degraded` / `unhealthy`) over **active** runs only — skipped sources (e.g. drought on a Tuesday) classify as `idle`, not `unhealthy`. 4 new tests in `dashboard/tests/source-health.test.js`.
+
+The day also shipped **branch protection** (Settings → Branches → require `test` to pass on `main`; admin bypass on for emergencies; no force-push, no deletions). With CI now triggering on PRs (#56), this closes the loop where a red PR could merge silently.
+
+### Net effect on regression surface
+
+```
+Pre-2026-05-09                       2026-05-09 stack
+─────────────────────────            ──────────────────────────────────────────
+Test gap → flaky 4 days              fix #55 + hermeticity gate #57
+PR merges with no checks             #56 PR trigger + #62 ruff + #63 mypy in CI
+Anyone can push red to main          branch protection #F
+Voice prompt drift = silent          #58 prompt-content tests (one per HARD RULE)
+Fabrication = fact-check kill        #58 + #60 safety regex at draft-time
+No replay coverage                   #61 nightly voice-regression suite
+Suppression view shows kills         #64 source-health surfaces failing sources
+```
 
 ## What changed structurally on 2026-05-08
 
