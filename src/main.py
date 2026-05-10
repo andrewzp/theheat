@@ -13,10 +13,13 @@ import os
 import secrets
 import sys
 import time
+from typing import Any, cast
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
 from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data.open_meteo import AllTimeRecord, AnomalyEvent, MonthlyRecord, RecordEvent
+from src.state_schema import BotState
 from src.data.source_status import SourceSkipped
 from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
@@ -80,7 +83,7 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
         return None
 
 
-def _find_draft(bot_state: dict, draft_id: str = "", tweet_text: str = "") -> dict | None:
+def _find_draft(bot_state: BotState, draft_id: str = "", tweet_text: str = "") -> dict | None:
     """Find a draft by explicit id first, then by approved tweet text fallback."""
     drafts = bot_state.get("drafts", [])
     if draft_id:
@@ -126,7 +129,7 @@ def _record_source_run(
     )
 
 
-def _previous_drafts_for_event(bot_state: dict, event_base: str) -> list[str]:
+def _previous_drafts_for_event(bot_state: BotState, event_base: str) -> list[str]:
     """Find text of previous drafts for the same base event.
 
     For evolving events (e.g. cyclones), the event_id changes with each
@@ -168,7 +171,7 @@ def _near_miss_gap() -> int:
 
 
 @contextlib.contextmanager
-def _suppression_context(bot_state: dict, *, source: str, run_id: str | None = None):
+def _suppression_context(bot_state: BotState, *, source: str, run_id: str | None = None):
     """Activate suppression capture for `_should_draft()` calls inside the block."""
     global _CURRENT_SUPPRESSION_CTX
     prev = _CURRENT_SUPPRESSION_CTX
@@ -179,7 +182,7 @@ def _suppression_context(bot_state: dict, *, source: str, run_id: str | None = N
         _CURRENT_SUPPRESSION_CTX = prev
 
 
-def _activate_suppression_ctx(bot_state: dict, *, source: str, run_id: str | None = None) -> None:
+def _activate_suppression_ctx(bot_state: BotState, *, source: str, run_id: str | None = None) -> None:
     """Set the suppression context for the rest of the process.
 
     Used at the top of each top-level run function (run_alerts, run_leaderboard,
@@ -219,7 +222,7 @@ def _score_reasons(score) -> list[str]:
 
 def _record_suppression(
     *,
-    bot_state: dict,
+    bot_state: BotState,
     source: str | None,
     run_id: str | None,
     event_id: str,
@@ -251,7 +254,7 @@ def _record_suppression(
 
 def _record_downstream_suppression(
     *,
-    bot_state: dict,
+    bot_state: BotState,
     source: str | None,
     run_id: str | None,
     event_id: str,
@@ -288,7 +291,7 @@ def _record_downstream_suppression(
 
 def _record_save_rejection(
     *,
-    bot_state: dict,
+    bot_state: BotState,
     event_id: str,
     score,
     kill_stage: str,
@@ -358,20 +361,22 @@ def _unwrap_generated_result(
         return generated.text, candidates, selected_score, evaluator_metadata
 
     text = getattr(generated, "text", "") if isinstance(getattr(generated, "text", ""), str) else ""
-    candidates = getattr(generated, "candidates", None)
-    selected_score = getattr(generated, "selected_score", None)
+    raw_candidates: Any = getattr(generated, "candidates", None)
+    raw_selected_score: Any = getattr(generated, "selected_score", None)
     evaluator_metadata = _evaluator_metadata_from_bundle(generated)
 
-    candidate_payload = None
-    if candidates:
+    candidate_payload: list[dict] | None = None
+    if raw_candidates:
         candidate_payload = []
-        for candidate in candidates:
+        for candidate in raw_candidates:
             if hasattr(candidate, "as_dict"):
                 candidate_payload.append(candidate.as_dict())
             elif isinstance(candidate, dict):
                 candidate_payload.append(candidate)
 
-    selected_payload = selected_score.as_dict() if hasattr(selected_score, "as_dict") else selected_score
+    selected_payload = (
+        raw_selected_score.as_dict() if hasattr(raw_selected_score, "as_dict") else raw_selected_score
+    )
     return text, candidate_payload, selected_payload, evaluator_metadata
 
 
@@ -461,7 +466,7 @@ ELITE_COPY_SCORE = 95
 CO2_ANNUAL_CAP = 12
 
 
-def _co2_annual_cap_reached(bot_state: dict, cap: int = CO2_ANNUAL_CAP) -> bool:
+def _co2_annual_cap_reached(bot_state: BotState, cap: int = CO2_ANNUAL_CAP) -> bool:
     """True if we've already drafted CO2_ANNUAL_CAP CO2 tweets this calendar year."""
     year_key = str(date.today().year)
     count = bot_state.get("co2_annual_count", {}).get(year_key, 0)
@@ -471,7 +476,7 @@ def _co2_annual_cap_reached(bot_state: dict, cap: int = CO2_ANNUAL_CAP) -> bool:
     return False
 
 
-def _increment_co2_annual_count(bot_state: dict) -> None:
+def _increment_co2_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("co2_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
@@ -480,7 +485,7 @@ def _increment_co2_annual_count(bot_state: dict) -> None:
 ICE_ANNUAL_CAP = 8
 
 
-def _ice_annual_cap_reached(bot_state: dict, cap: int = ICE_ANNUAL_CAP) -> bool:
+def _ice_annual_cap_reached(bot_state: BotState, cap: int = ICE_ANNUAL_CAP) -> bool:
     """True if we've already drafted ICE_ANNUAL_CAP ice-mass tweets this year."""
     year_key = str(date.today().year)
     count = bot_state.get("ice_annual_count", {}).get(year_key, 0)
@@ -490,7 +495,7 @@ def _ice_annual_cap_reached(bot_state: dict, cap: int = ICE_ANNUAL_CAP) -> bool:
     return False
 
 
-def _increment_ice_annual_count(bot_state: dict) -> None:
+def _increment_ice_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("ice_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
@@ -546,7 +551,7 @@ def _posted_city_within_days(drafts: list[dict], city: str, days: int) -> bool:
 
 def save_draft(
     tweet_text: str,
-    bot_state: dict,
+    bot_state: BotState,
     tweet_type: str,
     event_id: str = "",
     score: EditorialScore | None = None,
@@ -679,7 +684,7 @@ def save_draft(
         drafts = bot_state["drafts"]
         print(f"[draft] Pruned {before - len(drafts)} old drafts")
 
-    draft = {
+    draft: dict[str, Any] = {
         "id": f"draft_{_utc_now().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
         "text": tweet_text,
         "type": tweet_type,
@@ -723,7 +728,7 @@ def save_draft(
 
 def _save_generated_draft(
     generated: str | CandidateBundle | object | None,
-    bot_state: dict,
+    bot_state: BotState,
     tweet_type: str,
     event_id: str,
     score: EditorialScore,
@@ -789,7 +794,7 @@ def _two_bot_bundle_for_extreme_signal(
 
 def _try_two_bot_draft(
     bundle,
-    bot_state: dict,
+    bot_state: BotState,
     score,
     *,
     legacy_type: str,
@@ -821,7 +826,7 @@ def _try_two_bot_draft(
     from src.two_bot.pipeline import generate_draft
 
     pipeline_result: dict = {}
-    draft = generate_draft(bundle, bot_state, result_out=pipeline_result)
+    draft = generate_draft(bundle, cast(dict, bot_state), result_out=pipeline_result)
     if draft is None:
         ctx = _CURRENT_SUPPRESSION_CTX
         if ctx is not None:
@@ -850,7 +855,7 @@ def _try_two_bot_draft(
     )
 
 
-def _maybe_shadow_two_bot(bundle, bot_state: dict, review_context: dict) -> None:
+def _maybe_shadow_two_bot(bundle, bot_state: BotState, review_context: dict) -> None:
     """Run the shadow two-bot pipeline if enabled, attaching results in place.
 
     Gated by ``THEHEAT_SHADOW_AB_ENABLED=1``. The shadow's tweet text and
@@ -864,7 +869,7 @@ def _maybe_shadow_two_bot(bundle, bot_state: dict, review_context: dict) -> None
     try:
         from src.two_bot.pipeline import generate_shadow_draft
 
-        shadow = generate_shadow_draft(bundle, bot_state)
+        shadow = generate_shadow_draft(bundle, cast(dict, bot_state))
         if shadow:
             review_context["shadow_two_bot"] = {
                 "text": shadow["text"],
@@ -874,7 +879,7 @@ def _maybe_shadow_two_bot(bundle, bot_state: dict, review_context: dict) -> None
         print(f"[shadow_ab] Skipped due to error: {exc}")
 
 
-def post_approved(tweet_text: str, bot_state: dict) -> str:
+def post_approved(tweet_text: str, bot_state: BotState) -> str:
     """Post an approved tweet to X.
 
     Returns "posted", "rate_limited", or "failed".
@@ -900,7 +905,7 @@ def post_approved(tweet_text: str, bot_state: dict) -> str:
 MAX_DRAFTS_PER_CYCLE = 3
 
 
-def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
+def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Check all alert data sources and save drafts."""
     _activate_suppression_ctx(
         bot_state,
@@ -985,9 +990,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             # all-time > monthly > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            strongest_signal = None
-            strongest_score = None
-            strongest_event_id = None
+            strongest_signal: AllTimeRecord | MonthlyRecord | AnomalyEvent | RecordEvent | None = None
+            strongest_score: EditorialScore | None = None
+            strongest_event_id: str | None = None
             strongest_headline = ""
             strongest_facts = []
             strongest_type = ""
@@ -998,7 +1003,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             two_bot_saved = False
 
             if bundle.all_time_high:
-                ev = bundle.all_time_high
+                ev: AllTimeRecord = bundle.all_time_high
                 if not state.is_duplicate(bot_state, ev.event_id):
                     score = score_all_time_record(
                         ev.new_temp_c, ev.old_record_c, ev.old_record_year,
@@ -1044,160 +1049,164 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         signal_counts["all_time"] += 1
 
             if strongest_signal is None and bundle.monthly_high:
-                ev = bundle.monthly_high
+                ev_mh: MonthlyRecord = bundle.monthly_high
                 # Suppress "hottest April ever - old record set in 2026"
                 # tweets. When the prior record was set in the same year as
                 # this reading, the "hottest ever" framing reads as nonsense.
                 if (
-                    not state.is_duplicate(bot_state, ev.event_id)
-                    and ev.old_record_year != signal_year
+                    not state.is_duplicate(bot_state, ev_mh.event_id)
+                    and ev_mh.old_record_year != signal_year
                 ):
                     score = score_monthly_record(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
-                        ev.month, ev.years_of_data, kind="high",
+                        ev_mh.new_temp_c, ev_mh.old_record_c, ev_mh.old_record_year,
+                        ev_mh.month, ev_mh.years_of_data, kind="high",
                     )
-                    if _should_draft(score, ev.event_id):
-                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev.month]
-                        strongest_signal = ev
+                    if _should_draft(score, ev_mh.event_id):
+                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_mh.month]
+                        strongest_signal = ev_mh
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_mh.event_id
                         strongest_type = "monthly_high"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} on pace for hottest {month_name} on record"
+                        strongest_city = ev_mh.city
+                        strongest_headline = f"{ev_mh.city} on pace for hottest {month_name} on record"
                         strongest_facts = [
-                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
-                            _fact(f"Prior {month_name} max", _temp_pair_c(ev.old_record_c)),
-                            _fact("Prior year", ev.old_record_year),
-                            _fact("Archive span", f"{ev.years_of_data} years"),
+                            _fact("Forecast high", _temp_pair_c(ev_mh.new_temp_c)),
+                            _fact(f"Prior {month_name} max", _temp_pair_c(ev_mh.old_record_c)),
+                            _fact("Prior year", ev_mh.old_record_year),
+                            _fact("Archive span", f"{ev_mh.years_of_data} years"),
                         ]
                         signal_counts["monthly"] += 1
 
             if strongest_signal is None and bundle.monthly_low:
-                ev = bundle.monthly_low
+                ev_ml: MonthlyRecord = bundle.monthly_low
                 if (
-                    not state.is_duplicate(bot_state, ev.event_id)
-                    and ev.old_record_year != signal_year
+                    not state.is_duplicate(bot_state, ev_ml.event_id)
+                    and ev_ml.old_record_year != signal_year
                 ):
                     score = score_monthly_record(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
-                        ev.month, ev.years_of_data, kind="low",
+                        ev_ml.new_temp_c, ev_ml.old_record_c, ev_ml.old_record_year,
+                        ev_ml.month, ev_ml.years_of_data, kind="low",
                     )
-                    if _should_draft(score, ev.event_id):
-                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev.month]
-                        strongest_signal = ev
+                    if _should_draft(score, ev_ml.event_id):
+                        month_name = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][ev_ml.month]
+                        strongest_signal = ev_ml
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_ml.event_id
                         strongest_type = "monthly_low"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} hit its coldest {month_name} reading on record"
+                        strongest_city = ev_ml.city
+                        strongest_headline = f"{ev_ml.city} hit its coldest {month_name} reading on record"
                         strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
-                            _fact(f"Prior {month_name} min", _temp_pair_c(ev.old_record_c)),
-                            _fact("Prior year", ev.old_record_year),
-                            _fact("Archive span", f"{ev.years_of_data} years"),
+                            _fact("Observed low", _temp_pair_c(ev_ml.new_temp_c)),
+                            _fact(f"Prior {month_name} min", _temp_pair_c(ev_ml.old_record_c)),
+                            _fact("Prior year", ev_ml.old_record_year),
+                            _fact("Archive span", f"{ev_ml.years_of_data} years"),
                         ]
                         signal_counts["monthly"] += 1
 
             if strongest_signal is None and bundle.anomaly_hot:
-                ev = bundle.anomaly_hot
-                if not state.is_duplicate(bot_state, ev.event_id):
+                ev_ah: AnomalyEvent = bundle.anomaly_hot
+                if not state.is_duplicate(bot_state, ev_ah.event_id):
                     score = score_anomaly(
-                        ev.today_temp_c, ev.historical_mean_c, ev.anomaly_c,
+                        ev_ah.today_temp_c, ev_ah.historical_mean_c, ev_ah.anomaly_c,
                         kind="hot",
                     )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
+                    if _should_draft(score, ev_ah.event_id):
+                        strongest_signal = ev_ah
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_ah.event_id
                         strongest_type = "anomaly_hot"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city}: +{ev.anomaly_c:.1f}C above normal"
+                        strongest_city = ev_ah.city
+                        strongest_headline = f"{ev_ah.city}: +{ev_ah.anomaly_c:.1f}C above normal"
                         strongest_facts = [
-                            _fact("Today", _temp_pair_c(ev.today_temp_c)),
-                            _fact("Historical mean", _temp_pair_c(ev.historical_mean_c)),
-                            _fact("Anomaly", f"+{ev.anomaly_c:.1f}C"),
+                            _fact("Today", _temp_pair_c(ev_ah.today_temp_c)),
+                            _fact("Historical mean", _temp_pair_c(ev_ah.historical_mean_c)),
+                            _fact("Anomaly", f"+{ev_ah.anomaly_c:.1f}C"),
                         ]
                         signal_counts["anomaly"] += 1
 
             if strongest_signal is None and bundle.anomaly_cold:
-                ev = bundle.anomaly_cold
-                if not state.is_duplicate(bot_state, ev.event_id):
+                ev_ac: AnomalyEvent = bundle.anomaly_cold
+                if not state.is_duplicate(bot_state, ev_ac.event_id):
                     score = score_anomaly(
-                        ev.today_temp_c, ev.historical_mean_c, ev.anomaly_c,
+                        ev_ac.today_temp_c, ev_ac.historical_mean_c, ev_ac.anomaly_c,
                         kind="cold",
                     )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
+                    if _should_draft(score, ev_ac.event_id):
+                        strongest_signal = ev_ac
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_ac.event_id
                         strongest_type = "anomaly_cold"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city}: {ev.anomaly_c:.1f}C below normal"
+                        strongest_city = ev_ac.city
+                        strongest_headline = f"{ev_ac.city}: {ev_ac.anomaly_c:.1f}C below normal"
                         strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev.today_temp_c)),
-                            _fact("Historical mean low", _temp_pair_c(ev.historical_mean_c)),
-                            _fact("Anomaly", f"{ev.anomaly_c:.1f}C"),
+                            _fact("Observed low", _temp_pair_c(ev_ac.today_temp_c)),
+                            _fact("Historical mean low", _temp_pair_c(ev_ac.historical_mean_c)),
+                            _fact("Anomaly", f"{ev_ac.anomaly_c:.1f}C"),
                         ]
                         signal_counts["anomaly"] += 1
 
             if strongest_signal is None and bundle.calendar_date_high:
-                ev = bundle.calendar_date_high
-                if not state.is_duplicate(bot_state, ev.event_id):
+                ev_cdh: RecordEvent = bundle.calendar_date_high
+                if not state.is_duplicate(bot_state, ev_cdh.event_id):
                     score = score_record_event(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev_cdh.new_temp_c, ev_cdh.old_record_c, ev_cdh.old_record_year,
                     )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
+                    if _should_draft(score, ev_cdh.event_id):
+                        strongest_signal = ev_cdh
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_cdh.event_id
                         strongest_type = "record"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} is forecast to challenge a heat record"
+                        strongest_city = ev_cdh.city
+                        strongest_headline = f"{ev_cdh.city} is forecast to challenge a heat record"
                         strongest_facts = [
-                            _fact("Forecast high", _temp_pair_c(ev.new_temp_c)),
-                            _fact("Previous record", _temp_pair_c(ev.old_record_c)),
-                            _fact("Old record year", ev.old_record_year),
-                            _fact("Record gap", f"+{ev.new_temp_c - ev.old_record_c:.1f}C"),
-                            _fact("Country", ev.country),
+                            _fact("Forecast high", _temp_pair_c(ev_cdh.new_temp_c)),
+                            _fact("Previous record", _temp_pair_c(ev_cdh.old_record_c)),
+                            _fact("Old record year", ev_cdh.old_record_year),
+                            _fact("Record gap", f"+{ev_cdh.new_temp_c - ev_cdh.old_record_c:.1f}C"),
+                            _fact("Country", ev_cdh.country),
                         ]
                         signal_counts["calendar"] += 1
                         # Track only heat records for the simultaneous-records
                         # lane, preserving enough station detail for roll-call.
                         simultaneous_record_stations.append({
-                            "city": ev.city,
-                            "country": ev.country,
-                            "temp_c": ev.new_temp_c,
+                            "city": ev_cdh.city,
+                            "country": ev_cdh.country,
+                            "temp_c": ev_cdh.new_temp_c,
                             "kind": "high",
-                            "old_record_c": ev.old_record_c,
-                            "old_record_year": ev.old_record_year,
-                            "margin_c": round(ev.new_temp_c - ev.old_record_c, 1),
-                            "elevation_m": city_elevations.get((ev.city, ev.country)),
+                            "old_record_c": ev_cdh.old_record_c,
+                            "old_record_year": ev_cdh.old_record_year,
+                            "margin_c": round(ev_cdh.new_temp_c - ev_cdh.old_record_c, 1),
+                            "elevation_m": city_elevations.get((ev_cdh.city, ev_cdh.country)),
                             "signal_date": (bundle.signal_date or date.today()).isoformat(),
                         })
 
             if strongest_signal is None and bundle.calendar_date_low:
-                ev = bundle.calendar_date_low
-                if not state.is_duplicate(bot_state, ev.event_id):
+                ev_cdl: RecordEvent = bundle.calendar_date_low
+                if not state.is_duplicate(bot_state, ev_cdl.event_id):
                     score = score_record_low_event(
-                        ev.new_temp_c, ev.old_record_c, ev.old_record_year,
+                        ev_cdl.new_temp_c, ev_cdl.old_record_c, ev_cdl.old_record_year,
                     )
-                    if _should_draft(score, ev.event_id):
-                        strongest_signal = ev
+                    if _should_draft(score, ev_cdl.event_id):
+                        strongest_signal = ev_cdl
                         strongest_score = score
-                        strongest_event_id = ev.event_id
+                        strongest_event_id = ev_cdl.event_id
                         strongest_type = "record_low"
-                        strongest_city = ev.city
-                        strongest_headline = f"{ev.city} hit a daily cold record"
+                        strongest_city = ev_cdl.city
+                        strongest_headline = f"{ev_cdl.city} hit a daily cold record"
                         strongest_facts = [
-                            _fact("Observed low", _temp_pair_c(ev.new_temp_c)),
-                            _fact("Previous record low", _temp_pair_c(ev.old_record_c)),
-                            _fact("Old record year", ev.old_record_year),
-                            _fact("Record gap", f"{ev.new_temp_c - ev.old_record_c:.1f}C"),
-                            _fact("Country", ev.country),
+                            _fact("Observed low", _temp_pair_c(ev_cdl.new_temp_c)),
+                            _fact("Previous record low", _temp_pair_c(ev_cdl.old_record_c)),
+                            _fact("Old record year", ev_cdl.old_record_year),
+                            _fact("Record gap", f"{ev_cdl.new_temp_c - ev_cdl.old_record_c:.1f}C"),
+                            _fact("Country", ev_cdl.country),
                         ]
                         signal_counts["calendar"] += 1
 
             if strongest_signal:
+                # If strongest_signal is set, the cascade above always set
+                # strongest_event_id alongside it — narrow for downstream calls
+                # that accept only str.
+                assert strongest_event_id is not None
                 source_promoted += 1
                 # Record synthesis component as soon as editorial gate passes:
                 syn_state = us_city_state_map.get(strongest_city)
@@ -1671,7 +1680,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             pipeline_result: dict = {}
             draft = generate_fire_draft(
                 fire,
-                bot_state,
+                cast(dict, bot_state),
                 result_out=pipeline_result,
             )
             if draft is None:
@@ -1727,7 +1736,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         source_drafted = 0
         try:
             complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters)
-            crossings = fire_footprint.detect_tier_crossings(complexes, bot_state)
+            crossings = fire_footprint.detect_tier_crossings(complexes, cast(dict, bot_state))
             for fc in crossings:
                 try:
                     if state.is_duplicate(bot_state, fc.event_id):
@@ -1969,14 +1978,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
             try:
                 readings = _fetch_strict(sea_ice.fetch_sea_ice, hemisphere=hemisphere)
                 record = sea_ice.detect_record_low(readings)
-                score = None
+                sea_ice_score: EditorialScore | None = None
                 if record and not state.is_duplicate(bot_state, record.event_id):
-                    score = score_sea_ice_record(
+                    sea_ice_score = score_sea_ice_record(
                         record.extent_million_km2,
                         record.previous_extent,
                         record.previous_year,
                     )
-                source_promoted = 1 if score and _should_draft(score, record.event_id) else 0
+                source_promoted = 1 if sea_ice_score and record and _should_draft(sea_ice_score, record.event_id) else 0
                 source_drafted = 0
                 if record and source_promoted:
                     review_context = _review_context(
@@ -1993,7 +2002,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     from src.two_bot.intern import build_sea_ice_bundle
                     si_bundle = build_sea_ice_bundle(record)
                     if _try_two_bot_draft(
-                        si_bundle, bot_state, score,
+                        si_bundle, bot_state, sea_ice_score,
                         legacy_type="sea_ice_record",
                         event_id=record.event_id,
                         review_context=review_context,
@@ -2064,7 +2073,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         from dataclasses import asdict as _asdict, is_dataclass
                         from src.two_bot.intern import build_drought_bundle
                         drought_dicts = [
-                            _asdict(item) if is_dataclass(item) else dict(item)
+                            _asdict(item) if is_dataclass(item) and not isinstance(item, type) else dict(item)
                             for item in drought_updates
                         ]
                         drought_bundle = build_drought_bundle(drought_dicts, event_id=event_id)
@@ -2104,13 +2113,13 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
         try:
             enso_readings = _fetch_strict(enso.fetch_enso_data)
             transition = enso.detect_transition(enso_readings)
-            score = None
+            enso_score: EditorialScore | None = None
             if transition and not state.is_duplicate(bot_state, transition["event_id"]):
-                score = score_enso_transition(
+                enso_score = score_enso_transition(
                     transition["oni_value"],
                     transition["previous_duration_months"],
                 )
-            source_promoted = 1 if score and _should_draft(score, transition["event_id"]) else 0
+            source_promoted = 1 if enso_score and transition and _should_draft(enso_score, transition["event_id"]) else 0
             source_drafted = 0
             if transition and source_promoted:
                 review_context = _review_context(
@@ -2127,7 +2136,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 from src.two_bot.intern import build_enso_bundle
                 enso_bundle = build_enso_bundle(transition)
                 if _try_two_bot_draft(
-                    enso_bundle, bot_state, score,
+                    enso_bundle, bot_state, enso_score,
                     legacy_type="enso",
                     event_id=transition["event_id"],
                     review_context=review_context,
@@ -2216,7 +2225,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                 "ocean_sst_streak",
                 state.DEFAULT_STATE["ocean_sst_streak"],
             )
-            new_streak, event = ocean_sst.detect_streak_milestone(obs, prior_streak)
+            new_streak, event = ocean_sst.detect_streak_milestone(obs, cast(dict, prior_streak))
             state.update_ocean_sst_streak(bot_state, new_streak)
 
         if event and not state.is_duplicate(bot_state, event.event_id):
@@ -2397,9 +2406,9 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                     )
                     continue
 
-                ice_record = ice_mass.detect_monthly_record(readings, bot_state)
+                ice_record = ice_mass.detect_monthly_record(readings, cast(dict, bot_state))
                 if ice_record is None:
-                    ice_record = ice_mass.detect_cumulative_milestone(readings, bot_state)
+                    ice_record = ice_mass.detect_cumulative_milestone(readings, cast(dict, bot_state))
 
                 source_promoted = 0
                 source_drafted = 0
@@ -2416,16 +2425,24 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                         earliest = readings[0].month
                         earliest_year = int(earliest.split("-")[0])
                         years_of_record = date.today().year - earliest_year
-                        headline = (
-                            f"{ice_record.region.title()}: largest monthly ice loss on ice_record"
-                            if ice_record.kind == "monthly_loss_record"
-                            else f"{ice_record.region.title()}: cumulative loss crosses {abs(int(ice_record.threshold_gt))} Gt"
-                        )
+                        # Narrow the kind-conditional optional fields once;
+                        # see IceMassRecord (src/data/ice_mass.py): monthly_*
+                        # set for "monthly_loss_record", threshold_*+current_*
+                        # set for cumulative milestones.
+                        if ice_record.kind == "monthly_loss_record":
+                            assert ice_record.monthly_delta_gt is not None
+                            assert ice_record.month is not None
+                            headline = f"{ice_record.region.title()}: largest monthly ice loss on ice_record"
+                        else:
+                            assert ice_record.threshold_gt is not None
+                            assert ice_record.current_mass_gt is not None
+                            headline = f"{ice_record.region.title()}: cumulative loss crosses {abs(int(ice_record.threshold_gt))} Gt"
                         facts = [
                             _fact("Region", ice_record.region.title()),
                             _fact("Latest month", ice_record.month or latest_month),
                         ]
                         if ice_record.kind == "monthly_loss_record":
+                            assert ice_record.monthly_delta_gt is not None
                             facts.append(_fact(
                                 "Monthly loss",
                                 f"{abs(ice_record.monthly_delta_gt):.0f} Gt",
@@ -2437,6 +2454,8 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                                     f"({ice_record.previous_worst_month})",
                                 ))
                         else:
+                            assert ice_record.threshold_gt is not None
+                            assert ice_record.current_mass_gt is not None
                             facts.append(_fact(
                                 "Cumulative threshold",
                                 f"{abs(int(ice_record.threshold_gt))} Gt",
@@ -2470,11 +2489,14 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
                             source_drafted = 1
                             # Update the extreme trackers on success.
                             if ice_record.kind == "monthly_loss_record":
+                                assert ice_record.monthly_delta_gt is not None
+                                assert ice_record.month is not None
                                 bot_state.setdefault("ice_mass_max_loss", {})[ice_record.region] = {
                                     "gt": ice_record.monthly_delta_gt,
                                     "month": ice_record.month,
                                 }
                             else:
+                                assert ice_record.threshold_gt is not None
                                 bot_state.setdefault("ice_mass_last_milestone", {})[ice_record.region] = ice_record.threshold_gt
 
                 # Always mark the month as seen so we don't reprocess until data updates.
@@ -2512,7 +2534,7 @@ def run_alerts(bot_state: dict, current_run: dict | None = None) -> dict:
     synthesis_promoted = 0
     synthesis_drafted = 0
     try:
-        signals = synthesis.detect_fire_drought_heat(bot_state)
+        signals = synthesis.detect_fire_drought_heat(cast(dict, bot_state))
         synthesis_observed = len(signals)
         for sig in signals:
             if state.is_duplicate(bot_state, sig.event_id):
@@ -2636,7 +2658,7 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
 
 
 def _prune_weakest_cycle_drafts(
-    bot_state: dict,
+    bot_state: BotState,
     drafts_before: int,
     current_run: dict | None,
     drafted: int,
@@ -2672,7 +2694,7 @@ def _prune_weakest_cycle_drafts(
         ]
         if current_run is not None:
             for d in pruned:
-                src = _PRUNE_SOURCE_KEY_BY_TYPE.get(d.get("type"))
+                src = _PRUNE_SOURCE_KEY_BY_TYPE.get(d.get("type") or "")
                 if not src:
                     continue
                 for s_run in current_run.get("sources", []):
@@ -2701,7 +2723,7 @@ def _prune_weakest_cycle_drafts(
     return MAX_DRAFTS_PER_CYCLE
 
 
-def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
+def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Generate the daily Hot 10 leaderboard as a draft."""
     _activate_suppression_ctx(
         bot_state,
@@ -2746,7 +2768,7 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
             else:
                 changes.append(f"{ct.city} NEW to the Hot 10")
 
-        top_anomaly = hot10[0].anomaly_c if hot10 else 0.0
+        top_anomaly = (hot10[0].anomaly_c or 0.0) if hot10 else 0.0
         score = score_hot10(top_anomaly, len(hot10), len(changes))
 
         event_id = f"hot10_{date.today().isoformat()}"
@@ -2808,7 +2830,7 @@ def run_leaderboard(bot_state: dict, current_run: dict | None = None) -> dict:
     return bot_state
 
 
-def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
+def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Post an approved tweet from the TWEET_TEXT env var."""
     manual_start = time.perf_counter()
     tweet_text = os.environ.get("TWEET_TEXT", "").strip()
@@ -2871,8 +2893,9 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
         )
         return bot_state
 
-    passed, reason = run_safety_pipeline(tweet_text)
+    passed, safety_reason = run_safety_pipeline(tweet_text)
     if not passed:
+        reason = safety_reason or "Safety pipeline rejected tweet"
         print(f"[manual] Safety rejected tweet: {reason}")
         if draft:
             draft["status"] = "pending"
@@ -2916,7 +2939,7 @@ def run_manual_tweet(bot_state: dict, current_run: dict | None = None) -> dict:
     return bot_state
 
 
-def process_due_drafts(bot_state: dict, current_run: dict | None = None) -> dict:
+def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Post drafts whose auto-approval window has elapsed."""
     queue_start = time.perf_counter()
     now = _utc_now()
