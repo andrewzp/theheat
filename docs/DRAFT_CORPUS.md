@@ -13,6 +13,102 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-11 — Daily corpus grading (8 drafts)
+
+**Context:** First grading cycle on two-bot pipeline output post-May 4 port. Signal mix: three cold-record monthly_lows (Hill City SD, Mankato MN, Baudette MN), three severe heat warnings (Phoenix Metro ×2, Imperial County CA), one storm surge (Cook Inlet AK), one blizzard warning (Point Lay AK). First appearance of monthly_low cold-record signal type in this corpus. No fire or heat record drafts. `evaluator_pass: None` on all 8 drafts — same pattern as Apr 29; Sonnet evaluator either disabled or not logging verdict. Three drafts stale (>48h with dated/forecast references): [1], [2], [3].
+
+**Grade distribution:** 1 A-, 3 B+, 2 B, 2 B-. **A-rate: 12.5% (1/8).**
+Gap from resumption bar: 37.5 percentage points.
+
+### A range (1)
+
+#### [8] Point Lay, Alaska — blizzard warning — score 63 — **A-**
+
+> Blizzard Warning for Point Lay, Alaska — an Inupiat village on the Chukchi Sea — on May 11th. No falling snow needed: 40 mph winds are picking up what's already on the ground and cutting visibility to a quarter mile. The calendar says spring.
+
+Three moves stacked, none trying:
+
+1. **Place-identity specificity.** "An Inupiat village on the Chukchi Sea" gives the place its character without sentimentalizing it. Reader's model of the location sharpens immediately.
+2. **Mechanism explanation as voice move.** "No falling snow needed" is misdirection — you expect a blizzard to require precipitation. The explanation of the ground-blizzard mechanism is genuinely informative AND is itself the violation (existing snowpack dense enough to white-out in May). This is a move not catalogued in prior corpus entries: explaining HOW the violation works, not just asserting THAT it does. Stronger than any of the timing-closers-only drafts in this batch.
+3. **Timing closer.** "The calendar says spring." — clean descendant of "It's April." with one ironic degree added ("says" implies the calendar is being contradicted). Tighter than "May, not July." in [2] because it doesn't explain the irony; the reader supplies it.
+
+Wodehouse: perfect. No visible effort. Each sentence earns its place.
+
+### B+ range (3)
+
+#### [7] Baudette, Minnesota — monthly_low — score 82 — **B+**
+
+> Baudette, Minnesota hit 18°F (-7.8°C) overnight on May 7th — coldest May low in 31 years of records, breaking the 21°F mark set in 2002 by 3°F.
+
+Pure data delivery. 31 years is near-full-archive depth. 18°F in May + 3°F margin = three substantive data points that carry without needing a voice mechanic. No Wodehouse violations. "2002" is in `era_anchors.json` but the gate correctly didn't fire (1-in-10). Would benefit from a closer but lacks nothing that isn't absence of upside.
+
+#### [1] Hill City, South Dakota — monthly_low — score 80 — **B+**
+
+> Hill City, South Dakota hit 13°F (-10.6°C) overnight on May 6th — coldest May night in 59 years of records, breaking the 14°F mark set in 2002.
+
+59 years is the strongest record depth in this batch. Pure data delivery, clean execution. "2002" again — same anchor year as [7], same gate-correct non-deployment. No Wodehouse violations. Lacks a voice move that could elevate to A. **Stale: created 2026-05-09T06:18Z (>48h), contains "May 6th" dated reference. Bulk-reject.**
+
+#### [6] Mankato, Minnesota — monthly_low — score 79 — **B+**
+
+> Mankato, Minnesota hit 30°F (-1.1°C) overnight on May 6th — coldest May low in 16 years of records there, edging out the 30°F mark set in 2020 by a tenth of a degree Celsius. A record is a record.
+
+"A record is a record." is a genuine voice moment — dry tautology that acknowledges the marginal nature of the signal without apologizing. The detail that both temperatures round identically in Fahrenheit (30°F) but differ by a tenth Celsius is specific and earns the closer's wry shrug. 16 years is the weakest record depth in the batch, so the voice work carries more load here than in [1] or [7].
+
+### B range (2)
+
+#### [5] Anchorage Cook Inlet — storm_surge — score 63 — **B**
+
+> Anchorage's Cook Inlet recorded a storm surge 0.587 m above predicted tide on May 10th — water levels hitting 5.228 m against a forecast of 4.641 m. Cook Inlet's tidal range is already among the largest in North America. Extra water on top of that gets noticed.
+
+"Extra water on top of that gets noticed." is an understatement closer — genuine Wodehouse compliance ("gets noticed" = it's serious but said quietly). Ecosystem context (Cook Inlet's tidal range) is apt and correctly frames the signal. Dense numerical setup is the structural weakness: two pairs of precise figures before the interesting part, reader does calculation. Signal strength (0.587m on a multi-meter tidal range) is modest; the framing rescues it better than the raw number would.
+
+#### [3] Phoenix Metro — severe_weather — score 60 — **B**
+
+> 105–109°F (41–43°C) forecast across Phoenix Metro Sunday into Monday. Nine zones from Buckeye to Queen Creek under Extreme Heat Warning. May 9th.
+
+Lead-with-the-number opener (correct). "Nine zones from Buckeye to Queen Creek" is specific geography. "May 9th." is a clean timing closer — same family as "It's April." — and it IS the closer; nothing follows to undercut it. No Wodehouse violations. **Stale: created 2026-05-09T09:23Z (>48h), "Sunday into Monday" is past. Bulk-reject.**
+
+### B- range (2)
+
+#### [2] Phoenix Metro — severe_weather — score 60 — **B-**
+
+> Phoenix Metro under Extreme Heat Warning Sunday through Monday: 104–110°F (40–43°C) across nine zones from Buckeye to Queen Creek. May, not July. NWS rates the risk as Major.
+
+"May, not July." is the real voice moment — understatement contrast, same family as "It's April." but more explicit. **Stranded-mechanic violation (P3 evidence):** the voice beat lands in the middle; "NWS rates the risk as Major" follows it and defuses the closer. "NWS rates the risk as Major" is also borderline label:value territory. Compare with [3]: same event, tighter execution, "May 9th." as actual closer. [3] outperforms [2] precisely because [2]'s punchline is stranded. **Stale: created 2026-05-09T06:19Z (>48h). Bulk-reject.**
+
+#### [4] Imperial County, California — severe_weather — score 60 — **B-**
+
+> Imperial County, California — the Salton Sea corridor — bracing for 101–112°F (38–44°C) Sunday through Monday evening. The Sonoran Desert floor at its most unforgiving, weeks before summer solstice.
+
+"The Salton Sea corridor" is strong ecosystem specificity. "weeks before summer solstice" is the timing closer and earns its place. **Wodehouse violation (P1 evidence):** "The Sonoran Desert floor at its most unforgiving" tells the reader the data is serious — the numbers already do that. Editorial descriptor where none is needed; slight effort shows. Not quite 48h old (created 2026-05-09T16:59Z, ~46h elapsed at grading time) but forecast window ("Sunday through Monday evening") is functionally past.
+
+### Patterns named in this batch
+
+1. **Timing-closer family dominant.** Four of eight drafts use timing-as-punchline closers ("May 9th.", "The calendar says spring.", "May, not July.", "weeks before summer solstice"). The family is well-established and working. [8]'s "The calendar says spring." is the best execution because it adds ironic ambiguity ("says" implies the calendar is wrong) without over-explaining.
+2. **Wodehouse violations persist in severe-weather drafts.** [4]'s "at its most unforgiving" is the clearest instance — editorial heat the data doesn't need. Pattern is no longer fire/record-specific; it's prompt-wide. P1 evidence: fifth cycle. Highest-leverage unimplemented proposal.
+3. **Stranded-mechanic pattern extends to severe weather.** [2]'s "May, not July." is a real voice move killed by the following NWS line. Same shape as Apr 27 fire drafts [3], [4], [12]. P3 evidence: second cycle.
+4. **Mechanism explanation as new voice move.** [8]'s "No falling snow needed" is a move not in the current prompt tool palette — explaining HOW the violation works. More engaging than stating THAT it does. Candidate for P2 enrichment (name humor moves as tools).
+5. **First cold-record signal type in corpus.** Monthly_low drafts grade consistently B+ on pure data delivery. No specific failure mode emerged; the signal type handles cleanly with the existing voice approach.
+6. **Era-anchor gate working correctly.** [1] and [7] both reference 2002 records; neither deployed an era anchor. Gate at 1-in-10 doing its job.
+
+### Followups
+
+1. **Bulk-reject stale drafts [1], [2], [3]** (>48h, dated/forecast references) — attempt via `gh api -X PATCH`. Log result in `docs/QUALITY_TREND.md`.
+2. **P1 (Wodehouse rule) is the highest-leverage unimplemented proposal** — 5 cycles, present across fire/record/severe-weather signal types. Implement as rule #0 in `src/two_bot/prompts/writer_prompt.py`.
+3. **P3 (stranded mechanics)** — drafted addendum originally targeted fire prompt; May 11 evidence shows same pattern in severe-weather drafts. Extend to both addenda.
+4. **P2 (name humor moves)** — add "mechanism explanation" (explain HOW the violation works) to the tool palette, with [8] "No falling snow needed" as the corpus exemplar.
+
+### Numbers
+
+- Pending drafts: 8
+- A-rate: 12.5% (1/8)
+- Gap from bar: 37.5 points
+- Stale (>48h): [1] [2] [3] — bulk-reject attempted
+- Era-anchor deployment: 0% (no record drafts in batch; gate not triggered)
+- Evaluator_pass: None on all 8 (second consecutive batch — investigate separately, out of scope for voice work)
+
+---
+
 ## 2026-04-29 — Era anchors at 100% on records (3 drafts)
 
 **Context:** Three new record drafts came in on 2026-04-29 cycles. All
