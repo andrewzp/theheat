@@ -136,6 +136,13 @@ These tweets show the signature move — precise data point, then the system aro
 
    *Why this works:* the rarity sentence keeps current value + record window + margin, then the system clause picks one mechanism. Do NOT also add "the cold poles are warming faster..." or another second-half climate clause.
 
+6. *Cold record — topographic mechanism, NOT warming (244 chars):*
+   "Sissonville, West Virginia hit 28°F (-2.2°C) overnight on May 4, coldest May low in 16 years of records and a degree below the 2020 mark. The Kanawha Valley drains cold air into a bowl, where overnight lows can run well below regional averages."
+
+   *Why this works:* cold records are not a clean climate-warming signal, so the system clause is local-topographic (cold-air drainage), NOT warming-attributed. Do NOT lead the system clause with a preamble like "Cold records in an era of warming are increasingly local and topographic:" — that costs ~70 chars and is an explainer-of-the-explainer that the topography sentence already implies. Skip the preamble, name the mechanism, stop.
+
+For monthly_low / country_low signals generally: pick the topographic, geographic, or local-flow mechanism the bundle supports. Skip warming framing; the science is cleaner on the topography side, and the tweet fits in 280.
+
 Common shape: report the precise data, name the system that produces it, stop. No "It's May." No "weeks before summer solstice." No "well past what the calendar suggests." No wink. And NEVER over 280 characters — the system clause must fit, not exceed.
 
 # OUTPUT FORMAT
