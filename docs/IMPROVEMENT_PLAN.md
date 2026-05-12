@@ -8,16 +8,16 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `cc360f2` (voice engine v3 on origin/main) |
-| Voice engine version | v3 (era anchors PARKED at 1-in-10 + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic + new bad-examples) |
-| Last cycle A-rate | 12.5% (May 11, 1 of 8) |
+| Bot commit | `1ed7e2c` (PR #68 — Codex regex follow-up; latest on origin/main) |
+| Voice engine version | **two-bot** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04) |
+| Last cycle A-rate | — (May 12, 0 pending drafts — queue empty; prior measured: 0% Apr 29) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 37.5 percentage points |
+| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
 | Posting | paused until bar cleared |
 
 ## Active proposals
 
-Ordered by leverage = (cycles observed) × (recency). Each entry tracks: observation count, last seen, proposed fix, expected impact, status.
+Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
 
 ### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
@@ -37,92 +37,221 @@ Ordered by leverage = (cycles observed) × (recency). Each entry tracks: observa
 
 **Tests:** 23 era_anchor tests pass (up from 18 — added 5 gate tests). Full suite 566 passing.
 
-**Status:** SHIPPED. Post-gate cycles so far: 2 (Apr 29 pre-gate batch, May 11 no-record batch). Gate not yet empirically testable — no record drafts in post-gate cycles to trigger it. Promote to Resolved once 3 post-gate cycles with record drafts confirm ≤30% era-anchor rate. NOTE: `src/voice/generator.py` is dead code as of 2026-05-04 two-bot port; gate equivalent should be confirmed in `src/two_bot/prompts/writer_prompt.py`.
+**Status:** SHIPPED to `generator.py` — but `generator.py` was retired 2026-05-04. The
+1-in-10 deterministic gate no longer runs. The two-bot writer has `memory.used_era_anchors`
+tracking but no equivalent hard gate. Empirical confirmation of the gate rate is no longer
+possible on the current code path. Whether era anchors are over-deployed in two-bot output
+cannot be assessed until record drafts reach the pending queue. Move to Resolved when
+operator confirms era-anchor logic is either ported to writer_prompt.py or unnecessary.
 
-### P1 — Add Wodehouse rule top-of-SYSTEM_PROMPT
+### P1 — Fix station-name normalization: fact_check kills on GHCN suffix labels
 
-**Observed:** Humor-lens evaluation (Apr 27) found Wodehouse-rule violations are the single most predictive failure mode across all signal types. Drafts that try too hard graded D/C/B regardless of mechanics; drafts that don't try graded B+/A- regardless of moves used. Apr 29 [2] Mexico City: "That gap is 4.5 degrees" (explicit gap math the reader could do). May 11 [4] Imperial County: "The Sonoran Desert floor at its most unforgiving" (editorial descriptor the numbers don't need). Both pattern: voice reaches for editorial weight the data already carries.
+**Observed:** 2026-05-12 — "Paddock Lake 4 Ne" (Wisconsin) and "Sioux City Ang" (Iowa)
+both produce BUNDLE_FACT kills every run because `normalize_station_name()` strips the
+direction/distance suffix before the writer sees the bundle, but the raw suffix survives
+in bundle fields the fact-checker validates against. Pattern fires three times today on
+the same station (once per alerts run). Also observed 2026-05-11 on Sioux City Ang.
 
-**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29, May 11 (5 cycles, consistent across fire / record / severe-weather signal types).
-**Last seen:** May 11.
-**Proposed fix:** add as rule #0 in `src/two_bot/prompts/writer_prompt.py` (NOTE: `src/voice/generator.py::SYSTEM_PROMPT` is dead code since 2026-05-04 two-bot port):
+**Cycles observed:** May 11, May 12 (2 grading cycles; 5+ individual fact-check kills).
+**Last seen:** 2026-05-12.
+**Proposed fix:** In `src/two_bot/intern.py` GHCN-touching bundle builders
+(`_build_monthly_high_bundle`, `_build_record_bundle`, `_build_all_time_record_bundle`,
+`_build_anomaly_bundle`), apply `normalize_station_name()` to the `where` and
+`station_name` fields in the bundle before they're passed to the writer. Currently
+normalization happens during signal detection but the raw name may survive in the bundle
+struct. Verify all fields the fact-checker inspects use the normalized form. Known issue
+#5 in BRIEFING.md.
 
-> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice is its straight man. The Wodehouse rule: trying too hard breaks the spell. Approximation when exact is available ("nearly 3 degrees" when it's 2.7F), restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given), poetry-attempt closers ("pointed at the sky"), editorial descriptors the numbers don't need ("at its most unforgiving") — all show effort, all kill the joke before it lands.
+**Expected impact:** Unlocks all monthly_record and record drafts for GHCN stations with
+direction/distance suffixes. Paddock Lake alone fires 3 fact-check kills per day at the
+current cycle cadence.
 
-**Expected impact:** highest-leverage prompt change in the proposal stack. Present in every signal type in the corpus. Eliminating these violations moves several B drafts to B+/A- without changing anything else.
+**Status:** Ready to implement. Awaiting human greenlight.
 
-**Status:** drafted. Awaiting human implementation. **Highest priority.**
+### P2 — Fix fire MW rounding: fact_check kills on decimal truncation
 
-### P2 — Name humor moves as available tools (not requirements)
+**Observed:** 2026-05-11-12 — fact-checker kills fire drafts when writer rounds FRP
+values: 480.34 → 480 (BUNDLE_FACT), 547.92 → 548 (BUNDLE_FACT), 301.55 → 301
+(BUNDLE_FACT). The fact-checker requires exact numerical match. Also observed: a
+fabricated Hoover Dam comparison killed as WORLD_KNOWLEDGE ("roughly what the Hoover Dam
+generates" for a 301 MW fire; Hoover ≈ 2,080 MW — off by factor 7). Two separate issues.
 
-**Observed:** SYSTEM_PROMPT names some moves but doesn't enumerate the full palette. Gemini over-deploys whichever moves are most explicit. Apr 25, Apr 27: era anchors over-deployed because they were the most-explicit specificity vehicle. May 11 [8] Point Lay: "No falling snow needed" is a move not in the current tool palette — mechanism explanation (explaining HOW the violation works, not just THAT it does). This move is the strongest in the May 11 batch and comes from outside the named tool set.
+**Cycles observed:** May 11, May 12 (2 cycles; multiple kills each).
+**Last seen:** 2026-05-12.
 
-**Cycles observed:** Apr 25, Apr 27, May 11 (3 cycles).
-**Last seen:** May 11.
-**Proposed fix:** add a "Voice moves available" section in `src/two_bot/prompts/writer_prompt.py` (NOTE: `src/voice/generator.py::SYSTEM_PROMPT` is dead code since 2026-05-04). List: comic triple (period-stop), idiom-flip (Steven Wright), understatement closer (British dry), period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor, ecosystem-specific specificity, **mechanism explanation** ("No falling snow needed: 40 mph winds are picking up what's already on the ground" — explain HOW the violation works, more engaging than stating THAT it does). Conclude: *"None of these are mandatory. When the number alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+**Correction (2026-05-12, post-Codex-review):** the prior version of this plan proposed
+telling the writer to round FRP to one decimal and claimed "the fact-checker requires an
+exact match within 0.5 MW." Codex's review caught the contradiction:
+`src/two_bot/prompts/fact_check_prompt.py` line 9 says *"Verify exact match (number, unit,
+date). Mismatches = failure."* — there is **no tolerance rule**. Telling the writer to
+emit `480.3 MW` when the bundle carries `480.34` would still BUNDLE_FACT-kill. The fix
+has to make the writer's number match the bundle's number exactly, or change the bundle,
+or change the fact-checker. Pick one — don't paper over it with a tolerance claim that
+the runtime doesn't honor.
 
-**Expected impact:** richer move palette → more variety → less convergence on easy moves. "Mechanism explanation" is the new corpus exemplar; naming it lets the writer reach for it on unusual-event drafts.
+**Proposed fix (a — rounding, REVISED):** Round at the **bundle builder**, not at the
+writer. In `src/two_bot/intern.py:build_fire_bundle` (line 167), change
+`"value": fire.frp` to `"value": round(fire.frp, 1)` (and the same in `raw_signal_dump`
+at line 180). The bundle then carries `480.3` as the source of truth; the writer
+naturally echoes `480.3 MW`; the fact-checker confirms exact match. No prompt rule
+needed, no fact-checker mutation needed, no runtime tolerance bookkeeping. Add a
+regression test in `tests/two_bot/test_intern.py` that asserts the FRP `value` field is
+rounded to 1 decimal for representative inputs (480.34 → 480.3, 547.92 → 547.9,
+301.55 → 301.5 or 301.6 per Python banker's rounding).
 
-**Status:** drafted. Awaiting human implementation.
+  **Why bundle-side rounding wins over the alternatives:**
+  - **vs. writer-side rule:** Writer-side rules are fragile under model stochasticity
+    (see #76's length-cap retry). The bundle is source-of-truth and never drifts.
+  - **vs. fact-check tolerance:** Adding a `±0.5 MW` tolerance to the fact-check prompt
+    would mutate runtime behavior, require new voice-regression validation, and
+    introduce a soft-equality rule that downstream code may not honor identically. The
+    bundle-side fix preserves the "exact match" doctrine cleanly.
 
-### P3 — Add stranded-mechanic warning to per-signal addenda
+**Proposed fix (b — fabrication, unchanged):** Add to the writer prompt's HARD RULES /
+bad-examples list: "Do NOT compare fire FRP to a named power plant or dam unless the
+comparison's exact MW is provided in the bundle. 'Roughly what [named plant] produces'
+is hallucination territory. Observed failure modes: Hoover Dam at full capacity (~2,080
+MW) applied to a 301 MW fire; Akosombo Dam at full capacity (~1,020 MW) applied to a
+361 MW fire." (This is already partially landed in PR #74's "no self-supplied facility
+MW" rule; verify the wording still covers FRP-specifically and tighten if it doesn't.)
 
-**Observed:** Apr 27 drafts [3] (*"pointed at the sky"*), [4] (*"from a forest"*), [12] (*"That was 6 months ago"*) all contain real humor moves stranded inside throat-clearing. May 11 [2] Phoenix Metro: "May, not July." is the real voice moment, but "NWS rates the risk as Major" follows it and defuses the closer. Both fire and severe-weather signal types exhibit this pattern.
+**Expected impact:** Bundle-side rounding unlocks every fire draft that's currently
+dying on float-precision mismatch. The fabrication rule (already largely in place via
+#74) prevents the Hoover/Akosombo class entirely.
 
-**Cycles observed:** Apr 27, May 11 (2 cycles).
-**Last seen:** May 11.
-**Proposed fix:** add to fire and severe-weather addenda in `src/two_bot/prompts/writer_prompt.py` (NOTE: old target `src/voice/generator.py::_CATEGORY_PROMPTS["fire"]` is dead code since 2026-05-04):
+**Status:** Ready to implement. Bundle-side one-line change in `intern.py` + regression
+test + verify the writer-prompt fabrication rule still applies to FRP comparisons.
 
-> If you write a punchline, leave it alone. Don't pre-explain it, don't post-explain it, don't restate the data after. The data is the setup. The closer is the punchline. If an institutional line (NWS rates..., satellite confidence...) would come after your punchline, move it before — or cut it.
+### P3 — Writer fire overcall: add seasonal/calendar context as a verifiable framing
 
-**Expected impact:** reduces stranded-mechanic B- drafts in fire and severe-weather signal types.
+**Observed:** 2026-05-11-12 — writer kills fire drafts citing "no historical_context
+available; no peer comparison confident enough to use; no verifiable seasonal or rarity
+framing without archive data." Two Western Sahel fires (480 MW, 301 MW) and one Siberia
+fire (548 MW) died on this basis. The writer knows seasonal context exists ("May fires
+in Amur are seasonally plausible") but won't use it without verified archive data.
+The old voice engine used seasonal deadpan as world knowledge without archive backing.
 
-**Status:** drafted. Awaiting human implementation. Apply to both fire and severe-weather addenda.
+**Cycles observed:** May 11, May 12 (2 cycles; 3+ writer self-kills per cycle).
+**Last seen:** 2026-05-12.
+**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` fire framing section:
+"Seasonal and calendar context is world knowledge — it does not require archive data.
+'The burning season in [region] typically peaks in [month].' or 'Fire activity here
+normally fades by [month]. It is [current month].' are always verifiable framings. Do
+NOT self-kill a fire draft solely because no numeric historical comparison is available.
+When the only context is seasonal, use it. That's enough."
 
-### P4 — Widen plant-comparison regex adjective allowlist
+**Expected impact:** Unlocks the class of fire drafts where seasonal deadpan is the
+mechanic. Sahel and Siberia fires are consistently in this class. One paragraph addition;
+no other changes needed.
 
-**Observed:** Apr 27 draft [4] (D) used *"a commercial nuclear reactor outputs around 3,000 MW"* — the existing regex misses this because "commercial" isn't in the adjective allowlist (`typical|standard|average|large|small|usual`). No fire drafts in Apr 29 or May 11 batches — not observed again.
+**Status:** Ready to implement. Awaiting human greenlight.
 
-**Cycles observed:** Apr 27 (1 draft).
-**Last seen:** Apr 27. **Not observed in 2 subsequent cycles (Apr 29, May 11 — both had no fire drafts).**
-**Proposed fix:** add `commercial|industrial|mid-sized|high-capacity` to the adjective allowlist in `src/voice/safety.py::_STOCK_FORMULA_PATTERNS` (safety.py still applies at generation time via inline gate, PR #60).
+### P4 — Add Wodehouse rule to top of writer_prompt.py
 
-**Expected impact:** kills variant plant-comparison openers at parse time. Pure tactical.
+**Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are
+the single most predictive failure mode across all corpus cycles. Drafts that try too
+hard graded D-/C+/B regardless of mechanics; drafts that don't try graded B+/A-
+regardless. Apr 29 [2] Mexico City repeated the explicit-gap-math violation. Two
+consecutive prior cycles with the same violation. **2026-05-12 update:** Andrew's
+explicit voice direction on Mankato manual-editorial reject names the same pattern:
+"defensive 'A record is a record' closer" — the two-bot Sonnet writer reproduces
+Wodehouse violations. Evidence confirmed in new two-bot pipeline.
 
-**Status:** ready to implement. Awaiting human greenlight. Will move to Resolved (archive) if not observed in next cycle (approaching 3-cycle retirement threshold).
+**Cycles observed:** Apr 24, Apr 25, Apr 27, Apr 29, May 12 (5 cycles; most consistent
+failure mode in the corpus).
+**Last seen:** 2026-05-12.
+**Proposed fix (REDIRECTED to two-bot):** Add as rule #0 in
+`src/two_bot/prompts/writer_prompt.py` before the structural rules:
 
-### P5 — Widen opener-formula verb list (or rewrite as shape match)
+> 0. **DON'T SOUND LIKE YOU'RE TRYING.** The data is already extraordinary; the voice
+> is its straight man. The Wodehouse rule: trying too hard breaks the spell. Signals
+> of effort: approximation when exact is available ("nearly 3 degrees" when it's 2.7F),
+> restate-padding ("The new high: 94.5F. The old one: 93.7F." after the data was given),
+> poetry-attempt closers ("pointed at the sky"), defensive justification ("a record is
+> a record") — all show effort, all kill the tweet before it lands.
 
-**Observed:** Apr 27 draft [11] (D) used *"A single wildfire in central India is **pushing** 297 MW"* — `pushing` isn't in the regex's verb allowlist (`radiating | releasing | generating | putting out | emitting | producing`). No fire drafts in Apr 29 or May 11 batches — not observed again.
+**Expected impact:** Highest-leverage prompt change in the proposal stack. Wodehouse
+violations cluster across grades and pipelines. Eliminating them moves B drafts to
+B+/A- without changing structure.
 
-**Cycles observed:** Apr 27 (1 draft, but pattern "Gemini finds new verbs once known ones are blocked" is structural).
-**Last seen:** Apr 27. **Not observed in 2 subsequent cycles (Apr 29, May 11 — both had no fire drafts).**
-**Proposed fix:** two options — (a) add common synonyms (`pushing | spewing | pumping out | throwing off | sending up`) — incremental, ongoing maintenance. (b) rewrite the regex to match shape rather than verb (`is\s+\w+(?:ing|s)\s+\d`) — bigger blast radius, risk of false positives.
+**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
 
-**Expected impact (a):** blocks the named variants. May surface new ones next cycle.
-**Expected impact (b):** structural fix; needs false-positive analysis before shipping.
+### P5 — Name humor moves as available tools in writer_prompt.py
 
-**Status:** decision point — pick (a) tactical or (b) structural. Awaiting human direction. Will move to Resolved (archive) if not observed in next cycle (approaching 3-cycle retirement threshold).
+**Observed:** Apr 25-27 corpus — SYSTEM_PROMPT named only a subset of available moves;
+Gemini converged on the most-explicit ones (era anchors). Unnamed mechanics (idiom-flip,
+accelerating-warming, ecosystem specificity) appeared inconsistently. In the two-bot
+context, the Sonnet writer also defaults to the most-stated patterns unless the full
+palette is named.
+
+**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
+convergence).
+**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
+`src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
+(period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
+period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor,
+ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number
+alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+
+**Expected impact:** Richer move palette → more variety across drafts → less convergence
+on the easy default.
+
+**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
 
 ## Awaiting evidence
 
 These need more cycles before promotion to active proposals or retirement.
 
-### A1 — Era_anchors prune impact (Apr 26)
+### A1 — Era_anchors prune impact (Apr 26) — superseded by architecture change
 
-43 politically-charged / US-centric / mass-tragedy entries removed from `data/era_anchors.json` on 2026-04-26. The Apr 27 cycle had ONE draft that used a politically-charged anchor (Jacobabad / Elon Musk) — that anchor is no longer in the file. Whether the prune actually eliminates political/US-centric leakage from records needs the next cycle to confirm.
+43 politically-charged entries removed from `data/era_anchors.json` on 2026-04-26. The
+Apr 27 cycle had one political-anchor draft (Jacobabad / Elon Musk). Whether the prune
+eliminated leakage was the watch condition — but this is now moot because generator.py
+(which used era_anchors.json) is dead since 2026-05-04. The two-bot writer has its own
+`memory.used_era_anchors` tracking. Watch for: era anchor quality in two-bot record
+drafts once they reach pending. If any politically-charged anchor appears, that's a
+separate curation path to investigate in the two-bot writer.
 
-**Watch for:** record drafts that use era anchors. Note which year + which anchor. Compare against current `era_anchors.json`. If any anchor used isn't in the current file, that's a curation regression — different fix needed.
+### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
-### A2 — Voice engine v2.5 sample-size fragility
+The voice engine history (v2: 43% A-rate on 7 drafts; v2.5: 9% on 11 drafts) is no
+longer relevant — that pipeline is dead. The two-bot writer is the new baseline. Zero
+graded drafts from two-bot have reached the corpus so far (May 12 queue empty; all prior
+two-bot drafts were rejected before pending or have `evaluator_pass=None`).
 
-Apr 25 corpus = 7 drafts (43% A-rate). Apr 27 corpus = 11 drafts (9% A-rate). Both small. The Apr 27 regression may be small-sample noise OR a real pattern. Need 3-4 more cycles at >15 drafts each to know.
-
-**Watch for:** A-rate stability across larger corpora. If A-rate stays in 30-50% range over 3+ cycles, voice engine v2.5 is the new baseline. If it stays at 9-15%, v2.5 didn't generalize.
+**Watch for:** first two-bot drafts to reach pending and get graded. A-rate on first 10+
+two-bot drafts establishes the new baseline. Expect different failure modes than the
+voice engine (no era anchor over-deployment; potentially different Wodehouse profile).
 
 ## Resolved (archive)
 
-History of fixes that landed and held — added to this section by the daily agent when a previously-active failure mode no longer appears in a corpus for 3+ consecutive cycles. **Empty for now.**
+History of fixes that landed or became obsolete — added when a failure mode either held
+for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-05-12] P2 — Widen plant-comparison regex adjective allowlist
+
+Last observed: Apr 27 (1 draft; "a commercial nuclear reactor"). Target code
+`src/voice/generator.py::_STOCK_FORMULA_PATTERNS` is dead since 2026-05-04. Proposal
+cannot fire in the live two-bot pipeline. If plant-comparison failures emerge in two-bot
+output, open a new proposal targeting `src/two_bot/prompts/writer_prompt.py`.
+
+### [Archived 2026-05-12] P3 — Widen opener-formula verb list
+
+Last observed: Apr 27 (1 draft; "pushing" not in verb allowlist). Target code
+`src/voice/generator.py::_STOCK_FORMULA_PATTERNS` is dead since 2026-05-04. Proposal
+cannot fire in the live pipeline. If banned-opener variants emerge in two-bot fire drafts,
+open a new proposal against `src/voice/safety.py` (the safety pipeline still runs) or
+`src/two_bot/prompts/writer_prompt.py`.
+
+### [Archived 2026-05-12] P5 — Add stranded-mechanic warning to fire prompt addendum
+
+Last observed: Apr 27 (3 drafts; mechanics buried in throat-clearing). Target code
+`src/voice/generator.py::_CATEGORY_PROMPTS["fire"]` is dead since 2026-05-04. The
+underlying concern (don't bury the punchline in setup) is covered by P4's Wodehouse rule
+in the updated writer_prompt.py proposal.
 
 ## Daily agent runbook
 
