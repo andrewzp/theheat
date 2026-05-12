@@ -72,6 +72,185 @@ def test_write_fire_tweet_raises_on_invalid_json(mock_anthropic):
         write_fire_tweet(_bundle(), _memory())
 
 
+class TestLengthRetry:
+    """Writer-side defense: if the model returns a tweet > 280 chars, retry
+    with explicit length feedback. After LENGTH_RETRY_BUDGET retries, return
+    KILL so Twitter never sees an over-length string.
+
+    Production failure mode this prevents: voice-regression nightly failures
+    on cold-record fixtures (Sissonville, Verkhoyansk) where Sonnet's
+    system-explainer occasionally overshoots 280 chars on a given sampling.
+    Without retry, every such overshoot fails the test AND ships a
+    truncated draft. With retry, the second/third call usually fits.
+    """
+
+    def _overlong(self, n: int = 320) -> str:
+        return "x" * n
+
+    def _short(self) -> str:
+        return "Sissonville hit 28°F overnight on May 4; coldest May low in 16 years."
+
+    def test_retries_when_first_attempt_is_overlong(self, mock_anthropic):
+        """First call > 280, second call fits — second result returned."""
+        mock_anthropic.side_effect = [
+            _fake_writer_response({
+                "tweet": self._overlong(290),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "first",
+            }),
+            _fake_writer_response({
+                "tweet": self._short(),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "second",
+            }),
+        ]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert result.kill_reason is None
+        assert mock_anthropic.call_count == 2
+
+    def test_kills_after_retry_budget_exhausted(self, mock_anthropic):
+        """All 3 attempts > 280 — return KILL with explicit reason."""
+        from src.two_bot.writer import LENGTH_RETRY_BUDGET
+
+        mock_anthropic.side_effect = [
+            _fake_writer_response({
+                "tweet": self._overlong(290 + i),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": f"attempt {i}",
+            })
+            for i in range(LENGTH_RETRY_BUDGET + 1)
+        ]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet is None
+        assert result.kill_reason is not None
+        assert "over-280-char" in result.kill_reason
+        assert "attempts" in result.kill_reason
+        assert mock_anthropic.call_count == LENGTH_RETRY_BUDGET + 1
+
+    def test_no_retry_when_first_attempt_fits(self, mock_anthropic):
+        """Happy path: first call ≤ 280, no retry."""
+        mock_anthropic.return_value = _fake_writer_response({
+            "tweet": self._short(),
+            "kill_reason": None,
+            "angle_chosen": "x",
+            "era_anchor_used": None,
+            "peer_comparison_used": None,
+            "reasoning": "first",
+        })
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert mock_anthropic.call_count == 1
+
+    def test_no_retry_when_first_attempt_is_kill(self, mock_anthropic):
+        """If writer kills (tweet=None), no length-retry needed."""
+        mock_anthropic.return_value = _fake_writer_response({
+            "tweet": None,
+            "kill_reason": "no historical_context available",
+            "angle_chosen": "",
+            "era_anchor_used": None,
+            "peer_comparison_used": None,
+            "reasoning": "first",
+        })
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet is None
+        assert result.kill_reason == "no historical_context available"
+        assert mock_anthropic.call_count == 1
+
+    def test_retry_user_prompt_carries_length_feedback(self, mock_anthropic):
+        """The retry user prompt must include the previous draft's char count
+        so the model knows what to shorten."""
+        mock_anthropic.side_effect = [
+            _fake_writer_response({
+                "tweet": self._overlong(297),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "first",
+            }),
+            _fake_writer_response({
+                "tweet": self._short(),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "second",
+            }),
+        ]
+
+        write_fire_tweet(_bundle(), _memory())
+
+        # First call has no retry feedback; second call must.
+        first_prompt = mock_anthropic.call_args_list[0].args[0]
+        second_prompt = mock_anthropic.call_args_list[1].args[0]
+        assert "Length retry" not in first_prompt
+        assert "Length retry" in second_prompt
+        assert "297 characters" in second_prompt
+        assert "280-character cap" in second_prompt
+
+    def test_boundary_exactly_280_chars_passes(self, mock_anthropic):
+        """Tweet at exactly 280 chars is valid, no retry."""
+        text_280 = "x" * 280
+        mock_anthropic.return_value = _fake_writer_response({
+            "tweet": text_280,
+            "kill_reason": None,
+            "angle_chosen": "x",
+            "era_anchor_used": None,
+            "peer_comparison_used": None,
+            "reasoning": "boundary",
+        })
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == text_280
+        assert mock_anthropic.call_count == 1
+
+    def test_boundary_281_chars_triggers_retry(self, mock_anthropic):
+        """Tweet at 281 chars is over — retry triggers."""
+        text_281 = "x" * 281
+        mock_anthropic.side_effect = [
+            _fake_writer_response({
+                "tweet": text_281,
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "first",
+            }),
+            _fake_writer_response({
+                "tweet": self._short(),
+                "kill_reason": None,
+                "angle_chosen": "x",
+                "era_anchor_used": None,
+                "peer_comparison_used": None,
+                "reasoning": "second",
+            }),
+        ]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert mock_anthropic.call_count == 2
+
+
 def test_write_fire_tweet_raises_on_missing_api_key(monkeypatch):
     from src.two_bot import writer
 
