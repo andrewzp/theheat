@@ -17,6 +17,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
+| 2026-05-11 | 8 | 1 | 7 | 0 | 0 | **12.5%** | ✗ | First cold-weather/severe-weather batch post-two-bot port. [8] Point Lay blizzard (A-) carries the rate; 3 B+ cold records, 2 B (Phoenix heat/Cook Inlet surge), 2 B- (Wodehouse violation + stranded mechanic in severe-weather drafts). No fire or heat records in batch. Evaluator_pass: None on all 8 (2nd consecutive batch). Staleness bulk-reject [1][2][3] attempted (>48h). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -26,6 +27,12 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates. The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section logs the rejection EVENT (when, why, count) so the operational history is traceable.
+
+### 2026-05-11 — Staleness bulk-reject skipped: gh CLI unavailable
+
+**Why the rejection was attempted:** Three pending drafts aged >48h with real-time-baked content: `draft_20260509_061852_151` (Hill City SD, "May 6th" dated reference), `draft_20260509_061946_152` (Phoenix Metro, "Sunday through Monday" forward forecast), `draft_20260509_092330_153` (Phoenix Metro, "Sunday into Monday" forward forecast). All three are stale per the 2026-04-26 policy.
+
+**Result:** SKIPPED. `gh` CLI is not installed in the grading environment (`command not found`). Could not execute `gh api -X PATCH gists/...`. State.json was correctly prepared with the three draft statuses set to "rejected" but could not be written back to the gist. **Operator should bulk-reject these three drafts via the dashboard** (`draft_20260509_061852_151`, `draft_20260509_061946_152`, `draft_20260509_092330_153`).
 
 ### 2026-04-26 — Bulk-reject 14 stale pending drafts
 
