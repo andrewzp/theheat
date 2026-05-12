@@ -49,8 +49,15 @@ def test_write_fire_tweet_returns_kill(mock_anthropic):
     assert result.kill_reason
 
 
-def test_write_fire_tweet_raises_on_both_tweet_and_kill_set(mock_anthropic):
-    mock_anthropic.return_value = _fake_writer_response(
+def test_write_fire_tweet_kills_on_both_tweet_and_kill_set(mock_anthropic):
+    """Contract violation: both tweet AND kill_reason set. The JSON-parse
+    retry layer (see TestJsonParseRetry) catches the ValueError from
+    WriterResult's post-init validator and returns a KILL after the
+    retry budget is exhausted, instead of raising. Same root cause as
+    the Nettles Is pipeline_error regression on 2026-05-12 — surface
+    the failure mode as a recorded kill, not a crashed pipeline.
+    """
+    bad_response = _fake_writer_response(
         {
             "tweet": "x",
             "kill_reason": "y",
@@ -60,16 +67,30 @@ def test_write_fire_tweet_raises_on_both_tweet_and_kill_set(mock_anthropic):
             "reasoning": "x",
         }
     )
+    # Both parse attempts return the same contract-violating payload.
+    mock_anthropic.side_effect = [bad_response, bad_response]
 
-    with pytest.raises(ValueError):
-        write_fire_tweet(_bundle(), _memory())
+    result = write_fire_tweet(_bundle(), _memory())
+
+    assert result.tweet is None
+    assert result.kill_reason is not None
+    assert "invalid JSON across" in result.kill_reason
 
 
-def test_write_fire_tweet_raises_on_invalid_json(mock_anthropic):
-    mock_anthropic.return_value = _fake_writer_response_raw("not json")
+def test_write_fire_tweet_kills_on_invalid_json(mock_anthropic):
+    """Same as above for non-JSON output (the production Nettles Is
+    failure mode): retry once, then return KILL rather than raising
+    ValueError as pipeline_error."""
+    mock_anthropic.side_effect = [
+        _fake_writer_response_raw("not json"),
+        _fake_writer_response_raw("still not json"),
+    ]
 
-    with pytest.raises(ValueError):
-        write_fire_tweet(_bundle(), _memory())
+    result = write_fire_tweet(_bundle(), _memory())
+
+    assert result.tweet is None
+    assert result.kill_reason is not None
+    assert "invalid JSON across" in result.kill_reason
 
 
 class TestLengthRetry:
@@ -249,6 +270,96 @@ class TestLengthRetry:
 
         assert result.tweet == self._short()
         assert mock_anthropic.call_count == 2
+
+
+class TestJsonParseRetry:
+    """Writer-side defense: if the model returns empty / non-JSON output,
+    retry with a stronger contract reminder. If still failing, convert to
+    a clean KILL instead of letting ValueError bubble up as pipeline_error.
+
+    Production failure this prevents: 2026-05-12 had three consecutive
+    alerts runs (06:40, 10:34, 14:40 UTC) where the Nettles Is Florida
+    calendar_date_low bundle produced 'ValueError: invalid JSON in model
+    response' — pipeline_error each time. Same bundle, same error,
+    deterministic refusal class. The retry usually unblocks via fresh
+    sampling; if not, the KILL is the right ledger category (we tried,
+    we failed, we recorded — not "the pipeline crashed").
+    """
+
+    def _short(self) -> str:
+        return "Sissonville hit 28°F overnight on May 4; coldest May low in 16 years."
+
+    def _valid(self) -> str:
+        return _fake_writer_response({
+            "tweet": self._short(),
+            "kill_reason": None,
+            "angle_chosen": "x",
+            "era_anchor_used": None,
+            "peer_comparison_used": None,
+            "reasoning": "valid",
+        })
+
+    def test_retries_on_empty_response(self, mock_anthropic):
+        """First call returns empty string; second returns valid JSON."""
+        mock_anthropic.side_effect = ["", self._valid()]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert result.kill_reason is None
+        assert mock_anthropic.call_count == 2
+
+    def test_retries_on_non_json_response(self, mock_anthropic):
+        """First call returns prose; second returns valid JSON."""
+        mock_anthropic.side_effect = [
+            "I cannot help with this signal.",
+            self._valid(),
+        ]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert mock_anthropic.call_count == 2
+
+    def test_retry_user_prompt_carries_json_reminder(self, mock_anthropic):
+        """The retry prompt must reinforce the JSON contract so the model
+        understands why the first attempt was rejected."""
+        mock_anthropic.side_effect = ["", self._valid()]
+
+        write_fire_tweet(_bundle(), _memory())
+
+        first_prompt = mock_anthropic.call_args_list[0].args[0]
+        second_prompt = mock_anthropic.call_args_list[1].args[0]
+        assert "JSON-output retry" not in first_prompt
+        assert "JSON-output retry" in second_prompt
+        assert "OUTPUT FORMAT" in second_prompt
+
+    def test_kills_after_parse_budget_exhausted(self, mock_anthropic):
+        """Both attempts return non-JSON — return KILL with explicit reason.
+        Replaces the ValueError that previously bubbled up as pipeline_error.
+        """
+        from src.two_bot.writer import JSON_PARSE_RETRY_BUDGET
+
+        mock_anthropic.side_effect = [
+            "garbage one",
+            "garbage two",
+        ]
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet is None
+        assert result.kill_reason is not None
+        assert "invalid JSON across" in result.kill_reason
+        assert mock_anthropic.call_count == JSON_PARSE_RETRY_BUDGET + 1
+
+    def test_no_retry_when_first_attempt_parses(self, mock_anthropic):
+        """Happy path: first call is valid JSON, no retry."""
+        mock_anthropic.return_value = self._valid()
+
+        result = write_fire_tweet(_bundle(), _memory())
+
+        assert result.tweet == self._short()
+        assert mock_anthropic.call_count == 1
 
 
 def test_write_fire_tweet_raises_on_missing_api_key(monkeypatch):
