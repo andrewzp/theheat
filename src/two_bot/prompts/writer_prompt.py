@@ -53,7 +53,6 @@ When the `historical_context` field of the bundle is empty (`{}`), the intern ha
 Specifically, do NOT write:
 - "Largest [time-window] fire/storm/heatwave in [country] since [year]."
 - "First time [metric] has crossed [threshold]."
-- "[country]'s fire/storm/wet season peaks in [month]."
 - Any percentile or rarity claim that requires archive data you weren't given.
 
 You MAY use, from your own training:
@@ -65,6 +64,8 @@ You MAY NOT supply your own megawatt/output number for any named real-world faci
 If your only available angles are historical-context claims and historical_context is empty, return tweet=null with kill_reason="no historical_context available; nothing else earned extraordinary".
 
 **Important:** lack of historical_context does NOT automatically mean kill. Many bundles support tweets without archive comparison — describe the data (FRP, temperature, location, time-of-year from the bundle), name the geography, and explain a defensible system-level mechanism from general knowledge (e.g. "Mali sits on the southern edge of the Sahara, in the Sahel"). If neither a system link, stakes link, nor pattern is supported by bundle facts or well-established geography, kill. Do not invent stakes or pattern to avoid killing.
+
+**Seasonal context for fires is world knowledge.** Well-established seasonal patterns like "the Sahel dry season runs December–March" or "fire activity in this region peaks in [season]" are verifiable framings — they do not require archive data. When the bundle supplies FRP + location + time-of-year and historical_context is empty, use the seasonal mechanism INSIDE your system clause. Do NOT kill a fire draft solely because no numeric historical comparison is available; well-established seasonal geography is enough. The banned wink-kicker rules still apply: integrate the seasonal frame into the one-clause system explanation, do not tack on a separate calendar-stamp closer ("It is April.", "Calendar says spring.", etc.).
 
 When `historical_context` IS populated (e.g. it carries `prior_record_c`, `prior_record_year`, `archive_years`), you ARE permitted — and encouraged — to make the rarity claim it supports. Use the supplied numbers verbatim; do not round or extrapolate beyond them.
 

@@ -14,6 +14,7 @@ from src.data.co2 import CO2Milestone
 from src.data.firms import FireEvent
 from src.data.fire_footprint import FireComplex, TIERS_HECTARES
 from src.data.gdacs import GlobalDisasterEvent
+from src.data.ghcn import normalize_station_name
 from src.data.ice_mass import IceMassRecord
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
@@ -206,7 +207,8 @@ def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") 
 
     month_name = _MONTH_NAMES[ev.month] if 1 <= ev.month <= 12 else str(ev.month)
     state = getattr(ev, "state", None)
-    where = _format_where(ev.city, ev.country, state)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
     metric_label = _headline_temp_label(ev.kind, source)
     new_temp_f = _c_to_f(ev.new_temp_c)
     old_record_f = _c_to_f(ev.old_record_c)
@@ -223,7 +225,7 @@ def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") 
             "value_f": new_temp_f,
         },
         current_facts=[
-            {"label": "city", "value": ev.city},
+            {"label": "city", "value": city},
             {"label": "country", "value": ev.country},
             {"label": "month", "value": month_name},
             {"label": "kind", "value": ev.kind},
@@ -296,10 +298,11 @@ def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> Story
 
     kind = getattr(ev, "kind", "high")
     state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
     new_temp_f = _c_to_f(ev.new_temp_c)
     old_record_f = _c_to_f(ev.old_record_c)
-    where = _format_where(ev.city, ev.country, state)
+    where = _format_where(city, ev.country, state)
     when = _resolve_when(ev.signal_date)
     return StoryBundle(
         signal_kind="calendar_record" if kind == "high" else "calendar_record_low",
@@ -313,7 +316,7 @@ def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> Story
             "value_f": new_temp_f,
         },
         current_facts=[
-            {"label": "city", "value": ev.city},
+            {"label": "city", "value": city},
             {"label": "country", "value": ev.country},
             {"label": "calendar_date", "value": when},
             {"label": "kind", "value": kind},
@@ -385,7 +388,8 @@ def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo
     """
 
     state = getattr(ev, "state", None)
-    where = _format_where(ev.city, ev.country, state)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
     new_temp_f = _c_to_f(ev.new_temp_c)
     old_record_f = _c_to_f(ev.old_record_c)
     margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
@@ -401,7 +405,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo
             "value_f": new_temp_f,
         },
         current_facts=[
-            {"label": "city", "value": ev.city},
+            {"label": "city", "value": city},
             {"label": "country", "value": ev.country},
             {"label": "kind", "value": ev.kind},
             {"label": "today_temp_c", "value": ev.new_temp_c},
@@ -448,7 +452,8 @@ def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> Sto
     """
 
     state = getattr(ev, "state", None)
-    where = _format_where(ev.city, ev.country, state)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
     kind = "hot" if ev.anomaly_c >= 0 else "cold"
     # Map anomaly direction to TMAX/TMIN observation framing for the
     # observation_kind fact: hot anomalies derive from afternoon highs,
@@ -474,7 +479,7 @@ def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> Sto
             "value_f": anomaly_f,
         },
         current_facts=[
-            {"label": "city", "value": ev.city},
+            {"label": "city", "value": city},
             {"label": "country", "value": ev.country},
             {"label": "today_c", "value": ev.today_temp_c},
             {"label": "today_f", "value": today_temp_f},
