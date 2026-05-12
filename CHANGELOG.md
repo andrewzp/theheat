@@ -2,6 +2,138 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0.0] - 2026-05-12
+
+Voice-overhaul session. Three PRs landed cumulatively rewriting the writer's
+editorial direction (Attenborough/Economist voice with explicit
+system-explainer mandate) AND adding a code-side guardrail that makes
+the 280-char Twitter cap a hard guarantee rather than a hoped-for property
+of the prompt. Voice-regression went 12/12 green on the final state.
+
+### Added
+
+- **Attenborough/Economist voice + system-explainer mandate (#74).**
+  Rewrote `src/two_bot/prompts/writer_prompt.py`'s voice anchor from
+  "Economist correspondent" to "David Attenborough and The Economist"
+  with explicit signature-move description: report the precise data
+  point, name the system that produces it, stop. New sections:
+  - **THE SIGNATURE MOVE** — three-beat structure (data / system / stop)
+    with the "delete the last sentence" test for catching wink-kickers.
+  - **Climate-arc vs stakes/pattern guidance** — explicit list of
+    strong climate-connect candidates (heat records, marine heatwaves,
+    sea ice loss, drought, hot-season expansion, etc.) and weak ones
+    (cold records, isolated storms) where stakes / pattern framing is
+    more honest than warming attribution.
+  - **HARD RULE: no wink-kickers** — bans the *shape* not just the
+    literal phrases. Forbidden: any closer whose main job is to
+    reference "the calendar", "the season", "the date", or "what
+    [month] would suggest". Explicit examples include "The calendar
+    says spring.", "It's only May.", "Weeks before summer solstice.",
+    "A record is a record.", "well past what the calendar suggests".
+  - **HARD RULE: no self-supplied facility MW** — after the iter-2
+    voice-regression run caught the writer fabricating "Hoover Dam at
+    full capacity" (361 MW vs Hoover's actual ~2,080 MW) and then
+    "Akosombo Dam at full capacity" (vs Akosombo's ~1,020 MW), the
+    soft "95%+ confident" qualifier was replaced with a hard ban.
+    Writer must use bundle-supplied comparison numbers or skip the
+    comparison.
+  - **5 APPROVED EXEMPLARS (after #75)** — Point Lay Arctic system
+    (233 chars), Imperial County hot-season expansion (267), Mauna Loa
+    CO2 accumulation (177), Mali fire without facility comparison
+    (183), Verkhoyansk warm-record one-mechanism (187).
+
+  Triggered by Andrew rejecting a wink-kicker on the pending Point Lay
+  May blizzard draft ("The calendar says spring."). The old prompt's
+  "Context" example was literally `"Blizzard warning in Point Lay. It
+  is May 1."` — actively teaching the failure mode.
+
+- **Cold-record exemplar #6 + compact Verkhoyansk (#75).** Voice-regression
+  on the #74-merged state kept failing on Sissonville (monthly_low)
+  and Verkhoyansk (monthly_high) — both at >280 chars because the
+  writer reached for verbose "Cold records in an era of warming are
+  increasingly local and topographic:" preambles. Added APPROVED
+  EXEMPLAR #6 at 244 chars: Sissonville-style cold record with
+  topographic mechanism only (Kanawha Valley cold-air drainage), no
+  warming preamble. Andrew compacted exemplar #5 (Verkhoyansk) by
+  dropping the second-half "cold poles are warming faster..."
+  climate clause that overshot the budget. Plus a declarative rule:
+  for `monthly_low` / `country_low`, pick topographic / geographic /
+  local-flow mechanism, skip warming framing.
+
+- **Writer-side length-cap retry + hard kill (#76).** Code-side
+  guardrail in `src/two_bot/writer.py:write_tweet`. New constants
+  `TWEET_MAX_LENGTH = 280` and `LENGTH_RETRY_BUDGET = 2`. If the model
+  returns a tweet > 280 chars, retry up to 2 more times with
+  *declarative* length feedback appended to the user prompt:
+  > [Length retry: a previous attempt produced N characters. The
+  >  280-character cap is hard. Return a shorter tweet that fits, or
+  >  set tweet=null with kill_reason if no fitting version is possible.]
+
+  After 3 failed attempts, return a KILL result with explicit
+  `kill_reason`: `"writer produced over-280-char tweets across 3
+  attempts (last attempt: N chars)"`. The dashboard surfaces this as
+  a draft kill rather than shipping a truncated tweet to Twitter.
+
+  Probability math: at the worst observed per-call over-length rate
+  p=0.2 (run 4 against the unfinished prompt), all-3-attempts-fail =
+  p³ = 0.8%. At the post-#75 baseline p≈0.05, all-fail = 0.01%.
+  Cost: each retry ~$0.07 Sonnet call; worst case adds ~$0.30/voice-
+  regression run, taking nightly cost from ~$6/mo to ~$9/mo.
+
+  7 new tests in `TestLengthRetry` (tests/two_bot/test_writer.py)
+  cover: retry on overlong, kill after retry budget exhausted, no
+  retry when first attempt fits, no retry on kill, declarative
+  feedback content in retry prompt, boundary at exactly 280, boundary
+  at 281.
+
+- **New memory hook: feedback_prompt_json_contract.md.** Imperative
+  process steps ("count chars, identify clause, remove, recount,
+  repeat") in a strict-JSON prompt leak into the response as
+  reasoning text before the JSON, breaking the parser. Caught
+  mid-PR-iteration when an iter-4 commit on the (since-deleted)
+  voice-attenborough-economist branch broke 5/12 voice-regression
+  fixtures with `ValueError: invalid JSON in model response`. Andrew
+  merged at iter-3 before iter-4 landed, so main was never affected.
+  Saved for future prompt edits: keep guidance declarative for any
+  prompt with a strict-output contract.
+
+### Changed
+
+- **Killed pending draft #156 Mankato (manual editorial).** 0.1°C
+  tied record in 16yr archive with a defensive "A record is a
+  record." closer — didn't clear the editorial bar set by the new
+  voice. Marked status=rejected with kill_stage=manual_editorial via
+  `state.write_state()` (race-safe through `_merge_state`).
+
+### Verification
+
+- `python -m pytest tests/ -m "not voice_replay"` — **883 passed**
+  (876 baseline + 7 new TestLengthRetry tests).
+- `python -m mypy src/` — clean (with the voice.generator override
+  still in place per #63; mypy overrides for src.main, src.state,
+  src.editorial.scoring remain pending merge of #72).
+- `ruff check src/ tests/` — clean.
+- Voice-regression on each PR via `voice-check` label: #74 ran 4
+  times before final commit (each iteration caught a different
+  failure mode that informed the next iter); #75 ran 1x green; #76
+  ran 1x green. Final state on main: **12/12 fixtures pass**.
+
+### Open follow-ups
+
+- **PR #72 (mypy ignore-list removal via BotState TypedDict)** is
+  open with green CI. Not auto-merged — was authored on a previous
+  session and never reviewed. Removes `ignore_errors = true` for
+  `src.main`, `src.state`, `src.editorial.scoring` by adding a
+  `BotState` TypedDict module (`src/state_schema.py`) + propagating
+  annotations through `src/editorial/synthesis.py` and
+  `src/two_bot/{memory,fact_check,pipeline}.py`. 147 previously-
+  hidden errors → 0. Adds a `TestBotStateSchemaRoundTrip` to guard
+  against future drift between `DEFAULT_STATE` and `BotState`.
+
+- **PR #73 (auto-opened daily-plan refinement 2026-05-11: 8 drafts,
+  12.5% A-rate)** — proves yesterday's grading-agent routine repair
+  is working. Review when ready.
+
 ## [0.4.1.0] - 2026-05-10
 
 Cron-feedback-loop session. The voice-regression harness shipped yesterday

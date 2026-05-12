@@ -4,6 +4,99 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-11/12 — Voice overhaul: Attenborough/Economist + code-side length guardrail
+
+## Where we landed
+
+`main` is on `7542728` (PR #76). **883 tests passing** (was 876 at end of 2026-05-10; +7 new `TestLengthRetry` tests in #76). Voice-regression went **12/12 green** on the final state. Three PRs merged today rewriting the writer's editorial direction AND adding a code-side guarantee that Twitter never sees a >280-char string from this pipeline.
+
+## The arc
+
+The session opened with Andrew reviewing pending drafts and rejecting a wink-kicker on the Point Lay May blizzard draft ("The calendar says spring."). Diagnosed: the OLD prompt's "Context" framing example was literally `"Blizzard warning in Point Lay. It is May 1."` — actively teaching the failure mode. Refactored the voice anchor to "David Attenborough and The Economist" with explicit system-explainer mandate. Iterated 4 times across voice-regression cycles (each iter caught a different failure mode that informed the next), then landed a code-side length-cap retry that makes the 280 cap a hard guarantee.
+
+## PRs that landed today
+
+### PR #74 — Attenborough/Economist voice + system-explainer mandate (`4cd1b20...38e0c17`)
+
+Six commits, all to `src/two_bot/prompts/writer_prompt.py`:
+- `4cd1b20` initial voice rewrite
+- `de8c3df` compress over-long exemplars after run 1 caught 5/12 length failures (my "approved" exemplars were themselves 400+ chars)
+- `3b515ee` drop-a-clause length tactic + ban self-supplied facility MW numbers (after run 2 caught "Hoover Dam at full capacity" fabrication on a 361 MW fire — Hoover is 2,080 MW)
+- `f431b75` ban wink-shape (not just literal phrases — "well past what the calendar suggests" was a different surface text of the same anti-pattern) + soften no-context kill rule + add Mali fire exemplar
+- `9eb45e9` Andrew's cleanup pass (tightened review findings, compacted exemplars further)
+- `38e0c17` merge
+
+What landed in the merged state:
+- Voice anchor: Attenborough + Economist (precision data → system → stop, no wink)
+- THE SIGNATURE MOVE section with 3-beat structure + "delete the last sentence" test
+- Climate-arc vs stakes/pattern guidance (cold records ≠ warming signal)
+- HARD RULE banning wink-kickers by shape (not just literal phrases)
+- HARD RULE banning self-supplied facility MW numbers
+- 4 APPROVED EXEMPLARS (Point Lay, Imperial, Mauna Loa, Mali fire)
+
+Iter-4 trap (NOT merged): tried to add "Mandatory self-check before emitting JSON: count chars, identify clause, remove, recount, repeat..." — imperative process language broke strict-JSON output on 5/12 fixtures. Caught on the unfinished branch, never reached main. Saved to memory ([feedback_prompt_json_contract](../memory/feedback_prompt_json_contract.md)).
+
+### PR #75 — cold-record exemplar to stop nightly flap (`c8c30c5`)
+
+After #74 merged, voice-regression kept failing on Sissonville + Verkhoyansk. Both at >280 chars. The merged prompt had no `monthly_low` exemplar; the writer reached for verbose "Cold records in an era of warming are increasingly local and topographic:" preambles. Two commits:
+- `be0a02f` Andrew compacted the Verkhoyansk warm-record exemplar (drops "the cold poles are warming faster..." second-half climate clause)
+- `2aa8e04` added APPROVED EXEMPLAR #6 — Sissonville-style cold record at 244 chars, topographic mechanism only (Kanawha Valley cold-air drainage), no warming preamble. Plus declarative rule for monthly_low / country_low: pick topographic / geographic / local-flow mechanism, skip warming framing.
+
+Voice-regression ran green 12/12 in 1:31 on this PR.
+
+### PR #76 — writer-side length-cap retry + hard kill (`7542728`)
+
+Prompt-only length discipline is fragile under model stochasticity. Even a green snapshot today doesn't guarantee green tomorrow on a different sampling. Added a code-side guardrail in `src/two_bot/writer.py:write_tweet`:
+
+- `TWEET_MAX_LENGTH = 280`, `LENGTH_RETRY_BUDGET = 2` (3 attempts total)
+- If the model returns >280 chars, retry with declarative feedback in the user prompt
+- After 3 fails, return KILL with explicit `kill_reason`
+- Feedback is declarative ("a previous attempt produced N characters; return a shorter version") — not imperative process language, per the memory hook learned from iter-4 of #74
+
+Probability math: at worst p=0.2 per-call, p³ = 0.8%. At post-#75 baseline p≈0.05, p³ = 0.01%. Cost: ~$0.30/voice-regression run extra (~$6/mo → ~$9/mo).
+
+7 new `TestLengthRetry` tests: retry on overlong, kill after budget, no retry when fits, no retry on kill, declarative feedback content, boundary at 280, boundary at 281.
+
+Voice-regression ran green 12/12 in 1:32 on this PR.
+
+## Editorial work that landed alongside
+
+- **Killed draft #156 Mankato** (manual editorial). The pending draft was a 0.1°C tied May record in a 16yr archive with a defensive "A record is a record." closer — didn't clear the editorial bar set by the new voice. Marked status=rejected via `state.write_state()` (race-safe through `_merge_state`).
+
+## What's NOT done (carry forward)
+
+- **PR #72 (mypy ignore-list removal via BotState TypedDict)** — OPEN, CI green, ready to merge. Adds `src/state_schema.py` with a `BotState` TypedDict + propagates annotations through state.py / main.py / scoring.py / synthesis.py / two_bot pipeline. 147 previously-hidden errors → 0. Includes a `TestBotStateSchemaRoundTrip` to guard against future drift between `DEFAULT_STATE` and `BotState`. Worth a quick review and merge.
+- **PR #73 (auto-opened daily-plan refinement 2026-05-11: 8 drafts, 12.5% A-rate)** — proves yesterday's grading-agent routine repair is working. Review when ready.
+- **Pending drafts #154 (Imperial) and #158 (Point Lay)** — still have wink-kicker text from the old prompt. Decision pending: kill them so the next bot.yml run regenerates under the new voice, or let them sit and compare side-by-side as new drafts come in.
+- **Dashboard QA started but not finished** — local dev server (`:3030`) confirmed the dashboard renders cleanly with dark monospace aesthetic, 5 tabs (Dashboard / Pipeline / Workbench / Suppressed / Sources). Did not complete per-tab exploration before the session pivoted to docs sweep. Dashboard URL updated: was `dashboard-phi-beryl-65.vercel.app`, now `dashboard-andrew-puschels-projects.vercel.app`.
+
+## Defense-in-depth state (post-today)
+
+```
+writer prompt voice (Attenborough/Economist + HARD RULES tests #58 + wink-shape ban #74)
+  ↓
+writer-side length retry + hard kill (#76)  ← NEW: code-side guarantee
+  ↓
+inline safety regex (#60) + precision tuning (#67/#68)
+  ↓
+fact-check (existing)
+  ↓
+post-time safety regex (existing)
+  ↓
+nightly Sonnet replay (#61) — 12/12 green on final state
+  ↓
+source health visibility (#64 + #71)
+  ↓
+daily quality grading (#66 repair → validated by #73 auto-PR firing 2026-05-11)
+```
+
+## Memory hooks added today
+
+- [Attenborough/Economist voice](../memory/feedback_voice_bigger_picture.md) — TheHeat: place each data point inside the system the reader doesn't fully see; teach, don't wink. Includes 3 approved exemplars validated by Andrew.
+- [JSON-output prompt contracts](../memory/feedback_prompt_json_contract.md) — Imperative process steps ("count, remove, recount, repeat") leak into strict-JSON output; keep guidance declarative.
+
+---
+
 # 2026-05-10 — Cron feedback loop: voice-regression caught real signal on first scheduled run
 
 ## Where we landed

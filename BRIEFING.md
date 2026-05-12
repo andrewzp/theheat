@@ -1,12 +1,41 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-10 (post-cron-feedback-loop session).
-**Status:** **PIPELINE WORKING END-TO-END.** The voice-regression harness shipped 2026-05-09 (#61) fired on its first scheduled cron 2026-05-10 10:06 UTC and **caught three real safety false-positives** — exactly the silent-drift gap it was built for. Both regexes tightened, both false positives now pass clean, and the daily-plan grading-agent routine was repaired (PR #66 had flagged it was failing on a public-API rate limit).
-**Latest merged commits (2026-05-10):** `8ab835c` (#67 month-repetition false-positives + Andrew's single-digit Celsius cold-record relaxation) → `1ed7e2c` (#68 Codex follow-up: tighten both regexes — required apostrophe, backreference on year-anchored restatement).
-**Earlier this stack (2026-05-09):** `4cb1eba` (#55 flaky tests) → `3f92b9d` (#56 CI on PRs + Node 24) → `15469b9` (#57 hermeticity gate) → `84c7d9f` (#58 anti-fabrication safety) → `7015e01` (#60 safety gate inline in pipeline) → `03ba309` (#61 voice-replay regression suite) → `1d3e490` (#62 ruff) → `13480a2` (#63 mypy) → `69f2fcf` (#64 dashboard source-health) → `0fdec6c` (#65 doc sweep).
+**Last updated:** 2026-05-12 (post-voice-overhaul session).
+**Status:** **PIPELINE WORKING END-TO-END WITH NEW VOICE.** Three PRs landed today rewriting the writer's editorial direction: Attenborough/Economist voice with system-explainer mandate (#74), cold-record exemplar to stop voice-regression flap (#75), and a code-side length-cap retry+kill guardrail so over-280-char drafts can no longer ship regardless of model stochasticity (#76). Voice-regression went **12/12 green** on the final state.
+**Latest merged commits (2026-05-12):** `4cd1b20`...`38e0c17` (#74 Attenborough/Economist voice, wink-kicker bans, fabrication bans, system-explainer requirement) → `c8c30c5` (#75 cold-record exemplar #6 + compact Verkhoyansk exemplar) → `7542728` (#76 writer-side length retry + hard kill).
+**Open PRs:** #72 (mypy ignore-list removal via BotState TypedDict) — CI green, ready to merge but pending review. #73 (auto-opened daily-plan refinement for 2026-05-11: 8 drafts, 12.5% A-rate) — proves the grading-agent routine repair from yesterday is working.
+**Earlier this stack (2026-05-10):** `8ab835c` (#67 month-repetition false-positives + Andrew's single-digit Celsius cold-record relaxation) → `1ed7e2c` (#68 Codex follow-up: tighten both regexes) → `8490ed4` (#69 docs sweep) → `d6665a2` (#70 parallel-session WIP reconciliation) → `84f496d` (#71 dashboard last_error surfacing).
+**Earlier (2026-05-09):** `4cb1eba` (#55 flaky tests) → `3f92b9d` (#56 CI on PRs + Node 24) → `15469b9` (#57 hermeticity gate) → `84c7d9f` (#58 anti-fabrication safety) → `7015e01` (#60 safety gate inline in pipeline) → `03ba309` (#61 voice-replay regression suite) → `1d3e490` (#62 ruff) → `13480a2` (#63 mypy) → `69f2fcf` (#64 dashboard source-health) → `0fdec6c` (#65 doc sweep).
 **Branch protection:** required `test` status check on `main` (admin bypass for emergencies). Every change is a PR with green CI.
-**Tests:** **876 passing** locally (was 866 at end of 2026-05-09; +10 across PR #67-#68). +12 voice-replay tests run nightly via `voice-regression.yml`.
-**Cost:** GHCN-Daily free. Sonnet writer ~$13/mo + ~$6/mo nightly voice-regression replay = ~$19/mo Anthropic on top of the existing Sonnet evaluator (~$60-90/mo per memory). Gemini Flash usage unchanged.
+**Tests:** **883 passing** locally (was 876 at end of 2026-05-10; +7 new `TestLengthRetry` tests in #76). +12 voice-replay fixtures run nightly via `voice-regression.yml`; final run after #76 merged was 12/12 green.
+**Cost:** GHCN-Daily free. Sonnet writer ~$13/mo + voice-regression nightly went from ~$6/mo to ~$9/mo (the length retry adds up to 2 extra Sonnet calls per fixture worst case). Total ~$22/mo Anthropic on top of the existing Sonnet evaluator (~$60-90/mo per memory). Gemini Flash usage unchanged.
+
+## What changed structurally on 2026-05-11/12 (voice overhaul + code-side guardrail session)
+
+Three PRs landed, all merged. Cumulative effect: the writer prompt now teaches a coherent voice (Attenborough/Economist with explicit system-explainer mandate, wink-kicker bans, fabrication bans) AND the writer is protected by a code-side length retry that makes the 280-char cap a hard guarantee, not a hope.
+
+- **PR #74 — Attenborough/Economist voice + system-explainer mandate** (4cd1b20...38e0c17). Rewrote the writer prompt's voice anchor from "Economist correspondent" to "David Attenborough and The Economist" with explicit signature-move description: report the precise data, name the system that produces it, stop. Triggered by Andrew rejecting a wink-kicker on the Point Lay May blizzard draft ("The calendar says spring."). The OLD prompt's "Context" example was literally `"Blizzard warning in Point Lay. It is May 1."` — it was actively teaching the failure mode. New sections: THE SIGNATURE MOVE (3-beat structure + "delete the last sentence" test), declarative climate-arc-vs-stakes guidance, HARD RULE banning wink-shape (not just literal phrases) plus the no-self-supplied-facility-MW rule (after observed Hoover Dam + Akosombo Dam fabrications). 4 approved exemplars (Point Lay, Imperial, Mauna Loa, Mali fire). Iterated 3x across the merged commits before landing.
+
+- **PR #75 — cold-record exemplar to stop voice-regression flap** (be0a02f + 2aa8e04 → c8c30c5). The merged #74 prompt had no `monthly_low` exemplar; nightly voice-regression kept failing on Sissonville and Verkhoyansk with the writer reaching for verbose "Cold records in an era of warming..." preambles. Added APPROVED EXEMPLAR #6 at 262 chars (Sissonville-style topographic mechanism only, no warming preamble) + Andrew compacted the Verkhoyansk exemplar #5 (drops "the cold poles are warming faster..." second-half clause). Plus a declarative rule: for `monthly_low` / `country_low`, pick topographic / geographic / local-flow mechanism, skip warming framing.
+
+- **PR #76 — writer-side length-cap retry + hard kill** (7542728). Prompt-only length discipline is fragile under Sonnet's sampling stochasticity. Added a code-side guardrail in `src/two_bot/writer.py:write_tweet`: if the model returns a tweet > 280 chars, retry up to `LENGTH_RETRY_BUDGET=2` times with declarative length feedback appended to the user prompt. After 3 failed attempts, return KILL with explicit `kill_reason` ("writer produced over-280-char tweets across 3 attempts (last attempt: N chars)"). Probability math: at worst-observed p=0.2 per-call over-length rate, all 3 attempts fail at p³=0.8%. Cost: ~$0.30/voice-regression run extra. 7 new `TestLengthRetry` tests cover retry, kill, no-retry-on-fit, no-retry-on-kill, feedback content, boundary at 280, boundary at 281. **Twitter no longer sees a >280-char string from this pipeline, regardless of how the model samples on any given call.**
+
+### What today's session proved
+
+The voice work made the prompt smaller but smarter — declarative rules + 6 exemplars + 1 code-side guardrail = the system that consistently passes voice-regression. The iter-4 trap of trying imperative process language ("count, identify, remove, recount, repeat") was caught mid-PR by the harness itself: that prompt broke strict-JSON output on 5/12 fixtures. Saved to memory ([feedback_prompt_json_contract](memory/feedback_prompt_json_contract.md)) — imperative process steps leak into strict-JSON output.
+
+Also killed pending draft #156 Mankato (manual editorial — 0.1°C tied record in 16yr archive didn't clear the editorial bar set by the new voice).
+
+| Layer | Status |
+|---|---|
+| Writer prompt voice | **Rewritten 2026-05-12 (#74-#75) — Attenborough/Economist** |
+| Code-side length guarantee | **NEW 2026-05-12 (#76) — retry + kill, hard cap** |
+| Safety regex at draft-time | #60 inline + #67/#68 precision-tuned |
+| Fact-checker | Existing |
+| Safety regex at post-time | Existing |
+| Nightly Sonnet replay | #61 firing daily; 12/12 green after #76 |
+| Source health visibility | #64 + #71 last_error surfacing |
+| Daily quality grading | Repaired #66 → validated by #73 auto-PR firing 2026-05-11 |
 
 ## What changed structurally on 2026-05-10 (cron-feedback-loop session)
 
@@ -538,7 +567,7 @@ Sections:
 
 API routes: bulk_reject_below (for threshold cleanups), approve, reject, edit, auto_approve, select_candidate.
 
-**URL:** https://dashboard-phi-beryl-65.vercel.app
+**URL:** https://dashboard-andrew-puschels-projects.vercel.app
 
 ---
 
@@ -628,6 +657,6 @@ responses>=0.25
 - **GitHub:** `github.com/andrewzp/theheat`
 - **Branch:** `main` (latest: `d9c84ff` — PR #47 codex high-severity batch)
 - **Gist ID:** `06c02c97ffc0d11458687f1ed998d9e5`
-- **Dashboard:** https://dashboard-phi-beryl-65.vercel.app
+- **Dashboard:** https://dashboard-andrew-puschels-projects.vercel.app
 - **X:** @theheat (Premium tier — 4x/2x algo boost already active)
 - **CHANGELOG:** through 0.3.10.0 (2026-05-08); ten releases shipped on 2026-05-08 alone (#38 through #47).
