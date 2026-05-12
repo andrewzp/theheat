@@ -1185,7 +1185,20 @@ export default function Dashboard() {
   // Tabs
   const [activeTab, setActiveTab] = useState("dashboard")
 
+  // Refresh state for the refresh button + auto-refresh interval.
+  //   refreshing: true while a fetch is in-flight (drives "refreshing…" label
+  //     and disabled state on the button — prior version showed no feedback at
+  //     all so users couldn't tell the click did anything).
+  //   lastUpdated: timestamp of the most recent successful fetchData run.
+  //   refreshError: surfaces the last network/parse failure to the operator
+  //     (prior version swallowed errors into console.error only).
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [refreshError, setRefreshError] = useState(null)
+
   const fetchData = useCallback(async () => {
+    setRefreshing(true)
+    setRefreshError(null)
     try {
       const suppQuery = suppressionsSourceFilter
         ? `/api/suppressions?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
@@ -1213,10 +1226,13 @@ export default function Dashboard() {
         setSources(sh.sources || [])
         setSourcesStats(sh.stats || null)
       }
+      setLastUpdated(new Date().toISOString())
     } catch (e) {
       console.error(e)
+      setRefreshError(e?.message || String(e))
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [suppressionsSourceFilter])
 
@@ -1367,12 +1383,32 @@ export default function Dashboard() {
         }
         h1 { font-size: 20px; font-weight: 600; color: #ff4d00; }
         h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
+        .refresh-group {
+          display: flex; align-items: center; gap: 12px;
+        }
+        .refresh-meta {
+          color: #555; font-size: 11px; font-family: inherit;
+          letter-spacing: 0.02em;
+        }
+        .refresh-error {
+          color: #ff4d00; font-size: 11px; font-family: inherit;
+          padding: 4px 8px; border: 1px solid #5a1500; border-radius: 4px;
+          background: rgba(255, 77, 0, 0.06);
+        }
         .refresh-btn {
           background: none; border: 1px solid #333; color: #888;
           padding: 6px 12px; border-radius: 4px; cursor: pointer;
           font-family: inherit; font-size: 12px;
+          transition: border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+          min-width: 96px; /* prevent layout shift between "refresh" ↔ "refreshing…" */
         }
         .refresh-btn:hover { border-color: #555; color: #ccc; }
+        .refresh-btn:disabled { cursor: not-allowed; opacity: 0.6; }
+        .refresh-btn.is-refreshing {
+          border-color: #ff4d00;
+          color: #ff4d00;
+          opacity: 1; /* override the disabled-opacity above so the orange pops */
+        }
 
         /* Tabs — match simple aesthetic */
         .tabs {
@@ -1920,7 +1956,23 @@ export default function Dashboard() {
       <div className="dash">
         <header>
           <h1>@theheat <span>control panel</span></h1>
-          <button className="refresh-btn" onClick={fetchData}>refresh</button>
+          <div className="refresh-group">
+            {refreshError && (
+              <span className="refresh-error" title={refreshError}>
+                refresh failed
+              </span>
+            )}
+            {lastUpdated && !refreshError && (
+              <span className="refresh-meta">updated {timeAgo(lastUpdated)}</span>
+            )}
+            <button
+              className={`refresh-btn${refreshing ? " is-refreshing" : ""}`}
+              onClick={fetchData}
+              disabled={refreshing}
+            >
+              {refreshing ? "refreshing…" : "refresh"}
+            </button>
+          </div>
         </header>
 
         <div className="tabs">
