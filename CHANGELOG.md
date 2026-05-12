@@ -2,6 +2,187 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1.0] - 2026-05-12
+
+End-of-day cleanup wave. Six PRs merged after the morning's voice + length
+retry + dashboard work (0.5.0.0): mypy ignore-list removed, +25 coverage-gap
+stations, four production issues fixed in one PR, two daily-plan
+reconciliations, and the docs sweep. Plus four stale daily-plan auto-PRs
+closed without merge. **Open PR count: 5 → 0.**
+
+### Added
+
+- **`BotState` TypedDict + nested types (#72).** New `src/state_schema.py`
+  defines `BotState` as a `TypedDict, total=False` mirroring
+  `DEFAULT_STATE` exactly, with nested TypedDicts for the 9 keys that
+  have known internal shapes (`Hot10Snapshot`, `MemoryState`,
+  `OceanSSTStreak`, `SynthesisComponents`, `CityRecord`, `IceMassLoss`,
+  `DroughtSnapshot`, `RecordStreakEntry`, `StreakEntry`). `total=False`
+  lets older gist payloads (predating newer lane additions) still
+  typecheck. The schema is derived from `src/state.py:19` `DEFAULT_STATE`
+  as the single source of truth — drift is structurally prevented.
+
+- **JSON-parse retry + clean KILL in writer (#82).** Mirror of #76's
+  length retry but for the case where the model returns empty / non-JSON
+  output. Observed 2026-05-12 on the Nettles Is Florida calendar_date_low
+  bundle: same bundle, same writer call, same `Writer returned invalid
+  JSON` error three runs in a row, surfacing as `pipeline_error` in the
+  suppression ledger. Root cause is stochastic refusal — a second
+  sampling almost always produces JSON. New constant
+  `JSON_PARSE_RETRY_BUDGET = 1` plus declarative-only retry feedback (per
+  the `feedback_prompt_json_contract` memory hook: never use imperative
+  process language in strict-JSON prompts):
+
+  > [JSON-output retry: the previous attempt did not return valid JSON.
+  >  Return ONLY the JSON object specified by the system prompt's OUTPUT
+  >  FORMAT section — no prose before or after, no markdown fences, no
+  >  chain-of-thought.]
+
+  After budget exhausted, returns a `WriterResult` with `tweet=None` and
+  `kill_reason="writer returned invalid JSON across 2 attempts: …"`
+  instead of raising — the pipeline no longer crashes on writer-output
+  garbage, the dashboard shows a clean kill_reason. Five new tests in
+  `tests/two_bot/test_writer.py::TestJsonParseRetry` cover retry path,
+  exhaust → kill, no-retry-on-success, no-retry-on-good-kill, feedback
+  content shape.
+
+- **GHCN station-name normalization for space-separated COOP suffix +
+  ANG military suffix (#82).** `_COOP_SUFFIX_RE` was tight enough to
+  catch `1SW` / `2N` but missed space-separated `4 NE`. Stations like
+  `PADDOCK LAKE 4 NE` (Wisconsin) carried unnormalized names through to
+  the bundle; writer dropped the suffix when composing the tweet; fact-
+  checker killed BUNDLE_FACT on every run. New regex:
+  `\s+\d+(?:\.\d+)?\s*[NSEW]{1,3}$` (added `\s*` between digit and
+  direction). Plus a new `_MILITARY_SUFFIX_RE` for the Air National
+  Guard suffix (e.g. `SIOUX CITY ANG`). Two regression tests cover the
+  exact production failures.
+
+- **+25 stations closing coverage gaps (#81).** Cherry-picked from a
+  6-day-old branch onto current main as a clean rebase. 613 → 638
+  cities. Closes immediate gaps revealed by competitive coverage on
+  2026-05-05: **Japan southern islands** (Naha, Ishigaki, Miyakojima);
+  **Japan northern** (Sendai, Niigata); **Queensland coast** (Cairns,
+  Townsville, Rockhampton, Mackay, Bundaberg); **Australia cool-side**
+  (Hobart, Canberra); **northern China heatwave belt** (Harbin,
+  Shenyang, Hohhot, Lanzhou, Taiyuan, Changchun); **Cyprus** (Limassol,
+  Larnaca, Paphos); **cold-pole reporters** (Verkhoyansk, Oymyakon,
+  Phalodi, Furnace Creek).
+
+- **Wire-round-trip regression test for `BotState` (#72).** New
+  `tests/test_state.py::TestBotStateSchemaRoundTrip` (3 tests) — load
+  `DEFAULT_STATE`, `json.dumps(...)` with `json_default`, `json.loads`,
+  run through `_normalize_state` and `_merge_state(empty, parsed)`,
+  assert key-set equivalence and shape stability. Wire-format guarantee
+  for the gist + SQLite round-trip per the `feedback_verify_the_wire`
+  memory hook (TypedDict is erased at runtime but we still verified the
+  bytes).
+
+### Changed
+
+- **Removed `ignore_errors = true` mypy overrides for `src.main`,
+  `src.state`, `src.editorial.scoring` (#72).** Pyproject's
+  `[[tool.mypy.overrides]]` had been hiding 147 errors across the three
+  highest-trafficked modules pending a TypedDict refactor that this PR
+  finally lands. Flip on those modules; mypy now type-checks the
+  orchestrator end-to-end. The `src.voice.generator` override is out of
+  scope and remains.
+
+  - **`src/state.py`**: ~37 function signatures flipped `dict → BotState`,
+    `DEFAULT_STATE` annotated, `_merge_memory` bootstrap refactored to
+    use `cast(MemoryState, ...)` rather than dict iteration with
+    literal-key restrictions.
+  - **`src/main.py`**: ~20 function signatures flipped. The `:1000-1200`
+    if-cascade that reassigned `ev` across mutually-exclusive branches
+    (mypy couldn't narrow once locked) was rewritten with distinct
+    variable names per branch — `ev_mh`, `ev_ml`, `ev_ah`, `ev_ac`,
+    `ev_cdh`, `ev_cdl`. Minimal behavioral surface; pure type-narrowing
+    fix.
+  - **`src/editorial/scoring.py`**: widened `_build_score` and
+    `_compute_total` metric params from `int` to `float`. `_clamp`
+    already returns `int` so the wire format (SQLite + gist scores) is
+    unchanged. One signature change cascaded to ~30 call sites.
+
+- **`src/data/ocean_sst.py` — User-Agent header on
+  climatereanalyzer.org requests (#82).** Server loops requests without
+  a UA into infinite redirects (the `requests` default max of 30 is
+  hit, raising `TooManyRedirects`). Adopted the `theheat-bot` UA
+  convention already used by `src/data/nws_alerts.py`. Source goes
+  green; SST anomaly tracking restored.
+
+- **`src/data/river_gauges.py` — graceful degradation on retired
+  flood-stage endpoint (#82).** USGS WaterWatch
+  (`waterwatch.usgs.gov/webservices/floodstage`) was retired sometime
+  before 2026-05-12 and now 301-redirects without a Location header
+  returning HTML "Old Page" text. `_fetch_flood_stages` previously
+  raised `SourceFetchError` in strict mode, killing the entire
+  `river_gauges` source on every alerts run. Now always returns `{}`
+  on failure with a docstring explaining the graceful-degradation
+  contract. Current gauge heights still flow; only the
+  `above_flood_stage` flag is lost. Finding a replacement endpoint
+  (likely NWS AHPS gauge JSON) is tracked as a follow-up.
+
+### Operations
+
+- **Four stale daily-plan auto-PRs closed without merge** (#37, #49,
+  #59, #66 — accumulated 2026-05-05 through 2026-05-10). Each was
+  superseded by later daily-plan PRs and would have been a backward-
+  revert of today's docs sweep had they been merged.
+
+- **PR #29 (the +25 stations branch) closed via #81 supersession.**
+  The original had stale doc commits on top of the station additions
+  that would have reverted the morning's `BRIEFING.md` / `CHANGELOG.md`
+  / `PIPELINE.md` updates. Cherry-picked just the data commits onto
+  current main as the clean #81 instead.
+
+- **Operator follow-up spec'd: switch daily-plan routine to a single
+  long-lived `daily-plan-current` branch + persistent PR.** The
+  accumulated PRs above were an AI-PR-hygiene problem (the routine
+  opens fresh PRs but never closes the previous one), not an operator-
+  inattention problem. Routine prompt change drafted; Andrew to paste
+  into the Claude routines UI.
+
+### Memory hooks honored / added
+
+- **Honored — `feedback_prompt_json_contract`.** The new
+  JSON-parse-retry feedback in `write_tweet` uses declarative language
+  only ("Return ONLY the JSON object…") — no imperative process steps
+  like "count, identify, remove, recount, repeat" that the iter-4 voice
+  work proved will leak as visible reasoning into strict-JSON output.
+- **Honored — `feedback_verify_the_wire`.** The `BotState` work added
+  an explicit JSON round-trip test rather than relying on the TypedDict
+  to enforce wire format (it doesn't — it's erased at runtime).
+- **Honored — `feedback_generalize_fixes`.** The GHCN regex fix
+  generalized to `\s*` between digit and direction rather than
+  hardcoding the Paddock Lake station ID. The JSON-parse retry handles
+  the class of stochastic refusals rather than the specific Nettles Is
+  bundle.
+- **Honored — `feedback_versioned_doc_filenames`.** The afternoon's
+  end-of-day brief lives at `docs/NEXT_SESSION_PROMPT_2026-05-12-v2.md`,
+  not overwriting the morning's v1.
+- **Added — AI PR hygiene framing.** Auto-PRs authored by Claude or
+  Codex via the routines UI are AI hygiene, not Andrew's responsibility.
+  Stale auto-PRs must not be framed as operator inattention.
+
+### Tests
+
+- **894 passing** (was 884 at the close of 0.5.0.0). Net deltas:
+  +3 `TestBotStateSchemaRoundTrip` in #72, +2 station-name normalization
+  in #82, +5 `TestJsonParseRetry` in #82, -1 net from 2 pre-existing
+  writer tests updated for new retry+kill behavior.
+- Mypy now clean across `src/` (147 previously-hidden errors → 0).
+  `src.voice.generator` override remains (out of scope; different
+  problem, retained for future cleanup).
+
+### Production verification
+
+- The three alerts runs preceding #82 (06:40, 10:34, 14:40 UTC) each
+  produced 0 drafts, with the suppression ledger showing the four
+  distinct failure modes targeted by #82 (Paddock Lake BUNDLE_FACT,
+  Nettles Is pipeline_error, ocean_sst TooManyRedirects, river_gauges
+  JSONDecodeError). The 18:39 UTC run is the first one against the
+  fixes — if it reaches the writer without any of those four classes
+  firing, the cleanup is complete in production.
+
 ## [0.5.0.0] - 2026-05-12
 
 Voice-overhaul session. Three PRs landed cumulatively rewriting the writer's

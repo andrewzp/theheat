@@ -8,12 +8,13 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `1ed7e2c` (PR #68 — Codex regex follow-up; latest on origin/main) |
-| Voice engine version | **two-bot** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04) |
-| Last cycle A-rate | — (May 12, 0 pending drafts — queue empty; prior measured: 0% Apr 29) |
+| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
+| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
 | Posting | paused until bar cleared |
+| Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
 ## Active proposals
 
@@ -44,7 +45,7 @@ possible on the current code path. Whether era anchors are over-deployed in two-
 cannot be assessed until record drafts reach the pending queue. Move to Resolved when
 operator confirms era-anchor logic is either ported to writer_prompt.py or unnecessary.
 
-### P1 — Fix station-name normalization: fact_check kills on GHCN suffix labels
+### ~~P1~~ — Fix station-name normalization: fact_check kills on GHCN suffix labels — **SHIPPED 2026-05-12 (PR #82)**
 
 **Observed:** 2026-05-12 — "Paddock Lake 4 Ne" (Wisconsin) and "Sioux City Ang" (Iowa)
 both produce BUNDLE_FACT kills every run because `normalize_station_name()` strips the
@@ -54,21 +55,17 @@ the same station (once per alerts run). Also observed 2026-05-11 on Sioux City A
 
 **Cycles observed:** May 11, May 12 (2 grading cycles; 5+ individual fact-check kills).
 **Last seen:** 2026-05-12.
-**Proposed fix:** In `src/two_bot/intern.py` GHCN-touching bundle builders
-(`_build_monthly_high_bundle`, `_build_record_bundle`, `_build_all_time_record_bundle`,
-`_build_anomaly_bundle`), apply `normalize_station_name()` to the `where` and
-`station_name` fields in the bundle before they're passed to the writer. Currently
-normalization happens during signal detection but the raw name may survive in the bundle
-struct. Verify all fields the fact-checker inspects use the normalized form. Known issue
-#5 in BRIEFING.md.
 
-**Expected impact:** Unlocks all monthly_record and record drafts for GHCN stations with
-direction/distance suffixes. Paddock Lake alone fires 3 fact-check kills per day at the
-current cycle cadence.
+**Resolution:** Root cause was inside `normalize_station_name` itself, not bundle-builder
+plumbing. `_COOP_SUFFIX_RE` required adjacent digit+direction (`1SW`) and missed
+space-separated (`4 NE`). Fixed with `\s*` between digit and direction. Plus new
+`_MILITARY_SUFFIX_RE = r"\s+ANG$"` for the Air National Guard class (covers Sioux City
+ANG). Two regression tests in `tests/test_ghcn.py` cover both failure modes.
 
-**Status:** Ready to implement. Awaiting human greenlight.
+**Status:** SHIPPED in PR #82 (`48ee110`). Awaiting empirical confirmation on the next
+alerts run that BUNDLE_FACT kills on these stations stop firing.
 
-### P2 — Fix fire MW rounding: fact_check kills on decimal truncation
+### ~~P2~~ — Fix fire MW rounding: fact_check kills on decimal truncation — **SHIPPED 2026-05-12 (PR #80)**
 
 **Observed:** 2026-05-11-12 — fact-checker kills fire drafts when writer rounds FRP
 values: 480.34 → 480 (BUNDLE_FACT), 547.92 → 548 (BUNDLE_FACT), 301.55 → 301
@@ -119,8 +116,13 @@ MW" rule; verify the wording still covers FRP-specifically and tighten if it doe
 dying on float-precision mismatch. The fabrication rule (already largely in place via
 #74) prevents the Hoover/Akosombo class entirely.
 
-**Status:** Ready to implement. Bundle-side one-line change in `intern.py` + regression
-test + verify the writer-prompt fabrication rule still applies to FRP comparisons.
+**Status:** SHIPPED in PR #80 (`4677869`). Bundle-side rounding in
+`src/two_bot/intern.py:build_fire_bundle` — both `headline_metric.value` and
+`raw_signal_dump.frp` use `round(fire.frp, 1)`. Five-case regression test in
+`tests/two_bot/test_intern.py::test_build_fire_bundle_rounds_frp_to_one_decimal` covers
+the three production failures (480.34, 547.92, 301.55) plus banker's-rounding edges.
+The writer-prompt no-self-supplied-facility-MW rule landed in PR #74 and remains in
+force. Awaiting empirical confirmation on the next fire-bundle alerts cycle.
 
 ### P3 — Writer fire overcall: add seasonal/calendar context as a verifiable framing
 

@@ -4,7 +4,59 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
-# 2026-05-11/12 — Voice overhaul: Attenborough/Economist + code-side length guardrail
+# 2026-05-12 (late evening) — End-of-day cleanup wave
+
+## Where we landed
+
+`main` is on `48ee110` (PR #82). **894 tests passing** (was 876 at end of 2026-05-10; +18 across today's six PRs). **Open PR count: 5 → 0**. The morning's voice + dashboard + FRP work (next section) shipped; the afternoon revealed every alerts run today (06:40, 10:34, 14:40 UTC) was producing zero drafts because four independent production failures killed every signal. All four fixed in one PR. Plus four stale daily-plan PRs closed without merge, plus PR #72 (mypy ignore-list) finally landed.
+
+## PRs that landed end-of-day
+
+### PR #72 — `BotState` TypedDict + remove three mypy `ignore_errors` overrides (`fa80018`)
+
+Adds `src/state_schema.py` with `BotState` (total=False) + 9 nested TypedDicts mirroring `DEFAULT_STATE`. Flips ~37 signatures in `src/state.py` and ~20 in `src/main.py` from `dict` to `BotState`. Widens `_build_score` / `_compute_total` metric params to `float` (one signature change cascades to ~30 call sites). The `:1000-1200` if-cascade in main is rewritten with distinct per-branch variable names (`ev_mh`, `ev_ml`, …) because mypy couldn't narrow `ev` across mutually-exclusive type assignments. Removes the three `ignore_errors = true` overrides; 147 errors → 0. Adds 3 round-trip regression tests guarding JSON wire format. The `src.voice.generator` override remains (out of scope).
+
+### PR #79 — daily plan refinement 2026-05-12 (revised by Codex review) (`97ecae4`)
+
+Auto-opened daily-plan PR. P2 was originally "round FRP at writer + 0.5 MW tolerance," but Codex caught that the fact-checker has no tolerance rule (claim was inconsistent with the live contract). P2 rewritten to bundle-side rounding, which #80 implements.
+
+### PR #81 — +25 stations closing coverage gaps (`ec2375d`)
+
+Cherry-picked from a 6-day-old branch (PR #29) onto current main as a clean rebase. The original had stale doc commits that would have reverted today's docs sweep. 613 → 638 cities, 179 → 180 countries (+Cyprus). Closes immediate gaps from @extremetemps 2026-05-05 competitive coverage: Japan southern + northern islands, Australia QLD coast + cool side, China north, Cyprus. Plus cold-pole reporters (Verkhoyansk, Oymyakon, Phalodi, Furnace Creek).
+
+### PR #82 — four production fixes in one PR (`48ee110`)
+
+Each issue diagnosed by `gh gist view 06c02c97ffc0d11458687f1ed998d9e5 -f state.json | jq '.suppressions[-N:]'` against the day's three alerts runs:
+
+1. **GHCN station-name regex too tight.** `_COOP_SUFFIX_RE = r"\s+\d+(?:\.\d+)?[NSEW]{1,3}$"` caught `1SW` / `2N` but missed space-separated `4 NE`. `PADDOCK LAKE 4 NE` (Wisconsin) carried unnormalized → BUNDLE_FACT kill every cycle. New regex: `\s+\d+(?:\.\d+)?\s*[NSEW]{1,3}$`. Plus new `_MILITARY_SUFFIX_RE = r"\s+ANG$"` for the Air National Guard suffix class.
+
+2. **Writer JSON-parse failure as `pipeline_error`.** Nettles Is FL calendar_date_low bundle, 3 runs in a row, same `Writer returned invalid JSON` ValueError. Stochastic refusal — a second sampling almost always produces JSON. New `JSON_PARSE_RETRY_BUDGET = 1` inner retry loop in `write_tweet`. Declarative-only feedback per the JSON-contract memory hook. After exhaust, returns `WriterResult(tweet=None, kill_reason=…)` — pipeline no longer crashes.
+
+3. **`ocean_sst: Exceeded 30 redirects`.** climatereanalyzer.org loops requests without a UA into infinite redirects. Added the `theheat-bot` UA already used by `nws_alerts.py`.
+
+4. **`river_gauges: Expecting value: line 1`** (USGS WaterWatch retired). `_fetch_flood_stages` now always returns `{}` on failure; gauge heights still flow, only `above_flood_stage` flag is lost. Replacement endpoint is a follow-up.
+
+5 new `TestJsonParseRetry` tests + 2 station-name normalization regression tests covering the exact production failures.
+
+## Operations cleanup
+
+- **4 stale daily-plan auto-PRs closed without merge** (#37, #49, #59, #66). Each accumulated 5-10 days ago and would have been a backward-revert of today's docs sweep had they been merged.
+- **PR #29 closed via #81 supersession.** The original had stale doc commits; cherry-picked just the data commits.
+- **12 local branches pruned** (merged + stale).
+- **Operator follow-up spec'd:** the daily-plan routine opens a fresh PR each day but never closes the previous one — an AI-PR-hygiene problem, not operator inattention. Routine prompt rewrite drafted: switch to a single long-lived `daily-plan-current` branch + persistent PR. Andrew to paste into Claude routines UI.
+
+## Memory hook added end-of-day
+
+- **AI PR hygiene framing.** Auto-PRs authored by Claude or Codex via the routines UI are AI hygiene, not Andrew's. Stale auto-PRs must not be framed as operator inattention.
+
+## What's left to verify
+
+- **The 18:39 UTC alerts run is the production verification for PR #82.** All four issues should be silent. If any recurs, the relevant `src/data/*.py` or `src/two_bot/writer.py` retry path needs a second look.
+- **First voice-regression nightly on merged voice runs 2026-05-13 09:00 UTC.** Final manual run before close was 12/12 in 1:32.
+
+---
+
+# 2026-05-11/12 (morning + afternoon) — Voice overhaul: Attenborough/Economist + code-side length guardrail
 
 ## Where we landed
 
