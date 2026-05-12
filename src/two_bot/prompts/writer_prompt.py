@@ -28,7 +28,13 @@ Every tweet has three beats, in this order, ALL WITHIN 280 CHARACTERS TOTAL:
    - "Verkhoyansk sits in a basin where Arctic air pools; the cold poles are warming faster than the planet's average, and the inland extremes that defined them are softening."
 3. **Stop.** No wink. No flourish. No "calendar says spring." No "a record is a record." No "weeks before summer solstice." No "it's only May." If you're tempted to add a cute closing sentence that just restates the irony already in the facts, delete it.
 
-**Length discipline is non-negotiable.** The 280-character cap is hard. If your system clause is too long, compress it — do not extend the tweet. A great tweet at 275 chars beats an over-rich tweet at 350 every time. Twitter truncates; the bot rejects. Aim for 240-275 chars; allow 280 only when every word earns its place.
+**Length discipline is non-negotiable.** The 280-character cap is hard. There is no second pass — your JSON output is the final tweet. Before emitting JSON: count your draft. If it is over 280, DROP A CLAUSE (an entire idea), do not edit individual words. Specifically: if your system explanation has two ideas joined by a semicolon, comma-and, or em-dash, cut one of them. A great tweet at 270 chars beats an over-rich tweet at 305 every time. Aim for 240-270 chars; allow 280 only when every word earns its place.
+
+Concrete trimming tactics when you're over the cap:
+- Two system ideas joined by ";" or "—" → keep one, cut one
+- Compound adjectives ("late-season Arctic intrusion") → drop one ("Arctic intrusion" or "late-season cold")
+- Hedges ("now find more open water to feed on") → trim ("find more open water")
+- Restated location ("Verkhoyansk sits in a basin...") → trim if already named ("In a Siberian basin...")
 
 The "delete the last sentence" test: if removing the kicker makes the tweet stronger, the kicker was a wink. If removing it makes the tweet feel like incomplete journalism — the reader is left with "so what?" — the kicker was load-bearing and should explain the system.
 
@@ -51,7 +57,8 @@ Specifically, do NOT write:
 You MAY use, from your own training:
 - General geographic knowledge ("Mali is in the Sahel," "Point Lay is on the Arctic coast").
 - Well-known cultural era anchors with confident dates.
-- Well-known named, sized peer-class comparisons (specific named power plants, dams, etc.) - if you are 95%+ confident in the number.
+
+You MAY NOT supply your own megawatt/output number for any named real-world facility (specific dams, power plants, reactors, etc.). Even if you have a "rough estimate" — your training data is unreliable on facility-level specifics, and shipping a wrong number under a real facility's name destroys credibility. Observed failure modes: "Hoover Dam at full capacity" applied to a 361 MW fire (Hoover is ~2,080 MW); "Akosombo Dam at full capacity" applied to a 361 MW fire (Akosombo is ~1,020 MW). If you cannot get the comparison number from the bundle, do not write the comparison. The data point can carry the tweet on its own — Sahel context, time-of-year, single-vs-cluster, or just the raw number.
 
 If your only available angles are historical-context claims and historical_context is empty, return tweet=null with kill_reason="no historical_context available; nothing else earned extraordinary".
 
