@@ -1,6 +1,14 @@
 # @theheat Future State
 
-Last updated: April 8, 2026
+Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress against plan" below for what's actually shipped since).
+
+## Progress against plan (as of 2026-05-12)
+
+- **Phase 0 (Stabilize production)** — largely shipped. Suppression ledger (#54-#60), source-health visibility (#64, #71), CI on PRs (#56), hermeticity gate (#57), anti-fabrication safety (#58-#60), nightly voice-replay regression (#61), ruff + mypy gates (#62-#63, #72), fact-checker as third boundary (#82). Database migration off Gist *not yet started*; Gist remains the durable state with a `BotState` TypedDict (#72) now enforcing structure in-process.
+- **Phase 1 (Editorial data model)** — partial. Suppression ledger gives us `runs`/`source_runs`/`drafts`/`event_scores` equivalents inside the Gist payload. Event clustering exists per-city; cross-city clustering still aspirational. Multi-source observation persistence still aspirational.
+- **Phase 2 (Generation quality)** — partial. Two-bot pipeline (Sonnet writer + Gemini fact-check, #43) plus the Attenborough/Economist voice direction (#74-#75), code-side length retry + KILL (#76), JSON-parse retry + KILL (#82), bundle-side FRP rounding (#80), and 6 approved exemplars cover the "single-candidate quality" path. Multi-candidate generation + performance-based evals from published tweets still aspirational.
+- **Phase 3 (Dashboard)** — partial. Suppressed tab, Sources tab, refresh feedback (#78) shipped; Editorial Desk / Workbench / Run Center evolution ongoing.
+- **Phase 4 (Visual media)** — not started.
 
 ## Thesis
 

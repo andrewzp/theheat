@@ -1,6 +1,6 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-05-08 (post-port + suppression ledger).
+**Last updated:** 2026-05-12 (post-cleanup wave: writer length + JSON retries, FRP bundle-side rounding, GHCN station-name fix, +25 cities).
 
 A manufacturing-style flowchart showing how climate data becomes a tweet.
 
@@ -9,6 +9,10 @@ Each stage has a specific job; failure at any stage kills the draft rather than 
 **Two-bot writer is live since 2026-05-04** (CHANGELOG 0.2.0.0). The voice generator is no longer reached on any live signal path — Sonnet 4.6 writes every audience-facing tweet, Gemini Flash runs claim extraction + fact-check.
 
 **Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate` | `writer` | `fact_check` | `pipeline_error`) — the dashboard's `Suppressed` tab surfaces them in real time.
+
+**Writer-side guardrails are live since 2026-05-12** (CHANGELOG 0.5.0.0 + 0.5.1.0). The Sonnet writer is wrapped in two retry loops with declarative-only feedback: a **length-cap retry** (#76) reattempts up to 2x if a tweet > 280 chars, then KILLS with `kill_reason`; a **JSON-parse retry** (#82) reattempts 1x if the model returns non-JSON, then KILLS with `kill_reason`. Neither path crashes the pipeline. Twitter never sees over-length or malformed output regardless of model sampling.
+
+**Bundle-side normalization is live since 2026-05-12** (CHANGELOG 0.5.0.0 + 0.5.1.0). FRP gets `round(fire.frp, 1)` in `intern.build_fire_bundle` (#80); GHCN station names get COOP (`4 NE`) + military (`ANG`) suffix stripping in `normalize_station_name` (#82). Bundle becomes the single source of truth so the fact-checker's exact-match contract holds naturally.
 
 ---
 
@@ -25,7 +29,7 @@ flowchart TD
 
     subgraph RAW["RAW MATERIALS — 14 free public data sources"]
         direction TB
-        OM["Open-Meteo<br/>temperature records<br/>613 cities, 179 countries"]:::source
+        OM["Open-Meteo<br/>temperature records<br/>638 cities, 180 countries"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
         NIFC["NIFC WFIGS<br/>US fire complexes<br/>(tier dedup)"]:::source
         NOAACO2["NOAA GML<br/>Mauna Loa CO2<br/>(12/yr cap)"]:::source
@@ -37,7 +41,7 @@ flowchart TD
         ENSO["NOAA CPC<br/>1st of month"]:::source
         MARINE["Open-Meteo Marine<br/>wave heights"]:::source
         COOPS["NOAA CO-OPS<br/>tide gauges"]:::source
-        USGS["USGS Water<br/>river floods"]:::source
+        USGS["USGS Water<br/>river gauges<br/>(flood-stage offline)"]:::source
         OISST["NOAA OISST v2.1<br/>global-mean SST"]:::source
     end
 

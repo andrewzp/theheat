@@ -17,7 +17,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-25 | 7 | 3 | 3 | 1 | 0 | **43%** | ✗ | First post-v2 cycle. Largest single jump. Era anchors landing for the first time. |
 | 2026-04-27 | 11 | 1 | 5 | 1 | 4 | **9%** | ✗ | Regression. Banned-formula opener variants returned via Sonnet rewrite path. Era anchors over-deployed. Plus one political-anchor (Elon, since pruned). Humor-lens evaluation surfaced what's failing. |
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
-| 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). Two-bot pipeline operational (generator.py dead since 2026-05-04) but all drafts killed before pending: station-name normalization kills monthly records (Paddock Lake 4 Ne → fact_check every cycle), fire MW rounding kills fires (480.34→480 BUNDLE_FACT), writer self-kills fires lacking "verified" seasonal context. Plus two infra degradations (ocean_sst redirect loop, river_gauges empty response). Andrew manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer." |
+| 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -31,9 +31,13 @@ Drafts that got rejected, with dates.
 ### 2026-05-12 — Staleness bulk-reject: skipped (0 pending drafts)
 
 **Why:** No pending drafts in queue; nothing to evaluate for staleness. Gist write not
-attempted. Note for operator: `ocean_sst` source is failing with "Exceeded 30 redirects"
-on every run today; `river_gauges` is returning empty responses. Neither is blocking but
-both sources are producing zero signals. The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section logs the rejection EVENT (when, why, count) so the operational history is traceable.
+attempted. Operator note resolved end-of-day 2026-05-12: both source degradations
+(`ocean_sst` infinite redirects, `river_gauges` empty responses) are now fixed in PR #82
+(User-Agent header + graceful degradation respectively). The four classes of writer/fact-
+check kills that produced 0 drafts today are also addressed (PR #82 station-name regex,
+PR #80 FRP bundle-side rounding, PR #76 length retry + KILL, PR #82 JSON-parse retry +
+KILL). The texts and full grading commentary live in `docs/DRAFT_CORPUS.md`. This section
+logs the rejection EVENT (when, why, count) so the operational history is traceable.
 
 ### 2026-04-26 — Bulk-reject 14 stale pending drafts
 

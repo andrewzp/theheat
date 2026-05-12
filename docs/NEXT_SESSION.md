@@ -1,10 +1,23 @@
 # Start-of-Session Brief
 
+> **STALE — use [`NEXT_SESSION_PROMPT_2026-05-12-v2.md`](NEXT_SESSION_PROMPT_2026-05-12-v2.md) instead.**
+>
+> The 2-minute re-entry doc has moved to the dated prompt above (written end-of-day 2026-05-12 after the cleanup wave). This file's body below is a snapshot from 2026-04-29 — preserved for historical context only, not for actual re-entry.
+>
+> Order of reads on a new session:
+> 1. `docs/NEXT_SESSION_PROMPT_2026-05-12-v2.md` — current pointer with First-5-minutes orient block
+> 2. `BRIEFING.md` (root) — full state of the project
+> 3. `docs/SESSION_BRIEF.md` — recent sessions, newest at top
+
+---
+
+## Historical snapshot (2026-04-29)
+
 **Written:** 2026-04-29 after voice engine v3 ship (era-anchor parking + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite).
 
-**Status going in:** 566 tests green on `main`. Posting paused (Apr 12 was last post, deliberate quality pause). Pending queue: ask first — bulk-rejected after Apr 29 grading.
+**Status going in (at the time):** 566 tests green on `main`. Posting paused (Apr 12 was last post, deliberate quality pause). Pending queue: ask first — bulk-rejected after Apr 29 grading.
 
-This is the 2-minute re-entry doc. If you want what just happened, read `docs/SESSION_BRIEF.md`. If you want the deeper state, read `BRIEFING.md`.
+The historical content below is from before the two-bot writer + suppression ledger + Attenborough/Economist voice + writer guardrails landed. Do not treat as current state.
 
 ---
 
