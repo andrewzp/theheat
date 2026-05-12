@@ -105,10 +105,74 @@ of the prompt. Voice-regression went 12/12 green on the final state.
   voice. Marked status=rejected with kill_stage=manual_editorial via
   `state.write_state()` (race-safe through `_merge_state`).
 
+### Added (afternoon — dashboard UX + FRP rounding)
+
+- **Dashboard refresh-button feedback (#78).** Andrew reported "when I
+  click refresh on the dashboard it doesn't look like anything
+  happens." The button was functionally fine — all 5 API calls were
+  firing in ~60ms — but gave zero UI signal. Three new states wired
+  into `fetchData` in `dashboard/app/page.js`:
+  - `refreshing` (boolean) — true while any of the 5 parallel fetches
+    is in-flight. Drives button label "refresh" → "refreshing…",
+    disables the button, tints it the brand orange so the click is
+    visibly acknowledged. Also prevents double-fire on rapid clicks.
+  - `lastUpdated` (ISO string) — set on every successful run.
+    Renders as "updated 5s ago" next to the button using the existing
+    `timeAgo()` helper. Makes unchanged-data refreshes visibly
+    successful (the relative timestamp ticks) and surfaces the
+    auto-refresh interval to the operator.
+  - `refreshError` (string | null) — surfaces network/parse failures
+    as an orange "refresh failed" pill with the error in the title
+    attribute (hover tooltip). Replaces the silent `console.error`
+    path that was the original bug's root cause.
+
+  CSS: new `.refresh-group` flex container, `min-width: 96px` on the
+  button to prevent layout shift between the two labels,
+  `.refresh-btn.is-refreshing` overrides the disabled-opacity so the
+  brand orange remains saturated. 16 existing dashboard tests still
+  pass; no API-contract changes.
+
+- **Fire FRP rounded to 1 decimal at the bundle builder (#80).** NASA
+  FIRMS returns FRP at two-decimal precision (e.g. `480.34 MW`). The
+  fact-check prompt (`src/two_bot/prompts/fact_check_prompt.py` line
+  9) requires exact numerical match — *"Verify exact match (number,
+  unit, date). Mismatches = failure."* — with no tolerance rule.
+  Writer rounding `480.34 → "480 MW"` produced BUNDLE_FACT kills on
+  three fires in two cycles (480.34 → 480, 547.92 → 548,
+  301.55 → 301; all BUNDLE_FACT). Fix: round at the bundle builder,
+  not at the writer. `src/two_bot/intern.py:build_fire_bundle` now
+  computes `frp_rounded = round(fire.frp, 1)` and uses it for both
+  `headline_metric.value` and `raw_signal_dump.frp` so every
+  consumer of the bundle sees the same 1-decimal value. The bundle
+  becomes source-of-truth; writer naturally echoes the clean value;
+  fact-checker confirms exact match.
+
+  **Codex saved us from the wrong fix.** The original P2 proposal in
+  `docs/IMPROVEMENT_PLAN.md` would have added a writer-prompt rule
+  claiming a "±0.5 MW tolerance" the live fact-checker does not have.
+  Codex caught the contradiction in review on PR #79. The plan was
+  rewritten (commit `dcc6848` on the daily-plan-2026-05-12 branch)
+  and implemented per the corrected design. See memory hook
+  [feedback_prompt_json_contract](memory/feedback_prompt_json_contract.md)
+  for the related "don't paper over runtime contracts with prose"
+  pattern.
+
+  Regression test in `tests/two_bot/test_intern.py` exercises five
+  representative cases:
+  - 480.34 → 480.3 (production failure)
+  - 547.92 → 547.9 (production failure)
+  - 361.0 → 361.0 (already-clean values pass through)
+  - 250.05 → 250.1 (Python banker's rounding)
+  - 1000.999 → 1001.0 (full carry)
+
+  Asserts both `headline_metric.value` and `raw_signal_dump.frp` so
+  consumers can't drift apart.
+
 ### Verification
 
-- `python -m pytest tests/ -m "not voice_replay"` — **883 passed**
-  (876 baseline + 7 new TestLengthRetry tests).
+- `python -m pytest tests/ -m "not voice_replay"` — **884 passed**
+  (876 baseline + 7 new TestLengthRetry tests in #76, + 1 new
+  test_build_fire_bundle_rounds_frp_to_one_decimal in #80).
 - `python -m mypy src/` — clean (with the voice.generator override
   still in place per #63; mypy overrides for src.main, src.state,
   src.editorial.scoring remain pending merge of #72).
@@ -117,6 +181,9 @@ of the prompt. Voice-regression went 12/12 green on the final state.
   times before final commit (each iteration caught a different
   failure mode that informed the next iter); #75 ran 1x green; #76
   ran 1x green. Final state on main: **12/12 fixtures pass**.
+- Dashboard: 16 existing tests pass through #78 (no API-contract
+  changes); manual browser verification of idle / refreshing / error
+  states with `gstack-browse` tool.
 
 ### Open follow-ups
 

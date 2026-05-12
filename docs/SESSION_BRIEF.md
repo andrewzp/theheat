@@ -59,6 +59,32 @@ Probability math: at worst p=0.2 per-call, p³ = 0.8%. At post-#75 baseline p≈
 
 Voice-regression ran green 12/12 in 1:32 on this PR.
 
+### PR #78 — dashboard refresh-button feedback (`77ad753`)
+
+Andrew reported "when I click refresh on the dashboard it doesn't look like anything happens." Verified in the browser: the click WAS firing all 5 API calls (state, drafts, suppressions, config, source-health) in ~60ms and state WAS updating — the button just gave zero UI signal. Three new states in `fetchData`:
+
+- `refreshing` (boolean) — drives button label "refresh" → "refreshing…", disables the button, tints orange. Also prevents double-fire.
+- `lastUpdated` (ISO string) — renders "updated 5s ago" via the existing `timeAgo()` helper. Makes unchanged-data refreshes visibly successful.
+- `refreshError` (string | null) — surfaces failures as an orange "refresh failed" pill with the error in the title attribute. Replaces the silent `console.error` path.
+
+`min-width: 96px` on the button prevents layout shift between the two labels. 16 existing dashboard tests still pass.
+
+### PR #80 — fire FRP rounded at the bundle builder (`4677869`)
+
+NASA FIRMS returns FRP at two-decimal precision (e.g. `480.34 MW`). Fact-check prompt requires exact match — *"Verify exact match (number, unit, date). Mismatches = failure."* No tolerance rule. Writer rounding `480.34 → "480 MW"` produced BUNDLE_FACT kills on three fires across two cycles (480.34 → 480, 547.92 → 548, 301.55 → 301).
+
+**Codex saved us from the wrong fix.** The original P2 proposal in `docs/IMPROVEMENT_PLAN.md` would have added a writer-prompt rule claiming a ±0.5 MW tolerance the live fact-checker doesn't have. Codex caught it on PR #79. Plan rewritten (commit `dcc6848`) and implemented as a one-line bundle-side change:
+
+```python
+# src/two_bot/intern.py:build_fire_bundle
+frp_rounded = round(fire.frp, 1)
+# headline_metric.value AND raw_signal_dump.frp use frp_rounded
+```
+
+Bundle becomes source-of-truth at 1-decimal precision; writer naturally echoes; fact-checker confirms exact match. Five-case regression test in `test_intern.py` covers the three production failures plus banker's-rounding edges.
+
+Tests: 884 passing.
+
 ## Editorial work that landed alongside
 
 - **Killed draft #156 Mankato** (manual editorial). The pending draft was a 0.1°C tied May record in a 16yr archive with a defensive "A record is a record." closer — didn't clear the editorial bar set by the new voice. Marked status=rejected via `state.write_state()` (race-safe through `_merge_state`).
@@ -67,8 +93,10 @@ Voice-regression ran green 12/12 in 1:32 on this PR.
 
 - **PR #72 (mypy ignore-list removal via BotState TypedDict)** — OPEN, CI green, ready to merge. Adds `src/state_schema.py` with a `BotState` TypedDict + propagates annotations through state.py / main.py / scoring.py / synthesis.py / two_bot pipeline. 147 previously-hidden errors → 0. Includes a `TestBotStateSchemaRoundTrip` to guard against future drift between `DEFAULT_STATE` and `BotState`. Worth a quick review and merge.
 - **PR #73 (auto-opened daily-plan refinement 2026-05-11: 8 drafts, 12.5% A-rate)** — proves yesterday's grading-agent routine repair is working. Review when ready.
+- **PR #79 (auto-opened daily-plan refinement 2026-05-12: 0 drafts)** — the doc has been revised in `dcc6848` after Codex feedback; P2 (FRP rounding) is implemented and merged via #80, so the plan's status note can be updated next pass. Other priorities in #79 (P1 station-name normalization, P3 seasonal/calendar context, P4 Wodehouse rule for the new prompt) are still untouched.
 - **Pending drafts #154 (Imperial) and #158 (Point Lay)** — still have wink-kicker text from the old prompt. Decision pending: kill them so the next bot.yml run regenerates under the new voice, or let them sit and compare side-by-side as new drafts come in.
-- **Dashboard QA started but not finished** — local dev server (`:3030`) confirmed the dashboard renders cleanly with dark monospace aesthetic, 5 tabs (Dashboard / Pipeline / Workbench / Suppressed / Sources). Did not complete per-tab exploration before the session pivoted to docs sweep. Dashboard URL updated: was `dashboard-phi-beryl-65.vercel.app`, now `dashboard-andrew-puschels-projects.vercel.app`.
+- **Dashboard QA NOT FINISHED.** The refresh button is now fixed (#78), and a partial QA pass confirmed the dashboard renders cleanly (dark monospace, 5 tabs). Per-tab exploration (Pipeline / Workbench / Suppressed / Sources) still pending. Dashboard URL: `https://dashboard-andrew-puschels-projects.vercel.app` (HTTP Basic Auth from Vercel env). Local dev: `cd dashboard && npx next dev -p 3030`.
+- **Watch the next bot.yml alerts run.** With #80 merged, fire drafts should start surviving the fact-checker on FRP precision. The next cron will tell us whether other BUNDLE_FACT classes are still killing (e.g. station-name normalization per PR #79's P1).
 
 ## Defense-in-depth state (post-today)
 
@@ -79,7 +107,9 @@ writer-side length retry + hard kill (#76)  ← NEW: code-side guarantee
   ↓
 inline safety regex (#60) + precision tuning (#67/#68)
   ↓
-fact-check (existing)
+bundle-side FRP rounding (#80)  ← NEW: source-of-truth precision normalization
+  ↓
+fact-check (existing — exact match contract preserved)
   ↓
 post-time safety regex (existing)
   ↓

@@ -1,6 +1,6 @@
-# Resume @theheat — Next Session Prompt (written 2026-05-12)
+# Resume @theheat — Next Session Prompt (written 2026-05-12, revised end-of-day after PRs #78 + #80)
 
-You are picking up work on the @theheat climate Twitter bot. This brief is dated **2026-05-12**; the next scheduled validation event is the **2026-05-13 09:00 UTC voice-regression cron** (first nightly run against main since the voice-overhaul session). Before doing anything else, run the **First 5 minutes** block below to ground yourself in current state.
+You are picking up work on the @theheat climate Twitter bot. This brief is dated **2026-05-12**; the next scheduled validation events are the **2026-05-13 09:00 UTC voice-regression cron** (first nightly run against the new voice prompt + length retry) and the **next bot.yml alerts cron** (first run with the FRP rounding fix from #80 — fire drafts should now survive fact-check on decimal-precision mismatch). Before doing anything else, run the **First 5 minutes** block below to ground yourself in current state.
 
 ---
 
@@ -40,10 +40,10 @@ mypy src/ 2>&1 | tail -1
 ```
 
 Expected (if nothing regressed since 2026-05-12):
-- `main` HEAD is `7542728` (PR #76) or newer
+- `main` HEAD is `4677869` (PR #80) or newer
 - Voice-regression 2026-05-13 09:00 UTC: **12 passed**. If it failed, the most likely fixture is `sissonville_monthly_low_bundle` or `verkhoyansk_monthly_high_bundle` — the retry guardrail should have absorbed transient overlong drafts (p³ ≈ 0.01%), but watch for `kill_reason` mentioning "writer produced over-280-char tweets across 3 attempts" which would mean the writer is consistently producing oversized tweets on that fixture and needs a fresh exemplar.
-- bot.yml runs: all SUCCESS
-- 883 tests passing, lint + mypy clean
+- bot.yml runs: all SUCCESS. **Watch the first alerts run with PR #80 merged** — fire drafts should now survive the fact-checker on FRP precision (BUNDLE_FACT kills on `480.34 → 480` should be gone). If fire drafts still kill, classify: other BUNDLE_FACT class (likely station-name normalization per PR #79's P1), or WORLD_KNOWLEDGE class (named-facility fabrication should already be banned by #74's HARD RULE).
+- 884 tests passing, lint + mypy clean
 - 7 pending drafts (was 8 before #156 Mankato was killed)
 
 ---
@@ -52,18 +52,20 @@ Expected (if nothing regressed since 2026-05-12):
 
 Read these in order. They build on each other.
 
-1. **`BRIEFING.md`** — project front matter. Top section reflects today's voice overhaul + length-retry guardrail. Latest commits, test count (883), open PRs (#72 mypy, #73 daily-plan).
-2. **`docs/SESSION_BRIEF.md`** — top section is **2026-05-11/12 — Voice overhaul: Attenborough/Economist + code-side length guardrail**. Read at least that section.
+1. **`BRIEFING.md`** — project front matter. Top section reflects today's voice overhaul + dashboard refresh fix + FRP rounding. Latest commits, test count (884), open PRs (#72 mypy, #73 daily-plan-05-11, #77 this docs sweep, #79 daily-plan-05-12).
+2. **`docs/SESSION_BRIEF.md`** — top section is **2026-05-11/12 — Voice overhaul: Attenborough/Economist + code-side length guardrail + dashboard refresh + FRP rounding**. Read at least that section.
 3. **`CHANGELOG.md`** — most recent entry is `[0.5.0.0] - 2026-05-12`.
 
 Key facts:
 
 - **Voice rewritten.** The writer prompt at `src/two_bot/prompts/writer_prompt.py` is now anchored to **David Attenborough or The Economist**: report the precise data, name the system that produces it, stop. No wink-kickers ("It's May.", "Calendar says spring.", "A record is a record." — banned by *shape* not just literal phrase). No self-supplied facility MW comparisons (after observed Hoover Dam + Akosombo Dam fabrications). 6 approved exemplars are in the prompt.
 - **Code-side 280-char guarantee.** `write_tweet()` retries up to 2x if the model returns >280 chars (declarative feedback in user prompt). After 3 failed attempts, returns KILL with explicit `kill_reason`. **Twitter never sees a >280-char string from this pipeline** regardless of model stochasticity. Cost: ~$0.30/voice-regression run extra.
+- **Fire FRP rounded at the bundle (NEW 2026-05-12 afternoon).** `src/two_bot/intern.py:build_fire_bundle` now does `round(fire.frp, 1)` for both `headline_metric.value` and `raw_signal_dump.frp`. Closes the BUNDLE_FACT kill class where writer rounding `480.34 → 480` mismatched the raw bundle value. The fact-check prompt still enforces exact match — the fix puts the normalized value upstream so exact match holds naturally. Codex on PR #79 caught the original "writer-side rule + claimed tolerance" plan as internally inconsistent (no tolerance in the live fact-checker); revised plan + implementation is in #80.
+- **Dashboard refresh button now gives feedback (NEW 2026-05-12 afternoon).** Was silently doing the right thing (5 API calls firing in ~60ms) but the button stayed labeled "refresh" the whole time and errors went to `console.error`. PR #78 added three states: `refreshing` (drives "refreshing…" label + disabled + orange tint), `lastUpdated` (renders "updated 5s ago"), `refreshError` (orange "refresh failed" pill with hover-tooltip error). Live on Vercel after deploy.
 - **Pending drafts may still have old-voice wink-kickers.** Drafts #154 (Imperial: "weeks before summer solstice") and #158 (Point Lay: "The calendar says spring.") were generated under the *old* prompt. They're still in the pending queue as of session end. Decision deferred: kill them so the next bot.yml run regenerates under the new voice, or let them ship and let Andrew compare.
-- **Dashboard URL changed.** Was `dashboard-phi-beryl-65.vercel.app`, now `dashboard-andrew-puschels-projects.vercel.app`. Both return 401 (HTTP Basic Auth). Credentials live in Vercel env vars (`DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`); not in repo. For local dev: `cd dashboard && npx next dev -p 3030` runs on 3030 without auth (dev-mode bypass when env vars are empty).
-- **Dashboard QA started but not finished.** A `/qa` session opened the dashboard locally and confirmed it renders cleanly (dark monospace, 5 tabs: Dashboard / Pipeline / Workbench / Suppressed / Sources, with refresh + Generate Drafts + Compose Tweet sections). Per-tab exploration was not completed before the session pivoted to docs sweep. Resume with `/qa the dashboard` when ready.
-- **Memory hook added 2026-05-12:** [feedback_prompt_json_contract](../memory/feedback_prompt_json_contract.md) — when a prompt requires strict-JSON output, **imperative process language** ("count chars, identify clause, remove, recount, repeat") leaks into the response as reasoning text *before* the JSON, breaking the parser. Keep all guidance **declarative** ("aim for 240-270 chars", "drop a clause if your first draft is over") rather than imperative ("count, identify, remove, recount, repeat"). The iter-4 PR-#74 trap was diagnosed here; the lesson lives in memory.
+- **Dashboard URL.** `https://dashboard-andrew-puschels-projects.vercel.app` (HTTP Basic Auth — credentials in Vercel env vars `DASHBOARD_USERNAME` / `DASHBOARD_PASSWORD`, not in repo). For local dev: `cd dashboard && npx next dev -p 3030` (3030 without auth — dev-mode bypass when env vars are empty).
+- **Dashboard QA partial.** Refresh button is now fixed (#78). Dashboard verified to render cleanly (dark monospace, 5 tabs: Dashboard / Pipeline / Workbench / Suppressed / Sources). Per-tab exploration (Pipeline / Workbench / Suppressed / Sources) was not completed. Resume with `/qa the dashboard` when ready.
+- **Memory hook added 2026-05-12:** [feedback_prompt_json_contract](../memory/feedback_prompt_json_contract.md) — when a prompt requires strict-JSON output, **imperative process language** ("count chars, identify clause, remove, recount, repeat") leaks into the response as reasoning text *before* the JSON, breaking the parser. Keep all guidance **declarative**. The iter-4 PR-#74 trap and the original P2 IMPROVEMENT_PLAN text both fell into this trap; both were caught by external review (voice-regression + Codex respectively).
 
 ---
 
@@ -117,9 +119,23 @@ Options:
 
 Andrew's preference last session leaned toward letting them ride and comparing voices side-by-side. Defer until he weighs in.
 
-### 3. Finish the dashboard QA
+### 3. Watch the first bot.yml alerts run after #80 merged
 
-Resume the QA session that pivoted to docs sweep. The dashboard at `https://dashboard-andrew-puschels-projects.vercel.app` was confirmed loading cleanly on local dev (`localhost:3030`). Per-tab exploration not done. To resume:
+PR #80 rounded fire FRP at the bundle so the writer naturally echoes the bundle's 1-decimal value and the fact-checker confirms exact match. The class of BUNDLE_FACT kills on `480.34 → 480` should be gone. Check the next alerts run:
+
+```bash
+gh run list --workflow=bot.yml --limit 3 --json conclusion,createdAt
+gh gist view 06c02c97ffc0d11458687f1ed998d9e5 -f state.json | jq '.suppressions | map(select(.stage == "fact_check")) | sort_by(.ts) | .[-5:] | map({ts, summary, score_total})'
+```
+
+If fire drafts still kill at fact_check, classify the failure:
+- **BUNDLE_FACT on station-name** — PR #79's P1 (apply `normalize_station_name()` to bundle fields in `src/two_bot/intern.py` GHCN builders). Different fix from #80.
+- **WORLD_KNOWLEDGE on named-facility comparison** — writer is fabricating again despite #74's ban. Tighten the prompt's HARD RULE.
+- **Other category** — investigate.
+
+### 4. Finish the dashboard QA
+
+The refresh button is now fixed (#78). Per-tab exploration is still incomplete (Pipeline / Workbench / Suppressed / Sources). To resume:
 
 ```bash
 cd dashboard && (npx next dev -p 3030 > /tmp/dashboard.log 2>&1 &) && sleep 6
@@ -128,19 +144,22 @@ cd dashboard && (npx next dev -p 3030 > /tmp/dashboard.log 2>&1 &) && sleep 6
 
 Per `/qa` Standard tier: fix critical + high + medium issues with atomic commits; mark low as deferred. WTF-likelihood self-regulation applies.
 
-### 4. Coverage gap for Southern Africa (carry-forward from 2026-05-11 review)
+### 5. Implement remaining IMPROVEMENT_PLAN items from PR #79
+
+The 2026-05-12 grading agent revised the plan in commit `dcc6848`. P2 (FRP rounding) is merged via #80. Other priorities still open:
+- **P1: station-name normalization in GHCN bundles.** `_build_monthly_high_bundle`, `_build_record_bundle`, `_build_all_time_record_bundle`, `_build_anomaly_bundle` in `src/two_bot/intern.py` — apply `normalize_station_name()` to `where` and `station_name` fields before bundle hits the writer. Suffixes like "Paddock Lake 4 Ne" survive into fact-check today and BUNDLE_FACT-kill.
+- **P3: seasonal/calendar context as a verifiable framing for fires.** Writer kills fire drafts citing "no historical_context; no peer comparison; no verifiable seasonal or rarity framing." But "The burning season in [region] peaks in [month]" is world-knowledge-level. One paragraph addition to the writer prompt's fire framing section.
+- **P4: Wodehouse rule for the new prompt.** Already partially landed in the Attenborough/Economist voice (no winks, no flourishes). Worth a pass to verify the explicit rule lives at the top of the new prompt.
+
+### 6. Coverage gap for Southern Africa (carry-forward from 2026-05-11 review)
 
 When Andrew was reviewing the morning's tweet drafts on 2026-05-11, he flagged a Mozambique 38°C event (Chitima, Caia, Inhambane) that our bot didn't capture. We monitor 4 Mozambique cities (Beira, Maputo, Matola, Nampula) but not the three the @extremetemps account flagged. Inhambane is a ~80k-pop coastal city — real gap.
 
 Scope: add Inhambane MZ + 4-6 other Southern Africa cities in the GFS-red anomaly band (Polokwane SA, Bulawayo ZW, etc.) to `data/cities.csv`. Cost ~$0 (Open-Meteo is free, marginal API calls negligible). Worth a small PR.
 
-### 5. Investigate low signal-detection rate
+### 7. Investigate low signal-detection rate
 
 Latest alerts run (2026-05-11 21:20 UTC) saw only **2 open_meteo extreme signals** across 613 cities. That's low for a continental-scale anomaly day (the North America dipole was active and several other regions were running hot). Either threshold tuning is too strict, the data fetch is partial, or this is an off-day. Worth a half-hour investigation.
-
-### 6. Mypy ignore-list reduction (resolved once PR #72 merges)
-
-Will be closed automatically by #2 above.
 
 ---
 
