@@ -236,7 +236,7 @@ After review and selection of one direction:
 
 ## Working notes for the designer
 
-- The current dashboard at `https://dashboard-phi-beryl-65.vercel.app` is auth-protected (passphrase: `testtest`). Worth seeing the existing surface before redesigning.
+- The current dashboard at `https://dashboard-andrew-puschels-projects.vercel.app` is auth-protected (HTTP Basic Auth — credentials in Vercel env). Worth seeing the existing surface before redesigning.
 - The voice work and corpus grading are very active — the dashboard should anticipate that future versions will surface `docs/DRAFT_CORPUS.md` content and signal trends, even if Phase 3 doesn't build those views yet.
 - The bot's brand promise is *clear AND compelling* (per messaging architecture). Both halves matter. Don't sacrifice density for prettiness; don't sacrifice approachability for density.
 - The single-operator context means we can lean into power-user density. We're not training new users.
