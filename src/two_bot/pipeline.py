@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.data.firms import FireEvent
+from src.state_schema import BotState
 from src.two_bot import claim_extractor, fact_check, memory, writer
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.types import StoryBundle
@@ -11,7 +12,7 @@ from src.voice.safety import run_safety_pipeline
 
 def generate_draft(
     bundle: StoryBundle,
-    state: dict,
+    state: BotState,
     *,
     result_out: dict | None = None,
 ) -> dict | None:
@@ -110,7 +111,7 @@ def generate_draft(
 
 def generate_fire_draft(
     fire: FireEvent,
-    state: dict,
+    state: BotState,
     *,
     result_out: dict | None = None,
 ) -> dict | None:
@@ -131,7 +132,7 @@ def generate_fire_draft(
     return draft
 
 
-def generate_shadow_draft(bundle: StoryBundle, state: dict) -> dict | None:
+def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
     """Run the writer + fact-check stages WITHOUT recording memory.
 
     Used for the shadow A/B experiment: the live tweet is still produced by

@@ -4,9 +4,18 @@ from copy import deepcopy
 import json
 import os
 from datetime import UTC, date, datetime, timedelta
+from typing import cast
 
 import requests
 
+from src.state_schema import (
+    BotState,
+    DroughtSnapshot,
+    MemoryState,
+    OceanSSTStreak,
+    RecordStreakEntry,
+    SynthesisComponents,
+)
 from src.storage import sqlite_store
 from src.two_bot.json_utils import json_default
 
@@ -16,7 +25,7 @@ STATE_FILENAME = "state.json"
 STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
 DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
 
-DEFAULT_STATE = {
+DEFAULT_STATE: BotState = {
     "last_hot10": {"date": None, "cities": []},
     "streaks": {},
     "posted_events": [],
@@ -93,12 +102,12 @@ class StateReadError(RuntimeError):
     """Raised when a configured durable backend cannot be read safely."""
 
 
-def _fresh_state() -> dict:
+def _fresh_state() -> BotState:
     """Return an isolated copy of the default state."""
     return deepcopy(DEFAULT_STATE)
 
 
-def get_memory(state: dict) -> dict:
+def get_memory(state: BotState) -> MemoryState:
     """Return state memory, backfilled with the current first-build schema."""
 
     default_memory = deepcopy(DEFAULT_STATE["memory"])
@@ -106,24 +115,27 @@ def get_memory(state: dict) -> dict:
     if not isinstance(current, dict):
         current = {}
         state["memory"] = current
+    # Iteration uses runtime keys; widen to plain dict so TypedDict's
+    # literal-key restriction on setdefault doesn't apply during backfill.
+    current_writeable: dict = cast(dict, current)
     for key, value in default_memory.items():
-        current.setdefault(key, value)
+        current_writeable.setdefault(key, value)
     return current
 
 
-def set_memory(state: dict, memory: dict) -> dict:
+def set_memory(state: BotState, memory: MemoryState | dict) -> BotState:
     """Replace state memory after backfilling the first-build schema."""
 
-    state["memory"] = deepcopy(memory) if isinstance(memory, dict) else {}
+    state["memory"] = cast(MemoryState, deepcopy(memory) if isinstance(memory, dict) else {})
     get_memory(state)
     return state
 
 
-def _normalize_state(state: dict | None) -> dict:
+def _normalize_state(state: BotState | dict | None) -> BotState:
     """Ensure all expected top-level keys exist in the state payload."""
-    normalized = _fresh_state()
+    normalized: BotState = _fresh_state()
     if isinstance(state, dict):
-        normalized.update(state)
+        normalized.update(cast(BotState, state))
     get_memory(normalized)
     return normalized
 
@@ -170,7 +182,7 @@ def _draft_status_rank(draft: dict) -> int:
         "approved": 3,
         "rejected": 2,
         "pending": 1,
-    }.get(draft.get("status"), 0)
+    }.get(draft.get("status") or "", 0)
 
 
 def _draft_recency_key(draft: dict) -> tuple[datetime, int]:
@@ -278,15 +290,15 @@ def _merge_suppressions(current: list[dict], incoming: list[dict], max_items: in
     return ordered[-max_items:]
 
 
-def _merge_memory(current: dict | None, incoming: dict | None) -> dict:
-    base = deepcopy(DEFAULT_STATE["memory"])
+def _merge_memory(current: MemoryState | None, incoming: MemoryState | None) -> MemoryState:
+    base: MemoryState = deepcopy(DEFAULT_STATE["memory"])
     if isinstance(current, dict):
         base.update(deepcopy(current))
-    next_memory = deepcopy(DEFAULT_STATE["memory"])
+    next_memory: MemoryState = deepcopy(DEFAULT_STATE["memory"])
     if isinstance(incoming, dict):
         next_memory.update(deepcopy(incoming))
 
-    merged = deepcopy(DEFAULT_STATE["memory"])
+    merged: MemoryState = deepcopy(DEFAULT_STATE["memory"])
     merged["used_era_anchors"] = _merge_ordered_unique(
         base.get("used_era_anchors", []),
         next_memory.get("used_era_anchors", []),
@@ -349,10 +361,10 @@ def _merge_memory(current: dict | None, incoming: dict | None) -> dict:
     return merged
 
 
-def _merge_state(current: dict | None, incoming: dict | None) -> dict:
+def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
-    merged = _fresh_state()
+    merged: BotState = _fresh_state()
     merged["last_hot10"] = deepcopy(next_state.get("last_hot10", base["last_hot10"]))
     merged["streaks"] = deepcopy(next_state.get("streaks", base["streaks"]))
     merged["posted_events"] = _merge_ordered_unique(
@@ -399,37 +411,39 @@ def _merge_state(current: dict | None, incoming: dict | None) -> dict:
         list(base.get("ice_mass_max_loss", {}).keys())
         + list(next_state.get("ice_mass_max_loss", {}).keys())
     ):
-        a = base.get("ice_mass_max_loss", {}).get(region)
-        b = next_state.get("ice_mass_max_loss", {}).get(region)
-        if a is None:
-            merged["ice_mass_max_loss"][region] = deepcopy(b)
-        elif b is None:
-            merged["ice_mass_max_loss"][region] = deepcopy(a)
+        a_loss = base.get("ice_mass_max_loss", {}).get(region)
+        b_loss = next_state.get("ice_mass_max_loss", {}).get(region)
+        if a_loss is None:
+            assert b_loss is not None  # loop invariant: region in at least one
+            merged["ice_mass_max_loss"][region] = deepcopy(b_loss)
+        elif b_loss is None:
+            merged["ice_mass_max_loss"][region] = deepcopy(a_loss)
         else:
             merged["ice_mass_max_loss"][region] = deepcopy(
-                a if a.get("gt", 0.0) <= b.get("gt", 0.0) else b
+                a_loss if a_loss.get("gt", 0.0) <= b_loss.get("gt", 0.0) else b_loss
             )
     merged["ice_mass_last_milestone"] = {}
     for region in set(
         list(base.get("ice_mass_last_milestone", {}).keys())
         + list(next_state.get("ice_mass_last_milestone", {}).keys())
     ):
-        a = base.get("ice_mass_last_milestone", {}).get(region)
-        b = next_state.get("ice_mass_last_milestone", {}).get(region)
-        if a is None:
-            merged["ice_mass_last_milestone"][region] = b
-        elif b is None:
-            merged["ice_mass_last_milestone"][region] = a
+        a_mil = base.get("ice_mass_last_milestone", {}).get(region)
+        b_mil = next_state.get("ice_mass_last_milestone", {}).get(region)
+        if a_mil is None:
+            assert b_mil is not None  # loop invariant: region in at least one
+            merged["ice_mass_last_milestone"][region] = b_mil
+        elif b_mil is None:
+            merged["ice_mass_last_milestone"][region] = a_mil
         else:
-            merged["ice_mass_last_milestone"][region] = min(a, b)
+            merged["ice_mass_last_milestone"][region] = min(a_mil, b_mil)
     merged["ice_mass_last_seen"] = {}
     for region in set(
         list(base.get("ice_mass_last_seen", {}).keys())
         + list(next_state.get("ice_mass_last_seen", {}).keys())
     ):
-        a = base.get("ice_mass_last_seen", {}).get(region, "")
-        b = next_state.get("ice_mass_last_seen", {}).get(region, "")
-        merged["ice_mass_last_seen"][region] = a if a >= b else b
+        a_seen = base.get("ice_mass_last_seen", {}).get(region, "")
+        b_seen = next_state.get("ice_mass_last_seen", {}).get(region, "")
+        merged["ice_mass_last_seen"][region] = a_seen if a_seen >= b_seen else b_seen
     merged["ice_annual_count"] = {}
     for year in set(
         list(base.get("ice_annual_count", {}).keys())
@@ -495,8 +509,8 @@ def _merge_synthesis_event_list(
 
 
 def _merge_synthesis_components(
-    base: dict | None, incoming: dict | None
-) -> dict:
+    base: SynthesisComponents | None, incoming: SynthesisComponents | None
+) -> SynthesisComponents:
     """Merge synthesis_components preserving cross-run evidence.
 
     - ``fires`` and ``heats`` are per-state lists of events. Dedup by
@@ -505,19 +519,20 @@ def _merge_synthesis_components(
     - ``drought_snapshot`` is a single dict refreshed on each USDM poll.
       Take the one with the later ``updated_at``.
     """
-    b = base or {}
-    n = incoming or {}
-    merged: dict = {"fires": {}, "heats": {}, "drought_snapshot": None}
+    b: SynthesisComponents = base or {}
+    n: SynthesisComponents = incoming or {}
+    merged: SynthesisComponents = {"fires": {}, "heats": {}, "drought_snapshot": None}
 
-    for bucket in ("fires", "heats"):
-        b_bucket = b.get(bucket) or {}
-        n_bucket = n.get(bucket) or {}
-        merged_bucket: dict[str, list[dict]] = {}
+    def _merge_bucket(
+        b_bucket: dict[str, list[dict]], n_bucket: dict[str, list[dict]]
+    ) -> dict[str, list[dict]]:
+        result: dict[str, list[dict]] = {}
         for key in set(list(b_bucket.keys()) + list(n_bucket.keys())):
-            merged_bucket[key] = _merge_synthesis_event_list(
-                b_bucket.get(key), n_bucket.get(key)
-            )
-        merged[bucket] = merged_bucket
+            result[key] = _merge_synthesis_event_list(b_bucket.get(key), n_bucket.get(key))
+        return result
+
+    merged["fires"] = _merge_bucket(b.get("fires") or {}, n.get("fires") or {})
+    merged["heats"] = _merge_bucket(b.get("heats") or {}, n.get("heats") or {})
 
     b_snap = b.get("drought_snapshot")
     n_snap = n.get("drought_snapshot")
@@ -537,8 +552,9 @@ def _merge_synthesis_components(
 
 
 def _merge_synthesis_cooldown(
-    base: dict | None, incoming: dict | None
-) -> dict:
+    base: dict[str, dict[str, str]] | None,
+    incoming: dict[str, dict[str, str]] | None,
+) -> dict[str, dict[str, str]]:
     """Per-rule per-region cooldown. Keep the later fired-at timestamp."""
     b = base or {}
     n = incoming or {}
@@ -555,7 +571,7 @@ def _merge_synthesis_cooldown(
     return merged
 
 
-def _read_gist_state(*, strict: bool = False) -> dict:
+def _read_gist_state(*, strict: bool = False) -> BotState:
     if not GIST_ID and not GITHUB_TOKEN:
         return _fresh_state()
     if not GIST_ID or not GITHUB_TOKEN:
@@ -585,7 +601,7 @@ def _read_gist_state(*, strict: bool = False) -> dict:
     return _fresh_state()
 
 
-def _write_gist_state(state: dict) -> bool:
+def _write_gist_state(state: BotState) -> bool:
     if not GIST_ID or not GITHUB_TOKEN:
         return False
 
@@ -609,7 +625,7 @@ def _write_gist_state(state: dict) -> bool:
         return False
 
 
-def read_state() -> dict:
+def read_state() -> BotState:
     backend = _configured_backend()
     if backend == "sqlite":
         if not DB_PATH:
@@ -617,24 +633,26 @@ def read_state() -> dict:
         try:
             if sqlite_store.is_empty(DB_PATH) and GIST_ID and GITHUB_TOKEN:
                 gist_state = _read_gist_state(strict=True)
-                sqlite_store.write_state(DB_PATH, gist_state)
-            return _normalize_state(sqlite_store.read_state(DB_PATH, DEFAULT_STATE))
+                sqlite_store.write_state(DB_PATH, cast(dict, gist_state))
+            return _normalize_state(sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE)))
         except Exception as exc:
             raise StateReadError(f"Failed to read SQLite state store: {exc}") from exc
     return _read_gist_state(strict=True)
 
 
-def write_state(state: dict) -> bool:
+def write_state(state: BotState) -> bool:
     normalized = _normalize_state(state)
     if _configured_backend() == "sqlite":
         if not DB_PATH:
             return False
         try:
-            current = sqlite_store.read_state(DB_PATH, DEFAULT_STATE)
+            current: BotState | dict = sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE))
         except Exception:
             return False
         try:
-            return sqlite_store.write_state(DB_PATH, _merge_state(current, normalized))
+            return sqlite_store.write_state(
+                DB_PATH, cast(dict, _merge_state(current, normalized))
+            )
         except (TypeError, ValueError):
             return False
     try:
@@ -647,11 +665,11 @@ def write_state(state: dict) -> bool:
         return False
 
 
-def is_duplicate(state: dict, event_id: str) -> bool:
+def is_duplicate(state: BotState, event_id: str) -> bool:
     return event_id in state.get("posted_events", [])
 
 
-def record_event(state: dict, event_id: str) -> dict:
+def record_event(state: BotState, event_id: str) -> BotState:
     state.setdefault("posted_events", []).append(event_id)
     # Keep only last 500 events to prevent unbounded growth
     if len(state["posted_events"]) > 500:
@@ -659,12 +677,12 @@ def record_event(state: dict, event_id: str) -> dict:
     return state
 
 
-def get_daily_count(state: dict) -> int:
+def get_daily_count(state: BotState) -> int:
     today = date.today().isoformat()
     return state.get("daily_tweet_count", {}).get(today, 0)
 
 
-def increment_daily_count(state: dict) -> dict:
+def increment_daily_count(state: BotState) -> BotState:
     today = date.today().isoformat()
     counts = state.setdefault("daily_tweet_count", {})
     counts[today] = counts.get(today, 0) + 1
@@ -675,16 +693,16 @@ def increment_daily_count(state: dict) -> dict:
     return state
 
 
-def check_daily_cap(state: dict, cap: int = 10) -> bool:
+def check_daily_cap(state: BotState, cap: int = 10) -> bool:
     return get_daily_count(state) < cap
 
 
 def update_record_streak(
-    state: dict,
+    state: BotState,
     city: str,
     today_temp_c: float,
     event_date: date | None = None,
-) -> dict:
+) -> BotState:
     """Update the record-breaking streak for a city.
 
     Called when a city has broken its daily calendar-date record.
@@ -730,13 +748,13 @@ def update_record_streak(
     return state
 
 
-def get_record_streak(state: dict, city: str) -> dict | None:
+def get_record_streak(state: BotState, city: str) -> RecordStreakEntry | None:
     """Return current streak info for a city, or None if no active streak."""
     streaks = state.get("record_streaks", {})
     return streaks.get(city)
 
 
-def prune_stale_record_streaks(state: dict, max_gap_days: int = 2) -> dict:
+def prune_stale_record_streaks(state: BotState, max_gap_days: int = 2) -> BotState:
     """Remove streaks that haven't been updated in more than max_gap_days.
 
     Called at the end of each alert cycle to prevent unbounded growth
@@ -758,7 +776,7 @@ def prune_stale_record_streaks(state: dict, max_gap_days: int = 2) -> dict:
     return state
 
 
-def update_ocean_sst_streak(state: dict, streak: dict) -> dict:
+def update_ocean_sst_streak(state: BotState, streak: OceanSSTStreak | dict) -> BotState:
     """Replace the stored ocean SST streak state.
 
     Idempotent: callers always pass the full two-field dict
@@ -772,7 +790,7 @@ def update_ocean_sst_streak(state: dict, streak: dict) -> dict:
     return state
 
 
-def update_streaks(state: dict, hot10_cities: list[str]) -> dict:
+def update_streaks(state: BotState, hot10_cities: list[str]) -> BotState:
     today = date.today().isoformat()
     streaks = state.setdefault("streaks", {})
 
@@ -800,7 +818,7 @@ def update_streaks(state: dict, hot10_cities: list[str]) -> dict:
     return state
 
 
-def log_error(state: dict, source: str, msg: str) -> dict:
+def log_error(state: BotState, source: str, msg: str) -> BotState:
     errors = state.setdefault("errors", [])
     errors.append({
         "source": source,
@@ -867,7 +885,7 @@ def add_source_run(
     return run
 
 
-def update_fire_complex_tier(state: dict, complex_id: str, tier: int) -> dict:
+def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:
     """Record the highest tier we've tweeted for a fire complex.
 
     Takes max so concurrent cron runs don't lose a tier bump.
@@ -879,7 +897,7 @@ def update_fire_complex_tier(state: dict, complex_id: str, tier: int) -> dict:
     return state
 
 
-def finalize_run(state: dict, run: dict, status: str = "success", max_runs: int = 20) -> dict:
+def finalize_run(state: BotState, run: dict, status: str = "success", max_runs: int = 20) -> BotState:
     """Persist a completed run into state history."""
     completed = deepcopy(run)
     completed["status"] = status
@@ -901,19 +919,22 @@ def finalize_run(state: dict, run: dict, status: str = "success", max_runs: int 
 
 
 def record_synthesis_component(
-    state: dict,
+    state: BotState,
     *,
     kind: str,
     region: str,
     event_id: str,
     metadata: dict | None = None,
     timestamp: str | None = None,
-) -> dict:
+) -> BotState:
     bucket_key = "fires" if kind == "fire" else "heats"
-    components = state.setdefault("synthesis_components", {
+    state.setdefault("synthesis_components", {
         "fires": {}, "heats": {}, "drought_snapshot": None
     })
-    bucket = components.setdefault(bucket_key, {}).setdefault(region, [])
+    # Cast to plain dict for runtime-keyed setdefault; SynthesisComponents
+    # restricts keys to literals which doesn't match the conditional above.
+    components_writeable: dict = cast(dict, state["synthesis_components"])
+    bucket = components_writeable.setdefault(bucket_key, {}).setdefault(region, [])
     if any(entry.get("event_id") == event_id for entry in bucket):
         return state
     entry = {
@@ -928,17 +949,17 @@ def record_synthesis_component(
 
 
 def get_synthesis_components(
-    state: dict, *, kind: str, region: str, since: str | None = None,
+    state: BotState, *, kind: str, region: str, since: str | None = None,
 ) -> list[dict]:
     bucket_key = "fires" if kind == "fire" else "heats"
-    components = state.get("synthesis_components") or {}
+    components: dict = cast(dict, state.get("synthesis_components") or {})
     entries = (components.get(bucket_key) or {}).get(region) or []
     if since is None:
         return list(entries)
     return [e for e in entries if e.get("at", "") >= since]
 
 
-def record_synthesis_drought_snapshot(state: dict, updates) -> dict:
+def record_synthesis_drought_snapshot(state: BotState, updates) -> BotState:
     entries = []
     for u in updates or []:
         if hasattr(u, "state"):
@@ -965,13 +986,13 @@ def record_synthesis_drought_snapshot(state: dict, updates) -> dict:
     return state
 
 
-def get_synthesis_drought_snapshot(state: dict) -> dict | None:
+def get_synthesis_drought_snapshot(state: BotState) -> DroughtSnapshot | None:
     components = state.get("synthesis_components") or {}
     return components.get("drought_snapshot")
 
 
 def is_synthesis_on_cooldown(
-    state: dict, rule_name: str, region: str, days: int = 14,
+    state: BotState, rule_name: str, region: str, days: int = 14,
 ) -> bool:
     cooldowns = (state.get("synthesis_cooldown") or {}).get(rule_name) or {}
     last_fired = cooldowns.get(region)
@@ -985,8 +1006,8 @@ def is_synthesis_on_cooldown(
 
 
 def record_synthesis_fired(
-    state: dict, rule_name: str, region: str, timestamp: str | None = None,
-) -> dict:
+    state: BotState, rule_name: str, region: str, timestamp: str | None = None,
+) -> BotState:
     cooldowns = state.setdefault("synthesis_cooldown", {})
     per_rule = cooldowns.setdefault(rule_name, {})
     per_rule[region] = (
@@ -995,11 +1016,12 @@ def record_synthesis_fired(
     return state
 
 
-def prune_stale_synthesis_components(state: dict, ttl_days: int = 14) -> dict:
+def prune_stale_synthesis_components(state: BotState, ttl_days: int = 14) -> BotState:
     cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z")
-    components = state.setdefault("synthesis_components", {
+    state.setdefault("synthesis_components", {
         "fires": {}, "heats": {}, "drought_snapshot": None
     })
+    components: dict = cast(dict, state["synthesis_components"])
     for bucket_key in ("fires", "heats"):
         bucket = components.setdefault(bucket_key, {})
         for region in list(bucket.keys()):
@@ -1016,18 +1038,18 @@ def prune_stale_synthesis_components(state: dict, ttl_days: int = 14) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def increment_data_source_failure(state: dict, source: str) -> int:
+def increment_data_source_failure(state: BotState, source: str) -> int:
     """Increment and return the consecutive failure count for ``source``."""
     failures = state.setdefault("data_source_failures", {})
     failures[source] = failures.get(source, 0) + 1
     return failures[source]
 
 
-def reset_data_source_failure(state: dict, source: str) -> None:
+def reset_data_source_failure(state: BotState, source: str) -> None:
     """Reset the consecutive failure count for ``source`` to 0 on success."""
     state.setdefault("data_source_failures", {})[source] = 0
 
 
-def get_data_source_failure_count(state: dict, source: str) -> int:
+def get_data_source_failure_count(state: BotState, source: str) -> int:
     """Return current consecutive failure count for ``source`` (0 if unknown)."""
     return state.get("data_source_failures", {}).get(source, 0)

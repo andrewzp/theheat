@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from typing import Any
 
 from src import state as state_store
+from src.state_schema import BotState, MemoryState
 from src.two_bot.types import ExtractedClaim, MemorySlice, StoryBundle, WriterResult
 
 _STOPWORDS = {
@@ -122,11 +123,11 @@ def _dedup_append(values: list, value: Any) -> None:
         values.append(value)
 
 
-def _memory(state: dict) -> dict:
+def _memory(state: BotState) -> MemoryState:
     return state_store.get_memory(state)
 
 
-def build_memory_slice(state: dict, bundle: StoryBundle) -> MemorySlice:
+def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     """Assemble the relevant memory for the writer."""
 
     memory = _memory(state)
@@ -205,7 +206,7 @@ def build_memory_slice(state: dict, bundle: StoryBundle) -> MemorySlice:
 
 
 def record_shipped(
-    state: dict,
+    state: BotState,
     bundle: StoryBundle,
     writer: WriterResult,
     extracted: list[ExtractedClaim],
@@ -275,7 +276,7 @@ def record_shipped(
         existing["days_running"] = 1
 
 
-def is_reuse(state: dict, candidate: str, kind: str) -> bool:
+def is_reuse(state: BotState, candidate: str, kind: str) -> bool:
     """Check whether a candidate matches a forever-banned memory element."""
 
     memory = _memory(state)
@@ -299,9 +300,14 @@ def is_reuse(state: dict, candidate: str, kind: str) -> bool:
     if kind not in {"era_anchor", "peer_comparison"}:
         raise ValueError(f"Unsupported reuse kind: {kind}")
 
-    key = "used_era_anchors" if kind == "era_anchor" else "used_peer_comparisons"
+    # Branch on the literal key so MemoryState.get returns the precise
+    # list[str] type instead of widening to object for runtime keys.
+    stored_items: list[str] = (
+        memory.get("used_era_anchors", []) if kind == "era_anchor"
+        else memory.get("used_peer_comparisons", [])
+    )
     candidate_tokens = _tokens(candidate)
-    for stored in memory.get(key, []):
+    for stored in stored_items:
         stored_norm = _normalize(stored)
         if stored_norm and stored_norm in candidate_norm:
             return True

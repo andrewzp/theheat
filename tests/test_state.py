@@ -1076,3 +1076,51 @@ class TestSqliteRoundTripPreservesPythonOnlyKeys:
         assert out["data_source_failures"]["ghcn"] == 2
         assert out["data_source_failures"]["firms"] == 5
         assert out["data_source_failures"]["ocean_sst"] == 1
+
+
+class TestBotStateSchemaRoundTrip:
+    """Wire-format guarantee for the BotState TypedDict.
+
+    TypedDict is erased at runtime, so JSON serialization is unchanged
+    by the schema. But we want a regression test that catches any drift
+    between DEFAULT_STATE and the BotState declaration — if someone
+    adds a key to DEFAULT_STATE but forgets the schema, this test fails.
+    """
+
+    def test_default_state_keys_match_botstate_annotations(self):
+        from src.state import DEFAULT_STATE
+        from src.state_schema import BotState
+
+        assert set(DEFAULT_STATE.keys()) == set(BotState.__annotations__.keys()), (
+            "DEFAULT_STATE and BotState are out of sync — update src/state_schema.py "
+            "whenever you add a top-level key to DEFAULT_STATE in src/state.py"
+        )
+
+    def test_json_round_trip_preserves_schema_shape(self):
+        """Serialize DEFAULT_STATE, deserialize, normalize, and merge —
+        verify no key is lost across the round-trip the durable backend
+        uses (json.dumps with json_default → json.loads → _normalize_state)."""
+        import json
+        from src.state import DEFAULT_STATE, _fresh_state, _merge_state, _normalize_state
+        from src.two_bot.json_utils import json_default
+
+        # Round 1: DEFAULT_STATE → JSON bytes → dict → BotState
+        serialized = json.dumps(DEFAULT_STATE, default=json_default)
+        parsed = json.loads(serialized)
+        normalized = _normalize_state(parsed)
+        assert set(normalized.keys()) == set(DEFAULT_STATE.keys())
+
+        # Round 2: merge empty + parsed (simulates concurrent-writer reconciliation)
+        merged = _merge_state(_fresh_state(), normalized)
+        assert set(merged.keys()) == set(DEFAULT_STATE.keys())
+
+    def test_normalize_state_backfills_partial_payload(self):
+        """Older gist payloads predating recent lane additions must still
+        normalize cleanly. Strip a recent key and confirm _normalize_state
+        backfills the default — guards against total=True regression."""
+        from src.state import DEFAULT_STATE, _normalize_state
+
+        partial = {k: v for k, v in DEFAULT_STATE.items() if k != "ice_annual_count"}
+        normalized = _normalize_state(partial)
+        assert normalized["ice_annual_count"] == {}
+        assert set(normalized.keys()) == set(DEFAULT_STATE.keys())
