@@ -53,9 +53,12 @@ import requests
 # treated the dropped "1SW" as an unverifiable named-entity claim.
 
 # CoCoRaHS-style direction-distance suffix: trailing whitespace +
-# optional decimal number + 1-3 cardinal direction letters. Examples:
-# "1SW", "0.5N", "2NE", "3WSW".
-_COOP_SUFFIX_RE = re.compile(r"\s+\d+(?:\.\d+)?[NSEW]{1,3}$", re.IGNORECASE)
+# optional decimal number + optional whitespace + 1-3 cardinal direction
+# letters. Examples: "1SW", "0.5N", "2NE", "3WSW", "4 NE", "0.5 N".
+# The internal `\s*` between digit and direction handles both adjacent
+# ("1SW") and space-separated ("4 NE") GHCN names; the latter caused
+# the Paddock Lake fact-check kill regression on 2026-05-12.
+_COOP_SUFFIX_RE = re.compile(r"\s+\d+(?:\.\d+)?\s*[NSEW]{1,3}$", re.IGNORECASE)
 
 # Airport suffix: optional "INTL" / "INTERNATIONAL" / "MUNI" / etc.
 # Then "AP" at the end. Examples: "INTL AP", "MUNI AP", "AP".
@@ -63,6 +66,12 @@ _AIRPORT_SUFFIX_RE = re.compile(
     r"\s+(?:INTL|INTERNATIONAL|MUNI|MUNICIPAL|REGIONAL|REGNL|NATIONAL)?\s*AP$",
     re.IGNORECASE,
 )
+
+# Military suffix: GHCN appends "ANG" (Air National Guard) on military
+# weather stations ("SIOUX CITY ANG", "LINCOLN ANG"). Match only when
+# it's a standalone trailing token — `\s+` before guards against false
+# positives on real words ending in "ang" (PENANG, MUSTANG).
+_MILITARY_SUFFIX_RE = re.compile(r"\s+ANG$", re.IGNORECASE)
 
 # Weather Forecast Office prefix: "WFO X Y Z" -> "X Y Z".
 _WFO_PREFIX_RE = re.compile(r"^WFO\s+", re.IGNORECASE)
@@ -149,6 +158,7 @@ def normalize_station_name(raw: str) -> str:
     text = _WFO_PREFIX_RE.sub("", text)
     text = _COOP_SUFFIX_RE.sub("", text)
     text = _AIRPORT_SUFFIX_RE.sub("", text)
+    text = _MILITARY_SUFFIX_RE.sub("", text)
     text = text.strip()
     if not text:
         return raw

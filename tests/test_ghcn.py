@@ -698,6 +698,40 @@ class TestNormalizeStationName:
         assert normalize_station_name("SOMEWHERE 0.5N") == "Somewhere"
         assert normalize_station_name("PLACE 3WSW") == "Place"
 
+    def test_strips_cocorahs_with_space_between_digit_and_direction(self):
+        """Regression for the Paddock Lake fact-check kill (2026-05-12).
+
+        GHCN names sometimes have a space between the distance number and
+        the cardinal direction: "PADDOCK LAKE 4 NE" (Wisconsin). The
+        original COOP regex required digit and direction to be adjacent
+        (matching "1SW") and missed this variant — the bundle then
+        carried 'Paddock Lake 4 Ne' which the writer naturally dropped
+        to 'Paddock Lake', and fact-check killed the BUNDLE_FACT
+        mismatch every single alerts run.
+        """
+        from src.data.ghcn import normalize_station_name
+        # Spaces in the input that the regex must tolerate.
+        assert normalize_station_name("PADDOCK LAKE 4 NE") == "Paddock Lake"
+        assert normalize_station_name("Paddock Lake 4 Ne") == "Paddock Lake"
+        assert normalize_station_name("BIG CITY 12 SSW") == "Big City"
+        # Decimal distance with space.
+        assert normalize_station_name("PLACE 0.5 N") == "Place"
+        # Mixed: existing no-space variant must still strip correctly.
+        assert normalize_station_name("PADDOCK LAKE 4NE") == "Paddock Lake"
+
+    def test_strips_air_national_guard_suffix(self):
+        """GHCN appends 'ANG' (Air National Guard) on military stations
+        (e.g. SIOUX CITY ANG). Same kill class as the COOP suffix —
+        writer drops it, fact-check rejects the mismatch.
+        """
+        from src.data.ghcn import normalize_station_name
+        assert normalize_station_name("SIOUX CITY ANG") == "Sioux City"
+        assert normalize_station_name("LINCOLN ANG") == "Lincoln"
+        # Make sure "RANG" / "WHANG" / other words ending in "ANG" don't
+        # get truncated — the suffix only matches as a standalone trailing token.
+        assert normalize_station_name("MUSTANG") == "Mustang"
+        assert normalize_station_name("PENANG") == "Penang"
+
     def test_strips_airport_suffix(self):
         from src.data.ghcn import normalize_station_name
         assert normalize_station_name("MIAMI INTL AP") == "Miami"

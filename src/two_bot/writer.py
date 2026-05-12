@@ -55,6 +55,15 @@ TWEET_MAX_LENGTH = 280
 # writer call). 3-attempt cap keeps worst-case cost bounded.
 LENGTH_RETRY_BUDGET = 2
 
+# JSON-parse retry budget. Same shape as the length retry. If the model
+# returns empty / non-JSON output (observed 2026-05-12 on the Nettles Is
+# Florida calendar_date_low bundle three runs in a row), retry once with a
+# stronger contract reminder. If that also fails, convert to a clean KILL
+# in WriterResult so the dashboard records a kill_reason instead of the
+# pipeline raising a ValueError. 1 retry is enough because the failure is
+# typically stochastic refusal — a second sampling usually produces JSON.
+JSON_PARSE_RETRY_BUDGET = 1
+
 
 def _bundle_json(bundle: StoryBundle) -> str:
     return json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default)
@@ -176,6 +185,7 @@ def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
     )
 
     last_overlong_tweet: str | None = None
+    last_parse_error: str | None = None
     for attempt in range(LENGTH_RETRY_BUDGET + 1):
         user_prompt = base_user_prompt
         if attempt > 0 and last_overlong_tweet is not None:
@@ -190,8 +200,49 @@ def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
                 f"with kill_reason if no fitting version is possible.]"
             )
 
-        raw = _call_writer_provider(user_prompt)
-        result = _parse_writer_json(raw)
+        # JSON-parse retry loop (inner): if the model returns empty / non-JSON,
+        # retry once before bubbling up. Observed 2026-05-12 on the Nettles Is
+        # Florida calendar_date_low bundle — three runs, same bundle, same
+        # error, pipeline_error each time. A stochastic refusal usually
+        # resolves on a second sampling.
+        result: WriterResult | None = None
+        for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
+            parse_prompt = user_prompt
+            if parse_attempt > 0 and last_parse_error is not None:
+                parse_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"[JSON-output retry: the previous attempt did not return "
+                    f"valid JSON. Return ONLY the JSON object specified by the "
+                    f"system prompt's OUTPUT FORMAT section — no prose before "
+                    f"or after, no markdown fences, no chain-of-thought. If "
+                    f"there is no extraordinary angle, return tweet=null with "
+                    f"a one-line kill_reason.]"
+                )
+            raw = _call_writer_provider(parse_prompt)
+            try:
+                result = _parse_writer_json(raw)
+                break  # parse succeeded — exit inner loop
+            except ValueError as exc:
+                last_parse_error = str(exc)
+                # Fall through to retry; if budget exhausted, return KILL.
+        else:
+            # Inner for-else: budget exhausted without break (no successful parse).
+            return WriterResult(
+                tweet=None,
+                kill_reason=(
+                    f"writer returned invalid JSON across "
+                    f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
+                ),
+                angle_chosen="",
+                era_anchor_used=None,
+                peer_comparison_used=None,
+                reasoning=(
+                    f"json-parse retry exhausted; last error: "
+                    f"{last_parse_error or 'unknown'}"
+                ),
+            )
+
+        assert result is not None  # mypy: the break above guarantees result is set
 
         # Kill or fits — return as-is.
         if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:

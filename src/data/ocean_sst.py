@@ -23,6 +23,12 @@ SST_URL = (
     "oisst2.1_world_sst_day.json"
 )
 
+# ClimateReanalyzer.org redirects requests without a User-Agent header
+# into an infinite loop ("Exceeded 30 redirects" — observed all day
+# 2026-05-12 in production). Sending any non-default UA breaks the loop
+# and returns the JSON cleanly. Match the convention from nws_alerts.py.
+_REQUEST_HEADERS = {"User-Agent": "(theheat-bot, contact@theheat.app)"}
+
 # Fire on the first day of a confirmed streak (day 5, per Hobday et al.
 # 2016 MHW definition), then at each of these milestone day-counts.
 # Past 400: every +50 (see _milestones_up_to).
@@ -168,7 +174,7 @@ def fetch_global_sst(*, strict: bool = False) -> GlobalSSTObservation | None:
     Returns None on any fetch/validation failure unless ``strict=True``.
     """
     try:
-        resp = requests.get(SST_URL, timeout=15)
+        resp = requests.get(SST_URL, timeout=15, headers=_REQUEST_HEADERS)
         resp.raise_for_status()
         payload = resp.json()
     except (requests.RequestException, ValueError) as exc:

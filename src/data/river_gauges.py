@@ -62,7 +62,27 @@ class FloodEvent:
 
 
 def _fetch_flood_stages(*, strict: bool = False) -> dict[str, float]:
-    """Fetch flood stage thresholds for USGS stations."""
+    """Fetch flood stage thresholds for USGS stations.
+
+    **Always returns gracefully, never raises.** The original WaterWatch
+    endpoint (``waterwatch.usgs.gov/webservices/floodstage``) was retired
+    sometime before 2026-05-12 and now 301-redirects without a Location
+    header, returning HTML 'Old Page' text. Without flood-stage thresholds
+    the river-gauge source can still report current gauge heights — just
+    without the "above flood stage" flag. That's strictly less rich but
+    not a runtime failure.
+
+    Previous behavior (raise SourceFetchError in strict mode) killed the
+    entire river_gauges source every alerts run after the endpoint died.
+    Replaced with always-return-empty so the rest of the source keeps
+    working. Finding a replacement URL is tracked as a follow-up.
+
+    The ``strict`` parameter is kept for API symmetry with sibling
+    fetchers and may be used again when a replacement endpoint is wired
+    in. It is currently ignored.
+    """
+    del strict  # see docstring — kept for API symmetry, intentionally unused
+
     try:
         resp = requests.get(
             FLOOD_URL,
@@ -83,9 +103,10 @@ def _fetch_flood_stages(*, strict: bool = False) -> dict[str, float]:
                     continue
         return stages
 
-    except (requests.RequestException, ValueError, KeyError) as exc:
-        if strict:
-            raise SourceFetchError(f"Flood stage fetch failed: {exc}") from exc
+    except (requests.RequestException, ValueError, KeyError):
+        # Endpoint is dead; degrade gracefully. The rest of the river_gauges
+        # source still produces useful output (current gauge heights), just
+        # without the flood-stage threshold comparison.
         return {}
 
 
