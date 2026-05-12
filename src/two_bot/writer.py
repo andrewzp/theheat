@@ -46,6 +46,16 @@ def _resolve_provider(model: str) -> str:
 WRITER_PROVIDER = _resolve_provider(WRITER_MODEL)
 
 
+# Twitter cap. Writer must produce tweets ≤ this many characters.
+TWEET_MAX_LENGTH = 280
+
+# Length-retry budget: 1 initial attempt + N retries. Tuned for ~3 attempts
+# total. With per-call over-length probability p, P(all fail) = p^3, so even
+# at p=0.2 the all-fail rate is ~0.8%. Each retry costs ~$0.07 (Sonnet
+# writer call). 3-attempt cap keeps worst-case cost bounded.
+LENGTH_RETRY_BUDGET = 2
+
+
 def _bundle_json(bundle: StoryBundle) -> str:
     return json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default)
 
@@ -131,27 +141,86 @@ def _call_google(user_prompt: str) -> str:
     return response.text or ""
 
 
+def _call_writer_provider(user_prompt: str) -> str:
+    """Dispatch one writer call to the configured provider. Pure I/O — the
+    retry / length-validation logic in ``write_tweet`` wraps this."""
+    if WRITER_PROVIDER == "anthropic":
+        return _call_anthropic(user_prompt)
+    if WRITER_PROVIDER == "google":
+        return _call_google(user_prompt)
+    raise RuntimeError(f"Unsupported writer provider: {WRITER_PROVIDER}")
+
+
 def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
     """Call the configured writer model and parse a WriterResult.
 
     Signal-agnostic. The bundle's ``signal_kind`` and ``historical_context``
     fields tell the writer what kind of story to compose.
+
+    **Length guarantee.** If the writer returns a tweet over
+    ``TWEET_MAX_LENGTH`` (280) characters, retry up to
+    ``LENGTH_RETRY_BUDGET`` times with explicit length feedback appended to
+    the user prompt. If every retry still overshoots, return a KILL result
+    (tweet=None) with a ``kill_reason`` describing the failure mode. This
+    eliminates over-length drafts at the writer boundary — Twitter never
+    sees a >280-char string from this pipeline, no matter how the model
+    drifts on a given sampling.
     """
 
     if WRITER_PROVIDER == "unsupported_openai":
         raise NotImplementedError("OpenAI writer provider is not implemented")
 
-    user_prompt = WRITER_USER_PROMPT_TEMPLATE.format(
+    base_user_prompt = WRITER_USER_PROMPT_TEMPLATE.format(
         bundle_json=_bundle_json(bundle),
         memory_json=_memory_json(memory),
     )
-    if WRITER_PROVIDER == "anthropic":
-        raw = _call_anthropic(user_prompt)
-    elif WRITER_PROVIDER == "google":
-        raw = _call_google(user_prompt)
-    else:
-        raise RuntimeError(f"Unsupported writer provider: {WRITER_PROVIDER}")
-    return _parse_writer_json(raw)
+
+    last_overlong_tweet: str | None = None
+    for attempt in range(LENGTH_RETRY_BUDGET + 1):
+        user_prompt = base_user_prompt
+        if attempt > 0 and last_overlong_tweet is not None:
+            # Declarative-only feedback — no imperative process steps that
+            # could leak into strict-JSON output (see memory hook
+            # feedback_prompt_json_contract).
+            user_prompt = (
+                f"{base_user_prompt}\n\n"
+                f"[Length retry: a previous attempt produced "
+                f"{len(last_overlong_tweet)} characters. The 280-character cap "
+                f"is hard. Return a shorter tweet that fits, or set tweet=null "
+                f"with kill_reason if no fitting version is possible.]"
+            )
+
+        raw = _call_writer_provider(user_prompt)
+        result = _parse_writer_json(raw)
+
+        # Kill or fits — return as-is.
+        if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:
+            return result
+
+        # Over-length — remember and retry.
+        last_overlong_tweet = result.tweet
+
+    # All attempts produced over-length tweets. Hard-kill with a clear
+    # reason so the dashboard surfaces the failure mode rather than
+    # shipping an over-length draft that Twitter would truncate.
+    overlong_len = len(last_overlong_tweet) if last_overlong_tweet else 0
+    return WriterResult(
+        tweet=None,
+        kill_reason=(
+            f"writer produced over-{TWEET_MAX_LENGTH}-char tweets across "
+            f"{LENGTH_RETRY_BUDGET + 1} attempts (last attempt: "
+            f"{overlong_len} chars)"
+        ),
+        angle_chosen="",
+        era_anchor_used=None,
+        peer_comparison_used=None,
+        reasoning=(
+            f"length-cap retry exhausted; last draft started: "
+            f"{last_overlong_tweet[:80]!r}..."
+            if last_overlong_tweet
+            else "length-cap retry exhausted"
+        ),
+    )
 
 
 # Backwards-compat alias. The writer is signal-agnostic; legacy callers
