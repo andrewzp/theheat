@@ -245,7 +245,7 @@ def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") 
                 if (new_temp_f is not None and old_record_f is not None)
                 else None,
         },
-        raw_signal_dump=asdict(ev),
+        raw_signal_dump={**asdict(ev), "city": city},
     )
 
 
@@ -336,7 +336,7 @@ def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> Story
             "scope": "calendar_date_only",
             "kind": kind,
         },
-        raw_signal_dump=asdict(ev),
+        raw_signal_dump={**asdict(ev), "city": city},
     )
 
 
@@ -436,7 +436,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo
                 "in recorded history",
             ],
         },
-        raw_signal_dump=asdict(ev),
+        raw_signal_dump={**asdict(ev), "city": city},
     )
 
 
@@ -496,7 +496,7 @@ def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> Sto
             "archive_years": ev.years_of_data,
             "scope": "monthly_baseline",
         },
-        raw_signal_dump=asdict(ev),
+        raw_signal_dump={**asdict(ev), "city": city},
     )
 
 

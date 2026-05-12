@@ -903,6 +903,10 @@ def test_build_monthly_high_bundle_normalizes_suffixed_city():
     assert bundle.where.startswith("Paddock Lake")
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["city"] == "Paddock Lake"
+    # raw_signal_dump must also carry the normalized name — otherwise the
+    # bundle is internally inconsistent (where = "Paddock Lake" but raw dump
+    # = "Paddock Lake 4 Ne"), which defeats the defense-in-depth premise.
+    assert bundle.raw_signal_dump["city"] == "Paddock Lake"
 
 
 def test_build_record_bundle_normalizes_suffixed_city():
@@ -923,6 +927,7 @@ def test_build_record_bundle_normalizes_suffixed_city():
     assert bundle.where.startswith("Sioux City")
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["city"] == "Sioux City"
+    assert bundle.raw_signal_dump["city"] == "Sioux City"
 
 
 def test_build_all_time_record_bundle_normalizes_suffixed_city():
@@ -944,6 +949,7 @@ def test_build_all_time_record_bundle_normalizes_suffixed_city():
     assert bundle.where.startswith("Paddock Lake")
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["city"] == "Paddock Lake"
+    assert bundle.raw_signal_dump["city"] == "Paddock Lake"
 
 
 def test_build_anomaly_bundle_normalizes_suffixed_city():
@@ -964,6 +970,7 @@ def test_build_anomaly_bundle_normalizes_suffixed_city():
     assert bundle.where.startswith("Sioux City")
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["city"] == "Sioux City"
+    assert bundle.raw_signal_dump["city"] == "Sioux City"
 
 
 def test_normalize_station_name_idempotent_in_bundle_builders():
