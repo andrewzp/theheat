@@ -159,12 +159,21 @@ def _audience_unit_facts(country: str | None) -> list[dict]:
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
+    # FIRMS returns FRP at two-decimal precision (e.g. 480.34 MW). The fact-
+    # check prompt requires exact numerical match with no tolerance, so the
+    # writer rounding "480.34" → "480 MW" or "480.3 MW" produces a BUNDLE_FACT
+    # kill against the raw value. Round at the bundle builder so the bundle
+    # is the 1-decimal source of truth — writer echoes the clean value,
+    # fact-checker confirms exact match. See IMPROVEMENT_PLAN.md P2 +
+    # tests/two_bot/test_intern.py::test_build_fire_bundle_rounds_frp_to_one_decimal.
+    frp_rounded = round(fire.frp, 1)
+
     return StoryBundle(
         signal_kind="fire",
         where=fire.nearest_city or fire.country,
         when=date.today().isoformat(),
         event_id=fire.event_id,
-        headline_metric={"label": "FRP", "value": fire.frp, "unit": "MW"},
+        headline_metric={"label": "FRP", "value": frp_rounded, "unit": "MW"},
         current_facts=[
             {"label": "satellite_confidence", "value": fire.confidence, "unit": "%"},
             {"label": "country", "value": fire.country},
@@ -177,7 +186,7 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             "lat": fire.lat,
             "lon": fire.lon,
             "confidence": fire.confidence,
-            "frp": fire.frp,
+            "frp": frp_rounded,
             "nearest_city": fire.nearest_city,
             "country": fire.country,
             "event_id": fire.event_id,
