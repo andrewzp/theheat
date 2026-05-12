@@ -59,6 +59,41 @@ def test_build_fire_bundle_uses_fire_signal_fields():
     assert bundle.raw_signal_dump["event_id"] == "fire_1"
 
 
+def test_build_fire_bundle_rounds_frp_to_one_decimal():
+    """Regression for fact-check kills on FRP precision (P2 in IMPROVEMENT_PLAN,
+    Codex review on PR #79).
+
+    NASA FIRMS returns FRP with two-decimal precision (e.g. 480.34 MW). The
+    fact-check prompt requires exact numerical match with no tolerance, so the
+    writer rounding to "480 MW" or "480.3 MW" produces a BUNDLE_FACT kill
+    against the raw 480.34 in the bundle. Fix: round at the bundle builder
+    so the bundle itself is the 1-decimal source of truth — the writer
+    naturally echoes the clean value, the fact-checker confirms exact match.
+
+    Observed in production 2026-05-11 and 2026-05-12: 480.34 → 480 kill,
+    547.92 → 548 kill, 301.55 → 301 kill (all BUNDLE_FACT).
+    """
+    cases = [
+        (480.34, 480.3),
+        (547.92, 547.9),
+        (361.0, 361.0),    # already-clean values pass through unchanged
+        (250.05, 250.1),   # Python banker's rounding lands on .1, not .0
+        (1000.999, 1001.0),
+    ]
+    for raw, expected in cases:
+        fire = _fire_event(frp=raw, event_id=f"fire_{raw}")
+        bundle = build_fire_bundle(fire)
+
+        assert bundle.headline_metric == {"label": "FRP", "value": expected, "unit": "MW"}, (
+            f"headline_metric FRP for raw={raw} should be {expected}, got "
+            f"{bundle.headline_metric}"
+        )
+        assert bundle.raw_signal_dump["frp"] == expected, (
+            f"raw_signal_dump.frp for raw={raw} should be {expected}, got "
+            f"{bundle.raw_signal_dump['frp']}"
+        )
+
+
 def test_build_fire_bundle_falls_back_to_country_when_region_missing():
     fire = _fire_event(region="", country="ML")
     bundle = build_fire_bundle(fire)
