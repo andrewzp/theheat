@@ -78,18 +78,49 @@ generates" for a 301 MW fire; Hoover ≈ 2,080 MW — off by factor 7). Two sepa
 
 **Cycles observed:** May 11, May 12 (2 cycles; multiple kills each).
 **Last seen:** 2026-05-12.
-**Proposed fix (a — rounding):** Add to `src/two_bot/prompts/writer_prompt.py` fire
-framing section: "Always echo the exact FRP value from the bundle, rounded to one decimal
-(e.g., '480.3 MW'). Do NOT round to the nearest integer. The fact-checker requires an
-exact match within 0.5 MW." (b — fabrication): Add to the writer prompt's bad-examples
-list: "Do NOT compare fire FRP to a named power plant or dam unless the comparison's
-exact MW is provided in the bundle. 'Roughly what [named plant] produces' is
-hallucination territory."
 
-**Expected impact:** Unlocks fire drafts that survive the writer but fail fact-check on
-rounding. The Hoover Dam bad-example prevents world-knowledge hallucinations on fire MW.
+**Correction (2026-05-12, post-Codex-review):** the prior version of this plan proposed
+telling the writer to round FRP to one decimal and claimed "the fact-checker requires an
+exact match within 0.5 MW." Codex's review caught the contradiction:
+`src/two_bot/prompts/fact_check_prompt.py` line 9 says *"Verify exact match (number, unit,
+date). Mismatches = failure."* — there is **no tolerance rule**. Telling the writer to
+emit `480.3 MW` when the bundle carries `480.34` would still BUNDLE_FACT-kill. The fix
+has to make the writer's number match the bundle's number exactly, or change the bundle,
+or change the fact-checker. Pick one — don't paper over it with a tolerance claim that
+the runtime doesn't honor.
 
-**Status:** Ready to implement. Two-part prompt addition.
+**Proposed fix (a — rounding, REVISED):** Round at the **bundle builder**, not at the
+writer. In `src/two_bot/intern.py:build_fire_bundle` (line 167), change
+`"value": fire.frp` to `"value": round(fire.frp, 1)` (and the same in `raw_signal_dump`
+at line 180). The bundle then carries `480.3` as the source of truth; the writer
+naturally echoes `480.3 MW`; the fact-checker confirms exact match. No prompt rule
+needed, no fact-checker mutation needed, no runtime tolerance bookkeeping. Add a
+regression test in `tests/two_bot/test_intern.py` that asserts the FRP `value` field is
+rounded to 1 decimal for representative inputs (480.34 → 480.3, 547.92 → 547.9,
+301.55 → 301.5 or 301.6 per Python banker's rounding).
+
+  **Why bundle-side rounding wins over the alternatives:**
+  - **vs. writer-side rule:** Writer-side rules are fragile under model stochasticity
+    (see #76's length-cap retry). The bundle is source-of-truth and never drifts.
+  - **vs. fact-check tolerance:** Adding a `±0.5 MW` tolerance to the fact-check prompt
+    would mutate runtime behavior, require new voice-regression validation, and
+    introduce a soft-equality rule that downstream code may not honor identically. The
+    bundle-side fix preserves the "exact match" doctrine cleanly.
+
+**Proposed fix (b — fabrication, unchanged):** Add to the writer prompt's HARD RULES /
+bad-examples list: "Do NOT compare fire FRP to a named power plant or dam unless the
+comparison's exact MW is provided in the bundle. 'Roughly what [named plant] produces'
+is hallucination territory. Observed failure modes: Hoover Dam at full capacity (~2,080
+MW) applied to a 301 MW fire; Akosombo Dam at full capacity (~1,020 MW) applied to a
+361 MW fire." (This is already partially landed in PR #74's "no self-supplied facility
+MW" rule; verify the wording still covers FRP-specifically and tighten if it doesn't.)
+
+**Expected impact:** Bundle-side rounding unlocks every fire draft that's currently
+dying on float-precision mismatch. The fabrication rule (already largely in place via
+#74) prevents the Hoover/Akosombo class entirely.
+
+**Status:** Ready to implement. Bundle-side one-line change in `intern.py` + regression
+test + verify the writer-prompt fabrication rule still applies to FRP comparisons.
 
 ### P3 — Writer fire overcall: add seasonal/calendar context as a verifiable framing
 
