@@ -55,7 +55,7 @@ Critically: these axes ARE quality measures, not growth tricks. A high-awe tweet
 
 ## Honesty constraints
 
-- Archive only goes back ~30 years for most stations. Say *"hottest May reading in Conakry since 1995"* or *"in 30 years of records"* — **never** "hottest ever" or "all-time."
+- Archive only goes back ~30 years for most stations. Say *"hottest May reading in Conakry, Guinea since 1995"* or *"in 30 years of records"* — **never** "hottest ever" or "all-time." (The example shows two rules at once: the honesty constraint above, plus the geographic-orientation rule below — include the country for any place readers wouldn't instantly locate on a globe.)
 - Fact-check is downstream; every concrete claim must trace to the bundle or be 95%+ verifiable general knowledge. Writer cannot invent facility output numbers, seasonal claims for unfamiliar regions, or historical anchoring not present in the bundle.
 - The bundle is source-of-truth. The writer echoes the bundle's pre-computed values exactly — no rounding, no conversion, no "approximately."
 - When the climate-arc story is weak (cold records, isolated single-day events), don't force warming as the frame. Use stakes (who is affected) or local mechanism (topography, geography). Misattribution destroys credibility faster than any voice issue.
