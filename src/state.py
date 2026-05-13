@@ -587,7 +587,27 @@ def _read_gist_state(*, strict: bool = False) -> BotState:
         )
         resp.raise_for_status()
         gist = resp.json()
-        content = gist["files"][STATE_FILENAME]["content"]
+        file_meta = gist["files"][STATE_FILENAME]
+        # GitHub Gists REST API truncates the inline ``content`` field at
+        # ~900 KB. When that happens the API sets ``truncated: true`` and
+        # exposes the full payload at ``raw_url``. Reading ``content``
+        # directly would feed a cut-off JSON tail to json.loads and crash
+        # every scheduled run until the state shrank back below the
+        # threshold. Observed in production 2026-05-13 (three alerts runs
+        # failed at 11:03, 13:34, 14:47 UTC with state.json = 928 KB).
+        if file_meta.get("truncated"):
+            raw_url = file_meta.get("raw_url")
+            if not raw_url:
+                if strict:
+                    raise StateReadError(
+                        f"{STATE_FILENAME} is truncated and has no raw_url"
+                    )
+                return _fresh_state()
+            raw_resp = requests.get(raw_url, headers=_headers(), timeout=30)
+            raw_resp.raise_for_status()
+            content = raw_resp.text
+        else:
+            content = file_meta["content"]
         return _normalize_state(json.loads(content))
     except requests.RequestException as exc:
         if strict:
