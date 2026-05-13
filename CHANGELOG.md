@@ -2,6 +2,158 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased] - 2026-05-13
+
+Three quality PRs and one infra hotfix opened today, none merged yet. Headline:
+first graded two-bot cycle (PR #86) returned **4 drafts at 0% A-rate**. Voice
+work landed (no Wodehouse violations observed, no P3 self-kills, FRP rounding
+confirmed working) but new failure modes emerged — fire template convergence
+across multiple drafts in a cycle, and expository-rather-than-punchy system
+clauses limiting Chuuk monthly_high to a B-grade ceiling. Three afternoon PRs
+address both classes. Plus a state-truncation hotfix after three scheduled
+runs failed on a Gist API limit. **Open PRs: 4** (#84, #85, #86, #87).
+
+### Added
+
+- **State-truncation handling in `_read_gist_state` (#87, off main).** The
+  GitHub Gists REST API truncates the inline `content` field at ~900 KB. When
+  `state.json` grows past that the API sets `truncated: True` + exposes the
+  full payload at `raw_url`. The previous code path read `content`
+  unconditionally and fed it to `json.loads`, which crashed every scheduled
+  run with `state.json is not valid JSON` until state shrank back. Observed
+  in production 2026-05-13: three runs failed at 11:03 (auto_publish_due),
+  13:34 (auto_publish_due), 14:47 (alerts). State at the time was 928 KB.
+  Fix follows `raw_url` when the truncated flag is set, using the same auth
+  headers and a 30s timeout (larger than the inline path's 15s).
+  Regression test in `tests/test_state.py::test_read_state_handles_truncated_gist_via_raw_url`
+  reproduces the exact production failure.
+
+- **Defensive `normalize_station_name()` in 4 GHCN bundle builders (#84).**
+  PR #82 root-caused the Paddock Lake / Sioux City BUNDLE_FACT kills at the
+  regex source. This PR adds belt-and-suspenders normalization at the bundle
+  boundary in `build_monthly_high_bundle`, `build_record_bundle`,
+  `build_all_time_record_bundle`, `build_anomaly_bundle`. Idempotent on
+  already-clean inputs; pure defense against any future signal-detection
+  path that bypasses `ghcn.py:381`. Codex review surfaced an inconsistency
+  where the normalization touched `where` and `current_facts.city` but left
+  `raw_signal_dump.city` as the raw form — fixed via dict-spread
+  (`{**asdict(ev), "city": city}`) in a follow-up commit so the bundle's
+  internal city representations stay consistent. 5 new tests.
+
+- **P3 — seasonal context as world knowledge for fires (#84).** Two
+  changes to `writer_prompt.py`: removed the over-broad
+  `"[country]'s fire/storm/wet season peaks in [month]"` bullet from the
+  historical_context=empty "do NOT write" list, and added a new
+  "Seasonal context for fires is world knowledge" paragraph. Closes the
+  May 11–12 self-kill class where the writer killed Sahel/Siberia fire
+  drafts citing "no verifiable seasonal framing without archive data."
+  Empirically confirmed today (PR #86): no P3 self-kill failures across
+  the 4 graded drafts.
+
+- **P4 — Wodehouse rule section (#85).** New `# THE WODEHOUSE RULE`
+  section in writer_prompt.py before `# HARD RULES`. Names four
+  effort-signal failure modes: approximation when exact is available,
+  restate-padding, poetry-attempt closers, defensive justification.
+  Single most predictive failure mode across 5 corpus cycles per the
+  grading agent. Today's grader (PR #86) found zero Wodehouse violations
+  in the corpus — voice work already addresses this — but the explicit
+  rule hardens the prompt against future regression. Empirical test:
+  voice-regression cron tomorrow.
+
+- **FRP intensity tier in `build_fire_bundle` (#85).** New `_frp_tier()`
+  helper classifies FRP into low (<30 MW) / moderate (30–100) / high
+  (100–500) / very_high (≥500). Adds two `current_facts` entries:
+  `frp_tier` (label) and `frp_tier_floor_mw` (inclusive lower bound).
+  Writer prompt instructs use of the tier word ("high-intensity at 309 MW",
+  "in the very-high-intensity tier") instead of raw MW values that mean
+  nothing to non-specialist readers. Explicit anti-attribution — no NASA,
+  no FIRMS claim. Closes Andrew's editorial concern from 2026-05-12:
+  "how is a normal reader supposed to understand what 364 MW is?"
+  6 TDD tests at boundaries.
+
+- **Per-day category cooldown via `MemorySlice.recent_categories` (#85).**
+  New field on `MemorySlice` exposes signal categories already posted in
+  the last 24 hours. `_signal_kind_to_category()` maps the 25+
+  fine-grained signal_kinds to ~13 coarse categories (fire +
+  fire_footprint → "fire"; all temperature record variants →
+  "temperature_record"; etc.). Writer prompt's new `# PER-DAY CATEGORY
+  COOLDOWN` section sets the softer rule: if your draft's category is in
+  `recent_categories`, must clear meaningfully different mechanic /
+  geography / scale, else kill with `kill_reason="category cooldown"`.
+  Stops the "two fires in a row" pacing failure Andrew flagged from the
+  2026-05-12 pending queue. 4 TDD tests.
+
+- **P6 — fire sentence-1 variety (#85, second commit).** Grader found all
+  3 fire drafts in 2026-05-13's first graded cycle used the identical
+  opener: *"A fire in [location] is radiating X MW of heat, detected by
+  satellite at N% confidence."* The 24h category cooldown above catches
+  this across cron runs, not within a single cycle. New paragraph in
+  writer_prompt.py names 4 alternative sentence-1 forms
+  (lead-with-location, lead-with-seasonal-frame, lead-with-tier-word,
+  lead-with-stakes-or-scale-anchor) with full example tweets. Bans the
+  default opener when `recent_categories` already contains "fire" within
+  24h.
+
+- **Chuuk expository → punch nudge (#85, second commit).** Grader called
+  the Chuuk monthly_high draft (B-grade ceiling) for an expository
+  second sentence ("Chuuk sits in the Pacific warm pool") that described
+  the system rather than doing work. Augmented `# THE SIGNATURE MOVE`
+  section's bullet-2 with the expository-vs-punch distinction. Concrete
+  B-vs-A example pair using the Chuuk case. New "delete the system
+  clause" test: if removing your second sentence leaves the reader
+  thinking "so what?", load-bearing; "oh, fair enough", expository.
+
+- **`docs/writer-prompt-brief-v3.md`** — design brief for the writer
+  prompt as a handoff doc to a fresh AI session that could rewrite the
+  prompt from scratch. Captures brand context (utility not growth,
+  rejected directions), reader profile, the shareability test
+  framework (stop-mid-scroll + send-to-friend two-gate), the lodestar
+  voice (Attenborough/Economist), pipeline context, operational
+  constraints, output structure, observed failure modes (each rule
+  traced to a real grading cycle), and a "what the prompt should NOT
+  do" anti-pattern list. Iterated through 3 versions in chat. v3
+  reconciles the "no virality" framing with the pipeline's actual
+  virality evaluator by reframing both as quality measures, not growth
+  tools.
+
+### Findings
+
+- **First graded two-bot cycle: 0% A-rate.** PR #86. 4 drafts, scores 64
+  (Mali fire C+) / 65 (Campeche fire C) / 80 (Chuuk monthly_high B) /
+  64 (Mongolia fire C). Gap from resumption bar: 50pp. Voice work is
+  not the bottleneck this cycle — template convergence and
+  expository-vs-punch are.
+
+- **State.json approaching the GitHub Gist truncation limit.** State
+  was 928 KB this morning (~900 KB API limit). Out-of-band trimming
+  brought it back, but the underlying drift requires either #87 (graceful
+  handling) or proactive state pruning. The `posted_events` and
+  `suppressions` lists are the main contributors; both have cap logic
+  but the cap may be too generous.
+
+### Editorial framework changes
+
+- **Shareability test now explicit as the two-gate editorial bar.**
+  Stop-mid-scroll AND send-to-friend, both required. Codified in
+  `docs/writer-prompt-brief-v3.md`. The existing virality-research
+  evaluator (awe, social currency, opener, show-not-tell, comparison)
+  is the operational form of this test — quality measures, not growth
+  tools. Memory hook updated implicitly through brief; explicit memory
+  update deferred to next operator session.
+
+### Open items for tomorrow
+
+- Merge order recommendation: #87 first (urgent CI hotfix), then #84,
+  then #85 (auto-rebases onto main after #84). PR #86 (docs-only,
+  grading agent) can merge any time after #84/#85 to avoid
+  IMPROVEMENT_PLAN.md conflicts.
+- Voice-regression cron 2026-05-14 09:00 UTC is the first empirical
+  test of #85's Wodehouse + Chuuk punch + fire variety changes against
+  fixtures.
+- Codex review on PR #85 not yet run (was run on #84 only). Worth
+  doing once #84 + #85 settle; the prompt is now ~225 lines and may
+  have accreted conflicts.
+
 ## [0.5.1.0] - 2026-05-12
 
 End-of-day cleanup wave. Six PRs merged after the morning's voice + length
