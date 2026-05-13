@@ -1,7 +1,7 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-13 (evening — first graded two-bot cycle + four PRs in queue).
-**Status:** **PIPELINE STRUCTURALLY SOUND, EMPIRICALLY UNPROVEN.** Three quality PRs and one infra hotfix opened today (none merged yet). First graded two-bot cycle (#86) returned 4 drafts at 0% A-rate — voice work landed cleanly but the editorial ceiling is currently B-grade. New failure modes identified: fire template convergence (P6, addressed in #85) and expository-vs-punch system clauses (addressed in #85). State truncation incident at 11:03/13:34/14:47 UTC stopped three alerts runs; fixed in #87 (hotfix, off main). **Open PRs: 4** — #84, #85, #86, #87. Posting still paused until majority-A sustained.
+**Last updated:** 2026-05-13 (late evening — today's four PRs landed; post-merge state captured below).
+**Status:** **PIPELINE STRUCTURALLY SOUND, EMPIRICALLY UNPROVEN.** Today's four PRs (#87 hotfix, #84 P1+P3, #89 P4 superseding #85, #88 docs, #86 grading agent) all merged. First graded two-bot cycle (#86) returned 4 drafts at 0% A-rate — voice work landed cleanly but the editorial ceiling is currently B-grade. New failure modes identified: fire template convergence (P6, shipped in #89) and expository-vs-punch system clauses (shipped in #89). State truncation incident at 11:03/13:34/14:47 UTC stopped three alerts runs; fixed in #87. **Open PRs: 0** as of late evening 2026-05-13. Posting still paused until majority-A sustained.
 
 **Conceptual reframing today:** the editorial bar is now explicit as the **shareability test** — would a climate-literate reader pause AND want to send this to a friend? Both gates required. The pipeline's existing "virality evaluator" is the operational form of this test using virality-research dimensions (awe, social currency, opener, show-not-tell, comparison) as quality measures, not growth tools.
 
@@ -15,9 +15,9 @@
 
 4. **PR #86 — `daily-plan-2026-05-13`** (grading agent auto-PR). First graded two-bot cycle: 4 drafts, 0% A-rate. Findings: voice work landed (no Wodehouse violations observed), no P3 self-kills, FRP rounding confirmed working — but fire template convergence is the new ceiling, and Chuuk monthly_high was the B-grade ceiling. Adds P6 (fire template) as new active proposal.
 
-**Latest merged commits (still origin/main from 2026-05-12 evening):** `48ee110` (#82 four prod fixes). No new merges today.
+**Latest merged commits:** `7ad23ef` (#86 daily grading) → `842c43b` (#88 docs sweep) → `11af516` (#89 P4 — superseded #85) → `417ccd9` (#84 P1+P3) → `a8580f1` (#87 state truncation fix). PR #85 auto-closed when its stacked base branch was deleted by #84's merge; was recreated as #89 (same 4 commits rebased onto main).
 
-**Tests:** 895 passing on `main`, 899 on PR #84, 909 on PR #85, 895 on PR #87. No regressions.
+**Tests:** 909 passing on main post-merge. No regressions.
 
 **Cities monitored:** 638 (unchanged).
 

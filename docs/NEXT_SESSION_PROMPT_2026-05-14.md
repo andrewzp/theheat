@@ -1,6 +1,18 @@
-# Resume @theheat — Next Session Prompt (written 2026-05-13 evening)
+# Resume @theheat — Next Session Prompt (written 2026-05-13 evening; post-merge update 2026-05-13 late evening)
 
 This brief **supersedes** `NEXT_SESSION_PROMPT_2026-05-12-v2.md` for sessions on or after 2026-05-14.
+
+> **Post-merge update (2026-05-13 late evening):** all four queued PRs are now on main. The pre-merge state language below is preserved for context but is no longer current. Skip to the "Outstanding follow-ups" section if you just need to know what's next.
+>
+> - `main` HEAD is now `7ad23ef`. Order shipped: #87 → #84 → #89 (superseded #85) → #88 → #86.
+> - **#85 reopened as #89.** When #84 squash-merged, GitHub auto-closed #85 (its stacked base branch was deleted). #85's commits were rebased onto main and re-opened as PR #89 with the same 4 commits + identical CI (12/12 voice-regression, 909 tests).
+> - **Codex review branches: redundant, safe to delete.** The 5 branches `feat/codex-1-suppression-stage-ui`, `fix/codex-2-ghcn-observed-labels`, `feat/codex-3-writer-prompt-anti-speculation`, `fix/codex-4-json-utils-string-aware`, `fix/codex-6-station-name-acronyms` were each cherry-pick-detected as fully present in main during rebase testing. Originating PRs (#50–54) merged the same content days ago. One-liner to clean up: `for br in feat/codex-1-suppression-stage-ui fix/codex-2-ghcn-observed-labels feat/codex-3-writer-prompt-anti-speculation fix/codex-4-json-utils-string-aware fix/codex-6-station-name-acronyms; do git push origin --delete $br; done`. The orphan branch `codex/fix-review-findings` is also stale (0 commits ahead of main, contains old `Brand Design _ Design System.zip`); inspect before deleting — likely just a parked WIP.
+> - **Five `.claude/worktrees/agent-*` worktrees are locked from past dispatched agent sessions.** Holding the same 5 codex branches above. Cleanup: `git worktree list` to see them, then `git worktree unlock <path> && git worktree remove --force <path>` for each. Don't run blindly — verify no uncommitted work first.
+> - **Open PRs: 0.** Carry forward all follow-ups below.
+
+---
+
+## Pre-merge state (preserved for context — outdated as of late evening 2026-05-13)
 
 You are picking up work on the @theheat climate Twitter bot. End-of-day 2026-05-13 state:
 
