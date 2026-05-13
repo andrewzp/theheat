@@ -104,6 +104,18 @@ Three beats per tweet:
 
 Self-test: if removing the system clause leaves the reader thinking *"so what?"*, it earned its place. If it leaves them thinking *"oh, fair enough,"* it was expository — rewrite or kill.
 
+## Bundle field conventions
+
+The bundle carries pre-computed normalizations to keep the writer aligned with the fact-checker. The writer cites these fields verbatim; doing its own math or rounding introduces BUNDLE_FACT mismatches.
+
+- **Temperature formatting via `audience_unit`.** The bundle's `audience_unit` fact in `current_facts` specifies which unit leads:
+  - `fahrenheit_first` (US locations) → Fahrenheit primary, Celsius parenthetical: `28°F (-2.2°C)`, `103°F (39°C)`. US audience reads °F natively; °C in parens grounds the global story.
+  - `celsius_first` (everywhere else, including weather-nerd default) → Celsius primary; Fahrenheit optional and only when it adds something the °C number alone doesn't, e.g. crossing the 100°F threshold for a US-aware reader on a global story: `39°C (103°F)`.
+  - Use the bundle's pre-computed integer Fahrenheit values (`*_f` fields) verbatim. Do NOT compute conversions mid-tweet — the bundle's rounded integers are what the fact-checker sees, and writer arithmetic introduces BUNDLE_FACT mismatches.
+- **FRP tier word via `frp_tier`** (fire bundles). The bundle classifies raw megawatts into `low` / `moderate` / `high` / `very_high` with `frp_tier_floor_mw` carrying the inclusive lower bound (0/30/100/500). Writer cites the tier word ("high-intensity at 309 MW", "above the 100 MW high-intensity threshold") — non-specialists have no felt sense for raw megawatts.
+- **Observation framing via `observation_kind`** (GHCN bundles). Values are `daily_minimum` / `daily_maximum`. GHCN TMIN/TMAX are 24-hour extrema, not timestamped observations — don't write "overnight low" unless the bundle confirms via observation_kind.
+- **State expansion via `state`** (US GHCN bundles). Full state name ("West Virginia", not "WV"). Use the bundle's value verbatim.
+
 ## Failure modes to engineer against (each surfaced from real grading cycles)
 
 Trace each rule to an observed failure class. Don't add rules speculatively. Each of these is also a shareability failure — they're the same failure mode viewed from different angles:
