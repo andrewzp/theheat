@@ -394,6 +394,64 @@ class TestSqliteBackend:
             except StateReadError as exc:
                 assert "Failed to read gist state" in str(exc)
 
+    def test_read_state_handles_truncated_gist_via_raw_url(self):
+        """The GitHub Gist REST API truncates the `content` field at ~900 KB.
+        When the state file grows past that threshold, the API returns
+        ``truncated: True`` alongside a ``raw_url`` pointing at the full
+        content. The bot must follow the raw_url instead of trying to parse
+        the truncated content, or every scheduled run fails with
+        "state.json is not valid JSON" until the state shrinks back below
+        the threshold. Observed in production 2026-05-13: three alerts
+        runs failed (11:03, 13:34, 14:47 UTC) when state hit 928 KB.
+        """
+        import json as _json
+        from unittest.mock import MagicMock
+
+        full_state_dict = {
+            "drafts": [],
+            "memory": {"shipped_tweets": []},
+            "ledger": {},
+        }
+        full_state_json = _json.dumps(full_state_dict)
+        truncated_content = full_state_json[: len(full_state_json) // 2]
+        raw_url = "https://gist.githubusercontent.com/raw/abc/def/state.json"
+
+        api_response = MagicMock()
+        api_response.raise_for_status = MagicMock()
+        api_response.json.return_value = {
+            "files": {
+                "state.json": {
+                    "content": truncated_content,
+                    "truncated": True,
+                    "raw_url": raw_url,
+                }
+            }
+        }
+
+        raw_response = MagicMock()
+        raw_response.raise_for_status = MagicMock()
+        raw_response.text = full_state_json
+
+        def fake_get(url, headers=None, timeout=None):
+            if url == raw_url:
+                return raw_response
+            return api_response
+
+        with patch.multiple(
+            "src.state",
+            STATE_BACKEND="gist",
+            DB_PATH="",
+            GIST_ID="gist_123",
+            GITHUB_TOKEN="token_123",
+        ), patch("src.state.requests.get", side_effect=fake_get):
+            state = read_state()
+
+        # If the bug were still present, json.loads(truncated_content) would
+        # raise and read_state would error. We get here only if the raw_url
+        # path was followed.
+        assert isinstance(state, dict)
+        assert "drafts" in state
+
 
 class TestIceMassDefaultState:
     def test_ice_mass_keys_in_default_state(self):
