@@ -102,6 +102,72 @@ def test_build_fire_bundle_falls_back_to_country_when_region_missing():
     assert {"label": "nearest_region", "value": ""} in bundle.current_facts
 
 
+# ============================================================================
+# FRP intensity tier: closes the "what does 364 MW mean?" reader-anchor gap.
+#
+# Bundle classifies the FRP value into a tier (low/moderate/high/very_high) so
+# the writer can give readers a scale word. Raw MW is opaque to non-specialists.
+# Thresholds (simple round numbers, defensible across published wildfire
+# research conventions):
+#   <30 MW     → "low"        (floor 0)
+#   30-100 MW  → "moderate"   (floor 30)
+#   100-500 MW → "high"       (floor 100)
+#   ≥500 MW    → "very_high"  (floor 500)
+# Boundaries are inclusive at the lower bound (30.0 → moderate, 100.0 → high).
+# ============================================================================
+
+
+def test_build_fire_bundle_tier_low():
+    fire = _fire_event(frp=20.5, event_id="fire_low")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "low"
+    assert labels["frp_tier_floor_mw"] == 0
+
+
+def test_build_fire_bundle_tier_moderate():
+    fire = _fire_event(frp=50.0, event_id="fire_moderate")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "moderate"
+    assert labels["frp_tier_floor_mw"] == 30
+
+
+def test_build_fire_bundle_tier_high():
+    """309.6 MW is the live Mali Sahel draft FRP. Should land in high-intensity tier."""
+    fire = _fire_event(frp=309.6, event_id="fire_high")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "high"
+    assert labels["frp_tier_floor_mw"] == 100
+
+
+def test_build_fire_bundle_tier_very_high():
+    fire = _fire_event(frp=600.0, event_id="fire_very_high")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "very_high"
+    assert labels["frp_tier_floor_mw"] == 500
+
+
+def test_build_fire_bundle_tier_boundary_30():
+    """30.0 MW is the inclusive lower bound of the moderate tier."""
+    fire = _fire_event(frp=30.0, event_id="fire_boundary_30")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "moderate"
+    assert labels["frp_tier_floor_mw"] == 30
+
+
+def test_build_fire_bundle_tier_boundary_100():
+    """100.0 MW is the inclusive lower bound of the high tier."""
+    fire = _fire_event(frp=100.0, event_id="fire_boundary_100")
+    bundle = build_fire_bundle(fire)
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["frp_tier"] == "high"
+    assert labels["frp_tier_floor_mw"] == 100
+
+
 def test_build_monthly_high_bundle_populates_historical_context():
     ev = MonthlyRecord(
         city="Conakry",
