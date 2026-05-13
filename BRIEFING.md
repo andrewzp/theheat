@@ -1,7 +1,80 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-12 (late evening — full-day cleanup sweep complete).
-**Status:** **PIPELINE WORKING END-TO-END WITH NEW VOICE + STRICTER FACT-CHECK PASS-THROUGH + FOUR PROD KILLS FIXED.** Eleven PRs merged today + four stale PRs closed. Writer prompt rewritten to Attenborough/Economist voice (#74-#75), code-side length-cap retry guarantees no >280-char tweet (#76), dashboard refresh button works visibly (#78), fire FRP rounded at the bundle (#80), 25 coverage-gap stations added (#81), four production issues that killed every alerts run today fixed (#82). Mypy ignore-list removed (#72). Daily-plan history reconciled (#73, #79). Voice-regression: **12/12 green**. **Open PRs: 0.**
+**Last updated:** 2026-05-13 (evening — first graded two-bot cycle + four PRs in queue).
+**Status:** **PIPELINE STRUCTURALLY SOUND, EMPIRICALLY UNPROVEN.** Three quality PRs and one infra hotfix opened today (none merged yet). First graded two-bot cycle (#86) returned 4 drafts at 0% A-rate — voice work landed cleanly but the editorial ceiling is currently B-grade. New failure modes identified: fire template convergence (P6, addressed in #85) and expository-vs-punch system clauses (addressed in #85). State truncation incident at 11:03/13:34/14:47 UTC stopped three alerts runs; fixed in #87 (hotfix, off main). **Open PRs: 4** — #84, #85, #86, #87. Posting still paused until majority-A sustained.
+
+**Conceptual reframing today:** the editorial bar is now explicit as the **shareability test** — would a climate-literate reader pause AND want to send this to a friend? Both gates required. The pipeline's existing "virality evaluator" is the operational form of this test using virality-research dimensions (awe, social currency, opener, show-not-tell, comparison) as quality measures, not growth tools.
+
+**Today's open PRs (queued for review, merge order matters):**
+
+1. **PR #87 — `fix-gist-truncation`** (urgent, OFF main). Three scheduled `theheat-bot` runs failed today (11:03, 13:34, 14:47 UTC) with `ERROR: state.json is not valid JSON`. Root cause: GitHub Gists REST API truncates the inline `content` field at ~900 KB; state was 928 KB → 921600-byte content + `truncated: True` flag → `json.loads` crashed on cut-off tail. Fix in `src/state.py:_read_gist_state` follows `raw_url` when truncated. Will recur every time state grows past 900 KB until this lands. **Should merge first** — independent of #84/#85.
+
+2. **PR #84 — `p1-p3-belt-and-suspenders`**. Defensive `normalize_station_name()` in 4 GHCN bundle builders (P1 belt-and-suspenders complementing #82's regex fix at root) + P3 seasonal-context world knowledge in writer prompt + raw_signal_dump leak fix (Codex finding). 899 tests passing.
+
+3. **PR #85 — `p4-frp-tier-category-cooldown`** (stacked on #84). P4 Wodehouse rule + FRP intensity tier in `build_fire_bundle` + per-day category cooldown on `MemorySlice` + (second commit) fire sentence-1 variety (P6) + Chuuk expository-vs-punch nudge. 909 tests passing.
+
+4. **PR #86 — `daily-plan-2026-05-13`** (grading agent auto-PR). First graded two-bot cycle: 4 drafts, 0% A-rate. Findings: voice work landed (no Wodehouse violations observed), no P3 self-kills, FRP rounding confirmed working — but fire template convergence is the new ceiling, and Chuuk monthly_high was the B-grade ceiling. Adds P6 (fire template) as new active proposal.
+
+**Latest merged commits (still origin/main from 2026-05-12 evening):** `48ee110` (#82 four prod fixes). No new merges today.
+
+**Tests:** 895 passing on `main`, 899 on PR #84, 909 on PR #85, 895 on PR #87. No regressions.
+
+**Cities monitored:** 638 (unchanged).
+
+**Cost:** unchanged from 2026-05-12 baseline (~$22/mo Anthropic on top of ~$60–90/mo Sonnet evaluator).
+
+## What changed on 2026-05-13 — quality + variety + a CI hotfix
+
+### Morning: state truncation breaks three scheduled runs
+
+The Gist REST API silently truncates `state.json` `content` field at ~900 KB. State grew to 928 KB overnight, triggering the cutoff. Three scheduled runs failed in sequence (11:03 auto_publish_due, 13:34 auto_publish_due, 14:47 alerts) with the same `state.json is not valid JSON` error. The grading agent's docs-only run at 15:19 UTC succeeded — it doesn't touch state. Subsequent crons recovered only because something trimmed state back under 900 KB out-of-band. PR #87 makes the fix permanent by following `raw_url` when `truncated: True` is set on the file metadata.
+
+### Mid-day: first graded two-bot cycle (PR #86)
+
+The daily grading agent ran against the 4 drafts that reached pending under the new Attenborough/Economist voice:
+
+| Draft | Type | Score | Grade |
+|---|---|---|---|
+| Mali fire — 309.6 MW | fire | 64 | C+ |
+| Campeche fire — 364.7 MW | fire | 65 | C |
+| Chuuk FSM — 34.4°C (94°F), May record in 76yr archive | monthly_high | 80 | B |
+| Mongolia fire — 307.6 MW | fire | 64 | C |
+
+**A-rate: 0% (0/4). Gap from resumption bar: 50pp.** Critical findings:
+
+- **No Wodehouse violations observed.** The voice work landed; writer isn't "trying too hard" anymore. P4 in PR #85 hardens this against future regression but isn't moving today's A-rate — Wodehouse wasn't the bottleneck this cycle.
+- **No P3 self-kill failures.** Seasonal-context permission working as intended; the May 11–12 self-kill class is closed.
+- **FRP rounding (#80) confirmed working.** Zero BUNDLE_FACT kills.
+- **New failure mode P6 — fire template convergence.** All 3 fire drafts used identical sentence-1 structure: *"A fire in [location] is radiating X MW of heat, detected by satellite at N% confidence."* The 24h category cooldown shipped in #85's first commit catches this across cron runs, not within a single cycle. Second commit on #85 adds prompt-level variety guidance (4 alternative sentence-1 forms with full example tweets).
+- **Chuuk monthly_high (B) is the ceiling.** Grader called it: "second sentence is expository (Pacific warm pool context) rather than a punch." Addressed in #85's second commit — augmented THE SIGNATURE MOVE with expository-vs-punch distinction and a concrete B-vs-A example pair.
+
+### Afternoon/evening: four PRs queued, none merged
+
+Three quality PRs (#84, #85) and the state hotfix (#87) all opened today, stacked appropriately. PR #84 already passed Codex review with two findings (P2: `raw_signal_dump` leak; P3: docs lag) — both addressed in a follow-up commit on the same branch before EOD.
+
+### Conceptual: the shareability test as the editorial bar
+
+Through chat-driven iteration today, the editorial bar was sharpened into an explicit two-gate test:
+
+1. **Stop-mid-scroll** — would a climate-literate reader pause on this in a fast scroll?
+2. **Send-it-to-a-friend** — having paused, would they screenshot/quote/DM it with "did you see this?"
+
+Both required. This operationalizes the "Wait, what?" test that's been in the project memory since April. The existing virality-research evaluator (5 dimensions: awe, social currency, opener, show-not-tell, comparison) is the implementation. The framework predicts virality; the bot uses it as the quality bar. Shareability is a symptom of quality, not a strategy.
+
+Saved as **[docs/writer-prompt-brief-v3.md](docs/writer-prompt-brief-v3.md)** for handoff to a fresh AI session that could rewrite the writer prompt from scratch.
+
+### Next 24 hours — what to watch
+
+- **2026-05-14 09:00 UTC** voice-regression cron — first run after #84 + #85 merge. Does the Wodehouse rule + Chuuk punch nudge + fire variety guidance keep the 12/12 pass rate?
+- **First bot.yml alerts cycle after #87 merges** — confirm no more `state.json is not valid JSON` errors.
+- **First cycle producing 2+ fire drafts in 24h** (after #85 merges) — does the writer pick different sentence-1 forms? Does the category cooldown kill the second one if it can't?
+- **Next 15:00 UTC daily grader** — does the A-rate move off 0% with all today's work on main?
+
+---
+
+# Historical: 2026-05-12 (late evening — full-day cleanup sweep)
+
+**Status snapshot at the time:** **PIPELINE WORKING END-TO-END WITH NEW VOICE + STRICTER FACT-CHECK PASS-THROUGH + FOUR PROD KILLS FIXED.** Eleven PRs merged that day + four stale PRs closed. Writer prompt rewritten to Attenborough/Economist voice (#74-#75), code-side length-cap retry guarantees no >280-char tweet (#76), dashboard refresh button works visibly (#78), fire FRP rounded at the bundle (#80), 25 coverage-gap stations added (#81), four production issues that killed every alerts run that morning fixed (#82). Mypy ignore-list removed (#72). Daily-plan history reconciled (#73, #79). Voice-regression: **12/12 green**. **Open PRs: 0.**
 **Latest merged commits (2026-05-12, end-of-day):** `4cd1b20`...`38e0c17` (#74 Attenborough/Economist voice) → `c8c30c5` (#75 cold-record exemplar) → `7542728` (#76 length retry + hard kill) → `77ad753` (#78 dashboard refresh feedback) → `4677869` (#80 FRP bundle-side rounding) → `fa80018` (#72 BotState TypedDict, 147 mypy errors → 0) → `0b0a545` (#77 docs sweep) → `0107b81` (#73 daily-plan-05-11) → `97ecae4` (#79 daily-plan-05-12 with Codex-revised P2) → `ec2375d` (#81 +25 stations) → `48ee110` (#82 four prod fixes: P1 station-name + Nettles JSON-retry + ocean_sst UA + river_gauges graceful).
 **Open PRs:** 0 (cleaned up — 4 stale daily-plan PRs closed: #37, #49, #59, #66; #29 closed via #81 supersession). Routine config to be updated by operator to prevent future accumulation (spec in memory).
 **Earlier this stack (2026-05-10):** `8ab835c` (#67 month-repetition false-positives + Andrew's single-digit Celsius cold-record relaxation) → `1ed7e2c` (#68 Codex follow-up: tighten both regexes) → `8490ed4` (#69 docs sweep) → `d6665a2` (#70 parallel-session WIP reconciliation) → `84f496d` (#71 dashboard last_error surfacing).

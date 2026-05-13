@@ -4,6 +4,87 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-13 (evening) — First graded two-bot cycle + four PRs in queue
+
+## Where we landed
+
+`main` is still on `48ee110` (PR #82 from 2026-05-12). **No PRs merged today.** Four PRs are open and queued for review:
+
+- **PR #87** — `fix-gist-truncation` (off main, urgent). Three scheduled `theheat-bot` runs failed today on a state.json size > 900 KB hitting GitHub Gist's REST API truncation limit.
+- **PR #84** — `p1-p3-belt-and-suspenders`. Defensive normalization + P3 seasonal-context world knowledge + raw_signal_dump fix.
+- **PR #85** — `p4-frp-tier-category-cooldown` (stacked on #84). Wodehouse + FRP tier + category cooldown + fire variety + Chuuk punch.
+- **PR #86** — `daily-plan-2026-05-13` (grading agent). Records the first graded two-bot cycle.
+
+Recommended merge order: **#87 first** (unblocks CI), then **#84**, then **#85** (auto-rebases cleanly), then **#86** any time after.
+
+## The headline: 0% A-rate on the first graded two-bot cycle
+
+PR #86's grading agent ran against 4 drafts that reached pending:
+
+| Draft | Type | Score | Grade |
+|---|---|---|---|
+| Mali fire — 309.6 MW | fire | 64 | C+ |
+| Campeche fire — 364.7 MW | fire | 65 | C |
+| Chuuk FSM — 34.4°C (94°F), May record in 76yr archive | monthly_high | 80 | B |
+| Mongolia fire — 307.6 MW | fire | 64 | C |
+
+**Critical findings:**
+
+- **No Wodehouse violations.** Voice work landed. P4 (in #85) hardens against regression but isn't moving today's needle.
+- **No P3 self-kill failures.** Seasonal-context permission working as designed.
+- **No BUNDLE_FACT kills on FRP.** PR #80's bundle-side rounding confirmed.
+- **New failure mode P6 — fire template convergence.** All 3 fires used identical sentence-1 ("A fire in X is radiating Y MW…"). PR #85 second commit addresses this.
+- **Chuuk B-grade ceiling.** Expository "Pacific warm pool context" instead of a punch. PR #85 second commit addresses this with explicit B-vs-A example pair.
+
+## Today's three quality PRs
+
+### PR #84 — P1 belt-and-suspenders + P3 seasonal context (commit `decf525`)
+
+**P1 (defensive):** Adds `normalize_station_name()` calls at the top of 4 GHCN bundle builders in `src/two_bot/intern.py` (`build_monthly_high_bundle`, `build_record_bundle`, `build_all_time_record_bundle`, `build_anomaly_bundle`). Production was already safe (ghcn.py:381 normalizes upstream); this is boundary defense against any future signal-detection path that bypasses it. Codex review noted the original commit normalized `where` and `current_facts.city` but not `raw_signal_dump.city` — second commit closed the gap via `{**asdict(ev), "city": city}` dict-spread. 5 new tests.
+
+**P3 (positive):** Removed the over-broad `"[country]'s fire/storm/wet season peaks in [month]"` bullet from the historical_context=empty "do NOT write" list. Added new "Seasonal context for fires is world knowledge" paragraph. The HARD RULES `NO FABRICATED CONTEXT` 95%+ confidence gate still catches truly invented seasonal claims. Confirmed empirically by PR #86: no P3 self-kill failures across the 4 drafts.
+
+### PR #85 — P4 Wodehouse + FRP tier + category cooldown + variety nudges (commits `24b4145` + `1b324f2`)
+
+**P4 Wodehouse rule** (`writer_prompt.py`): New `# THE WODEHOUSE RULE` section before HARD RULES. Names four effort-signals: approximation when exact is available, restate-padding, poetry-attempt closers, defensive justification. No unit tests (voice-regression cron is the empirical gate).
+
+**FRP intensity tier** (`intern.py` + `writer_prompt.py`): `_frp_tier()` helper classifies into low (<30) / moderate (30–100) / high (100–500) / very_high (≥500). Two new `current_facts` entries (`frp_tier`, `frp_tier_floor_mw`). Writer prompt instructs use of the tier word ("high-intensity at 309 MW") instead of opaque raw MW — anchors readers without a NASA/FIRMS attribution claim. 6 TDD tests at boundaries.
+
+**Per-day category cooldown** (`types.py` + `memory.py` + `writer_prompt.py`): New `recent_categories` field on `MemorySlice`. `_signal_kind_to_category()` maps 25+ kinds to ~13 categories. `build_memory_slice` filters shipped_tweets to last 24h, dedupes by category preserving recency. Writer prompt's new `# PER-DAY CATEGORY COOLDOWN` section sets the softer rule. 4 TDD tests.
+
+**Second commit (`1b324f2`):** Fire sentence-1 variety (4 alternative forms with full example tweets) + Chuuk expository-vs-punch nudge in THE SIGNATURE MOVE. Pure prompt edits, no new tests. **Note on prompt structure**: the Chuuk expansion landed inside THE SIGNATURE MOVE bullet 2, leaving the numbered list with `1 / 2 / 2-continued / 3`. Reads fine but the numbering is now off. If a reviewer asks, the fix is to restructure bullet 2's expansion as a separate paragraph between bullets 2 and 3.
+
+### PR #87 — Gist truncation hotfix (commit `35f4c66`)
+
+`src/state.py:_read_gist_state` previously read `gist["files"][STATE_FILENAME]["content"]` unconditionally. When the file exceeds ~900 KB, GitHub's REST API truncates the inline content and exposes the full payload at `raw_url`. The fix: check the `truncated` flag and follow `raw_url` with the same auth headers (30s timeout, 2x the inline path's 15s since the full payload is larger). Falls back through existing `StateReadError` paths if raw_url is missing or fails. TDD regression test mocks the truncated → raw_url path and asserts read_state succeeds; RED before fix, GREEN after.
+
+## Editorial framework — shareability as the two-gate test
+
+Through chat-driven iteration today, the editorial bar was sharpened into an explicit two-gate test:
+
+1. **Stop-mid-scroll** — would a climate-literate reader pause on this in a fast scroll?
+2. **Send-it-to-a-friend** — having paused, would they screenshot/quote/DM it with "did you see this?"
+
+Both required for ship. This operationalizes the long-standing "Wait, what?" test. The existing virality-research evaluator (5 dimensions: awe, social currency, opener, show-not-tell, comparison) is the implementation. The framework predicts virality; the bot uses it as the quality bar. **Shareability is a symptom of quality, not a strategy** — engineering for shares is engagement-bait; engineering for shareability is the editorial bar.
+
+Saved as `docs/writer-prompt-brief-v3.md` — a clean-slate design brief for handing the writer prompt to a fresh AI session. Includes brand context (utility not growth, rejected directions, reader profile), the two-gate test, the lodestar voice, pipeline context, operational constraints, observed failure modes traced to real cycles, and anti-patterns. v3 reconciles the apparent "no virality" / "virality evaluator" contradiction (v1 had it as a real bug; v3 frames both consistently).
+
+## What today did NOT change
+
+- `main` HEAD (still `48ee110`).
+- IMPROVEMENT_PLAN.md is updated in 3 open PRs (#84, #85, #86) — careful with merge conflicts.
+- QUALITY_TREND.md updated only in PR #86.
+- No changes to `src/voice/`, `src/data/` (other than #82's `src/data/ghcn.py` regex from 2026-05-12), or the dashboard.
+- Routine config (Claude routines UI) still opens fresh daily-plan PRs each cycle instead of pushing to a single long-lived branch — memory hook from 2026-05-12 still pending operator action.
+
+## Open questions for tomorrow
+
+1. **Is voice still the bottleneck, or is editorial/structural now?** Today's data (no Wodehouse violations, expository ceiling, template convergence) suggests the latter. P4 was the highest-leverage proposal in the plan; if it doesn't move A-rate tomorrow, the bottleneck has shifted and the IMPROVEMENT_PLAN needs reordering.
+2. **Should the category cooldown also cover same-cycle drafts, not just 24h windows?** Current design reads from `shipped_tweets` (posted history). Within a single cron run, fires #1 and #2 both see empty `recent_categories` because neither has been posted yet. PR #85's prompt-level variety guidance partially addresses this, but a memory-layer extension (`session_drafts` tracking per-cycle) would be more robust.
+3. **Is the Chuuk "expository → punch" rewrite actually shippable for non-fire signals?** The B-vs-A example pair used Chuuk specifically. Empirical test: next graded cycle's temperature record drafts — does the system clause now do work, or did the example over-fit to the warm-pool case?
+
+---
+
 # 2026-05-12 (late evening) — End-of-day cleanup wave
 
 ## Where we landed

@@ -1,0 +1,198 @@
+# Resume @theheat — Next Session Prompt (written 2026-05-13 evening)
+
+This brief **supersedes** `NEXT_SESSION_PROMPT_2026-05-12-v2.md` for sessions on or after 2026-05-14.
+
+You are picking up work on the @theheat climate Twitter bot. End-of-day 2026-05-13 state:
+
+- **`main` HEAD is still `48ee110`** (PR #82, from 2026-05-12 evening). No PRs merged today.
+- **Four open PRs queued for review:** #87 (urgent CI hotfix), #84 (P1 + P3), #85 (P4 + FRP tier + category cooldown + variety nudges), #86 (grading agent docs-only).
+- **First graded two-bot cycle returned 0% A-rate** on 4 drafts (Mali, Campeche, Mongolia fires + Chuuk monthly_high). Voice work landed but template convergence + expository ceiling are the new bottlenecks.
+- **Three scheduled `theheat-bot` runs failed today** with `state.json is not valid JSON` at 11:03, 13:34, 14:47 UTC. State hit GitHub Gist's 900 KB content-field truncation limit. PR #87 makes the fix permanent.
+
+The next scheduled validation events are:
+
+- **2026-05-14 09:00 UTC voice-regression cron** — first nightly run after #85 merges; tests Wodehouse rule + Chuuk punch + fire variety guidance against fixtures. Will email `andrew.puschel@gmail.com` on red.
+- **First bot.yml alerts cycle after #87 merges** — confirms state truncation no longer crashes runs.
+- **2026-05-14 15:00 UTC daily grading agent** — first grader run with today's work on main (if all merges land).
+
+Before doing anything else, run the **First 5 minutes** block below to ground yourself.
+
+---
+
+## First 5 minutes — orient
+
+```bash
+cd /Users/andrewpuschel/Documents/Claude/theheat
+source .venv/bin/activate
+
+# 1. Confirm main and recent commits
+git fetch && git log --oneline -10 main
+# Expected (pre-merge): 48ee110 fix: four production issues...
+# Expected (post-merge): main advanced through #87 → #84 → #85 → #86
+
+# 2. Open PRs (queue triage)
+gh pr list --state open --limit 8 --json number,title,headRefName,statusCheckRollup
+# Want: #87 / #84 / #85 / #86 all open or merged. Recommended order: #87, #84, #85, #86.
+
+# 3. Were today's failed runs caught by #87 (if merged)?
+gh run list --workflow=bot.yml --limit 6 --json conclusion,event,createdAt,databaseId
+# Want: most recent runs conclusion="success", no "state.json is not valid JSON" errors.
+
+# 4. Voice-regression cron status
+gh run list --workflow=voice-regression.yml --limit 3 --json databaseId,conclusion,createdAt
+# 2026-05-14 09:00 UTC nightly: want "12/12 passed" if #85 merged before it ran.
+
+# 5. Current state in the gist (size matters)
+GITHUB_TOKEN=$(gh auth token) curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  "https://api.github.com/gists/06c02c97ffc0d11458687f1ed998d9e5" \
+  | python3 -c "import json,sys; f=json.load(sys.stdin)['files']['state.json']; print(f'state.json: {f[\"size\"]} bytes, truncated={f[\"truncated\"]}')"
+# Watch the size. If approaching 900 KB and #87 not yet merged: hotfix is critical.
+
+# 6. Pending drafts (anything new since the 4 graded today?)
+gh gist view 06c02c97ffc0d11458687f1ed998d9e5 -f state.json > /tmp/state.json && \
+  jq '{
+    pending: (.drafts // [] | map(select(.status == "pending")) | length),
+    pending_ids: (.drafts // [] | map(select(.status == "pending")) | map(.id)),
+    recent_kills: ((.suppressions // []) | sort_by(.ts) | .[-5:] | map({ts, stage, summary})),
+    last_run: (.run_history // [] | sort_by(.started_at) | last | {id, mode, failures: (.failures // [] | length)})
+  }' /tmp/state.json
+
+# 7. Local sanity: tests + lint + types on whatever branch you land on
+python -m pytest tests/ -q -m "not voice_replay" 2>&1 | tail -3
+ruff check src/ tests/ 2>&1 | tail -1
+mypy src/ 2>&1 | tail -1
+```
+
+---
+
+## State as of end-of-day 2026-05-13
+
+Read these in order:
+
+1. **`BRIEFING.md`** — top section reflects today's open PRs and the 0% A-rate cycle.
+2. **`docs/SESSION_BRIEF.md`** — top section is *2026-05-13 (evening) — First graded two-bot cycle + four PRs in queue*. Read at least that section.
+3. **`CHANGELOG.md`** — top entry is `[unreleased] - 2026-05-13`.
+4. **`docs/writer-prompt-brief-v3.md`** — NEW handoff doc capturing the editorial framework. Read if you're touching the writer prompt or building anything that interacts with the writer.
+
+## Open PRs (queue triage)
+
+Recommended merge order: **#87 → #84 → #85 → #86**. Reasoning: #87 unblocks CI immediately and is independent of the others; #84 is the base for #85's stacked branch; #86 is docs-only (grading agent) and should land last to avoid IMPROVEMENT_PLAN.md merge conflicts.
+
+### PR #87 — state truncation hotfix (urgent)
+
+**Branch:** `fix-gist-truncation` (off main).
+**Commit:** `35f4c66`.
+**Files:** `src/state.py` + `tests/test_state.py`.
+
+The Gist REST API truncates `content` at ~900 KB. State at 928 KB this morning broke three scheduled runs. Fix: in `_read_gist_state`, check `truncated` flag and follow `raw_url` when set. TDD regression test reproduces the production failure (RED before fix, GREEN after). 895 tests passing on the branch.
+
+To review:
+```bash
+gh pr view 87 --json title,body,statusCheckRollup
+gh pr diff 87 | head -100
+```
+
+To merge:
+```bash
+gh pr merge 87 --squash --delete-branch
+```
+
+### PR #84 — P1 belt-and-suspenders + P3 seasonal context
+
+**Branch:** `p1-p3-belt-and-suspenders` (off main).
+**Commits:** `17fbfa6` (initial) + `decf525` (Codex follow-up).
+**Files:** `src/two_bot/intern.py`, `src/two_bot/prompts/writer_prompt.py`, `tests/two_bot/test_intern.py`, `docs/IMPROVEMENT_PLAN.md`.
+
+P1 adds defensive `normalize_station_name()` in 4 GHCN bundle builders (boundary defense; production safe via ghcn.py:381 upstream). P3 removes the over-broad "season peaks in [month]" ban and adds the "Seasonal context for fires is world knowledge" paragraph. Second commit closes the `raw_signal_dump.city` gap Codex flagged. **Confirmed empirically by PR #86:** no P3 self-kill failures across 4 graded drafts.
+
+### PR #85 — P4 Wodehouse + FRP intensity tier + category cooldown + variety nudges
+
+**Branch:** `p4-frp-tier-category-cooldown` (stacked on `p1-p3-belt-and-suspenders`).
+**Commits:** `24b4145` (initial) + `1b324f2` (P6 variety + Chuuk punch).
+**Files:** `src/two_bot/intern.py`, `src/two_bot/memory.py`, `src/two_bot/types.py`, `src/two_bot/prompts/writer_prompt.py`, `tests/two_bot/test_intern.py`, `tests/two_bot/test_memory.py`, `docs/IMPROVEMENT_PLAN.md`. 909 tests passing.
+
+P4 = new `# THE WODEHOUSE RULE` section. FRP tier = `_frp_tier()` helper + 2 new `current_facts` fields. Category cooldown = new `recent_categories` on `MemorySlice` + 24h dedup + writer guidance. Second commit = 4 alternative fire sentence-1 forms + Chuuk expository-vs-punch nudge.
+
+**Open caveat:** the Chuuk expansion landed inside THE SIGNATURE MOVE bullet 2, leaving the numbered list with `1 / 2 / 2-continued / 3`. Reads fine but the numbering is off. Fix if a reviewer asks: restructure bullet 2's expansion as a separate paragraph between bullets 2 and 3.
+
+### PR #86 — Daily plan refinement 2026-05-13 (grading agent)
+
+**Branch:** `daily-plan-2026-05-13`.
+**Files:** `docs/IMPROVEMENT_PLAN.md`, `docs/QUALITY_TREND.md`, `docs/DRAFT_CORPUS.md`.
+
+Records the 4 drafts, 0% A-rate cycle. Adds P6 (fire template convergence) as new active proposal. Reorders the IMPROVEMENT_PLAN by current leverage. **Merge last** — touches IMPROVEMENT_PLAN.md which #84 and #85 also touch.
+
+### PR #88 — docs sweep 2026-05-13 (this commit)
+
+**Branch:** `docs-sweep-2026-05-13`.
+**Files:** `BRIEFING.md`, `CHANGELOG.md`, `PIPELINE.md`, `docs/SESSION_BRIEF.md`, `docs/writer-prompt-brief-v3.md` (new), `docs/NEXT_SESSION_PROMPT_2026-05-14.md` (new).
+
+No code or test changes. End-of-day docs sweep capturing today's narrative across all the operational docs. Avoids `docs/IMPROVEMENT_PLAN.md` (already in #84/#85/#86) and `docs/QUALITY_TREND.md` (already in #86) to prevent merge conflicts. Safe to merge any time after #84/#85/#86 land, or before — no overlap.
+
+---
+
+## Outstanding follow-ups (carry forward if no new priority lands)
+
+### 1. Watch the 2026-05-14 09:00 UTC voice-regression cron
+
+If #85 merged before the cron fires, this is the first empirical test of the Wodehouse rule + Chuuk punch + fire variety guidance against fixtures. Want **12/12 passed**. Most likely red fixture: `verkhoyansk_monthly_high_bundle` if the new Chuuk-style "punch" guidance produces over-280-char system clauses. If red, check the `kill_reason` — the length-cap retry should have absorbed it.
+
+### 2. Watch the next bot.yml alerts cycle after #87 merges
+
+The state-truncation fix is verified by the absence of `state.json is not valid JSON` in the run logs. If a run still fails on this, the truncation path didn't trigger — investigate the raw_url fetch.
+
+### 3. Codex review on PR #85
+
+PR #84 was reviewed by Codex (2 findings, both addressed). PR #85 has not been reviewed. The writer prompt is now ~225 lines and may have accreted conflicts — particularly the wink-kicker ban appearing in 4 places (SIGNATURE MOVE, WODEHOUSE RULE, HARD RULES, APPROVED EXEMPLARS). Worth running `/codex review docs/codex-review-pr-85-2026-05-14.md` (you'd need to draft that prompt; pattern is in `docs/codex-review-pr-84-2026-05-12.md`).
+
+### 4. Operator action: routine config to prevent daily-plan PR accumulation
+
+Per the memory hook from 2026-05-12: the grading routine opens a fresh PR each day but doesn't close the previous one. Switch to a single long-lived `daily-plan-current` branch + persistent PR. Spec is in memory.
+
+### 5. State pruning (defense in depth on top of #87)
+
+PR #87 makes state truncation graceful, but state at 928 KB is itself a structural issue — the `posted_events` list and `suppressions` ledger are growing. Both have cap logic (500 and 200 respectively) but the cap may be too generous. Worth auditing: what's actually in state that justifies 900+ KB?
+
+### 6. IMPROVEMENT_PLAN reordering
+
+Today's grader data suggests voice is no longer the bottleneck (no Wodehouse violations observed). P4 was the highest-leverage proposal historically, but P6 (template convergence) + the Chuuk expository ceiling are the new ceiling-class. The grading agent already promoted P6; consider also demoting P4 from #1 priority since it's now a defense-in-depth rather than a moving lever.
+
+### 7. Posting still paused
+
+Resumption bar: majority-A sustained per cycle. Current: 0% on 4 drafts. Gap: 50pp. Don't unpause on vibes — wait for the grader to confirm trend.
+
+---
+
+## What to consider next (highest-leverage)
+
+Ranked by impact-on-A-rate (best guess):
+
+1. **Within-cycle category cooldown** — extend `MemorySlice.recent_categories` to include drafts produced in the current cron run (not just shipped tweets). Today the writer produced 3 fire drafts in sequence with no memory of fires 1 and 2 when writing fire 3.
+
+2. **Punch-style system-clause exemplars across signal types** — the Chuuk B-vs-A example pair is fire-specific. Add 1-2 punch-style exemplars for monthly_high, anomaly, severe_weather, marine to generalize the principle.
+
+3. **P5 (named humor moves)** — already drafted in IMPROVEMENT_PLAN. Adds a "Voice moves available" section to the writer prompt naming comic triple, idiom-flip, deadpan, etc. Could move the next graded cycle from B to A- by giving the writer a wider palette than "just describe."
+
+4. **Audit and remove redundant rules** — the wink-kicker ban appears in 4 places. The writer prompt is now bloated. v3 brief (`docs/writer-prompt-brief-v3.md`) is the spec for a clean-slate rewrite; consider it on a quiet day.
+
+5. **State pruning** — see follow-up #5 above. Independent of writer quality but unblocks the bot's runtime.
+
+---
+
+## Don't-touch list (preserved from prior sessions)
+
+- `src/voice/generator.py` (dead since 2026-05-04; do NOT add code to it).
+- `data/era_anchors.json` content (only the `_meta.audit_history` field if logging).
+- Regex (`_STOPCHARS`, `_STOCK_FORMULA_PATTERNS`) without a corresponding test.
+- Brand spec docs (`brand/VOICE.md`, `brand/MESSAGING_ARCHITECTURE.md`, `brand/HUMOR_RESEARCH.md`, `brand/EXEMPLARS.md`, `brand/VIRALITY_RESEARCH.md`) — these are the canonical specs; if you'd update them, surface to operator first.
+- Sonnet-evaluator-rewrite bypass — user confirmed 2026-04-27 it's intentional design.
+
+---
+
+## Operator constraints (preserved)
+
+- DO NOT push to main. Branch + PR only.
+- DO NOT skip pre-commit / pre-push hooks.
+- DO NOT amend or rewrite published commits.
+- DO NOT propose features that add recurring services or paid tools beyond Sonnet writer + Premium X tier.
+- IF a memory hook conflicts with this brief, the memory hook wins. Andrew's CLAUDE.md / memory > my brief.
