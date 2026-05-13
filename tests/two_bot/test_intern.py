@@ -868,3 +868,129 @@ class TestFahrenheitConversion:
         assert labels.get("audience_unit") == "fahrenheit_first"
         assert bundle.historical_context["prior_record_f"] == 111
         assert bundle.historical_context["margin_f"] == 4
+
+
+# ============================================================================
+# Belt-and-suspenders: bundle builders normalize GHCN-style suffixed cities.
+#
+# Root-cause fix lives in src/data/ghcn.py (PR #82 — _COOP_SUFFIX_RE and
+# _MILITARY_SUFFIX_RE patterns). These tests lock the boundary contract at
+# the bundle layer so any future signal-detection path that bypasses ghcn.py's
+# normalization still produces a clean place name in `where` and
+# `current_facts.city`. normalize_station_name is idempotent — re-normalizing
+# an already-clean "Paddock Lake" returns "Paddock Lake" — so this layer is
+# pure defense, no behavior change on the production path.
+# ============================================================================
+
+
+def test_build_monthly_high_bundle_normalizes_suffixed_city():
+    ev = MonthlyRecord(
+        city="Paddock Lake 4 Ne",
+        country="United States",
+        kind="low",
+        month=5,
+        new_temp_c=-1.0,
+        old_record_c=0.5,
+        old_record_year=2003,
+        years_of_data=25,
+        event_id="monthly_low_USC00086092_05_2026-05-12",
+        state="Wisconsin",
+    )
+
+    bundle = build_monthly_high_bundle(ev, source="ghcn")
+
+    assert "4 Ne" not in bundle.where
+    assert bundle.where.startswith("Paddock Lake")
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["city"] == "Paddock Lake"
+    # raw_signal_dump must also carry the normalized name — otherwise the
+    # bundle is internally inconsistent (where = "Paddock Lake" but raw dump
+    # = "Paddock Lake 4 Ne"), which defeats the defense-in-depth premise.
+    assert bundle.raw_signal_dump["city"] == "Paddock Lake"
+
+
+def test_build_record_bundle_normalizes_suffixed_city():
+    ev = RecordEvent(
+        city="Sioux City Ang",
+        country="United States",
+        new_temp_c=33.0,
+        old_record_c=31.0,
+        old_record_year=1998,
+        event_id="cal_high_USW00014943_2026-05-12",
+        kind="high",
+        state="Iowa",
+    )
+
+    bundle = build_record_bundle(ev, source="ghcn")
+
+    assert "Ang" not in bundle.where
+    assert bundle.where.startswith("Sioux City")
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["city"] == "Sioux City"
+    assert bundle.raw_signal_dump["city"] == "Sioux City"
+
+
+def test_build_all_time_record_bundle_normalizes_suffixed_city():
+    ev = AllTimeRecord(
+        city="Paddock Lake 4 Ne",
+        country="United States",
+        kind="low",
+        new_temp_c=-12.0,
+        old_record_c=-11.5,
+        old_record_year=1996,
+        years_of_data=30,
+        event_id="all_time_low_USC00086092_2026-05-12",
+        state="Wisconsin",
+    )
+
+    bundle = build_all_time_record_bundle(ev, source="ghcn")
+
+    assert "4 Ne" not in bundle.where
+    assert bundle.where.startswith("Paddock Lake")
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["city"] == "Paddock Lake"
+    assert bundle.raw_signal_dump["city"] == "Paddock Lake"
+
+
+def test_build_anomaly_bundle_normalizes_suffixed_city():
+    ev = AnomalyEvent(
+        city="Sioux City Ang",
+        country="United States",
+        today_temp_c=35.0,
+        historical_mean_c=18.0,
+        anomaly_c=17.0,
+        years_of_data=30,
+        event_id="anomaly_hot_USW00014943_2026-05-12",
+        state="Iowa",
+    )
+
+    bundle = build_anomaly_bundle(ev, source="ghcn")
+
+    assert "Ang" not in bundle.where
+    assert bundle.where.startswith("Sioux City")
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["city"] == "Sioux City"
+    assert bundle.raw_signal_dump["city"] == "Sioux City"
+
+
+def test_normalize_station_name_idempotent_in_bundle_builders():
+    """A clean ev.city (the production case after ghcn.py:381) must round-trip
+    unchanged through the builder. Guards against accidental over-normalization
+    (e.g. stripping legitimate trailing tokens like 'San Juan' to 'San')."""
+    ev = MonthlyRecord(
+        city="San Juan",
+        country="Puerto Rico",
+        kind="high",
+        month=5,
+        new_temp_c=35.0,
+        old_record_c=33.5,
+        old_record_year=1999,
+        years_of_data=40,
+        event_id="monthly_high_TJSJ_05_2026-05-12",
+    )
+
+    bundle = build_monthly_high_bundle(ev)
+
+    assert bundle.where == "San Juan, Puerto Rico"
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["city"] == "San Juan"

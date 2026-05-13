@@ -124,7 +124,7 @@ the three production failures (480.34, 547.92, 301.55) plus banker's-rounding ed
 The writer-prompt no-self-supplied-facility-MW rule landed in PR #74 and remains in
 force. Awaiting empirical confirmation on the next fire-bundle alerts cycle.
 
-### P3 — Writer fire overcall: add seasonal/calendar context as a verifiable framing
+### ~~P3~~ — Writer fire overcall: add seasonal/calendar context as a verifiable framing — **SHIPPED 2026-05-12 (PR #84)**
 
 **Observed:** 2026-05-11-12 — writer kills fire drafts citing "no historical_context
 available; no peer comparison confident enough to use; no verifiable seasonal or rarity
@@ -146,7 +146,25 @@ When the only context is seasonal, use it. That's enough."
 mechanic. Sahel and Siberia fires are consistently in this class. One paragraph addition;
 no other changes needed.
 
-**Status:** Ready to implement. Awaiting human greenlight.
+**Resolution:** Two changes to `src/two_bot/prompts/writer_prompt.py`:
+1. Removed the "[country]'s fire/storm/wet season peaks in [month]" bullet from the
+   `historical_context=empty` "do NOT write" list. The HARD RULES `NO FABRICATED
+   CONTEXT` rule (with its 95%+ confidence gate) still catches truly invented seasonal
+   claims; the removed bullet over-banned well-established geography.
+2. Added a "Seasonal context for fires is world knowledge" paragraph after the existing
+   "Important: lack of historical_context does NOT automatically mean kill" guidance.
+   Emphasizes integrating seasonal framing INSIDE the system clause (the wink-kicker
+   rules still apply — no separate calendar-stamp closer).
+
+The proposal's second example ("Fire activity here normally fades by [month]. It is
+[current month].") was trimmed during implementation because the second sentence
+matched the banned wink-kicker shape from line 80. Replaced with single-clause example
+("the Sahel dry season runs December–March") and explicit guidance against the calendar
+closer.
+
+**Status:** SHIPPED in PR #84. Awaiting empirical confirmation on the next two-bot
+alerts cycle that fire drafts in Sahel/Siberia (the consistent self-kill class) now
+produce drafts rather than dying on "no verifiable seasonal framing."
 
 ### P4 — Add Wodehouse rule to top of writer_prompt.py
 
