@@ -166,7 +166,7 @@ closer.
 alerts cycle that fire drafts in Sahel/Siberia (the consistent self-kill class) now
 produce drafts rather than dying on "no verifiable seasonal framing."
 
-### P4 — Add Wodehouse rule to top of writer_prompt.py
+### ~~P4~~ — Add Wodehouse rule to top of writer_prompt.py — **SHIPPED 2026-05-12 (PR #85)**
 
 **Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are
 the single most predictive failure mode across all corpus cycles. Drafts that try too
@@ -194,8 +194,22 @@ failure mode in the corpus).
 violations cluster across grades and pipelines. Eliminating them moves B drafts to
 B+/A- without changing structure.
 
-**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+**Resolution:** New section `# THE WODEHOUSE RULE` added to
+`src/two_bot/prompts/writer_prompt.py` directly before `# HARD RULES`. Names the
+four effort-signal failure modes (approximation, restate-padding, poetry-attempt
+closers, defensive justification) and ties them back to the Attenborough/Economist
+voice anchor — "the data is already extraordinary; the voice is its straight man."
+Bundled with two other quality moves in the same PR:
+1. **FRP intensity tier** in `build_fire_bundle` (`frp_tier` + `frp_tier_floor_mw`
+   in `current_facts`) so the writer can give readers a scale-word ("high-intensity"
+   at 309 MW) instead of opaque raw megawatts.
+2. **Category cooldown** via new `recent_categories` field on `MemorySlice`. 24h
+   per-category dedup prevents the "two fires in a row" pacing failure Andrew
+   flagged on 2026-05-12 when both pending drafts were Sahel-style fires.
+
+**Status:** SHIPPED in PR #85. Awaiting empirical confirmation on the next two-bot
+alerts cycle (Wodehouse impact on writer self-criticism + variety mix) and the
+next daily grading agent run (A-rate lift target: >50% sustained).
 
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
@@ -220,6 +234,52 @@ on the easy default.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+
+### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
+
+**Observed:** 2026-05-13 first graded two-bot cycle — all 3 fire drafts (Mali,
+Campeche, Mongolia) used the identical sentence-1 structure: *"A fire in
+[location] is radiating X MW of heat, detected by satellite at N% confidence."*
+The writer defaults to the most-stated form when the bundle is signal_kind=fire
+without historical_context, and the prompt's existing fire exemplar (#4) further
+reinforces the template. The 24h category cooldown shipped in PR #85 catches
+this across cron runs but not within a single cycle.
+
+**Cycles observed:** May 13 (1 cycle; 3 of 3 fire drafts identical sentence-1).
+**Last seen:** 2026-05-13.
+
+**Resolution:** New paragraph in `writer_prompt.py` IF-historical_context-IS-EMPTY
+section directly after the FRP intensity tier paragraph. Names 4 alternative
+sentence-1 forms (lead-with-location, lead-with-seasonal-frame, lead-with-tier-word,
+lead-with-stakes-or-scale-anchor) with full example tweets for each. Closes by
+banning the default opener when `recent_categories` already contains "fire" within
+24h, and tells the writer to ask whether the bundle is actually extraordinary
+enough to ship if no alternative form works.
+
+**Status:** SHIPPED in PR #85 second commit. Empirical test: next cron run that
+produces 2+ fire drafts in the same cycle — do they show structural variety?
+
+### ~~Chuuk ceiling — "expository → punch"~~ — **SHIPPED 2026-05-12 (PR #85)**
+
+**Observed:** 2026-05-13 grader noted that the Chuuk monthly_high draft was the
+ceiling at B (not A-). Clean data, 76-year record, °C+°F, specific date — but
+second sentence was "expository (Pacific warm pool context) rather than a
+punch." The system clause described the geography without paying off the data.
+
+**Cycles observed:** May 13 (1 cycle; identified as ceiling-class).
+**Last seen:** 2026-05-13.
+
+**Resolution:** Augmented THE SIGNATURE MOVE section's bullet-2 with the
+expository-vs-punch distinction. Explicit B-vs-A example pair using the Chuuk
+case ("Chuuk sits in the Pacific warm pool" → expository B; "Chuuk anchors the
+Pacific warm pool — the engine of the global atmosphere; small May reading
+shifts here propagate downstream" → punch A). New "delete the system clause"
+test: if removing your second sentence leaves the reader thinking "so what?",
+load-bearing. If it leaves them thinking "oh, fair enough", expository.
+
+**Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
+do system clauses do work (consequence/contrast/causal/rate) rather than just
+describing geography?
 
 ## Awaiting evidence
 

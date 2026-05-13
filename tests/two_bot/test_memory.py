@@ -1,4 +1,11 @@
-from src.two_bot.memory import build_memory_slice, is_reuse, record_shipped
+from datetime import datetime, timedelta, timezone
+
+from src.two_bot.memory import (
+    _signal_kind_to_category,
+    build_memory_slice,
+    is_reuse,
+    record_shipped,
+)
 from src.two_bot.types import ExtractedClaim, StoryBundle, WriterResult
 
 from tests.two_bot.conftest import (
@@ -7,6 +14,12 @@ from tests.two_bot.conftest import (
     _state_with_memory,
     _state_with_shipped_tweets,
 )
+
+
+def _iso_hours_ago(hours: float) -> str:
+    """Return an ISO-8601 UTC timestamp for ``hours`` hours before now."""
+    ts = datetime.now(timezone.utc) - timedelta(hours=hours)
+    return ts.isoformat().replace("+00:00", "Z")
 
 
 def test_build_memory_slice_filters_by_country():
@@ -166,3 +179,110 @@ def test_is_reuse_framing_exact_match_only():
 
     assert is_reuse(state, "off_season_irony", "framing")
     assert not is_reuse(state, "off_season", "framing")
+
+
+# ============================================================================
+# Category cooldown: MemorySlice.recent_categories exposes the signal
+# categories already posted in the last 24h so the writer can self-veto a
+# same-category draft. The memory layer dedupes by country today; the
+# category axis is the gap that lets us post two fires back-to-back. Each
+# signal_kind maps to a coarser category (fire+fire_footprint → "fire",
+# all temperature-record variants → "temperature_record", etc.) so the
+# writer reasons about content variety, not detection-source variety.
+# ============================================================================
+
+
+def test_build_memory_slice_includes_recent_categories_in_last_24h():
+    state = _state_with_memory(
+        shipped_tweets=[
+            {
+                "tweet_text": "Mali fire 1",
+                "signal_kind": "fire",
+                "event_id": "fire_a",
+                "country": "ML",
+                "shipped_at": _iso_hours_ago(2),
+            },
+            {
+                "tweet_text": "Mali fire 2",
+                "signal_kind": "fire",
+                "event_id": "fire_b",
+                "country": "ML",
+                "shipped_at": _iso_hours_ago(8),
+            },
+        ]
+    )
+    bundle = _bundle(event_id="fire_c", country="ML")
+
+    memory_slice = build_memory_slice(state, bundle)
+
+    # Two fires within 24h dedupe to a single category entry.
+    assert memory_slice.recent_categories == ["fire"]
+
+
+def test_build_memory_slice_filters_categories_older_than_24h():
+    state = _state_with_memory(
+        shipped_tweets=[
+            {
+                "tweet_text": "Old fire (25h ago)",
+                "signal_kind": "fire",
+                "event_id": "fire_old",
+                "country": "ML",
+                "shipped_at": _iso_hours_ago(25),
+            }
+        ]
+    )
+    bundle = _bundle(event_id="fire_new", country="ML")
+
+    memory_slice = build_memory_slice(state, bundle)
+
+    # 25h-old shipped tweet must NOT appear in the 24h cooldown window.
+    assert memory_slice.recent_categories == []
+
+
+def test_build_memory_slice_recent_categories_dedupes_most_recent_first():
+    """Multiple categories within 24h dedupe; order is most-recent-first
+    so the writer reads the freshest category first."""
+    state = _state_with_memory(
+        shipped_tweets=[
+            {
+                "tweet_text": "Fire 12h ago",
+                "signal_kind": "fire",
+                "event_id": "fire_a",
+                "country": "ML",
+                "shipped_at": _iso_hours_ago(12),
+            },
+            {
+                "tweet_text": "Temperature record 6h ago",
+                "signal_kind": "monthly_high",
+                "event_id": "monthly_a",
+                "country": "ES",
+                "shipped_at": _iso_hours_ago(6),
+            },
+            {
+                "tweet_text": "Another fire 2h ago",
+                "signal_kind": "fire_footprint",
+                "event_id": "footprint_a",
+                "country": "AU",
+                "shipped_at": _iso_hours_ago(2),
+            },
+        ]
+    )
+    bundle = _bundle(event_id="fire_new", country="US")
+
+    memory_slice = build_memory_slice(state, bundle)
+
+    # fire_footprint maps to "fire"; monthly_high maps to "temperature_record".
+    # Most-recent-first: 2h fire, then 6h temperature_record. Fire dedupes.
+    assert memory_slice.recent_categories == ["fire", "temperature_record"]
+
+
+def test_signal_kind_to_category_handles_known_and_unknown_kinds():
+    assert _signal_kind_to_category("fire") == "fire"
+    assert _signal_kind_to_category("fire_footprint") == "fire"
+    assert _signal_kind_to_category("monthly_high") == "temperature_record"
+    assert _signal_kind_to_category("calendar_record_low") == "temperature_record"
+    assert _signal_kind_to_category("anomaly_hot") == "anomaly"
+    assert _signal_kind_to_category("sea_ice") == "cryosphere"
+    # Unknown kind falls back to the input string so the writer still sees
+    # something meaningful rather than dropping the entry silently.
+    assert _signal_kind_to_category("future_signal_kind") == "future_signal_kind"
