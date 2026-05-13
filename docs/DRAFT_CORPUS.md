@@ -13,6 +13,178 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-13 — First two-bot pipeline drafts graded (4 drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 4 pending
+drafts — 3 fire, 1 monthly_high. This is the **first graded two-bot output cycle**: prior
+cycles had zero pending two-bot drafts (May 12: queue empty; earlier cycles: generator.py
+era). Cron runs on 2026-05-12 18:03 UTC and 2026-05-13 10:32 UTC produced these four
+drafts under the Attenborough/Economist writer prompt (PR #74 + #75) with FRP rounding
+fix (#80) and station-normalization fix (#82).
+
+**Grade distribution:** 0 A, 1 B, 3 C (one C+). **A-rate: 0% (0/4).**
+Gap from resumption bar: 50 points.
+
+### Per-draft
+
+#### [1] Mali fire — 309.6 MW — **C+**
+
+> *A fire in Mali's Western Sahel is radiating 309.6 MW of heat, detected by satellite at
+> 95% confidence. May sits at the tail of the dry season here; grasses cured by months
+> without rain burn hot before the first rains reset the landscape.*
+
+**Score:** 64 (threshold 64). Created 2026-05-12T18:03Z.
+
+Humor lens:
+- **Violation:** 309.6 MW satellite detection at 95% confidence. Present.
+- **Benign?** Yes — calm, factual register throughout.
+- **Setup→Punchline?** Data is the setup. "Grasses cured by months without rain burn hot
+  before the first rains reset the landscape" is seasonal explanation, not a punchline.
+  No kicker.
+- **Named mechanic?** None operating. Seasonal context deployed, but as educational prose.
+- **Wodehouse rule?** Not violated — voice isn't trying too hard. But "reset the landscape"
+  drifts toward literary; the closer is soft where it should stop harder.
+
+Formula opener: "A fire in [location] is radiating X MW of heat, detected by satellite at
+N% confidence." This structure appears in all three fire drafts — first instance. The
+second sentence is valid seasonal framing (P3 failure mode — writer self-kill — is NOT
+evidenced here; seasonal context is being deployed), but delivered as explanation rather
+than incongruity.
+
+The A-grade Mali fire from the Apr 26 corpus used the same location: "A 291 MW fire is
+active in a landscape where the burning season typically peaks in January and ends by
+February. It is April 26." The kicker ("It is April 26.") did the work — it named the
+incongruity. This draft provides context without establishing whether May is expected or
+anomalous for Mali fires. No timing statement. No kicker.
+
+#### [2] Campeche fire — 364.7 MW — **C**
+
+> *A fire in southern Mexico — near the Campeche lowlands — is radiating 364.7 MW of heat,
+> detected by satellite at 95% confidence. May closes out the dry season here; months without
+> rain cure tropical vegetation into fuel before the wet season arrives.*
+
+**Score:** 65 (threshold 64). Created 2026-05-12T21:25Z.
+
+Same formula opener as Draft [1] confirmed. Second sentence is a structural twin:
+"[Month] [sits at / closes out] the [tail of / end of] the dry season here; [vegetation]
+cured by months without rain [burns hot / into fuel] before the [rains / wet season]
+[reset / arrive]." The writer produced the same two-sentence shape in consecutive runs,
+only swapping regional vocabulary. Memory's `used_framings` is not preventing structural
+reuse across runs.
+
+No kicker, no incongruity, no named mechanic. Graded C (below Draft [1]) because this is
+the second instance of the same formula — the convergence itself is the failure mode.
+
+#### [3] Chuuk FSM monthly_high — 34.4°C — **B**
+
+> *Chuuk, Federated States of Micronesia hit 34.4°C (94°F) on May 9 — a new May record in
+> 76 years of data, edging past the 33.9°C mark set in 2000. The western Pacific warm pool
+> keeps sea-surface temperatures here among the highest on Earth year-round.*
+
+**Score:** 80 (threshold 76). Created 2026-05-13T10:32Z.
+
+Humor lens:
+- **Violation:** New May record in 76 years. Real signal, well-stated.
+- **Benign?** Yes. Calm register.
+- **Setup→Punchline?** Setup: 34.4°C, 76 years, prior mark 33.9°C in 2000. Second sentence:
+  ecosystem specificity (Pacific warm pool). This is context, not punchline. The implied
+  incongruity — "even the warmest ocean on Earth just broke its own May record" — is present
+  but unexploited, stated as explanation rather than as a deadpan landing.
+- **Named mechanic?** Ecosystem specificity. No comic mechanic.
+- **Wodehouse rule?** Clean. No restate-padding, no defensive justification, no explicit-gap
+  math. Tone measured. Not trying too hard.
+
+Strongest draft in the cycle. Data complete: city, full country name, °C + °F, specific
+observation date (May 9), archive depth (76 years), prior record temperature (33.9°C),
+prior year (2000). All voice-spec requirements met for monthly_high type. No Wodehouse
+violations.
+
+Deduct for: second sentence is expository rather than a voice move. "The western Pacific
+warm pool keeps sea-surface temperatures here among the highest on Earth year-round" is
+educational. The implied incongruity ("warmest ocean already; still breaking records") is
+present but not stated. If it ended "Chuuk sits in the Pacific's warmest waters. Those
+waters just broke their own May ceiling." — that would grade A-/B+. As written, B.
+
+"Edging past" is soft phrasing for a 0.5°C margin in a 76-year dataset. The margin is
+real and notable; flatter language would let it stand on its own.
+
+#### [4] Mongolia fire — 307.6 MW — **C**
+
+> *A fire in eastern Mongolia is radiating 307.6 MW of heat, detected by satellite at 95%
+> confidence. Mongolia's steppe turns dry by late spring as winter snowpack retreats; cured
+> grasslands ignite fast and spread far across open terrain.*
+
+**Score:** 64 (threshold 64). Created 2026-05-13T10:33Z.
+
+Third fire draft; third instance of the formula opener. The second sentence achieves the
+only regional distinctiveness in the fire batch: "winter snowpack retreats" is
+Mongolia-specific (the other drafts reference rain cycles), and "spread far across open
+terrain" gives a landscape sense the others lack. Still no punchline, no kicker, no
+stated incongruity about whether May is expected or unusual for Mongolian steppe fires.
+
+"Mongolia's steppe turns dry by late spring as winter snowpack retreats" describes a
+natural, expected seasonal progression. There's no implied anomaly. Without a timing
+statement ("The burning season here typically ends by June. It is May." would be weak
+here because May IS normal) or a different angle on the incongruity, the framing is
+geography lesson, not deadpan. The snowpack detail earns C over C-; the formula
+pattern keeps it from B.
+
+### Patterns named in this batch
+
+1. **Fire template convergence (new failure mode).** All three fire drafts follow the same
+   two-sentence structure: (1) "A fire in [location] is radiating X MW of heat, detected by
+   satellite at N% confidence." (2) "[Region's vegetation/landscape] [seasonal transition];
+   [combustion behavior note]." The writer produces this shape across Mali savanna, Campeche
+   tropical forest, and Mongolian steppe. Memory's `used_framings` is not preventing
+   structural reuse across consecutive cron runs. Template needs to be burned in the prompt.
+
+2. **Seasonal context as explanation, not punchline.** The P3 failure mode (writer self-kill
+   when no archive data is available) is NOT evidenced today — all three fire drafts reached
+   pending with seasonal framing intact. Positive improvement. But the framing is deployed
+   as educational prose rather than as the incongruity-delivery vehicle. The A-grade pattern
+   was: state the data, state the timing anomaly, land the kicker ("It is April."). Today's
+   pattern: state the data, explain the dry season, stop. The kicker is absent.
+
+3. **No named humor mechanic in any fire draft.** No comic triple, no period-and-restate,
+   no deadpan kicker, no era anchor, no idiom-flip. The writer is not reaching for the named
+   palette of moves. Consistent with P5's diagnosis: moves not named in the prompt don't get
+   used.
+
+4. **Chuuk monthly_high is the strongest draft but stops short of a punch.** All data
+   requirements met. No Wodehouse violation. The implied incongruity (warmest ocean still
+   broke its May record) is present but unstated. One punchy closer would move this to A-.
+
+5. **P3 self-kill failure not observed.** All three fire drafts reached pending with seasonal
+   context deployed. Improvement confirmed in first graded two-bot cycle.
+
+6. **FRP rounding working.** Today's values (309.6, 364.7, 307.6) confirm bundle-side
+   rounding (#80) is producing clean 1-decimal FRP values. No BUNDLE_FACT mismatch kills
+   on rounding observed.
+
+### Followups
+
+1. Burn the fire template: add to writer_prompt.py fire framing: the two-sentence
+   "[radiating X MW]...[seasonal context]" structure is burned — name alternative sentence-1
+   forms (lead with FRP number, lead with regional ecology, lead with timing incongruity).
+2. Add deadpan kicker instruction to fire framing: "When timing is anomalous, state it
+   directly and stop: 'The burning season here peaks in [month]. It is [current month].'
+   That is the punchline."
+3. Watch P3 status: if next 2 cycles also show no self-kills, move to Resolved.
+4. Chuuk as a near-miss exemplar: "Chuuk sits in the Pacific's warmest waters. Those
+   waters just broke their own May ceiling." is the A- version.
+
+### Numbers
+
+- Pending drafts graded: 4 (3 fire, 1 monthly_high)
+- A-rate: 0% (0/4)
+- Grade distribution: 0 A / 1 B / 3 C (one C+) / 0 D-F
+- First graded two-bot pipeline cycle
+- Staleness rejection: not applicable (all drafts < 48 hours; no baked "today" content)
+- P3 failure mode: not observed (positive)
+- New failure mode identified: fire template convergence → P6 proposal added
+
+---
+
 ## 2026-05-12 — No fresh pending drafts (0 drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
