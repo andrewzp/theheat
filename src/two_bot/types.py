@@ -46,6 +46,7 @@ class MemorySlice:
     used_peer_comparisons: list[str] = field(default_factory=list)
     used_framings: list[str] = field(default_factory=list)
     shipped_tweet_texts: list[str] = field(default_factory=list)
+    recent_categories: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -56,6 +57,7 @@ class MemorySlice:
             "used_peer_comparisons": self.used_peer_comparisons,
             "used_framings": self.used_framings,
             "shipped_tweet_texts": self.shipped_tweet_texts,
+            "recent_categories": self.recent_categories,
         }
 
 

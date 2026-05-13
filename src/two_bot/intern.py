@@ -157,6 +157,27 @@ def _audience_unit_facts(country: str | None) -> list[dict]:
     return [{"label": "audience_unit", "value": "celsius_first"}]
 
 
+def _frp_tier(frp_mw: float) -> tuple[str, int]:
+    """Classify a fire's FRP value into a reader-relatable intensity tier.
+
+    Raw MW is opaque to non-specialist readers; the tier word gives them a
+    scale they can feel. Thresholds are simple round numbers that align with
+    common conventions in wildfire research — they are not tied to any
+    specific authority's classification, so the writer prompt is instructed
+    NOT to attribute the tier (no "per NASA", no "by FIRMS standards").
+    Returns ``(tier_label, tier_floor_mw)``. The floor is the inclusive lower
+    bound of the tier, useful when the writer wants to cite the threshold
+    ("above the 100 MW high-intensity threshold").
+    """
+    if frp_mw >= 500:
+        return ("very_high", 500)
+    if frp_mw >= 100:
+        return ("high", 100)
+    if frp_mw >= 30:
+        return ("moderate", 30)
+    return ("low", 0)
+
+
 def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     """Assemble a pure-facts StoryBundle for a fire signal."""
 
@@ -168,6 +189,7 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     # fact-checker confirms exact match. See IMPROVEMENT_PLAN.md P2 +
     # tests/two_bot/test_intern.py::test_build_fire_bundle_rounds_frp_to_one_decimal.
     frp_rounded = round(fire.frp, 1)
+    tier_label, tier_floor = _frp_tier(frp_rounded)
 
     return StoryBundle(
         signal_kind="fire",
@@ -181,6 +203,8 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             {"label": "nearest_region", "value": fire.nearest_city},
             {"label": "lat", "value": fire.lat},
             {"label": "lon", "value": fire.lon},
+            {"label": "frp_tier", "value": tier_label},
+            {"label": "frp_tier_floor_mw", "value": tier_floor},
         ],
         historical_context={},
         raw_signal_dump={

@@ -27,6 +27,54 @@ _STOPWORDS = {
     "that",
 }
 
+# Maps the 25+ detection-specific signal_kinds to a smaller set of coarse
+# categories for the per-day cooldown logic. Two fires from different countries
+# (e.g. "fire" + "fire_footprint") should count as the same category so the
+# writer doesn't post them back-to-back. Temperature records likewise: a
+# calendar-day record and a monthly-high record on different cities still
+# both feel like "temperature" to the reader.
+_SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
+    "fire": "fire",
+    "fire_footprint": "fire",
+    "monthly_high": "temperature_record",
+    "monthly_low": "temperature_record",
+    "calendar_record": "temperature_record",
+    "calendar_record_low": "temperature_record",
+    "open_meteo_archive_high": "temperature_record",
+    "open_meteo_archive_low": "temperature_record",
+    "country_high": "temperature_record",
+    "country_low": "temperature_record",
+    "anomaly_hot": "anomaly",
+    "anomaly_cold": "anomaly",
+    "severe_weather": "severe_weather",
+    "record_streak": "record_streak",
+    "simultaneous_records": "simultaneous_records",
+    "co2_milestone": "co2",
+    "sea_ice": "cryosphere",
+    "ice_mass": "cryosphere",
+    "marine_heatwave": "marine",
+    "extreme_wave": "marine",
+    "storm_surge": "marine",
+    "river_flood": "flood",
+    "drought": "drought",
+    "enso": "enso",
+    "hot10": "hot10",
+    "synthesis": "synthesis",
+    "global_disaster": "global_disaster",
+}
+
+
+def _signal_kind_to_category(kind: str) -> str:
+    """Map a fine-grained signal_kind to a coarse category for cooldown logic.
+
+    Unknown kinds fall back to the input string so the writer still sees a
+    consistent category label rather than silently dropping the entry.
+    """
+    return _SIGNAL_KIND_TO_CATEGORY.get(kind, kind)
+
+
+_CATEGORY_COOLDOWN_SECONDS = 24 * 60 * 60
+
 
 def _normalize(s: str) -> str:
     """Lowercase, trim, collapse whitespace, and remove trailing punctuation."""
@@ -177,6 +225,28 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         reverse=True,
     )
 
+    # Per-category cooldown: which signal categories have we already posted
+    # in the last 24h? The writer reads this to self-veto a same-category
+    # draft (or clear a higher bar — meaningfully different mechanic /
+    # geography / scale) so the feed doesn't read like two fires in a row.
+    # shipped_rows is already most-recent-first; preserve that order while
+    # deduping so the writer sees the freshest category first.
+    category_cutoff = datetime.now(UTC).timestamp() - _CATEGORY_COOLDOWN_SECONDS
+    recent_categories: list[str] = []
+    seen_categories: set[str] = set()
+    for row in shipped_rows:
+        shipped_at = _parse_time(row.get("shipped_at"))
+        if shipped_at is None or shipped_at.timestamp() < category_cutoff:
+            continue
+        kind = row.get("signal_kind")
+        if not kind:
+            continue
+        category = _signal_kind_to_category(kind)
+        if category in seen_categories:
+            continue
+        seen_categories.add(category)
+        recent_categories.append(category)
+
     same_event_rows = []
     if event_keys:
         for row in list(memory.get("shipped_tweets", [])) + list(state.get("drafts", [])):
@@ -202,6 +272,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         used_peer_comparisons=list(memory.get("used_peer_comparisons", []))[-200:],
         used_framings=list(memory.get("used_framings", []))[-200:],
         shipped_tweet_texts=[_tweet_text(row) for row in shipped_rows[:100]],
+        recent_categories=recent_categories,
     )
 
 

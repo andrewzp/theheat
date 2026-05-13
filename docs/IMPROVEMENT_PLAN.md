@@ -164,7 +164,7 @@ closer.
 alerts cycle that fire drafts in Sahel/Siberia (the consistent self-kill class) now
 produce drafts rather than dying on "no verifiable seasonal framing."
 
-### P4 — Add Wodehouse rule to top of writer_prompt.py
+### ~~P4~~ — Add Wodehouse rule to top of writer_prompt.py — **SHIPPED 2026-05-12 (PR #85)**
 
 **Observed:** humor-lens evaluation (Apr 27 corpus) found Wodehouse-rule violations are
 the single most predictive failure mode across all corpus cycles. Drafts that try too
@@ -192,8 +192,22 @@ failure mode in the corpus).
 violations cluster across grades and pipelines. Eliminating them moves B drafts to
 B+/A- without changing structure.
 
-**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+**Resolution:** New section `# THE WODEHOUSE RULE` added to
+`src/two_bot/prompts/writer_prompt.py` directly before `# HARD RULES`. Names the
+four effort-signal failure modes (approximation, restate-padding, poetry-attempt
+closers, defensive justification) and ties them back to the Attenborough/Economist
+voice anchor — "the data is already extraordinary; the voice is its straight man."
+Bundled with two other quality moves in the same PR:
+1. **FRP intensity tier** in `build_fire_bundle` (`frp_tier` + `frp_tier_floor_mw`
+   in `current_facts`) so the writer can give readers a scale-word ("high-intensity"
+   at 309 MW) instead of opaque raw megawatts.
+2. **Category cooldown** via new `recent_categories` field on `MemorySlice`. 24h
+   per-category dedup prevents the "two fires in a row" pacing failure Andrew
+   flagged on 2026-05-12 when both pending drafts were Sahel-style fires.
+
+**Status:** SHIPPED in PR #85. Awaiting empirical confirmation on the next two-bot
+alerts cycle (Wodehouse impact on writer self-criticism + variety mix) and the
+next daily grading agent run (A-rate lift target: >50% sustained).
 
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
