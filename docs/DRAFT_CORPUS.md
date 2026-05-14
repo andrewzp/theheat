@@ -13,6 +13,110 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-14 — Daily corpus grading (5 drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending drafts —
+4 carry-overs from the 2026-05-13 graded cycle (Mali fire, Campeche fire, Chuuk FSM
+monthly_high, Mongolia fire; all still pending, no drafts posted or rejected since
+yesterday's run) + 1 new draft added 2026-05-13T21:29Z (Bethel, Maine monthly_low).
+Carry-over drafts were fully graded in the 2026-05-13 section; grades stand. Today's
+new grade: draft [5].
+
+**Grade distribution:** 0 A, 1 B, 4 C / 0 D-F. **A-rate: 0% (0/5).**  
+Gap from resumption bar: 50 points.
+
+### Carry-over grades (2026-05-13 section — unchanged)
+
+| # | Draft | Grade | Key note |
+|---|---|---|---|
+| [1] | Mali fire — 309.6 MW | C+ | Formula opener. Seasonal context as explanation, no kicker. |
+| [2] | Campeche fire — 364.7 MW | C | Structural twin of [1]; second instance of the same formula. |
+| [3] | Chuuk FSM monthly_high — 34.4°C, 76yr | B | Clean data, no Wodehouse violation. Second sentence expository not a punch. Cycle ceiling. |
+| [4] | Mongolia fire — 307.6 MW | C | Third formula opener. Some regional distinctiveness (snowpack). No punchline. |
+
+### New draft
+
+#### [5] Bethel, Maine monthly_low — 28°F / -2.2°C — **C**
+
+> *Bethel, Maine hit 28°F (-2.2°C) on May 9 — coldest May low in 16 years of records, a
+> degree below the 2017 mark. The upper Androscoggin Valley sits in a bowl surrounded by
+> the White Mountain foothills; cold air drains into it on still nights and holds.*
+
+**Score:** 80 (threshold 76). Created 2026-05-13T21:29Z.
+
+Humor lens:
+- **Violation present?** Coldest May low in 16 years. Mild — shallow archive, 1°F margin,
+  cold-climate location.
+- **Benign?** Yes. Calm, factual throughout.
+- **Setup→Punchline?** Setup: 28°F, 16yr record, 1°F below 2017 mark. Second sentence:
+  topographic mechanism ("bowl surrounded by foothills; cold air drains in on still nights
+  and holds"). This is explanation, not punchline. PR #75 compliant — topographic mechanism,
+  no warming framing.
+- **Named mechanic?** None.
+- **Wodehouse rule?** Clean. "a degree below the 2017 mark" is specific. No approximation,
+  no restate-padding, no defensive justification. Writer followed the cold-record template
+  correctly.
+
+Data completeness: all fields present — city + state, °F + °C, specific date (May 9),
+archive depth (16 years), prior record year (2017), margin (1°F). Temperature
+formatting fahrenheit_first correct for US location.
+
+The topographic second sentence is precisely what PR #75 requires. But it also explains
+why the Androscoggin bowl regularly gets cold on still nights — inadvertently framing the
+record as physically expected rather than surprising. The closer ("holds") has a faint ominous
+quality but the sentence as a whole reads as geography lesson, not punchline.
+
+**Signal quality concern:** Andrew manually rejected Mankato, Minnesota monthly_low (score 79,
+16yr archive, 0°F effective margin, "defensive 'A record is a record' closer") on
+2026-05-11. Bethel shares the signal class — 16yr archive, 1°F margin, cold-climate city.
+The voice here is cleaner than Mankato (no defensive closer); the signal is comparably weak.
+Cold record + shallow archive + small margin + location where cold is architecturally
+expected = a combination that passes the score gate but fails the editorial bar Andrew
+established. This is a new failure mode: the writer has no self-kill rule for weak cold
+signals the way it has strong self-kill instincts on low-confidence fire framings.
+
+Grade C: voice execution adequate, data complete, template-compliant, no Wodehouse
+violations. Signal insufficient for the editorial bar: 16-year archive, 1°F margin, cold
+in a cold-climate bowl. Topographic mechanism explains rather than pays off.
+
+### Patterns named in this batch
+
+1. **P5 confirmed in two-bot context, fourth consecutive cycle.** All 5 drafts — 3 fire,
+   1 monthly_high, 1 monthly_low — deploy zero named humor mechanics. No idiom-flip, no
+   comic triple, no understatement closer, no deadpan kicker. P5 evidence count now spans
+   Apr 25, Apr 27, May 13, May 14. It is the only unresolved active proposal and the most
+   consistently evidenced failure mode across both pipelines.
+
+2. **Cold-record quality floor — new failure mode.** Draft [5] Bethel passed score gate
+   (80 > 76) with 16yr archive + 1°F margin + cold-climate bowl. Matches the signal class
+   Andrew rejected manually (Mankato, May 11). Writer executes the cold-record template
+   correctly (topographic mechanism) but has no self-kill gate for shallow-archive cold
+   records. Fire drafts have strong self-kill instincts; cold records don't. New proposal
+   added to plan.
+
+3. **Carry-over fire drafts pre-date P6 fix.** Drafts [1]-[4] were generated under the
+   pre-PR #89 prompt. P6 empirical confirmation (fire sentence-1 variety) is still pending —
+   requires the first fire cycle generated AFTER PR #89 merged (late 2026-05-13 evening).
+
+4. **No P3 self-kills observed, second consecutive graded cycle.** Positive carry-over.
+   All fire drafts reached pending with seasonal framing intact.
+
+5. **FRP rounding confirmed again.** Values 309.6, 364.7, 307.6 MW — all 1-decimal clean
+   in carry-over fire drafts. No BUNDLE_FACT mismatch kills.
+
+### Numbers
+
+- Pending drafts graded: 5 (4 carry-over + 1 new)
+- A-rate: 0% (0/5)
+- Grade distribution: 0 A / 1 B / 4 C / 0 D-F
+- New draft: Bethel, ME monthly_low — C (voice template-compliant; signal too weak)
+- Staleness rejection: not attempted — no drafts >48h; no date-baked content; gh CLI
+  unavailable in grading environment (git-clone read path succeeded)
+- P3 self-kill failures: 0 (positive, second consecutive cycle)
+- New failure mode identified: cold-record quality floor → new proposal added
+
+---
+
 ## 2026-05-13 — First two-bot pipeline drafts graded (4 drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 4 pending

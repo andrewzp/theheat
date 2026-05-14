@@ -10,9 +10,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Last cycle A-rate | 0% (May 14, 5 pending drafts — 4 carry-over fire/monthly_high + 1 new monthly_low) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | 50 pp (three consecutive graded cycles at 0%: Apr 29, May 13, May 14) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -122,7 +122,9 @@ dying on float-precision mismatch. The fabrication rule (already largely in plac
 `tests/two_bot/test_intern.py::test_build_fire_bundle_rounds_frp_to_one_decimal` covers
 the three production failures (480.34, 547.92, 301.55) plus banker's-rounding edges.
 The writer-prompt no-self-supplied-facility-MW rule landed in PR #74 and remains in
-force. Awaiting empirical confirmation on the next fire-bundle alerts cycle.
+force. **Empirically confirmed: 2 graded cycles (May 13, May 14) with 6 fire drafts
+total, all producing clean 1-decimal FRP values (309.6, 364.7, 307.6 MW), zero
+BUNDLE_FACT rounding kills observed.**
 
 ### ~~P3~~ — Writer fire overcall: add seasonal/calendar context as a verifiable framing — **SHIPPED 2026-05-12 (PR #84)**
 
@@ -162,9 +164,10 @@ matched the banned wink-kicker shape from line 80. Replaced with single-clause e
 ("the Sahel dry season runs December–March") and explicit guidance against the calendar
 closer.
 
-**Status:** SHIPPED in PR #84. Awaiting empirical confirmation on the next two-bot
-alerts cycle that fire drafts in Sahel/Siberia (the consistent self-kill class) now
-produce drafts rather than dying on "no verifiable seasonal framing."
+**Status:** SHIPPED in PR #84. **Empirically confirmed: 2 graded cycles (May 13, May 14)
+with 6 fire drafts (Mali, Campeche, Mongolia × 2 cycles), all reaching pending with
+seasonal framing deployed. Zero P3 self-kills observed across both cycles. Failure mode
+closed in two-bot pipeline.**
 
 ### ~~P4~~ — Add Wodehouse rule to top of writer_prompt.py — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -207,9 +210,11 @@ Bundled with two other quality moves in the same PR:
    per-category dedup prevents the "two fires in a row" pacing failure Andrew
    flagged on 2026-05-12 when both pending drafts were Sahel-style fires.
 
-**Status:** SHIPPED in PR #85. Awaiting empirical confirmation on the next two-bot
-alerts cycle (Wodehouse impact on writer self-criticism + variety mix) and the
-next daily grading agent run (A-rate lift target: >50% sustained).
+**Status:** SHIPPED in PR #85 / PR #89. **Empirically confirmed (partially): 2 graded
+cycles (May 13, May 14) with 9 two-bot drafts total — zero Wodehouse violations observed
+in either cycle. Fire drafts arrive clean; no defensive closers, no explicit gap math,
+no restate-padding. A-rate has not lifted yet (still 0%); Wodehouse violations were not
+the current bottleneck — named mechanics and fire template convergence are.**
 
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
@@ -219,9 +224,11 @@ accelerating-warming, ecosystem specificity) appeared inconsistently. In the two
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
 palette is named.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 14 (4 cycles; confirmed in both legacy
+generator.py pipeline and two-bot pipeline). Two-bot confirmation: all 4 May 13 drafts
+(3 fire, 1 monthly_high) and all 5 May 14 drafts (3 fire, 1 monthly_high carry-over,
+1 monthly_low) use zero named humor mechanics.
+**Last seen:** May 14.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -230,10 +237,45 @@ ecosystem-specific specificity. Conclude: *"None of these are mandatory. When th
 alone is striking, deliver the data plainly. Forced humor breaks the spell."*
 
 **Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default.
+on the no-mechanic seasonal-explanation pattern. Single unresolved active proposal with
+the most cross-pipeline evidence (4 cycles, 9 graded two-bot drafts, 0 named mechanics
+observed).
 
-**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+**Status:** Drafted. Awaiting human implementation. **Highest-leverage unresolved proposal.**
+
+### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
+
+**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
+threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
+bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
+violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
+manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
+margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
+archive, trivial margin, location where cold is architecturally expected — but with
+cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
+strong self-kill instincts for low-confidence fire framings.
+
+**Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
+**Last seen:** May 14.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+cold-record framing section:
+
+> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
+> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
+> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
+> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
+> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
+> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
+> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
+> correct on the same grounds.
+
+**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
+(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
+drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
+only — does not affect monthly_high or other record types.
+
+**Status:** Drafted. Awaiting human implementation.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
