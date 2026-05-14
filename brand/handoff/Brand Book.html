@@ -52,6 +52,7 @@
   .cover .hero{display:flex;flex-direction:column;justify-content:center;flex:1}
   .cover .hero .lockup .wm{font-size:64px}
   .cover .hero .tagline{font-size:18px;color:var(--ink2);max-width:50ch;margin-top:24px;line-height:1.4;letter-spacing:-.005em}
+    .cover .hero .sub{font-size:13px;color:var(--ash);max-width:54ch;margin-top:10px;line-height:1.5;font-weight:400;font-family:var(--mono);letter-spacing:.01em;text-transform:none}
   .cover .meta{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;font-family:var(--mono);font-size:10px;color:var(--ash);letter-spacing:.06em;text-transform:uppercase;border-top:1px solid var(--ink);padding-top:14px}
   .cover .meta b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
 
@@ -141,9 +142,9 @@
   <!-- COVER -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
-      <div class="mast-sub"><div>OWNER · ANDREW</div><div>26 APR 2026 · LETTER · PRINT-READY</div></div>
+      <div class="mast-sub"><div>OWNER · ANDREW</div><div>v1.0 · LETTER · PRINT-READY</div></div>
     </header>
     <div class="cover">
       <div class="hero">
@@ -155,21 +156,22 @@
           </svg>
           <svg class="wm wm-outlined" viewBox="0 0 296 80" width="236.80" height="64" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
         </div>
-        <p class="tagline">A climate data wire. The brand is the reading: extraordinary numbers, plainly reported, sourced. Not amber. Not a dashboard. A logbook of a planet running a fever.</p>
+        <p class="tagline">Diary of a warming planet.</p>
+        <p class="sub">An automated climate desk that surfaces events extraordinary enough to deserve a stranger&rsquo;s attention.</p>
       </div>
       <div class="meta">
-        <div><b>Format</b>9 pages · letter</div>
+        <div><b>Format</b>10 pages · letter</div>
         <div><b>Use</b>The canonical reference</div>
         <div><b>Companion</b>Usage Guide (one-page)</div>
       </div>
     </div>
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>COVER</div><div class="num">01 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>COVER</div><div class="num">01 / 10</div></div>
   </article>
 
   <!-- §01 WORDMARK -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§01 · WORDMARK</div><div>INTER SEMIBOLD · LOCKUP · CLEAR-SPACE · MIN SIZE</div></div>
     </header>
@@ -196,20 +198,20 @@
     <h2>Outline file</h2>
     <p><span class="mono">handoff/svg/wordmark-outlined.svg</span> ships glyph paths &mdash; renders correctly without Inter loaded externally. Same for <span class="mono">lockup-outlined.svg</span> and <span class="mono">lockup-mono-outlined.svg</span>.</p>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§01 WORDMARK</div><div class="num">02 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§01 WORDMARK</div><div class="num">02 / 10</div></div>
   </article>
 
   <!-- §02 COLOR -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§02 · COLOR</div><div>NEUTRAL PALETTE · ACCENT CONTRACT · DO / DON'T</div></div>
     </header>
     <div class="sec-head">
       <div class="sec-num">§02</div>
       <h1>Color</h1>
-      <p class="deck">Mostly neutral. One warm accent, applied only where a number needs emphasis. The page is a logbook, not a dashboard &mdash; if you find yourself adding a second hue, the layout is wrong.</p>
+      <p class="deck">Mostly neutral. One warm accent, applied only where a number needs emphasis. The accent earns its place once per surface &mdash; on a value that matters. If you find yourself adding a second hue, the layout is wrong.</p>
     </div>
 
     <div class="chips" style="grid-template-columns:repeat(6,1fr)">
@@ -227,7 +229,7 @@
       <li><strong>Unit stays neutral.</strong> &deg;C, ppm, MW in ink-2.</li>
       <li><strong>+&Delta;C callouts</strong> in accent.</li>
       <li><strong>One accent per surface.</strong> If you find yourself adding a second hue, the layout is wrong.</li>
-      <li><strong>No gradients, no glows, no amber.</strong></li>
+      <li><strong>No gradients, no glows.</strong></li>
     </ul>
 
     <div class="dd">
@@ -245,13 +247,13 @@
       </div>
     </div>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§02 COLOR</div><div class="num">03 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§02 COLOR</div><div class="num">03 / 10</div></div>
   </article>
 
   <!-- §03 NUMBER -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§03 · NUMBER</div><div>THE HERO · INT/DEC/UNIT · TABULAR · SCALE BEHAVIORS</div></div>
     </header>
@@ -297,13 +299,13 @@
       <div class="reading" style="font-size:36px"><span class="int">1.5</span><span class="dec">2</span><span class="unit" style="font-size:.34em">&deg;C anom</span></div>
     </div>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§03 NUMBER</div><div class="num">04 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§03 NUMBER</div><div class="num">04 / 10</div></div>
   </article>
 
   <!-- §04 MARK -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§04 · MARK</div><div>THERMOMETER + BULB · 400/200/96/48/24/16 · FAVICON RULE</div></div>
     </header>
@@ -350,13 +352,13 @@
     <h2>Icon kit (semantic, not identity)</h2>
     <p>Thermometer = mark. Degree, isotherm, station-pin, mercury-bulb stay in <span class="mono">handoff/svg/</span> as semantic helpers used inline in the dashboard, sidebar lists, and tweet meta. Never substituted for the mark.</p>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§04 MARK</div><div class="num">05 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§04 MARK</div><div class="num">05 / 10</div></div>
   </article>
 
   <!-- §05 LOCKUP -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§05 · LOCKUP</div><div>POSITIONS · CLEAR-SPACE · MIN SIZE · LIGHT + REVERSE</div></div>
     </header>
@@ -396,13 +398,13 @@
       <li><strong>Outlined</strong>. <span class="mono">lockup-outlined.svg</span>, <span class="mono">lockup-mono-outlined.svg</span> &mdash; glyphs as paths, no font dependency.</li>
     </ul>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§05 LOCKUP</div><div class="num">06 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§05 LOCKUP</div><div class="num">06 / 10</div></div>
   </article>
 
   <!-- §06 ACCENT RULE -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§06 · ACCENT RULE</div><div>ONE-PAGE CONTRACT · OWNED VS. UNOWNED SURFACES</div></div>
     </header>
@@ -431,7 +433,7 @@
     <h2 style="margin-top:18px;color:var(--red)">The Twitter timeline caveat</h2>
     <div style="border:1px solid var(--rule);background:var(--paper2);padding:14px 18px;border-radius:3px;font-size:11.5px;line-height:1.5;color:var(--ink2)">
       <p style="margin:0 0 6px"><strong>Inside the timeline, tweets render as plain text.</strong> Twitter strips the typographic system: no integer/decimal contrast, no tabular figures, no accent color. The number reads in body weight, body size, body color.</p>
-      <p style="margin:0">Owned surfaces (avatar, banner, OG card, screenshots, the wire desk) keep the brand. The feed itself is a plain-text channel &mdash; design copy that survives without the system. <em>If the post needs the typography to land, the post is wrong.</em></p>
+      <p style="margin:0">Owned surfaces (avatar, banner, OG card, screenshots, the operator dashboard) keep the brand. The feed itself is a plain-text channel &mdash; design copy that survives without the system. <em>If the post needs the typography to land, the post is wrong.</em></p>
     </div>
 
     <h2>Owned vs. unowned</h2>
@@ -442,7 +444,7 @@
           <li>Avatar &amp; banner</li>
           <li>OG / share card</li>
           <li>Screenshots, embeds, quote-cards</li>
-          <li>Wire-desk dashboard</li>
+          <li>Operator dashboard</li>
           <li>Brand book, usage guide, web</li>
         </ul>
       </div>
@@ -457,48 +459,44 @@
       </div>
     </div>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§06 ACCENT RULE</div><div class="num">07 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§06 ACCENT RULE</div><div class="num">07 / 10</div></div>
   </article>
 
   <!-- §07 TWITTER APPLICATION -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§07 · TWITTER APPLICATION</div><div>AVATAR · BANNER · BIO · PINNED</div></div>
     </header>
     <div class="sec-head">
       <div class="sec-num">§07</div>
       <h1>Twitter &mdash; @theheat</h1>
-      <p class="deck">Profile composite. The brand fights for the thumb-stop on the avatar and banner; the body fights with copy alone.</p>
+      <p class="deck">Profile composite. The avatar and banner are the masthead &mdash; a single lockup + tagline, nothing else. Everything that makes the brand specific (the data, the sources, the time-stamping, the confidence flags) lives in the tweets themselves, not the chrome.</p>
     </div>
 
     <!-- profile composite -->
     <div style="border:1px solid var(--rule);background:var(--paper);position:relative;margin-bottom:14px">
       <!-- banner -->
-      <div style="height:140px;background:var(--paper2);position:relative;border-bottom:1px solid var(--rule);padding:14px 20px;display:flex;flex-direction:column;justify-content:space-between">
-        <div class="mast" style="font-size:9.5px"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r" style="font-size:9px">VOL. I · NO. 138 · 26 APR 2026</div></div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-end">
-          <div class="lockup">
-            <svg viewBox="0 0 60 96" width="22" height="36"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
-            <svg class="wm wm-outlined" viewBox="0 0 296 80" width="88.80" height="24" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
-          </div>
-          <div class="reading" style="font-size:22px"><span class="int">54</span><span class="dec">.4</span><span class="unit" style="font-size:.4em">&deg;C</span></div>
+      <div style="height:140px;background:var(--paper2);border-bottom:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+        <div class="lockup">
+          <svg viewBox="0 0 60 96" width="26" height="42"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+          <svg viewBox="0 0 296 80" width="103.60" height="28" aria-label="The Heat" role="img" style="display:inline-block;vertical-align:middle"><path d="M18.56 14.76L2.84 14.76L2.84 7.07L43.37 7.07L43.37 14.76L27.69 14.76L27.69 58L18.56 58L18.56 14.76ZM58.27 35.61L58.27 35.61L58.27 58L49.39 58L49.39 7.07L58.14 7.07L58.14 26.83Q59.61 23.62 61.93 21.77L61.93 21.77Q65.04 19.31 69.72 19.31L69.72 19.31Q73.66 19.31 76.61 20.98Q79.57 22.66 81.19 25.87Q82.82 29.08 82.82 33.70L82.82 33.70L82.82 58L73.89 58L73.89 35.07Q73.89 31.24 71.91 29.05Q69.93 26.86 66.44 26.86L66.44 26.86Q64.09 26.86 62.24 27.89Q60.39 28.91 59.33 30.88Q58.27 32.84 58.27 35.61ZM107.59 58.79L107.59 58.79Q101.82 58.79 97.66 56.36Q93.51 53.93 91.27 49.52Q89.03 45.11 89.03 39.13L89.03 39.13Q89.03 33.22 91.24 28.78Q93.44 24.33 97.49 21.82Q101.54 19.31 107.01 19.31L107.01 19.31Q110.50 19.31 113.66 20.44Q116.82 21.56 119.27 23.92Q121.71 26.28 123.09 29.92Q124.48 33.56 124.48 38.59L124.48 38.59L124.48 41.39L97.85 41.39Q97.99 44.53 99.08 46.79L99.08 46.79Q100.31 49.28 102.54 50.55Q104.76 51.81 107.70 51.81L107.70 51.81Q109.64 51.81 111.23 51.25Q112.82 50.69 113.99 49.57Q115.15 48.46 115.73 46.86L115.73 46.86L123.90 48.53Q122.97 51.61 120.75 53.92Q118.53 56.22 115.20 57.50Q111.87 58.79 107.59 58.79ZM97.89 35.34L97.89 35.34L115.83 35.34Q115.63 33.22 114.91 31.44L114.91 31.44Q113.92 29.02 111.95 27.65Q109.99 26.28 107.05 26.28Q104.11 26.28 102.06 27.67Q100.01 29.05 98.95 31.34L98.95 31.34Q98.09 33.19 97.89 35.34ZM156.19 58L147.07 58L147.07 7.07L156.19 7.07L156.19 28.13L179.88 28.13L179.88 7.07L189.01 7.07L189.01 58L179.88 58L179.88 35.82L156.19 35.82L156.19 58ZM214.19 58.79L214.19 58.79Q208.42 58.79 204.27 56.36Q200.11 53.93 197.87 49.52Q195.63 45.11 195.63 39.13L195.63 39.13Q195.63 33.22 197.84 28.78Q200.04 24.33 204.09 21.82Q208.14 19.31 213.61 19.31L213.61 19.31Q217.10 19.31 220.26 20.44Q223.42 21.56 225.87 23.92Q228.31 26.28 229.70 29.92Q231.08 33.56 231.08 38.59L231.08 38.59L231.08 41.39L204.45 41.39Q204.59 44.53 205.68 46.79L205.68 46.79Q206.91 49.28 209.14 50.55Q211.36 51.81 214.30 51.81L214.30 51.81Q216.25 51.81 217.83 51.25Q219.42 50.69 220.59 49.57Q221.75 48.46 222.33 46.86L222.33 46.86L230.50 48.53Q229.58 51.61 227.35 53.92Q225.13 56.22 221.80 57.50Q218.47 58.79 214.19 58.79ZM204.49 35.34L204.49 35.34L222.43 35.34Q222.23 33.22 221.51 31.44L221.51 31.44Q220.52 29.02 218.55 27.65Q216.59 26.28 213.65 26.28Q210.71 26.28 208.66 27.67Q206.61 29.05 205.55 31.34L205.55 31.34Q204.69 33.19 204.49 35.34ZM247.83 58.79L247.83 58.79Q244.20 58.79 241.30 57.47Q238.39 56.15 236.72 53.59Q235.04 51.03 235.04 47.27L235.04 47.27Q235.04 44.02 236.26 41.90Q237.47 39.78 239.54 38.52Q241.60 37.25 244.20 36.60Q246.80 35.95 249.60 35.68L249.60 35.68Q252.92 35.30 255.00 35.03Q257.09 34.76 258.06 34.14Q259.04 33.53 259.04 32.23L259.04 32.23L259.04 32.06Q259.04 30.18 258.28 28.86Q257.53 27.55 256.05 26.85Q254.56 26.14 252.37 26.14L252.37 26.14Q250.15 26.14 248.53 26.83Q246.90 27.51 245.88 28.61Q244.85 29.70 244.37 30.96L244.37 30.96L236.14 29.29Q237.26 25.91 239.62 23.70Q241.98 21.50 245.24 20.40Q248.51 19.31 252.34 19.31L252.34 19.31Q255.04 19.31 257.79 19.94Q260.54 20.57 262.83 22.08Q265.12 23.58 266.52 26.11Q267.92 28.64 267.92 32.47L267.92 32.47L267.92 58L259.41 58L259.41 52.74L259.07 52.74Q258.22 54.34 256.73 55.73Q255.24 57.11 253.04 57.95Q250.83 58.79 247.83 58.79ZM250.12 52.19L250.12 52.19Q252.88 52.19 254.88 51.10Q256.88 50.00 257.99 48.21Q259.10 46.41 259.10 44.29L259.10 44.29L259.10 39.78Q258.66 40.12 257.62 40.43Q256.58 40.74 255.29 40.98Q254.01 41.22 252.76 41.39Q251.52 41.56 250.66 41.66L250.66 41.66Q248.68 41.94 247.07 42.55Q245.47 43.17 244.56 44.28Q243.66 45.39 243.66 47.17L243.66 47.17Q243.66 48.81 244.49 49.92Q245.33 51.03 246.78 51.61Q248.24 52.19 250.12 52.19ZM286.10 19.79L293.49 19.79L293.49 26.76L286.10 26.76L286.10 47.23Q286.10 49.32 286.99 50.29Q287.88 51.27 289.90 51.27L289.90 51.27Q290.51 51.27 291.52 51.11Q292.53 50.96 293.15 50.82L293.15 50.82L294.55 57.69Q293.08 58.14 291.54 58.32Q290.00 58.51 288.60 58.51L288.60 58.51Q283.10 58.51 280.16 55.78Q277.22 53.04 277.22 47.99L277.22 47.99L277.22 26.76L271.78 26.76L271.78 19.79L277.22 19.79L277.22 10.70L286.10 10.70L286.10 19.79Z" fill="#16181B"/></svg>
         </div>
+        <div style="font-size:11px;color:var(--ash);letter-spacing:.005em">Diary of a warming planet.</div>
       </div>
       <!-- profile body -->
       <div style="padding:0 20px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:-30px">
-          <div style="width:60px;height:60px;border-radius:999px;background:var(--paper);border:3px solid var(--paper);display:flex;align-items:center;justify-content:center">
-            <svg viewBox="0 0 60 96" width="30" height="48"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:-42px;position:relative;z-index:1">
+          <div style="width:84px;height:84px;border-radius:999px;background:var(--paper);border:4px solid var(--paper);box-shadow:0 0 0 1px var(--rule);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg viewBox="0 0 60 96" width="42" height="67"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg>
           </div>
           <div style="border:1px solid var(--ink);padding:4px 12px;border-radius:999px;font-size:11px;color:var(--ink);font-weight:600;margin-top:8px">Follow</div>
         </div>
         <div style="margin-top:8px">
           <div style="font-size:14px;font-weight:700;color:var(--ink)">The Heat</div>
           <div style="font-size:11.5px;color:var(--ash)">@theheat</div>
-          <p style="margin:8px 0 4px;font-size:11.5px;line-height:1.45;color:var(--ink)">Climate data, on the wire. Records, anomalies, &amp; readings &mdash; from <span class="num">11,907</span> stations &amp; satellite data. Every post sourced. UTC times.</p>
-          <div class="mono" style="color:var(--ash);font-size:9.5px">SOURCES · NOAA · NASA · ECMWF · USGS · GDACS · 9 MORE</div>
+          <p style="margin:8px 0 4px;font-size:11.5px;line-height:1.45;color:var(--ink)">Records, anomalies, and readings from across the climate system. Every post sourced. UTC times.</p>
         </div>
       </div>
     </div>
@@ -512,51 +510,50 @@
         </div>
         <div><div class="name">The Heat</div><div class="handle">@theheat</div></div>
       </div>
-      <div class="body">A wire service for a planet running a fever. Every post is a record, an anomaly, or a reading that crossed a line — sourced, time-stamped, in plain language. Quiet by default. Loud when the data is.</div>
-      <div class="meta">SOURCES · NOAA · NASA · ECMWF · USGS · GDACS · 9 MORE · UTC TIMES · CONFIDENCE TAGS ON EVERY POST</div>
+      <div class="body">This is a record of the planet&rsquo;s vital signs. Every post pairs an exact, sourced number with one sentence on the system behind it &mdash; the western Pacific warm pool, the Sahel dry season, the cold-air drainage in a topographic bowl. Calm by default. The data carries the weight.</div>
     </div>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§07 TWITTER</div><div class="num">08 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§07 TWITTER</div><div class="num">08 / 10</div></div>
   </article>
 
   <!-- §08 OPERATOR DASHBOARD -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
-      <div class="mast-sub"><div>§08 · OPERATOR DASHBOARD</div><div>WIRE DESK · MASTHEAD · DATELINE · SOURCE-LINE</div></div>
+      <div class="mast-sub"><div>§08 · OPERATOR DASHBOARD</div><div>EDITORIAL CONSOLE · DRAFTS · SOURCE HEALTH</div></div>
     </header>
     <div class="sec-head">
       <div class="sec-num">§08</div>
       <h1>Operator dashboard</h1>
-      <p class="deck">Andrew uses this every day. Same masthead, same dateline, same source-line conventions as the public-facing brand &mdash; the brand <em>is</em> the workflow.</p>
+      <p class="deck">Andrew uses this every day. Internal editorial console &mdash; pending drafts, suppressions, source health. Functional first; the typography and accent system are inherited from the public brand, but the dashboard is tooling, not masthead. No volume number, no edition, no public-facing flourish.</p>
     </div>
 
     <div class="dash">
-      <div class="mini-mast"><div>THE HEAT · CLIMATE DATA WIRE</div><div style="color:var(--ash);font-weight:500">VOL. I · NO. 138 · 2026-04-26</div></div>
+      <div class="mini-mast"><div>THE HEAT · OPERATOR DASHBOARD</div><div style="color:var(--ash);font-weight:500">DRAFTS QUEUE</div></div>
       <div class="row head"><span>id</span><span>time</span><span>tier</span><span>draft · data + impact</span><span style="text-align:right">score</span><span>action</span></div>
       <div class="row">
-        <span class="id">WIRE-0142</span><span class="t">06:42 UTC</span><span class="tier">extreme</span>
+        <span class="id">DRAFT-0142</span><span class="t">06:42 UTC</span><span class="tier">extreme</span>
         <div class="body">EXTRAORDINARY heat in the Sahel. <span class="acc num">47.2&deg;C</span> in Kayes, Mali — hottest reading in 28 years. Survival outdoors is measured in hours, not days.</div>
         <span class="score">97</span><span class="act btn">Post</span>
       </div>
       <div class="row">
-        <span class="id">WIRE-0141</span><span class="t">06:38 UTC</span><span class="tier">all-time-high</span>
+        <span class="id">DRAFT-0141</span><span class="t">06:38 UTC</span><span class="tier">all-time-high</span>
         <div class="body">Buenos Aires hit <span class="acc num">42.1&deg;C</span> today. Old record: 41.3&deg;C, 1929. ER visits in 2022 spell at this level: ~1,300 city-wide.</div>
         <span class="score">84</span><span class="act btn">Post</span>
       </div>
       <div class="row">
-        <span class="id">WIRE-0140</span><span class="t">04:00 UTC</span><span class="tier">co2</span>
+        <span class="id">DRAFT-0140</span><span class="t">04:00 UTC</span><span class="tier">co2</span>
         <div class="body">CO&#8322; at Mauna Loa: <span class="acc num">435.11 ppm</span>. Last time the atmosphere held this much — 4.5M years ago — seas sat ~25m higher.</div>
         <span class="score">78</span><span class="act">In review</span>
       </div>
       <div class="row" style="opacity:.65">
-        <span class="id">WIRE-0138</span><span class="t">22:08 UTC</span><span class="tier">severe</span>
+        <span class="id">DRAFT-0138</span><span class="t">22:08 UTC</span><span class="tier">severe</span>
         <div class="body">Tornado warning, central Oklahoma. Radar-confirmed, 2 mi WSW El Reno, NE at 35 mph. Median lead time: 13 minutes.</div>
         <span class="score">66</span><span class="act">✓ Posted</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:8px 12px;border-top:1px solid var(--ink);background:var(--paper2);font-family:var(--mono);font-size:8.5px;color:var(--ash);letter-spacing:.06em">
-        <span>Daily quota · 14 / 24 posts</span><span>11,907 stations · nominal</span><span>Last refresh · 06:43 UTC</span>
+        <span>Daily quota · 14 / 24 posts</span><span>Source health · nominal</span><span>Last refresh · [UTC]</span>
       </div>
     </div>
 
@@ -569,20 +566,20 @@
     </ul>
     <p style="margin-top:8px"><strong>Standalone reference:</strong> <span class="mono">handoff/Operator Dashboard.html</span> &mdash; full 1440px implementation.</p>
 
-    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§08 DASHBOARD</div><div class="num">09 / 09</div></div>
+    <div class="foot"><div>THE HEAT · BRAND BOOK</div><div>§08 DASHBOARD</div><div class="num">09 / 10</div></div>
   </article>
 
   <!-- §09 TWEET SYSTEM -->
   <article class="page">
     <header>
-      <div class="mast"><div>THE HEAT &nbsp;·&nbsp; CLIMATE DATA WIRE</div><div class="r">BRAND BOOK · v1.0</div></div>
+      <div class="mast"><div>THE HEAT</div><div class="r">BRAND BOOK · v1.0</div></div>
       <div class="mast-rule"></div>
       <div class="mast-sub"><div>§09 · TWEET SYSTEM</div><div>BRAND-RENDER · TIMELINE-RENDER · 8 SAMPLES</div></div>
     </header>
     <div class="sec-head">
       <div class="sec-num">§09</div>
       <h1>Tweet system</h1>
-      <p class="deck">Every tweet has both beats: the <em>data point</em> and one sentence of <em>real consequence</em> — body, infrastructure, ecosystem, future. Each shown two ways: brand-render (left, owned surface) vs. timeline-render (right, plain text).</p>
+      <p class="deck">Every tweet pairs a precise data point with one calm sentence explaining the system that produced it. Two renderings shown: brand-render (left, owned surface &mdash; for embed, blog, screenshot) vs. timeline-render (right, plain text as it appears in the Twitter feed).</p>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -593,26 +590,26 @@
       <div class="tweet">
         <div class="h"><div class="av"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
         <div class="body"><strong>EXTRAORDINARY.</strong> Kayes, Mali hit <span class="acc num">47.2&deg;C</span>. Hottest in 28 years there. At 47&deg;C the body can&rsquo;t shed heat fast enough to hold core temperature; survival outdoors is hours, not days.</div>
-        <div class="meta">SOURCE · MALI-MÉTÉO · OGIMET 11907 · 2026-04-26 06:42 UTC · CONF=HIGH</div>
+        <div class="meta">SOURCE · MALI-MÉTÉO · [STATION ID] · [UTC TIMESTAMP] · CONF=HIGH</div>
       </div>
       <!-- 1 plain -->
       <div class="tweet" style="background:#fff">
         <div class="h"><div class="av" style="background:#16181B"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#F2F1EC"/><circle cx="30" cy="76" r="14" fill="#F2F1EC"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
         <div class="body" style="color:#0F1419">EXTRAORDINARY. Kayes, Mali hit 47.2&deg;C. Hottest in 28 years there. At 47&deg;C the body can&rsquo;t shed heat fast enough to hold core temperature; survival outdoors is hours, not days.</div>
-        <div class="meta">Source: Mali-Météo · OGIMET 11907 · 06:42 UTC · conf=high</div>
+        <div class="meta">Source: Mali-Météo · [STATION ID] · [UTC TIMESTAMP] · conf=high</div>
       </div>
 
       <!-- 2 brand -->
       <div class="tweet">
         <div class="h"><div class="av"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#16181B"/><circle cx="30" cy="76" r="14" fill="#16181B"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
         <div class="body">CO&#8322; at Mauna Loa: <span class="acc num">435.11 ppm</span>. Pre-industrial: 280. Last time the atmosphere held this much &mdash; about 4.5M years ago &mdash; Greenland was largely ice-free and seas sat ~25m higher.</div>
-        <div class="meta">SOURCE · NOAA GML · NOAA MLO · 2026-04-26 04:00 UTC · CONF=HIGH</div>
+        <div class="meta">SOURCE · NOAA GML · NOAA MLO · [UTC TIMESTAMP] · CONF=HIGH</div>
       </div>
       <!-- 2 plain -->
       <div class="tweet" style="background:#fff">
         <div class="h"><div class="av" style="background:#16181B"><svg viewBox="0 0 60 96" width="12" height="20"><rect x="26.5" y="6" width="7" height="62" rx="3.5" fill="#F2F1EC"/><circle cx="30" cy="76" r="14" fill="#F2F1EC"/><circle cx="30" cy="76" r="7" fill="#C2410C"/></svg></div><div><div class="name">The Heat</div><div class="handle">@theheat</div></div></div>
         <div class="body" style="color:#0F1419">CO&#8322; at Mauna Loa: 435.11 ppm. Pre-industrial: 280. Last time the atmosphere held this much &mdash; about 4.5M years ago &mdash; Greenland was largely ice-free and seas sat ~25m higher.</div>
-        <div class="meta">Source: NOAA GML · MLO · 04:00 UTC · conf=high</div>
+        <div class="meta">Source: NOAA GML · MLO · [UTC TIMESTAMP] · conf=high</div>
       </div>
     </div>
 
