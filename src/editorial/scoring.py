@@ -672,7 +672,10 @@ def score_anomaly(today_temp_c: float, historical_mean_c: float, anomaly_c: floa
         f"{'+' if kind == 'hot' else '-'}{abs_anomaly:.1f}C from normal for this month",
         f"historical mean: {historical_mean_c:.1f}C; today: {today_temp_c:.1f}C",
     ]
-    # Anomaly scoring: 15C = baseline elite, 20C+ = extreme
+    # Anomaly scoring: 15C = baseline elite, 20C+ = extreme.
+    # Threshold 74 (not 76) admits 11–14C anomalies — empirically extraordinary
+    # but rejected by the prior bar. 8C and below still self-filter via the
+    # formula's downside penalty. See test_anomaly_11c_florida_cold_passes.
     return _build_score(
         "anomaly",
         severity=72 + min(abs_anomaly - 15, 10) * 3,
@@ -681,7 +684,7 @@ def score_anomaly(today_temp_c: float, historical_mean_c: float, anomaly_c: floa
         confidence=82,
         shareability=80 + min(abs_anomaly - 15, 10) * 2,
         sensitivity=10,
-        threshold=76,
+        threshold=74,
         reasons=reasons,
     )
 
