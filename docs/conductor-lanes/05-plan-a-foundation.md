@@ -1,7 +1,7 @@
 # Lane 05 — Plan A Lane A: Source-Health Foundation + Restore + Degraded Fix
 
 **Branch:** `plan-a/source-health-foundation`
-**Plan-of-record:** `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md`
+**Plan-of-record:** `docs/PLAN_A.md` (in-repo)
 **Total scope:** Phases 1 + 2 + 3 (sequential within this lane — they share `src/main.py` so can't parallelize)
 **Estimated time:** 9-12 hours CC across 3 PRs
 
@@ -23,7 +23,7 @@ This lane fixes the data layer AND adds persistent source-health surveillance so
 
 ## Read first (in order)
 
-1. `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md` — full Plan A doc.
+1. `docs/PLAN_A.md` — full Plan A doc (5 phases, file inventory, failure modes, risk register).
 2. `PIPELINE.md` (repo root) — current flow.
 3. `BRIEFING.md` (repo root) — pipeline conventions, state shape, approval policies.
 4. `docs/conductor-lanes/00-README.md` — lane conventions (note: parts of this README are outdated re: voice/templates, ignore those bits).

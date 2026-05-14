@@ -1,7 +1,7 @@
 # Lane 06 — Plan A Lane B: State Hygiene (Trim Rejected Drafts)
 
 **Branch:** `plan-a/state-trim`
-**Plan-of-record:** `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md`
+**Plan-of-record:** `docs/PLAN_A.md` (in-repo)
 **Scope:** Plan A Phase 4 only — independent of Lane A
 **Estimated time:** 1 hour CC, single PR
 **Runs in parallel with Lane 05 (different files; no merge conflicts)**
@@ -32,7 +32,7 @@ Each rejected draft retains its `review_context` blob after the human decision i
 
 ## Read first
 
-1. `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md` — Plan A doc, Phase 4 section
+1. `docs/PLAN_A.md` — Plan A doc, Phase 4 section
 2. `src/state.py` — existing trim logic for drafts (find the function that enforces the 200-cap; this lane extends it)
 3. `tests/test_state.py` — existing draft-trim tests
 
