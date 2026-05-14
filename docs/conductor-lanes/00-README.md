@@ -1,10 +1,32 @@
-# Conductor Lanes — Deferred Detection Work
+# Conductor Lanes — Parallel Workstreams
 
-Four independent lanes, each adds a new data source or synthesis layer to
-@theheat's detection pipeline. They're independent enough to run in parallel
-worktrees — no two lanes touch the same scoring/generator region (except all
-four modify `main.py`'s `run_alerts` orchestrator, which merges cleanly as
-long as each lane adds its section in the standard order).
+## Active: Plan A — Data layer soundness (2026-05-14)
+
+Two lanes can run in parallel Conductor workspaces today. Lane 07 (dashboard)
+opens after Lane 05's Phase 1 ships.
+
+| Lane | Status | Brief | Estimated CC time |
+|---|---|---|---|
+| [05 — Source-health foundation + restore + degraded fix](./05-plan-a-foundation.md) | startable now | Phases 1+2+3 sequential within lane | 9-12 hr, 3 PRs |
+| [06 — State hygiene (trim rejected drafts)](./06-plan-a-state-trim.md) | startable now | Phase 4 standalone | 1 hr, 1 PR |
+| 07 — Dashboard source-health view | starts after Lane 05 P1 | Phase 5 standalone | 2-3 hr, 1 PR |
+
+Plan-of-record: `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md`
+
+Lane 05 and Lane 06 touch disjoint files (Lane 05: `src/main.py`, `src/data/*`, `src/state_schema.py`, `src/data/source_status.py`; Lane 06: `src/state.py`, `tests/test_state.py`) — clean parallel execution, no merge conflicts.
+
+## Legacy: lanes 01-04 (shipped, archived for reference)
+
+Four older lanes from a coverage-expansion initiative. All four shipped earlier in 2026 and are now part of the pipeline (ocean_sst, ice_mass, fire_footprint, synthesis). Files kept for the lane-prompt pattern reference only. Don't re-execute.
+
+---
+
+# Original lane conventions (still applies to 05/06/07)
+
+The original four lanes were independent enough to run in parallel worktrees — no two
+lanes touched the same scoring/generator region (except all four modified `main.py`'s
+`run_alerts` orchestrator, which merged cleanly as long as each lane added its section
+in the standard order).
 
 Before starting ANY lane, read in this order:
 
