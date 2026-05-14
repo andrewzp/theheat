@@ -1,3 +1,15 @@
+# Claude Design Brief — Update Document Inventory: MESSAGING_ARCHITECTURE.md
+
+**Date:** 2026-05-14
+**Scope:** Replace your cached copy of `brand/MESSAGING_ARCHITECTURE.md` with the version below. The previous version was the source of stale framings (`The planet's scorecard.`, `climate data wire service that developed a personality`, `Reuters meets @spectatorindex`) that produced incorrect output in the earlier delivery. The version below is the new canonical source of truth.
+
+All design work continues per `brand/CLAUDE_DESIGN_BRIEF_BRAND_KIT_CORRECTION_2026-05-14.md`. This brief only updates your reference inventory.
+
+---
+
+## New canonical MESSAGING_ARCHITECTURE.md (replaces previous)
+
+```markdown
 # The Heat — Messaging Architecture
 
 ---
@@ -101,65 +113,7 @@ Rules:
 - No sports metaphors. No gaming slang. No forced personality.
 - If the data is striking, state it plainly. That's enough.
 
-Examples:
-
-Heat records:
-- "Phoenix: 121F today. New record for this date. Previous record: 119F, set in 2024."
-- "Buenos Aires recorded 42.1C. That breaks the April 7 record, which stood since 1929. Ninety-seven years."
-- "Delhi: 48.2C. Highest temperature recorded in the city since June 2014."
-- "Kuwait City: 53.2C (127.8F). Highest reading anywhere on Earth this year."
-
-Cold records:
-- "Buenos Aires recorded a low of 2.1C overnight. Coldest April night since 1928."
-- "Anchorage dropped to -31F. New record low for this date. Previous: -28F, set in 1989."
-
-Streaks and patterns:
-- "Phoenix has been above 110F for 47 consecutive days."
-- "Ocean surface temperatures have set a daily record for 400 consecutive days."
-- "Earth has recorded above-average global temperatures for 14 consecutive months."
-
-CO2:
-- "Atmospheric CO2 at Mauna Loa: 433.24 ppm. First reading above 433 in recorded history. Pre-industrial baseline was 280."
-- "Weekly CO2 average: 436.2 ppm. Same week last year: 433.8 ppm. +2.4 ppm year over year."
-- "Daily CO2: 435.11 ppm. Yesterday: 435.02. Last week: 434.89. This measurement has not decreased in 67 years of continuous monitoring."
-
-Fires:
-- "Large wildfire detected in Northern California. Satellite confidence: HIGH. 0% contained. Fire Radiative Power: 850 MW."
-- "Satellite detected a 1,200 MW fire in Siberia. For reference, a large power plant generates about 1,000 MW."
-
-Severe weather:
-- "Tornado Warning for Tulsa, OK and 3 other areas."
-- "Hurricane Warning for Miami-Dade, FL. It's October."
-- "Flash Flood Emergency for Harris County, TX."
-
-Global disasters:
-- "GDACS RED alert. Tropical Cyclone Freddy, Mozambique. Category 4."
-- "GDACS ORANGE alert. Earthquake, Turkey. 6.7 magnitude."
-
-Flooding:
-- "Mississippi River at St. Louis: 35.5ft. Flood stage is 30ft. Currently 5.5ft above."
-- "Water level at The Battery, NY: 2.3ft above predicted. Storm surge."
-
-Ocean:
-- "12.4m waves in the Drake Passage. That's 41 feet. It's April."
-- "Marine forecast: 10.8m waves in the North Sea."
-
-Sea ice:
-- "Arctic sea ice: 12.4 million sq km. Lowest for this date since satellite records began in 1979."
-
-Drought:
-- "US Drought Monitor: Extreme/exceptional drought. Texas 25%, Oklahoma 20%, Kansas 13%."
-
-ENSO:
-- "NOAA declares El Nino conditions. ONI: +0.6. Previous La Nina phase lasted 3 months."
-
-Leaderboard:
-- "Hottest cities by anomaly today: Algiers +9.7C, Brussels +8.2C, Urumqi +7.9C above normal."
-- "Houston is on the Hot 10 in April. That doesn't usually happen until July."
-- "Anchorage, Alaska recorded 82F today. The average high for this date is 57F."
-
-Quiet days:
-- "No temperature records broken today. No new fires. CO2 held at 433.18 ppm."
+(Tweet examples retained from the previous version are historical reference; the current writer-prompt standard lives in `src/two_bot/prompts/writer_prompt.py`.)
 
 ---
 
@@ -181,7 +135,7 @@ Awareness is the side effect of clarity. That's the model.
 
 The "Diary of a warming planet" tagline sets up a brand arc that today's voice does not yet execute in the tweets themselves. Today's voice is calm, third-person, observational — the planet's transcribers, not the planet's narrator.
 
-The longer-term arc is first-person personification: the heat (or the planet) as the narrator of its own diary, in the spirit of Karl the Fog. Single-author character accounts work on Twitter when written by a human with taste; automated pipelines cannot yet carry the voice discipline this requires consistently. The model would drift into cutesy anthropomorphism or break voice entirely — the same ceiling we hit with wink-kickers.
+The longer-term arc is first-person personification: the heat (or the planet) as the narrator of its own diary, in the spirit of Karl the Fog. Single-author character accounts work on Twitter when written by a human with taste; automated pipelines cannot yet carry the voice discipline this requires consistently.
 
 Hold this as the v2 brand evolution. Revisit when model capability supports consistent first-person personified-heat narration that meets the Attenborough/Economist quality bar without collapsing into "the planet is having a bad day" cuteness.
 
@@ -189,7 +143,12 @@ For now: tagline lives in the brand layer ("Diary of a warming planet."), tweets
 
 Also held for a future v2 pass:
 
-- **The thermometer mark** may eventually over-index on temperature when the brand covers fires, CO2, ice mass, drought, marine waves, severe weather, river floods, sea ice. Future evolution might explore a mark that reads as *planetary instrument* rather than *thermometer*.
-- **The orange accent** (#C2410C) is applied to "values that matter" but visually reads as *heat*. When applied to a cold record, the color subtly miscues. Future pass: decide whether the accent stays mono ("look here") or splits into a small data-class palette.
+- **The thermometer mark** may eventually over-index on temperature when the brand covers fires, CO2, ice mass, drought, marine waves, severe weather, river floods, sea ice.
+- **The orange accent** (#C2410C) is applied to "values that matter" but visually reads as *heat*. When applied to a cold record, the color subtly miscues.
+```
 
-None of these are urgent. They are the questions that the corrected positioning eventually raises but does not require resolving now.
+---
+
+## Action
+
+Replace your cached `MESSAGING_ARCHITECTURE.md` with the block above. Continue all design work per `CLAUDE_DESIGN_BRIEF_BRAND_KIT_CORRECTION_2026-05-14.md`.
