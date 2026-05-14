@@ -1,11 +1,11 @@
 # Start-of-Session Brief
 
-> **STALE — use [`NEXT_SESSION_PROMPT_2026-05-12-v2.md`](NEXT_SESSION_PROMPT_2026-05-12-v2.md) instead.**
+> **STALE — use [`NEXT_SESSION_PROMPT_2026-05-14-v2.md`](NEXT_SESSION_PROMPT_2026-05-14-v2.md) instead.**
 >
-> The 2-minute re-entry doc has moved to the dated prompt above (written end-of-day 2026-05-12 after the cleanup wave). This file's body below is a snapshot from 2026-04-29 — preserved for historical context only, not for actual re-entry.
+> The current re-entry doc is the dated prompt above (written mid-session 2026-05-14 after the brand-kit-correction work). This file's body below is a snapshot from 2026-04-29 — preserved for historical context only, not for actual re-entry.
 >
 > Order of reads on a new session:
-> 1. `docs/NEXT_SESSION_PROMPT_2026-05-12-v2.md` — current pointer with First-5-minutes orient block
+> 1. `docs/NEXT_SESSION_PROMPT_2026-05-14-v2.md` — current pointer with First-5-minutes orient block
 > 2. `BRIEFING.md` (root) — full state of the project
 > 3. `docs/SESSION_BRIEF.md` — recent sessions, newest at top
 
