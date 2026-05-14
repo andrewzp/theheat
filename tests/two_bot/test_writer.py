@@ -732,12 +732,19 @@ class TestWriterPromptHardRules:
 
     def test_geographic_orientation_rule(self):
         """Must remain with named-city examples; this rule was a recurring
-        regression target — readers need 'Conakry, Guinea' not just 'Conakry.'"""
+        regression target — readers need 'Conakry, Guinea' not just 'Conakry.'
+
+        Updated 2026-05-14: the 25-city iconic-cities curated list was cut as
+        part of the trust-the-model voice-prompt slim-down; the principle is
+        preserved as a sentence-case bullet rather than a SHOUTED header.
+        Assertions now check the rule's content, not its formatting."""
         prompt = self._get_system_prompt()
-        assert "ORIENT THE READER GEOGRAPHICALLY" in prompt
-        # Specific anchor cities that motivated the rule
-        assert "Conakry" in prompt
-        assert "Yakutsk" in prompt
+        assert "Orient the reader geographically" in prompt
+        # Specific anchor place-name examples that motivated the rule
+        assert "Conakry, Guinea" in prompt
+        assert "Sissonville, West Virginia" in prompt
+        # Non-city features must always be qualified regardless of fame
+        assert "Mauna Loa, Hawaii" in prompt
 
     def test_temperature_formatting_rules_present(self):
         """audience_unit / Fahrenheit-first routing — added in PR #46."""
