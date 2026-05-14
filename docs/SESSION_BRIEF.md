@@ -4,6 +4,64 @@ Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest secti
 
 ---
 
+# 2026-05-14 — Brand kit correction + @theheat profile live + PR #93 closed
+
+## Where we landed
+
+`main` is on `c1f7e83` (PR #94). The brand kit correction merged. **Open PRs: 1** (PR #92 daily-plan-2026-05-14, routine auto-PR). Tests unchanged (909 passing on v3 from 2026-05-13).
+
+The @theheat X profile is now updated with the corrected brand assets — banner, avatar, bio, pinned tweet. Canonical tagline locked: **"Diary of a warming planet."** Posting still paused (manual approval mode, awaiting majority-A graded cycle).
+
+## The arc of today
+
+The session opened with the goal of getting tweets shipping. Quickly pivoted to the brand kit because the previous brand book had been built around an invented "climate data wire / logbook of a planet running a fever" tagline that didn't match canonical messaging architecture. That positioning had propagated into the banner, OG card, brand book cover, Twitter section mockup, operator dashboard ("Wire Desk"), and item ID prefixes (WIRE-XXXX) — making the X profile unshippable as-is.
+
+Tagline decision iterated through several rounds: "The planet's scorecard" (canonical-but-stale) → "A climate change chronicle" (user's framing) → 10 permutations → "Diary of a warming planet" (locked, with "A climate change chronicle" as held alternative).
+
+The "Diary of a warming planet" framing sets up a future first-person personification arc (Karl-the-Fog DNA) that today's model can't yet execute consistently. For now: tagline lives in the brand layer, tweets stay third-person Attenborough/Economist. Captured in MA's new FUTURE DIRECTION section.
+
+## PRs this session
+
+### PR #94 — `brand-kit-correction-2026-05-14` (`c1f7e83`) — MERGED
+
+The brand kit correction. Three artifacts in `brand/`:
+- `brand/MESSAGING_ARCHITECTURE.md` updated — new tagline, new personality opener, new voice references, new FUTURE DIRECTION section.
+- `brand/CLAUDE_DESIGN_BRIEF_BRAND_KIT_CORRECTION_2026-05-14.md` — master spec used to drive Claude Design's deliveries.
+- `brand/CLAUDE_DESIGN_BRIEF_MA_UPDATE_2026-05-14.md` — companion brief instructing Claude Design to update its cached MA reference.
+- `brand/handoff/` asset overhaul — banners, OG cards, brand-book HTML, usage-guide HTML, operator-dashboard HTML all corrected.
+
+### PR #93 — `voice-prompt-trust-more-prescribe-less` — CLOSED WITHOUT MERGE
+
+Created earlier in the session as a 50-line simplification of the v2 writer prompt: cut three-beat formula, cut 4 of 6 exemplars, cut 25-city list, cut fire-variety menu, cut category-cooldown 3-criterion menu. Diagnosis: prompt had become a "fortress of accumulated formula" that forced the writer to interpolate between approved templates (the Mongolia/Mexico/Mali fire template convergence).
+
+Closed because PR #91 (v3 writer prompt, merged 2026-05-13 by another session) went the opposite direction — explicitly preserved everything #93 cut, plus added a new dedicated KILL DISCIPLINE section. Selective porting onto v3 produced near-empty diff because every #93 cut intersected a v3 preserve.
+
+The 50-line simplification diff is stashed locally. If v3 produces another round of template-converged fires on the next 2-3 alerts cycles, the simplification thesis comes back with empirical support — much stronger than the philosophical argument made today. For now: v3 is what's live.
+
+## What's on @theheat now (live state)
+
+- **Display name:** The Heat
+- **Handle:** @theheat
+- **Banner:** simplified — lockup + tagline ("Diary of a warming planet.") only. No newspaper-pastiche overlay.
+- **Avatar:** thermometer mark on cream circle (unchanged in concept; rendering refreshed from Claude Design v2 delivery).
+- **Bio:** "Records, anomalies, and readings from across the climate system. Every post sourced. UTC times."
+- **Pinned tweet:** "This is a record of the planet's vital signs. Every post pairs an exact, sourced number with one sentence on the system behind it — the western Pacific warm pool, the Sahel dry season, the cold-air drainage in a topographic bowl. Calm by default. The data carries the weight."
+- **Location:** *(operator decision pending — recommended "Earth")*
+- **Website:** blank (theheat.ai purchased on GoDaddy this session; coming-soon page is a future task)
+
+## Memory hooks added today
+
+- **"Bring decisions to the user, not finished work."** Tagline drift this session — I drafted "The planet's scorecard" → "An automated climate desk that surfaces events..." as cover sub-deck → Claude Design rendered → user rejected. Pattern fix: any brand-facing copy in a brief must be either (a) lifted verbatim from MA / canonical docs, or (b) surfaced to the user as a decision before the brief ships. Never slip in invented copy.
+
+## What's NOT done (carry forward)
+
+- **The bot is in draft-only mode.** Posting is paused. Drafts go to the dashboard for manual approval; nothing auto-publishes to X. The structural blocker for "tweets going live" is now editorial-bar-related (drafts need to clear majority-A on a graded cycle) rather than infrastructure-related.
+- **theheat.ai needs DNS + a landing page.** Currently shows GoDaddy parking page. Recommend: deploy a Vercel/Cloudflare Pages one-pager (lockup + tagline + "Launching soon at @theheat"), point DNS, update X profile website field.
+- **Location field on X profile is still blank.** Recommended: "Earth" (matches the diary-of-a-warming-planet frame; understated and intentional like Karl the Fog's "San Francisco").
+- **Pipeline engineering review still owed.** Earlier in the session we surfaced three structural issues that a writer-prompt edit alone won't fix: (1) anomaly score threshold throttle — 9 anomalies died at score_gate by 2 points in 24h; (2) bundle layer doesn't carry geographic/climate-system context for heat records → fact-checker kills good Attenborough drafts that name unverifiable systems; (3) no second-pass editorial agent — we're encoding all editorial taste as prompt rules. These are the eng-review agenda for the next session.
+
+---
+
 # 2026-05-13 (evening) — First graded two-bot cycle + four PRs in queue
 
 ## Where we landed

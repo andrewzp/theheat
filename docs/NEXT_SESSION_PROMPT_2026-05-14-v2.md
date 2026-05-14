@@ -1,0 +1,203 @@
+# Resume @theheat — Next Session Prompt (v2, written 2026-05-14 mid-session)
+
+This brief **supersedes** `NEXT_SESSION_PROMPT_2026-05-14.md` (which was actually written end-of-day 2026-05-13 and labeled forward). This v2 captures the 2026-05-14 brand-kit-correction session and is the current handoff.
+
+You are picking up work on the @theheat climate Twitter bot. The next scheduled validation events are:
+
+- **The next bot.yml alerts cron** — first run after the brand kit work landed. Whether v3 writer prompt produces A-grade drafts is empirical from here.
+- **2026-05-15 09:00 UTC voice-regression cron** — second nightly run against v3 (first was 05-14, came back green).
+- **2026-05-15 15:03 UTC grading-agent cron** — daily auto-PR with grading of any drafts that reached pending in the last 24h.
+
+Before doing anything else, run the **First 5 minutes** block below to ground yourself.
+
+---
+
+## The user's goal in priority order
+
+1. **Get tweets posting to @theheat.** This is the north star. Posting is currently paused — drafts go to dashboard for manual approval. The structural blocker is editorial quality (majority-A graded cycle), not infrastructure.
+2. **Understand whether v3 writer prompt is producing draft-worthy tweets.** v3 landed 2026-05-13 (PR #91). First cycle under v3 graded 5 drafts at 0% A-rate. The empirical signal so far: v3 hasn't broken the B-grade ceiling yet.
+3. **Run pipeline engineering review.** Three structural issues surfaced in the 2026-05-14 conversation that a writer-prompt edit alone won't fix. The actual leverage on "more A-grade drafts" probably lives at the bundle / scoring / source-coverage layer, not the writer prompt. Detailed in §Outstanding follow-ups.
+
+---
+
+## First 5 minutes — orient
+
+```bash
+cd /Users/andrewpuschel/Documents/Claude/theheat
+
+# 1. Confirm main + recent commits
+git fetch && git log --oneline -10 main
+# Expected HEAD: docs-sweep merge commit (this brief lands as PR #95 or similar) on top of c1f7e83 (PR #94 brand kit)
+
+# 2. Did the most recent alerts run produce drafts?
+gh run list --workflow=bot.yml --limit 6 --json conclusion,event,createdAt,databaseId
+# Want: recent alerts runs conclusion="success", drafts reaching pending
+
+# 3. Voice-regression nightly status (cron is 09:00 UTC daily)
+gh run list --workflow=voice-regression.yml --limit 3 --json databaseId,conclusion,createdAt
+# v3's first nightly (2026-05-14) was green; want 12/12 sustained
+
+# 4. Open PRs
+gh pr list --state open --limit 10
+# Expected: ~1 (the daily-plan-2026-05-15 auto-PR if 15:03 UTC has fired)
+
+# 5. Pipeline state
+gh gist view 06c02c97ffc0d11458687f1ed998d9e5 -f state.json > /tmp/state.json && jq '{
+  pending: (.drafts // [] | map(select(.status == "pending")) | length),
+  pending_ids: (.drafts // [] | map(select(.status == "pending")) | map(.id)),
+  recent_pending_categories: (.drafts // [] | map(select(.status == "pending")) | map(.signal_kind // .type)),
+  last_5_suppressions: (.suppressions // [] | sort_by(.ts) | reverse | .[0:5] | map({stage, category, summary, reason: (.reasons[0] // "")[:120], ts}))
+}' /tmp/state.json
+
+# 6. Sanity (tests + types)
+source .venv/bin/activate
+python -m mypy src/ 2>&1 | tail -3   # expect: Success: no issues
+python -m pytest tests/ -q -m "not voice_replay" 2>&1 | tail -3   # expect: 909 passed
+```
+
+If any of these is unexpected (failing tests, ocean_sst still throwing, no recent drafts, etc.), stop and investigate before doing further work.
+
+---
+
+## What landed on 2026-05-14 (pure brand/docs, no code)
+
+| # | PR | What | Status |
+|---|---|---|---|
+| 1 | #94 | Brand kit correction — `Diary of a warming planet.` tagline + MA rewrite + asset overhaul | MERGED `c1f7e83` |
+| 2 | #93 | Writer prompt "trust the model more" simplification | CLOSED (superseded by v3) |
+| 3 | #95 (or similar) | This docs sweep | (merging as you read this) |
+
+**The X profile is now live with the corrected brand.** Banner, avatar, bio, pinned tweet all updated. The corrected `brand/handoff/` assets in the repo match what's on X.
+
+**No code changes this session.** Writer prompt is still v3 (PR #91 from 2026-05-13). Pipeline architecture unchanged. The "tweets going live" path is now editorial-quality-bar-gated, not infrastructure-gated.
+
+---
+
+## State of the project at handoff
+
+- **`main` HEAD:** `c1f7e83` (PR #94) + the docs-sweep merge commit
+- **Tests:** 909 passing, mypy clean across `src/`
+- **Cities monitored:** 638
+- **Open PRs:** 1 (PR #92 daily-plan-2026-05-14 auto-PR — routine, may have closed naturally)
+- **Writer prompt:** v3 (226 lines) — preserves all 6 exemplars, all 4 fire-variety alternatives, 25-city list (Dubai + Singapore added), 3-criterion category cooldown, plus dedicated KILL DISCIPLINE section with 9 explicit conditions + 7 example `kill_reason` strings
+- **@theheat X profile:** banner/avatar/bio/pinned tweet aligned with corrected brand
+- **Tagline:** *Diary of a warming planet.* (locked this session; canonical in `brand/MESSAGING_ARCHITECTURE.md` line 46)
+- **Posting mode:** paused. Draft-only — dashboard approval gate
+- **Voice-regression baseline:** 12/12 on v3's first nightly (2026-05-14)
+- **Last graded cycle (PR #92):** 5 drafts, 0% A-rate. Voice work landed; editorial ceiling still B-grade
+
+---
+
+## Outstanding follow-ups (in priority order — most leverage first)
+
+The 2026-05-14 conversation surfaced three structural issues that a writer-prompt edit alone won't fix. These are the right targets for the next session — they likely move the A-rate needle more than another prompt iteration.
+
+### 1. Pipeline engineering review (`/plan-eng-review`)
+
+Three diagnostic findings worth grouping into one pass:
+
+**a) Anomaly score threshold is throttling content.** 9 temperature anomalies of 15°C+ deviation died at `score_gate` by a 2-point margin in 24 hours (score 74, threshold 76). 15°C+ deviations are extraordinary by any climate-science definition. The threshold is mis-tuned vs the bundle quality the scorer produces. Either drop the anomaly threshold from 76 to 73-74 OR re-tune the scoring weights. This single change probably unlocks 8-10 extra drafts per day.
+
+**b) The bundle layer doesn't carry geographic/climate-system context for heat records.** This is the highest-leverage finding. Today's voice prompt asks the writer for system-explainer clauses (the western Pacific warm pool, the cold-air drainage in a topographic bowl, the Sahel dry season). The fact-checker requires every claim to trace to the bundle. The bundle doesn't carry valley topography, sea-surface-temperature context, or other geographic-climate context for heat-record signals — so when the writer correctly produces an Attenborough-mode system clause, the fact-checker kills it as UNVERIFIABLE.
+
+Recent examples that died at fact-check this way:
+- Bethel, Maine monthly_low — writer wrote "The Androscoggin Valley funnels cold air off the White Mountains" — UNVERIFIABLE (not in bundle).
+- Chuuk monthly_high — writer wrote "sea surface temperatures have warmed steadily" + "ocean heat and humidity push daily highs to their limits" — both UNVERIFIABLE.
+
+The leverage: have the intern (`build_*_bundle` functions in `src/two_bot/intern.py`) attach `region_climate_system` or `local_topography_note` fields populated from a curated lookup table. This is probably the single highest-leverage change for unlocking heat-record A-grades.
+
+**c) No second-pass editorial agent.** The writer ships, the fact-checker validates, then it lands in the dashboard. There's no editor between writer and dashboard asking "would I scroll past this." We've been encoding that question into prompt rules (which is what produced the v2 → v3 evolution). The alternative is a second model call: a critique pass on the `tweet` text using the Two Gates as the rubric. Higher cost, higher ceiling. Hold for after (a) and (b).
+
+### 2. Source coverage gaps
+
+- **`ocean_sst`** was supposedly fixed by PR #82's UA-header change, but the error mode shifted from `Exceeded 30 redirects` to `Expecting value: line 1 column 1 (char 0)` — meaning the endpoint may be fully retired. Either find a working endpoint or accept the source as dead.
+- **`river_gauges`** flood-stage endpoint (USGS WaterWatch) is retired. Gauge heights still flow; only the `above_flood_stage` flag is lost. Find a replacement (likely NWS AHPS gauge JSON).
+- **No global flood / tropical cyclone / precipitation extreme sources.** Today the pipeline mostly sees temperature + fires + CO2. Three free APIs to wire in: Copernicus Emergency Management (global flood detection), IBTrACS (tropical cyclone tracks), NOAA HURDAT (Atlantic + East Pacific hurricane history).
+
+### 3. theheat.ai landing page
+
+Domain purchased on GoDaddy this session. Currently shows GoDaddy parking page. Deploy a Vercel/Cloudflare Pages one-pager (lockup + tagline + "Launching soon at @theheat"), point DNS, update X profile Website field from blank to `https://theheat.ai`.
+
+### 4. Operator settings to lock in
+
+- **X profile Location field** — recommended: `Earth` (matches diary-of-a-warming-planet framing; understated and intentional like Karl the Fog's "San Francisco"). Currently blank.
+- **X profile Website field** — currently blank. Update to `theheat.ai` after follow-up #3 lands.
+
+### 5. v3 writer prompt empirical validation
+
+Watch the next 2-3 alerts cycles. If template convergence in fires recurs (Mongolia / Mexico / Mali shape) or if the B-grade ceiling holds across multiple cycles, the "trust the model more / cut formula" thesis from closed PR #93 comes back with empirical support.
+
+The 50-line simplification diff is stashed locally. `git stash list` to find it (it'll be the "brand work + voice-prompt remnants" stash). Recover with `git stash apply <stash-id>` ONLY if v3 underperforms across 2-3 cycles — don't restore preemptively.
+
+---
+
+## Memory hooks to honor
+
+- **NEW today — "Bring decisions to the user, not finished work."** Tagline iterations this session showed the cost of slipping unapproved copy into briefs ("The planet's scorecard" then "An automated climate desk that surfaces events..." both ended up in Claude Design output and got rejected). Any brand-facing copy in a brief must be either (a) lifted verbatim from MA / canonical docs, or (b) surfaced to the user as a decision before the brief ships. Never invent.
+- **`feedback_voice_bigger_picture` (Attenborough/Economist voice)** — each data point goes inside a system the reader doesn't fully see. Teach, don't wink.
+- **`feedback_voice_failures`** — banned shapes: press-release openers, label:value, date repetition, tier explainers, wink-kickers.
+- **`feedback_editorial_bar`** — only tweet astounding events. "Wait, what?" test.
+- **`feedback_verify_the_wire`** — for boundary changes, verify the actual bytes crossing the boundary.
+- **`feedback_generalize_fixes`** — when a bug surfaces through one example, fix the class.
+- **`feedback_eng_review_after_plan`** — run `/plan-eng-review` on plan docs before dispatching subagent-driven-development.
+- **`feedback_subagent_models`** — never Haiku for Agent dispatches. Sonnet for routine, Opus for high-risk.
+- **`feedback_versioned_doc_filenames`** — when regenerating a doc, use `-v2` / `-v3` / date suffix. (Exception: canonical docs like MA where overwrite-in-place is correct.)
+- **`feedback_absolute_file_paths`** — always use full absolute paths in file links.
+
+---
+
+## Don't touch without re-reading
+
+- **`src/two_bot/prompts/writer_prompt.py`** — v3 is freshly stable. v3 was a deliberate "preserve everything verified + add explicit kill discipline" choice. Closed PR #93 went the opposite direction; don't accidentally re-open that fight. Before editing, re-read `feedback_voice_bigger_picture`, `feedback_voice_failures`, `feedback_prompt_json_contract` and run voice-regression manually first to establish baseline.
+- **`brand/MESSAGING_ARCHITECTURE.md`** — freshly corrected. Canonical tagline is *"Diary of a warming planet."* If you propose changing it or anything in the personality / voice / future-direction sections, surface as a decision to the user — don't slip in changes.
+- **`brand/handoff/` assets** — these match what's live on @theheat X. Any change here should sync to the X profile.
+- **`pyproject.toml` mypy section** — the three deleted overrides from 2026-05-12 cost ~6 hours of TypedDict work. Don't re-add. `src.voice.generator` override is out of scope.
+- **`src/state_schema.py`** — `BotState` mirrors `DEFAULT_STATE` in `src/state.py:19`. If you add a key to `DEFAULT_STATE`, mirror it here in the same PR.
+
+---
+
+## Operator constraints
+
+- **$0 stack.** No paid services without explicit approval.
+- **Draft-only mode.** Bot writes drafts to dashboard; manual approval. No auto-posting without explicit go.
+- **No push to main.** All changes via PR. Squash-merge with `--delete-branch`.
+- **Andrew does not code.** PRs authored by `andrewzp` are Claude or Codex work — frame as AI hygiene.
+- **Max 20x subscription.** Sonnet 4.6 for routine, Opus for hard. Parallel concurrency is the throughput lever.
+- **Plan before code.** /brainstorm → /write-plan → /plan-eng-review → /autoplan before non-trivial code.
+
+---
+
+## Useful one-liners
+
+```bash
+# Tail the live state
+gh gist view 06c02c97ffc0d11458687f1ed998d9e5 -f state.json | jq '.suppressions[-5:], .drafts[-3:]'
+
+# Re-run voice-regression manually (~$0.20)
+gh workflow run voice-regression.yml && gh run watch
+
+# Trigger alerts run on demand
+gh workflow run bot.yml -f mode=alerts && gh run watch
+
+# Local one-shot: ingest signals without writer call
+THEHEAT_DB_PATH=/tmp/local.db python -m src.main --mode=ingest_only
+
+# Recover closed-PR-93 simplification diff if v3 underperforms
+git stash list
+git stash apply <stash-id>   # ONLY if v3 empirically fails across 2-3 cycles
+```
+
+---
+
+## First substantive task suggestion
+
+After the orient block:
+
+1. **Verify v3 is still producing drafts.** Check recent alerts runs; check pending queue. The diagnosis routes to the right follow-up:
+   - 0 drafts pending + most suppressions at `fact_check` with "UNVERIFIABLE" reasons → bundle-context fix (#1b) is the highest leverage.
+   - 0 drafts pending + most suppressions at `score_gate` with scores 73-75 vs threshold 76 → threshold tuning (#1a).
+   - Drafts pending but grading agent rates them B-grade → second-pass editorial agent (#1c).
+
+2. **Then start on whichever of #1a / #1b / #1c the diagnosis points to.** Don't open multiple lines of work in parallel — pick the one with the strongest empirical signal and run `/plan-eng-review` before any code.
+
+3. **Don't open a new feature line until the production diagnosis is in hand.** Pipeline is on v3 + corrected brand. Next move should be informed by what v3 actually does, not by what we hope it does.

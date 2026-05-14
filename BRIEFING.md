@@ -1,27 +1,32 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-13 (late evening — today's four PRs landed; post-merge state captured below).
-**Status:** **PIPELINE STRUCTURALLY SOUND, EMPIRICALLY UNPROVEN.** Today's four PRs (#87 hotfix, #84 P1+P3, #89 P4 superseding #85, #88 docs, #86 grading agent) all merged. First graded two-bot cycle (#86) returned 4 drafts at 0% A-rate — voice work landed cleanly but the editorial ceiling is currently B-grade. New failure modes identified: fire template convergence (P6, shipped in #89) and expository-vs-punch system clauses (shipped in #89). State truncation incident at 11:03/13:34/14:47 UTC stopped three alerts runs; fixed in #87. **Open PRs: 0** as of late evening 2026-05-13. Posting still paused until majority-A sustained.
+**Last updated:** 2026-05-14 (mid-session — brand kit live on @theheat, ready to start posting).
+**Status:** **BRAND ALIGNED AND LIVE; PIPELINE ON v3 WRITER PROMPT; POSTING STILL PAUSED PENDING QUALITY BAR.** The @theheat X profile is now updated with the corrected brand assets (banner, avatar, bio, pinned tweet) and the canonical tagline **"Diary of a warming planet."** Brand kit correction PR #94 merged today. v3 of the writer prompt (PR #91) landed last night with the cross-model rewrite + ChatGPT kill_reason library + nullability discipline. v3 went green on the 2026-05-14 09:00 UTC voice-regression nightly. PR #93 ("trust the model more — strip ~50 lines of formula") was closed today as superseded by v3 (the two PRs were philosophical opposites — v3 preserved everything; #93 cut). **Open PRs: 1** (PR #92 daily-plan-2026-05-14 auto-PR; routine).
 
-**Conceptual reframing today:** the editorial bar is now explicit as the **shareability test** — would a climate-literate reader pause AND want to send this to a friend? Both gates required. The pipeline's existing "virality evaluator" is the operational form of this test using virality-research dimensions (awe, social currency, opener, show-not-tell, comparison) as quality measures, not growth tools.
+**Today's session was almost entirely brand work.** Three artifacts now live in `brand/`:
+- `brand/MESSAGING_ARCHITECTURE.md` rewritten — new tagline, new personality opener (planet-keeps-own-record framing replaces "climate data wire service"), new voice references (Attenborough + Economist + Reuters, replacing older @spectatorindex / @unusual_whales / @darth), new FUTURE DIRECTION section capturing the Karl-the-Fog first-person-personification arc as v2 brand evolution.
+- `brand/CLAUDE_DESIGN_BRIEF_BRAND_KIT_CORRECTION_2026-05-14.md` — master spec used to drive Claude Design's deliveries.
+- `brand/CLAUDE_DESIGN_BRIEF_MA_UPDATE_2026-05-14.md` — companion brief for MA inventory update.
+- `brand/handoff/` asset overhaul — banners, OG cards, brand-book HTML, usage-guide HTML, operator-dashboard HTML all corrected. "climate data wire / logbook / wire desk / running a fever / amber / WIRE-XXXX" framing removed throughout.
 
-**Today's open PRs (queued for review, merge order matters):**
+**Tagline decision locked this session:** *Diary of a warming planet.* Frame chosen over "A climate change chronicle" for distinctiveness, emotional weight, and future-direction (Karl-the-Fog first-person arc). The tagline is a brand-layer frame, not a voice instruction — tweets stay third-person Attenborough/Economist; readers will eventually read them *through* the diary frame.
 
-1. **PR #87 — `fix-gist-truncation`** (urgent, OFF main). Three scheduled `theheat-bot` runs failed today (11:03, 13:34, 14:47 UTC) with `ERROR: state.json is not valid JSON`. Root cause: GitHub Gists REST API truncates the inline `content` field at ~900 KB; state was 928 KB → 921600-byte content + `truncated: True` flag → `json.loads` crashed on cut-off tail. Fix in `src/state.py:_read_gist_state` follows `raw_url` when truncated. Will recur every time state grows past 900 KB until this lands. **Should merge first** — independent of #84/#85.
+**v3 writer prompt is what's live.** Preserves all 6 approved exemplars and 4 fire-variety alternatives from v2 plus adds a dedicated KILL DISCIPLINE section with 9 explicit conditions + 7 example `kill_reason` strings. The "trust the model more" diagnosis I argued for in #93 is preserved as queued evidence — if v3 produces another round of template-converged fires on the next 2-3 alerts cycles, the simplification thesis comes back with empirical support.
 
-2. **PR #84 — `p1-p3-belt-and-suspenders`**. Defensive `normalize_station_name()` in 4 GHCN bundle builders (P1 belt-and-suspenders complementing #82's regex fix at root) + P3 seasonal-context world knowledge in writer prompt + raw_signal_dump leak fix (Codex finding). 899 tests passing.
+**Latest merged commits (2026-05-14):** `c1f7e83` (#94 brand kit correction).
+**Earlier this stack (2026-05-13):** `212f7f5` (#91 v3 writer prompt) → `17db1ab` (#90 late-evening docs) → `7ad23ef` (#86 daily-plan-05-13) → `842c43b` (#88 docs sweep) → `11af516` (#89 P4 + FRP intensity tier + category cooldown) → `417ccd9` (#84 P1+P3) → `a8580f1` (#87 state truncation fix).
 
-3. **PR #85 — `p4-frp-tier-category-cooldown`** (stacked on #84). P4 Wodehouse rule + FRP intensity tier in `build_fire_bundle` + per-day category cooldown on `MemorySlice` + (second commit) fire sentence-1 variety (P6) + Chuuk expository-vs-punch nudge. 909 tests passing.
+**Closed without merge today:** PR #93 (`voice-prompt-trust-more-prescribe-less`). Reason: v3 is philosophically opposite — every cut in #93 intersected a v3 preserve. Local stash preserved the 50-line simplification diff in case empirical evidence later supports re-opening the question.
 
-4. **PR #86 — `daily-plan-2026-05-13`** (grading agent auto-PR). First graded two-bot cycle: 4 drafts, 0% A-rate. Findings: voice work landed (no Wodehouse violations observed), no P3 self-kills, FRP rounding confirmed working — but fire template convergence is the new ceiling, and Chuuk monthly_high was the B-grade ceiling. Adds P6 (fire template) as new active proposal.
-
-**Latest merged commits:** `7ad23ef` (#86 daily grading) → `842c43b` (#88 docs sweep) → `11af516` (#89 P4 — superseded #85) → `417ccd9` (#84 P1+P3) → `a8580f1` (#87 state truncation fix). PR #85 auto-closed when its stacked base branch was deleted by #84's merge; was recreated as #89 (same 4 commits rebased onto main).
-
-**Tests:** 909 passing on main post-merge. No regressions.
+**Tests:** 909 passing on main (unchanged from end of 2026-05-13). No code changes today — pure brand/docs.
 
 **Cities monitored:** 638 (unchanged).
 
 **Cost:** unchanged from 2026-05-12 baseline (~$22/mo Anthropic on top of ~$60–90/mo Sonnet evaluator).
+
+**X profile state:** @theheat banner / avatar / bio / pinned tweet all updated with corrected assets. Tagline reads *Diary of a warming planet.* Bio reads *"Records, anomalies, and readings from across the climate system. Every post sourced. UTC times."* No website link yet (theheat.ai purchased on GoDaddy this session, not yet pointed at a landing page — coming-soon page is a future task).
+
+**Posting status:** Still paused. The bot is in draft-only mode — drafts go to the dashboard for manual approval. The structural blockers for posting are now editorial-bar-related (drafts need to clear majority-A on a graded cycle) rather than infrastructure-related. v3 + the brand alignment is the current state; whether v3 produces A-grade drafts is empirical, to be observed on the next bot.yml alerts cycle.
 
 ## What changed on 2026-05-13 — quality + variety + a CI hotfix
 

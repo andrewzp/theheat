@@ -2,6 +2,109 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0.0] - 2026-05-14
+
+Brand-kit correction session. The brand book and asset kit had been built
+around an invented "climate data wire / logbook of a planet running a fever"
+tagline that didn't match canonical messaging architecture. This release
+corrects the kit end-to-end while preserving the visual system (wordmark,
+mark, lockup geometry, palette, typography all unchanged). No code changes.
+
+**Tagline locked:** *Diary of a warming planet.*
+
+### Brand
+
+- **`brand/MESSAGING_ARCHITECTURE.md` updated** (#94). Tagline line corrected
+  to *"Diary of a warming planet."* (was *"The planet's scorecard."*).
+  Personality opener rewritten — *"The Heat is a diary of a warming planet —
+  the planet keeps its own record; we transcribe the entries with calm
+  authority and one sentence on the system behind each number."* — replacing
+  the "climate data wire service that developed a personality" framing.
+  Voice references updated to Attenborough + The Economist + Reuters/AP wire
+  (replacing older @spectatorindex / @unusual_whales / @darth which predated
+  the May voice work). Voice section updated to lead with "system clause
+  second — name the mechanism, consequence, or rate behind the data when one
+  exists" instead of "Dry observation third, only when earned."
+
+- **NEW `FUTURE DIRECTION` section** in MA (#94) captures three v2 brand-
+  evolution questions: (1) Karl-the-Fog-style first-person personified-heat
+  arc — held until model capability supports consistent personified narration
+  without collapsing into anthropomorphic cuteness; (2) the thermometer mark
+  may eventually over-index on temperature when the brand covers all
+  planetary vital signs; (3) the orange accent applied to "values that
+  matter" semantically reads as *heat* and miscues on cold-record values.
+
+- **`brand/handoff/` asset overhaul** (#94, deliveries from Claude Design v2
+  zip). Banner light + reverse simplified to lockup + tagline only — the
+  previous newspaper-pastiche overlay (volume number, source list, station
+  count, embedded live data) removed. OG card light + dark replaced — the
+  previous frozen-in-time Kayes Mali data card retired in favor of brand-
+  frame only (lockup + tagline). Brand Book HTML: cover tagline corrected,
+  "climate data wire / logbook / wire desk / running a fever / amber / the
+  brand is the reading" framing removed throughout (every page running
+  header, every section deck, every embedded mockup). Usage Guide HTML:
+  intro deck rewritten. Operator Dashboard HTML: renamed from "Wire Desk" to
+  "Operator Dashboard"; item IDs renamed from `WIRE-XXXX` to `DRAFT-XXXX`;
+  hero deck rewritten as internal editorial console framing.
+
+- **`brand/CLAUDE_DESIGN_BRIEF_BRAND_KIT_CORRECTION_2026-05-14.md`** (#94)
+  preserved in repo for traceability. The master spec used to drive Claude
+  Design's deliveries, including: §1 product description, §2 diagnosis of
+  the wrong positioning, §3 Phase 1 visual replacement deliverables, §4
+  Phase 2 copy correction deliverables (8 sub-areas), §5 brand DNA to
+  preserve, §6 hard constraints, §7 visual self-review protocol with three
+  checklists + 16-string grep banlist, §8 reference files, §9 open questions
+  for future v2 pass (mark, accent), §10 out of scope.
+
+- **`brand/CLAUDE_DESIGN_BRIEF_MA_UPDATE_2026-05-14.md`** (#94) — companion
+  brief instructing Claude Design to update its cached MA reference.
+  Preserved alongside the master spec for the same traceability reason.
+
+### Operations
+
+- **Twitter / X profile updated** (off-repo, performed in-session). @theheat
+  banner, avatar, bio, and pinned tweet now reflect the corrected
+  positioning. Bio reads: *"Records, anomalies, and readings from across
+  the climate system. Every post sourced. UTC times."* Display name and
+  handle unchanged.
+
+- **`theheat.ai` purchased on GoDaddy** (off-repo, in-session). Not yet
+  pointed at a landing page; coming-soon page is a future task. X profile
+  Website field left blank rather than linking to a GoDaddy parking page.
+
+- **PR #93 closed without merge** (`voice-prompt-trust-more-prescribe-less`).
+  Reason: v3 (PR #91, merged 2026-05-13) is philosophically opposite — v3
+  explicitly preserves all 6 approved exemplars + 4 fire-variety alternatives
+  + the 25-city orient-the-reader list (expanded to add Dubai + Singapore)
+  + adds a new dedicated KILL DISCIPLINE section, while PR #93 cut exactly
+  those elements. Selective porting produced near-empty diff because every
+  cut in #93 intersected a v3 preserve. The 50-line simplification diff is
+  stashed locally — to be re-examined if v3 produces another round of
+  template-converged fires on subsequent alerts cycles.
+
+### Memory hooks honored / added
+
+- **Honored — `feedback_versioned_doc_filenames`**: the two Claude Design
+  briefs use date-suffixed filenames. The MA update wasn't versioned because
+  MA is the single canonical source (overwrite-in-place is the correct
+  pattern for the canonical doc; old content lives in git history).
+- **Honored — `feedback_absolute_file_paths`**: file references in the
+  briefs use absolute paths.
+- **Added — "Bring decisions to the user, not finished work."** Tagline
+  iterations during this session showed the cost of slipping unapproved
+  copy into briefs — I drafted "The planet's scorecard" → "An automated
+  climate desk that surfaces events..." as cover sub-deck → Claude Design
+  rendered them → user rejected. Pattern fix: any brand-facing copy in a
+  brief must be either (a) lifted verbatim from MA / canonical docs, or
+  (b) surfaced to the user as a decision before the brief ships.
+
+### Tests
+
+- **909 passing** (unchanged from 2026-05-13). No code changes this release.
+- Mypy clean across `src/`.
+- v3 writer prompt's 2026-05-14 09:00 UTC voice-regression nightly was the
+  first nightly against v3 — confirmed green.
+
 ## [unreleased] - 2026-05-13
 
 Three quality PRs and one infra hotfix opened today, none merged yet. Headline:
