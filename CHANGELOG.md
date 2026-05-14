@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0.1] - 2026-05-14
+
+Anomaly score_gate calibration. 24h of post-v3 alerts crons showed the same
+Florida -11.1°C cold anomaly firing every cycle, scoring 74, dying at the
+score_gate's 76-threshold every time. -11.1°C below normal in May Florida is
+genuinely extraordinary by Wait,what? standards. The scoring formula's 15°C
+"baseline elite" anchor was too high — 11–14°C anomalies are real news.
+
+### Fixed
+
+- **`src/editorial/scoring.py`** — `score_anomaly` threshold lowered 76→74.
+  Opens the 11–14°C anomaly band that was being rejected. The formula's own
+  downside penalty keeps 8°C and below self-filtering — no widening to noise.
+- **`tests/test_editorial_scoring.py`** — added two cases. The Florida -11.1°C
+  event now passes (`test_anomaly_11c_florida_cold_passes`); -8°C still does
+  not (`test_anomaly_8c_remains_below_bar`). 912 tests pass; mypy clean.
+
+### Verification
+
+Empirical: next alerts cron after merge should promote the still-pending
+-11.1°C anomaly from `score_gate` suppression to `pending` draft.
+
 ## [0.6.0.0] - 2026-05-14
 
 Brand-kit correction session. The brand book and asset kit had been built

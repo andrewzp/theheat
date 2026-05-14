@@ -60,6 +60,33 @@ class TestEditorialScoring:
         score = score_anomaly(today_temp_c=40.0, historical_mean_c=22.0, anomaly_c=18.0, kind="hot")
         assert score.passes
 
+    def test_anomaly_11c_florida_cold_passes(self):
+        # Real suppressed event: Nettles Is, FL on 2026-05-10 was 11.7C vs 22.8C
+        # historical mean. -11.1C from normal in May Florida is genuinely
+        # extraordinary by Wait,what? standards, but was scoring 74 vs 76.
+        score = score_anomaly(
+            today_temp_c=11.7,
+            historical_mean_c=22.8,
+            anomaly_c=-11.1,
+            kind="cold",
+        )
+        assert score.passes, (
+            f"-11.1C anomaly in May Florida should pass, got total={score.total}"
+        )
+
+    def test_anomaly_8c_remains_below_bar(self):
+        # 8C off normal is significant but routine seasonal variability —
+        # confirms threshold relaxation doesn't open the gate to noise.
+        score = score_anomaly(
+            today_temp_c=15.0,
+            historical_mean_c=23.0,
+            anomaly_c=-8.0,
+            kind="cold",
+        )
+        assert not score.passes, (
+            f"-8C anomaly should not pass — routine variability, got total={score.total}"
+        )
+
     def test_record_streak_escalates_with_days(self):
         short = score_record_streak(consecutive_days=3, peak_temp_c=42.0)
         long = score_record_streak(consecutive_days=15, peak_temp_c=45.0)
