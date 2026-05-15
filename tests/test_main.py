@@ -196,7 +196,7 @@ class TestCycloneAlerts:
 def mock_alerts_pipeline_sources(monkeypatch):
     """Clamp the run_alerts data sources that test classes typically leave unmocked.
 
-    Covers methane, coral_dhw, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought,
+    Covers methane, coral_dhw, nws_alerts, gdacs, copernicus_ems, nhc, jtwc, sea_ice, drought,
     enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, synthesis, ghcn, and
     fire_footprint. Callers must still mock `src.main.open_meteo`,
     `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
@@ -225,6 +225,11 @@ def mock_alerts_pipeline_sources(monkeypatch):
     gdacs = MagicMock()
     monkeypatch.setattr("src.main.gdacs", gdacs)
     gdacs.fetch_disasters.return_value = []
+
+    copernicus = MagicMock()
+    monkeypatch.setattr("src.main.copernicus_ems", copernicus)
+    copernicus.fetch_active_flood_activations.return_value = []
+    copernicus.detect_flood_events.return_value = []
 
     nhc = MagicMock()
     monkeypatch.setattr("src.main.nhc", nhc)
@@ -1212,6 +1217,8 @@ class TestRunAlerts:
         monkeypatch.setattr(main.coral_dhw, "detect_dhw_thresholds", lambda readings, last_tiers=None: [])
         monkeypatch.setattr(main.nws_alerts, "fetch_alerts", lambda: [])
         monkeypatch.setattr(main.gdacs, "fetch_disasters", lambda min_severity=None: [])
+        monkeypatch.setattr(main.copernicus_ems, "fetch_active_flood_activations", lambda: [])
+        monkeypatch.setattr(main.copernicus_ems, "detect_flood_events", lambda activations, tiers=None: [])
         monkeypatch.setattr(main.sea_ice, "fetch_sea_ice", lambda hemisphere=None: [])
         monkeypatch.setattr(main.sea_ice, "detect_record_low", lambda readings: None)
         monkeypatch.setattr(main.drought, "fetch_drought_data", lambda: [])
@@ -1593,7 +1600,7 @@ class TestRunAlertsIceMass:
                             lambda region: readings if region == "greenland" else [])
         # Short-circuit all other fetchers
         for mod_name in (
-            "firms", "co2", "nws_alerts", "gdacs", "sea_ice", "drought", "enso",
+            "firms", "co2", "nws_alerts", "gdacs", "copernicus_ems", "sea_ice", "drought", "enso",
             "ocean", "water_levels", "river_gauges",
         ):
             mod = getattr(main, mod_name, None)
@@ -1666,7 +1673,7 @@ class TestRunAlertsIceMass:
 
         monkeypatch.setattr(ice_mass_mod, "fetch_grace_mass", spy)
         for mod_name in (
-            "firms", "co2", "nws_alerts", "gdacs", "sea_ice", "drought", "enso",
+            "firms", "co2", "nws_alerts", "gdacs", "copernicus_ems", "sea_ice", "drought", "enso",
             "ocean", "water_levels", "river_gauges",
         ):
             mod = getattr(main, mod_name, None)

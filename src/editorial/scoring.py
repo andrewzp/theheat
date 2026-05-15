@@ -441,6 +441,38 @@ def score_global_disaster(severity: str, disaster_type: str) -> EditorialScore:
     )
 
 
+def score_global_flood(
+    severity: str,
+    populations_affected: int,
+    affected_area_km2: float,
+    country: str,
+) -> EditorialScore:
+    severity_score = {
+        "Extreme": 98,
+        "Major": 90,
+        "Moderate": 68,
+        "Minor": 48,
+    }.get(severity, 70)
+    population_bonus = min(populations_affected / 25_000, 12)
+    area_bonus = min(affected_area_km2 / 50.0, 10)
+    reasons = [f"Copernicus EMS {severity} flood activation", country]
+    if populations_affected > 0:
+        reasons.append(f"{populations_affected:,} people affected")
+    if affected_area_km2 > 0:
+        reasons.append(f"{affected_area_km2:.1f} sq km mapped flood extent")
+    return _build_score(
+        "global_flood",
+        severity=severity_score + population_bonus + area_bonus,
+        novelty=78 + min(population_bonus + area_bonus, 12),
+        timeliness=94,
+        confidence=88,
+        shareability=72 + min(population_bonus, 10),
+        sensitivity=60,
+        threshold=72,
+        reasons=reasons[:4],
+    )
+
+
 def score_cyclone_rapid_intensification(
     delta_kt_24h: int,
     current_category: int,

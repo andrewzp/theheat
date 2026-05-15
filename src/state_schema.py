@@ -157,6 +157,8 @@ class BotState(TypedDict, total=False):
     cyclone_tiers: dict[str, int]
     cyclone_wind_history: dict[str, list[CycloneWindObservation]]
     cyclone_annual_count: dict[str, int]
+    flood_activation_tiers: dict[str, str]
+    flood_annual_count: dict[str, int]
     fire_footprint_last_run: str | None
     synthesis_components: SynthesisComponents
     synthesis_cooldown: dict[str, dict[str, str]]

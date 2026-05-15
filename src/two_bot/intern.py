@@ -12,6 +12,7 @@ from datetime import date
 
 from src.data.co2 import CO2Milestone
 from src.data.coral_dhw import CoralBleachingEvent
+from src.data.copernicus_ems import CopernicusFloodActivation
 from src.data.cyclones import (
     BasinRecordEvent,
     LandfallEvent,
@@ -1140,6 +1141,50 @@ def build_river_flood_bundle(flood: FloodEvent) -> StoryBundle:
         ],
         historical_context={},
         raw_signal_dump=asdict(flood),
+    )
+
+
+def build_global_flood_bundle(event: CopernicusFloodActivation) -> StoryBundle:
+    """A non-US flood activation from Copernicus EMS Rapid Mapping."""
+
+    headline_metric = (
+        {
+            "label": "populations_affected",
+            "value": event.populations_affected,
+            "unit": "people",
+        }
+        if event.populations_affected > 0
+        else {
+            "label": "affected_area_km2",
+            "value": event.affected_area_km2,
+            "unit": "km2",
+        }
+    )
+    return StoryBundle(
+        signal_kind="global_flood",
+        where=event.country or event.name or "Unknown",
+        when=event.activation_date[:10],
+        event_id=event.event_id,
+        headline_metric=headline_metric,
+        current_facts=[
+            {"label": "activation_id", "value": event.activation_id},
+            {"label": "country", "value": event.country},
+            {"label": "event_type", "value": event.event_type},
+            {"label": "severity", "value": event.severity},
+            {"label": "populations_affected", "value": event.populations_affected},
+            {"label": "affected_area_km2", "value": event.affected_area_km2},
+            {"label": "lat", "value": event.lat},
+            {"label": "lon", "value": event.lon},
+            {"label": "activation_date", "value": event.activation_date},
+            {"label": "copernicus_url", "value": event.copernicus_url},
+            {"label": "name", "value": event.name},
+            *_climate_context_facts(event.lat, event.lon, category="flood"),
+        ],
+        historical_context={
+            "source": "Copernicus EMS Rapid Mapping",
+            "scope": "non_us_global_flood_activation",
+        },
+        raw_signal_dump=asdict(event),
     )
 
 

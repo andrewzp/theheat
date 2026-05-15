@@ -22,10 +22,12 @@ from src.state import (
     update_ch4_last_milestone,
     update_coral_dhw_tier,
     update_cyclone_tier,
+    update_flood_activation_tier,
     record_cyclone_wind_observation,
     increment_ch4_annual_count,
     increment_coral_dhw_annual_count,
     increment_cyclone_annual_count,
+    increment_flood_annual_count,
     get_record_streak,
     prune_stale_record_streaks,
     log_error,
@@ -347,6 +349,49 @@ class TestCycloneState:
         increment_cyclone_annual_count(fresh_state)
 
         assert fresh_state["cyclone_annual_count"]["2026"] == 1
+
+
+class TestCopernicusFloodState:
+    def test_default_state_has_flood_trackers(self):
+        assert DEFAULT_STATE["flood_activation_tiers"] == {}
+        assert DEFAULT_STATE["flood_annual_count"] == {}
+
+    def test_update_flood_activation_tier_keeps_highest_severity(self, fresh_state):
+        update_flood_activation_tier(fresh_state, "EMSR999", "Major")
+        update_flood_activation_tier(fresh_state, "EMSR999", "Moderate")
+        update_flood_activation_tier(fresh_state, "EMSR999", "Extreme")
+
+        assert fresh_state["flood_activation_tiers"]["EMSR999"] == "Extreme"
+
+    def test_merge_state_keeps_highest_flood_severity_and_annual_count(self):
+        from src.state import _merge_state
+
+        current = {
+            "flood_activation_tiers": {"EMSR999": "Major", "EMSR998": "Extreme"},
+            "flood_annual_count": {"2026": 2},
+        }
+        incoming = {
+            "flood_activation_tiers": {"EMSR999": "Extreme", "EMSR997": "Major"},
+            "flood_annual_count": {"2026": 1, "2025": 3},
+        }
+
+        merged = _merge_state(current, incoming)
+
+        assert merged["flood_activation_tiers"] == {
+            "EMSR999": "Extreme",
+            "EMSR998": "Extreme",
+            "EMSR997": "Major",
+        }
+        assert merged["flood_annual_count"] == {"2026": 2, "2025": 3}
+
+    @patch("src.state.date")
+    def test_increment_flood_annual_count(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 5, 14)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+
+        increment_flood_annual_count(fresh_state)
+
+        assert fresh_state["flood_annual_count"]["2026"] == 1
 
 
 class TestLane08State:
@@ -912,6 +957,15 @@ class TestSqliteRoundTripLaneKeys:
         assert out["ch4_last_milestone"] == 1940
         assert out["coral_dhw_last_tier"] == {"gbr_northern": 8}
         assert out["coral_dhw_annual_count"] == {"2026": 4}
+
+    def test_round_trip_preserves_flood_state(self):
+        state_in = {
+            "flood_activation_tiers": {"EMSR999": "Major"},
+            "flood_annual_count": {"2026": 2},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["flood_activation_tiers"] == {"EMSR999": "Major"}
+        assert out["flood_annual_count"] == {"2026": 2}
 
     def test_round_trip_preserves_city_extreme_trackers(self):
         state_in = {
