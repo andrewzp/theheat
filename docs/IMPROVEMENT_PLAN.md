@@ -10,9 +10,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Last cycle A-rate | **10% (May 15, 1/10 — first A-grade in two-bot corpus; Galapagos A-)** |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | **40 pp (May 15)** |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -64,65 +64,6 @@ ANG). Two regression tests in `tests/test_ghcn.py` cover both failure modes.
 
 **Status:** SHIPPED in PR #82 (`48ee110`). Awaiting empirical confirmation on the next
 alerts run that BUNDLE_FACT kills on these stations stop firing.
-
-### ~~P2~~ — Fix fire MW rounding: fact_check kills on decimal truncation — **SHIPPED 2026-05-12 (PR #80)**
-
-**Observed:** 2026-05-11-12 — fact-checker kills fire drafts when writer rounds FRP
-values: 480.34 → 480 (BUNDLE_FACT), 547.92 → 548 (BUNDLE_FACT), 301.55 → 301
-(BUNDLE_FACT). The fact-checker requires exact numerical match. Also observed: a
-fabricated Hoover Dam comparison killed as WORLD_KNOWLEDGE ("roughly what the Hoover Dam
-generates" for a 301 MW fire; Hoover ≈ 2,080 MW — off by factor 7). Two separate issues.
-
-**Cycles observed:** May 11, May 12 (2 cycles; multiple kills each).
-**Last seen:** 2026-05-12.
-
-**Correction (2026-05-12, post-Codex-review):** the prior version of this plan proposed
-telling the writer to round FRP to one decimal and claimed "the fact-checker requires an
-exact match within 0.5 MW." Codex's review caught the contradiction:
-`src/two_bot/prompts/fact_check_prompt.py` line 9 says *"Verify exact match (number, unit,
-date). Mismatches = failure."* — there is **no tolerance rule**. Telling the writer to
-emit `480.3 MW` when the bundle carries `480.34` would still BUNDLE_FACT-kill. The fix
-has to make the writer's number match the bundle's number exactly, or change the bundle,
-or change the fact-checker. Pick one — don't paper over it with a tolerance claim that
-the runtime doesn't honor.
-
-**Proposed fix (a — rounding, REVISED):** Round at the **bundle builder**, not at the
-writer. In `src/two_bot/intern.py:build_fire_bundle` (line 167), change
-`"value": fire.frp` to `"value": round(fire.frp, 1)` (and the same in `raw_signal_dump`
-at line 180). The bundle then carries `480.3` as the source of truth; the writer
-naturally echoes `480.3 MW`; the fact-checker confirms exact match. No prompt rule
-needed, no fact-checker mutation needed, no runtime tolerance bookkeeping. Add a
-regression test in `tests/two_bot/test_intern.py` that asserts the FRP `value` field is
-rounded to 1 decimal for representative inputs (480.34 → 480.3, 547.92 → 547.9,
-301.55 → 301.5 or 301.6 per Python banker's rounding).
-
-  **Why bundle-side rounding wins over the alternatives:**
-  - **vs. writer-side rule:** Writer-side rules are fragile under model stochasticity
-    (see #76's length-cap retry). The bundle is source-of-truth and never drifts.
-  - **vs. fact-check tolerance:** Adding a `±0.5 MW` tolerance to the fact-check prompt
-    would mutate runtime behavior, require new voice-regression validation, and
-    introduce a soft-equality rule that downstream code may not honor identically. The
-    bundle-side fix preserves the "exact match" doctrine cleanly.
-
-**Proposed fix (b — fabrication, unchanged):** Add to the writer prompt's HARD RULES /
-bad-examples list: "Do NOT compare fire FRP to a named power plant or dam unless the
-comparison's exact MW is provided in the bundle. 'Roughly what [named plant] produces'
-is hallucination territory. Observed failure modes: Hoover Dam at full capacity (~2,080
-MW) applied to a 301 MW fire; Akosombo Dam at full capacity (~1,020 MW) applied to a
-361 MW fire." (This is already partially landed in PR #74's "no self-supplied facility
-MW" rule; verify the wording still covers FRP-specifically and tighten if it doesn't.)
-
-**Expected impact:** Bundle-side rounding unlocks every fire draft that's currently
-dying on float-precision mismatch. The fabrication rule (already largely in place via
-#74) prevents the Hoover/Akosombo class entirely.
-
-**Status:** SHIPPED in PR #80 (`4677869`). Bundle-side rounding in
-`src/two_bot/intern.py:build_fire_bundle` — both `headline_metric.value` and
-`raw_signal_dump.frp` use `round(fire.frp, 1)`. Five-case regression test in
-`tests/two_bot/test_intern.py::test_build_fire_bundle_rounds_frp_to_one_decimal` covers
-the three production failures (480.34, 547.92, 301.55) plus banker's-rounding edges.
-The writer-prompt no-self-supplied-facility-MW rule landed in PR #74 and remains in
-force. Awaiting empirical confirmation on the next fire-bundle alerts cycle.
 
 ### ~~P3~~ — Writer fire overcall: add seasonal/calendar context as a verifiable framing — **SHIPPED 2026-05-12 (PR #84)**
 
@@ -219,9 +160,10 @@ accelerating-warming, ecosystem specificity) appeared inconsistently. In the two
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
 palette is named.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 15 (4 cycles; era anchor
+over-deployment → fire batch no named mechanics → coral batch no named mechanics in
+7/10 drafts — convergence on formula template in every new signal type).
+**Last seen:** May 15.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -234,6 +176,52 @@ on the easy default.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+
+### P7 — Coral bleaching template convergence
+
+**Observed:** 2026-05-15 first coral_bleaching graded cycle — 7 of 8 coral drafts used
+identical two-sentence structure: (1) "[Location] reefs [have accumulated/reached]
+X°C-weeks of thermal stress — [threshold comparison]." (2) "[Geographic context /
+nothing]; [DHW explanation variant]." The DHW explanation closers (drafts 7, 8, 9, 10)
+are near-identical variants: "persistence is what kills" / "turns stress into die-off"
+/ "it's persistence that kills coral" / "duration above the tolerance ceiling that kills
+coral." Same convergence pattern as May 13 fire batch (P6), reproduced on the FIRST
+cycle of a new signal type. P6's fire-specific variety fix did not generalize.
+
+The two drafts that broke the template earned A- (Galapagos) and B+ (Austral Islands):
+- **Galapagos (A-):** ratio framing ("double the 12°C-week tier") + protection-mechanism-
+  named-then-failed system clause ("cold upwelling normally buffers heat; when that
+  buffer fails, stress accumulates fast"). The expected protection is the setup; its
+  failure is the punchline.
+- **Austral Islands (B+):** "heat that persists this far from the warm pool signals the
+  band has stretched" — draws a climate inference (SPCZ expansion) from the reef stress
+  reading rather than explaining DHW.
+
+**Cycles observed:** May 15 (1 cycle; 7/8 coral drafts identical template).
+**Last seen:** May 15.
+**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` coral_bleaching framing
+section. Name 4 alternative first-sentence structures:
+1. **Ratio framing:** "X°C-weeks of thermal stress — double/triple the Y°C-week [tier]
+   where [mortality/mass bleaching] is expected." Lead with scale, not threshold position.
+2. **Protection-failure framing:** "[Location] sits where [protection mechanism] normally
+   limits thermal stress. It has accumulated X°C-weeks." Name the buffer, then its failure.
+3. **Mortality-tier framing:** Distinguish between the 8°C-week bleaching threshold and
+   the 12°C-week mortality tier — use the correct tier word; "mortality" is more impactful
+   than "bleaching expected."
+4. **Inference framing:** What does this reef stress reading imply about the broader climate
+   system? (e.g., Austral Islands stress → SPCZ has stretched; Galapagos → upwelling
+   buffer failing.) The second sentence draws a conclusion, not a DHW tutorial.
+
+Ban the plain "[Location] reefs have accumulated X°C-weeks" opener as the default.
+Promote the Galapagos draft as the exemplar: ratio framing + protection-failure clause.
+The "persistence is what kills" closer is valid on first use; after 3+ drafts in a cycle
+it is a formula — the second sentence must be ecosystem-specific.
+
+**Expected impact:** Same as P6 for fire — breaks template convergence on the most common
+signal type added by the overnight wave. Galapagos shows the A- target is achievable;
+the fix names the path.
+
+**Status:** Drafted. Awaiting human implementation.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -256,8 +244,10 @@ banning the default opener when `recent_categories` already contains "fire" with
 24h, and tells the writer to ask whether the bundle is actually extraordinary
 enough to ship if no alternative form works.
 
-**Status:** SHIPPED in PR #85 second commit. Empirical test: next cron run that
-produces 2+ fire drafts in the same cycle — do they show structural variety?
+**Status:** SHIPPED in PR #85 second commit. **2026-05-15 empirical check:** British
+Columbia fire (draft [6]) used "British Columbia has a X MW fire burning today" —
+structurally different from the banned formula. P6 fix is landing for fire openers.
+The same underlying convergence pressure migrated to coral_bleaching → P7.
 
 ### ~~Chuuk ceiling — "expository → punch"~~ — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -310,6 +300,15 @@ voice engine (no era anchor over-deployment; potentially different Wodehouse pro
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-05-15] ~~P2~~ — Fix fire MW rounding: fact_check kills on decimal truncation
+
+Shipped PR #80 (`4677869`). Empirically confirmed across 2 graded cycles: May 13 (FRP
+values 309.6/364.7/307.6 MW all clean 1-decimal; zero BUNDLE_FACT kills on precision)
+and May 15 (BC fire 426.8 MW clean). No FRP decimal-mismatch kill observed since
+2026-05-12. Moved to Resolved at 2 clean cycles rather than 3 — "awaiting empirical
+confirmation" criterion satisfied; no evidence the failure mode can resurface on a
+shipped bundle-side fix.
 
 ### [Archived 2026-05-12] P2 — Widen plant-comparison regex adjective allowlist
 

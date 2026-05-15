@@ -19,6 +19,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
 | 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 | 2026-05-13 | 4 | 0 | 1 | 3 | 0 | **0%** | ✗ | First graded two-bot cycle. 3 fire drafts (Mali, Campeche, Mongolia) all used identical formula opener + seasonal-explanation structure — fire template convergence identified as new failure mode (P6). Chuuk FSM monthly_high (76-year record) is the one B: clean data, no Wodehouse violation, but expository second sentence instead of a punchline. P3 self-kill failure not observed (positive). FRP bundle rounding (#80) confirmed working (309.6, 364.7, 307.6 MW values clean). |
+| 2026-05-15 | 10 | 1 | 5 | 4 | 0 | **10%** | ✗ | First coral_bleaching cycle (8 of 10 drafts); 1 fire (BC, P6 fix confirmed — different opener); 1 monthly_low (Bethel Maine B-). Galapagos A- = first A-grade in two-bot corpus (ratio framing + buffer-failure system clause). 7/8 coral drafts identical two-sentence template → P7 added. ~~P2~~ FRP rounding moved to Resolved (2 clean cycles). ~~P3~~ fire self-kill 3rd cycle without observation (approaching Resolved). P5 (name humor moves) now 4 cycles evidence. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -28,6 +29,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-15 — Staleness bulk-reject: not applicable + gist write blocked
+
+**Why not applicable:** 14 pending drafts reviewed. Drafts 1-4 (carryovers, 2-3 days old) use present-tense satellite-detection framing with no "today"-baked content; Chuuk "May 9" is an observation date, not a "today" reference (same ruling as 2026-05-13 review). No draft qualifies under the "forecast-to-hit-today, dated references" criterion. **Gist write status:** `gh` CLI not available in this remote exec environment; `curl` to REST API returns 403 rate-limited. Staleness write would have been a no-op regardless.
 
 ### 2026-05-13 — Staleness bulk-reject: not needed (no stale drafts)
 
