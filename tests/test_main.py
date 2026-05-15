@@ -2,12 +2,20 @@
 
 from copy import deepcopy
 from unittest.mock import patch, MagicMock
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
 from src.state import DEFAULT_STATE
-from src.main import save_draft, post_approved, run_alerts, run_leaderboard, run_manual_tweet, process_due_drafts
+from src.main import (
+    _classify_ghcn_source_status,
+    save_draft,
+    post_approved,
+    run_alerts,
+    run_leaderboard,
+    run_manual_tweet,
+    process_due_drafts,
+)
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone
@@ -15,6 +23,99 @@ from src.data.co2 import CO2Reading, CO2Milestone
 
 def _fresh_state():
     return deepcopy(DEFAULT_STATE)
+
+
+class TestGhcnSourceStatus:
+    def test_success_when_all_diff_dates_fetched(self):
+        metrics = {
+            "diff_dates_missing": 0,
+            "diff_dates_fetched": 3,
+            "diff_missing_dates": [],
+        }
+
+        assert _classify_ghcn_source_status(metrics, today=date(2026, 5, 14)) == "success"
+
+    def test_tolerates_newest_diff_date_missing(self):
+        metrics = {
+            "diff_dates_missing": 1,
+            "diff_dates_fetched": 2,
+            "diff_missing_dates": ["2026-05-13"],
+        }
+
+        assert _classify_ghcn_source_status(metrics, today=date(2026, 5, 14)) == "success"
+
+    def test_degraded_when_older_diff_date_missing(self):
+        metrics = {
+            "diff_dates_missing": 1,
+            "diff_dates_fetched": 2,
+            "diff_missing_dates": ["2026-05-12"],
+        }
+
+        assert _classify_ghcn_source_status(metrics, today=date(2026, 5, 14)) == "degraded"
+
+    def test_degraded_when_multiple_diff_dates_missing(self):
+        metrics = {
+            "diff_dates_missing": 2,
+            "diff_dates_fetched": 1,
+            "diff_missing_dates": ["2026-05-13", "2026-05-12"],
+        }
+
+        assert _classify_ghcn_source_status(metrics, today=date(2026, 5, 14)) == "degraded"
+
+    def test_degraded_when_missing_dates_not_reported(self):
+        metrics = {
+            "diff_dates_missing": 1,
+            "diff_dates_fetched": 2,
+        }
+
+        assert _classify_ghcn_source_status(metrics, today=date(2026, 5, 14)) == "degraded"
+
+    def test_run_alerts_records_success_for_newest_diff_lag(
+        self,
+        mocker,
+        monkeypatch,
+        mock_alerts_pipeline_sources,
+    ):
+        monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
+        mocker.patch("src.main.open_meteo.load_cities", return_value=[])
+        mocker.patch("src.main.firms.fetch_fires", return_value=[])
+        mocker.patch("src.main.co2.fetch_co2_data", return_value=[])
+        mocker.patch("src.main.co2.detect_milestone", return_value=None)
+
+        newest_missing = (date.today() - timedelta(days=1)).isoformat()
+
+        def fake_ghcn_fetch(*, metrics_out=None):
+            if metrics_out is not None:
+                metrics_out.update({
+                    "stations_active": 11982,
+                    "stations_with_obs": 3985,
+                    "stations_checked": 5207,
+                    "raw_signals": 400,
+                    "bundles_after_dedup": 0,
+                    "diff_dates_attempted": 3,
+                    "diff_dates_fetched": 2,
+                    "diff_dates_missing": 1,
+                    "diff_missing_dates": [newest_missing],
+                })
+            return [], []
+
+        mock_alerts_pipeline_sources.check_extreme_signals_for_stations.side_effect = (
+            fake_ghcn_fetch
+        )
+        bot_state = _fresh_state()
+        current_run = {"sources": []}
+
+        run_alerts(bot_state, current_run=current_run)
+
+        source = next(
+            item for item in current_run["sources"]
+            if item["source"] == "open_meteo_extreme_signals"
+        )
+        assert source["status"] == "success"
+        assert "diff_missing:1" in source["note"]
+        health = bot_state["source_health"]["open_meteo_extreme_signals"]
+        assert health["degraded"] == 0
+        assert health["success"] == 1
 
 
 @pytest.fixture
@@ -81,6 +182,8 @@ def mock_alerts_pipeline_sources(mocker):
     ff.fetch_active_fire_perimeters.return_value = []
     ff.detect_tier_crossings.return_value = []
     ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+
+    return ghcn
 
 
 class TestSaveDraft:
