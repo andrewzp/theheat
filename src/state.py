@@ -24,6 +24,10 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 STATE_FILENAME = "state.json"
 STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
 DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
+MAX_DRAFTS = 200
+REJECTED_DRAFT_RETENTION_DAYS = 30
+REJECTED_DRAFT_GUARDRAIL_COUNT = 10
+_DRAFT_CAP_PROTECTED_STATUSES = {"pending", "posted"}
 
 DEFAULT_STATE: BotState = {
     "last_hot10": {"date": None, "cities": []},
@@ -197,7 +201,68 @@ def _draft_recency_key(draft: dict) -> tuple[datetime, int]:
     )
 
 
-def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = 200) -> list[dict]:
+def _draft_retention_timestamp(draft: dict) -> datetime:
+    parsed = _parse_state_timestamp(draft.get("created_at"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _enforce_draft_cap(drafts: list[dict], max_items: int) -> list[dict]:
+    if len(drafts) <= max_items:
+        return drafts
+
+    protected = [
+        draft for draft in drafts
+        if draft.get("status") in _DRAFT_CAP_PROTECTED_STATUSES
+    ]
+    if len(protected) >= max_items:
+        return protected
+
+    slots = max_items - len(protected)
+    cap_candidates = [
+        draft for draft in drafts
+        if draft.get("status") not in _DRAFT_CAP_PROTECTED_STATUSES
+    ]
+    capped_candidates = cap_candidates[-slots:] if slots > 0 else []
+    keep_ids = {id(draft) for draft in [*protected, *capped_candidates]}
+    return [draft for draft in drafts if id(draft) in keep_ids]
+
+
+def _trim_drafts(state: BotState, max_items: int) -> None:
+    cutoff = datetime.now(UTC) - timedelta(days=REJECTED_DRAFT_RETENTION_DAYS)
+    retained = []
+    expired_rejected = []
+    for draft in state.get("drafts", []):
+        if draft.get("status") == "rejected" and _draft_retention_timestamp(draft) < cutoff:
+            expired_rejected.append(draft)
+            continue
+        retained.append(draft)
+
+    if not retained and expired_rejected:
+        expired_rejected.sort(key=_draft_retention_timestamp)
+        retained = expired_rejected[-REJECTED_DRAFT_GUARDRAIL_COUNT:]
+
+    state["drafts"] = _enforce_draft_cap(retained, max_items)
+
+
+def trim_drafts(state: BotState) -> None:
+    """Trim durable drafts in place.
+
+    Policy:
+    - all pending drafts are kept indefinitely for human review
+    - all posted drafts are kept indefinitely for audit trail
+    - rejected drafts older than 30 days by created_at are dropped
+    - if every draft would be dropped, keep the newest 10 rejected drafts
+      as a guardrail for state/audit continuity
+    - after time-trim, enforce the 200-cap against non-pending/non-posted
+      drafts as a backstop
+    """
+
+    _trim_drafts(state, MAX_DRAFTS)
+
+
+def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MAX_DRAFTS) -> list[dict]:
     merged: dict[str, dict] = {}
     anonymous: list[dict] = []
 
@@ -218,9 +283,9 @@ def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = 20
             _parse_state_timestamp(draft.get("updated_at") or draft.get("created_at")),
         )
     )
-    if len(ordered) > max_items:
-        ordered = ordered[-max_items:]
-    return ordered
+    state: BotState = {"drafts": ordered}
+    _trim_drafts(state, max_items)
+    return state["drafts"]
 
 
 def _merge_run_history(current: list[dict], incoming: list[dict], max_items: int = 20) -> list[dict]:

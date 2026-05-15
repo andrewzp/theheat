@@ -1,6 +1,6 @@
 """Tests for state management."""
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 import tempfile
 from unittest.mock import patch
 
@@ -26,6 +26,22 @@ from src.state import (
     write_state,
     _fresh_state,
 )
+
+
+def _draft_timestamp(days_ago: int) -> str:
+    return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
+
+
+def _draft(draft_id: str, status: str, days_ago: int) -> dict:
+    ts = _draft_timestamp(days_ago)
+    return {
+        "id": draft_id,
+        "text": draft_id,
+        "status": status,
+        "type": "record",
+        "created_at": ts,
+        "updated_at": ts,
+    }
 
 
 class TestDuplicate:
@@ -260,6 +276,94 @@ class TestOceanSSTStreak:
         state = {}
         result = update_ocean_sst_streak(state, {"seeded": True, "last_milestone_fired": None})
         assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": None}
+
+
+class TestDraftTrimming:
+    def test_rejected_drafts_older_than_30_days_are_trimmed(self):
+        from src.state import trim_drafts
+
+        old_rejected = _draft("old_rejected", "rejected", 31)
+        old_rejected["updated_at"] = _draft_timestamp(0)
+        state = {
+            "drafts": [
+                old_rejected,
+                _draft("recent_rejected", "rejected", 29),
+            ]
+        }
+
+        trim_drafts(state)
+
+        assert [draft["id"] for draft in state["drafts"]] == ["recent_rejected"]
+
+    def test_pending_drafts_never_trimmed_regardless_of_age(self):
+        from src.state import trim_drafts
+
+        state = {
+            "drafts": [
+                _draft("old_pending", "pending", 365),
+                _draft("old_rejected", "rejected", 31),
+            ]
+        }
+
+        trim_drafts(state)
+
+        assert [draft["id"] for draft in state["drafts"]] == ["old_pending"]
+
+    def test_posted_drafts_never_trimmed_regardless_of_age(self):
+        from src.state import trim_drafts
+
+        state = {
+            "drafts": [
+                _draft("old_posted", "posted", 365),
+                _draft("old_rejected", "rejected", 31),
+            ]
+        }
+
+        trim_drafts(state)
+
+        assert [draft["id"] for draft in state["drafts"]] == ["old_posted"]
+
+    def test_200_cap_still_enforced_after_time_trim(self):
+        from src.state import trim_drafts
+
+        state = {
+            "drafts": [
+                *[_draft(f"old_rejected_{i}", "rejected", 31) for i in range(50)],
+                *[_draft(f"recent_rejected_{i}", "rejected", 1) for i in range(225)],
+            ]
+        }
+
+        trim_drafts(state)
+
+        assert len(state["drafts"]) == 200
+        assert state["drafts"][0]["id"] == "recent_rejected_25"
+        assert state["drafts"][-1]["id"] == "recent_rejected_224"
+
+    def test_all_old_rejected_drafts_keep_newest_10_as_guardrail(self):
+        from src.state import trim_drafts
+
+        state = {
+            "drafts": [
+                _draft(f"old_rejected_{i}", "rejected", 230 - i)
+                for i in range(200)
+            ]
+        }
+
+        trim_drafts(state)
+
+        assert len(state["drafts"]) == 10
+        assert [draft["id"] for draft in state["drafts"]] == [
+            f"old_rejected_{i}" for i in range(190, 200)
+        ]
+
+    def test_rejected_drafts_newer_than_30_days_kept(self):
+        from src.state import trim_drafts
+
+        state = {"drafts": [_draft("recent_rejected", "rejected", 29)]}
+
+        trim_drafts(state)
+
+        assert [draft["id"] for draft in state["drafts"]] == ["recent_rejected"]
 
 
 class TestSqliteBackend:
