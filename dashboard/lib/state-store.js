@@ -24,6 +24,7 @@ const DEFAULT_STATE = {
   city_monthly_min: {},
   record_streaks: {},
   data_source_failures: {},
+  source_health: {},
   ocean_sst_streak: {
     seeded: false,
     last_milestone_fired: null,
@@ -161,6 +162,7 @@ const METADATA_JSON_KEYS = [
   "suppressions",
   "memory",
   "data_source_failures",
+  "source_health",
 ]
 
 const PYTHON_OWNED_METADATA_KEYS = METADATA_JSON_KEYS.filter((key) => key !== "suppressions")

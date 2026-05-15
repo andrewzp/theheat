@@ -128,6 +128,7 @@ _METADATA_JSON_KEYS = (
     # round-trip. Found 2026-05-08 via codex review.
     "memory",
     "data_source_failures",
+    "source_health",
 )
 
 
