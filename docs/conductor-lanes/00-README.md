@@ -2,27 +2,27 @@
 
 ## Currently startable (2026-05-15)
 
-### Parallel right now (alongside in-flight Phase 3 workspace)
+### Queue order (each waits for the prior to merge — all touch main.py + scoring.py + intern.py)
 
-| Lane | Brief | Conflicts with | Time |
+| # | Lane | Time | Notes |
 |---|---|---|---|
-| [10 — Docs cleanup (handoff archive)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | `docs/` only — zero conflict with anything | nothing | 30-45 min, 1 PR |
-| [11 — F2 bundle enrichment helper](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | `src/two_bot/intern.py` + new `src/data/_climate_context.py` | Lane 08, Lane 09 (both touch intern.py); SAFE with Phase 3 | 4-6 hr, 1 PR |
+| 1 | [08 — Plan B: Coral DHW + CH4 methane](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/08-plan-b-coral-dhw-ch4.md) | 4-5 hr | in flight 2026-05-14 22:12 |
+| 2 | [12 — Plan D: Global floods (Copernicus EMS)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/12-plan-d-global-floods.md) | 4-6 hr | non-US flood coverage |
+| 3 | [13 — Plan E: Precip + Snow (GPM-IMERG + NSIDC)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/13-plan-e-precip-snow.md) | 5-7 hr | requires NASA EarthData token |
+| 4 | [14 — Plan F: Climate indices (NAO/AO/PDO + ozone)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/14-plan-f-climate-indices.md) | 3-4 hr | long-arc + seasonal signals |
+| 5 | [15 — Threshold registry refactor](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/15-threshold-registry.md) | 2-3 hr | centralize ~25 magic numbers |
+| 6 | [16 — main.py refactor (split monolith)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/16-main-py-refactor.md) | 3-4 hr | 3,070 → ~50 line entrypoint + modules |
 
-### Run after Phase 3 + Lane 11 land (touches main.py orchestrator)
-
-| Lane | Brief | Conflicts with | Time |
-|---|---|---|---|
-| [08 — Plan B: Coral DHW + CH4 methane](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/08-plan-b-coral-dhw-ch4.md) | adds 2 new sources, marine warming story class | Lane 09, Lane 11 | 4-5 hr, 1 PR |
-| [09 — Plan C: Tropical cyclones (NHC + JTWC)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/09-plan-c-tropical-cyclones.md) | adds 2 new sources, biggest editorial unlock — ship before June 1 | Lane 08, Lane 11 | 5-7 hr, 1 PR |
-
-### Recently landed (Plan A wave, 2026-05-14 → 05-15)
+### Recently landed (2026-05-14 → 05-15)
 
 | Lane | Status |
 |---|---|
-| [05 — Source-health foundation + restore + degraded fix](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/05-plan-a-foundation.md) | Phases 1, 2 merged. Phase 3 in flight. |
-| [06 — State hygiene (trim rejected drafts)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/06-plan-a-state-trim.md) | shipped (PR #98) |
-| [07 — Dashboard source-health view](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/07-plan-a-dashboard.md) | shipped (PR #101 + #103 follow-up) |
+| [05 — Plan A foundation + restore + degraded fix](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/05-plan-a-foundation.md) | all 3 phases shipped (#99, #102, #105) |
+| [06 — Plan A state trim](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/06-plan-a-state-trim.md) | shipped (#98) |
+| [07 — Plan A dashboard /health view](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/07-plan-a-dashboard.md) | shipped (#101 + #103) |
+| [09 — Plan C tropical cyclones](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/09-plan-c-tropical-cyclones.md) | shipped (#108) — ready for Atlantic season |
+| [10 — Docs cleanup](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | shipped (#106) |
+| [11 — F2 bundle enrichment](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | shipped (#107) |
 
 Plan-of-record for Plan A: [/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md)
 
