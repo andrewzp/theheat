@@ -1,19 +1,30 @@
 # Conductor Lanes — Parallel Workstreams
 
-## Active: Plan A — Data layer soundness (2026-05-14)
+## Currently startable (2026-05-15)
 
-Two lanes can run in parallel Conductor workspaces today. Lane 07 (dashboard)
-opens after Lane 05's Phase 1 ships.
+### Parallel right now (alongside in-flight Phase 3 workspace)
 
-| Lane | Status | Brief | Estimated CC time |
+| Lane | Brief | Conflicts with | Time |
 |---|---|---|---|
-| [05 — Source-health foundation + restore + degraded fix](./05-plan-a-foundation.md) | startable now | Phases 1+2+3 sequential within lane | 9-12 hr, 3 PRs |
-| [06 — State hygiene (trim rejected drafts)](./06-plan-a-state-trim.md) | startable now | Phase 4 standalone | 1 hr, 1 PR |
-| 07 — Dashboard source-health view | starts after Lane 05 P1 | Phase 5 standalone | 2-3 hr, 1 PR |
+| [10 — Docs cleanup (NEXT_SESSION_PROMPT chaos)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | `docs/` only — zero conflict with anything | nothing | 30-45 min, 1 PR |
+| [11 — F2 bundle enrichment helper](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | `src/two_bot/intern.py` + new `src/data/_climate_context.py` | Lane 08, Lane 09 (both touch intern.py); SAFE with Phase 3 | 4-6 hr, 1 PR |
 
-Plan-of-record: `/Users/andrewpuschel/.claude/plans/plan-a-data-layer-soundness.md`
+### Run after Phase 3 + Lane 11 land (touches main.py orchestrator)
 
-Lane 05 and Lane 06 touch disjoint files (Lane 05: `src/main.py`, `src/data/*`, `src/state_schema.py`, `src/data/source_status.py`; Lane 06: `src/state.py`, `tests/test_state.py`) — clean parallel execution, no merge conflicts.
+| Lane | Brief | Conflicts with | Time |
+|---|---|---|---|
+| [08 — Plan B: Coral DHW + CH4 methane](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/08-plan-b-coral-dhw-ch4.md) | adds 2 new sources, marine warming story class | Lane 09, Lane 11 | 4-5 hr, 1 PR |
+| [09 — Plan C: Tropical cyclones (NHC + JTWC)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/09-plan-c-tropical-cyclones.md) | adds 2 new sources, biggest editorial unlock — ship before June 1 | Lane 08, Lane 11 | 5-7 hr, 1 PR |
+
+### Recently landed (Plan A wave, 2026-05-14 → 05-15)
+
+| Lane | Status |
+|---|---|
+| [05 — Source-health foundation + restore + degraded fix](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/05-plan-a-foundation.md) | Phases 1, 2 merged. Phase 3 in flight. |
+| [06 — State hygiene (trim rejected drafts)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/06-plan-a-state-trim.md) | shipped (PR #98) |
+| [07 — Dashboard source-health view](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/07-plan-a-dashboard.md) | shipped (PR #101 + #103 follow-up) |
+
+Plan-of-record for Plan A: [/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md)
 
 ## Legacy: lanes 01-04 (shipped, archived for reference)
 
