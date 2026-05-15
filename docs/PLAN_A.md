@@ -1,8 +1,13 @@
 # Plan A — @theheat data layer soundness
 
+**STATUS: ALL 5 PHASES SHIPPED (2026-05-15).** See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0. PRs: #98 (Phase 4), #99 (Phase 1), #101 + #103 (Phase 5), #102 (Phase 2), #105 (Phase 3). Kept in-repo for handoff continuity and as a reference pattern for multi-phase plans.
+
+---
+
 **Date:** 2026-05-14
 **Scope:** Make the bot's data layer sound + know when it breaks
 **Estimated total CC time:** 12-16 hours, phased across 5 PRs
+**Actual:** ~3 hours wall-clock at ~23 min/lane Conductor pace
 **Posture per Andrew:** coverage-first, "tackle EVERYTHING"
 
 ## Context

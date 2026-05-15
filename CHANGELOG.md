@@ -2,6 +2,188 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0.0] - 2026-05-15
+
+The largest single landing in @theheat's history. 23 PRs merged in ~6 hours
+overnight via parallel Conductor + Claude Code workspaces. Plan A through
+Plan F shipped end-to-end. F2 bundle enrichment live. Threshold registry
+centralized. main.py decomposed from 3,070 lines to 96. Median Conductor
+lane time: ~23 min from prompt-paste to PR merge.
+
+This release is **infrastructure + coverage + architecture** all at once.
+Editorial-quality verification is now the only remaining blocker on the
+posting flip.
+
+### Added — new sources (+9, total 14 → 23)
+
+- **`src/data/coral_dhw.py`** (#109) — NOAA Coral Reef Watch Degree Heating
+  Weeks per region. Bleaching levels: warning (DHW ≥ 4), alert (≥ 8),
+  critical (≥ 12). Tier-dedup pattern. Live smoke at merge: 137 active
+  stress stations, 42 tier crossings ready to fire.
+- **`src/data/methane.py`** (#109) — NOAA GML CH4 monthly mean milestones.
+  Mirrors `co2.py` shape. Annual cap 12/year. Live at merge: CH4 had just
+  crossed 1940 ppb (1940.43 actual).
+- **`src/data/cyclones.py`, `nhc.py`, `jtwc.py`** (#108) — Tropical cyclone
+  coverage. NHC (Atlantic + East Pacific) and JTWC (West Pacific, Indian
+  Ocean, Southern Hemisphere). Detection: rapid intensification (≥30 kt
+  in 24h), Saffir-Simpson tier crossings, major hurricane landfalls (Cat
+  3+), basin records. Ready for June 1 Atlantic season opener.
+- **`src/data/copernicus_ems.py`** (#112) — Copernicus Emergency Management
+  Service global flood activations. Severity tiers + population-impact
+  threshold. Non-US coverage that closes the Pakistan/Sudan/BC gap.
+- **`src/data/gpm_imerg.py`** (#116) — NASA GPM-IMERG daily precipitation
+  extremes. Per-city daily total records, multi-day rolling accumulations,
+  country-wide simultaneous events. Requires existing `EARTHDATA_TOKEN`
+  env var (same as GRACE-FO ice mass).
+- **`src/data/nsidc_snow.py`** (#116) — NSIDC Snow Today single-event snow
+  extremes + multi-day blizzards + seasonal snowfall records. Annual cap
+  8/year via the sea-ice pattern.
+- **`src/data/climate_indices.py`** (#115) — NAO + AO + PDO monthly
+  oscillation indices. Detection: phase transitions, 2-sigma extreme
+  excursions, multi-index winter-blocking alignment. Mirrors ENSO pattern.
+- **`src/data/ozone_hole.py`** (#115) — NASA Ozone Watch Antarctic ozone
+  hole. Seasonal peak detection (Aug-Nov). Annual cap 2/year.
+
+### Added — bundle enrichment (F2)
+
+- **`src/data/_climate_context.py`** (#107) — 38 curated climate regions
+  with bounding boxes + climate-system phrase + topography note +
+  Wikipedia source URL per entry. Writer-produced system clauses ("the
+  western Pacific warm pool", "the Androscoggin Valley funnels cold air")
+  now pass fact-check because the bundle carries the verifiable phrase.
+  Wired into `build_fire_bundle`, `build_record_bundle`, `build_monthly_*`,
+  `build_anomaly_bundle`, `build_all_time_record_bundle`,
+  `build_coral_bleaching_bundle`, `build_cyclone_*`,
+  `build_global_flood_bundle`, and Plan E/F bundle builders.
+
+### Added — observability platform (Plan A Phase 1)
+
+- **`src/data/source_status.py`** extended (#99) with `assert_response_schema`
+  helper — top-of-fetch shape check that raises `SourceFetchError` on
+  upstream schema drift. Catches the ocean_sst silent-death class of bugs
+  on day one.
+- **`src/data/_freshness.py`** (#99) — `assert_freshness(data_date, source,
+  max_age_days)` for cadence-gated sources. Stale data fails loud.
+- **`state.source_health`** (#99) — rolling 7-day per-source record:
+  success/degraded/failed/skipped counts + `last_success_ts`, `last_error`,
+  `last_error_ts`. Persists across the 20-entry run_history buffer.
+- **`dashboard/app/api/source-health/route.js`** (#101) — aggregates
+  run_history into per-source health classifier (healthy / degraded /
+  unhealthy / idle). Sorted worst-first.
+- **`dashboard/app/health/`** (#101) — `/health` route with stats card +
+  per-source grid. Andrew sees source health at a glance, no jq required.
+
+### Added — threshold registry
+
+- **`src/editorial/thresholds.py`** (#114, #117) — Centralized
+  `THRESHOLDS: dict[str, ThresholdEntry]` with 32 entries covering every
+  `score_*` function. Each entry has category + threshold + rationale
+  string. Calibration is now a one-config-table edit instead of a
+  grep-and-patch.
+- **`tests/test_thresholds.py`** — registry coverage assertions: every
+  public score function is in the registry, no inline threshold literals
+  remain, every entry has a non-empty rationale.
+
+### Added — shared helpers
+
+- **`src/data/_http.py`** (#102) — `fetch_with_retry` helper. Exponential
+  backoff (1s, 2s, 4s) on `ConnectionError` / `Timeout` / 5xx. Does NOT
+  retry on 4xx or schema-drift errors. Wired into FIRMS, ocean_sst, and
+  available to all sources.
+
+### Changed — restored broken sources
+
+- **`src/data/ocean_sst.py`** (#102) — Switched from dead
+  `oisst2.1_world_sst_day.json` endpoint to ClimateReanalyzer's
+  `json_2clim/world2` payload. Schema-drift + freshness assertions added.
+  Marine heatwave streak detection back online (was 0/8 success for weeks).
+- **`src/data/river_gauges.py`** (#102) — USGS WaterWatch flood-stage
+  parsing replaced with NOAA NWPS gauge metadata. Flood-stage flag back
+  online.
+- **`src/data/firms.py`** (#102) — Wrapped in `fetch_with_retry`. Closes
+  the ~12%-per-cron HTTPSConnectionPool transient failure class.
+
+### Changed — open_meteo "degraded" calibration
+
+- **`src/main.py` → now `src/orchestrator/run_alerts.py`** (#105) — GHCN
+  `diff_dates_missing == 1` (newest expected date lagging upstream) now
+  classifies as `success` instead of `degraded`. Investigation note at
+  `docs/conductor-lanes/05-phase3-open-meteo-investigation.md` shows
+  every degraded row had identical `diff_dates_missing=[2026-05-13]`
+  pattern; NCEI was just publishing yesterday's diff late.
+
+### Changed — anomaly score threshold
+
+- **`src/editorial/scoring/temperature.py`** (#96) — `score_anomaly`
+  threshold lowered 76 → 74. Florida -11.1°C cold anomaly was firing every
+  cron and dying at the gate. -11.1°C below normal in May Florida is real
+  news. Formula self-protects at smaller anomalies (8°C scores 70).
+
+### Refactored — monolith decomposition
+
+- **`src/main.py`** (#113) — 3,070 lines → 96-line entrypoint facade.
+- **`src/orchestrator/`** (NEW package, #113) — `run_alerts.py`,
+  `common.py`, `finalize.py`, `pipeline_routing.py`, `hot10.py`,
+  `posting.py`, plus `sources/<source>.py` per-source runner files
+  (22 files at landing).
+- **`src/editorial/scoring/`** (NEW package, #113) — per-category files:
+  `atmospheric.py`, `disasters.py`, `drought.py`, `fire.py`, `hot10.py`,
+  `marine.py`, `precipitation.py`, `synthesis.py`, `temperature.py`, plus
+  `_shared.py` (EditorialScore dataclass + `_build_score` + `_clamp`).
+- **`src/two_bot/intern/`** (NEW package, #113) — per-category files
+  mirroring the scoring split. `__init__.py` re-exports preserve all
+  existing imports.
+- Why this matters: every future source-add lane touches a NEW file in
+  each package. Two concurrent lanes never edit the same file. Parallel
+  source-adds are now structurally safe.
+
+### Changed — state hygiene
+
+- **`src/state.py`** (#98) — `trim_drafts` extended with time-based trim
+  of rejected drafts older than 30 days. Pending and posted kept
+  indefinitely. 200-cap backstop preserved. Recovered ~400 KB of
+  state.json size; future writes self-prune.
+
+### Documentation
+
+- **`docs/PLAN_A.md`** — full 5-phase plan-of-record for the wave (added
+  in #97, kept in repo for handoff continuity)
+- **`docs/conductor-lanes/`** — 12 lane briefs authored (05-16) covering
+  the full wave. README updated with queue order + parallelism map.
+- **`docs/handoffs/`** — 6 prior NEXT_SESSION_PROMPT files consolidated
+  here in #106 via `git mv` (history preserved). New handoff at
+  `2026-05-15.md` captures this release.
+- **`docs/cyclone-feed-investigation.md`**, **`copernicus-ems-flood-investigation.md`**,
+  **`main-py-refactor-map.md`** — Conductor workspaces committed
+  investigation artifacts as the first commit of their respective lanes.
+  Reference for future source-add work.
+
+### Tests
+
+- **1151 passing** (was 909). +242 tests across all the new lanes.
+- mypy clean across 88 source files.
+- Voice-regression green; cyclone scenarios added.
+
+### Production state at release
+
+- **`state.json`:** 906 KB (down from 958 peak, will continue trimming as
+  rejected drafts age past 30 days).
+- **Pending drafts:** 12 (up from 6 — new sources firing).
+- **`source_health` tracked:** 24 sources/runners with rolling per-source
+  health.
+- **Suppression mix (24h):** writer 23, fact_check 22, cycle_cap 4, safety
+  1. **Zero score_gate kills** — anomaly threshold tuning + new sources
+  flowing cleanly through the gate.
+
+### What's still NOT done (queued)
+
+- F3 second-pass editorial agent (deferred: "Flash has no taste, no new
+  models tonight")
+- theheat.ai landing page (domain bought, parked)
+- Posting mode flip from `manual_only` to `armed_auto` / `suggested_auto`
+- X profile Location field (recommend `Earth`) + Website field (set after
+  landing page deploys)
+
 ## [0.6.0.1] - 2026-05-14
 
 Anomaly score_gate calibration. 24h of post-v3 alerts crons showed the same
