@@ -112,6 +112,82 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
   }
 })
 
+test("readStateStore fetches raw gist content when state.json is truncated", async () => {
+  process.env.THEHEAT_STATE_BACKEND = "gist"
+  process.env.THEHEAT_DB_PATH = ""
+  process.env.GIST_ID = "gist_123"
+  process.env.GITHUB_TOKEN = "token_123"
+
+  const fullState = {
+    drafts: [
+      { id: "draft_1", text: "Full state draft", status: "pending", created_at: "2026-05-14T00:00:00Z" },
+    ],
+    posted_events: [],
+    run_history: [
+      {
+        id: "run_1",
+        mode: "alerts",
+        started_at: "2026-05-14T00:00:00Z",
+        sources: [{ source: "ocean_sst", status: "failed", error: "fetch failed" }],
+      },
+    ],
+    errors: [],
+    last_hot10: { date: null, cities: [] },
+    streaks: {},
+    daily_tweet_count: {},
+    pending_confirmations: [],
+  }
+
+  const fetchCalls = []
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url, options = {}) => {
+    fetchCalls.push({ url: String(url), options })
+    if (String(url).includes("api.github.com/gists")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            files: {
+              "state.json": {
+                content: "{\"drafts\":[",
+                truncated: true,
+                raw_url: "https://gist.githubusercontent.com/raw/state.json",
+              },
+            },
+          }
+        },
+        async text() {
+          return ""
+        },
+      }
+    }
+    if (String(url) === "https://gist.githubusercontent.com/raw/state.json") {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify(fullState)
+        },
+      }
+    }
+    throw new Error(`unexpected fetch ${url}`)
+  }
+
+  try {
+    const stateStore = await importFresh("lib/state-store.js")
+    const loaded = await stateStore.readStateStore()
+
+    assert.equal(loaded.drafts[0].text, "Full state draft")
+    assert.equal(loaded.run_history[0].sources[0].source, "ocean_sst")
+    assert.equal(fetchCalls.length, 2)
+    assert.equal(fetchCalls[1].url, "https://gist.githubusercontent.com/raw/state.json")
+    assert.match(fetchCalls[1].options.headers.Authorization, /^token /)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("sqlite state store preserves Python-owned metadata keys", async () => {
   const tmp = mkdtempSync(path.join(os.tmpdir(), "theheat-state-store-"))
   const dbPath = path.join(tmp, "state.sqlite")
