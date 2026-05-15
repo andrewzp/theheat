@@ -14,6 +14,8 @@ from src.state_schema import (
     MemoryState,
     OceanSSTStreak,
     RecordStreakEntry,
+    SourceHealth,
+    SourceHealthRun,
     SynthesisComponents,
 )
 from src.storage import sqlite_store
@@ -61,6 +63,10 @@ DEFAULT_STATE: BotState = {
     # Consecutive fetch failures per data source (reset on success).
     # Used to fire a structural alert when a source goes silent for 3+ cycles.
     "data_source_failures": {},  # {source_key: consecutive_failure_count}
+    # Rolling 7-day source-health counters keyed by run source.
+    # Populated from alert run telemetry so every source row gets a durable
+    # health observation, not just the last 20-run dashboard window.
+    "source_health": {},
     # Global ocean SST archive-high streak. Two-field state:
     # seeded flips True after first observation (enables silent bootstrap);
     # last_milestone_fired tracks which milestone we last tweeted so
@@ -401,6 +407,10 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
     merged["city_monthly_max"] = deepcopy(next_state.get("city_monthly_max", base.get("city_monthly_max", {})))
     merged["city_monthly_min"] = deepcopy(next_state.get("city_monthly_min", base.get("city_monthly_min", {})))
     merged["record_streaks"] = deepcopy(next_state.get("record_streaks", base.get("record_streaks", {})))
+    merged["source_health"] = _merge_source_health(
+        base.get("source_health"),
+        next_state.get("source_health"),
+    )
     # ocean_sst_streak — always-take-incoming, same semantics as record_streaks above.
     merged["ocean_sst_streak"] = deepcopy(
         next_state.get("ocean_sst_streak", base.get("ocean_sst_streak", {}))
@@ -903,6 +913,127 @@ def add_source_run(
         entry["details"] = details
     run.setdefault("sources", []).append(entry)
     return run
+
+
+SOURCE_HEALTH_WINDOW_DAYS = 7
+_SOURCE_HEALTH_COUNTERS = ("success", "degraded", "failed", "skipped")
+
+
+def _source_health_status(status: str) -> str:
+    if status == "partial_failure":
+        return "degraded"
+    if status in _SOURCE_HEALTH_COUNTERS:
+        return status
+    return "failed"
+
+
+def _format_state_timestamp(value: datetime | str | None = None) -> str:
+    if isinstance(value, str):
+        parsed = _parse_state_timestamp(value)
+    elif isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.now(UTC)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _empty_source_health() -> SourceHealth:
+    return {
+        "success": 0,
+        "degraded": 0,
+        "failed": 0,
+        "skipped": 0,
+        "last_success_ts": None,
+        "last_error": None,
+        "last_error_ts": None,
+        "runs": [],
+    }
+
+
+def _source_health_window_cutoff(runs: list[SourceHealthRun]) -> datetime:
+    latest: datetime | None = None
+    for run in runs:
+        parsed = _parse_state_timestamp(run.get("ts"))
+        if latest is None or parsed > latest:
+            latest = parsed
+    if latest is None:
+        latest = datetime.now(UTC)
+    return latest - timedelta(days=SOURCE_HEALTH_WINDOW_DAYS)
+
+
+def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
+    health = _empty_source_health()
+    cutoff = _source_health_window_cutoff(runs)
+    seen = set()
+    ordered: list[SourceHealthRun] = []
+    for run in sorted(runs, key=lambda row: _parse_state_timestamp(row.get("ts"))):
+        ts = _format_state_timestamp(run.get("ts"))
+        if _parse_state_timestamp(ts) < cutoff:
+            continue
+        status = _source_health_status(str(run.get("status") or "failed"))
+        error = run.get("error")
+        error_text = str(error) if error else None
+        key = (ts, status, error_text)
+        if key in seen:
+            continue
+        seen.add(key)
+        entry: SourceHealthRun = {"ts": ts, "status": status}
+        if error_text:
+            entry["error"] = error_text
+        ordered.append(entry)
+        health_counts = cast(dict, health)
+        health_counts[status] = int(health_counts.get(status, 0)) + 1
+        if status == "success":
+            health["last_success_ts"] = ts
+        elif status in {"degraded", "failed"} and error_text:
+            health["last_error"] = error_text
+            health["last_error_ts"] = ts
+    health["runs"] = ordered
+    return health
+
+
+def record_source_health(
+    state: BotState,
+    source: str,
+    status: str,
+    error: str | None = None,
+    *,
+    timestamp: datetime | str | None = None,
+) -> None:
+    """Append a source-health observation and keep a rolling 7-day summary."""
+    if not source:
+        return
+    health_map = state.setdefault("source_health", {})
+    health_writeable: dict = cast(dict, health_map)
+    existing = health_writeable.get(source) or {}
+    runs = list(existing.get("runs") or [])
+    run: SourceHealthRun = {
+        "ts": _format_state_timestamp(timestamp),
+        "status": _source_health_status(status),
+    }
+    if error:
+        run["error"] = str(error)
+    runs.append(run)
+    health_writeable[source] = _rebuild_source_health(runs)
+
+
+def _merge_source_health(
+    current: dict[str, SourceHealth] | None,
+    incoming: dict[str, SourceHealth] | None,
+) -> dict[str, SourceHealth]:
+    merged: dict[str, SourceHealth] = {}
+    for source in set(list((current or {}).keys()) + list((incoming or {}).keys())):
+        runs: list[SourceHealthRun] = []
+        for health in ((current or {}).get(source), (incoming or {}).get(source)):
+            if not isinstance(health, dict):
+                continue
+            for run in health.get("runs") or []:
+                if isinstance(run, dict):
+                    runs.append(run)
+        merged[source] = _rebuild_source_health(runs)
+    return merged
 
 
 def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:

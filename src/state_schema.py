@@ -90,6 +90,27 @@ class SynthesisComponents(TypedDict, total=False):
     drought_snapshot: DroughtSnapshot | None
 
 
+class SourceHealthRun(TypedDict, total=False):
+    """Single source-health observation retained in the 7-day window."""
+
+    ts: str
+    status: str
+    error: str | None
+
+
+class SourceHealth(TypedDict, total=False):
+    """Rolling per-source health counters and last-known problem state."""
+
+    success: int
+    degraded: int
+    failed: int
+    skipped: int
+    last_success_ts: str | None
+    last_error: str | None
+    last_error_ts: str | None
+    runs: list[SourceHealthRun]
+
+
 class BotState(TypedDict, total=False):
     """Top-level durable state for the @theheat orchestrator.
 
@@ -115,6 +136,7 @@ class BotState(TypedDict, total=False):
     city_monthly_min: dict[str, dict[str, CityRecord]]
     record_streaks: dict[str, RecordStreakEntry]
     data_source_failures: dict[str, int]
+    source_health: dict[str, SourceHealth]
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]
     ice_mass_last_milestone: dict[str, float]

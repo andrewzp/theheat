@@ -99,6 +99,7 @@ def _find_draft(bot_state: BotState, draft_id: str = "", tweet_text: str = "") -
 
 def _record_source_run(
     current_run: dict | None,
+    bot_state: BotState | None,
     source: str,
     started_at: float,
     *,
@@ -111,6 +112,12 @@ def _record_source_run(
     details: dict | None = None,
 ) -> None:
     """Track a source result when run telemetry is enabled."""
+    if bot_state is not None:
+        health_error = error
+        if not health_error and status in {"failed", "degraded", "partial_failure"}:
+            health_error = note
+        state.record_source_health(bot_state, source, status, health_error)
+
     if current_run is None:
         return
 
@@ -920,7 +927,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         cities = open_meteo.load_cities()
         us_city_state_map = cities_to_state_map(cities)
         _record_source_run(
-            current_run, "load_cities", cities_start,
+            current_run, bot_state, "load_cities", cities_start,
             status="success", observed=len(cities), promoted=len(cities)
         )
     except Exception as e:
@@ -928,7 +935,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         state.log_error(bot_state, "load_cities", str(e))
         cities = []
         _record_source_run(
-            current_run, "load_cities", cities_start,
+            current_run, bot_state, "load_cities", cities_start,
             status="failed", error=str(e)
         )
 
@@ -1613,7 +1620,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         else:
             state.reset_data_source_failure(bot_state, _signals_provider)
         _record_source_run(
-            current_run, "open_meteo_extreme_signals", signals_start,
+            current_run, bot_state, "open_meteo_extreme_signals", signals_start,
             status=source_status, observed=total_observed,
             promoted=source_promoted, drafted=source_drafted,
             note=note, details=details,
@@ -1628,7 +1635,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             pass  # mock or unexpected return type — skip the alert
         state.log_error(bot_state, "open_meteo_extreme_signals", str(e))
         _record_source_run(
-            current_run, "open_meteo_extreme_signals", signals_start,
+            current_run, bot_state, "open_meteo_extreme_signals", signals_start,
             status="failed", error=str(e),
         )
 
@@ -1710,20 +1717,20 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "firms", firms_start,
+            current_run, bot_state, "firms", firms_start,
             status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted
         )
     except SourceSkipped as e:
         print(f"[alerts] FIRMS skipped: {e}")
         _record_source_run(
-            current_run, "firms", firms_start,
+            current_run, bot_state, "firms", firms_start,
             status="skipped", note=str(e),
         )
     except Exception as e:
         print(f"[alerts] FIRMS error: {e}")
         state.log_error(bot_state, "firms", str(e))
         _record_source_run(
-            current_run, "firms", firms_start,
+            current_run, bot_state, "firms", firms_start,
             status="failed", error=str(e)
         )
 
@@ -1784,7 +1791,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             # Only mark as run-today on success — failed fetches retry on next cron tick.
             bot_state["fire_footprint_last_run"] = today_iso
             _record_source_run(
-                current_run, "fire_footprint", ff_start,
+                current_run, bot_state, "fire_footprint", ff_start,
                 status="success", observed=len(complexes),
                 promoted=source_promoted, drafted=source_drafted,
             )
@@ -1792,13 +1799,13 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             print(f"[alerts] Fire footprint error: {e}")
             state.log_error(bot_state, "fire_footprint", str(e))
             _record_source_run(
-                current_run, "fire_footprint", ff_start,
+                current_run, bot_state, "fire_footprint", ff_start,
                 status="failed", error=str(e),
             )
     else:
         ff_skipped_start = time.perf_counter()
         _record_source_run(
-            current_run, "fire_footprint", ff_skipped_start,
+            current_run, bot_state, "fire_footprint", ff_skipped_start,
             status="skipped", note="Already ran today",
         )
 
@@ -1854,14 +1861,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                     co2_drafted_today = True
                     source_drafted += 1
         _record_source_run(
-            current_run, "co2", co2_start,
+            current_run, bot_state, "co2", co2_start,
             status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] CO2 error: {e}")
         state.log_error(bot_state, "co2", str(e))
         _record_source_run(
-            current_run, "co2", co2_start,
+            current_run, bot_state, "co2", co2_start,
             status="failed", error=str(e)
         )
 
@@ -1908,14 +1915,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "nws_alerts", nws_start,
+            current_run, bot_state, "nws_alerts", nws_start,
             status="success", observed=len(alerts), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] NWS error: {e}")
         state.log_error(bot_state, "nws_alerts", str(e))
         _record_source_run(
-            current_run, "nws_alerts", nws_start,
+            current_run, bot_state, "nws_alerts", nws_start,
             status="failed", error=str(e)
         )
 
@@ -1959,14 +1966,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "gdacs", gdacs_start,
+            current_run, bot_state, "gdacs", gdacs_start,
             status="success", observed=len(disasters), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] GDACS error: {e}")
         state.log_error(bot_state, "gdacs", str(e))
         _record_source_run(
-            current_run, "gdacs", gdacs_start,
+            current_run, bot_state, "gdacs", gdacs_start,
             status="failed", error=str(e)
         )
 
@@ -2012,21 +2019,21 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                         source_drafted = 1
                 observed = len(readings) if hasattr(readings, "__len__") else 0
                 _record_source_run(
-                    current_run, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
+                    current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
                     status="success", observed=observed, promoted=source_promoted, drafted=source_drafted
                 )
             except Exception as e:
                 print(f"[alerts] Sea ice ({hemisphere}) error: {e}")
                 state.log_error(bot_state, f"sea_ice_{hemisphere.lower()}", str(e))
                 _record_source_run(
-                    current_run, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
+                    current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
                     status="failed", error=str(e)
                 )
     else:
         for hemisphere in ("Arctic", "Antarctic"):
             skipped_start = time.perf_counter()
             _record_source_run(
-                current_run, f"sea_ice_{hemisphere.lower()}", skipped_start,
+                current_run, bot_state, f"sea_ice_{hemisphere.lower()}", skipped_start,
                 status="skipped", note="Runs Mondays only"
             )
 
@@ -2089,20 +2096,20 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             if drought_updates:
                 state.record_synthesis_drought_snapshot(bot_state, drought_updates)
             _record_source_run(
-                current_run, "drought", drought_start,
+                current_run, bot_state, "drought", drought_start,
                 status="success", observed=len(drought_updates), promoted=source_promoted, drafted=source_drafted
             )
         except Exception as e:
             print(f"[alerts] Drought error: {e}")
             state.log_error(bot_state, "drought", str(e))
             _record_source_run(
-                current_run, "drought", drought_start,
+                current_run, bot_state, "drought", drought_start,
                 status="failed", error=str(e)
             )
     else:
         skipped_start = time.perf_counter()
         _record_source_run(
-            current_run, "drought", skipped_start,
+            current_run, bot_state, "drought", skipped_start,
             status="skipped", note="Runs Fridays only"
         )
 
@@ -2146,20 +2153,20 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                     source_drafted = 1
             observed = len(enso_readings) if hasattr(enso_readings, "__len__") else 0
             _record_source_run(
-                current_run, "enso", enso_start,
+                current_run, bot_state, "enso", enso_start,
                 status="success", observed=observed, promoted=source_promoted, drafted=source_drafted
             )
         except Exception as e:
             print(f"[alerts] ENSO error: {e}")
             state.log_error(bot_state, "enso", str(e))
             _record_source_run(
-                current_run, "enso", enso_start,
+                current_run, bot_state, "enso", enso_start,
                 status="failed", error=str(e)
             )
     else:
         skipped_start = time.perf_counter()
         _record_source_run(
-            current_run, "enso", skipped_start,
+            current_run, bot_state, "enso", skipped_start,
             status="skipped", note="Runs on the 1st of the month"
         )
 
@@ -2201,14 +2208,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "ocean", ocean_start,
+            current_run, bot_state, "ocean", ocean_start,
             status="success", observed=len(ocean_readings), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] Ocean error: {e}")
         state.log_error(bot_state, "ocean", str(e))
         _record_source_run(
-            current_run, "ocean", ocean_start,
+            current_run, bot_state, "ocean", ocean_start,
             status="failed", error=str(e)
         )
 
@@ -2259,7 +2266,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                     drafted += 1
                     source_drafted += 1
         _record_source_run(
-            current_run, "ocean_sst", sst_start,
+            current_run, bot_state, "ocean_sst", sst_start,
             status="success",
             observed=1 if obs is not None else 0,
             promoted=source_promoted,
@@ -2269,7 +2276,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         print(f"[alerts] Ocean SST error: {e}")
         state.log_error(bot_state, "ocean_sst", str(e))
         _record_source_run(
-            current_run, "ocean_sst", sst_start,
+            current_run, bot_state, "ocean_sst", sst_start,
             status="failed", error=str(e),
         )
 
@@ -2312,14 +2319,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "water_levels", water_levels_start,
+            current_run, bot_state, "water_levels", water_levels_start,
             status="success", observed=len(wl_readings), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] Water levels error: {e}")
         state.log_error(bot_state, "water_levels", str(e))
         _record_source_run(
-            current_run, "water_levels", water_levels_start,
+            current_run, bot_state, "water_levels", water_levels_start,
             status="failed", error=str(e)
         )
 
@@ -2362,14 +2369,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 drafted += 1
                 source_drafted += 1
         _record_source_run(
-            current_run, "river_gauges", river_start,
+            current_run, bot_state, "river_gauges", river_start,
             status="success", observed=len(river_readings), promoted=source_promoted, drafted=source_drafted
         )
     except Exception as e:
         print(f"[alerts] River gauges error: {e}")
         state.log_error(bot_state, "river_gauges", str(e))
         _record_source_run(
-            current_run, "river_gauges", river_start,
+            current_run, bot_state, "river_gauges", river_start,
             status="failed", error=str(e)
         )
 
@@ -2385,14 +2392,14 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             try:
                 if _ice_annual_cap_reached(bot_state):
                     _record_source_run(
-                        current_run, region_key, im_start,
+                        current_run, bot_state, region_key, im_start,
                         status="skipped", note="annual cap reached",
                     )
                     continue
                 readings = _fetch_strict(ice_mass.fetch_grace_mass, region=region)
                 if not readings:
                     _record_source_run(
-                        current_run, region_key, im_start,
+                        current_run, bot_state, region_key, im_start,
                         status="success", observed=0,
                     )
                     continue
@@ -2400,7 +2407,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 last_seen = bot_state.get("ice_mass_last_seen", {}).get(region)
                 if last_seen == latest_month:
                     _record_source_run(
-                        current_run, region_key, im_start,
+                        current_run, bot_state, region_key, im_start,
                         status="skipped",
                         note=f"already processed {latest_month}",
                     )
@@ -2502,28 +2509,28 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 # Always mark the month as seen so we don't reprocess until data updates.
                 bot_state.setdefault("ice_mass_last_seen", {})[region] = latest_month
                 _record_source_run(
-                    current_run, region_key, im_start,
+                    current_run, bot_state, region_key, im_start,
                     status="success", observed=len(readings),
                     promoted=source_promoted, drafted=source_drafted,
                 )
             except SourceSkipped as e:
                 print(f"[alerts] ice_mass {region} skipped: {e}")
                 _record_source_run(
-                    current_run, region_key, im_start,
+                    current_run, bot_state, region_key, im_start,
                     status="skipped", note=str(e),
                 )
             except Exception as e:
                 print(f"[alerts] ice_mass {region} error: {e}")
                 state.log_error(bot_state, region_key, str(e))
                 _record_source_run(
-                    current_run, region_key, im_start,
+                    current_run, bot_state, region_key, im_start,
                     status="failed", error=str(e),
                 )
     else:
         for region in ("greenland", "antarctica"):
             skipped_start = time.perf_counter()
             _record_source_run(
-                current_run, f"ice_mass_{region}", skipped_start,
+                current_run, bot_state, f"ice_mass_{region}", skipped_start,
                 status="skipped", note="Runs Mondays only",
             )
 
@@ -2601,7 +2608,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 synthesis_drafted += 1
         state.prune_stale_synthesis_components(bot_state)
         _record_source_run(
-            current_run, "synthesis_fire_drought_heat", synthesis_start,
+            current_run, bot_state, "synthesis_fire_drought_heat", synthesis_start,
             status="success",
             observed=synthesis_observed,
             promoted=synthesis_promoted,
@@ -2611,7 +2618,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         print(f"[alerts] Synthesis error: {e}")
         state.log_error(bot_state, "synthesis_fire_drought_heat", str(e))
         _record_source_run(
-            current_run, "synthesis_fire_drought_heat", synthesis_start,
+            current_run, bot_state, "synthesis_fire_drought_heat", synthesis_start,
             status="failed", error=str(e),
         )
 
@@ -2740,7 +2747,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         if not temps:
             print("[leaderboard] No temperature data available")
             _record_source_run(
-                current_run, "leaderboard", leaderboard_start,
+                current_run, bot_state, "leaderboard", leaderboard_start,
                 status="success", observed=0, promoted=0, drafted=0, note="No temperature data available"
             )
             return bot_state
@@ -2751,7 +2758,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         if not hot10:
             print("[leaderboard] No valid anomalies to rank")
             _record_source_run(
-                current_run, "leaderboard", leaderboard_start,
+                current_run, bot_state, "leaderboard", leaderboard_start,
                 status="success", observed=len(temps), promoted=0, drafted=0, note="No valid anomalies to rank"
             )
             return bot_state
@@ -2815,7 +2822,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         }
         state.update_streaks(bot_state, [ct.city for ct in hot10])
         _record_source_run(
-            current_run, "leaderboard", leaderboard_start,
+            current_run, bot_state, "leaderboard", leaderboard_start,
             status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=drafted_count
         )
 
@@ -2823,7 +2830,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         print(f"[leaderboard] Error: {e}")
         state.log_error(bot_state, "leaderboard", str(e))
         _record_source_run(
-            current_run, "leaderboard", leaderboard_start,
+            current_run, bot_state, "leaderboard", leaderboard_start,
             status="failed", error=str(e)
         )
 
@@ -2840,7 +2847,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
     if not tweet_text:
         print("[manual] No TWEET_TEXT provided, skipping")
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="skipped", note="No TWEET_TEXT provided"
         )
         return bot_state
@@ -2849,7 +2856,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         reason = f"Draft not found for id {draft_id}"
         print(f"[manual] {reason}, skipping")
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="failed", observed=1, error=reason
         )
         return bot_state
@@ -2857,7 +2864,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
     if draft_id and draft and draft.get("status") == "posted":
         print(f"[manual] Draft {draft_id} already posted, skipping duplicate publish")
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="skipped", observed=1, note=f"Draft {draft_id} already posted"
         )
         return bot_state
@@ -2866,7 +2873,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         reason = f"Draft {draft_id} is not approved for publishing"
         print(f"[manual] {reason}")
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="failed", observed=1, error=reason
         )
         return bot_state
@@ -2875,7 +2882,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         reason = f"Draft {draft_id} publish intent is stale"
         print(f"[manual] {reason}, skipping")
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="skipped", observed=1, note=reason
         )
         return bot_state
@@ -2888,7 +2895,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
             draft.pop("publish_intent_id", None)
             _touch_draft(draft)
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="failed", observed=1, error=f"Tweet too long ({len(tweet_text)} chars)"
         )
         return bot_state
@@ -2903,7 +2910,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
             draft.pop("publish_intent_id", None)
             _touch_draft(draft)
         _record_source_run(
-            current_run, "manual_publish", manual_start,
+            current_run, bot_state, "manual_publish", manual_start,
             status="failed", observed=1, error=reason
         )
         return bot_state
@@ -2933,7 +2940,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
     source_status = "success" if result == "posted" else "failed"
     error = None if result == "posted" else ("Rate limited — retry later" if result == "rate_limited" else "Failed to post to X")
     _record_source_run(
-        current_run, "manual_publish", manual_start,
+        current_run, bot_state, "manual_publish", manual_start,
         status=source_status, observed=1, promoted=1, drafted=1 if result == "posted" else 0, error=error
     )
     return bot_state
@@ -2953,7 +2960,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
 
     if not due_drafts:
         _record_source_run(
-            current_run, "auto_publish_due", queue_start,
+            current_run, bot_state, "auto_publish_due", queue_start,
             status="skipped", observed=0, note="No drafts due for auto-approval"
         )
         return bot_state
@@ -3007,7 +3014,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
 
     status = "success" if not failures else "partial_failure"
     _record_source_run(
-        current_run, "auto_publish_due", queue_start,
+        current_run, bot_state, "auto_publish_due", queue_start,
         status=status,
         observed=len(due_drafts),
         promoted=len(due_drafts),
