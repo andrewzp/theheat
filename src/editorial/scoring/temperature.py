@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -47,7 +48,7 @@ def score_record_event(
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=72,
+        threshold=get_threshold("record"),
         reasons=reasons or ["clear weather record"],
     )
 
@@ -89,7 +90,7 @@ def score_country_record(
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=82,
+        threshold=get_threshold(f"country_{kind}"),
         reasons=reasons[:3],
     )
 
@@ -116,7 +117,7 @@ def score_record_low_event(new_temp_c: float, old_record_c: float, old_record_ye
         confidence=confidence,
         shareability=shareability,
         sensitivity=8,
-        threshold=72,
+        threshold=get_threshold("record_low"),
         reasons=reasons or ["notable cold record"],
     )
 
@@ -142,7 +143,7 @@ def score_all_time_record(new_temp_c: float, old_record_c: float, old_record_yea
         confidence=78,  # provisional forecast data
         shareability=86 + delta * 3,
         sensitivity=10 if kind == "high" else 8,
-        threshold=80,  # high bar — only elite records pass
+        threshold=get_threshold("all_time_record"),  # high bar - only elite records pass
         reasons=reasons,
     )
 
@@ -165,7 +166,7 @@ def score_monthly_record(new_temp_c: float, old_record_c: float, old_record_year
         confidence=74,
         shareability=78 + delta * 3,
         sensitivity=10,
-        threshold=76,
+        threshold=get_threshold("monthly_record"),
         reasons=reasons,
     )
 
@@ -188,7 +189,7 @@ def score_anomaly(today_temp_c: float, historical_mean_c: float, anomaly_c: floa
         confidence=82,
         shareability=80 + min(abs_anomaly - 15, 10) * 2,
         sensitivity=10,
-        threshold=74,
+        threshold=get_threshold("anomaly"),
         reasons=reasons,
     )
 
@@ -207,7 +208,7 @@ def score_record_streak(consecutive_days: int, peak_temp_c: float) -> EditorialS
         confidence=76,
         shareability=78 + min(consecutive_days, 20) * 1.2,
         sensitivity=8,
-        threshold=74,  # fires at 3+ days
+        threshold=get_threshold("record_streak"),  # fires at 3+ days
         reasons=reasons,
     )
 
@@ -227,6 +228,6 @@ def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> Edi
         confidence=84,
         shareability=82 + min(city_count - 5, 15) * 1.5,
         sensitivity=6,
-        threshold=78,
+        threshold=get_threshold("simultaneous_records"),
         reasons=reasons,
     )

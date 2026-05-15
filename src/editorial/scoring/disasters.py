@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -37,7 +38,7 @@ def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
         confidence=92,
         shareability=54,
         sensitivity=74,
-        threshold=58,
+        threshold=get_threshold("severe_weather"),
         reasons=reasons,
     )
 
@@ -55,7 +56,7 @@ def score_global_disaster(severity: str, disaster_type: str) -> EditorialScore:
         confidence=88,
         shareability=58,
         sensitivity=82,
-        threshold=62,
+        threshold=get_threshold("global_disaster"),
         reasons=reasons,
     )
 
@@ -86,7 +87,7 @@ def score_global_flood(
         confidence=88,
         shareability=72 + min(population_bonus, 10),
         sensitivity=60,
-        threshold=72,
+        threshold=get_threshold("global_flood"),
         reasons=reasons[:4],
     )
 
@@ -114,7 +115,7 @@ def score_cyclone_rapid_intensification(
         confidence=92,
         shareability=74 + min(delta_kt_24h - 30, 25) * 0.8,
         sensitivity=72,
-        threshold=70,
+        threshold=get_threshold("cyclone_rapid_intensification"),
         reasons=reasons[:3],
     )
 
@@ -137,7 +138,7 @@ def score_cyclone_tier_crossing(from_cat: int, to_cat: int, basin: str) -> Edito
         confidence=92,
         shareability=62 + to_cat * 5,
         sensitivity=74,
-        threshold=68,
+        threshold=get_threshold("cyclone_tier_crossing"),
         reasons=reasons[:3],
     )
 
@@ -157,7 +158,7 @@ def score_cyclone_landfall(category: int, location: str, basin: str) -> Editoria
         confidence=94,
         shareability=78 + max(category - 3, 0) * 4,
         sensitivity=86,
-        threshold=70,
+        threshold=get_threshold("cyclone_landfall"),
         reasons=reasons,
     )
 
@@ -172,7 +173,7 @@ def score_cyclone_basin_record(category: int, basin: str, record_label: str) -> 
         confidence=90,
         shareability=84,
         sensitivity=72,
-        threshold=72,
+        threshold=get_threshold("cyclone_basin_record"),
         reasons=[record_label, basin, f"Category {category}"],
     )
 
@@ -188,7 +189,7 @@ def score_storm_surge(anomaly_m: float) -> EditorialScore:
         confidence=86,
         shareability=58 + anomaly_m * 18,
         sensitivity=66,
-        threshold=60,
+        threshold=get_threshold("storm_surge"),
         reasons=reasons,
     )
 
@@ -204,6 +205,6 @@ def score_river_flood(above_by_ft: float) -> EditorialScore:
         confidence=88,
         shareability=54 + above_by_ft * 4,
         sensitivity=72,
-        threshold=62,
+        threshold=get_threshold("river_flood"),
         reasons=reasons,
     )

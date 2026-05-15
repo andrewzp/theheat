@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -20,7 +21,7 @@ def score_drought(states: list) -> EditorialScore:
             confidence=0,
             shareability=0,
             sensitivity=0,
-            threshold=60,
+            threshold=get_threshold("drought_empty"),
             reasons=["no drought states provided"],
         )
 
@@ -41,6 +42,6 @@ def score_drought(states: list) -> EditorialScore:
         confidence=88,
         shareability=48 + min(worst, 30) * 0.7,
         sensitivity=38,
-        threshold=62,
+        threshold=get_threshold("drought"),
         reasons=reasons,
     )

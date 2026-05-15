@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -36,7 +37,7 @@ def score_fire_event(confidence: int, frp: float, *, region: str = "") -> Editor
         confidence=confidence_score,
         shareability=shareability,
         sensitivity=34,
-        threshold=64,
+        threshold=get_threshold("fire"),
         reasons=reasons or ["large active wildfire"],
     )
 
@@ -79,6 +80,6 @@ def score_fire_footprint(
         confidence=confidence_score,
         shareability=shareability,
         sensitivity=34,
-        threshold=72,
+        threshold=get_threshold("fire_footprint"),
         reasons=reasons[:3],
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -33,7 +34,7 @@ def score_coral_bleaching(dhw_value: float, tier: int, region: str) -> Editorial
         confidence=confidence,
         shareability=shareability,
         sensitivity=24,
-        threshold=72,
+        threshold=get_threshold("coral_bleaching"),
         reasons=reasons[:3],
     )
 
@@ -53,7 +54,7 @@ def score_sea_ice_record(extent: float, previous_extent: float, previous_year: i
         confidence=98,
         shareability=74 + gap * 40,
         sensitivity=4,
-        threshold=60,
+        threshold=get_threshold("sea_ice_record"),
         reasons=reasons,
     )
 
@@ -97,7 +98,7 @@ def score_ice_mass_event(
             confidence=96,
             shareability=shareability,
             sensitivity=8,
-            threshold=78,
+            threshold=get_threshold("ice_mass_record"),
             reasons=reasons,
         )
 
@@ -117,7 +118,7 @@ def score_ice_mass_event(
         confidence=96,
         shareability=84,
         sensitivity=8,
-        threshold=78,
+        threshold=get_threshold("ice_mass_record"),
         reasons=reasons,
     )
 
@@ -136,7 +137,7 @@ def score_extreme_wave(wave_height_m: float) -> EditorialScore:
         confidence=84,
         shareability=56 + wave_height_m * 2.4,
         sensitivity=12,
-        threshold=62,
+        threshold=get_threshold("extreme_wave"),
         reasons=reasons,
     )
 
@@ -163,6 +164,6 @@ def score_marine_heatwave(
         confidence=92,
         shareability=80 + min(days / 20.0, 12),
         sensitivity=6,
-        threshold=78,
+        threshold=get_threshold("marine_heatwave"),
         reasons=reasons,
     )

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -49,6 +50,6 @@ def score_synthesis_fire_drought_heat(
         confidence=confidence,
         shareability=shareability,
         sensitivity=sensitivity,
-        threshold=82,
+        threshold=get_threshold("synthesis_fire_drought_heat"),
         reasons=reasons,
     )
