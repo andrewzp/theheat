@@ -340,6 +340,56 @@ def score_co2_milestone(ppm_crossed: int, actual_ppm: float) -> EditorialScore:
     )
 
 
+def score_ch4_milestone(ppb_crossed: int, actual_ppb: float) -> EditorialScore:
+    severity = 58 + max(ppb_crossed - 1900, 0) * 0.25
+    novelty = 90
+    timeliness = 74
+    confidence = 99
+    shareability = 78 + max(actual_ppb - ppb_crossed, 0) * 1.5
+    reasons = [
+        f"new 10-ppb methane milestone above {ppb_crossed} ppb",
+        "pre-industrial methane baseline available",
+        "high-confidence NOAA GML source",
+    ]
+    return _build_score(
+        "ch4_milestone",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence,
+        shareability=shareability,
+        sensitivity=3,
+        threshold=58,
+        reasons=reasons,
+    )
+
+
+def score_coral_bleaching(dhw_value: float, tier: int, region: str) -> EditorialScore:
+    severity = 58 + tier * 2.8 + max(dhw_value - tier, 0) * 2.5
+    novelty = 66 + tier * 1.6
+    timeliness = 92
+    confidence = 94
+    shareability = 58 + tier * 2.2 + (6 if region else 0)
+    reasons = [
+        f"DHW {dhw_value:.1f} °C-weeks",
+        f"crossed {tier} °C-week bleaching threshold",
+        "NOAA Coral Reef Watch regional virtual station",
+    ]
+    if region:
+        reasons.append(region)
+    return _build_score(
+        "coral_bleaching",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence,
+        shareability=shareability,
+        sensitivity=24,
+        threshold=72,
+        reasons=reasons[:3],
+    )
+
+
 def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
     event_weight = {
         "Tornado Warning": 92,

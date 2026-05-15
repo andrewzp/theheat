@@ -367,6 +367,74 @@ def co2_milestone_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def ch4_milestone_bundle() -> StoryBundle:
+    """CH4 methane milestone fixture for NOAA GML atmospheric signals."""
+    return StoryBundle(
+        signal_kind="ch4_milestone",
+        where="NOAA GML global marine surface mean",
+        when="2026-04-01",
+        event_id="ch4_milestone_1940ppb",
+        headline_metric={"label": "ppb_crossed", "value": 1940, "unit": "ppb"},
+        current_facts=[
+            {"label": "ppb_crossed", "value": 1940},
+            {"label": "actual_ppb", "value": 1942.3},
+            {"label": "measurement_date", "value": "2026-04-01"},
+            {"label": "source_name", "value": "NOAA GML"},
+        ],
+        historical_context={
+            "scope": "atmospheric_ch4_threshold_crossed",
+            "preindustrial_baseline_ppb": 722,
+        },
+        raw_signal_dump={
+            "ppb_crossed": 1940,
+            "actual_ppb": 1942.3,
+            "date": "2026-04-01",
+            "event_id": "ch4_milestone_1940ppb",
+            "source_name": "NOAA GML",
+        },
+    )
+
+
+@pytest.fixture
+def coral_bleaching_bundle() -> StoryBundle:
+    """Coral bleaching DHW fixture with CRW region and threshold facts."""
+    return StoryBundle(
+        signal_kind="coral_bleaching",
+        where="Northern GBR",
+        when="2026-05-13",
+        event_id="coral_dhw_gbr_northern_tier8",
+        headline_metric={"label": "DHW", "value": 8.2, "unit": "°C-weeks"},
+        current_facts=[
+            {"label": "region_id", "value": "gbr_northern"},
+            {"label": "region_full_name", "value": "Northern GBR"},
+            {"label": "dhw_value", "value": 8.2, "unit": "°C-weeks"},
+            {"label": "dhw_tier", "value": 8, "unit": "°C-weeks"},
+            {"label": "bleaching_level", "value": "mass bleaching expected"},
+            {"label": "stress_level", "value": "Alert Level 1"},
+            {"label": "source_name", "value": "NOAA Coral Reef Watch"},
+            {"label": "region_climate_system", "value": "the Great Barrier Reef shelf lagoon"},
+            {
+                "label": "climate_mechanism_note",
+                "value": "a shallow tropical shelf reef system is exposed to marine heat stress",
+            },
+        ],
+        historical_context={
+            "scope": "coral_reef_watch_regional_dhw_threshold",
+            "thresholds_c_weeks": [4, 8, 12],
+        },
+        raw_signal_dump={
+            "region_id": "gbr_northern",
+            "region_full_name": "Northern GBR",
+            "date": "2026-05-13",
+            "dhw_value": 8.2,
+            "dhw_tier": 8,
+            "bleaching_level": "mass bleaching expected",
+            "stress_level": "Alert Level 1",
+        },
+    )
+
+
+@pytest.fixture
 def fresh_memory_slice() -> MemorySlice:
     """Empty memory — all era anchors / peer comparisons / framings
     available. Used in replay tests so writer isn't constrained by

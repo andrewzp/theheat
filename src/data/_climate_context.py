@@ -430,6 +430,23 @@ CLIMATE_CONTEXT_REGIONS: tuple[ClimateContextRegion, ...] = (
         source_url="https://en.wikipedia.org/wiki/Patagonian_Desert",
     ),
     ClimateContextRegion(
+        key="great_barrier_reef",
+        lat_min=-24.5,
+        lat_max=-10.0,
+        lon_min=142.0,
+        lon_max=154.0,
+        sample_lat=-18.3,
+        sample_lon=147.7,
+        context=ClimateContext(
+            region_climate_system="the Great Barrier Reef shelf lagoon",
+            climate_mechanism_note="a shallow tropical shelf reef system is exposed to marine heat stress",
+            season_context="southern-hemisphere warm-season reef heat-stress regime",
+        ),
+        source_title="Great Barrier Reef",
+        source_url="https://en.wikipedia.org/wiki/Great_Barrier_Reef",
+        categories=("coral",),
+    ),
+    ClimateContextRegion(
         key="pampas",
         lat_min=-40.0,
         lat_max=-30.0,

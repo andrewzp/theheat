@@ -11,6 +11,7 @@ from dataclasses import asdict
 from datetime import date
 
 from src.data.co2 import CO2Milestone
+from src.data.coral_dhw import CoralBleachingEvent
 from src.data.cyclones import (
     BasinRecordEvent,
     LandfallEvent,
@@ -23,6 +24,7 @@ from src.data.gdacs import GlobalDisasterEvent
 from src.data.ghcn import normalize_station_name
 from src.data._climate_context import local_climate_context
 from src.data.ice_mass import IceMassRecord
+from src.data.methane import MethaneMilestone
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
@@ -728,6 +730,76 @@ def build_co2_milestone_bundle(milestone: CO2Milestone) -> StoryBundle:
             "preindustrial_baseline_ppm": 280,
         },
         raw_signal_dump=asdict(milestone),
+    )
+
+
+# =====================================================================
+# CH4 methane milestones
+# =====================================================================
+
+
+def build_ch4_milestone_bundle(milestone: MethaneMilestone) -> StoryBundle:
+    """Atmospheric methane crossed a round-number threshold."""
+
+    return StoryBundle(
+        signal_kind="ch4_milestone",
+        where="NOAA GML global marine surface mean",
+        when=milestone.date,
+        event_id=milestone.event_id,
+        headline_metric={
+            "label": "ppb_crossed",
+            "value": milestone.ppb_crossed,
+            "unit": "ppb",
+        },
+        current_facts=[
+            {"label": "ppb_crossed", "value": milestone.ppb_crossed},
+            {"label": "actual_ppb", "value": milestone.actual_ppb},
+            {"label": "measurement_date", "value": milestone.date},
+            {"label": "source_name", "value": milestone.source_name},
+        ],
+        historical_context={
+            "scope": "atmospheric_ch4_threshold_crossed",
+            "preindustrial_baseline_ppb": 722,
+        },
+        raw_signal_dump=asdict(milestone),
+    )
+
+
+# =====================================================================
+# Coral bleaching (NOAA Coral Reef Watch DHW)
+# =====================================================================
+
+
+def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
+    """A Coral Reef Watch region crossed a DHW bleaching threshold."""
+
+    return StoryBundle(
+        signal_kind="coral_bleaching",
+        where=event.region_full_name,
+        when=event.date,
+        event_id=event.event_id,
+        headline_metric={
+            "label": "DHW",
+            "value": event.dhw_value,
+            "unit": "°C-weeks",
+        },
+        current_facts=[
+            {"label": "region_id", "value": event.region_id},
+            {"label": "region_full_name", "value": event.region_full_name},
+            {"label": "dhw_value", "value": event.dhw_value, "unit": "°C-weeks"},
+            {"label": "dhw_tier", "value": event.dhw_tier, "unit": "°C-weeks"},
+            {"label": "bleaching_level", "value": event.bleaching_level},
+            {"label": "stress_level", "value": event.stress_level},
+            {"label": "source_name", "value": event.source_name},
+            {"label": "lat", "value": event.lat},
+            {"label": "lon", "value": event.lon},
+            *_climate_context_facts(event.lat, event.lon, category="coral"),
+        ],
+        historical_context={
+            "scope": "coral_reef_watch_regional_dhw_threshold",
+            "thresholds_c_weeks": [4, 8, 12],
+        },
+        raw_signal_dump=asdict(event),
     )
 
 

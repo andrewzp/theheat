@@ -107,6 +107,8 @@ def _json(value) -> str:
 # merge order.
 _METADATA_JSON_KEYS = (
     "co2_annual_count",
+    "ch4_annual_count",
+    "ch4_last_milestone",
     "city_all_time_max",
     "city_all_time_min",
     "city_monthly_max",
@@ -118,6 +120,8 @@ _METADATA_JSON_KEYS = (
     "ice_mass_last_seen",
     "ice_annual_count",
     "fire_complex_tiers",
+    "coral_dhw_last_tier",
+    "coral_dhw_annual_count",
     "fire_footprint_last_run",
     "synthesis_components",
     "synthesis_cooldown",

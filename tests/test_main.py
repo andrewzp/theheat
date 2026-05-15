@@ -19,7 +19,9 @@ from src.main import (
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone
+from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading
 from src.data.cyclones import CycloneAdvisory, TierCrossingEvent
+from src.data.methane import MethaneMilestone, MethaneReading
 
 
 def _fresh_state():
@@ -194,18 +196,28 @@ class TestCycloneAlerts:
 def mock_alerts_pipeline_sources(monkeypatch):
     """Clamp the run_alerts data sources that test classes typically leave unmocked.
 
-    Covers nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst,
-    water_levels, river_gauges, ice_mass, synthesis, ghcn, and
+    Covers methane, coral_dhw, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought,
+    enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, synthesis, ghcn, and
     fire_footprint. Callers must still mock `src.main.open_meteo`,
     `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
 
-    run_alerts has 18 _try_two_bot_draft call sites, one per signal-type
+    run_alerts has 20 _try_two_bot_draft call sites, one per signal-type
     branch. Tests that exercise a single branch and assert call counts on
     `_try_two_bot_draft` need every other branch's data source mocked away,
     or real network responses occasionally trigger extra draft attempts and
     break `assert_called_once`. See test_run_alerts_ocean_sst_drafts_on_day_5
     for the canonical inline equivalent.
     """
+    methane = MagicMock()
+    monkeypatch.setattr("src.main.methane", methane)
+    methane.fetch_ch4_milestones.return_value = []
+    methane.detect_milestone.return_value = None
+
+    coral = MagicMock()
+    monkeypatch.setattr("src.main.coral_dhw", coral)
+    coral.fetch_coral_dhw.return_value = []
+    coral.detect_dhw_thresholds.return_value = []
+
     nws = MagicMock()
     monkeypatch.setattr("src.main.nws_alerts", nws)
     nws.fetch_alerts.return_value = []
@@ -899,6 +911,118 @@ class TestCO2AnnualCap:
         mock_two_bot.assert_called_once()
 
 
+class TestCH4Alerts:
+    @patch("src.main._try_two_bot_draft")
+    def test_run_alerts_drafts_ch4_milestone(
+        self,
+        mock_two_bot,
+        monkeypatch,
+        mock_alerts_pipeline_sources,
+    ):
+        import src.main as main
+
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr(
+            "src.main.open_meteo.check_extreme_signals_for_cities",
+            MagicMock(return_value=([], [])),
+        )
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        main.methane.fetch_ch4_milestones.return_value = [
+            MethaneReading("2026-03-01", 1938.0, "ch4_2026-03"),
+            MethaneReading("2026-04-01", 1942.3, "ch4_2026-04"),
+        ]
+        main.methane.detect_milestone.return_value = MethaneMilestone(
+            ppb_crossed=1940,
+            actual_ppb=1942.3,
+            date="2026-04-01",
+            event_id="ch4_milestone_1940ppb",
+        )
+        mock_two_bot.return_value = True
+
+        state = _fresh_state()
+        current_run = {"sources": []}
+        run_alerts(state, current_run=current_run)
+
+        mock_two_bot.assert_any_call(
+            ANY,
+            state,
+            ANY,
+            legacy_type="ch4_milestone",
+            event_id="ch4_milestone_1940ppb",
+            review_context=ANY,
+        )
+        assert state["ch4_last_milestone"] == 1940
+        assert state["ch4_annual_count"][str(date.today().year)] == 1
+        source = next(item for item in current_run["sources"] if item["source"] == "ch4_milestone")
+        assert source["observed"] == 2
+        assert source["promoted"] == 1
+
+
+class TestCoralDHWAlerts:
+    @patch("src.main._try_two_bot_draft")
+    def test_run_alerts_drafts_coral_bleaching_threshold(
+        self,
+        mock_two_bot,
+        monkeypatch,
+        mock_alerts_pipeline_sources,
+    ):
+        import src.main as main
+
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr(
+            "src.main.open_meteo.check_extreme_signals_for_cities",
+            MagicMock(return_value=([], [])),
+        )
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        reading = CoralDHWReading(
+            region_id="gbr_northern",
+            region_full_name="Northern GBR",
+            date="2026-05-13",
+            dhw_value=8.2,
+            stress_level="Alert Level 1",
+            baa_7day_max=3,
+            lat=-16.1,
+            lon=145.975,
+        )
+        event = CoralBleachingEvent(
+            region_id="gbr_northern",
+            region_full_name="Northern GBR",
+            date="2026-05-13",
+            dhw_value=8.2,
+            dhw_tier=8,
+            bleaching_level="mass bleaching expected",
+            stress_level="Alert Level 1",
+            lat=-16.1,
+            lon=145.975,
+            event_id="coral_dhw_gbr_northern_tier8",
+        )
+        main.coral_dhw.fetch_coral_dhw.return_value = [reading]
+        main.coral_dhw.detect_dhw_thresholds.return_value = [event]
+        mock_two_bot.return_value = True
+
+        state = _fresh_state()
+        current_run = {"sources": []}
+        run_alerts(state, current_run=current_run)
+
+        mock_two_bot.assert_any_call(
+            ANY,
+            state,
+            ANY,
+            legacy_type="coral_bleaching",
+            event_id="coral_dhw_gbr_northern_tier8",
+            review_context=ANY,
+        )
+        assert state["coral_dhw_last_tier"]["gbr_northern"] == 8
+        assert state["coral_dhw_annual_count"][str(date.today().year)] == 1
+        source = next(item for item in current_run["sources"] if item["source"] == "coral_dhw")
+        assert source["observed"] == 1
+        assert source["promoted"] == 1
+
+
 class TestPostApproved:
     @patch("src.main.state")
     @patch("src.main.post_tweet")
@@ -1082,6 +1206,10 @@ class TestRunAlerts:
         monkeypatch.setattr(main.firms, "fetch_fires", lambda: [])
         monkeypatch.setattr(main.co2, "fetch_co2_data", lambda: [])
         monkeypatch.setattr(main.co2, "detect_milestone", lambda readings: None)
+        monkeypatch.setattr(main.methane, "fetch_ch4_milestones", lambda: [])
+        monkeypatch.setattr(main.methane, "detect_milestone", lambda readings, **kwargs: None)
+        monkeypatch.setattr(main.coral_dhw, "fetch_coral_dhw", lambda: [])
+        monkeypatch.setattr(main.coral_dhw, "detect_dhw_thresholds", lambda readings, last_tiers=None: [])
         monkeypatch.setattr(main.nws_alerts, "fetch_alerts", lambda: [])
         monkeypatch.setattr(main.gdacs, "fetch_disasters", lambda min_severity=None: [])
         monkeypatch.setattr(main.sea_ice, "fetch_sea_ice", lambda hemisphere=None: [])

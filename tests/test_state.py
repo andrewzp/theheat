@@ -19,8 +19,12 @@ from src.state import (
     check_daily_cap,
     update_streaks,
     update_record_streak,
+    update_ch4_last_milestone,
+    update_coral_dhw_tier,
     update_cyclone_tier,
     record_cyclone_wind_observation,
+    increment_ch4_annual_count,
+    increment_coral_dhw_annual_count,
     increment_cyclone_annual_count,
     get_record_streak,
     prune_stale_record_streaks,
@@ -343,6 +347,58 @@ class TestCycloneState:
         increment_cyclone_annual_count(fresh_state)
 
         assert fresh_state["cyclone_annual_count"]["2026"] == 1
+
+
+class TestLane08State:
+    def test_default_state_has_ch4_and_coral_trackers(self):
+        assert DEFAULT_STATE["ch4_annual_count"] == {}
+        assert DEFAULT_STATE["ch4_last_milestone"] is None
+        assert DEFAULT_STATE["coral_dhw_last_tier"] == {}
+        assert DEFAULT_STATE["coral_dhw_annual_count"] == {}
+
+    def test_update_ch4_last_milestone_takes_max(self, fresh_state):
+        update_ch4_last_milestone(fresh_state, 1940)
+        update_ch4_last_milestone(fresh_state, 1930)
+        assert fresh_state["ch4_last_milestone"] == 1940
+
+    def test_update_coral_dhw_tier_takes_max(self, fresh_state):
+        update_coral_dhw_tier(fresh_state, "gbr_northern", 8)
+        update_coral_dhw_tier(fresh_state, "gbr_northern", 4)
+        assert fresh_state["coral_dhw_last_tier"]["gbr_northern"] == 8
+
+    @patch("src.state.date")
+    def test_increment_lane08_annual_counts(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 5, 14)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+
+        increment_ch4_annual_count(fresh_state)
+        increment_coral_dhw_annual_count(fresh_state)
+
+        assert fresh_state["ch4_annual_count"]["2026"] == 1
+        assert fresh_state["coral_dhw_annual_count"]["2026"] == 1
+
+    def test_merge_state_max_merges_lane08_trackers(self):
+        from src.state import _merge_state
+
+        current = {
+            "ch4_annual_count": {"2026": 2},
+            "ch4_last_milestone": 1930,
+            "coral_dhw_last_tier": {"gbr_northern": 4},
+            "coral_dhw_annual_count": {"2026": 3},
+        }
+        incoming = {
+            "ch4_annual_count": {"2026": 1},
+            "ch4_last_milestone": 1940,
+            "coral_dhw_last_tier": {"gbr_northern": 8, "florida_keys": 4},
+            "coral_dhw_annual_count": {"2026": 4},
+        }
+
+        merged = _merge_state(current, incoming)
+
+        assert merged["ch4_annual_count"]["2026"] == 2
+        assert merged["ch4_last_milestone"] == 1940
+        assert merged["coral_dhw_last_tier"] == {"gbr_northern": 8, "florida_keys": 4}
+        assert merged["coral_dhw_annual_count"]["2026"] == 4
 
 
 class TestDraftTrimming:
@@ -843,6 +899,19 @@ class TestSqliteRoundTripLaneKeys:
         state_in = {"co2_annual_count": {"2026": 5, "2025": 11}}
         out = self._sqlite_round_trip(state_in)
         assert out["co2_annual_count"] == {"2026": 5, "2025": 11}
+
+    def test_round_trip_preserves_lane08_state(self):
+        state_in = {
+            "ch4_annual_count": {"2026": 2},
+            "ch4_last_milestone": 1940,
+            "coral_dhw_last_tier": {"gbr_northern": 8},
+            "coral_dhw_annual_count": {"2026": 4},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["ch4_annual_count"] == {"2026": 2}
+        assert out["ch4_last_milestone"] == 1940
+        assert out["coral_dhw_last_tier"] == {"gbr_northern": 8}
+        assert out["coral_dhw_annual_count"] == {"2026": 4}
 
     def test_round_trip_preserves_city_extreme_trackers(self):
         state_in = {

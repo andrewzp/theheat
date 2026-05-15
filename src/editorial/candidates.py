@@ -25,6 +25,8 @@ CATEGORY_HINTS = {
     "fire": ("satellite", "confidence", "MW"),
     "fire_footprint": ("hectares", "burned", "complex"),
     "co2_milestone": ("Mauna Loa", "280", "ppm"),
+    "ch4_milestone": ("methane", "722", "ppb"),
+    "coral_bleaching": ("DHW", "coral", "reef"),
     "severe_weather": ("warning", "issued", "for"),
     "global_disaster": ("GDACS", "alert", "severity"),
     "sea_ice_record": ("sea ice", "satellite", "record"),

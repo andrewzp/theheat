@@ -1,6 +1,7 @@
 from datetime import date
 
 from src.data.co2 import CO2Milestone
+from src.data.coral_dhw import CoralBleachingEvent
 from src.data.cyclones import (
     BasinRecordEvent,
     LandfallEvent,
@@ -10,6 +11,7 @@ from src.data.cyclones import (
 from src.data.fire_footprint import FireComplex
 from src.data.gdacs import GlobalDisasterEvent
 from src.data.ice_mass import IceMassRecord
+from src.data.methane import MethaneMilestone
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
@@ -27,7 +29,9 @@ from src.data.water_levels import StormSurgeEvent
 from src.two_bot.intern import (
     build_all_time_record_bundle,
     build_anomaly_bundle,
+    build_ch4_milestone_bundle,
     build_co2_milestone_bundle,
+    build_coral_bleaching_bundle,
     build_cyclone_basin_record_bundle,
     build_cyclone_landfall_bundle,
     build_cyclone_rapid_intensification_bundle,
@@ -635,6 +639,48 @@ def test_build_co2_milestone_bundle_anchors_to_mauna_loa():
     bundle = build_co2_milestone_bundle(m)
     assert bundle.where == "Mauna Loa Observatory"
     assert bundle.historical_context["preindustrial_baseline_ppm"] == 280
+
+
+def test_build_ch4_milestone_bundle_preserves_ppb_and_baseline():
+    m = MethaneMilestone(
+        ppb_crossed=1940,
+        actual_ppb=1942.3,
+        date="2026-04-01",
+        event_id="ch4_milestone_1940ppb",
+    )
+    bundle = build_ch4_milestone_bundle(m)
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+    assert bundle.signal_kind == "ch4_milestone"
+    assert bundle.headline_metric == {"label": "ppb_crossed", "value": 1940, "unit": "ppb"}
+    assert labels["actual_ppb"] == 1942.3
+    assert labels["source_name"] == "NOAA GML"
+    assert bundle.historical_context["preindustrial_baseline_ppb"] == 722
+
+
+def test_build_coral_bleaching_bundle_carries_verifiable_dhw_fields():
+    event = CoralBleachingEvent(
+        region_id="gbr_northern",
+        region_full_name="Northern GBR",
+        date="2026-05-13",
+        dhw_value=8.2,
+        dhw_tier=8,
+        bleaching_level="mass bleaching expected",
+        stress_level="Alert Level 1",
+        lat=-16.1,
+        lon=145.975,
+        event_id="coral_dhw_gbr_northern_tier8",
+    )
+    bundle = build_coral_bleaching_bundle(event)
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+    assert bundle.signal_kind == "coral_bleaching"
+    assert bundle.where == "Northern GBR"
+    assert bundle.headline_metric == {"label": "DHW", "value": 8.2, "unit": "°C-weeks"}
+    assert labels["region_id"] == "gbr_northern"
+    assert labels["region_full_name"] == "Northern GBR"
+    assert labels["dhw_value"] == 8.2
+    assert labels["dhw_tier"] == 8
+    assert labels["bleaching_level"] == "mass bleaching expected"
+    assert labels["region_climate_system"] == "the Great Barrier Reef shelf lagoon"
 
 
 def test_build_global_disaster_bundle_preserves_severity_value():
