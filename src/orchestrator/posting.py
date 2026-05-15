@@ -1,0 +1,216 @@
+"""Posting and publish queue modes."""
+
+from __future__ import annotations
+
+# ruff: noqa: F403,F405
+from src.orchestrator.common import *
+
+
+def post_approved(tweet_text: str, bot_state: BotState) -> str:
+    """Post an approved tweet to X.
+
+    Returns "posted", "rate_limited", or "failed".
+    """
+    if not state.check_daily_cap(bot_state):
+        print("[post] Daily tweet cap reached, skipping")
+        return "failed"
+
+    result = post_tweet(tweet_text)
+    if result is None:
+        print("[post] Failed to post to X")
+        return "failed"
+
+    if result.get("error") == "rate_limited":
+        return "rate_limited"
+
+    post_to_bluesky(tweet_text)
+    state.increment_daily_count(bot_state)
+    print(f"[post] Posted to X: {tweet_text[:60]}...")
+    return "posted"
+
+
+def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> BotState:
+    """Post an approved tweet from the TWEET_TEXT env var."""
+    manual_start = time.perf_counter()
+    tweet_text = os.environ.get("TWEET_TEXT", "").strip()
+    draft_id = os.environ.get("DRAFT_ID", "").strip()
+    publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
+    draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
+    if not tweet_text:
+        print("[manual] No TWEET_TEXT provided, skipping")
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="skipped", note="No TWEET_TEXT provided"
+        )
+        return bot_state
+
+    if draft_id and not draft:
+        reason = f"Draft not found for id {draft_id}"
+        print(f"[manual] {reason}, skipping")
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="failed", observed=1, error=reason
+        )
+        return bot_state
+
+    if draft_id and draft and draft.get("status") == "posted":
+        print(f"[manual] Draft {draft_id} already posted, skipping duplicate publish")
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="skipped", observed=1, note=f"Draft {draft_id} already posted"
+        )
+        return bot_state
+
+    if draft_id and draft and draft.get("status") != "approved":
+        reason = f"Draft {draft_id} is not approved for publishing"
+        print(f"[manual] {reason}")
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="failed", observed=1, error=reason
+        )
+        return bot_state
+
+    if draft_id and draft and publish_intent_id and draft.get("publish_intent_id") != publish_intent_id:
+        reason = f"Draft {draft_id} publish intent is stale"
+        print(f"[manual] {reason}, skipping")
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="skipped", observed=1, note=reason
+        )
+        return bot_state
+
+    if len(tweet_text) > 280:
+        print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
+        if draft:
+            draft["status"] = "pending"
+            draft["post_error"] = f"Tweet too long ({len(tweet_text)} chars)"
+            draft.pop("publish_intent_id", None)
+            _touch_draft(draft)
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="failed", observed=1, error=f"Tweet too long ({len(tweet_text)} chars)"
+        )
+        return bot_state
+
+    passed, safety_reason = run_safety_pipeline(tweet_text)
+    if not passed:
+        reason = safety_reason or "Safety pipeline rejected tweet"
+        print(f"[manual] Safety rejected tweet: {reason}")
+        if draft:
+            draft["status"] = "pending"
+            draft["post_error"] = reason
+            draft.pop("publish_intent_id", None)
+            _touch_draft(draft)
+        _record_source_run(
+            current_run, bot_state, "manual_publish", manual_start,
+            status="failed", observed=1, error=reason
+        )
+        return bot_state
+
+    print(f"[manual] Posting: {tweet_text}")
+    result = post_approved(tweet_text, bot_state)
+
+    # Update draft status with post result
+    if draft:
+        draft["last_publish_attempt_at"] = _utc_now_iso()
+        if result == "posted":
+            draft["status"] = "posted"
+            draft["posted_at"] = _utc_now_iso()
+            draft.pop("post_error", None)
+            draft.pop("publish_intent_id", None)
+        elif result == "rate_limited":
+            draft["status"] = "pending"
+            draft["post_error"] = "Rate limited — retry later"
+            draft.pop("publish_intent_id", None)
+            print("[manual] Rate limited, draft kept as pending for retry")
+        else:
+            draft["status"] = "pending"
+            draft["post_error"] = "Failed to post to X"
+            draft.pop("publish_intent_id", None)
+        _touch_draft(draft)
+
+    source_status = "success" if result == "posted" else "failed"
+    error = None if result == "posted" else ("Rate limited — retry later" if result == "rate_limited" else "Failed to post to X")
+    _record_source_run(
+        current_run, bot_state, "manual_publish", manual_start,
+        status=source_status, observed=1, promoted=1, drafted=1 if result == "posted" else 0, error=error
+    )
+    return bot_state
+
+
+def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> BotState:
+    """Post drafts whose auto-approval window has elapsed."""
+    queue_start = time.perf_counter()
+    now = _utc_now()
+    due_drafts = []
+    for draft in bot_state.get("drafts", []):
+        if draft.get("status") != "pending":
+            continue
+        auto_approve_at = _parse_iso_utc(draft.get("auto_approve_at"))
+        if auto_approve_at and auto_approve_at <= now:
+            due_drafts.append(draft)
+
+    if not due_drafts:
+        _record_source_run(
+            current_run, bot_state, "auto_publish_due", queue_start,
+            status="skipped", observed=0, note="No drafts due for auto-approval"
+        )
+        return bot_state
+
+    published = 0
+    failures = []
+    for draft in due_drafts:
+        policy = draft.get("approval_policy", {})
+        is_policy_auto = policy.get("mode") == "armed_auto"
+        is_requested_auto = (
+            policy.get("mode") == "suggested_auto"
+            and draft.get("approval_mode") == "auto"
+        )
+        if policy.get("can_auto_approve") is False or not (is_policy_auto or is_requested_auto):
+            draft.pop("auto_approve_at", None)
+            draft["approval_mode"] = "manual"
+            draft["post_error"] = "Auto-approval blocked by policy"
+            _touch_draft(draft)
+            failures.append(f"{draft.get('id')}: blocked by policy")
+            continue
+
+        # Safety check before auto-posting (same gate as manual path)
+        passed, reason = run_safety_pipeline(draft["text"])
+        if not passed:
+            draft.pop("auto_approve_at", None)
+            draft["status"] = "pending"
+            draft["approval_mode"] = "manual"
+            draft["post_error"] = f"Auto-post safety rejected: {reason}"
+            _touch_draft(draft)
+            failures.append(f"{draft.get('id')}: safety rejected: {reason}")
+            continue
+
+        result = post_approved(draft["text"], bot_state)
+        draft["last_publish_attempt_at"] = _utc_now_iso()
+        if result == "posted":
+            draft["status"] = "posted"
+            draft["approved_at"] = draft.get("approved_at") or _utc_now_iso()
+            draft["posted_at"] = _utc_now_iso()
+            draft["approval_mode"] = draft.get("approval_mode") or "auto"
+            draft.pop("auto_approve_at", None)
+            draft.pop("auto_approve_requested_at", None)
+            draft.pop("post_error", None)
+            published += 1
+        elif result == "rate_limited":
+            draft["post_error"] = "Rate limited — retry later"
+            failures.append(f"{draft.get('id')}: rate limited")
+        else:
+            draft["post_error"] = "Failed to post to X"
+            failures.append(f"{draft.get('id')}: failed to post")
+        _touch_draft(draft)
+
+    status = "success" if not failures else "partial_failure"
+    _record_source_run(
+        current_run, bot_state, "auto_publish_due", queue_start,
+        status=status,
+        observed=len(due_drafts),
+        promoted=len(due_drafts),
+        drafted=published,
+        error="; ".join(failures[:3]) if failures else None,
+    )
+    return bot_state
