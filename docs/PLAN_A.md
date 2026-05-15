@@ -163,7 +163,7 @@ Explicitly deferred to keep Plan A focused:
 - **Second-pass editorial agent** (#1c). Deferred per Andrew: "we've tried Flash and it has no taste; let's not add models right now."
 - **Threshold registry** (centralizing the ~25 magic numbers in scoring.py). Hygiene work; not blocking.
 - **main.py monolith** (3,070 lines). Hygiene; refactor would touch this plan's work, so do AFTER Plan A lands.
-- **docs/ naming chaos** (6 NEXT_SESSION_PROMPT files). Trivial; capture as a small cleanup PR anytime.
+- **docs/ handoff naming chaos** (root-level dated handoff files). Trivial; capture as a small cleanup PR anytime.
 - **Refactoring 14 source modules to a common base class.** High churn, low payoff. Each module's quirks are real (NIFC tier dedup, GHCN normalization, etc.) and would leak through any abstraction. Schema-drift + freshness assertions (Phase 1) deliver the same observability without the rewrite.
 
 ## What already exists (reuse — don't rebuild)

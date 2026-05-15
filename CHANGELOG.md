@@ -434,7 +434,7 @@ closed without merge. **Open PR count: 5 → 0.**
   the class of stochastic refusals rather than the specific Nettles Is
   bundle.
 - **Honored — `feedback_versioned_doc_filenames`.** The afternoon's
-  end-of-day brief lives at `docs/NEXT_SESSION_PROMPT_2026-05-12-v2.md`,
+  end-of-day brief lives at `docs/handoffs/2026-05-12-v2.md`,
   not overwriting the morning's v1.
 - **Added — AI PR hygiene framing.** Auto-PRs authored by Claude or
   Codex via the routines UI are AI hygiene, not Andrew's responsibility.

@@ -564,13 +564,13 @@ User also clarified important nuances:
 Read in order:
 1. `BRIEFING.md` (current state)
 2. This file's top section (Apr 26-29 — what just happened)
-3. `docs/NEXT_SESSION.md` (action menu, invariants, common commands)
+3. `docs/handoffs/README.md` (current handoff index)
 4. `docs/IMPROVEMENT_PLAN.md` (living plan, P1 SHIPPED + P4-P6 active)
 5. `docs/QUALITY_TREND.md` (A-rate trend)
 6. `docs/DRAFT_CORPUS.md` Apr 29 + Apr 27 sections (lens evaluations + re-grades)
 7. `brand/HUMOR_RESEARCH.md` (the framework)
 
-Pull pending drafts. If new corpus needs grading, append to `DRAFT_CORPUS.md`. Then pick a menu item from `NEXT_SESSION.md` — likely either continue the voice work (P4 Wodehouse top-of-prompt), open the two-bot architecture brainstorm, or finish the prompts inventory.
+Pull pending drafts. If new corpus needs grading, append to `DRAFT_CORPUS.md`. Then pick a menu item from the current handoff in `docs/handoffs/README.md` — likely either continue the voice work (P4 Wodehouse top-of-prompt), open the two-bot architecture brainstorm, or finish the prompts inventory.
 
 ---
 
@@ -734,6 +734,6 @@ User also clarified important nuances:
    informed every voice change today)
 3. Read `docs/VOICE_FAILURE_ANALYSIS.md` (named patterns)
 4. Read this `SESSION_BRIEF.md` (what just happened)
-5. Read `docs/NEXT_SESSION.md` (action menu for the new session)
+5. Read `docs/handoffs/README.md` (current handoff index)
 6. Pull current pending drafts from the Gist — see whether the next
    alerts cycle output reflects voice engine v2 quality lift

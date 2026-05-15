@@ -6,7 +6,7 @@
 
 | Lane | Brief | Conflicts with | Time |
 |---|---|---|---|
-| [10 — Docs cleanup (NEXT_SESSION_PROMPT chaos)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | `docs/` only — zero conflict with anything | nothing | 30-45 min, 1 PR |
+| [10 — Docs cleanup (handoff archive)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | `docs/` only — zero conflict with anything | nothing | 30-45 min, 1 PR |
 | [11 — F2 bundle enrichment helper](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | `src/two_bot/intern.py` + new `src/data/_climate_context.py` | Lane 08, Lane 09 (both touch intern.py); SAFE with Phase 3 | 4-6 hr, 1 PR |
 
 ### Run after Phase 3 + Lane 11 land (touches main.py orchestrator)
