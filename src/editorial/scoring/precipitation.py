@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..thresholds import get_threshold
 from ._shared import EditorialScore, _build_score
 
 
@@ -33,7 +34,7 @@ def score_precipitation_extreme(
         confidence=82,
         shareability=shareability,
         sensitivity=28,
-        threshold=70,
+        threshold=get_threshold("precipitation_extreme"),
         reasons=reasons[:3],
     )
 
@@ -61,7 +62,7 @@ def score_snow_extreme(
         confidence=86,
         shareability=62 + min(mm_swe * 0.25, 20),
         sensitivity=24,
-        threshold=70,
+        threshold=get_threshold("snow_extreme"),
         reasons=reasons[:3],
     )
 
@@ -84,6 +85,6 @@ def score_seasonal_snow_record(
         confidence=86,
         shareability=68 + min(total_mm / 80.0, 14),
         sensitivity=18,
-        threshold=74,
+        threshold=get_threshold("seasonal_snow_record"),
         reasons=reasons,
     )
