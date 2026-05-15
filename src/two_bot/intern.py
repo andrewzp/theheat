@@ -15,6 +15,7 @@ from src.data.firms import FireEvent
 from src.data.fire_footprint import FireComplex, TIERS_HECTARES
 from src.data.gdacs import GlobalDisasterEvent
 from src.data.ghcn import normalize_station_name
+from src.data._climate_context import local_climate_context
 from src.data.ice_mass import IceMassRecord
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
@@ -157,6 +158,35 @@ def _audience_unit_facts(country: str | None) -> list[dict]:
     return [{"label": "audience_unit", "value": "celsius_first"}]
 
 
+def _climate_context_facts(
+    lat: float | None,
+    lon: float | None,
+    category: str | None = None,
+) -> list[dict]:
+    """Fact-checkable geographic-climate context for writer system clauses."""
+
+    if lat is None or lon is None:
+        return []
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except (TypeError, ValueError):
+        return []
+
+    ctx = local_climate_context(lat=lat_f, lon=lon_f, category=category)
+    if not ctx:
+        return []
+
+    facts = [{"label": "region_climate_system", "value": ctx.region_climate_system}]
+    if ctx.climate_mechanism_note:
+        facts.append({"label": "climate_mechanism_note", "value": ctx.climate_mechanism_note})
+    if ctx.local_topography_note:
+        facts.append({"label": "local_topography_note", "value": ctx.local_topography_note})
+    if ctx.season_context:
+        facts.append({"label": "season_context", "value": ctx.season_context})
+    return facts
+
+
 def _frp_tier(frp_mw: float) -> tuple[str, int]:
     """Classify a fire's FRP value into a reader-relatable intensity tier.
 
@@ -205,6 +235,7 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             {"label": "lon", "value": fire.lon},
             {"label": "frp_tier", "value": tier_label},
             {"label": "frp_tier_floor_mw", "value": tier_floor},
+            *_climate_context_facts(fire.lat, fire.lon, category="fire"),
         ],
         historical_context={},
         raw_signal_dump={
@@ -257,6 +288,11 @@ def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") 
             {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, ev.kind),
             *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=ev.kind,
+            ),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -348,6 +384,11 @@ def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> Story
             {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, kind),
             *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=kind,
+            ),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -436,6 +477,11 @@ def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo
             {"label": "today_temp_f", "value": new_temp_f},
             *_ghcn_observation_facts(state, ev.kind),
             *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=ev.kind,
+            ),
         ],
         historical_context={
             "prior_record_c": ev.old_record_c,
@@ -513,6 +559,11 @@ def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> Sto
             {"label": "anomaly_f", "value": anomaly_f},
             *_ghcn_observation_facts(state, obs_kind),
             *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=kind,
+            ),
         ],
         historical_context={
             "historical_mean_c": ev.historical_mean_c,
