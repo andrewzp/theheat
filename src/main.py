@@ -440,6 +440,36 @@ def _check_city_extreme_signals(cities: list[dict], metrics_out: dict):
         return open_meteo.check_extreme_signals_for_cities(cities)
 
 
+def _classify_ghcn_source_status(
+    pipeline_metrics: dict,
+    *,
+    today: date | None = None,
+) -> str:
+    """Classify GHCN source health while tolerating normal newest-diff lag."""
+    diff_missing = int(pipeline_metrics.get("diff_dates_missing", 0) or 0)
+    if diff_missing <= 0:
+        return "success"
+
+    diff_fetched = int(pipeline_metrics.get("diff_dates_fetched", 0) or 0)
+    if diff_fetched <= 0:
+        return "degraded"
+
+    missing_dates = pipeline_metrics.get("diff_missing_dates")
+    if not isinstance(missing_dates, list) or len(missing_dates) != diff_missing:
+        return "degraded"
+
+    current_date = today or date.today()
+    tolerated_missing_dates = {current_date - timedelta(days=1)}
+    try:
+        parsed_missing = {date.fromisoformat(str(raw)) for raw in missing_dates}
+    except ValueError:
+        return "degraded"
+
+    if parsed_missing.issubset(tolerated_missing_dates):
+        return "success"
+    return "degraded"
+
+
 def _temp_pair_c(temp_c: float) -> str:
     temp_f = round(temp_c * 9 / 5 + 32, 1)
     return f"{temp_c:.1f}C / {temp_f:.1f}F"
@@ -1574,15 +1604,18 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         source_status = "success"
         details: dict | None = None
         if _signals_provider == "ghcn" and ghcn_pipeline_metrics:
-            diff_missing = int(ghcn_pipeline_metrics.get("diff_dates_missing", 0) or 0)
-            if diff_missing:
-                source_status = "degraded"
+            source_status = _classify_ghcn_source_status(ghcn_pipeline_metrics)
+            diff_attempted = ghcn_pipeline_metrics.get("diff_dates_attempted", "-")
+            diff_fetched = ghcn_pipeline_metrics.get("diff_dates_fetched", "-")
+            diff_missing = ghcn_pipeline_metrics.get("diff_dates_missing", "-")
             funnel = (
                 f"stations_active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
                 f"stations_with_obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
                 f"raw_signals:{ghcn_pipeline_metrics.get('raw_signals', '-')} "
                 f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')} "
+                f"diffs:{diff_fetched}/{diff_attempted} "
+                f"diff_missing:{diff_missing} "
                 f"drafted:{source_drafted}"
             )
             note = f"provider:ghcn {funnel} | {signal_breakdown}"
