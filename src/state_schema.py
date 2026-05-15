@@ -134,6 +134,14 @@ class BotState(TypedDict, total=False):
     co2_annual_count: dict[str, int]
     ch4_annual_count: dict[str, int]
     ch4_last_milestone: int | None
+    nao_annual_count: dict[str, int]
+    ao_annual_count: dict[str, int]
+    pdo_annual_count: dict[str, int]
+    nao_last_phase: str | None
+    ao_last_phase: str | None
+    pdo_last_phase: str | None
+    ozone_hole_last_peak: dict[str, dict]
+    ozone_hole_annual_count: dict[str, int]
     drafts: list[dict]
     run_history: list[dict]
     errors: list[dict]
