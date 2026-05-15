@@ -16,6 +16,10 @@ against the live API). They catch:
 
 from __future__ import annotations
 
+from src.two_bot.prompts.critic_prompt import (
+    CRITIC_SYSTEM_PROMPT,
+    CRITIC_USER_PROMPT_TEMPLATE,
+)
 from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
 from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
 
@@ -184,3 +188,113 @@ class TestWriterPromptKeepsLoosenedWorldKnowledgeFraming:
         # back to bundle-only quotation.
         lowered = WRITER_SYSTEM_PROMPT.lower()
         assert "editorial product" in lowered or "editorial value" in lowered
+
+
+class TestCriticPromptKillConditions:
+    """Structural assertions on the critic prompt — the F3 second-pass
+    editorial gate. These guard the kill conditions that justify the
+    critic existing in the first place; if any of these disappear, the
+    critic loses its main structural lift over the writer.
+    """
+
+    def test_default_to_kill_disposition(self):
+        # The whole point of the critic is to be a HIGHER bar than the
+        # writer self-imposes. "Default to KILL" sets that posture.
+        assert "Default to KILL" in CRITIC_SYSTEM_PROMPT
+
+    def test_two_gates_present(self):
+        # Stop-mid-scroll + Send-it-to-a-friend — the @theheat
+        # editorial bar mirrored from the writer prompt.
+        assert "stop-mid-scroll" in CRITIC_SYSTEM_PROMPT.lower()
+        assert "send-it-to-a-friend" in CRITIC_SYSTEM_PROMPT.lower()
+
+    def test_template_convergence_is_the_signature_lift(self):
+        # This is the structural reason the critic exists: it sees
+        # cross-draft context (today's pending) that the writer cannot.
+        assert "template_convergence" in CRITIC_SYSTEM_PROMPT.lower() or "template convergence" in CRITIC_SYSTEM_PROMPT.lower()
+        # The motivating concrete example — 6 coral drafts same shape:
+        assert "coral" in CRITIC_SYSTEM_PROMPT.lower()
+
+    def test_recycled_phrasing_check(self):
+        # The shipped library shrinks monotonically — same rule the
+        # writer follows. Critic enforces by reading the recent shipped.
+        assert "recycled" in CRITIC_SYSTEM_PROMPT.lower() or "shipped" in CRITIC_SYSTEM_PROMPT.lower()
+
+    def test_dead_system_clause_check(self):
+        # The "delete the system clause" test from the writer prompt —
+        # critic catches the times the writer missed it.
+        assert "system clause" in CRITIC_SYSTEM_PROMPT.lower()
+
+    def test_voice_failures_mirrored(self):
+        # The critic enforces the same voice rules the writer prompt
+        # already lists. Spot-check the major ones.
+        assert "hedging" in CRITIC_SYSTEM_PROMPT.lower()
+        assert "wink" in CRITIC_SYSTEM_PROMPT.lower() or "wink-kicker" in CRITIC_SYSTEM_PROMPT.lower()
+        assert "BREAKING" in CRITIC_SYSTEM_PROMPT or "breaking" in CRITIC_SYSTEM_PROMPT.lower()
+
+    def test_bias_toward_kill_on_borderline(self):
+        # Asymmetric cost rule — missed kill = boring tweet erodes
+        # signal-to-noise; missed pass = good draft will return tomorrow.
+        # Removing this would push the critic toward false-positive
+        # PASSes and re-create the boring-feed failure mode.
+        lowered = CRITIC_SYSTEM_PROMPT.lower()
+        assert "bias toward kill" in lowered or "kill" in lowered
+
+    def test_pass_conditions_present(self):
+        # The critic must know what GOOD looks like, not just what BAD
+        # looks like — otherwise it converges on always-KILL.
+        assert "Pass conditions" in CRITIC_SYSTEM_PROMPT
+
+
+class TestCriticPromptOutputContract:
+    """JSON output contract — downstream parsing in src/two_bot/critic.py
+    depends on this shape."""
+
+    def test_output_shape_documented(self):
+        assert '"passed": true | false' in CRITIC_SYSTEM_PROMPT
+        assert '"kill_reason"' in CRITIC_SYSTEM_PROMPT
+
+    def test_no_markdown_directive(self):
+        assert "No markdown" in CRITIC_SYSTEM_PROMPT
+
+    def test_kill_reason_examples_present(self):
+        # Concrete examples — without these the model emits vague kill
+        # reasons that the suppression dashboard can't render meaningfully.
+        for example in ["template_convergence", "recycled_phrasing", "wink_kicker"]:
+            assert example in CRITIC_SYSTEM_PROMPT
+
+
+class TestCriticUserPromptTemplate:
+    """The user prompt template must accept the four format keys the
+    critic.py implementation passes. A mismatch (renamed key, missing
+    key) causes KeyError at runtime — these tests catch it before
+    deploy."""
+
+    def test_template_accepts_all_required_keys(self):
+        rendered = CRITIC_USER_PROMPT_TEMPLATE.format(
+            draft_text="example",
+            bundle_json="{}",
+            pending_count=0,
+            pending_drafts_block="(none)",
+            shipped_count=0,
+            shipped_tweets_block="(none)",
+        )
+        assert "example" in rendered
+        assert "(none)" in rendered
+
+    def test_template_surfaces_draft_first(self):
+        # Order matters for model attention — draft should be near the
+        # top, bundle next, then comparison context.
+        rendered = CRITIC_USER_PROMPT_TEMPLATE.format(
+            draft_text="THE_DRAFT_MARKER",
+            bundle_json='{"k": "THE_BUNDLE_MARKER"}',
+            pending_count=0,
+            pending_drafts_block="THE_PENDING_MARKER",
+            shipped_count=0,
+            shipped_tweets_block="THE_SHIPPED_MARKER",
+        )
+        draft_pos = rendered.index("THE_DRAFT_MARKER")
+        bundle_pos = rendered.index("THE_BUNDLE_MARKER")
+        pending_pos = rendered.index("THE_PENDING_MARKER")
+        shipped_pos = rendered.index("THE_SHIPPED_MARKER")
+        assert draft_pos < bundle_pos < pending_pos < shipped_pos

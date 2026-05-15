@@ -32,3 +32,14 @@ CHEAP_MODEL = os.environ.get("THEHEAT_CHEAP_MODEL", "gemini-2.5-flash")
 # creative judgment work; Haiku/Flash struggle with theheat's banned-
 # phrase discipline and tone constraints.
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
+
+# Second-pass editorial critic — runs after fact_check passes, the final
+# gate before a draft enters the human-approval queue. Cross-family with
+# the Sonnet writer (Gemini 2.5 Pro) for taste diversity: the critic's
+# job is to catch the writer's blind spots, especially template
+# convergence across same-cron drafts. Per the 2026-05-15 handoff:
+# "Start with Gemini 2.5 Pro as the v1 model (cross-family vs Sonnet
+# writer, no new SDK wiring beyond the existing google-genai)."
+# NEVER Flash here — Flash has no taste for editorial gating (see
+# feedback_theheat_flash_no_taste.md).
+CRITIC_MODEL = os.environ.get("THEHEAT_CRITIC_MODEL", "gemini-2.5-pro")
