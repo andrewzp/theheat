@@ -17,7 +17,15 @@ from typing import Any, cast
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data.cyclones import (
+    BasinRecordEvent,
+    CycloneAdvisory,
+    LandfallEvent,
+    RapidIntensificationEvent,
+    TierCrossingEvent,
+    latest_advisories_by_storm,
+)
 from src.data.open_meteo import AllTimeRecord, AnomalyEvent, MonthlyRecord, RecordEvent
 from src.state_schema import BotState
 from src.data.source_status import SourceSkipped
@@ -31,6 +39,10 @@ from src.editorial.scoring import (
     score_all_time_record,
     score_anomaly,
     score_co2_milestone,
+    score_cyclone_basin_record,
+    score_cyclone_landfall,
+    score_cyclone_rapid_intensification,
+    score_cyclone_tier_crossing,
     score_drought,
     score_enso_transition,
     score_extreme_wave,
@@ -536,6 +548,236 @@ def _increment_ice_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("ice_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
+
+
+def _cyclone_history_advisories(
+    bot_state: BotState,
+    current_advisories: list[CycloneAdvisory],
+) -> list[CycloneAdvisory]:
+    """Rehydrate retained wind observations as advisories for RI detection."""
+
+    latest = latest_advisories_by_storm(current_advisories)
+    history_rows = bot_state.get("cyclone_wind_history", {})
+    historical: list[CycloneAdvisory] = []
+    for storm_id, rows in history_rows.items():
+        current = latest.get(storm_id)
+        if current is None:
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                wind_kt = int(row.get("wind_kt", 0))
+            except (TypeError, ValueError):
+                continue
+            issued_at = str(row.get("issued_at") or "")
+            if not issued_at:
+                continue
+            historical.append(CycloneAdvisory(
+                source=current.source,
+                storm_id=current.storm_id,
+                storm_name=current.storm_name,
+                basin=current.basin,
+                advisory_number=f"history_{issued_at}",
+                issued_at=issued_at,
+                wind_kt=wind_kt,
+                pressure_mb=None,
+                lat=current.lat,
+                lon=current.lon,
+                classification=current.classification,
+                public_advisory_url=current.public_advisory_url,
+                advisory_text="",
+            ))
+    return historical + current_advisories
+
+
+def _score_cyclone_event(
+    event: RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent,
+) -> EditorialScore:
+    if isinstance(event, RapidIntensificationEvent):
+        return score_cyclone_rapid_intensification(
+            event.delta_kt_24h,
+            event.current_category,
+            event.basin,
+        )
+    if isinstance(event, TierCrossingEvent):
+        return score_cyclone_tier_crossing(
+            event.from_category,
+            event.to_category,
+            event.basin,
+        )
+    if isinstance(event, LandfallEvent):
+        return score_cyclone_landfall(event.category, event.location, event.basin)
+    return score_cyclone_basin_record(
+        event.category,
+        event.basin,
+        event.record_label,
+    )
+
+
+def _bundle_for_cyclone_event(
+    event: RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent,
+):
+    from src.two_bot.intern import (
+        build_cyclone_basin_record_bundle,
+        build_cyclone_landfall_bundle,
+        build_cyclone_rapid_intensification_bundle,
+        build_cyclone_tier_crossing_bundle,
+    )
+
+    if isinstance(event, RapidIntensificationEvent):
+        return build_cyclone_rapid_intensification_bundle(event)
+    if isinstance(event, TierCrossingEvent):
+        return build_cyclone_tier_crossing_bundle(event)
+    if isinstance(event, LandfallEvent):
+        return build_cyclone_landfall_bundle(event)
+    return build_cyclone_basin_record_bundle(event)
+
+
+def _cyclone_review_context(
+    event: RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent,
+    *,
+    source_label: str,
+    source_key: str,
+    current_run: dict | None,
+) -> dict:
+    if isinstance(event, RapidIntensificationEvent):
+        headline = f"{event.storm_name}: +{event.delta_kt_24h} kt in 24h"
+        facts = [
+            _fact("Storm", event.storm_name),
+            _fact("Basin", event.basin),
+            _fact("Current wind", f"{event.current_wind_kt} kt"),
+            _fact("Previous wind", f"{event.previous_wind_kt} kt"),
+            _fact("Public advisory", event.public_advisory_url or "—"),
+        ]
+    elif isinstance(event, TierCrossingEvent):
+        headline = f"{event.storm_name}: Category {event.from_category} to {event.to_category}"
+        facts = [
+            _fact("Storm", event.storm_name),
+            _fact("Basin", event.basin),
+            _fact("Wind", f"{event.wind_kt} kt"),
+            _fact("Category crossed", f"{event.from_category} -> {event.to_category}"),
+            _fact("Public advisory", event.public_advisory_url or "—"),
+        ]
+    elif isinstance(event, LandfallEvent):
+        headline = f"{event.storm_name}: Category {event.category} landfall"
+        facts = [
+            _fact("Storm", event.storm_name),
+            _fact("Basin", event.basin),
+            _fact("Landfall location", event.location),
+            _fact("Wind", f"{event.wind_kt} kt"),
+            _fact("Public advisory", event.public_advisory_url or "—"),
+        ]
+    else:
+        headline = f"{event.storm_name}: {event.record_label}"
+        facts = [
+            _fact("Storm", event.storm_name),
+            _fact("Basin", event.basin),
+            _fact("Record", event.record_label),
+            _fact("Wind", f"{event.wind_kt} kt"),
+            _fact("Public advisory", event.public_advisory_url or "—"),
+        ]
+    return _review_context(
+        source=source_label,
+        source_key=source_key,
+        headline=headline,
+        current_run=current_run,
+        facts=facts,
+    )
+
+
+def _process_cyclone_source(
+    bot_state: BotState,
+    current_run: dict | None,
+    *,
+    source_key: str,
+    source_label: str,
+    fetch_fn,
+    detect_module,
+) -> int:
+    """Fetch, detect, and draft NHC/JTWC cyclone events."""
+
+    print(f"[alerts] Checking {source_label} tropical cyclones...")
+    source_start = time.perf_counter()
+    source_promoted = 0
+    source_drafted = 0
+    try:
+        advisories = _fetch_strict(fetch_fn)
+        advisory_history = _cyclone_history_advisories(bot_state, advisories)
+        events: list[RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent] = [
+            *detect_module.detect_rapid_intensification(advisory_history),
+            *detect_module.detect_tier_crossings(
+                advisories,
+                cast(dict, bot_state.get("cyclone_tiers", {})),
+            ),
+            *detect_module.detect_landfalls(advisories),
+        ]
+        for event in events:
+            if state.is_duplicate(bot_state, event.event_id):
+                continue
+            score = _score_cyclone_event(event)
+            if not _should_draft(score, event.event_id):
+                continue
+            source_promoted += 1
+            review_context = _cyclone_review_context(
+                event,
+                source_label=source_label,
+                source_key=source_key,
+                current_run=current_run,
+            )
+            bundle = _bundle_for_cyclone_event(event)
+            if _try_two_bot_draft(
+                bundle,
+                bot_state,
+                score,
+                legacy_type=event.kind,
+                event_id=event.event_id,
+                review_context=review_context,
+                cooldown_exempt=True,
+            ):
+                state.record_event(bot_state, event.event_id)
+                if isinstance(event, TierCrossingEvent):
+                    state.update_cyclone_tier(bot_state, f"{event.source}:{event.storm_id}".lower(), event.to_category)
+                state.increment_cyclone_annual_count(bot_state)
+                source_drafted += 1
+
+        for advisory in advisories:
+            state.record_cyclone_wind_observation(
+                bot_state,
+                advisory.tracking_key,
+                advisory.issued_at,
+                advisory.wind_kt,
+            )
+            if advisory.category >= 1:
+                state.update_cyclone_tier(bot_state, advisory.tracking_key, advisory.category)
+
+        _record_source_run(
+            current_run, bot_state, source_key, source_start,
+            status="success",
+            observed=len(advisories),
+            promoted=source_promoted,
+            drafted=source_drafted,
+            details={
+                "events": [
+                    {
+                        "event_id": event.event_id,
+                        "kind": event.kind,
+                        "storm_id": event.storm_id,
+                        "storm_name": event.storm_name,
+                        "basin": event.basin,
+                    }
+                    for event in events[:50]
+                ]
+            } if events else None,
+        )
+    except Exception as e:
+        print(f"[alerts] {source_label} cyclone error: {e}")
+        state.log_error(bot_state, source_key, str(e))
+        _record_source_run(
+            current_run, bot_state, source_key, source_start,
+            status="failed", error=str(e),
+        )
+    return source_drafted
 
 
 def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
@@ -2010,6 +2252,24 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             status="failed", error=str(e)
         )
 
+    # 5b. Operational tropical cyclones (NHC + JTWC)
+    drafted += _process_cyclone_source(
+        bot_state,
+        current_run,
+        source_key="nhc",
+        source_label="NHC",
+        fetch_fn=nhc.fetch_active_cyclones,
+        detect_module=nhc,
+    )
+    drafted += _process_cyclone_source(
+        bot_state,
+        current_run,
+        source_key="jtwc",
+        source_label="JTWC",
+        fetch_fn=jtwc.fetch_active_cyclones,
+        detect_module=jtwc,
+    )
+
     # 6. Sea ice records (check weekly on Mondays to avoid hammering NSIDC)
     if date.today().weekday() == 0:
         print("[alerts] Checking sea ice records...")
@@ -2693,6 +2953,10 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
     "river_flood": "river_gauges",
     "marine_heatwave": "ocean_sst",
     "ice_mass_record": "ice_mass",
+    "cyclone_rapid_intensification": "nhc",
+    "cyclone_tier_crossing": "nhc",
+    "cyclone_landfall": "nhc",
+    "cyclone_basin_record": "nhc",
     "synthesis_fire_drought_heat": "synthesis_fire_drought_heat",
 }
 

@@ -2,6 +2,10 @@ from src.editorial.scoring import (
     score_all_time_record,
     score_anomaly,
     score_co2_milestone,
+    score_cyclone_basin_record,
+    score_cyclone_landfall,
+    score_cyclone_rapid_intensification,
+    score_cyclone_tier_crossing,
     score_fire_event,
     score_fire_footprint,
     score_global_disaster,
@@ -38,6 +42,41 @@ class TestEditorialScoring:
         red = score_global_disaster("Red", "Tropical Cyclone")
         orange = score_global_disaster("Orange", "Flood")
         assert red.total > orange.total
+
+    def test_cyclone_rapid_intensification_scores_high_bar_signal(self):
+        score = score_cyclone_rapid_intensification(
+            delta_kt_24h=40,
+            current_category=4,
+            basin="Atlantic",
+        )
+
+        assert score.passes
+        assert score.category == "cyclone_rapid_intensification"
+        assert any("+40 kt" in reason for reason in score.reasons)
+
+    def test_cyclone_tier_crossing_escalates_with_category(self):
+        cat4 = score_cyclone_tier_crossing(2, 4, "Atlantic")
+        cat2 = score_cyclone_tier_crossing(1, 2, "Atlantic")
+
+        assert cat4.passes
+        assert cat4.total > cat2.total
+
+    def test_cyclone_landfall_is_manual_review_grade(self):
+        score = score_cyclone_landfall(3, "Cedar Key, Florida", "Atlantic")
+
+        assert score.passes
+        assert score.threshold == 70
+        assert "Cedar Key, Florida" in score.reasons
+
+    def test_cyclone_basin_record_scores_archive_backed_record(self):
+        score = score_cyclone_basin_record(
+            4,
+            "Atlantic",
+            "earliest Atlantic Category 4 on record",
+        )
+
+        assert score.passes
+        assert score.category == "cyclone_basin_record"
 
     def test_hot10_prefers_large_anomaly_days(self):
         strong = score_hot10(9.7, 10, 3)

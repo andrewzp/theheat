@@ -11,6 +11,12 @@ from dataclasses import asdict
 from datetime import date
 
 from src.data.co2 import CO2Milestone
+from src.data.cyclones import (
+    BasinRecordEvent,
+    LandfallEvent,
+    RapidIntensificationEvent,
+    TierCrossingEvent,
+)
 from src.data.firms import FireEvent
 from src.data.fire_footprint import FireComplex, TIERS_HECTARES
 from src.data.gdacs import GlobalDisasterEvent
@@ -755,6 +761,183 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
         ],
         historical_context={},
         raw_signal_dump=asdict(disaster),
+    )
+
+
+# =====================================================================
+# Tropical cyclones (NHC / JTWC)
+# =====================================================================
+
+
+def _cyclone_common_facts(
+    *,
+    source: str,
+    storm_name: str,
+    basin: str,
+    category: int,
+    wind_kt: int,
+    pressure_mb: int | None,
+    lat: float | None,
+    lon: float | None,
+    advisory_number: str,
+    public_advisory_url: str,
+) -> list[dict]:
+    return [
+        {"label": "source", "value": source.upper()},
+        {"label": "storm_name", "value": storm_name},
+        {"label": "basin", "value": basin},
+        {"label": "category", "value": category},
+        {"label": "wind_speed_kt", "value": wind_kt, "unit": "kt"},
+        {"label": "central_pressure_mb", "value": pressure_mb, "unit": "mb"},
+        {"label": "lat", "value": lat},
+        {"label": "lon", "value": lon},
+        {"label": "advisory_number", "value": advisory_number},
+        {"label": "public_advisory_url", "value": public_advisory_url},
+        *_climate_context_facts(lat, lon, category="cyclone"),
+    ]
+
+
+def _cyclone_where(storm_name: str, basin: str) -> str:
+    return f"{storm_name}, {basin}" if basin else storm_name
+
+
+def build_cyclone_rapid_intensification_bundle(event: RapidIntensificationEvent) -> StoryBundle:
+    """A tropical cyclone gained at least 30 kt in roughly 24 hours."""
+
+    return StoryBundle(
+        signal_kind="cyclone_rapid_intensification",
+        where=_cyclone_where(event.storm_name, event.basin),
+        when=event.issued_at or date.today().isoformat(),
+        event_id=event.event_id,
+        headline_metric={
+            "label": "delta_kt_24h",
+            "value": event.delta_kt_24h,
+            "unit": "kt",
+        },
+        current_facts=[
+            *_cyclone_common_facts(
+                source=event.source,
+                storm_name=event.storm_name,
+                basin=event.basin,
+                category=event.current_category,
+                wind_kt=event.current_wind_kt,
+                pressure_mb=event.pressure_mb,
+                lat=event.lat,
+                lon=event.lon,
+                advisory_number=event.advisory_number,
+                public_advisory_url=event.public_advisory_url,
+            ),
+            {"label": "previous_wind_kt", "value": event.previous_wind_kt, "unit": "kt"},
+            {"label": "previous_category", "value": event.previous_category},
+            {"label": "delta_kt_24h", "value": event.delta_kt_24h, "unit": "kt"},
+        ],
+        historical_context={
+            "window_hours": 24,
+            "rapid_intensification_threshold_kt": 30,
+        },
+        raw_signal_dump=asdict(event),
+    )
+
+
+def build_cyclone_tier_crossing_bundle(event: TierCrossingEvent) -> StoryBundle:
+    """A tropical cyclone crossed into a higher Saffir-Simpson category."""
+
+    return StoryBundle(
+        signal_kind="cyclone_tier_crossing",
+        where=_cyclone_where(event.storm_name, event.basin),
+        when=event.issued_at or date.today().isoformat(),
+        event_id=event.event_id,
+        headline_metric={
+            "label": "category",
+            "value": event.to_category,
+        },
+        current_facts=[
+            *_cyclone_common_facts(
+                source=event.source,
+                storm_name=event.storm_name,
+                basin=event.basin,
+                category=event.to_category,
+                wind_kt=event.wind_kt,
+                pressure_mb=event.pressure_mb,
+                lat=event.lat,
+                lon=event.lon,
+                advisory_number=event.advisory_number,
+                public_advisory_url=event.public_advisory_url,
+            ),
+            {"label": "from_category", "value": event.from_category},
+            {"label": "to_category", "value": event.to_category},
+        ],
+        historical_context={"scope": "saffir_simpson_tier_crossing"},
+        raw_signal_dump=asdict(event),
+    )
+
+
+def build_cyclone_landfall_bundle(event: LandfallEvent) -> StoryBundle:
+    """A Cat 3+ tropical cyclone landfall was confirmed in an advisory."""
+
+    return StoryBundle(
+        signal_kind="cyclone_landfall",
+        where=event.location,
+        when=event.issued_at or date.today().isoformat(),
+        event_id=event.event_id,
+        headline_metric={
+            "label": "category",
+            "value": event.category,
+        },
+        current_facts=[
+            *_cyclone_common_facts(
+                source=event.source,
+                storm_name=event.storm_name,
+                basin=event.basin,
+                category=event.category,
+                wind_kt=event.wind_kt,
+                pressure_mb=event.pressure_mb,
+                lat=event.lat,
+                lon=event.lon,
+                advisory_number=event.advisory_number,
+                public_advisory_url=event.public_advisory_url,
+            ),
+            {"label": "landfall_location", "value": event.location},
+        ],
+        historical_context={"scope": "major_hurricane_landfall"},
+        raw_signal_dump=asdict(event),
+    )
+
+
+def build_cyclone_basin_record_bundle(event: BasinRecordEvent) -> StoryBundle:
+    """An archive-backed tropical cyclone basin record."""
+
+    return StoryBundle(
+        signal_kind="cyclone_basin_record",
+        where=_cyclone_where(event.storm_name, event.basin),
+        when=event.issued_at or date.today().isoformat(),
+        event_id=event.event_id,
+        headline_metric={
+            "label": "category",
+            "value": event.category,
+        },
+        current_facts=[
+            *_cyclone_common_facts(
+                source=event.source,
+                storm_name=event.storm_name,
+                basin=event.basin,
+                category=event.category,
+                wind_kt=event.wind_kt,
+                pressure_mb=event.pressure_mb,
+                lat=event.lat,
+                lon=event.lon,
+                advisory_number=event.advisory_number,
+                public_advisory_url=event.public_advisory_url,
+            ),
+            {"label": "record_label", "value": event.record_label},
+            {"label": "record_scope", "value": event.record_scope},
+        ],
+        historical_context={
+            "record_label": event.record_label,
+            "record_scope": event.record_scope,
+            "scope": "basin_record",
+        },
+        raw_signal_dump=asdict(event),
     )
 
 

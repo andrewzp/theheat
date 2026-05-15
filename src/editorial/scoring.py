@@ -391,6 +391,96 @@ def score_global_disaster(severity: str, disaster_type: str) -> EditorialScore:
     )
 
 
+def score_cyclone_rapid_intensification(
+    delta_kt_24h: int,
+    current_category: int,
+    basin: str,
+) -> EditorialScore:
+    """Score cyclone rapid intensification, the high-bar cyclone signal."""
+
+    major_bonus = 10 if current_category >= 3 else 0
+    very_fast_bonus = max(delta_kt_24h - 35, 0) * 0.8
+    reasons = [
+        f"+{delta_kt_24h} kt in 24 hours",
+        f"current category {current_category}",
+        basin,
+    ]
+    if delta_kt_24h >= 35:
+        reasons.append("exceeds rapid-intensification threshold")
+    return _build_score(
+        "cyclone_rapid_intensification",
+        severity=82 + major_bonus + very_fast_bonus,
+        novelty=82 + min(delta_kt_24h - 30, 20) * 0.5,
+        timeliness=96,
+        confidence=92,
+        shareability=74 + min(delta_kt_24h - 30, 25) * 0.8,
+        sensitivity=72,
+        threshold=70,
+        reasons=reasons[:3],
+    )
+
+
+def score_cyclone_tier_crossing(from_cat: int, to_cat: int, basin: str) -> EditorialScore:
+    """Score a Saffir-Simpson category upgrade."""
+
+    crossed_major = from_cat < 3 <= to_cat
+    reasons = [
+        f"Category {from_cat} to Category {to_cat}",
+        basin,
+        "Saffir-Simpson tier crossing",
+    ]
+    if crossed_major:
+        reasons.append("crossed major-hurricane threshold")
+    return _build_score(
+        "cyclone_tier_crossing",
+        severity=70 + to_cat * 6 + (8 if crossed_major else 0),
+        novelty=66 + to_cat * 5,
+        timeliness=94,
+        confidence=92,
+        shareability=62 + to_cat * 5,
+        sensitivity=74,
+        threshold=68,
+        reasons=reasons[:3],
+    )
+
+
+def score_cyclone_landfall(category: int, location: str, basin: str) -> EditorialScore:
+    """Score a confirmed Cat 3+ tropical cyclone landfall."""
+
+    reasons = [
+        f"Category {category} landfall",
+        location,
+        basin,
+    ]
+    return _build_score(
+        "cyclone_landfall",
+        severity=88 + max(category - 3, 0) * 5,
+        novelty=82 + max(category - 3, 0) * 4,
+        timeliness=98,
+        confidence=94,
+        shareability=78 + max(category - 3, 0) * 4,
+        sensitivity=86,
+        threshold=70,
+        reasons=reasons,
+    )
+
+
+def score_cyclone_basin_record(category: int, basin: str, record_label: str) -> EditorialScore:
+    """Score archive-backed basin records once a caller supplies the archive rule."""
+
+    return _build_score(
+        "cyclone_basin_record",
+        severity=80 + category * 4,
+        novelty=94,
+        timeliness=88,
+        confidence=90,
+        shareability=84,
+        sensitivity=72,
+        threshold=72,
+        reasons=[record_label, basin, f"Category {category}"],
+    )
+
+
 def score_sea_ice_record(extent: float, previous_extent: float, previous_year: int) -> EditorialScore:
     gap = max(previous_extent - extent, 0.0)
     years_since_prev = max(date.today().year - previous_year, 0)

@@ -1,6 +1,12 @@
 from datetime import date
 
 from src.data.co2 import CO2Milestone
+from src.data.cyclones import (
+    BasinRecordEvent,
+    LandfallEvent,
+    RapidIntensificationEvent,
+    TierCrossingEvent,
+)
 from src.data.fire_footprint import FireComplex
 from src.data.gdacs import GlobalDisasterEvent
 from src.data.ice_mass import IceMassRecord
@@ -22,6 +28,10 @@ from src.two_bot.intern import (
     build_all_time_record_bundle,
     build_anomaly_bundle,
     build_co2_milestone_bundle,
+    build_cyclone_basin_record_bundle,
+    build_cyclone_landfall_bundle,
+    build_cyclone_rapid_intensification_bundle,
+    build_cyclone_tier_crossing_bundle,
     build_country_record_bundle,
     build_drought_bundle,
     build_enso_bundle,
@@ -246,6 +256,114 @@ def test_build_severe_weather_bundle_has_empty_historical_context():
     }
     assert bundle.historical_context == {}
     assert {"label": "max_wind_gust", "value": "40 mph"} in bundle.current_facts
+
+
+def test_build_cyclone_rapid_intensification_bundle_includes_climate_context():
+    event = RapidIntensificationEvent(
+        source="nhc",
+        storm_id="AL012026",
+        storm_name="Beryl",
+        basin="Atlantic",
+        advisory_number="12",
+        issued_at="2026-07-02T00:00:00Z",
+        current_wind_kt=115,
+        previous_wind_kt=75,
+        delta_kt_24h=40,
+        current_category=4,
+        previous_category=1,
+        pressure_mb=950,
+        lat=18.0,
+        lon=-75.0,
+        public_advisory_url="https://www.nhc.noaa.gov/text/MIATCPAT1.shtml",
+        event_id="nhc_ri_al012026_12_115",
+    )
+
+    bundle = build_cyclone_rapid_intensification_bundle(event)
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert bundle.signal_kind == "cyclone_rapid_intensification"
+    assert bundle.where == "Beryl, Atlantic"
+    assert bundle.headline_metric == {"label": "delta_kt_24h", "value": 40, "unit": "kt"}
+    assert labels["storm_name"] == "Beryl"
+    assert labels["public_advisory_url"] == "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
+    assert labels["region_climate_system"] == "the Caribbean warm pool"
+    assert bundle.historical_context["rapid_intensification_threshold_kt"] == 30
+
+
+def test_build_cyclone_tier_crossing_bundle_carries_required_fields():
+    event = TierCrossingEvent(
+        source="nhc",
+        storm_id="AL012026",
+        storm_name="Beryl",
+        basin="Atlantic",
+        advisory_number="12",
+        issued_at="2026-07-02T00:00:00Z",
+        from_category=2,
+        to_category=4,
+        wind_kt=115,
+        pressure_mb=950,
+        lat=18.0,
+        lon=-75.0,
+        public_advisory_url="https://www.nhc.noaa.gov/text/MIATCPAT1.shtml",
+        event_id="nhc_tier_al012026_12_cat4",
+    )
+
+    bundle = build_cyclone_tier_crossing_bundle(event)
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert bundle.signal_kind == "cyclone_tier_crossing"
+    assert bundle.headline_metric == {"label": "category", "value": 4}
+    assert labels["from_category"] == 2
+    assert labels["to_category"] == 4
+    assert labels["wind_speed_kt"] == 115
+
+
+def test_build_cyclone_landfall_bundle_uses_landfall_location_as_where():
+    event = LandfallEvent(
+        source="nhc",
+        storm_id="AL012026",
+        storm_name="Beryl",
+        basin="Atlantic",
+        advisory_number="12",
+        issued_at="2026-07-02T00:00:00Z",
+        category=3,
+        wind_kt=100,
+        location="Cedar Key, Florida",
+        pressure_mb=960,
+        lat=29.1,
+        lon=-83.0,
+        public_advisory_url="https://www.nhc.noaa.gov/text/MIATCPAT1.shtml",
+        event_id="nhc_landfall_al012026_12_cedar_key",
+    )
+
+    bundle = build_cyclone_landfall_bundle(event)
+
+    assert bundle.signal_kind == "cyclone_landfall"
+    assert bundle.where == "Cedar Key, Florida"
+    assert {"label": "landfall_location", "value": "Cedar Key, Florida"} in bundle.current_facts
+    assert bundle.historical_context["scope"] == "major_hurricane_landfall"
+
+
+def test_build_cyclone_basin_record_bundle_preserves_record_context():
+    event = BasinRecordEvent(
+        source="nhc",
+        storm_id="AL012026",
+        storm_name="Beryl",
+        basin="Atlantic",
+        advisory_number="9",
+        issued_at="2026-06-15T00:00:00Z",
+        category=4,
+        wind_kt=115,
+        record_label="earliest Atlantic Category 4 on record",
+        record_scope="Atlantic best-track archive",
+        event_id="nhc_record_al012026_9_earliest_cat4",
+    )
+
+    bundle = build_cyclone_basin_record_bundle(event)
+
+    assert bundle.signal_kind == "cyclone_basin_record"
+    assert {"label": "record_label", "value": "earliest Atlantic Category 4 on record"} in bundle.current_facts
+    assert bundle.historical_context["record_scope"] == "Atlantic best-track archive"
 
 
 def test_build_record_bundle_includes_country_in_where():

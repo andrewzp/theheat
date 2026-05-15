@@ -10,6 +10,7 @@ import requests
 
 from src.state_schema import (
     BotState,
+    CycloneWindObservation,
     DroughtSnapshot,
     MemoryState,
     OceanSSTStreak,
@@ -95,6 +96,14 @@ DEFAULT_STATE: BotState = {
     # TIERS_HECTARES. Prevents re-tweeting the same fire at every update;
     # only tier upgrades trigger a new draft.
     "fire_complex_tiers": {},
+    # Per-storm NHC/JTWC Saffir-Simpson tier dedup. Keys include source
+    # (e.g. "nhc:al012026") so basin identifiers cannot collide.
+    "cyclone_tiers": {},
+    # Rolling per-storm wind observations retained for rapid-intensification
+    # detection across scheduled runs.
+    "cyclone_wind_history": {},
+    # Visibility counter only; no cap yet.
+    "cyclone_annual_count": {},
     # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
     "fire_footprint_last_run": None,
     # Cross-source synthesis layer (src/editorial/synthesis.py).
@@ -432,6 +441,33 @@ def _merge_memory(current: MemoryState | None, incoming: MemoryState | None) -> 
     return merged
 
 
+def _merge_cyclone_wind_history(
+    current: dict[str, list[CycloneWindObservation]] | None,
+    incoming: dict[str, list[CycloneWindObservation]] | None,
+    max_items: int = 16,
+) -> dict[str, list[CycloneWindObservation]]:
+    """Merge retained cyclone wind observations by storm and timestamp."""
+
+    merged: dict[str, list[CycloneWindObservation]] = {}
+    for storm_id in set(list((current or {}).keys()) + list((incoming or {}).keys())):
+        by_time: dict[str, CycloneWindObservation] = {}
+        for row in [*((current or {}).get(storm_id) or []), *((incoming or {}).get(storm_id) or [])]:
+            if not isinstance(row, dict):
+                continue
+            issued_at = str(row.get("issued_at") or "")
+            if not issued_at:
+                continue
+            try:
+                wind_kt = int(row.get("wind_kt", 0))
+            except (TypeError, ValueError):
+                continue
+            by_time[issued_at] = {"issued_at": issued_at, "wind_kt": wind_kt}
+        rows = list(by_time.values())
+        rows.sort(key=lambda row: _parse_state_timestamp(row.get("issued_at")))
+        merged[storm_id] = rows[-max_items:]
+    return merged
+
+
 def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
@@ -538,6 +574,30 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
         merged["fire_complex_tiers"][cid] = max(
             int(base.get("fire_complex_tiers", {}).get(cid, -1)),
             int(next_state.get("fire_complex_tiers", {}).get(cid, -1)),
+        )
+    # Cyclone tier dedup follows the same monotonic semantics: never lose a
+    # higher category already observed by a concurrent run.
+    merged["cyclone_tiers"] = {}
+    for storm_id in set(
+        list(base.get("cyclone_tiers", {}).keys())
+        + list(next_state.get("cyclone_tiers", {}).keys())
+    ):
+        merged["cyclone_tiers"][storm_id] = max(
+            int(base.get("cyclone_tiers", {}).get(storm_id, -1)),
+            int(next_state.get("cyclone_tiers", {}).get(storm_id, -1)),
+        )
+    merged["cyclone_wind_history"] = _merge_cyclone_wind_history(
+        base.get("cyclone_wind_history"),
+        next_state.get("cyclone_wind_history"),
+    )
+    merged["cyclone_annual_count"] = {}
+    for year in set(
+        list(base.get("cyclone_annual_count", {}).keys())
+        + list(next_state.get("cyclone_annual_count", {}).keys())
+    ):
+        merged["cyclone_annual_count"][year] = max(
+            base.get("cyclone_annual_count", {}).get(year, 0),
+            next_state.get("cyclone_annual_count", {}).get(year, 0),
         )
     # Max-merge the daily gate so concurrent cron runs keep the later date.
     merged["fire_footprint_last_run"] = max(
@@ -1110,6 +1170,48 @@ def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> Bot
     current = int(tiers.get(complex_id, -1))
     if tier > current:
         tiers[complex_id] = int(tier)
+    return state
+
+
+def update_cyclone_tier(state: BotState, storm_id: str, tier: int) -> BotState:
+    """Record the highest cyclone tier that has produced a draft."""
+
+    tiers = state.setdefault("cyclone_tiers", {})
+    current = int(tiers.get(storm_id, -1))
+    if tier > current:
+        tiers[storm_id] = int(tier)
+    return state
+
+
+def record_cyclone_wind_observation(
+    state: BotState,
+    storm_id: str,
+    issued_at: str,
+    wind_kt: int,
+    *,
+    max_items: int = 16,
+) -> BotState:
+    """Retain a small wind history for rapid-intensification detection."""
+
+    if not storm_id or not issued_at:
+        return state
+    history = state.setdefault("cyclone_wind_history", {})
+    rows = [
+        row for row in history.get(storm_id, [])
+        if isinstance(row, dict) and row.get("issued_at") != issued_at
+    ]
+    rows.append({"issued_at": issued_at, "wind_kt": int(wind_kt)})
+    rows.sort(key=lambda row: _parse_state_timestamp(row.get("issued_at")))
+    history[storm_id] = rows[-max_items:]
+    return state
+
+
+def increment_cyclone_annual_count(state: BotState) -> BotState:
+    """Track cyclone draft volume for visibility without enforcing a cap."""
+
+    year = str(date.today().year)
+    counts = state.setdefault("cyclone_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
     return state
 
 

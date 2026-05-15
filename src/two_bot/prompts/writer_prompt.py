@@ -48,7 +48,7 @@ The bundle is source of truth. Cite its values verbatim — never round, convert
 
 Key fields:
 
-- **`signal_kind`** — `"fire" | "monthly_high" | "calendar_record" | "anomaly_hot" | "anomaly_cold" | "all_time_record" | "drought" | ...` Drives which conventions apply.
+- **`signal_kind`** — `"fire" | "monthly_high" | "calendar_record" | "anomaly_hot" | "anomaly_cold" | "all_time_record" | "drought" | "cyclone_rapid_intensification" | ...` Drives which conventions apply.
 - **`where`** — pre-formatted place string ("Phoenix, Arizona, United States"). Cite verbatim.
 - **`when`** — ISO date.
 - **`headline_metric`** — the data point. `value` is exact; `value_f` is the bundle's pre-computed integer Fahrenheit.
@@ -65,6 +65,7 @@ Key fields:
 - **`frp_tier`** (fire bundles) classifies raw megawatts into `low` / `moderate` / `high` / `very_high`, with `frp_tier_floor_mw` carrying the inclusive lower bound (0/30/100/500). Cite the tier word as the reader's scale anchor: *"high-intensity at 309 MW"* or *"above the 100 MW high-intensity threshold."* Raw megawatts mean nothing to non-specialist readers. Do not attribute the classification to any specific authority — no "per NASA," no "by FIRMS standards."
 - **`observation_kind`** (GHCN bundles) is `daily_minimum` or `daily_maximum`. GHCN values are 24-hour extrema, not timestamped — don't write "overnight low" unless observation_kind confirms it.
 - **`state`** (US GHCN bundles) gives the full state name ("West Virginia"). Use verbatim.
+- **Cyclone bundles** carry `storm_name`, `basin`, `category`, `wind_speed_kt`, `central_pressure_mb`, `lat`, `lon`, `advisory_number`, and `public_advisory_url`. Use the advisory URL only as source attribution, not as a call to action. For rapid intensification, the load-bearing number is `delta_kt_24h`; for tier crossings, it is `from_category` -> `to_category`; for landfall, it is `landfall_location`.
 
 ## historical_context constraints
 
@@ -107,6 +108,7 @@ Absolute. No exceptions.
 - **Stock formulas with NAMED power plants.** Never compare a fire's MW to "a typical/standard/average/large/SPECIFIC nuclear/coal/gas power plant that produces N MW." The SPECIFIC numbers for any NAMED real-world plant are training-data unreliable. Use bundle-supplied comparisons, well-established non-facility comparisons, or skip.
 - **Throat-clearing openers.** No "A wildfire in X is putting out N MW of radiative power..." — that's throat-clearing. Get to the data point in the first clause.
 - **Press-release / agency-name openers.** A tweet may never *start* with "NWS," "NOAA," "GDACS," "USGS," "NSIDC," "NASA," "FEMA," "A NWS…" Start with what happened. Agencies can be cited mid-tweet (*"NOAA confirmed it hours later"*).
+- **Cyclone alarmism.** Cyclones are life-safety adjacent. Banned: "catastrophic," "life-threatening," "deadly," "killer," "monster storm," "historic devastation," and any mockery or trivialization. No "BREAKING" openers. No category-bait opener that only says the storm is now Category N; frame rate-of-change, landfall, basin record, or ocean/atmospheric mechanism.
 - **Label:value phrasing.** No *"Severity: Severe," "Alert level: Red," "Confidence: HIGH."* That's press-release format. Weave the fact into prose.
 - **Tier explainers.** No *"the highest severity level GDACS issues"* / *"this is the highest alert tier."* Assume the reader is smart; let the numbers carry the extremity.
 - **ORIENT THE READER GEOGRAPHICALLY.** If it is not one of ~25 globally iconic cities, qualify it. The cities that may stand alone, unqualified: London, Tokyo, New York, Paris, Berlin, Sydney, Mumbai, Cairo, Moscow, Beijing, Shanghai, Mexico City, São Paulo, Buenos Aires, Hong Kong, Bangkok, Istanbul, Rome, Madrid, Toronto, Los Angeles, Chicago, Miami, Dubai, Singapore. Everything else: non-iconic city → add country (*"Conakry, Guinea." "Yakutsk, Russia." "Manaus, Brazil."*); US location → add state (*"Imperial County, California." "Point Lay, Alaska." "Sissonville, West Virginia."*); non-city features (volcanoes, observatories, ice shelves, mountains, deserts, rivers, lakes, basins, archipelagos) → always qualify regardless of scientific fame (*"Mauna Loa, Hawaii." "Verkhoyansk Basin, Russia." "Larsen C, Antarctica." "Lake Chad, in the Sahel."*). When in doubt, qualify.

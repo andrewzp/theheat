@@ -1,7 +1,7 @@
 """Integration tests for main orchestrator with all externals mocked."""
 
 from copy import deepcopy
-from unittest.mock import patch, MagicMock
+from unittest.mock import ANY, patch, MagicMock
 from datetime import date, timedelta
 
 import pytest
@@ -19,6 +19,7 @@ from src.main import (
 from src.data.open_meteo import CityTemp, RecordEvent
 from src.data.firms import FireEvent
 from src.data.co2 import CO2Reading, CO2Milestone
+from src.data.cyclones import CycloneAdvisory, TierCrossingEvent
 
 
 def _fresh_state():
@@ -72,15 +73,14 @@ class TestGhcnSourceStatus:
 
     def test_run_alerts_records_success_for_newest_diff_lag(
         self,
-        mocker,
         monkeypatch,
         mock_alerts_pipeline_sources,
     ):
         monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "ghcn")
-        mocker.patch("src.main.open_meteo.load_cities", return_value=[])
-        mocker.patch("src.main.firms.fetch_fires", return_value=[])
-        mocker.patch("src.main.co2.fetch_co2_data", return_value=[])
-        mocker.patch("src.main.co2.detect_milestone", return_value=None)
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
 
         newest_missing = (date.today() - timedelta(days=1)).isoformat()
 
@@ -118,11 +118,83 @@ class TestGhcnSourceStatus:
         assert health["success"] == 1
 
 
+class TestCycloneAlerts:
+    def test_run_alerts_records_nhc_cyclone_draft(
+        self,
+        monkeypatch,
+        mock_alerts_pipeline_sources,
+    ):
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr(
+            "src.main.open_meteo.check_extreme_signals_for_cities",
+            MagicMock(return_value=([], [])),
+        )
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        draft = MagicMock(return_value=True)
+        monkeypatch.setattr("src.main._try_two_bot_draft", draft)
+
+        advisory = CycloneAdvisory(
+            source="nhc",
+            storm_id="AL012026",
+            storm_name="Beryl",
+            basin="Atlantic",
+            advisory_number="12",
+            issued_at="2026-07-02T00:00:00Z",
+            wind_kt=115,
+            pressure_mb=950,
+            lat=18.0,
+            lon=-75.0,
+            public_advisory_url="https://www.nhc.noaa.gov/text/MIATCPAT1.shtml",
+        )
+        event = TierCrossingEvent(
+            source="nhc",
+            storm_id="AL012026",
+            storm_name="Beryl",
+            basin="Atlantic",
+            advisory_number="12",
+            issued_at="2026-07-02T00:00:00Z",
+            from_category=2,
+            to_category=4,
+            wind_kt=115,
+            pressure_mb=950,
+            lat=18.0,
+            lon=-75.0,
+            public_advisory_url="https://www.nhc.noaa.gov/text/MIATCPAT1.shtml",
+            event_id="nhc_tier_al012026_12_cat4",
+        )
+        import src.main as main
+
+        main.nhc.fetch_active_cyclones.return_value = [advisory]
+        main.nhc.detect_tier_crossings.return_value = [event]
+        state_dict = _fresh_state()
+        current_run = {"sources": []}
+
+        run_alerts(state_dict, current_run=current_run)
+
+        draft.assert_any_call(
+            ANY,
+            state_dict,
+            ANY,
+            legacy_type="cyclone_tier_crossing",
+            event_id="nhc_tier_al012026_12_cat4",
+            review_context=ANY,
+            cooldown_exempt=True,
+        )
+        source = next(item for item in current_run["sources"] if item["source"] == "nhc")
+        assert source["observed"] == 1
+        assert source["promoted"] == 1
+        assert source["drafted"] == 1
+        assert state_dict["cyclone_tiers"]["nhc:al012026"] == 4
+        assert state_dict["cyclone_annual_count"][str(date.today().year)] == 1
+
+
 @pytest.fixture
-def mock_alerts_pipeline_sources(mocker):
+def mock_alerts_pipeline_sources(monkeypatch):
     """Clamp the run_alerts data sources that test classes typically leave unmocked.
 
-    Covers nws_alerts, gdacs, sea_ice, drought, enso, ocean, ocean_sst,
+    Covers nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst,
     water_levels, river_gauges, ice_mass, synthesis, ghcn, and
     fire_footprint. Callers must still mock `src.main.open_meteo`,
     `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
@@ -134,51 +206,78 @@ def mock_alerts_pipeline_sources(mocker):
     break `assert_called_once`. See test_run_alerts_ocean_sst_drafts_on_day_5
     for the canonical inline equivalent.
     """
-    nws = mocker.patch("src.main.nws_alerts")
+    nws = MagicMock()
+    monkeypatch.setattr("src.main.nws_alerts", nws)
     nws.fetch_alerts.return_value = []
 
-    gdacs = mocker.patch("src.main.gdacs")
+    gdacs = MagicMock()
+    monkeypatch.setattr("src.main.gdacs", gdacs)
     gdacs.fetch_disasters.return_value = []
 
-    sea_ice = mocker.patch("src.main.sea_ice")
+    nhc = MagicMock()
+    monkeypatch.setattr("src.main.nhc", nhc)
+    nhc.fetch_active_cyclones.return_value = []
+    nhc.detect_rapid_intensification.return_value = []
+    nhc.detect_tier_crossings.return_value = []
+    nhc.detect_landfalls.return_value = []
+
+    jtwc = MagicMock()
+    monkeypatch.setattr("src.main.jtwc", jtwc)
+    jtwc.fetch_active_cyclones.return_value = []
+    jtwc.detect_rapid_intensification.return_value = []
+    jtwc.detect_tier_crossings.return_value = []
+    jtwc.detect_landfalls.return_value = []
+
+    sea_ice = MagicMock()
+    monkeypatch.setattr("src.main.sea_ice", sea_ice)
     sea_ice.fetch_sea_ice.return_value = []
     sea_ice.detect_record_low.return_value = None
 
-    drought = mocker.patch("src.main.drought")
+    drought = MagicMock()
+    monkeypatch.setattr("src.main.drought", drought)
     drought.fetch_drought_data.return_value = []
 
-    enso = mocker.patch("src.main.enso")
+    enso = MagicMock()
+    monkeypatch.setattr("src.main.enso", enso)
     enso.fetch_enso_data.return_value = []
     enso.detect_transition.return_value = None
 
-    ocean = mocker.patch("src.main.ocean")
+    ocean = MagicMock()
+    monkeypatch.setattr("src.main.ocean", ocean)
     ocean.fetch_ocean_conditions.return_value = []
     ocean.detect_extreme_waves.return_value = []
 
-    ocean_sst = mocker.patch("src.main.ocean_sst")
+    ocean_sst = MagicMock()
+    monkeypatch.setattr("src.main.ocean_sst", ocean_sst)
     ocean_sst.fetch_global_sst.return_value = None
     ocean_sst.detect_streak_milestone.return_value = (None, None)
 
-    water = mocker.patch("src.main.water_levels")
+    water = MagicMock()
+    monkeypatch.setattr("src.main.water_levels", water)
     water.fetch_water_levels.return_value = []
     water.detect_storm_surge.return_value = []
 
-    river = mocker.patch("src.main.river_gauges")
+    river = MagicMock()
+    monkeypatch.setattr("src.main.river_gauges", river)
     river.fetch_river_levels.return_value = []
     river.detect_floods.return_value = []
 
-    ice = mocker.patch("src.main.ice_mass")
+    ice = MagicMock()
+    monkeypatch.setattr("src.main.ice_mass", ice)
     ice.fetch_grace_mass.return_value = []
     ice.detect_monthly_record.return_value = None
     ice.detect_cumulative_milestone.return_value = None
 
-    synth = mocker.patch("src.main.synthesis")
+    synth = MagicMock()
+    monkeypatch.setattr("src.main.synthesis", synth)
     synth.detect_fire_drought_heat.return_value = []
 
-    ghcn = mocker.patch("src.main.ghcn")
+    ghcn = MagicMock()
+    monkeypatch.setattr("src.main.ghcn", ghcn)
     ghcn.check_extreme_signals_for_stations.return_value = ([], [])
 
-    ff = mocker.patch("src.main.fire_footprint")
+    ff = MagicMock()
+    monkeypatch.setattr("src.main.fire_footprint", ff)
     ff.fetch_active_fire_perimeters.return_value = []
     ff.detect_tier_crossings.return_value = []
     ff.TIERS_HECTARES = [20_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]

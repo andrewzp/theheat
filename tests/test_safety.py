@@ -180,6 +180,14 @@ class TestWeatherServiceBoilerplate:
         passed, _ = check_regex("Life-threatening storm surge at Guam.")
         assert not passed
 
+    def test_deadly_rejected(self):
+        passed, _ = check_regex("Deadly storm surge at Guam.")
+        assert not passed
+
+    def test_monster_storm_rejected(self):
+        passed, _ = check_regex("Monster storm near Luzon, now Category 4.")
+        assert not passed
+
     def test_dangerous_conditions_rejected(self):
         passed, _ = check_regex("Dangerous conditions developing along the coast.")
         assert not passed
