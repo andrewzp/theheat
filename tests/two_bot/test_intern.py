@@ -371,6 +371,101 @@ def test_build_anomaly_bundle_classifies_kind_by_sign():
     assert build_anomaly_bundle(cold).signal_kind == "anomaly_cold"
 
 
+def test_build_fire_bundle_adds_sahel_climate_context():
+    fire = _fire_event(lat=13.5, lon=-4.2, region="Mali", country="ML")
+    bundle = build_fire_bundle(fire)
+
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["region_climate_system"] == "the Sahel"
+    assert labels["climate_mechanism_note"] == (
+        "a semi-arid transition zone sits between the Sahara and wetter savanna"
+    )
+    assert labels["season_context"] == "sharp wet-dry seasonal transition"
+
+
+def test_build_monthly_high_bundle_adds_western_pacific_warm_pool_context():
+    ev = MonthlyRecord(
+        city="Chuuk",
+        country="Micronesia",
+        kind="high",
+        month=5,
+        new_temp_c=34.0,
+        old_record_c=33.1,
+        old_record_year=2019,
+        years_of_data=30,
+        event_id="monthly_high_Chuuk_2026-05-14",
+        lat=7.4,
+        lon=151.8,
+    )
+    bundle = build_monthly_high_bundle(ev)
+
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["region_climate_system"] == "the western Pacific warm pool"
+    assert labels["climate_mechanism_note"] == (
+        "persistently warm tropical ocean water anchors deep convection"
+    )
+
+
+def test_build_record_bundle_adds_androscoggin_topography_context():
+    ev = RecordEvent(
+        city="Bethel",
+        country="United States",
+        new_temp_c=-4.0,
+        old_record_c=-2.0,
+        old_record_year=1981,
+        event_id="cal_low_Bethel_2026-05-14",
+        kind="low",
+        state="Maine",
+        lat=44.4,
+        lon=-70.8,
+    )
+    bundle = build_record_bundle(ev, source="ghcn")
+
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["region_climate_system"] == "the northern New England mountain-valley climate"
+    assert labels["local_topography_note"] == (
+        "the Androscoggin River valley sits near the White Mountains"
+    )
+
+
+def test_build_anomaly_bundle_adds_eastern_mongolian_steppe_context():
+    ev = AnomalyEvent(
+        city="Choibalsan",
+        country="Mongolia",
+        today_temp_c=33.0,
+        historical_mean_c=18.0,
+        anomaly_c=15.0,
+        years_of_data=30,
+        event_id="anomaly_hot_Choibalsan_2026-05-14",
+        lat=46.5,
+        lon=114.0,
+    )
+    bundle = build_anomaly_bundle(ev)
+
+    labels = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert labels["region_climate_system"] == "the eastern Mongolian steppe"
+    assert labels["climate_mechanism_note"] == (
+        "continental grassland climate brings dry air and large temperature swings"
+    )
+
+
+def test_temperature_bundle_without_coordinates_has_no_climate_context():
+    ev = RecordEvent(
+        city="Reykjavik",
+        country="Iceland",
+        new_temp_c=15.0,
+        old_record_c=14.0,
+        old_record_year=2020,
+        event_id="record_Reykjavik_2026-05-03",
+    )
+    bundle = build_record_bundle(ev)
+
+    labels = {f["label"] for f in bundle.current_facts}
+    assert "region_climate_system" not in labels
+    assert "climate_mechanism_note" not in labels
+    assert "local_topography_note" not in labels
+
+
 def test_build_record_streak_bundle_includes_consecutive_days():
     ev = RecordStreakEvent(
         city="Sevilla", country="Spain",

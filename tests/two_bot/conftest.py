@@ -66,8 +66,10 @@ def _fire_event(
     region: str = "Mali",
     frp: float = 361.0,
     confidence: int = 95,
+    lat: float = 13.5,
+    lon: float = -4.2,
 ) -> FireEvent:
-    return FireEvent(13.5, -4.2, confidence, frp, region, country, event_id)
+    return FireEvent(lat, lon, confidence, frp, region, country, event_id)
 
 
 def _empty_memory_state() -> dict:
@@ -201,4 +203,3 @@ def _passing_fact_check(extracted=None) -> FactCheckResult:
         raw_response="ok",
         extracted_claims=extracted or [],
     )
-
