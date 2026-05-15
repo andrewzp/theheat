@@ -115,3 +115,34 @@ class FactCheckResult:
             "raw_response": self.raw_response,
             "extracted_claims": [c.to_dict() for c in self.extracted_claims],
         }
+
+
+@dataclass
+class CriticResult:
+    """Second-pass editorial critic verdict.
+
+    The critic runs after fact_check passes and acts as the final
+    editorial gate before a draft enters the human-approval queue.
+    PASS/KILL only — no rewrite loop in v1.
+    """
+
+    passed: bool
+    kill_reason: str | None
+    raw_response: str
+
+    def __post_init__(self) -> None:
+        if self.passed and self.kill_reason is not None:
+            raise ValueError(
+                "CriticResult invariant violated: kill_reason must be None when passed=True"
+            )
+        if not self.passed and not self.kill_reason:
+            raise ValueError(
+                "CriticResult invariant violated: kill_reason required when passed=False"
+            )
+
+    def to_dict(self) -> dict:
+        return {
+            "passed": self.passed,
+            "kill_reason": self.kill_reason,
+            "raw_response": self.raw_response,
+        }

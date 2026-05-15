@@ -185,6 +185,35 @@ def mock_safety(monkeypatch):
     return mock
 
 
+@pytest.fixture
+def mock_critic(monkeypatch):
+    """Patch the in-pipeline critic call. Default: passes.
+
+    NOT autouse — tests that exercise generate_draft / generate_fire_draft
+    need to take this fixture explicitly. ``test_pipeline.py`` makes it
+    autouse at the module scope so its pre-existing tests stay green
+    without per-test edits; ``test_critic.py`` (which exercises the real
+    critic_review function via a separately-mocked _call_gemini) does
+    NOT pull this fixture in, so the real function runs.
+
+    Override pattern:
+
+        mock_critic.return_value = CriticResult(
+            passed=False,
+            kill_reason="template_convergence: same opener as Fiji",
+            raw_response="...",
+        )
+    """
+    from src.two_bot import pipeline
+    from src.two_bot.types import CriticResult
+
+    mock = MagicMock(return_value=CriticResult(
+        passed=True, kill_reason=None, raw_response="default-pass"
+    ))
+    monkeypatch.setattr(pipeline.critic, "critic_review", mock)
+    return mock
+
+
 def _writer_result(tweet: str = "Mali fire test") -> WriterResult:
     return WriterResult(
         tweet=tweet,

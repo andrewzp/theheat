@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import os
+
 from src.data.firms import FireEvent
 from src.state_schema import BotState
-from src.two_bot import claim_extractor, fact_check, memory, writer
+from src.two_bot import claim_extractor, critic, fact_check, memory, writer
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.types import StoryBundle
 from src.voice.safety import run_safety_pipeline
+
+
+def _critic_enabled() -> bool:
+    """Operations kill-switch for the critic stage.
+
+    Defaults to enabled. Set ``THEHEAT_CRITIC_ENABLED=0`` (or
+    ``false``/``off``/``no``) to skip the critic without touching the
+    code path — useful if the critic ever starts over-killing drafts
+    in production and we need to triage without a deploy.
+    """
+
+    raw = os.environ.get("THEHEAT_CRITIC_ENABLED", "").strip().lower()
+    return raw not in {"0", "false", "off", "no"}
 
 
 def generate_draft(
@@ -84,22 +99,48 @@ def generate_draft(
             _record_kill("fact_check", failures_str or "unknown")
             return None
 
+        # Stage 5: editorial critic — final gate before the draft reaches
+        # the human-approval queue. Sees cross-draft context the writer
+        # cannot (same-day pending drafts), so it catches template
+        # convergence in a single cron run. Kill-switch via
+        # THEHEAT_CRITIC_ENABLED=0 if the critic over-kills in production.
+        critic_result = None
+        if _critic_enabled():
+            shipped_recent = memory_slice.shipped_tweet_texts[:10]
+            critic_result = critic.critic_review(
+                writer_result.tweet,
+                bundle,
+                state,
+                shipped_recent=shipped_recent,
+            )
+            if not critic_result.passed:
+                print(
+                    f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
+                    f"draft: {critic_result.kill_reason}"
+                )
+                _record_kill("critic", critic_result.kill_reason or "unknown")
+                return None
+
         canonical_claims = fact_result.extracted_claims or extracted
         memory.record_shipped(state, bundle, writer_result, canonical_claims)
+        metadata = {
+            "signal_kind": bundle.signal_kind,
+            "angle_chosen": writer_result.angle_chosen,
+            "era_anchor_used": writer_result.era_anchor_used,
+            "peer_comparison_used": writer_result.peer_comparison_used,
+            "reasoning": writer_result.reasoning,
+            "fact_check": fact_result.to_dict(),
+            "writer_model": writer.WRITER_MODEL,
+            "fact_checker_model": fact_check.FACT_CHECKER_MODEL,
+        }
+        if critic_result is not None:
+            metadata["critic"] = critic_result.to_dict()
+            metadata["critic_model"] = critic.CRITIC_MODEL
         return {
             "type": bundle.signal_kind,
             "text": writer_result.tweet,
             "event_id": bundle.event_id,
-            "two_bot_metadata": {
-                "signal_kind": bundle.signal_kind,
-                "angle_chosen": writer_result.angle_chosen,
-                "era_anchor_used": writer_result.era_anchor_used,
-                "peer_comparison_used": writer_result.peer_comparison_used,
-                "reasoning": writer_result.reasoning,
-                "fact_check": fact_result.to_dict(),
-                "writer_model": writer.WRITER_MODEL,
-                "fact_checker_model": fact_check.FACT_CHECKER_MODEL,
-            },
+            "two_bot_metadata": metadata,
         }
     except Exception as exc:
         print(
