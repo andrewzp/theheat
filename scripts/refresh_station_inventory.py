@@ -130,7 +130,6 @@ def main() -> int:
     print(f"\nWriting to {args.db} ...", flush=True)
     t0 = time.monotonic()
     with open_db(args.db) as conn:
-        batch: list = []
         for i, meta in enumerate(stations, 1):
             inv = inv_by_station.get(meta.station_id, [])
             country_name = countries.get(meta.country_code_inferred(), "")
