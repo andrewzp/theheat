@@ -1,0 +1,422 @@
+"""Temperature two-bot intern builders."""
+
+
+
+from __future__ import annotations
+
+
+
+from dataclasses import asdict
+
+from datetime import date
+
+from src.data.ghcn import normalize_station_name
+
+from src.data.open_meteo import AllTimeRecord
+
+from src.data.open_meteo import AnomalyEvent
+
+from src.data.open_meteo import CountryRecord
+
+from src.data.open_meteo import MonthlyRecord
+
+from src.data.open_meteo import RecordEvent
+
+from src.data.open_meteo import RecordStreakEvent
+
+from src.two_bot.types import StoryBundle
+
+from ._shared import _MONTH_NAMES, _audience_unit_facts, _c_to_f, _climate_context_facts, _format_where, _ghcn_observation_facts, _headline_temp_label, _resolve_when
+
+
+
+def build_monthly_high_bundle(ev: MonthlyRecord, *, source: str = "open_meteo") -> StoryBundle:
+    """Assemble a StoryBundle for a monthly high-temperature record signal.
+
+    Args:
+        ev:     The ``MonthlyRecord`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed station records (emits
+                ``observed_*_c``); ``"open_meteo"`` (default) for forecast
+                data (emits ``forecast_*_c``).
+    """
+
+    month_name = _MONTH_NAMES[ev.month] if 1 <= ev.month <= 12 else str(ev.month)
+    state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
+    metric_label = _headline_temp_label(ev.kind, source)
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
+    return StoryBundle(
+        signal_kind=f"monthly_{ev.kind}",
+        where=where,
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": metric_label,
+            "value": ev.new_temp_c,
+            "unit": "C",
+            "value_f": new_temp_f,
+        },
+        current_facts=[
+            {"label": "city", "value": city},
+            {"label": "country", "value": ev.country},
+            {"label": "month", "value": month_name},
+            {"label": "kind", "value": ev.kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
+            *_ghcn_observation_facts(state, ev.kind),
+            *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=ev.kind,
+            ),
+        ],
+        historical_context={
+            "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
+            "prior_record_year": ev.old_record_year,
+            "archive_years": ev.years_of_data,
+            "month": month_name,
+            "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
+        },
+        raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_country_record_bundle(cr: CountryRecord) -> StoryBundle:
+    """Assemble a StoryBundle for a country-level archive-record signal."""
+
+    return StoryBundle(
+        signal_kind=f"country_{cr.kind}",
+        where=cr.country,
+        when=_resolve_when(cr.signal_date),
+        event_id=cr.event_id,
+        headline_metric={
+            "label": "country_archive_peak_c",
+            "value": cr.new_temp_c,
+            "unit": "C",
+        },
+        current_facts=[
+            {"label": "country", "value": cr.country},
+            {"label": "peak_city_today", "value": cr.peak_city},
+            {"label": "prior_peak_city", "value": cr.old_record_city},
+            {"label": "kind", "value": cr.kind},
+        ],
+        historical_context={
+            "prior_peak_c": cr.old_record_c,
+            "prior_peak_year": cr.old_record_year,
+            "prior_peak_city": cr.old_record_city,
+            "archive_years": cr.years_of_data,
+            "cities_sampled": cr.cities_sampled,
+            "kind": cr.kind,
+            "margin_c": round(cr.new_temp_c - cr.old_record_c, 2),
+        },
+        raw_signal_dump=asdict(cr),
+    )
+
+def build_record_bundle(ev: RecordEvent, *, source: str = "open_meteo") -> StoryBundle:
+    """Assemble a StoryBundle for a calendar-day record signal.
+
+    "Calendar-day record" means a city is forecast to break the previous
+    record for *this specific date* (e.g. May 3). These signals fire
+    routinely in temperate climates, so the editorial bar should be high
+    — the writer's discipline (and the empty-margin guard) decides
+    whether it ships, not the absolute temperature.
+
+    Args:
+        ev:     The ``RecordEvent`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data.
+    """
+
+    kind = getattr(ev, "kind", "high")
+    state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
+    where = _format_where(city, ev.country, state)
+    when = _resolve_when(ev.signal_date)
+    return StoryBundle(
+        signal_kind="calendar_record" if kind == "high" else "calendar_record_low",
+        where=where,
+        when=when,
+        event_id=ev.event_id,
+        headline_metric={
+            "label": _headline_temp_label(kind, source),
+            "value": ev.new_temp_c,
+            "unit": "C",
+            "value_f": new_temp_f,
+        },
+        current_facts=[
+            {"label": "city", "value": city},
+            {"label": "country", "value": ev.country},
+            {"label": "calendar_date", "value": when},
+            {"label": "kind", "value": kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
+            *_ghcn_observation_facts(state, kind),
+            *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=kind,
+            ),
+        ],
+        historical_context={
+            "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
+            "prior_record_year": ev.old_record_year,
+            "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
+            "scope": "calendar_date_only",
+            "kind": kind,
+        },
+        raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo") -> StoryBundle:
+    """City broke (or is forecast to break) its archive-record temperature.
+
+    Highest-tier temperature signal — a ``+0.5C over a 50-year archive``
+    is a real headline. The writer should treat the archive span as the
+    rarity peg.
+
+    Args:
+        ev:     The ``AllTimeRecord`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data.
+    """
+
+    state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
+    new_temp_f = _c_to_f(ev.new_temp_c)
+    old_record_f = _c_to_f(ev.old_record_c)
+    margin_c = round(ev.new_temp_c - ev.old_record_c, 2)
+    return StoryBundle(
+        signal_kind=f"open_meteo_archive_{ev.kind}",
+        where=where,
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": _headline_temp_label(ev.kind, source),
+            "value": ev.new_temp_c,
+            "unit": "C",
+            "value_f": new_temp_f,
+        },
+        current_facts=[
+            {"label": "city", "value": city},
+            {"label": "country", "value": ev.country},
+            {"label": "kind", "value": ev.kind},
+            {"label": "today_temp_c", "value": ev.new_temp_c},
+            {"label": "today_temp_f", "value": new_temp_f},
+            *_ghcn_observation_facts(state, ev.kind),
+            *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=ev.kind,
+            ),
+        ],
+        historical_context={
+            "prior_record_c": ev.old_record_c,
+            "prior_record_f": old_record_f,
+            "prior_record_year": ev.old_record_year,
+            "archive_years": ev.years_of_data,
+            "archive_start_year": date.today().year - ev.years_of_data,
+            "archive_window_only": True,
+            "kind": ev.kind,
+            "margin_c": margin_c,
+            "margin_f": (new_temp_f - old_record_f)
+                if (new_temp_f is not None and old_record_f is not None)
+                else None,
+            "scope": "archive_history",
+            "forbidden_claims": [
+                "all-time high",
+                "all-time low",
+                "hottest ever",
+                "coldest ever",
+                "highest ever",
+                "lowest ever",
+                "in recorded history",
+            ],
+        },
+        raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> StoryBundle:
+    """Today's reading is far above (or below) the historical mean.
+
+    Args:
+        ev:     The ``AnomalyEvent`` dataclass from Open-Meteo or GHCN.
+        source: ``"ghcn"`` for GHCN observed records; ``"open_meteo"``
+                (default) for forecast data. Passed through so callers are
+                consistent; anomaly headline_metric uses ``anomaly_c`` label
+                regardless of source.
+    """
+
+    state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
+    kind = "hot" if ev.anomaly_c >= 0 else "cold"
+    # Map anomaly direction to TMAX/TMIN observation framing for the
+    # observation_kind fact: hot anomalies derive from afternoon highs,
+    # cold anomalies from overnight lows.
+    obs_kind = "high" if kind == "hot" else "low"
+    today_temp_f = _c_to_f(ev.today_temp_c)
+    historical_mean_f = _c_to_f(ev.historical_mean_c)
+    # Anomaly itself is a delta — convert via 9/5 scaling, no offset.
+    anomaly_f = (
+        round(ev.anomaly_c * 9 / 5)
+        if ev.anomaly_c is not None
+        else None
+    )
+    return StoryBundle(
+        signal_kind=f"anomaly_{kind}",
+        where=where,
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": "anomaly_c",
+            "value": ev.anomaly_c,
+            "unit": "C",
+            "value_f": anomaly_f,
+        },
+        current_facts=[
+            {"label": "city", "value": city},
+            {"label": "country", "value": ev.country},
+            {"label": "today_c", "value": ev.today_temp_c},
+            {"label": "today_f", "value": today_temp_f},
+            {"label": "historical_mean_c", "value": ev.historical_mean_c},
+            {"label": "historical_mean_f", "value": historical_mean_f},
+            {"label": "anomaly_c", "value": ev.anomaly_c},
+            {"label": "anomaly_f", "value": anomaly_f},
+            *_ghcn_observation_facts(state, obs_kind),
+            *_audience_unit_facts(ev.country),
+            *_climate_context_facts(
+                getattr(ev, "lat", None),
+                getattr(ev, "lon", None),
+                category=kind,
+            ),
+        ],
+        historical_context={
+            "historical_mean_c": ev.historical_mean_c,
+            "anomaly_c": ev.anomaly_c,
+            "archive_years": ev.years_of_data,
+            "scope": "monthly_baseline",
+        },
+        raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_record_streak_bundle(ev: RecordStreakEvent) -> StoryBundle:
+    """A city has broken its daily record N consecutive days."""
+
+    where = f"{ev.city}, {ev.country}" if ev.country else ev.city
+    return StoryBundle(
+        signal_kind="record_streak",
+        where=where,
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": "consecutive_days",
+            "value": ev.consecutive_days,
+            "unit": "days",
+        },
+        current_facts=[
+            {"label": "city", "value": ev.city},
+            {"label": "country", "value": ev.country},
+            {"label": "consecutive_days", "value": ev.consecutive_days},
+            {"label": "start_date", "value": ev.start_date},
+            {"label": "peak_temp_c", "value": ev.peak_temp_c},
+        ],
+        historical_context={
+            "scope": "consecutive_calendar_records",
+            "start_date": ev.start_date,
+            "peak_temp_c": ev.peak_temp_c,
+        },
+        raw_signal_dump=asdict(ev),
+    )
+
+def build_simultaneous_records_bundle(
+    stations: list[dict],
+    *,
+    event_id: str,
+    when: str | None = None,
+) -> StoryBundle:
+    """Many cities broke their calendar-day record on the same day.
+
+    ``stations`` is the list of per-station dicts main.py builds in the
+    extreme-signals loop (city, country, temp_c, kind, old_record_c,
+    old_record_year, margin_c, elevation_m). Geographic spread and
+    elevation diversity are the story.
+    """
+
+    when = when or date.today().isoformat()
+    countries = sorted({s.get("country", "") for s in stations if s.get("country")})
+    cities = [s.get("city", "") for s in stations if s.get("city")]
+    return StoryBundle(
+        signal_kind="simultaneous_records",
+        where=", ".join(countries) if countries else "global",
+        when=when,
+        event_id=event_id,
+        headline_metric={
+            "label": "stations_breaking_record",
+            "value": len(stations),
+            "unit": "cities",
+        },
+        current_facts=[
+            {"label": "station_count", "value": len(stations)},
+            {"label": "countries", "value": countries},
+            {"label": "cities", "value": cities},
+        ],
+        historical_context={
+            "scope": "same_day_calendar_records",
+            "stations": stations,  # full per-station detail for the writer
+        },
+        raw_signal_dump={"stations": stations, "event_id": event_id},
+    )
+
+def build_hot10_bundle(
+    cities: list[dict],
+    *,
+    changes: list[str],
+    event_id: str,
+) -> StoryBundle:
+    """Daily Hot 10 leaderboard.
+
+    ``cities`` is the ranked list of {city, country, temp_high_c,
+    normal_high_c, anomaly_c}. ``changes`` is the precomputed
+    rank-shift / new-entry strings the writer can paraphrase.
+    """
+
+    leader = cities[0] if cities else None
+    return StoryBundle(
+        signal_kind="hot10",
+        where=f"{leader['city']}, {leader['country']}" if leader else "global",
+        when=date.today().isoformat(),
+        event_id=event_id,
+        headline_metric={
+            "label": "top_anomaly_c",
+            "value": leader["anomaly_c"] if leader else None,
+            "unit": "C",
+        },
+        current_facts=[
+            {"label": "leader_city", "value": leader["city"] if leader else None},
+            {"label": "leader_country", "value": leader["country"] if leader else None},
+            {"label": "leader_temp_c", "value": leader["temp_high_c"] if leader else None},
+            {"label": "leader_anomaly_c", "value": leader["anomaly_c"] if leader else None},
+            {"label": "city_count", "value": len(cities)},
+            {"label": "cities", "value": cities},
+            {"label": "rank_changes", "value": changes},
+        ],
+        historical_context={"scope": "daily_top10_anomaly_leaderboard"},
+        raw_signal_dump={"cities": cities, "changes": changes, "event_id": event_id},
+    )
