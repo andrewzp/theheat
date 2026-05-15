@@ -4,7 +4,7 @@ from copy import deepcopy
 import json
 import os
 from datetime import UTC, date, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 import requests
 
@@ -44,6 +44,18 @@ DEFAULT_STATE: BotState = {
     # calendar year; last_milestone dedupes the NOAA monthly series.
     "ch4_annual_count": {},
     "ch4_last_milestone": None,
+    # Monthly climate-mode indices (Lane 14). Counts are keyed by calendar
+    # year; last_phase records the newest observed sign so state/debug views
+    # can show the current regime even when no draft fires.
+    "nao_annual_count": {},
+    "ao_annual_count": {},
+    "pdo_annual_count": {},
+    "nao_last_phase": None,
+    "ao_last_phase": None,
+    "pdo_last_phase": None,
+    # Antarctic ozone hole annual peak state. Keyed by year string.
+    "ozone_hole_last_peak": {},
+    "ozone_hole_annual_count": {},
     "drafts": [],
     "run_history": [],
     "errors": [],
@@ -599,6 +611,26 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
         merged["ch4_last_milestone"] = base_ch4
     else:
         merged["ch4_last_milestone"] = max(int(base_ch4), int(next_ch4))
+    merged_writeable: dict = cast(dict, merged)
+    for key in ("nao_annual_count", "ao_annual_count", "pdo_annual_count", "ozone_hole_annual_count"):
+        base_counts = cast(dict, base.get(key, {}))
+        next_counts = cast(dict, next_state.get(key, {}))
+        merged_counts: dict[str, int] = {}
+        for year in set(
+            list(base_counts.keys())
+            + list(next_counts.keys())
+        ):
+            merged_counts[year] = max(
+                int(base_counts.get(year, 0) or 0),
+                int(next_counts.get(year, 0) or 0),
+            )
+        merged_writeable[key] = merged_counts
+    for key in ("nao_last_phase", "ao_last_phase", "pdo_last_phase"):
+        merged_writeable[key] = next_state.get(key, base.get(key))
+    merged["ozone_hole_last_peak"] = _merge_ozone_hole_last_peak(
+        base.get("ozone_hole_last_peak"),
+        next_state.get("ozone_hole_last_peak"),
+    )
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
@@ -854,6 +886,29 @@ def _merge_synthesis_components(
             n_snap if n_at >= b_at else b_snap
         )
     return merged
+
+
+def _merge_ozone_hole_last_peak(current: dict | None, incoming: dict | None) -> dict:
+    merged = deepcopy(current or {})
+    for year, payload in (incoming or {}).items():
+        if not isinstance(payload, dict):
+            continue
+        existing = merged.get(year)
+        if not isinstance(existing, dict):
+            merged[year] = deepcopy(payload)
+            continue
+        existing_area = _safe_float(existing.get("area_million_km2"))
+        incoming_area = _safe_float(payload.get("area_million_km2"))
+        if incoming_area >= existing_area:
+            merged[year] = deepcopy(payload)
+    return merged
+
+
+def _safe_float(value: object) -> float:
+    try:
+        return float(cast(Any, value))
+    except (TypeError, ValueError):
+        return float("-inf")
 
 
 def _merge_synthesis_cooldown(
@@ -1376,6 +1431,51 @@ def increment_ch4_annual_count(state: BotState) -> BotState:
 
     year = str(date.today().year)
     counts = state.setdefault("ch4_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def increment_oscillation_annual_count(state: BotState, index_name: str) -> BotState:
+    """Track NAO/AO/PDO draft volume against per-index annual caps."""
+
+    key = f"{index_name.lower()}_annual_count"
+    year = str(date.today().year)
+    counts = cast(dict, state).setdefault(key, {})
+    counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def update_oscillation_last_phase(
+    state: BotState,
+    index_name: str,
+    phase: str,
+) -> BotState:
+    """Store the latest observed NAO/AO/PDO phase."""
+
+    cast(dict, state)[f"{index_name.lower()}_last_phase"] = phase
+    return state
+
+
+def record_ozone_hole_peak(state: BotState, event) -> BotState:
+    """Persist the latest annual Antarctic ozone hole peak payload."""
+
+    peaks = state.setdefault("ozone_hole_last_peak", {})
+    peaks[str(event.year)] = {
+        "peak_date": event.peak_date,
+        "area_million_km2": event.area_million_km2,
+        "previous_year": event.previous_year,
+        "previous_area_million_km2": event.previous_area_million_km2,
+        "record_year": event.record_year,
+        "record_area_million_km2": event.record_area_million_km2,
+    }
+    return state
+
+
+def increment_ozone_hole_annual_count(state: BotState) -> BotState:
+    """Track annual ozone-hole draft volume."""
+
+    year = str(date.today().year)
+    counts = state.setdefault("ozone_hole_annual_count", {})
     counts[year] = int(counts.get(year, 0)) + 1
     return state
 

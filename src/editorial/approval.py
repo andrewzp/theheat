@@ -92,6 +92,33 @@ def recommend_approval_policy(
             reason="Methane drafts are safe to auto-queue, but middling copy should wait for review.",
         )
 
+    if tweet_type == "oscillation_transition":
+        return ApprovalPolicy(
+            key="oscillation_transition_auto_window",
+            mode="armed_auto",
+            recommended_delay_minutes=60,
+            can_auto_approve=True,
+            reason="High-confidence NOAA monthly climate-mode phase shift with low blast radius.",
+        )
+
+    if tweet_type in {"oscillation_extreme", "oscillation_alignment"}:
+        return ApprovalPolicy(
+            key="oscillation_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=90,
+            can_auto_approve=True,
+            reason="Low-sensitivity climate-mode signal, but long-cycle framing benefits from review.",
+        )
+
+    if tweet_type == "ozone_hole_peak":
+        return ApprovalPolicy(
+            key="ozone_hole_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=120,
+            can_auto_approve=True,
+            reason="Annual NASA ozone-hole recovery signal. Review window keeps the framing measured.",
+        )
+
     if tweet_type in {"country_high", "country_low"}:
         # The biggest story the pipeline produces — but rare enough to keep
         # a human-aware review window. Suggested-auto, longer delay.

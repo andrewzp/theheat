@@ -26,8 +26,12 @@ from src.state import (
     record_cyclone_wind_observation,
     increment_ch4_annual_count,
     increment_coral_dhw_annual_count,
+    increment_oscillation_annual_count,
+    increment_ozone_hole_annual_count,
     increment_cyclone_annual_count,
     increment_flood_annual_count,
+    update_oscillation_last_phase,
+    record_ozone_hole_peak,
     get_record_streak,
     prune_stale_record_streaks,
     log_error,
@@ -444,6 +448,88 @@ class TestLane08State:
         assert merged["ch4_last_milestone"] == 1940
         assert merged["coral_dhw_last_tier"] == {"gbr_northern": 8, "florida_keys": 4}
         assert merged["coral_dhw_annual_count"]["2026"] == 4
+
+
+class TestLane14State:
+    def test_default_state_has_climate_index_and_ozone_trackers(self):
+        assert DEFAULT_STATE["nao_annual_count"] == {}
+        assert DEFAULT_STATE["ao_annual_count"] == {}
+        assert DEFAULT_STATE["pdo_annual_count"] == {}
+        assert DEFAULT_STATE["nao_last_phase"] is None
+        assert DEFAULT_STATE["ozone_hole_last_peak"] == {}
+        assert DEFAULT_STATE["ozone_hole_annual_count"] == {}
+
+    @patch("src.state.date")
+    def test_increment_lane14_annual_counts(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 11, 5)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+
+        increment_oscillation_annual_count(fresh_state, "NAO")
+        increment_oscillation_annual_count(fresh_state, "PDO")
+        increment_ozone_hole_annual_count(fresh_state)
+
+        assert fresh_state["nao_annual_count"]["2026"] == 1
+        assert fresh_state["pdo_annual_count"]["2026"] == 1
+        assert fresh_state["ozone_hole_annual_count"]["2026"] == 1
+
+    def test_update_oscillation_last_phase(self, fresh_state):
+        update_oscillation_last_phase(fresh_state, "AO", "Negative")
+
+        assert fresh_state["ao_last_phase"] == "Negative"
+
+    def test_record_ozone_hole_peak_payload(self, fresh_state):
+        from src.data.ozone_hole import OzoneHoleSeasonalEvent
+
+        event = OzoneHoleSeasonalEvent(
+            year=2026,
+            peak_date="2026-09-20",
+            area_million_km2=23.0,
+            previous_year=2025,
+            previous_area_million_km2=20.8,
+            record_year=2000,
+            record_area_million_km2=29.9,
+            trailing_10yr_mean_area_million_km2=21.4,
+            larger_than_previous_year=True,
+            event_id="ozone_hole_peak_2026",
+        )
+
+        record_ozone_hole_peak(fresh_state, event)
+
+        assert fresh_state["ozone_hole_last_peak"]["2026"]["peak_date"] == "2026-09-20"
+        assert fresh_state["ozone_hole_last_peak"]["2026"]["area_million_km2"] == 23.0
+
+    def test_merge_state_keeps_max_counts_and_larger_ozone_peak(self):
+        from src.state import _merge_state
+
+        current = {
+            "nao_annual_count": {"2026": 2},
+            "ao_annual_count": {"2026": 1},
+            "pdo_annual_count": {"2026": 3},
+            "ozone_hole_annual_count": {"2026": 1},
+            "nao_last_phase": "Positive",
+            "ozone_hole_last_peak": {
+                "2026": {"peak_date": "2026-09-19", "area_million_km2": 22.0}
+            },
+        }
+        incoming = {
+            "nao_annual_count": {"2026": 1, "2025": 4},
+            "ao_annual_count": {"2026": 3},
+            "pdo_annual_count": {"2026": 1},
+            "ozone_hole_annual_count": {"2026": 2},
+            "nao_last_phase": "Negative",
+            "ozone_hole_last_peak": {
+                "2026": {"peak_date": "2026-09-20", "area_million_km2": 23.0}
+            },
+        }
+
+        merged = _merge_state(current, incoming)
+
+        assert merged["nao_annual_count"] == {"2026": 2, "2025": 4}
+        assert merged["ao_annual_count"] == {"2026": 3}
+        assert merged["pdo_annual_count"] == {"2026": 3}
+        assert merged["ozone_hole_annual_count"] == {"2026": 2}
+        assert merged["nao_last_phase"] == "Negative"
+        assert merged["ozone_hole_last_peak"]["2026"]["area_million_km2"] == 23.0
 
 
 class TestDraftTrimming:
@@ -966,6 +1052,26 @@ class TestSqliteRoundTripLaneKeys:
         out = self._sqlite_round_trip(state_in)
         assert out["flood_activation_tiers"] == {"EMSR999": "Major"}
         assert out["flood_annual_count"] == {"2026": 2}
+
+    def test_round_trip_preserves_lane14_state(self):
+        state_in = {
+            "nao_annual_count": {"2026": 2},
+            "ao_annual_count": {"2026": 3},
+            "pdo_annual_count": {"2026": 1},
+            "nao_last_phase": "Negative",
+            "ao_last_phase": "Negative",
+            "pdo_last_phase": "Positive",
+            "ozone_hole_last_peak": {
+                "2026": {"peak_date": "2026-09-20", "area_million_km2": 23.0}
+            },
+            "ozone_hole_annual_count": {"2026": 1},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["nao_annual_count"] == {"2026": 2}
+        assert out["ao_annual_count"] == {"2026": 3}
+        assert out["pdo_last_phase"] == "Positive"
+        assert out["ozone_hole_last_peak"]["2026"]["area_million_km2"] == 23.0
+        assert out["ozone_hole_annual_count"] == {"2026": 1}
 
     def test_round_trip_preserves_city_extreme_trackers(self):
         state_in = {

@@ -95,6 +95,21 @@ def score_enso_transition(*args: Any, **kwargs: Any) -> EditorialScore:
     return _atmospheric.score_enso_transition(*args, **kwargs)
 
 
+def score_oscillation_transition(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _atmospheric.score_oscillation_transition(*args, **kwargs)
+
+
+def score_oscillation_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _atmospheric.score_oscillation_extreme(*args, **kwargs)
+
+
+def score_ozone_hole_peak(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _atmospheric.score_ozone_hole_peak(*args, **kwargs)
+
+
 def score_coral_bleaching(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _marine.score_coral_bleaching(*args, **kwargs)
@@ -210,6 +225,9 @@ __all__ = [
     "score_co2_milestone",
     "score_ch4_milestone",
     "score_enso_transition",
+    "score_oscillation_transition",
+    "score_oscillation_extreme",
+    "score_ozone_hole_peak",
     "score_coral_bleaching",
     "score_sea_ice_record",
     "score_ice_mass_event",

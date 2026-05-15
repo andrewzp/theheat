@@ -7,6 +7,7 @@ from src.orchestrator.common import *
 from src.orchestrator.finalize import _prune_weakest_cycle_drafts
 from src.orchestrator.sources.co2 import run_co2
 from src.orchestrator.sources.co_ops import run_water_levels
+from src.orchestrator.sources.climate_indices import run_climate_indices
 from src.orchestrator.sources.copernicus_ems import run_copernicus_ems
 from src.orchestrator.sources.coral_dhw import run_coral_dhw
 from src.orchestrator.sources.drought import run_drought
@@ -21,6 +22,7 @@ from src.orchestrator.sources.nifc import run_fire_footprint
 from src.orchestrator.sources.nws_alerts import run_nws_alerts
 from src.orchestrator.sources.nsidc_snow import run_nsidc_snow
 from src.orchestrator.sources.ocean_sst import run_ocean_sst
+from src.orchestrator.sources.ozone_hole import run_ozone_hole
 from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.orchestrator.sources.river_gauges import run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
@@ -105,6 +107,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_sea_ice(bot_state, current_run)
     drafted += run_drought(bot_state, current_run)
     drafted += run_enso(bot_state, current_run)
+    drafted += run_climate_indices(bot_state, current_run)
     drafted += run_ocean(bot_state, current_run)
     drafted += run_ocean_sst(bot_state, current_run)
     drafted += run_coral_dhw(bot_state, current_run)
@@ -113,6 +116,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_ice_mass(bot_state, current_run)
     drafted += run_gpm_imerg(bot_state, current_run, cities)
     drafted += run_nsidc_snow(bot_state, current_run)
+    drafted += run_ozone_hole(bot_state, current_run)
     drafted += run_synthesis(bot_state, current_run)
 
     drafted = _prune_weakest_cycle_drafts(

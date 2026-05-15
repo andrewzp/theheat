@@ -11,6 +11,9 @@ from src.editorial.scoring import (
     score_global_disaster,
     score_hot10,
     score_monthly_record,
+    score_oscillation_extreme,
+    score_oscillation_transition,
+    score_ozone_hole_peak,
     score_precipitation_extreme,
     score_record_event,
     score_record_streak,
@@ -184,6 +187,24 @@ class TestEditorialScoring:
 
         assert score.category == "seasonal_snow_record"
         assert score.passes
+
+    def test_score_oscillation_transition_passes(self):
+        score = score_oscillation_transition("NAO", -1.2, 5)
+        assert score.category == "oscillation_transition"
+        assert score.passes
+        assert any("NAO" in reason for reason in score.reasons)
+
+    def test_score_oscillation_extreme_passes_for_two_sigma(self):
+        score = score_oscillation_extreme("PDO", 2.4)
+        assert score.category == "oscillation_extreme"
+        assert score.passes
+        assert score.confidence >= 90
+
+    def test_score_ozone_hole_peak_uses_recovery_anchor(self):
+        score = score_ozone_hole_peak(23.0, 2000)
+        assert score.category == "ozone_hole_peak"
+        assert score.passes
+        assert any("2000" in reason for reason in score.reasons)
 
 
 class TestScoreIceMassEvent:

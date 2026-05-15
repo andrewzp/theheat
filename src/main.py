@@ -17,8 +17,8 @@ _alerts = importlib.import_module("src.orchestrator.run_alerts")
 _SOURCE_MODULES = (
     "open_meteo", "firms", "nifc", "co2", "methane", "nws_alerts",
     "gdacs", "copernicus_ems", "sea_ice", "drought", "enso", "marine",
-    "ocean_sst", "coral_dhw", "co_ops", "river_gauges", "ice_mass",
-    "gpm_imerg", "nsidc_snow", "synthesis",
+    "climate_indices", "ocean_sst", "coral_dhw", "co_ops", "river_gauges",
+    "ice_mass", "gpm_imerg", "nsidc_snow", "ozone_hole", "synthesis",
 )
 
 

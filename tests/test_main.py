@@ -259,6 +259,15 @@ def mock_alerts_pipeline_sources(monkeypatch):
     enso.fetch_enso_data.return_value = []
     enso.detect_transition.return_value = None
 
+    climate_indices = MagicMock()
+    monkeypatch.setattr("src.main.climate_indices", climate_indices)
+    climate_indices.fetch_nao.return_value = []
+    climate_indices.fetch_ao.return_value = []
+    climate_indices.fetch_pdo.return_value = []
+    climate_indices.detect_phase_transition.return_value = None
+    climate_indices.detect_extreme_excursion.return_value = None
+    climate_indices.detect_nao_ao_alignment.return_value = None
+
     ocean = MagicMock()
     monkeypatch.setattr("src.main.ocean", ocean)
     ocean.fetch_ocean_conditions.return_value = []
@@ -284,6 +293,12 @@ def mock_alerts_pipeline_sources(monkeypatch):
     ice.fetch_grace_mass.return_value = []
     ice.detect_monthly_record.return_value = None
     ice.detect_cumulative_milestone.return_value = None
+
+    ozone = MagicMock()
+    monkeypatch.setattr("src.main.ozone_hole", ozone)
+    ozone.fetch_ozone_hole_data.return_value = []
+    ozone.fetch_ozone_hole_annual_peaks.return_value = []
+    ozone.detect_seasonal_peak.return_value = None
 
     synth = MagicMock()
     monkeypatch.setattr("src.main.synthesis", synth)

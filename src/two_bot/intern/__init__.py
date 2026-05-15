@@ -5,7 +5,7 @@ from __future__ import annotations
 from ._shared import _c_to_f, _is_us_country
 from .temperature import build_monthly_high_bundle, build_country_record_bundle, build_record_bundle, build_all_time_record_bundle, build_anomaly_bundle, build_record_streak_bundle, build_simultaneous_records_bundle, build_hot10_bundle
 from .fire import build_fire_bundle, build_fire_footprint_bundle
-from .atmospheric import build_co2_milestone_bundle, build_ch4_milestone_bundle, build_enso_bundle
+from .atmospheric import build_co2_milestone_bundle, build_ch4_milestone_bundle, build_enso_bundle, build_oscillation_bundle, build_ozone_hole_bundle
 from .disasters import build_severe_weather_bundle, build_global_disaster_bundle, build_cyclone_rapid_intensification_bundle, build_cyclone_tier_crossing_bundle, build_cyclone_landfall_bundle, build_cyclone_basin_record_bundle, build_river_flood_bundle, build_global_flood_bundle, build_storm_surge_bundle
 from .marine import build_coral_bleaching_bundle, build_sea_ice_bundle, build_ice_mass_bundle, build_marine_heatwave_bundle, build_extreme_wave_bundle
 from .drought import build_drought_bundle
@@ -28,6 +28,8 @@ __all__ = [
     "build_co2_milestone_bundle",
     "build_ch4_milestone_bundle",
     "build_enso_bundle",
+    "build_oscillation_bundle",
+    "build_ozone_hole_bundle",
     "build_severe_weather_bundle",
     "build_global_disaster_bundle",
     "build_cyclone_rapid_intensification_bundle",
