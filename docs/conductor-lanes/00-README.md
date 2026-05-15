@@ -1,31 +1,38 @@
 # Conductor Lanes — Parallel Workstreams
 
-## Currently startable (2026-05-15)
+## Status: wave-2 + wave-3 fully shipped (2026-05-15)
 
-### Queue order (revised 2026-05-15 to maximize parallelism)
+**All 12 lanes (05-16) from the 2026-05-14 → 2026-05-15 overnight wave are MERGED.** See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0 for the full landing summary.
 
-| # | Lane | Mode | Notes |
-|---|---|---|---|
-| 1 | [12 — Plan D: Global floods (Copernicus EMS)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/12-plan-d-global-floods.md) | sequential | in flight — touches monolithic main.py / scoring.py / intern.py |
-| 2 | **[16 — Monolith decomposition](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/16-main-py-refactor.md)** | sequential | **PROMOTED to step 2.** Splits main.py + scoring.py + intern.py by domain so subsequent lanes are truly parallel-safe. |
-| 3a | [13 — Plan E: Precip + Snow](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/13-plan-e-precip-snow.md) | **parallel** | new files in `orchestrator/sources/`, `scoring/precipitation.py`, `intern/precipitation.py` |
-| 3b | [14 — Plan F: Climate indices](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/14-plan-f-climate-indices.md) | **parallel** | new files in `orchestrator/sources/`, `scoring/atmospheric.py`, `intern/atmospheric.py` |
-| 3c | [15 — Threshold registry refactor](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/15-threshold-registry.md) | **parallel** | touches `scoring/_shared.py` + new `thresholds.py` — different files than E and F |
+### Shipped in the overnight wave
 
-After step 2 (Lane 16), 3a + 3b + 3c spawn in three concurrent Conductor workspaces. They touch different files (per-category split).
+| Lane | Status | PR(s) |
+|---|---|---|
+| [05 — Plan A foundation + restore + degraded fix](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/05-plan-a-foundation.md) | all 3 phases shipped | #99, #102, #105 |
+| [06 — Plan A state trim](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/06-plan-a-state-trim.md) | shipped | #98 |
+| [07 — Plan A dashboard /health view](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/07-plan-a-dashboard.md) | shipped | #101, #103 |
+| [08 — Plan B Coral DHW + CH4 methane](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/08-plan-b-coral-dhw-ch4.md) | shipped | #109 |
+| [09 — Plan C tropical cyclones](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/09-plan-c-tropical-cyclones.md) | shipped — ready for Atlantic season | #108 |
+| [10 — Docs cleanup](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | shipped | #106 |
+| [11 — F2 bundle enrichment](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | shipped | #107 |
+| [12 — Plan D Copernicus EMS floods](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/12-plan-d-global-floods.md) | shipped | #112 |
+| [13 — Plan E precip + snow](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/13-plan-e-precip-snow.md) | shipped | #116 |
+| [14 — Plan F climate indices + ozone hole](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/14-plan-f-climate-indices.md) | shipped | #115 |
+| [15 — Threshold registry](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/15-threshold-registry.md) | shipped (+ #117 coverage fix) | #114, #117 |
+| [16 — Monolith decomposition](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/16-main-py-refactor.md) | shipped — main.py 3,070 → 96 lines | #113 |
 
-**Wall-clock estimate at ~23 min/lane Conductor pace:** 23 (Plan D) + ~30-45 (Lane 16) + ~23 (parallel 3a/b/c) = **~75-90 min total for the remaining wave** vs ~115 min serial.
+**Median Conductor lane time:** ~23 min from prompt-paste to PR merge.
 
-### Recently landed (2026-05-14 → 05-15)
+**Architectural unlock proven:** Lane 16 (monolith decomposition) ran second, enabling Plans E + F + Lane 15 to ship concurrently in 3 parallel workspaces (~23 min wall-clock for all three vs ~70 min serial). Saved ~45 min and validated the parallelization model for future source-add lanes.
 
-| Lane | Status |
-|---|---|
-| [05 — Plan A foundation + restore + degraded fix](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/05-plan-a-foundation.md) | all 3 phases shipped (#99, #102, #105) |
-| [06 — Plan A state trim](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/06-plan-a-state-trim.md) | shipped (#98) |
-| [07 — Plan A dashboard /health view](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/07-plan-a-dashboard.md) | shipped (#101 + #103) |
-| [09 — Plan C tropical cyclones](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/09-plan-c-tropical-cyclones.md) | shipped (#108) — ready for Atlantic season |
-| [10 — Docs cleanup](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/10-docs-cleanup.md) | shipped (#106) |
-| [11 — F2 bundle enrichment](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/11-f2-bundle-enrichment.md) | shipped (#107) |
+### What's next (not yet authored as briefs)
+
+The overnight wave covered Plans A-F. Future briefs to author when needed:
+
+- **F3 second-pass editorial agent** — Gemini 2.5 Pro / Claude Haiku 4.5 / Sonnet 4.6 as critic between fact_check and pending. Deferred per Andrew: "Flash has no taste, no new models tonight." Revisit if A-rate doesn't move after next grading-agent cycle.
+- **theheat.ai landing page** — Vercel one-pager, separate from theheat repo. ~30 min lane.
+- **Posting mode flip** — manual_only → suggested_auto for high-confidence categories. Operational, not code.
+- **Plans G+** — glacier retreat, vegetation NDVI, atmospheric rivers, volcanic VEI, ocean acidification, regional marine heatwaves.
 
 Plan-of-record for Plan A: [/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/PLAN_A.md)
 

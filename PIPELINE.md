@@ -1,6 +1,8 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-05-13 (pending merge of #84/#85/#87: belt-and-suspenders normalization, FRP intensity tier, per-day category cooldown, fire sentence-1 variety, Chuuk expository-vs-punch nudge, Gist truncation hotfix).
+**Last updated:** 2026-05-15 (post-overnight wave: Plan A + Plans B-F + F2 + threshold registry + monolith decomposition — see [CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0).
+
+**Architecture status (post-2026-05-15):** Monolithic `src/main.py` decomposed into `src/orchestrator/` (per-source runner files), `src/editorial/scoring/` (per-category), `src/two_bot/intern/` (per-category). 23 sources tracked. Score-gate thresholds centralized in `src/editorial/thresholds.py`. F2 bundle enrichment via `src/data/_climate_context.py` (38 curated climate regions, Wikipedia-sourced for fact-check verifiability). Source-health observability via `state.source_health` rolling 7-day record + dashboard `/health` view.
 
 A manufacturing-style flowchart showing how climate data becomes a tweet.
 

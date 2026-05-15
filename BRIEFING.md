@@ -1,7 +1,29 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-14 (mid-session — brand kit live on @theheat, ready to start posting).
-**Status:** **BRAND ALIGNED AND LIVE; PIPELINE ON v3 WRITER PROMPT; POSTING STILL PAUSED PENDING QUALITY BAR.** The @theheat X profile is now updated with the corrected brand assets (banner, avatar, bio, pinned tweet) and the canonical tagline **"Diary of a warming planet."** Brand kit correction PR #94 merged today. v3 of the writer prompt (PR #91) landed last night with the cross-model rewrite + ChatGPT kill_reason library + nullability discipline. v3 went green on the 2026-05-14 09:00 UTC voice-regression nightly. PR #93 ("trust the model more — strip ~50 lines of formula") was closed today as superseded by v3 (the two PRs were philosophical opposites — v3 preserved everything; #93 cut). **Open PRs: 1** (PR #92 daily-plan-2026-05-14 auto-PR; routine).
+**Last updated:** 2026-05-15 (post-overnight wave — Plans A-F + F2 + threshold registry + monolith decomposition all shipped).
+**Status:** **DATA LAYER COMPLETE; 23 SOURCES LIVE; ARCHITECTURE DECOMPOSED; POSTING STILL PAUSED PENDING EDITORIAL QUALITY BAR.** Massive overnight landing: 23 PRs merged in ~6 hours via parallel Conductor + Claude Code workspaces. See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0 for the full release notes and [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15.md) for the current next-session prompt.
+
+**What landed:**
+
+- **Plan A (5 phases)** — source-health observability platform, restored broken sources (`ocean_sst`, `river_gauges` flood-stage, FIRMS retry hardening), open_meteo "degraded" calibration fix, state.json self-pruning (`trim_drafts` drops rejected >30d), dashboard `/health` view.
+- **Plans B + C + D + E + F** — 9 new sources: Coral Reef Watch DHW + CH4 methane, NHC + JTWC tropical cyclones, Copernicus EMS global floods, GPM-IMERG precip + NSIDC snow extremes, NAO/AO/PDO + Antarctic ozone hole.
+- **F2 — Bundle enrichment** for system clauses: `src/data/_climate_context.py` with 38 curated climate regions, Wikipedia-sourced for fact-check verifiability. Writer's "western Pacific warm pool" / "Androscoggin Valley" framings now pass fact-check.
+- **Threshold registry** — 32-entry `src/editorial/thresholds.py` centralizes every score-gate threshold. Calibration is one-config-table edit.
+- **Monolith decomposition** — `src/main.py` 3,070 → 96 lines. `src/orchestrator/sources/<source>.py` (22 files), `src/editorial/scoring/<category>.py` (9 files), `src/two_bot/intern/<category>.py`. `__init__.py` re-exports preserve all imports. Future source-adds land parallel-safe.
+
+**Architecture status:** post-decomposition. New sources go in `src/orchestrator/sources/`, scoring in `src/editorial/scoring/<category>.py`, bundles in `src/two_bot/intern/<category>.py`. Thresholds in `src/editorial/thresholds.py`. F2 enrichment via `local_climate_context(lat, lon, category)`.
+
+**Production state:** state.json 906 KB, 12 pending drafts (up from 6 — new sources firing), 24 sources in `source_health`, zero score_gate kills in 24h, 1151 tests passing.
+
+**Open PRs:** typically 1 (daily-plan auto-PR from grading agent at 15:03 UTC). The wave's PRs (#96, #98-103, #105-117) are all merged.
+
+**Posting status:** still **manual_only** for all categories. Structural blocker is now exclusively editorial quality (A-grade rate from grading-agent cycle), not infrastructure or coverage.
+
+---
+
+## Historical context — what shipped before the wave
+
+**Brand kit correction (2026-05-14):** @theheat X profile updated with the canonical tagline **"Diary of a warming planet."** Banner, avatar, bio, pinned tweet all corrected. Brand kit PR #94 merged.
 
 **Today's session was almost entirely brand work.** Three artifacts now live in `brand/`:
 - `brand/MESSAGING_ARCHITECTURE.md` rewritten — new tagline, new personality opener (planet-keeps-own-record framing replaces "climate data wire service"), new voice references (Attenborough + Economist + Reuters, replacing older @spectatorindex / @unusual_whales / @darth), new FUTURE DIRECTION section capturing the Karl-the-Fog first-person-personification arc as v2 brand evolution.
