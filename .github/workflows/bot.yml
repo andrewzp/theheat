@@ -165,6 +165,9 @@ jobs:
           BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
           BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
+          # Required for GPM IMERG precipitation and GRACE-FO ice mass.
+          # Use a NASA Earthdata application token.
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
           # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
           # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.
           THEHEAT_SIGNALS_PROVIDER: ghcn

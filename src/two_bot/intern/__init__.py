@@ -10,6 +10,7 @@ from .disasters import build_severe_weather_bundle, build_global_disaster_bundle
 from .marine import build_coral_bleaching_bundle, build_sea_ice_bundle, build_ice_mass_bundle, build_marine_heatwave_bundle, build_extreme_wave_bundle
 from .drought import build_drought_bundle
 from .synthesis import build_synthesis_bundle
+from .precipitation import build_precipitation_bundle, build_snow_extreme_bundle, build_seasonal_snow_bundle
 
 __all__ = [
     "_c_to_f",
@@ -45,4 +46,7 @@ __all__ = [
     "build_extreme_wave_bundle",
     "build_drought_bundle",
     "build_synthesis_bundle",
+    "build_precipitation_bundle",
+    "build_snow_extreme_bundle",
+    "build_seasonal_snow_bundle",
 ]

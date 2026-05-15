@@ -1582,3 +1582,40 @@ class TestBotStateSchemaRoundTrip:
         normalized = _normalize_state(partial)
         assert normalized["ice_annual_count"] == {}
         assert set(normalized.keys()) == set(DEFAULT_STATE.keys())
+
+    def test_precip_and_snow_state_keys_round_trip_through_merge(self):
+        from src.state import _merge_state
+
+        base = {
+            "precip_daily_records": {"france:paris:05-14": {"mm": 40.0, "year": 2025}},
+            "precip_recent_by_city": {
+                "france:paris": [{"date": "2026-05-13", "mm": 30.0}],
+            },
+            "snow_daily_swe_gain_records": {"albro_lake:05-14": {"mm": 20.0, "year": 2025}},
+            "snow_recent_by_station": {
+                "albro_lake": [{"date": "2026-05-13", "mm": 12.0}],
+            },
+            "snow_annual_count": {"2026": 2},
+            "seasonal_snow_records": {"albro_lake": {"mm": 300.0, "year": 2025}},
+        }
+        incoming = {
+            "precip_daily_records": {"france:paris:05-14": {"mm": 55.0, "year": 2026}},
+            "precip_recent_by_city": {
+                "france:paris": [{"date": "2026-05-14", "mm": 55.0}],
+            },
+            "snow_daily_swe_gain_records": {"albro_lake:05-14": {"mm": 50.8, "year": 2026}},
+            "snow_recent_by_station": {
+                "albro_lake": [{"date": "2026-05-14", "mm": 50.8}],
+            },
+            "snow_annual_count": {"2026": 3},
+            "seasonal_snow_records": {"albro_lake": {"mm": 350.0, "year": 2026}},
+        }
+
+        merged = _merge_state(base, incoming)
+
+        assert merged["precip_daily_records"]["france:paris:05-14"]["mm"] == 55.0
+        assert len(merged["precip_recent_by_city"]["france:paris"]) == 2
+        assert merged["snow_daily_swe_gain_records"]["albro_lake:05-14"]["mm"] == 50.8
+        assert len(merged["snow_recent_by_station"]["albro_lake"]) == 2
+        assert merged["snow_annual_count"]["2026"] == 3
+        assert merged["seasonal_snow_records"]["albro_lake"]["mm"] == 350.0

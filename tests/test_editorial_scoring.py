@@ -14,9 +14,12 @@ from src.editorial.scoring import (
     score_oscillation_extreme,
     score_oscillation_transition,
     score_ozone_hole_peak,
+    score_precipitation_extreme,
     score_record_event,
     score_record_streak,
+    score_seasonal_snow_record,
     score_simultaneous_records,
+    score_snow_extreme,
 )
 
 
@@ -152,6 +155,38 @@ class TestEditorialScoring:
         from src.editorial.scoring import score_marine_heatwave
         score = score_marine_heatwave(days=100, peak_anomaly_c=0.4, years_of_data=44)
         assert score.total >= 85, f"day-100 should be elite, got {score.total}"
+
+    def test_precipitation_record_scores_manual_grade(self):
+        score = score_precipitation_extreme(
+            mm_total=147.0,
+            period_days=1,
+            deviation_from_record=42.0,
+            region="Pakistan",
+        )
+
+        assert score.category == "precipitation_extreme"
+        assert score.passes
+        assert any("147" in reason for reason in score.reasons)
+
+    def test_snow_extreme_scores_heavy_swe(self):
+        score = score_snow_extreme(
+            mm_swe=76.2,
+            deviation_from_record=30.0,
+            region="Great Lakes",
+        )
+
+        assert score.category == "snow_extreme"
+        assert score.passes
+
+    def test_seasonal_snow_record_scores_archive_signal(self):
+        score = score_seasonal_snow_record(
+            total_mm=1200.0,
+            years_of_archive=20,
+            region="Sierra Nevada",
+        )
+
+        assert score.category == "seasonal_snow_record"
+        assert score.passes
 
     def test_score_oscillation_transition_passes(self):
         score = score_oscillation_transition("NAO", -1.2, 5)

@@ -105,6 +105,16 @@ class TestApprovalPolicy:
         assert policy.mode == "manual_only"
         assert policy.can_auto_approve is False
 
+    def test_precipitation_and_snow_require_manual_review(self):
+        for tweet_type in ("precipitation_extreme", "snow_extreme", "seasonal_snow_record"):
+            policy = recommend_approval_policy(
+                tweet_type,
+                signal_total=88,
+                candidate_score={"total": 82},
+            )
+            assert policy.mode == "manual_only"
+            assert policy.can_auto_approve is False
+
 
 class TestIceMassApproval:
     def test_ice_mass_record_policy(self):
