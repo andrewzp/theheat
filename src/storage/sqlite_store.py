@@ -122,6 +122,8 @@ _METADATA_JSON_KEYS = (
     "fire_complex_tiers",
     "coral_dhw_last_tier",
     "coral_dhw_annual_count",
+    "flood_activation_tiers",
+    "flood_annual_count",
     "fire_footprint_last_run",
     "synthesis_components",
     "synthesis_cooldown",

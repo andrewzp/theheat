@@ -2,6 +2,7 @@ from datetime import date
 
 from src.data.co2 import CO2Milestone
 from src.data.coral_dhw import CoralBleachingEvent
+from src.data.copernicus_ems import CopernicusFloodActivation
 from src.data.cyclones import (
     BasinRecordEvent,
     LandfallEvent,
@@ -42,6 +43,7 @@ from src.two_bot.intern import (
     build_extreme_wave_bundle,
     build_fire_bundle,
     build_fire_footprint_bundle,
+    build_global_flood_bundle,
     build_global_disaster_bundle,
     build_hot10_bundle,
     build_ice_mass_bundle,
@@ -760,6 +762,37 @@ def test_build_river_flood_bundle_uses_above_by_ft():
     bundle = build_river_flood_bundle(f)
     assert bundle.where == "Memphis, TN"
     assert bundle.headline_metric["value"] == 8.0
+
+
+def test_build_global_flood_bundle_includes_copernicus_fields():
+    flood = CopernicusFloodActivation(
+        activation_id="EMSR999",
+        country="Colombia",
+        event_type="Riverine flood",
+        severity="Major",
+        populations_affected=125000,
+        affected_area_km2=215.4,
+        lat=8.8,
+        lon=-75.9,
+        activation_date="2026-05-14T12:00:00",
+        copernicus_url="https://mapping.emergency.copernicus.eu/activations/EMSR999/",
+        event_id="copernicus_flood_EMSR999_major",
+        name="Flood in Cordoba, Colombia",
+    )
+
+    bundle = build_global_flood_bundle(flood)
+
+    assert bundle.signal_kind == "global_flood"
+    assert bundle.where == "Colombia"
+    assert bundle.when == "2026-05-14"
+    assert bundle.headline_metric == {
+        "label": "populations_affected",
+        "value": 125000,
+        "unit": "people",
+    }
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+    assert labels["activation_id"] == "EMSR999"
+    assert labels["copernicus_url"].endswith("/EMSR999/")
 
 
 def test_build_storm_surge_bundle_uses_anomaly_m():

@@ -114,6 +114,10 @@ DEFAULT_STATE: BotState = {
     "cyclone_wind_history": {},
     # Visibility counter only; no cap yet.
     "cyclone_annual_count": {},
+    # Per-Copernicus EMS activation severity dedup for global flood events.
+    "flood_activation_tiers": {},
+    # Visibility counter only; no cap yet.
+    "flood_annual_count": {},
     # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
     "fire_footprint_last_run": None,
     # Cross-source synthesis layer (src/editorial/synthesis.py).
@@ -478,6 +482,24 @@ def _merge_cyclone_wind_history(
     return merged
 
 
+_FLOOD_SEVERITY_ORDER = {
+    "Minor": 0,
+    "Moderate": 1,
+    "Major": 2,
+    "Extreme": 3,
+}
+
+
+def _max_flood_severity(a: str | None, b: str | None) -> str:
+    a_label = str(a or "")
+    b_label = str(b or "")
+    return (
+        a_label
+        if _FLOOD_SEVERITY_ORDER.get(a_label, -1) >= _FLOOD_SEVERITY_ORDER.get(b_label, -1)
+        else b_label
+    )
+
+
 def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
@@ -643,6 +665,24 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
         merged["cyclone_annual_count"][year] = max(
             base.get("cyclone_annual_count", {}).get(year, 0),
             next_state.get("cyclone_annual_count", {}).get(year, 0),
+        )
+    merged["flood_activation_tiers"] = {}
+    for activation_id in set(
+        list(base.get("flood_activation_tiers", {}).keys())
+        + list(next_state.get("flood_activation_tiers", {}).keys())
+    ):
+        merged["flood_activation_tiers"][activation_id] = _max_flood_severity(
+            base.get("flood_activation_tiers", {}).get(activation_id),
+            next_state.get("flood_activation_tiers", {}).get(activation_id),
+        )
+    merged["flood_annual_count"] = {}
+    for year in set(
+        list(base.get("flood_annual_count", {}).keys())
+        + list(next_state.get("flood_annual_count", {}).keys())
+    ):
+        merged["flood_annual_count"][year] = max(
+            base.get("flood_annual_count", {}).get(year, 0),
+            next_state.get("flood_annual_count", {}).get(year, 0),
         )
     # Max-merge the daily gate so concurrent cron runs keep the later date.
     merged["fire_footprint_last_run"] = max(
@@ -1293,6 +1333,25 @@ def increment_cyclone_annual_count(state: BotState) -> BotState:
 
     year = str(date.today().year)
     counts = state.setdefault("cyclone_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def update_flood_activation_tier(state: BotState, activation_id: str, severity: str) -> BotState:
+    """Record the highest Copernicus EMS flood severity that produced a draft."""
+
+    tiers = state.setdefault("flood_activation_tiers", {})
+    current = str(tiers.get(activation_id, ""))
+    if _max_flood_severity(current, severity) == severity:
+        tiers[activation_id] = severity
+    return state
+
+
+def increment_flood_annual_count(state: BotState) -> BotState:
+    """Track global-flood draft volume for visibility without enforcing a cap."""
+
+    year = str(date.today().year)
+    counts = state.setdefault("flood_annual_count", {})
     counts[year] = int(counts.get(year, 0)) + 1
     return state
 

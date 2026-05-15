@@ -60,6 +60,7 @@ _SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
     "cyclone_landfall": "cyclone",
     "cyclone_basin_record": "cyclone",
     "river_flood": "flood",
+    "global_flood": "flood",
     "drought": "drought",
     "enso": "enso",
     "hot10": "hot10",
