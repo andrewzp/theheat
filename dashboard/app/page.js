@@ -1433,6 +1433,7 @@ export default function Dashboard() {
           align-items: center;
           gap: 8px;
           margin-bottom: -1px;
+          text-decoration: none;
         }
         .tab:hover { color: #ccc; }
         .tab.active {
@@ -2018,6 +2019,14 @@ export default function Dashboard() {
               <span className="tab-count">{sourcesStats.degraded_count}</span>
             ) : null}
           </button>
+          <a className="tab" href="/health">
+            Health
+            {sourcesStats?.unhealthy_count > 0 ? (
+              <span className="tab-count alert">{sourcesStats.unhealthy_count}</span>
+            ) : sourcesStats?.degraded_count > 0 ? (
+              <span className="tab-count">{sourcesStats.degraded_count}</span>
+            ) : null}
+          </a>
         </div>
 
         {loading ? (
