@@ -387,6 +387,12 @@ def _detect_signals_for_station(
     # foreign stations (Canadian provinces don't get expanded — we don't
     # have that mapping and "WA" being Washington is a US-specific safe bet).
     state = expand_us_state(station.get("state"), country_code)
+    try:
+        station_lat = float(station["lat"]) if station.get("lat") is not None else None
+        station_lon = float(station["lon"]) if station.get("lon") is not None else None
+    except (TypeError, ValueError):
+        station_lat = None
+        station_lon = None
 
     obs_list = [obs] if isinstance(obs, DailyObs) else list(obs)
     if not obs_list:
@@ -440,6 +446,8 @@ def _detect_signals_for_station(
                     event_id=f"all_time_high_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             monthly_max = thresholds.monthly_max.get(month)
@@ -453,6 +461,8 @@ def _detect_signals_for_station(
                     event_id=f"monthly_high_{sid_key}_{month:02d}_{obs_date_iso}",
                     signal_date=obs_date,
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             cal_max = thresholds.calendar_date_max.get(md)
@@ -466,6 +476,8 @@ def _detect_signals_for_station(
                     signal_date=obs_date,
                     kind="high",
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             clim_mean = thresholds.climatological_mean.get(month)
@@ -481,6 +493,8 @@ def _detect_signals_for_station(
                         event_id=f"anomaly_hot_{sid_key}_{obs_date_iso}",
                         signal_date=obs_date,
                         state=state,
+                        lat=station_lat,
+                        lon=station_lon,
                     )
 
         elif o.element == "TMIN":
@@ -507,6 +521,8 @@ def _detect_signals_for_station(
                     event_id=f"all_time_low_{sid_key}_{obs_date_iso}",
                     signal_date=obs_date,
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             monthly_min = thresholds.monthly_min.get(month)
@@ -520,6 +536,8 @@ def _detect_signals_for_station(
                     event_id=f"monthly_low_{sid_key}_{month:02d}_{obs_date_iso}",
                     signal_date=obs_date,
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             cal_min = thresholds.calendar_date_min.get(md)
@@ -533,6 +551,8 @@ def _detect_signals_for_station(
                     signal_date=obs_date,
                     kind="low",
                     state=state,
+                    lat=station_lat,
+                    lon=station_lon,
                 )
 
             clim_mean = thresholds.climatological_mean_min.get(month)
@@ -548,6 +568,8 @@ def _detect_signals_for_station(
                         event_id=f"anomaly_cold_{sid_key}_{obs_date_iso}",
                         signal_date=obs_date,
                         state=state,
+                        lat=station_lat,
+                        lon=station_lon,
                     )
 
     if not usable:

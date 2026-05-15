@@ -36,6 +36,8 @@ class RecordEvent:
     signal_date: date | None = None  # date reading was observed; None → use date.today()
     kind: str = "high"  # "high" or "low"; default preserves legacy positional calls
     state: str | None = None  # full state name (e.g. "West Virginia") for US stations; None elsewhere
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -51,6 +53,8 @@ class AllTimeRecord:
     event_id: str
     signal_date: date | None = None
     state: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -67,6 +71,8 @@ class MonthlyRecord:
     event_id: str
     signal_date: date | None = None
     state: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -81,6 +87,8 @@ class AnomalyEvent:
     event_id: str
     signal_date: date | None = None
     state: str | None = None
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -320,6 +328,8 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
                 old_record_year=old_record_year,
                 event_id=f"record_{city.replace(' ', '_')}_{today.isoformat()}",
                 kind="high",
+                lat=lat,
+                lon=lon,
             )
 
         return None
@@ -502,6 +512,8 @@ def detect_extreme_signals(
             old_record_year=hist_max_calendar_year,
             event_id=f"record_{city_key}_{today_iso}",
             kind="high",
+            lat=lat,
+            lon=lon,
         )
     if today_min is not None and hist_min_calendar is not None and today_min < hist_min_calendar:
         bundle.calendar_date_low = RecordEvent(
@@ -510,6 +522,8 @@ def detect_extreme_signals(
             old_record_year=hist_min_calendar_year,
             event_id=f"record_low_{city_key}_{today_iso}",
             kind="low",
+            lat=lat,
+            lon=lon,
         )
 
     # All-time records within our archive window
@@ -520,6 +534,8 @@ def detect_extreme_signals(
             old_record_year=hist_max_overall_year,
             years_of_data=archive_years,
             event_id=f"alltime_high_{city_key}_{today_iso}",
+            lat=lat,
+            lon=lon,
         )
     if today_min is not None and hist_min_overall is not None and today_min < hist_min_overall:
         bundle.all_time_low = AllTimeRecord(
@@ -528,6 +544,8 @@ def detect_extreme_signals(
             old_record_year=hist_min_overall_year,
             years_of_data=archive_years,
             event_id=f"alltime_low_{city_key}_{today_iso}",
+            lat=lat,
+            lon=lon,
         )
 
     # Monthly records (hottest/coldest ever for this month-of-year)
@@ -539,6 +557,8 @@ def detect_extreme_signals(
             old_record_year=hist_max_this_month_year,
             years_of_data=archive_years,
             event_id=f"monthly_high_{city_key}_{today.year}_{target_month:02d}",
+            lat=lat,
+            lon=lon,
         )
     if today_min is not None and hist_min_this_month is not None and today_min < hist_min_this_month:
         bundle.monthly_low = MonthlyRecord(
@@ -548,6 +568,8 @@ def detect_extreme_signals(
             old_record_year=hist_min_this_month_year,
             years_of_data=archive_years,
             event_id=f"monthly_low_{city_key}_{today.year}_{target_month:02d}",
+            lat=lat,
+            lon=lon,
         )
 
     # Anomaly vs historical mean for this month
@@ -562,6 +584,8 @@ def detect_extreme_signals(
                 anomaly_c=anomaly,
                 years_of_data=archive_years,
                 event_id=f"anomaly_hot_{city_key}_{today_iso}",
+                lat=lat,
+                lon=lon,
             )
     if today_min is not None and this_month_lows:
         mean = sum(this_month_lows) / len(this_month_lows)
@@ -574,6 +598,8 @@ def detect_extreme_signals(
                 anomaly_c=anomaly,
                 years_of_data=archive_years,
                 event_id=f"anomaly_cold_{city_key}_{today_iso}",
+                lat=lat,
+                lon=lon,
             )
 
     return bundle
@@ -803,6 +829,8 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
                 old_record_year=old_record_year,
                 event_id=f"record_low_{city.replace(' ', '_')}_{today.isoformat()}",
                 kind="low",
+                lat=lat,
+                lon=lon,
             )
 
         return None
