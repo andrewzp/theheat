@@ -80,13 +80,27 @@ class TestFetchFires:
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")
     def test_api_error_returns_empty(self):
-        responses.add(
-            responses.GET,
-            "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
-            status=500,
-        )
+        for _ in range(3):
+            responses.add(
+                responses.GET,
+                "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1",
+                status=500,
+            )
         fires = fetch_fires()
         assert fires == []
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_transient_5xx_retries_then_returns_fires(self):
+        csv_body = FIRMS_CSV_HEADER + "34.05,-118.25,90,350.0\n"
+        url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1"
+        responses.add(responses.GET, url, status=502)
+        responses.add(responses.GET, url, body=csv_body, status=200)
+
+        fires = fetch_fires()
+
+        assert len(fires) == 1
+        assert len(responses.calls) == 2
 
     @responses.activate
     @patch("src.data.firms.FIRMS_API_KEY", "test_key")

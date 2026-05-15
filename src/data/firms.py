@@ -8,6 +8,7 @@ from datetime import date
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 FIRMS_API_KEY = os.environ.get("NASA_FIRMS_API_KEY", "")
@@ -80,11 +81,10 @@ def fetch_fires(
         return []
 
     try:
-        resp = requests.get(
+        resp = fetch_with_retry(
             f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}",
             timeout=30,
         )
-        resp.raise_for_status()
 
         reader = csv.DictReader(io.StringIO(resp.text))
         fires = []

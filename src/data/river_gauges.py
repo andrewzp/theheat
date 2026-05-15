@@ -1,8 +1,7 @@
-"""USGS Water Services — river flood stages.
+"""USGS gauge heights plus NOAA NWPS flood-stage thresholds.
 
-Free API, no auth required. Real-time streamflow and gauge height
-data from thousands of stations across the US.
-Docs: https://waterservices.usgs.gov/rest/IV-Service.html
+Both APIs are free and unauthenticated. USGS provides live gauge heights;
+NOAA NWPS provides the replacement flood-stage metadata for AHPS/WaterWatch.
 """
 
 from __future__ import annotations
@@ -12,10 +11,12 @@ from datetime import date
 
 import requests
 
-from src.data.source_status import SourceFetchError
+from src.data._http import fetch_with_retry
+from src.data.source_status import SourceFetchError, assert_response_schema
 
 USGS_URL = "https://waterservices.usgs.gov/nwis/iv/"
-FLOOD_URL = "https://waterwatch.usgs.gov/webservices/floodstage"
+FLOOD_URL = "https://api.water.noaa.gov/nwps/v1/gauges/{site_id}"
+_REQUEST_HEADERS = {"User-Agent": "(theheat-bot, contact@theheat.app)"}
 
 # Major river stations: (site_id, river_name, location)
 # Chosen for flood significance and population exposure
@@ -62,52 +63,50 @@ class FloodEvent:
 
 
 def _fetch_flood_stages(*, strict: bool = False) -> dict[str, float]:
-    """Fetch flood stage thresholds for USGS stations.
+    """Fetch minor flood-stage thresholds from NOAA NWPS gauge metadata."""
+    stages: dict[str, float] = {}
+    for site_id, _river_name, _location in MAJOR_STATIONS:
+        try:
+            resp = fetch_with_retry(
+                FLOOD_URL.format(site_id=site_id),
+                headers=_REQUEST_HEADERS,
+                timeout=15,
+            )
+            data = resp.json()
+            stage = _parse_nwps_minor_flood_stage(data, site_id)
+            if stage is not None:
+                stages[site_id] = stage
+        except (requests.RequestException, ValueError, SourceFetchError) as exc:
+            if strict:
+                raise SourceFetchError(
+                    f"River gauge flood-stage fetch failed for {site_id}: {exc}"
+                ) from exc
+            continue
+    return stages
 
-    **Always returns gracefully, never raises.** The original WaterWatch
-    endpoint (``waterwatch.usgs.gov/webservices/floodstage``) was retired
-    sometime before 2026-05-12 and now 301-redirects without a Location
-    header, returning HTML 'Old Page' text. Without flood-stage thresholds
-    the river-gauge source can still report current gauge heights — just
-    without the "above flood stage" flag. That's strictly less rich but
-    not a runtime failure.
 
-    Previous behavior (raise SourceFetchError in strict mode) killed the
-    entire river_gauges source every alerts run after the endpoint died.
-    Replaced with always-return-empty so the rest of the source keeps
-    working. Finding a replacement URL is tracked as a follow-up.
-
-    The ``strict`` parameter is kept for API symmetry with sibling
-    fetchers and may be used again when a replacement endpoint is wired
-    in. It is currently ignored.
-    """
-    del strict  # see docstring — kept for API symmetry, intentionally unused
-
+def _parse_nwps_minor_flood_stage(payload: object, site_id: str) -> float | None:
+    assert_response_schema(payload, ["flood"], "river_gauges")
+    if not isinstance(payload, dict):
+        raise SourceFetchError("river_gauges schema drift: expected gauge object")
+    flood = payload["flood"]
+    if not isinstance(flood, dict):
+        raise SourceFetchError("river_gauges schema drift: flood was not an object")
+    categories = flood.get("categories")
+    if not isinstance(categories, dict):
+        raise SourceFetchError("river_gauges schema drift: missing flood.categories")
+    minor = categories.get("minor")
+    if not isinstance(minor, dict):
+        return None
+    stage = minor.get("stage")
+    if stage in (None, "", -9999, "-9999"):
+        return None
     try:
-        resp = requests.get(
-            FLOOD_URL,
-            params={"format": "json"},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        stages = {}
-        for site in data.get("sites", []):
-            site_id = site.get("site_no", "")
-            flood = site.get("flood_stage", "")
-            if site_id and flood:
-                try:
-                    stages[site_id] = float(flood)
-                except ValueError:
-                    continue
-        return stages
-
-    except (requests.RequestException, ValueError, KeyError):
-        # Endpoint is dead; degrade gracefully. The rest of the river_gauges
-        # source still produces useful output (current gauge heights), just
-        # without the flood-stage threshold comparison.
-        return {}
+        return float(stage)
+    except (TypeError, ValueError) as exc:
+        raise SourceFetchError(
+            f"river_gauges schema drift: invalid minor flood stage for {site_id}"
+        ) from exc
 
 
 def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
