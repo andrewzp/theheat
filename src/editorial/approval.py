@@ -145,6 +145,9 @@ def recommend_approval_policy(
             "river_flood",
             "drought",
             "coral_bleaching",
+            "precipitation_extreme",
+            "snow_extreme",
+            "seasonal_snow_record",
         }
         or tweet_type.startswith("cyclone_")
     ):

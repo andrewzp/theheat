@@ -18,7 +18,7 @@ from typing import Any, cast
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, gpm_imerg, nsidc_snow
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -50,6 +50,7 @@ from src.editorial.scoring import (
     score_enso_transition,
     score_extreme_wave,
     score_marine_heatwave,
+    score_precipitation_extreme,
     score_fire_event,
     score_fire_footprint,
     score_global_disaster,
@@ -62,9 +63,11 @@ from src.editorial.scoring import (
     score_record_streak,
     score_river_flood,
     score_sea_ice_record,
+    score_seasonal_snow_record,
     score_ice_mass_event,
     score_severe_weather,
     score_simultaneous_records,
+    score_snow_extreme,
     score_storm_surge,
     score_synthesis_fire_drought_heat,
 )
@@ -90,6 +93,8 @@ CH4_ANNUAL_CAP = 12
 CORAL_DHW_ANNUAL_CAP = 16
 
 ICE_ANNUAL_CAP = 8
+
+SNOW_ANNUAL_CAP = 8
 
 
 
@@ -532,6 +537,21 @@ def _ice_annual_cap_reached(bot_state: BotState, cap: int = ICE_ANNUAL_CAP) -> b
 def _increment_ice_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("ice_annual_count", {})
+    counts[year_key] = counts.get(year_key, 0) + 1
+
+
+def _snow_annual_cap_reached(bot_state: BotState, cap: int = SNOW_ANNUAL_CAP) -> bool:
+    year_key = str(date.today().year)
+    count = bot_state.get("snow_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[snow] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
+
+
+def _increment_snow_annual_count(bot_state: BotState) -> None:
+    year_key = str(date.today().year)
+    counts = bot_state.setdefault("snow_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
 
 def _cyclone_history_advisories(
@@ -1161,6 +1181,7 @@ __all__ = [
     "MonthlyRecord",
     "RapidIntensificationEvent",
     "RecordEvent",
+    "SNOW_ANNUAL_CAP",
     "SourceSkipped",
     "TierCrossingEvent",
     "_CURRENT_SUPPRESSION_CTX",
@@ -1182,6 +1203,7 @@ __all__ = [
     "_ice_annual_cap_reached",
     "_increment_co2_annual_count",
     "_increment_ice_annual_count",
+    "_increment_snow_annual_count",
     "_maybe_shadow_two_bot",
     "_near_miss_gap",
     "_parse_iso_utc",
@@ -1201,6 +1223,7 @@ __all__ = [
     "_score_int",
     "_score_reasons",
     "_should_draft",
+    "_snow_annual_cap_reached",
     "_suppression_context",
     "_temp_pair_c",
     "_touch_draft",
@@ -1226,12 +1249,14 @@ __all__ = [
     "gdacs",
     "generator",
     "ghcn",
+    "gpm_imerg",
     "ice_mass",
     "jtwc",
     "latest_advisories_by_storm",
     "lat_lon_to_state",
     "methane",
     "nhc",
+    "nsidc_snow",
     "nws_alerts",
     "ocean",
     "ocean_sst",
@@ -1264,13 +1289,16 @@ __all__ = [
     "score_ice_mass_event",
     "score_marine_heatwave",
     "score_monthly_record",
+    "score_precipitation_extreme",
     "score_record_event",
     "score_record_low_event",
     "score_record_streak",
     "score_river_flood",
     "score_sea_ice_record",
+    "score_seasonal_snow_record",
     "score_severe_weather",
     "score_simultaneous_records",
+    "score_snow_extreme",
     "score_storm_surge",
     "score_synthesis_fire_drought_heat",
     "sea_ice",

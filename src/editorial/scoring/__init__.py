@@ -14,6 +14,7 @@ from . import disasters as _disasters
 from . import drought as _drought
 from . import hot10 as _hot10
 from . import synthesis as _synthesis
+from . import precipitation as _precipitation
 
 _DATE_MODULES = (
     _temperature,
@@ -179,6 +180,21 @@ def score_synthesis_fire_drought_heat(*args: Any, **kwargs: Any) -> EditorialSco
     return _synthesis.score_synthesis_fire_drought_heat(*args, **kwargs)
 
 
+def score_precipitation_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _precipitation.score_precipitation_extreme(*args, **kwargs)
+
+
+def score_snow_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _precipitation.score_snow_extreme(*args, **kwargs)
+
+
+def score_seasonal_snow_record(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _precipitation.score_seasonal_snow_record(*args, **kwargs)
+
+
 __all__ = [
     "EditorialScore",
     "score_record_event",
@@ -211,4 +227,7 @@ __all__ = [
     "score_drought",
     "score_hot10",
     "score_synthesis_fire_drought_heat",
+    "score_precipitation_extreme",
+    "score_snow_extreme",
+    "score_seasonal_snow_record",
 ]

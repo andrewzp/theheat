@@ -13,11 +13,13 @@ from src.orchestrator.sources.drought import run_drought
 from src.orchestrator.sources.enso import run_enso
 from src.orchestrator.sources.firms import run_firms
 from src.orchestrator.sources.gdacs import run_gdacs
+from src.orchestrator.sources.gpm_imerg import run_gpm_imerg
 from src.orchestrator.sources.ice_mass import run_ice_mass
 from src.orchestrator.sources.marine import run_ocean
 from src.orchestrator.sources.methane import run_methane
 from src.orchestrator.sources.nifc import run_fire_footprint
 from src.orchestrator.sources.nws_alerts import run_nws_alerts
+from src.orchestrator.sources.nsidc_snow import run_nsidc_snow
 from src.orchestrator.sources.ocean_sst import run_ocean_sst
 from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.orchestrator.sources.river_gauges import run_river_gauges
@@ -109,6 +111,8 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_water_levels(bot_state, current_run)
     drafted += run_river_gauges(bot_state, current_run)
     drafted += run_ice_mass(bot_state, current_run)
+    drafted += run_gpm_imerg(bot_state, current_run, cities)
+    drafted += run_nsidc_snow(bot_state, current_run)
     drafted += run_synthesis(bot_state, current_run)
 
     drafted = _prune_weakest_cycle_drafts(

@@ -96,6 +96,16 @@ DEFAULT_STATE: BotState = {
     "ice_mass_last_seen": {},  # {region: "YYYY-MM"}
     # Running count of ice_mass tweets per calendar year (cap: 8/year).
     "ice_annual_count": {},  # {year_str: int}
+    # GPM IMERG precipitation state. Daily records are keyed by
+    # country:city:MM-DD. Recent rows are keyed by country:city.
+    "precip_daily_records": {},
+    "precip_recent_by_city": {},
+    # NSIDC Snow Today state. Daily gain records are keyed by station:MM-DD.
+    # Seasonal records and recent rows are keyed by station.
+    "snow_daily_swe_gain_records": {},
+    "snow_recent_by_station": {},
+    "snow_annual_count": {},
+    "seasonal_snow_records": {},
     # Per-complex tier dedup for fire footprint (GWIS). Integer index into
     # TIERS_HECTARES. Prevents re-tweeting the same fire at every update;
     # only tier upgrades trigger a new draft.
@@ -500,6 +510,52 @@ def _max_flood_severity(a: str | None, b: str | None) -> str:
     )
 
 
+def _merge_max_mm_records(a: dict | None, b: dict | None) -> dict:
+    """Merge keyed mm records, preserving the highest observed value."""
+
+    merged: dict = {}
+    for key in set(list((a or {}).keys()) + list((b or {}).keys())):
+        a_record = (a or {}).get(key)
+        b_record = (b or {}).get(key)
+        if not isinstance(a_record, dict):
+            if isinstance(b_record, dict):
+                merged[key] = deepcopy(b_record)
+            continue
+        if not isinstance(b_record, dict):
+            merged[key] = deepcopy(a_record)
+            continue
+        a_mm = _record_mm_value(a_record)
+        b_mm = _record_mm_value(b_record)
+        merged[key] = deepcopy(a_record if a_mm >= b_mm else b_record)
+    return merged
+
+
+def _record_mm_value(record: dict) -> float:
+    try:
+        return float(record.get("mm") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _merge_recent_mm_rows(a: dict | None, b: dict | None, *, max_items: int = 10) -> dict:
+    """Merge recent measurement rows by date for each keyed location."""
+
+    merged: dict = {}
+    for key in set(list((a or {}).keys()) + list((b or {}).keys())):
+        by_date: dict[str, dict] = {}
+        for row in [*((a or {}).get(key) or []), *((b or {}).get(key) or [])]:
+            if not isinstance(row, dict):
+                continue
+            row_date = str(row.get("date") or "")
+            if not row_date:
+                continue
+            by_date[row_date] = deepcopy(row)
+        rows = list(by_date.values())
+        rows.sort(key=lambda row: str(row.get("date") or ""))
+        merged[key] = rows[-max_items:]
+    return merged
+
+
 def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
@@ -613,6 +669,35 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
             base.get("ice_annual_count", {}).get(year, 0),
             next_state.get("ice_annual_count", {}).get(year, 0),
         )
+    merged["precip_daily_records"] = _merge_max_mm_records(
+        base.get("precip_daily_records"),
+        next_state.get("precip_daily_records"),
+    )
+    merged["precip_recent_by_city"] = _merge_recent_mm_rows(
+        base.get("precip_recent_by_city"),
+        next_state.get("precip_recent_by_city"),
+    )
+    merged["snow_daily_swe_gain_records"] = _merge_max_mm_records(
+        base.get("snow_daily_swe_gain_records"),
+        next_state.get("snow_daily_swe_gain_records"),
+    )
+    merged["snow_recent_by_station"] = _merge_recent_mm_rows(
+        base.get("snow_recent_by_station"),
+        next_state.get("snow_recent_by_station"),
+    )
+    merged["snow_annual_count"] = {}
+    for year in set(
+        list(base.get("snow_annual_count", {}).keys())
+        + list(next_state.get("snow_annual_count", {}).keys())
+    ):
+        merged["snow_annual_count"][year] = max(
+            base.get("snow_annual_count", {}).get(year, 0),
+            next_state.get("snow_annual_count", {}).get(year, 0),
+        )
+    merged["seasonal_snow_records"] = _merge_max_mm_records(
+        base.get("seasonal_snow_records"),
+        next_state.get("seasonal_snow_records"),
+    )
     # Take max tier per complex across concurrent writes so a tier bump
     # on one cron run isn't lost to a stale concurrent run.
     merged["fire_complex_tiers"] = {}

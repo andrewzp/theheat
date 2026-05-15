@@ -77,6 +77,37 @@ class IceMassLoss(TypedDict):
     month: str
 
 
+class PrecipRecord(TypedDict, total=False):
+    """Observed precipitation record for a city/calendar-day key."""
+
+    mm: float
+    year: int
+    date: str
+
+
+class RecentPrecipRow(TypedDict):
+    """Rolling city precipitation row used for multi-day accumulations."""
+
+    date: str
+    mm: float
+
+
+class SnowRecord(TypedDict, total=False):
+    """Observed SWE record for a station key."""
+
+    mm: float
+    year: int
+    date: str
+    years_of_archive: int
+
+
+class RecentSnowRow(TypedDict):
+    """Rolling station SWE-gain row used for multi-day snow events."""
+
+    date: str
+    mm: float
+
+
 class DroughtSnapshot(TypedDict, total=False):
     """Latest USDM drought snapshot — entries are state-level rows."""
 
@@ -151,6 +182,12 @@ class BotState(TypedDict, total=False):
     ice_mass_last_milestone: dict[str, float]
     ice_mass_last_seen: dict[str, str]
     ice_annual_count: dict[str, int]
+    precip_daily_records: dict[str, PrecipRecord]
+    precip_recent_by_city: dict[str, list[RecentPrecipRow]]
+    snow_daily_swe_gain_records: dict[str, SnowRecord]
+    snow_recent_by_station: dict[str, list[RecentSnowRow]]
+    snow_annual_count: dict[str, int]
+    seasonal_snow_records: dict[str, SnowRecord]
     fire_complex_tiers: dict[str, int]
     coral_dhw_last_tier: dict[str, int]
     coral_dhw_annual_count: dict[str, int]
