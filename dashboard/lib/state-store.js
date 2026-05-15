@@ -381,7 +381,19 @@ async function readGistState() {
     throw new Error(`Failed to read state: ${res.status} ${errorText}`)
   }
   const gist = await res.json()
-  const content = gist?.files?.["state.json"]?.content
+  const stateFile = gist?.files?.["state.json"]
+  let content = stateFile?.content
+  if (stateFile?.truncated && stateFile?.raw_url) {
+    const rawRes = await fetch(stateFile.raw_url, {
+      headers: gistHeaders(),
+      cache: "no-store",
+    })
+    if (!rawRes.ok) {
+      const errorText = await rawRes.text()
+      throw new Error(`Failed to read raw state: ${rawRes.status} ${errorText}`)
+    }
+    content = await rawRes.text()
+  }
   if (!content) {
     throw new Error("state.json not found in Gist")
   }
