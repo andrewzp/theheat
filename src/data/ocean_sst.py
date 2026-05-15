@@ -11,23 +11,26 @@ cron outages on our side.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 
 import requests
 
-from src.data.source_status import SourceFetchError
+from src.data._freshness import assert_freshness
+from src.data._http import fetch_with_retry
+from src.data.source_status import SourceFetchError, assert_response_schema
 
 SST_URL = (
-    "https://climatereanalyzer.org/clim/sst_daily/json/"
-    "oisst2.1_world_sst_day.json"
+    "https://climatereanalyzer.org/clim/sst_daily/json_2clim/"
+    "oisst2.1_world2_sst_day.json"
 )
 
-# ClimateReanalyzer.org redirects requests without a User-Agent header
-# into an infinite loop ("Exceeded 30 redirects" — observed all day
-# 2026-05-12 in production). Sending any non-default UA breaks the loop
-# and returns the JSON cleanly. Match the convention from nws_alerts.py.
+# ClimateReanalyzer rejects generic/no-UA clients on the JSON endpoint.
+# Match the convention from nws_alerts.py.
 _REQUEST_HEADERS = {"User-Agent": "(theheat-bot, contact@theheat.app)"}
+_MAX_DATA_LAG_DAYS = 10
+_PRELIMINARY_SERIES = "Preliminary"
 
 # Fire on the first day of a confirmed streak (day 5, per Hobday et al.
 # 2016 MHW definition), then at each of these milestone day-counts.
@@ -87,6 +90,46 @@ def _valid_sst(v: object) -> bool:
 
 def _date_from_doy(year: int, doy: int) -> str:
     return (date(year, 1, 1) + timedelta(days=doy - 1)).isoformat()
+
+
+def _normalise_series_payload(payload: object) -> dict[str, list]:
+    """Return a name -> daily values map for legacy and current CR payloads."""
+    if isinstance(payload, Mapping):
+        series_map = {
+            str(key): val
+            for key, val in payload.items()
+            if isinstance(key, str | int) and isinstance(val, list)
+        }
+    elif isinstance(payload, list):
+        series_map = {}
+        for entry in payload:
+            if not isinstance(entry, Mapping):
+                continue
+            name = entry.get("name")
+            values = entry.get("data")
+            if isinstance(name, str) and isinstance(values, list):
+                series_map[name] = values
+    else:
+        raise SourceFetchError(
+            f"ocean_sst schema drift: expected JSON object or list, got {type(payload).__name__}"
+        )
+
+    if not series_map:
+        raise SourceFetchError("ocean_sst schema drift: no named SST series found")
+    return series_map
+
+
+def _current_year_series(series_map: dict[str, list], current_year: int) -> list:
+    assert_response_schema(series_map, [str(current_year)], "ocean_sst")
+    current_arr = list(series_map[str(current_year)])
+    preliminary = series_map.get(_PRELIMINARY_SERIES)
+    if isinstance(preliminary, list):
+        if len(preliminary) > len(current_arr):
+            current_arr.extend([None] * (len(preliminary) - len(current_arr)))
+        for idx, value in enumerate(preliminary):
+            if _valid_sst(value):
+                current_arr[idx] = value
+    return current_arr
 
 
 def _archive_max_for_doy(prior_years_arrs: dict[int, list], doy: int) -> tuple[float, int] | None:
@@ -174,24 +217,28 @@ def fetch_global_sst(*, strict: bool = False) -> GlobalSSTObservation | None:
     Returns None on any fetch/validation failure unless ``strict=True``.
     """
     try:
-        resp = requests.get(SST_URL, timeout=15, headers=_REQUEST_HEADERS)
-        resp.raise_for_status()
+        resp = fetch_with_retry(SST_URL, timeout=15, headers=_REQUEST_HEADERS)
         payload = resp.json()
-    except (requests.RequestException, ValueError) as exc:
+        series_map = _normalise_series_payload(payload)
+    except (requests.RequestException, ValueError, SourceFetchError) as exc:
         if strict:
+            if isinstance(exc, SourceFetchError):
+                raise
             raise SourceFetchError(f"Ocean SST fetch failed: {exc}") from exc
         return None
 
-    if not isinstance(payload, dict):
+    current_year, today_doy = _today_year_doy()
+    run_date = date(current_year, 1, 1) + timedelta(days=today_doy - 1)
+    try:
+        cur_arr = _current_year_series(series_map, current_year)
+    except SourceFetchError:
         if strict:
-            raise SourceFetchError("Ocean SST fetch failed: response was not a JSON object")
+            raise
         return None
 
-    current_year, today_doy = _today_year_doy()
-    cur_arr = payload.get(str(current_year))
-    if not isinstance(cur_arr, list) or not cur_arr:
+    if not cur_arr:
         if strict:
-            raise SourceFetchError(f"Ocean SST fetch failed: missing {current_year} data")
+            raise SourceFetchError(f"Ocean SST fetch failed: empty {current_year} data")
         return None
 
     # Find most recent non-null index at or before today_doy.
@@ -206,9 +253,21 @@ def fetch_global_sst(*, strict: bool = False) -> GlobalSSTObservation | None:
         return None
     today_doy = today_idx + 1
     today_c = float(cur_arr[today_idx])
+    observation_date = _date_from_doy(current_year, today_doy)
+    try:
+        assert_freshness(
+            observation_date,
+            "ocean_sst",
+            _MAX_DATA_LAG_DAYS,
+            today=run_date,
+        )
+    except SourceFetchError:
+        if strict:
+            raise
+        return None
 
     prior_arrs: dict[int, list] = {}
-    for key, val in payload.items():
+    for key, val in series_map.items():
         try:
             y = int(key)
         except (TypeError, ValueError):
@@ -245,7 +304,7 @@ def fetch_global_sst(*, strict: bool = False) -> GlobalSSTObservation | None:
     )
 
     return GlobalSSTObservation(
-        date=_date_from_doy(current_year, today_doy),
+        date=observation_date,
         day_of_year=today_doy,
         today_c=today_c,
         archive_max_c=archive_max_c,

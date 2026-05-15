@@ -1,7 +1,11 @@
 """Tests for USGS river gauge / flood stage data."""
 
+from unittest.mock import patch
+
+import pytest
 import responses
 
+from src.data.source_status import SourceFetchError
 from src.data.river_gauges import (
     RiverReading,
     FloodEvent,
@@ -11,6 +15,11 @@ from src.data.river_gauges import (
     USGS_URL,
     FLOOD_URL,
 )
+
+TEST_STATIONS = [
+    ("07010000", "Mississippi River", "St. Louis, MO"),
+    ("07374000", "Mississippi River", "Baton Rouge, LA"),
+]
 
 SAMPLE_USGS_RESPONSE = {
     "value": {
@@ -43,34 +52,62 @@ SAMPLE_USGS_RESPONSE = {
     }
 }
 
-SAMPLE_FLOOD_STAGES = {
-    "sites": [
-        {"site_no": "07010000", "flood_stage": "30.0"},
-        {"site_no": "07374000", "flood_stage": "35.0"},
-    ]
-}
+def _nwps_gauge(stage: float | None) -> dict:
+    minor = {"stage": stage} if stage is not None else None
+    return {"flood": {"categories": {"minor": minor}}}
+
+
+def _add_nwps_stage(site_id: str, stage: float, *, status: int = 200) -> None:
+    responses.add(
+        responses.GET,
+        FLOOD_URL.format(site_id=site_id),
+        json=_nwps_gauge(stage),
+        status=status,
+    )
 
 
 class TestFetchFloodStages:
     @responses.activate
     def test_parses_flood_stages(self):
-        responses.add(responses.GET, FLOOD_URL, json=SAMPLE_FLOOD_STAGES, status=200)
-        stages = _fetch_flood_stages()
+        _add_nwps_stage("07010000", 30.0)
+        _add_nwps_stage("07374000", 35.0)
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS):
+            stages = _fetch_flood_stages()
         assert stages["07010000"] == 30.0
         assert stages["07374000"] == 35.0
 
     @responses.activate
     def test_api_error_returns_empty(self):
-        responses.add(responses.GET, FLOOD_URL, status=500)
-        assert _fetch_flood_stages() == {}
+        for _ in range(3):
+            responses.add(
+                responses.GET,
+                FLOOD_URL.format(site_id="07010000"),
+                status=500,
+            )
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS[:1]):
+            assert _fetch_flood_stages() == {}
+
+    @responses.activate
+    def test_strict_schema_drift_raises(self):
+        responses.add(
+            responses.GET,
+            FLOOD_URL.format(site_id="07010000"),
+            json={"status": {}},
+            status=200,
+        )
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS[:1]):
+            with pytest.raises(SourceFetchError, match="schema drift"):
+                _fetch_flood_stages(strict=True)
 
 
 class TestFetchRiverLevels:
     @responses.activate
     def test_happy_path(self):
         responses.add(responses.GET, USGS_URL, json=SAMPLE_USGS_RESPONSE, status=200)
-        responses.add(responses.GET, FLOOD_URL, json=SAMPLE_FLOOD_STAGES, status=200)
-        readings = fetch_river_levels()
+        _add_nwps_stage("07010000", 30.0)
+        _add_nwps_stage("07374000", 35.0)
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS):
+            readings = fetch_river_levels()
         assert len(readings) == 2
         assert all(isinstance(r, RiverReading) for r in readings)
         # St. Louis at 35.5ft, flood stage 30.0 -> above flood

@@ -79,7 +79,7 @@ def test_fetch_global_sst_happy_path():
     payload = _fake_payload(2026, today_doy, cur_values, prior)
 
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -94,6 +94,39 @@ def test_fetch_global_sst_happy_path():
     assert obs.streak_peak_anomaly_c == pytest.approx(0.2)
 
 
+def test_fetch_global_sst_parses_current_json_2clim_preliminary_series():
+    from src.data import ocean_sst
+
+    today_doy = 133
+    official = [None] * 366
+    official[118] = 20.9
+    preliminary = [None] * 366
+    preliminary[today_doy - 1] = 21.2
+    prior = {}
+    for y in range(1982, 2026):
+        arr = [18.0] * 366
+        arr[today_doy - 1] = 20.8 if y == 2025 else 20.0
+        prior[y] = arr
+    payload = [{"name": str(y), "data": arr} for y, arr in prior.items()]
+    payload.extend([
+        {"name": "2026", "data": official},
+        {"name": "Preliminary", "data": preliminary},
+        {"name": "1991-2020", "data": [19.0] * 366},
+    ])
+
+    with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
+            mock_get.return_value.json = lambda: payload
+            obs = ocean_sst.fetch_global_sst()
+
+    assert obs is not None
+    assert obs.date == "2026-05-13"
+    assert obs.day_of_year == today_doy
+    assert obs.today_c == pytest.approx(21.2)
+    assert obs.archive_max_c == pytest.approx(20.8)
+    assert obs.archive_max_year == 2025
+
+
 def test_fetch_global_sst_returns_none_on_too_few_prior_years():
     """Fewer than 30 prior years → return None (can't claim a record)."""
     from src.data import ocean_sst
@@ -104,7 +137,7 @@ def test_fetch_global_sst_returns_none_on_too_few_prior_years():
     prior = {y: [18.0] * 365 for y in range(1982, 1985)}
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -132,7 +165,7 @@ def test_fetch_global_sst_streak_stops_at_first_non_exceedance():
 
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -165,7 +198,7 @@ def test_fetch_global_sst_streak_crosses_new_year():
 
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -181,7 +214,7 @@ def test_fetch_global_sst_returns_none_when_all_current_year_values_null():
     prior = {y: [18.0] * 365 for y in range(1982, 2026)}
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -190,7 +223,7 @@ def test_fetch_global_sst_returns_none_when_all_current_year_values_null():
 
 def test_fetch_global_sst_returns_none_on_http_error():
     from src.data import ocean_sst
-    with patch("src.data.ocean_sst.requests.get",
+    with patch("src.data.ocean_sst.fetch_with_retry",
                side_effect=requests.RequestException("boom")):
         assert ocean_sst.fetch_global_sst() is None
 
@@ -205,7 +238,7 @@ def test_fetch_global_sst_rejects_out_of_range_values():
     prior[2020][99] = 999.0  # absurd value — ignored
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
@@ -222,7 +255,7 @@ def test_fetch_global_sst_handles_today_null_uses_latest_non_null():
     prior = {y: [18.0] * 365 for y in range(1982, 2026)}
     payload = _fake_payload(2026, today_doy, cur, prior)
     with patch("src.data.ocean_sst._today_year_doy", return_value=(2026, today_doy)):
-        with patch("src.data.ocean_sst.requests.get") as mock_get:
+        with patch("src.data.ocean_sst.fetch_with_retry") as mock_get:
             mock_get.return_value.raise_for_status = lambda: None
             mock_get.return_value.json = lambda: payload
             obs = ocean_sst.fetch_global_sst()
