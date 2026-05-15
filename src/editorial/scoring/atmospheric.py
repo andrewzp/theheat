@@ -93,7 +93,7 @@ def score_oscillation_transition(
         confidence=96,
         shareability=66 + min(prev_duration_months, 24),
         sensitivity=5,
-        threshold=60,
+        threshold=get_threshold("oscillation_transition"),
         reasons=reasons,
     )
 
@@ -111,7 +111,7 @@ def score_oscillation_extreme(index_name: str, sigma_excursion: float) -> Editor
         confidence=95,
         shareability=68 + sigma_excursion * 4,
         sensitivity=5,
-        threshold=64,
+        threshold=get_threshold("oscillation_extreme"),
         reasons=reasons,
     )
 
@@ -137,6 +137,6 @@ def score_ozone_hole_peak(
         confidence=96,
         shareability=74,
         sensitivity=4,
-        threshold=64,
+        threshold=get_threshold("ozone_hole_peak"),
         reasons=reasons,
     )

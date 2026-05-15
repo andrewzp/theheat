@@ -173,6 +173,36 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         82,
         "Elite synthesis signal; minimum qualifying fire, drought, and heat case is designed to clear.",
     ),
+    "precipitation_extreme": ThresholdEntry(
+        "precipitation_extreme",
+        70,
+        "Plan E (Lane 13) GPM-IMERG daily precipitation extremes; manual-only approval.",
+    ),
+    "snow_extreme": ThresholdEntry(
+        "snow_extreme",
+        70,
+        "Plan E (Lane 13) NSIDC Snow Today single-event SWE extremes; manual-only approval.",
+    ),
+    "seasonal_snow_record": ThresholdEntry(
+        "seasonal_snow_record",
+        74,
+        "Plan E (Lane 13) end-of-season cumulative snowfall record; annual-cap pattern.",
+    ),
+    "oscillation_transition": ThresholdEntry(
+        "oscillation_transition",
+        60,
+        "Plan F (Lane 14) NAO/AO/PDO phase transitions; mirrors ENSO transition threshold.",
+    ),
+    "oscillation_extreme": ThresholdEntry(
+        "oscillation_extreme",
+        64,
+        "Plan F (Lane 14) NAO/AO/PDO 2-sigma extreme excursions; long-arc context-driven.",
+    ),
+    "ozone_hole_peak": ThresholdEntry(
+        "ozone_hole_peak",
+        64,
+        "Plan F (Lane 14) Antarctic ozone hole seasonal peak; annual-cap of 2 tweets/year.",
+    ),
 }
 
 
