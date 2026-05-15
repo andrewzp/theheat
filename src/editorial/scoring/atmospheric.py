@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from ._shared import EditorialScore, _build_score
+from src.editorial.thresholds import get_threshold
 
 
 
@@ -29,7 +30,7 @@ def score_co2_milestone(ppm_crossed: int, actual_ppm: float) -> EditorialScore:
         confidence=confidence,
         shareability=shareability,
         sensitivity=3,
-        threshold=58,
+        threshold=get_threshold("co2_milestone"),
         reasons=reasons,
     )
 
@@ -52,7 +53,7 @@ def score_ch4_milestone(ppb_crossed: int, actual_ppb: float) -> EditorialScore:
         confidence=confidence,
         shareability=shareability,
         sensitivity=3,
-        threshold=58,
+        threshold=get_threshold("ch4_milestone"),
         reasons=reasons,
     )
 
@@ -70,7 +71,7 @@ def score_enso_transition(oni_value: float, previous_duration_months: int) -> Ed
         confidence=96,
         shareability=64 + min(previous_duration_months, 12) * 1.5,
         sensitivity=6,
-        threshold=56,
+        threshold=get_threshold("enso"),
         reasons=reasons,
     )
 
