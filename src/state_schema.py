@@ -132,6 +132,8 @@ class BotState(TypedDict, total=False):
     posted_events: list[str]
     daily_tweet_count: dict[str, int]
     co2_annual_count: dict[str, int]
+    ch4_annual_count: dict[str, int]
+    ch4_last_milestone: int | None
     drafts: list[dict]
     run_history: list[dict]
     errors: list[dict]
@@ -150,6 +152,8 @@ class BotState(TypedDict, total=False):
     ice_mass_last_seen: dict[str, str]
     ice_annual_count: dict[str, int]
     fire_complex_tiers: dict[str, int]
+    coral_dhw_last_tier: dict[str, int]
+    coral_dhw_annual_count: dict[str, int]
     cyclone_tiers: dict[str, int]
     cyclone_wind_history: dict[str, list[CycloneWindObservation]]
     cyclone_annual_count: dict[str, int]

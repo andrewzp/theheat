@@ -17,7 +17,7 @@ from typing import Any, cast
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -38,7 +38,9 @@ from src.editorial.scoring import (
     EditorialScore,
     score_all_time_record,
     score_anomaly,
+    score_ch4_milestone,
     score_co2_milestone,
+    score_coral_bleaching,
     score_cyclone_basin_record,
     score_cyclone_landfall,
     score_cyclone_rapid_intensification,
@@ -513,6 +515,8 @@ def _touch_draft(draft: dict) -> None:
 CITY_COOLDOWN_DAYS = 3
 ELITE_COPY_SCORE = 95
 CO2_ANNUAL_CAP = 12
+CH4_ANNUAL_CAP = 12
+CORAL_DHW_ANNUAL_CAP = 16
 
 
 def _co2_annual_cap_reached(bot_state: BotState, cap: int = CO2_ANNUAL_CAP) -> bool:
@@ -529,6 +533,27 @@ def _increment_co2_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("co2_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
+
+
+def _ch4_annual_cap_reached(bot_state: BotState, cap: int = CH4_ANNUAL_CAP) -> bool:
+    year_key = str(date.today().year)
+    count = bot_state.get("ch4_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[ch4] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
+
+
+def _coral_dhw_annual_cap_reached(
+    bot_state: BotState,
+    cap: int = CORAL_DHW_ANNUAL_CAP,
+) -> bool:
+    year_key = str(date.today().year)
+    count = bot_state.get("coral_dhw_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[coral_dhw] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
 
 
 ICE_ANNUAL_CAP = 8
@@ -2147,6 +2172,70 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             status="failed", error=str(e)
         )
 
+    # 3b. CH4 methane milestones.
+    print("[alerts] Checking CH4 methane...")
+    ch4_drafted_today = any(
+        d.get("type", "").startswith("ch4")
+        and d.get("created_at", "").startswith(date.today().isoformat())
+        for d in bot_state.get("drafts", [])
+    )
+    ch4_start = time.perf_counter()
+    try:
+        readings = _fetch_strict(methane.fetch_ch4_milestones)
+        last_milestone_raw = bot_state.get("ch4_last_milestone")
+        last_milestone = int(last_milestone_raw) if last_milestone_raw is not None else None
+        ch4_milestone = methane.detect_milestone(readings, last_milestone=last_milestone)
+        source_promoted = 0
+        source_drafted = 0
+        if ch4_milestone and state.is_duplicate(bot_state, ch4_milestone.event_id):
+            state.update_ch4_last_milestone(bot_state, ch4_milestone.ppb_crossed)
+        elif (
+            ch4_milestone
+            and not ch4_drafted_today
+            and not _ch4_annual_cap_reached(bot_state)
+        ):
+            score = score_ch4_milestone(ch4_milestone.ppb_crossed, ch4_milestone.actual_ppb)
+            if _should_draft(score, ch4_milestone.event_id):
+                source_promoted += 1
+                review_context = _review_context(
+                    source="NOAA GML",
+                    source_key="ch4_milestone",
+                    headline=f"Methane crossed {ch4_milestone.ppb_crossed} ppb",
+                    current_run=current_run,
+                    facts=[
+                        _fact("Actual reading", f"{ch4_milestone.actual_ppb:.1f} ppb"),
+                        _fact("Milestone crossed", f"{ch4_milestone.ppb_crossed} ppb"),
+                        _fact("Pre-industrial baseline", "722 ppb"),
+                    ],
+                )
+                from src.two_bot.intern import build_ch4_milestone_bundle
+                ch4_bundle = build_ch4_milestone_bundle(ch4_milestone)
+                if _try_two_bot_draft(
+                    ch4_bundle,
+                    bot_state,
+                    score,
+                    legacy_type="ch4_milestone",
+                    event_id=ch4_milestone.event_id,
+                    review_context=review_context,
+                ):
+                    state.record_event(bot_state, ch4_milestone.event_id)
+                    state.update_ch4_last_milestone(bot_state, ch4_milestone.ppb_crossed)
+                    state.increment_ch4_annual_count(bot_state)
+                    drafted += 1
+                    ch4_drafted_today = True
+                    source_drafted += 1
+        _record_source_run(
+            current_run, bot_state, "ch4_milestone", ch4_start,
+            status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted
+        )
+    except Exception as e:
+        print(f"[alerts] CH4 error: {e}")
+        state.log_error(bot_state, "ch4_milestone", str(e))
+        _record_source_run(
+            current_run, bot_state, "ch4_milestone", ch4_start,
+            status="failed", error=str(e)
+        )
+
     # 4. NWS severe weather alerts (US)
     print("[alerts] Checking NWS severe weather...")
     nws_start = time.perf_counter()
@@ -2573,6 +2662,74 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
             status="failed", error=str(e),
         )
 
+    # 9c. Coral Reef Watch DHW threshold crossings (every run)
+    print("[alerts] Checking coral bleaching DHW...")
+    coral_start = time.perf_counter()
+    try:
+        readings = _fetch_strict(coral_dhw.fetch_coral_dhw)
+        events = coral_dhw.detect_dhw_thresholds(
+            readings,
+            cast(dict, bot_state.get("coral_dhw_last_tier", {})),
+        )
+        source_promoted = 0
+        source_drafted = 0
+        for coral_event in events:
+            if state.is_duplicate(bot_state, coral_event.event_id):
+                state.update_coral_dhw_tier(bot_state, coral_event.region_id, coral_event.dhw_tier)
+                continue
+            if _coral_dhw_annual_cap_reached(bot_state):
+                break
+            score = score_coral_bleaching(
+                coral_event.dhw_value,
+                coral_event.dhw_tier,
+                coral_event.region_full_name,
+            )
+            if not _should_draft(score, coral_event.event_id):
+                continue
+            source_promoted += 1
+            review_context = _review_context(
+                source="NOAA Coral Reef Watch",
+                source_key="coral_dhw",
+                headline=f"{coral_event.region_full_name} DHW {coral_event.dhw_value:.1f}",
+                current_run=current_run,
+                facts=[
+                    _fact("Region", coral_event.region_full_name),
+                    _fact("Region ID", coral_event.region_id),
+                    _fact("DHW", f"{coral_event.dhw_value:.1f} °C-weeks"),
+                    _fact("Threshold crossed", f"{coral_event.dhw_tier} °C-weeks"),
+                    _fact("Bleaching level", coral_event.bleaching_level),
+                ],
+            )
+            from src.two_bot.intern import build_coral_bleaching_bundle
+            coral_bundle = build_coral_bleaching_bundle(coral_event)
+            if _try_two_bot_draft(
+                coral_bundle,
+                bot_state,
+                score,
+                legacy_type="coral_bleaching",
+                event_id=coral_event.event_id,
+                review_context=review_context,
+            ):
+                state.record_event(bot_state, coral_event.event_id)
+                state.update_coral_dhw_tier(bot_state, coral_event.region_id, coral_event.dhw_tier)
+                state.increment_coral_dhw_annual_count(bot_state)
+                drafted += 1
+                source_drafted += 1
+        _record_source_run(
+            current_run, bot_state, "coral_dhw", coral_start,
+            status="success",
+            observed=len(readings),
+            promoted=source_promoted,
+            drafted=source_drafted,
+        )
+    except Exception as e:
+        print(f"[alerts] Coral DHW error: {e}")
+        state.log_error(bot_state, "coral_dhw", str(e))
+        _record_source_run(
+            current_run, bot_state, "coral_dhw", coral_start,
+            status="failed", error=str(e),
+        )
+
     # 10. Storm surge / abnormal water levels (every run)
     print("[alerts] Checking coastal water levels...")
     water_levels_start = time.perf_counter()
@@ -2943,6 +3100,8 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
     "fire": "firms",
     "fire_footprint": "fire_footprint",
     "co2_milestone": "co2",
+    "ch4_milestone": "ch4_milestone",
+    "coral_bleaching": "coral_dhw",
     "severe_weather": "nws_alerts",
     "global_disaster": "gdacs",
     "sea_ice_record": "sea_ice",

@@ -75,6 +75,23 @@ def recommend_approval_policy(
             reason="CO2 drafts are safe to auto-queue, but middling copy should wait for review.",
         )
 
+    if tweet_type == "ch4_milestone":
+        if is_strong:
+            return ApprovalPolicy(
+                key="ch4_auto_window",
+                mode="armed_auto",
+                recommended_delay_minutes=45,
+                can_auto_approve=True,
+                reason="High-confidence atmospheric methane signal with low human-harm risk.",
+            )
+        return ApprovalPolicy(
+            key="ch4_review",
+            mode="suggested_auto",
+            recommended_delay_minutes=90,
+            can_auto_approve=True,
+            reason="Methane drafts are safe to auto-queue, but middling copy should wait for review.",
+        )
+
     if tweet_type in {"country_high", "country_low"}:
         # The biggest story the pipeline produces — but rare enough to keep
         # a human-aware review window. Suggested-auto, longer delay.
@@ -126,6 +143,7 @@ def recommend_approval_policy(
             "storm_surge",
             "river_flood",
             "drought",
+            "coral_bleaching",
         }
         or tweet_type.startswith("cyclone_")
     ):

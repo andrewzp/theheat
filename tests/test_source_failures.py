@@ -54,6 +54,28 @@ def test_co2_strict_request_error_is_failed():
             co2.fetch_co2_data(strict=True)
 
 
+def test_ch4_strict_request_error_is_failed():
+    from src.data import methane
+
+    with patch(
+        "src.data._http.requests.get",
+        side_effect=requests.RequestException("network down"),
+    ):
+        with pytest.raises(SourceFetchError):
+            methane.fetch_ch4_milestones(strict=True)
+
+
+def test_coral_dhw_strict_request_error_is_failed():
+    from src.data import coral_dhw
+
+    with patch(
+        "src.data._http.requests.get",
+        side_effect=requests.RequestException("network down"),
+    ):
+        with pytest.raises(SourceFetchError):
+            coral_dhw.fetch_coral_dhw(strict=True)
+
+
 def test_ocean_strict_all_points_failed_is_failed(monkeypatch):
     from src.data import ocean
 

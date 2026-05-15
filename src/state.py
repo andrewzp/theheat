@@ -40,6 +40,10 @@ DEFAULT_STATE: BotState = {
     # Running count of CO2 tweets per calendar year, keyed by "YYYY".
     # Enforced by _co2_annual_cap_reached() in main.py (cap: 12/year).
     "co2_annual_count": {},
+    # Atmospheric methane milestone state (Lane 08). Count is keyed by
+    # calendar year; last_milestone dedupes the NOAA monthly series.
+    "ch4_annual_count": {},
+    "ch4_last_milestone": None,
     "drafts": [],
     "run_history": [],
     "errors": [],
@@ -96,6 +100,12 @@ DEFAULT_STATE: BotState = {
     # TIERS_HECTARES. Prevents re-tweeting the same fire at every update;
     # only tier upgrades trigger a new draft.
     "fire_complex_tiers": {},
+    # Per-reef DHW threshold dedup. Values are the highest tweeted
+    # threshold in °C-weeks (4, 8, or 12).
+    "coral_dhw_last_tier": {},
+    # Running count of coral-bleaching DHW tweets per calendar year
+    # (cap: 16/year).
+    "coral_dhw_annual_count": {},
     # Per-storm NHC/JTWC Saffir-Simpson tier dedup. Keys include source
     # (e.g. "nhc:al012026") so basin identifiers cannot collide.
     "cyclone_tiers": {},
@@ -494,6 +504,23 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
             base.get("co2_annual_count", {}).get(year, 0),
             next_state.get("co2_annual_count", {}).get(year, 0),
         )
+    merged["ch4_annual_count"] = {}
+    for year in set(
+        list(base.get("ch4_annual_count", {}).keys())
+        + list(next_state.get("ch4_annual_count", {}).keys())
+    ):
+        merged["ch4_annual_count"][year] = max(
+            base.get("ch4_annual_count", {}).get(year, 0),
+            next_state.get("ch4_annual_count", {}).get(year, 0),
+        )
+    base_ch4 = base.get("ch4_last_milestone")
+    next_ch4 = next_state.get("ch4_last_milestone")
+    if base_ch4 is None:
+        merged["ch4_last_milestone"] = next_ch4
+    elif next_ch4 is None:
+        merged["ch4_last_milestone"] = base_ch4
+    else:
+        merged["ch4_last_milestone"] = max(int(base_ch4), int(next_ch4))
     merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
     merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
     merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
@@ -574,6 +601,24 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
         merged["fire_complex_tiers"][cid] = max(
             int(base.get("fire_complex_tiers", {}).get(cid, -1)),
             int(next_state.get("fire_complex_tiers", {}).get(cid, -1)),
+        )
+    merged["coral_dhw_last_tier"] = {}
+    for region_id in set(
+        list(base.get("coral_dhw_last_tier", {}).keys())
+        + list(next_state.get("coral_dhw_last_tier", {}).keys())
+    ):
+        merged["coral_dhw_last_tier"][region_id] = max(
+            int(base.get("coral_dhw_last_tier", {}).get(region_id, 0)),
+            int(next_state.get("coral_dhw_last_tier", {}).get(region_id, 0)),
+        )
+    merged["coral_dhw_annual_count"] = {}
+    for year in set(
+        list(base.get("coral_dhw_annual_count", {}).keys())
+        + list(next_state.get("coral_dhw_annual_count", {}).keys())
+    ):
+        merged["coral_dhw_annual_count"][year] = max(
+            base.get("coral_dhw_annual_count", {}).get(year, 0),
+            next_state.get("coral_dhw_annual_count", {}).get(year, 0),
         )
     # Cyclone tier dedup follows the same monotonic semantics: never lose a
     # higher category already observed by a concurrent run.
@@ -1170,6 +1215,43 @@ def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> Bot
     current = int(tiers.get(complex_id, -1))
     if tier > current:
         tiers[complex_id] = int(tier)
+    return state
+
+
+def update_coral_dhw_tier(state: BotState, region_id: str, tier: int) -> BotState:
+    """Record the highest DHW threshold that has produced a draft."""
+
+    tiers = state.setdefault("coral_dhw_last_tier", {})
+    current = int(tiers.get(region_id, 0))
+    if tier > current:
+        tiers[region_id] = int(tier)
+    return state
+
+
+def increment_coral_dhw_annual_count(state: BotState) -> BotState:
+    """Track annual coral-bleaching DHW draft volume."""
+
+    year = str(date.today().year)
+    counts = state.setdefault("coral_dhw_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def update_ch4_last_milestone(state: BotState, milestone: int) -> BotState:
+    """Record the highest methane milestone that has produced a draft."""
+
+    current = state.get("ch4_last_milestone")
+    if current is None or milestone > int(current):
+        state["ch4_last_milestone"] = int(milestone)
+    return state
+
+
+def increment_ch4_annual_count(state: BotState) -> BotState:
+    """Track annual methane milestone draft volume."""
+
+    year = str(date.today().year)
+    counts = state.setdefault("ch4_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
     return state
 
 
