@@ -2,16 +2,19 @@
 
 ## Currently startable (2026-05-15)
 
-### Queue order (each waits for the prior to merge — all touch main.py + scoring.py + intern.py)
+### Queue order (revised 2026-05-15 to maximize parallelism)
 
-| # | Lane | Time | Notes |
+| # | Lane | Mode | Notes |
 |---|---|---|---|
-| 1 | [08 — Plan B: Coral DHW + CH4 methane](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/08-plan-b-coral-dhw-ch4.md) | 4-5 hr | in flight 2026-05-14 22:12 |
-| 2 | [12 — Plan D: Global floods (Copernicus EMS)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/12-plan-d-global-floods.md) | 4-6 hr | non-US flood coverage |
-| 3 | [13 — Plan E: Precip + Snow (GPM-IMERG + NSIDC)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/13-plan-e-precip-snow.md) | 5-7 hr | requires NASA EarthData token |
-| 4 | [14 — Plan F: Climate indices (NAO/AO/PDO + ozone)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/14-plan-f-climate-indices.md) | 3-4 hr | long-arc + seasonal signals |
-| 5 | [15 — Threshold registry refactor](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/15-threshold-registry.md) | 2-3 hr | centralize ~25 magic numbers |
-| 6 | [16 — main.py refactor (split monolith)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/16-main-py-refactor.md) | 3-4 hr | 3,070 → ~50 line entrypoint + modules |
+| 1 | [12 — Plan D: Global floods (Copernicus EMS)](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/12-plan-d-global-floods.md) | sequential | in flight — touches monolithic main.py / scoring.py / intern.py |
+| 2 | **[16 — Monolith decomposition](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/16-main-py-refactor.md)** | sequential | **PROMOTED to step 2.** Splits main.py + scoring.py + intern.py by domain so subsequent lanes are truly parallel-safe. |
+| 3a | [13 — Plan E: Precip + Snow](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/13-plan-e-precip-snow.md) | **parallel** | new files in `orchestrator/sources/`, `scoring/precipitation.py`, `intern/precipitation.py` |
+| 3b | [14 — Plan F: Climate indices](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/14-plan-f-climate-indices.md) | **parallel** | new files in `orchestrator/sources/`, `scoring/atmospheric.py`, `intern/atmospheric.py` |
+| 3c | [15 — Threshold registry refactor](/Users/andrewpuschel/Documents/Claude/theheat/docs/conductor-lanes/15-threshold-registry.md) | **parallel** | touches `scoring/_shared.py` + new `thresholds.py` — different files than E and F |
+
+After step 2 (Lane 16), 3a + 3b + 3c spawn in three concurrent Conductor workspaces. They touch different files (per-category split).
+
+**Wall-clock estimate at ~23 min/lane Conductor pace:** 23 (Plan D) + ~30-45 (Lane 16) + ~23 (parallel 3a/b/c) = **~75-90 min total for the remaining wave** vs ~115 min serial.
 
 ### Recently landed (2026-05-14 → 05-15)
 
