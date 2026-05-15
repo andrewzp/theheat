@@ -205,10 +205,22 @@ class TestCriticReview:
         assert result.passed is False
         assert result.kill_reason == "template_convergence: same shape as Fiji draft"
 
-    def test_raises_on_invalid_json(self, mock_gemini):
+    def test_fails_closed_when_every_attempt_returns_invalid_json(self, mock_gemini):
+        """Replaces an older version of this test that expected
+        ``critic_review`` to raise ValueError on bad JSON. Since the
+        JSON-parse-retry change (mirrors writer + fact_check), the
+        function instead retries once, then returns a structured
+        ``CriticResult(passed=False)`` with a kill_reason naming the
+        JSON failure. See TestCriticJsonParseRetry below for the full
+        retry-shape coverage; this test guards the fail-closed
+        disposition at the top-level API."""
         mock_gemini.return_value = "definitely not json"
-        with pytest.raises(ValueError):
-            critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is False
+        assert result.kill_reason is not None
+        assert "invalid JSON across" in result.kill_reason
 
     def test_uses_explicit_shipped_recent_when_provided(self, mock_gemini):
         mock_gemini.return_value = '{"passed": true, "kill_reason": null}'
@@ -258,6 +270,91 @@ class TestCriticResultInvariants:
         result = CriticResult(passed=False, kill_reason="boring", raw_response="ok")
         assert result.passed is False
         assert result.kill_reason == "boring"
+
+
+class TestCriticJsonParseRetry:
+    """Critic-side defense: if Gemini 2.5 Pro returns empty / non-JSON /
+    mid-truncation output, retry once with a stronger contract reminder.
+    If that also fails, return CriticResult(passed=False) instead of
+    letting ValueError bubble up as pipeline_error.
+
+    Mirrors the fact_check + writer retry shape. Fail-closed on
+    exhaustion (the critic is a gate; block on uncertainty).
+    """
+
+    def _ok(self) -> str:
+        return '{"passed": true, "kill_reason": null}'
+
+    def test_retries_on_empty_response(self, mock_gemini):
+        """First call returns empty; second returns valid JSON."""
+        mock_gemini.side_effect = ["", self._ok()]
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_retries_on_non_json_response(self, mock_gemini):
+        """First call returns prose; second returns valid JSON."""
+        mock_gemini.side_effect = [
+            "I think the draft is fine.",
+            self._ok(),
+        ]
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_retries_on_mid_truncation(self, mock_gemini):
+        """Same shape as the Somalia 2026-05-15 fact-check failure but
+        on the critic side: well-formed prefix, malformed inside."""
+        mid_truncation = '{"passed": false, "kill_reason": "template_conv'  # cut off
+        mock_gemini.side_effect = [mid_truncation, self._ok()]
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_fails_closed_after_parse_budget_exhausted(self, mock_gemini):
+        """Both attempts return non-JSON — return CriticResult with
+        passed=False and a kill_reason naming the JSON failure. The
+        pipeline records this as a critic-stage kill (not
+        pipeline_error). Fail-closed is the right disposition: the
+        gate blocks the draft when it can't read the verdict.
+        """
+        from src.two_bot.critic import JSON_PARSE_RETRY_BUDGET
+
+        mock_gemini.side_effect = ["garbage one", "garbage two"]
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is False
+        assert result.kill_reason is not None
+        assert "invalid JSON across" in result.kill_reason
+        assert mock_gemini.call_count == JSON_PARSE_RETRY_BUDGET + 1
+
+    def test_no_retry_when_first_attempt_parses(self, mock_gemini):
+        """Happy path: first call is valid JSON, no retry."""
+        mock_gemini.return_value = self._ok()
+
+        result = critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 1
+
+    def test_retry_passes_contract_reminder_suffix(self, mock_gemini):
+        """Second attempt must pass a non-empty ``retry_suffix`` so the
+        model knows the previous attempt was rejected for format."""
+        mock_gemini.side_effect = ["", self._ok()]
+
+        critic.critic_review("test tweet", _bundle(), _state_with_drafts([]))
+
+        first_call_kwargs = mock_gemini.call_args_list[0].kwargs
+        second_call_kwargs = mock_gemini.call_args_list[1].kwargs
+        assert first_call_kwargs.get("retry_suffix", "") == ""
+        assert "JSON-output retry" in second_call_kwargs.get("retry_suffix", "")
 
 
 class TestCriticGeminiTimeoutUnit:

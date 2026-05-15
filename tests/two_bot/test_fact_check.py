@@ -88,6 +88,102 @@ def test_fact_check_propagates_llm_failure(mock_gemini):
     assert any("since 2012" in failure for failure in result.failures)
 
 
+class TestJsonParseRetry:
+    """Fact-check-side defense: if Gemini returns empty / non-JSON / mid-
+    truncation output, retry once with a stronger contract reminder. If
+    that also fails, return a structured FactCheckResult(passed=False)
+    instead of letting ValueError bubble up as pipeline_error.
+
+    Production failure this prevents: 2026-05-15 alerts cron logged a
+    Somalia coral_bleaching pipeline_error with reason 'ValueError:
+    invalid JSON in model response: Expecting "," delimiter: line 7
+    column 384'. Stochastic refusal class — the retry usually unblocks
+    via fresh sampling, and on the off-chance it doesn't the structured
+    KILL is the right ledger category (the gate held; the draft is
+    blocked) rather than 'the pipeline crashed.'
+    """
+
+    def _ok(self) -> str:
+        return '{"passed": true, "failures": []}'
+
+    def test_retries_on_empty_response(self, mock_gemini):
+        """First call returns empty string; second returns valid JSON."""
+        mock_gemini.side_effect = ["", self._ok()]
+
+        result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_retries_on_non_json_response(self, mock_gemini):
+        """First call returns prose; second returns valid JSON."""
+        mock_gemini.side_effect = [
+            "I cannot help with this fact-check.",
+            self._ok(),
+        ]
+
+        result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_retries_on_mid_truncation(self, mock_gemini):
+        """The Somalia 2026-05-15 production failure shape: well-formed
+        prefix, malformed inside. ``loads_model_json`` raises
+        JSONDecodeError which the parser converts to ValueError → retry.
+        """
+        mid_truncation = '{"passed": false, "failures": [{"claim": "X", "category": "BUNDLE_FACT",'  # cut off
+        mock_gemini.side_effect = [mid_truncation, self._ok()]
+
+        result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 2
+
+    def test_fails_closed_after_parse_budget_exhausted(self, mock_gemini):
+        """Both attempts return non-JSON — return FactCheckResult with
+        passed=False and a failures entry naming the JSON failure. The
+        pipeline records this as a fact_check stage kill (not pipeline_error).
+        Fail-closed is the right disposition: the gate blocks the draft
+        when it can't read the verdict.
+        """
+        from src.two_bot.fact_check import JSON_PARSE_RETRY_BUDGET
+
+        mock_gemini.side_effect = ["garbage one", "garbage two"]
+
+        result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        assert result.passed is False
+        assert any("invalid JSON across" in f for f in result.failures)
+        assert mock_gemini.call_count == JSON_PARSE_RETRY_BUDGET + 1
+
+    def test_no_retry_when_first_attempt_parses(self, mock_gemini):
+        """Happy path: first call is valid JSON, no retry, no contract
+        reminder appended to the prompt."""
+        mock_gemini.return_value = self._ok()
+
+        result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        assert result.passed is True
+        assert mock_gemini.call_count == 1
+
+    def test_retry_passes_contract_reminder_suffix(self, mock_gemini):
+        """The retry attempt must pass a non-empty ``retry_suffix`` that
+        reinforces the JSON contract — otherwise the model has no
+        feedback that the first attempt was rejected for format
+        reasons (not content)."""
+        mock_gemini.side_effect = ["", self._ok()]
+
+        fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+        first_call_kwargs = mock_gemini.call_args_list[0].kwargs
+        second_call_kwargs = mock_gemini.call_args_list[1].kwargs
+        # First attempt: no retry_suffix (or empty).
+        assert first_call_kwargs.get("retry_suffix", "") == ""
+        # Second attempt: retry_suffix is the contract reminder.
+        assert "JSON-output retry" in second_call_kwargs.get("retry_suffix", "")
+
+
 class TestGeminiTimeoutUnit:
     """Regression: google-genai HttpOptions.timeout is MILLISECONDS, not
     seconds. A bare integer like ``timeout=90`` means 90ms — barely
