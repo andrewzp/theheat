@@ -1,6 +1,7 @@
 from datetime import date
 
 from src.data.co2 import CO2Milestone
+from src.data.climate_indices import OscillationAlignmentEvent, OscillationExtremeEvent, OscillationTransition
 from src.data.coral_dhw import CoralBleachingEvent
 from src.data.copernicus_ems import CopernicusFloodActivation
 from src.data.cyclones import (
@@ -13,6 +14,7 @@ from src.data.fire_footprint import FireComplex
 from src.data.gdacs import GlobalDisasterEvent
 from src.data.ice_mass import IceMassRecord
 from src.data.methane import MethaneMilestone
+from src.data.ozone_hole import OzoneHoleSeasonalEvent
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
@@ -40,6 +42,8 @@ from src.two_bot.intern import (
     build_country_record_bundle,
     build_drought_bundle,
     build_enso_bundle,
+    build_oscillation_bundle,
+    build_ozone_hole_bundle,
     build_extreme_wave_bundle,
     build_fire_bundle,
     build_fire_footprint_bundle,
@@ -850,6 +854,91 @@ def test_build_enso_bundle_passes_through_oni():
     assert {"label": "status_from", "value": "Neutral"} in bundle.current_facts
     assert {"label": "status_to", "value": "El Nino"} in bundle.current_facts
     assert {"label": "previous_duration_months", "value": 8} in bundle.current_facts
+
+
+def test_build_oscillation_transition_bundle_carries_long_arc_fields():
+    event = OscillationTransition(
+        index_name="NAO",
+        full_name="North Atlantic Oscillation",
+        year=2026,
+        month=2,
+        value=-1.4,
+        from_phase="Positive",
+        to_phase="Negative",
+        previous_duration_months=6,
+        event_id="oscillation_transition_nao_negative_2026_02",
+    )
+
+    bundle = build_oscillation_bundle(event)
+
+    assert bundle.signal_kind == "oscillation_transition"
+    assert bundle.where == "North Atlantic Oscillation"
+    assert bundle.when == "2026-02-01"
+    assert {"label": "to_phase", "value": "Negative"} in bundle.current_facts
+    assert bundle.historical_context["anchor_year"] == 2026
+
+
+def test_build_oscillation_extreme_bundle_carries_comparison_year():
+    event = OscillationExtremeEvent(
+        index_name="PDO",
+        full_name="Pacific Decadal Oscillation",
+        year=2026,
+        month=4,
+        value=-2.1,
+        mean=0.0,
+        stdev=0.8,
+        sigma_excursion=2.6,
+        comparison_year=1973,
+        comparison_month=5,
+        event_id="oscillation_extreme_pdo_2026_04",
+    )
+
+    bundle = build_oscillation_bundle(event)
+
+    assert bundle.signal_kind == "oscillation_extreme"
+    assert bundle.headline_metric["value"] == 2.6
+    assert {"label": "comparison_year", "value": 1973} in bundle.current_facts
+    assert bundle.historical_context["comparison_year"] == 1973
+
+
+def test_build_oscillation_alignment_bundle_uses_joint_signal_kind():
+    event = OscillationAlignmentEvent(
+        year=2026,
+        month=1,
+        nao_value=-2.3,
+        ao_value=-2.1,
+        nao_sigma_excursion=2.5,
+        ao_sigma_excursion=2.2,
+        event_id="oscillation_alignment_nao_ao_2026_01",
+    )
+
+    bundle = build_oscillation_bundle(event)
+
+    assert bundle.signal_kind == "oscillation_alignment"
+    assert bundle.headline_metric["value"] == 2.5
+    assert {"label": "ao_value", "value": -2.1} in bundle.current_facts
+
+
+def test_build_ozone_hole_bundle_preserves_recovery_comparisons():
+    event = OzoneHoleSeasonalEvent(
+        year=2026,
+        peak_date="2026-09-20",
+        area_million_km2=23.0,
+        previous_year=2025,
+        previous_area_million_km2=20.8,
+        record_year=2000,
+        record_area_million_km2=29.9,
+        trailing_10yr_mean_area_million_km2=21.4,
+        larger_than_previous_year=True,
+        event_id="ozone_hole_peak_2026",
+    )
+
+    bundle = build_ozone_hole_bundle(event)
+
+    assert bundle.signal_kind == "ozone_hole_peak"
+    assert bundle.headline_metric["unit"] == "million km2"
+    assert bundle.historical_context["record_year"] == 2000
+    assert {"label": "larger_than_previous_year", "value": True} in bundle.current_facts
 
 
 def test_build_synthesis_bundle_carries_components():

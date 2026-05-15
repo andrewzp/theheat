@@ -18,7 +18,7 @@ from typing import Any, cast
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -48,6 +48,9 @@ from src.editorial.scoring import (
     score_cyclone_tier_crossing,
     score_drought,
     score_enso_transition,
+    score_oscillation_transition,
+    score_oscillation_extreme,
+    score_ozone_hole_peak,
     score_extreme_wave,
     score_marine_heatwave,
     score_fire_event,
@@ -1214,6 +1217,7 @@ __all__ = [
     "cast",
     "cities_to_state_map",
     "co2",
+    "climate_indices",
     "contextlib",
     "copernicus_ems",
     "coral_dhw",
@@ -1236,6 +1240,7 @@ __all__ = [
     "ocean",
     "ocean_sst",
     "open_meteo",
+    "ozone_hole",
     "os",
     "post_to_bluesky",
     "post_tweet",
@@ -1255,6 +1260,9 @@ __all__ = [
     "score_cyclone_tier_crossing",
     "score_drought",
     "score_enso_transition",
+    "score_oscillation_transition",
+    "score_oscillation_extreme",
+    "score_ozone_hole_peak",
     "score_extreme_wave",
     "score_fire_event",
     "score_fire_footprint",

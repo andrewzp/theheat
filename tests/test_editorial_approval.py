@@ -60,6 +60,33 @@ class TestApprovalPolicy:
         assert policy.mode == "manual_only"
         assert policy.can_auto_approve is False
 
+    def test_oscillation_transition_arms_automatically(self):
+        policy = recommend_approval_policy(
+            "oscillation_transition",
+            signal_total=70,
+            candidate_score={"total": 70},
+        )
+        assert policy.mode == "armed_auto"
+        assert policy.can_auto_approve is True
+
+    def test_oscillation_extreme_gets_review_window(self):
+        policy = recommend_approval_policy(
+            "oscillation_extreme",
+            signal_total=72,
+            candidate_score={"total": 72},
+        )
+        assert policy.mode == "suggested_auto"
+        assert policy.key == "oscillation_review"
+
+    def test_ozone_hole_peak_gets_measured_review_window(self):
+        policy = recommend_approval_policy(
+            "ozone_hole_peak",
+            signal_total=74,
+            candidate_score={"total": 72},
+        )
+        assert policy.mode == "suggested_auto"
+        assert policy.key == "ozone_hole_review"
+
     def test_fire_footprint_requires_manual_review(self):
         policy = recommend_approval_policy(
             "fire_footprint",
