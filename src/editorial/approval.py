@@ -117,7 +117,18 @@ def recommend_approval_policy(
             ),
         )
 
-    if tweet_type in {"fire", "fire_footprint", "severe_weather", "global_disaster", "storm_surge", "river_flood", "drought"}:
+    if (
+        tweet_type in {
+            "fire",
+            "fire_footprint",
+            "severe_weather",
+            "global_disaster",
+            "storm_surge",
+            "river_flood",
+            "drought",
+        }
+        or tweet_type.startswith("cyclone_")
+    ):
         return ApprovalPolicy(
             key="manual_only",
             mode="manual_only",

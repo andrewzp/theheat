@@ -46,6 +46,13 @@ class OceanSSTStreak(TypedDict, total=False):
     last_milestone_fired: int | None
 
 
+class CycloneWindObservation(TypedDict, total=False):
+    """Single retained tropical-cyclone intensity observation."""
+
+    issued_at: str
+    wind_kt: int
+
+
 class MemoryState(TypedDict, total=False):
     """Two-bot memory layer carried across runs (see src/two_bot/memory.py)."""
 
@@ -143,6 +150,9 @@ class BotState(TypedDict, total=False):
     ice_mass_last_seen: dict[str, str]
     ice_annual_count: dict[str, int]
     fire_complex_tiers: dict[str, int]
+    cyclone_tiers: dict[str, int]
+    cyclone_wind_history: dict[str, list[CycloneWindObservation]]
+    cyclone_annual_count: dict[str, int]
     fire_footprint_last_run: str | None
     synthesis_components: SynthesisComponents
     synthesis_cooldown: dict[str, dict[str, str]]

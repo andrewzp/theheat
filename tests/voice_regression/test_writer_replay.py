@@ -45,6 +45,9 @@ BUNDLE_FIXTURES = [
     "verkhoyansk_monthly_high_bundle",
     "mali_fire_bundle",
     "co2_milestone_bundle",
+    "cyclone_rapid_intensification_bundle",
+    "cyclone_landfall_bundle",
+    "cyclone_basin_record_bundle",
 ]
 
 

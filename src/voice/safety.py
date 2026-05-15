@@ -70,6 +70,10 @@ BANNED_PATTERNS = [
     re.compile(r"EXTREME force", re.IGNORECASE),
     re.compile(r"\bcatastrophic\b", re.IGNORECASE),
     re.compile(r"life.threatening", re.IGNORECASE),
+    re.compile(r"\bdeadly\b", re.IGNORECASE),
+    re.compile(r"\bkiller\b", re.IGNORECASE),
+    re.compile(r"\bmonster storm\b", re.IGNORECASE),
+    re.compile(r"historic devastation", re.IGNORECASE),
     re.compile(r"dangerous conditions", re.IGNORECASE),
     re.compile(r"\bextreme wind warning\b", re.IGNORECASE),
     # Bureaucratic noise in event names

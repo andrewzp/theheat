@@ -19,6 +19,9 @@ from src.state import (
     check_daily_cap,
     update_streaks,
     update_record_streak,
+    update_cyclone_tier,
+    record_cyclone_wind_observation,
+    increment_cyclone_annual_count,
     get_record_streak,
     prune_stale_record_streaks,
     log_error,
@@ -276,6 +279,70 @@ class TestOceanSSTStreak:
         state = {}
         result = update_ocean_sst_streak(state, {"seeded": True, "last_milestone_fired": None})
         assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": None}
+
+
+class TestCycloneState:
+    def test_default_state_has_cyclone_trackers(self):
+        assert DEFAULT_STATE["cyclone_tiers"] == {}
+        assert DEFAULT_STATE["cyclone_wind_history"] == {}
+        assert DEFAULT_STATE["cyclone_annual_count"] == {}
+
+    def test_update_cyclone_tier_keeps_highest_category(self, fresh_state):
+        update_cyclone_tier(fresh_state, "nhc:al012026", 3)
+        update_cyclone_tier(fresh_state, "nhc:al012026", 2)
+
+        assert fresh_state["cyclone_tiers"]["nhc:al012026"] == 3
+
+    def test_record_cyclone_wind_observation_dedupes_by_timestamp(self, fresh_state):
+        record_cyclone_wind_observation(
+            fresh_state,
+            "nhc:al012026",
+            "2026-07-01T00:00:00Z",
+            70,
+        )
+        record_cyclone_wind_observation(
+            fresh_state,
+            "nhc:al012026",
+            "2026-07-01T00:00:00Z",
+            75,
+        )
+
+        assert fresh_state["cyclone_wind_history"]["nhc:al012026"] == [
+            {"issued_at": "2026-07-01T00:00:00Z", "wind_kt": 75}
+        ]
+
+    def test_merge_state_max_merges_cyclone_tiers_and_history(self):
+        from src.state import _merge_state
+
+        current = {
+            "cyclone_tiers": {"nhc:al012026": 2},
+            "cyclone_wind_history": {
+                "nhc:al012026": [{"issued_at": "2026-07-01T00:00:00Z", "wind_kt": 70}]
+            },
+        }
+        incoming = {
+            "cyclone_tiers": {"nhc:al012026": 4},
+            "cyclone_wind_history": {
+                "nhc:al012026": [{"issued_at": "2026-07-02T00:00:00Z", "wind_kt": 115}]
+            },
+        }
+
+        merged = _merge_state(current, incoming)
+
+        assert merged["cyclone_tiers"]["nhc:al012026"] == 4
+        assert merged["cyclone_wind_history"]["nhc:al012026"] == [
+            {"issued_at": "2026-07-01T00:00:00Z", "wind_kt": 70},
+            {"issued_at": "2026-07-02T00:00:00Z", "wind_kt": 115},
+        ]
+
+    @patch("src.state.date")
+    def test_increment_cyclone_annual_count(self, mock_date, fresh_state):
+        mock_date.today.return_value = date(2026, 7, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+
+        increment_cyclone_annual_count(fresh_state)
+
+        assert fresh_state["cyclone_annual_count"]["2026"] == 1
 
 
 class TestDraftTrimming:

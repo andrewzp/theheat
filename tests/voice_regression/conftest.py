@@ -220,6 +220,122 @@ def mali_fire_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def cyclone_rapid_intensification_bundle() -> StoryBundle:
+    """Cyclone RI: Cat 1 to Cat 4 in 24h, with Caribbean warm-pool context."""
+    return StoryBundle(
+        signal_kind="cyclone_rapid_intensification",
+        where="Beryl, Atlantic",
+        when="2026-07-02T00:00:00Z",
+        event_id="nhc_ri_al012026_12_115",
+        headline_metric={"label": "delta_kt_24h", "value": 40, "unit": "kt"},
+        current_facts=[
+            {"label": "source", "value": "NHC"},
+            {"label": "storm_name", "value": "Beryl"},
+            {"label": "basin", "value": "Atlantic"},
+            {"label": "category", "value": 4},
+            {"label": "wind_speed_kt", "value": 115, "unit": "kt"},
+            {"label": "central_pressure_mb", "value": 950, "unit": "mb"},
+            {"label": "lat", "value": 18.0},
+            {"label": "lon", "value": -75.0},
+            {"label": "advisory_number", "value": "12"},
+            {"label": "public_advisory_url", "value": "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"},
+            {"label": "previous_wind_kt", "value": 75, "unit": "kt"},
+            {"label": "previous_category", "value": 1},
+            {"label": "delta_kt_24h", "value": 40, "unit": "kt"},
+            {"label": "region_climate_system", "value": "the Caribbean warm pool"},
+            {"label": "climate_mechanism_note", "value": "warm tropical waters feed humidity, heavy rain, and cyclone energy"},
+            {"label": "season_context", "value": "Atlantic tropical warm-season regime"},
+        ],
+        historical_context={
+            "window_hours": 24,
+            "rapid_intensification_threshold_kt": 30,
+        },
+        raw_signal_dump={
+            "storm_name": "Beryl",
+            "basin": "Atlantic",
+            "current_wind_kt": 115,
+            "previous_wind_kt": 75,
+            "delta_kt_24h": 40,
+            "current_category": 4,
+            "previous_category": 1,
+        },
+    )
+
+
+@pytest.fixture
+def cyclone_landfall_bundle() -> StoryBundle:
+    """Major hurricane landfall, safety-sensitive and manual-only."""
+    return StoryBundle(
+        signal_kind="cyclone_landfall",
+        where="Cedar Key, Florida",
+        when="2026-07-02T00:00:00Z",
+        event_id="nhc_landfall_al012026_12_cedar_key",
+        headline_metric={"label": "category", "value": 3},
+        current_facts=[
+            {"label": "source", "value": "NHC"},
+            {"label": "storm_name", "value": "Beryl"},
+            {"label": "basin", "value": "Atlantic"},
+            {"label": "category", "value": 3},
+            {"label": "wind_speed_kt", "value": 100, "unit": "kt"},
+            {"label": "central_pressure_mb", "value": 960, "unit": "mb"},
+            {"label": "lat", "value": 29.1},
+            {"label": "lon", "value": -83.0},
+            {"label": "advisory_number", "value": "12"},
+            {"label": "public_advisory_url", "value": "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"},
+            {"label": "landfall_location", "value": "Cedar Key, Florida"},
+            {"label": "region_climate_system", "value": "the Gulf Coast humid subtropical belt"},
+            {"label": "climate_mechanism_note", "value": "warm Gulf moisture feeds humid heat and heavy-rain setups"},
+        ],
+        historical_context={"scope": "major_hurricane_landfall"},
+        raw_signal_dump={
+            "storm_name": "Beryl",
+            "basin": "Atlantic",
+            "category": 3,
+            "wind_kt": 100,
+            "location": "Cedar Key, Florida",
+        },
+    )
+
+
+@pytest.fixture
+def cyclone_basin_record_bundle() -> StoryBundle:
+    """Atlantic basin record fixture for archive-backed cyclone wording."""
+    return StoryBundle(
+        signal_kind="cyclone_basin_record",
+        where="Beryl, Atlantic",
+        when="2026-06-15T00:00:00Z",
+        event_id="nhc_record_al012026_9_earliest_cat4",
+        headline_metric={"label": "category", "value": 4},
+        current_facts=[
+            {"label": "source", "value": "NHC"},
+            {"label": "storm_name", "value": "Beryl"},
+            {"label": "basin", "value": "Atlantic"},
+            {"label": "category", "value": 4},
+            {"label": "wind_speed_kt", "value": 115, "unit": "kt"},
+            {"label": "central_pressure_mb", "value": 950, "unit": "mb"},
+            {"label": "lat", "value": 14.5},
+            {"label": "lon", "value": -57.0},
+            {"label": "advisory_number", "value": "9"},
+            {"label": "public_advisory_url", "value": "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"},
+            {"label": "record_label", "value": "earliest Atlantic Category 4 on record"},
+            {"label": "record_scope", "value": "Atlantic best-track archive"},
+        ],
+        historical_context={
+            "record_label": "earliest Atlantic Category 4 on record",
+            "record_scope": "Atlantic best-track archive",
+            "scope": "basin_record",
+        },
+        raw_signal_dump={
+            "storm_name": "Beryl",
+            "basin": "Atlantic",
+            "category": 4,
+            "wind_kt": 115,
+            "record_label": "earliest Atlantic Category 4 on record",
+        },
+    )
+
+
+@pytest.fixture
 def co2_milestone_bundle() -> StoryBundle:
     """CO2 milestone — no city, no temperature. Tests writer adapting to
     a non-place, non-temperature signal kind."""
