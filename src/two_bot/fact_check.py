@@ -19,6 +19,15 @@ from src.two_bot.json_utils import json_default as _json_default, loads_model_js
 FACT_CHECKER_MODEL = os.environ.get("THEHEAT_FACT_CHECK_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
+# JSON-parse retry budget — mirrors the writer's same-named constant. If the
+# Gemini fact-checker returns empty / non-JSON / mid-truncation output, retry
+# once with a stronger contract reminder before bubbling up as a structured
+# failure. Production failures this prevents: 2026-05-15 Somalia coral_bleaching
+# alerts run hit "ValueError: invalid JSON: Expecting ',' delimiter line 7 col
+# 384" — single attempt, no retry, surfaced as pipeline_error. Stochastic
+# refusal usually unblocks on a second sampling.
+JSON_PARSE_RETRY_BUDGET = 1
+
 
 def _format_failure(item) -> str:
     if isinstance(item, str):
@@ -48,7 +57,13 @@ def _parse_fact_check_json(raw: str) -> tuple[bool, list[str]]:
     return parsed["passed"], [_format_failure(item) for item in failures]
 
 
-def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
+def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> str:
+    """One Gemini fact-check call. Network-level retries handled by
+    call_with_retries; JSON-parse retries handled by the caller (fact_check)
+    via the ``retry_suffix`` kwarg, which appends a contract-reinforcement
+    message to the user prompt on the second attempt.
+    """
+
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for fact-checking")
@@ -66,6 +81,8 @@ def _call_gemini(tweet: str, bundle: StoryBundle) -> str:
         tweet=tweet,
         bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
     )
+    if retry_suffix:
+        user_prompt = f"{user_prompt}{retry_suffix}"
     response = call_with_retries(
         "gemini fact-check",
         lambda: client.models.generate_content(
@@ -106,11 +123,49 @@ def fact_check(
             extracted_claims=extracted,
         )
 
-    raw = _call_gemini(tweet, bundle)
-    passed, llm_failures = _parse_fact_check_json(raw)
+    # JSON-parse retry loop. The Gemini fact-checker occasionally returns
+    # empty / mid-truncated / non-JSON output (stochastic refusal class).
+    # call_with_retries handles network-level errors INSIDE _call_gemini,
+    # but the JSON parse happens AFTER that returns — so without this
+    # outer retry a malformed response surfaces as pipeline_error. Mirror
+    # the writer's pattern: retry once with an explicit contract reminder,
+    # then return a structured fact_check FAIL instead of letting
+    # ValueError bubble up. Fail-closed is the right disposition for a
+    # gate — better to block a draft than ship an unchecked one.
+    last_parse_error: str | None = None
+    raw = ""
+    for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
+        retry_suffix = ""
+        if parse_attempt > 0 and last_parse_error is not None:
+            retry_suffix = (
+                "\n\n[JSON-output retry: the previous attempt did not return "
+                "valid JSON. Return ONLY the JSON object specified above — "
+                "no prose before or after, no markdown fences, no chain-of-"
+                "thought. If every claim passes, return "
+                '{"passed": true, "failures": []}.]'
+            )
+        raw = _call_gemini(tweet, bundle, retry_suffix=retry_suffix)
+        try:
+            passed, llm_failures = _parse_fact_check_json(raw)
+            return FactCheckResult(
+                passed=passed,
+                failures=llm_failures,
+                raw_response=raw,
+                extracted_claims=extracted,
+            )
+        except ValueError as exc:
+            last_parse_error = str(exc)
+
+    # Retry budget exhausted — fail-closed with a clear failures entry so
+    # the suppression dashboard categorizes it as a fact_check stage kill
+    # (not pipeline_error). The draft is blocked; the human-approval queue
+    # never sees something the fact-checker couldn't read.
     return FactCheckResult(
-        passed=passed,
-        failures=llm_failures,
-        raw_response=raw,
+        passed=False,
+        failures=[
+            f"fact-checker returned invalid JSON across "
+            f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
+        ],
+        raw_response="(json-parse retry exhausted)",
         extracted_claims=extracted,
     )

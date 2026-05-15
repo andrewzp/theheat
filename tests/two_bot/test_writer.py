@@ -600,7 +600,7 @@ class TestBundleJsonHandlesDates:
         # Stub _call_gemini so we can capture the bundle_json string it builds.
         captured = {}
 
-        def fake_call(tweet, bundle):
+        def fake_call(tweet, bundle, *, retry_suffix: str = ""):
             from src.two_bot.fact_check import _json_default
             from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_USER_PROMPT_TEMPLATE
             user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
@@ -609,7 +609,7 @@ class TestBundleJsonHandlesDates:
                     bundle.to_dict(), sort_keys=True, default=_json_default
                 ),
             )
-            captured["prompt"] = user_prompt
+            captured["prompt"] = user_prompt + retry_suffix
             return '{"passed": true, "failures": []}'
 
         from src.two_bot import fact_check

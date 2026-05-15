@@ -37,6 +37,15 @@ from src.two_bot.retry import call_with_retries
 from src.two_bot.types import CriticResult, StoryBundle
 
 
+# JSON-parse retry budget — mirrors the writer + fact_check constants. If
+# Gemini 2.5 Pro returns empty / non-JSON / mid-truncation output, retry
+# once with a stronger contract reminder before bubbling up. Without this,
+# a single malformed response would surface as pipeline_error instead of
+# a clean critic-stage kill. Fail-closed on exhaustion (the critic is a
+# gate; block on uncertainty).
+JSON_PARSE_RETRY_BUDGET = 1
+
+
 def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = None) -> list[dict]:
     """Pending drafts created since UTC midnight, freshest first.
 
@@ -140,8 +149,15 @@ def _call_gemini(
     bundle: StoryBundle,
     pending_today: list[dict],
     shipped_recent: list[str],
+    *,
+    retry_suffix: str = "",
 ) -> str:
     """Call Gemini 2.5 Pro with the critic prompt.
+
+    Network-level retries handled by call_with_retries; JSON-parse retries
+    handled by the caller (critic_review) via ``retry_suffix``, which
+    appends a contract-reinforcement message to the user prompt on the
+    second attempt.
 
     Mirrors fact_check._call_gemini's HttpOptions timeout posture exactly
     — timeout=90000 is MILLISECONDS (90s). The fact_check.py comment
@@ -167,6 +183,8 @@ def _call_gemini(
         shipped_count=len(shipped_recent),
         shipped_tweets_block=_format_shipped_block(shipped_recent),
     )
+    if retry_suffix:
+        user_prompt = f"{user_prompt}{retry_suffix}"
     response = call_with_retries(
         "gemini critic",
         lambda: client.models.generate_content(
@@ -208,6 +226,44 @@ def critic_review(
             if isinstance(row, dict)
         ]
 
-    raw = _call_gemini(draft_text, bundle, pending_today, shipped_recent)
-    passed, kill_reason = _parse_critic_json(raw)
-    return CriticResult(passed=passed, kill_reason=kill_reason, raw_response=raw)
+    # JSON-parse retry loop — mirrors writer + fact_check. Gemini 2.5 Pro
+    # is much more reliable than Flash on structured output, but stochastic
+    # mid-truncation / refusal still happens (~1 in 50 calls observed in
+    # 2026-05-15 production: Somalia coral_bleaching with "ValueError:
+    # invalid JSON: Expecting ',' delimiter line 7 col 384"). Without
+    # this retry the malformed response surfaces as pipeline_error;
+    # with it, a second sampling usually unblocks.
+    last_parse_error: str | None = None
+    raw = ""
+    for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
+        retry_suffix = ""
+        if parse_attempt > 0 and last_parse_error is not None:
+            retry_suffix = (
+                "\n\n[JSON-output retry: the previous attempt did not return "
+                "valid JSON. Return ONLY the JSON object specified above — "
+                "no prose before or after, no markdown fences, no chain-of-"
+                'thought. Use {"passed": true, "kill_reason": null} or '
+                '{"passed": false, "kill_reason": "<short reason>"}.]'
+            )
+        raw = _call_gemini(
+            draft_text, bundle, pending_today, shipped_recent,
+            retry_suffix=retry_suffix,
+        )
+        try:
+            passed, kill_reason = _parse_critic_json(raw)
+            return CriticResult(passed=passed, kill_reason=kill_reason, raw_response=raw)
+        except ValueError as exc:
+            last_parse_error = str(exc)
+
+    # Retry budget exhausted — fail-closed with a structured KILL so the
+    # suppression dashboard categorizes this as a critic-stage kill (not
+    # pipeline_error). The draft is blocked; the human-approval queue
+    # never sees something the critic couldn't read.
+    return CriticResult(
+        passed=False,
+        kill_reason=(
+            f"critic returned invalid JSON across "
+            f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
+        ),
+        raw_response="(json-parse retry exhausted)",
+    )
