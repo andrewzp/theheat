@@ -8,13 +8,13 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Bot commit | `dc25f7b` (PR #121 — JSON-parse retry for fact_check + critic; latest on origin/main 2026-05-16) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + F3 critic + Wodehouse rule** (Sonnet 4.6 writer + Gemini fact-checker + Sonnet 4.6 second-pass editorial critic since PR #120 2026-05-15; `src/voice/generator.py` dead since 2026-05-04) |
+| Last cycle A-rate | **10%** (May 16 — 1 A- in 10 new drafts; Galapagos coral, 24.5°C-weeks) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | **40 pp** (10% this cycle vs 50% bar) |
 | Posting | paused until bar cleared |
-| Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
+| Coverage | **638 cities × 180 countries** + coral DHW (8 reef zones via Coral Reef Watch, Plan B) |
 
 ## Active proposals
 
@@ -162,9 +162,11 @@ matched the banned wink-kicker shape from line 80. Replaced with single-clause e
 ("the Sahel dry season runs December–March") and explicit guidance against the calendar
 closer.
 
-**Status:** SHIPPED in PR #84. Awaiting empirical confirmation on the next two-bot
-alerts cycle that fire drafts in Sahel/Siberia (the consistent self-kill class) now
-produce drafts rather than dying on "no verifiable seasonal framing."
+**Status:** SHIPPED in PR #84. **Empirical confirmation in progress.** May 13: no P3
+self-kills (first graded two-bot cycle, all 3 fire drafts reached pending with seasonal
+context). May 16: no P3 self-kills (BC fire [6] reached pending with seasonal timing
+frame). Two consecutive cycles without P3 evidence. One more cycle without observation
+→ move to Resolved (archive threshold = 3 consecutive).
 
 ### ~~P4~~ — Add Wodehouse rule to top of writer_prompt.py — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -219,18 +221,24 @@ accelerating-warming, ecosystem specificity) appeared inconsistently. In the two
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
 palette is named.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 16 (4 cycles; coral batch provides
+strongest evidence — 7/8 coral_bleaching drafts converge on the DHW-explanation template
+because no alternative framings are named; the two that break it spontaneously, Galapagos
+and Austral Islands, use ecosystem incongruity and earn A-/B+).
+**Last seen:** 2026-05-16.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
 period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor,
-ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number
-alone is striking, deliver the data plainly. Forced humor breaks the spell."*
+ecosystem-specific specificity. For coral specifically, name the Galapagos template:
+"expected protection + failed protection + consequence" (e.g. "cold upwelling normally
+buffers heat; when that buffer fails, stress accumulates fast"). Conclude: *"None of these
+are mandatory. When the number alone is striking, deliver the data plainly. Forced humor
+breaks the spell."*
 
 **Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default.
+on the easy default. For coral in particular: 7/8 drafts used DHW-explanation; naming
+the ecosystem-incongruity alternative should split the distribution.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
@@ -256,8 +264,10 @@ banning the default opener when `recent_categories` already contains "fire" with
 24h, and tells the writer to ask whether the bundle is actually extraordinary
 enough to ship if no alternative form works.
 
-**Status:** SHIPPED in PR #85 second commit. Empirical test: next cron run that
-produces 2+ fire drafts in the same cycle — do they show structural variety?
+**Status:** SHIPPED in PR #85 second commit. **Empirical confirmation: positive (partial).**
+May 16 draft [6] BC fire — first post-PR #85 fire in the pending queue — breaks the formula
+opener. One fire draft is not definitive. Next test: 2+ fire drafts in the same cycle — do
+different sentence-1 forms appear?
 
 ### ~~Chuuk ceiling — "expository → punch"~~ — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -277,9 +287,57 @@ shifts here propagate downstream" → punch A). New "delete the system clause"
 test: if removing your second sentence leaves the reader thinking "so what?",
 load-bearing. If it leaves them thinking "oh, fair enough", expository.
 
-**Status:** SHIPPED in PR #85 second commit. Empirical test: next graded cycle —
-do system clauses do work (consequence/contrast/causal/rate) rather than just
-describing geography?
+**Status:** SHIPPED in PR #85 second commit. **Not yet observable.** May 16 had no
+new monthly_high or record drafts (8 coral_bleaching + 1 fire + 1 monthly_low). Coral
+drafts show similar expository-vs-punch tension: [8] Fiji SPCZ clause is expository;
+[13] Galapagos buffer clause is a punch. Fix appears relevant to coral as well as records.
+Next test: a monthly_high or record draft generated post-PR #85 — does the system clause
+do work (consequence/contrast/causal/rate) rather than describing geography?
+
+### P7 — Coral template convergence + sub-threshold framing mismatch
+
+**Observed:** 2026-05-16 — 8 of 8 coral_bleaching drafts (first graded coral cycle) used the
+same two-sentence structure: (1) "[Location] reefs have accumulated X°C-weeks — past/approaching
+Y threshold." (2) DHW explanation + "persistence/duration is what kills/turns to die-off."
+The two drafts that broke the template (Galapagos, Austral Islands) used ecosystem incongruity
+framing and earned A-/B+. The six that stayed in it earned C–B. Separate sub-issue: two
+sub-threshold drafts (Great Nicobar 7.2°C-weeks, Chagos 7.2°C-weeks) deployed the kill
+mechanism language ("duration above the tolerance ceiling that kills coral") for readings that
+haven't reached the bleaching-expected threshold. Framing doesn't match signal tier.
+
+**Direct parallel to P6:** P6 observed all fire drafts using "[A fire in X] is radiating Y MW"
+in every cycle; P7 observes all coral drafts using the DHW-explanation structure in the first
+cycle. Same root cause: no named alternatives in the prompt.
+
+**Cycles observed:** May 16 (1 cycle; 7/8 coral drafts template-converged).
+**Last seen:** 2026-05-16.
+
+**Proposed fix (a — coral framing variety):** Add to `src/two_bot/prompts/writer_prompt.py`
+coral_bleaching framing section. Name the Galapagos template as the A-grade target:
+"Lead with signal scale (double a tier, not just past a floor). Name the expected protection
+and its failure. Close on the consequence." Provide the Galapagos draft as an APPROVED EXEMPLAR.
+Name 2–3 alternatives: geographic-expansion framing (Austral Islands: "heat persisting this far
+signals the band has stretched"), cold-water-zone framing (Galapagos: buffer fails → rapid
+accumulation), archive-scale framing (if archive depth is available). Ban the DHW-lecture
+template as the default: "Do NOT open the system clause with 'DHW measures X; persistence is
+what kills.' That is the explanation of last resort. Use it only when no ecosystem incongruity
+is available."
+
+**Proposed fix (b — sub-threshold framing tier):** Add to coral framing section: "Signal tier
+determines framing. Below 8°C-weeks (Alert Level 1): the story is the approach — name how close
+it is and what the approach signals. Above 8°C-weeks (mass bleaching threshold): the story is
+the mechanism of loss — name what fails and why. At or above 12°C-weeks (mortality tier): the
+story is the scale — 'double the mortality threshold' does the work."
+
+**Expected impact:** Coral A-rate should approach fire A-rate (currently 0–C+ without the fix;
+Galapagos-class drafts are achievable when the right location + signal tier appear). Sub-threshold
+framing fix prevents the kill-mechanism language misfire.
+
+**Status:** Drafted. One cycle of evidence. Target: `src/two_bot/prompts/writer_prompt.py`
+coral framing section (or wherever coral bundle framing is specified in the writer prompt).
+Awaiting human implementation.
+
+---
 
 ## Awaiting evidence
 
@@ -298,13 +356,23 @@ separate curation path to investigate in the two-bot writer.
 ### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
 The voice engine history (v2: 43% A-rate on 7 drafts; v2.5: 9% on 11 drafts) is no
-longer relevant — that pipeline is dead. The two-bot writer is the new baseline. Zero
-graded drafts from two-bot have reached the corpus so far (May 12 queue empty; all prior
-two-bot drafts were rejected before pending or have `evaluator_pass=None`).
+longer relevant — that pipeline is dead. The two-bot writer is the new baseline.
 
-**Watch for:** first two-bot drafts to reach pending and get graded. A-rate on first 10+
-two-bot drafts establishes the new baseline. Expect different failure modes than the
-voice engine (no era anchor over-deployment; potentially different Wodehouse profile).
+**Emerging baseline (2 graded cycles):**
+- May 13: 0% (0/4 — 3 fire, 1 monthly_high; fire template convergence was the bottleneck)
+- May 16: 10% (1/10 new drafts — Galapagos coral A-; coral template convergence new)
+- Cumulative two-bot baseline: 7% (1/14 graded) — well below bar
+
+**Failure mode profile (two-bot vs. voice engine):**
+- Era anchor over-deployment: NOT observed (no record drafts reaching pending yet)
+- Wodehouse violations: NOT observed across 14 graded drafts (P4 shipped in PR #85 holding)
+- Template convergence: IS observed (P6 fire — improving; P7 coral — new)
+- Kicker/incongruity delivery: IS observed gap (most B-range drafts stop at mechanism, not punch)
+- Fire self-kills: NOT observed for 2 consecutive cycles (P3 approaching archive)
+
+**Watch for:** first record (all_time_high/low, monthly_high/low with era anchor opportunity)
+draft to reach pending — tests era anchor gate and A1 era-anchor concerns. F3 editorial
+critic (PR #120, 2026-05-15) may lift B→A-; watch first post-critic cycle.
 
 ## Resolved (archive)
 
