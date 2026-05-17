@@ -8,13 +8,13 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Bot commit | `dc25f7b` (PR #121 — JSON-parse retry for fact_check + critic; post-overnight-wave stack including Plans A-F + F2 + F3 critic + threshold registry + monolith decomposition) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + F3 second-pass editorial critic + length+JSON retries** (Sonnet 4.6 writer → Gemini fact-checker → Sonnet F3 critic; `src/voice/generator.py` dead since 2026-05-04; WORLD_KNOWLEDGE widened in PR #119; critic added in PR #120) |
+| Last cycle A-rate | **7%** (May 17, 14 drafts: 1 A-, 7 B-range, 6 C-range) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | **43 pp** (1/14 A-rate, May 17) |
 | Posting | paused until bar cleared |
-| Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
+| Coverage | **638 cities × 180 countries + 23 live data sources** (Plans A-F wave merged 2026-05-15; 9 new sources including Coral Reef Watch DHW, NHC/JTWC cyclones, Copernicus EMS floods, GPM-IMERG precip, NSIDC snow, NAO/AO/PDO, Antarctic ozone) |
 
 ## Active proposals
 
@@ -219,9 +219,13 @@ accelerating-warming, ecosystem specificity) appeared inconsistently. In the two
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
 palette is named.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 17 (4 cycles; era anchor over-deployment
++ mechanic convergence in old pipeline; no named mechanics in fire batch May 13; mostly no
+named mechanics in coral batch May 17 — exception: Galapagos [13] used ecosystem specificity
+as incongruity vehicle and graded A-, showing the writer CAN reach for the move when the
+location is distinctive enough; the gap is for less-iconic locations where the move is
+available but not obvious).
+**Last seen:** May 17.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -281,6 +285,49 @@ load-bearing. If it leaves them thinking "oh, fair enough", expository.
 do system clauses do work (consequence/contrast/causal/rate) rather than just
 describing geography?
 
+**May 17 update:** Partially working. Three of the 8 coral bleaching drafts (Galapagos,
+Austral Islands, Madagascar) have second sentences that do real work — expectation/violation,
+geographic incongruity, mechanism-then-consequence. Five coral drafts (Nauru, Great Nicobar,
+Chagos, Fiji, Southern Borneo) still use explanatory geography-lesson second sentences. The
+fix is landing on strong signals with distinctive ecosystem context; not yet landing on
+weaker signals. P7 (below) targets the within-cycle convergence version of this failure.
+
+### P7 — Coral DHW explanation convergence in second sentences
+
+**Observed:** May 17 — 8 coral_bleaching drafts in one cycle; 5 of them use near-identical
+second-sentence DHW explanations. The pattern:
+
+- [7] Madagascar: "DHW measures how long heat persists, and persistence is what kills"
+- [8] Fiji: "sustained heat above the tolerance ceiling is what turns stress into die-off"
+- [9] Nauru: "DHW measures heat duration, not just intensity; it's persistence above the
+  tolerance ceiling that kills coral"
+- [10] Great Nicobar: "DHW measures heat persistence, not just intensity; it is duration
+  above the tolerance ceiling that kills coral" (synonyms for [9])
+- [11] Chagos: "DHW counts how long heat persists above the tolerance ceiling; proximity to
+  8 is what matters"
+
+By draft [10], the explanation is verbatim-with-synonyms. The metric explanation is useful
+ONCE — DHW is unfamiliar to most readers. After that, subsequent coral drafts in the same
+cycle should use the second sentence for location-specific ecosystem context only (trust the
+reader to remember what DHW means from the earlier draft in their scroll).
+
+**Cycles observed:** May 17 (1 cycle; 5 of 8 coral drafts converge on explanation closer).
+**Last seen:** May 17.
+
+**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` coral_bleaching section:
+"If `used_framings` already contains a DHW explanation this cycle, skip the DHW definition
+in the second sentence entirely. Go straight to the location-specific ecosystem context:
+what makes THIS reef system distinctively vulnerable? (Cold upwelling failure, SPCZ band
+expansion, atoll exposure, etc.) Trust the reader — the metric was explained in the earlier
+draft. Repeating it with synonyms reads as template, not voice."
+
+**Expected impact:** Eliminates the [9]-[11] explanation-convergence pattern. Forces the
+writer to surface location-specific ecosystem vulnerability in the second sentence for every
+coral draft past the first — which is where the A-grade coral moves actually live
+(Galapagos, Austral Islands).
+
+**Status:** Drafted. Awaiting human implementation in `writer_prompt.py`.
+
 ## Awaiting evidence
 
 These need more cycles before promotion to active proposals or retirement.
@@ -298,13 +345,26 @@ separate curation path to investigate in the two-bot writer.
 ### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
 The voice engine history (v2: 43% A-rate on 7 drafts; v2.5: 9% on 11 drafts) is no
-longer relevant — that pipeline is dead. The two-bot writer is the new baseline. Zero
-graded drafts from two-bot have reached the corpus so far (May 12 queue empty; all prior
-two-bot drafts were rejected before pending or have `evaluator_pass=None`).
+longer relevant — that pipeline is dead. The two-bot writer is the new baseline.
 
-**Watch for:** first two-bot drafts to reach pending and get graded. A-rate on first 10+
-two-bot drafts establishes the new baseline. Expect different failure modes than the
-voice engine (no era anchor over-deployment; potentially different Wodehouse profile).
+**Updated May 17:** Two graded cycles now on record. May 13: 0% A-rate (4 drafts — 3 fire, 1
+monthly_high). May 17: 7% A-rate (14 drafts — 4 carry-over, 1 monthly_low, 1 fire, 8 coral).
+Cumulative two-bot A-rate: **1/18 graded = 6%** (not counting carry-over double-count). First
+A- is Galapagos coral (May 17) — ecosystem-specificity mechanic via cold-upwelling incongruity.
+Confirmed failure modes in two-bot pipeline: fire template convergence (partially fixed by
+PR #85), DHW explanation convergence in coral drafts (new — P7), margin-language vagueness in
+cold records (Bethel "a degree below"). No era-anchor over-deployment observed (no record drafts
+with era anchors in either graded cycle). No Wodehouse violations in either cycle (P4 fix holding).
+
+**F3 critic context (PR #120, merged ~May 15-16):** Second-pass editorial critic now in
+pipeline. It's unclear whether the May 15 coral drafts passed through the critic (timing is
+ambiguous). If they did, the 7% A-rate with the critic active sets a new post-critic baseline.
+If they didn't, the next cycle with fresh coral or record drafts will be the first critic-
+inclusive graded cycle.
+
+**Watch for:** (a) Record drafts (all_time_high, country_high, monthly_high) reaching pending
+under two-bot pipeline — no era anchor test cases yet. (b) First critic-inclusive graded cycle
+to see if the F3 pass is lifting B drafts to B+ or A-.
 
 ## Resolved (archive)
 
