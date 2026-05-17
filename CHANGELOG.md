@@ -2,6 +2,174 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1.0] - 2026-05-15
+
+The editorial-architecture release. Three PRs landed in one session to lift
+the A-rate ceiling that the 0.7.0.0 wave couldn't address from the data
+layer. The fact-checker is now generous on the writer's external knowledge
+(canonical scales, named geography, IPCC framings); a second-pass critic
+(Gemini 2.5 Pro) catches the writer's blind spots, especially template
+convergence across same-cron drafts; and both Gemini callers gained
+JSON-parse retry parity with the writer so stochastic refusals stop
+crashing the pipeline.
+
+Production verdict at session close: the post-architecture cron killed 27
+weak/template-convergent drafts in one alerts run (with specific
+kill_reasons in the suppression ledger) while letting through the Galapagos
+24.5°C-week DHW Alert Level 5 banger as the lead pending draft.
+
+### Changed — fact-check WORLD_KNOWLEDGE widened (#119)
+
+- **`src/two_bot/prompts/fact_check_prompt.py`** — rewrite of the
+  WORLD_KNOWLEDGE bucket with concrete allow-list categories:
+  - **Canonical published scales:** NOAA Coral Reef Watch DHW alert
+    levels (4 / 8 / 12 / 16 / 20 °C-weeks → Bleaching Alert Levels 1–5),
+    Saffir-Simpson, Beaufort, Fujita/EF, VEI, Drought Monitor D0–D4,
+    GDACS tiers.
+  - **Named marine and physical geography:** seas, channels, straits,
+    basins, reef systems, archipelagos, currents, plates — atlases are
+    settled science; don't require the bundle to spell out every named
+    feature.
+  - **IPCC AR6-grade climate framings:** Indian Ocean warming faster
+    than most tropical basins, Arctic amplification, ENSO mechanics,
+    monsoon timing, warm-pool / convergence-zone behavior.
+  - **Basic ocean / atmospheric mechanism:** semi-enclosed basin heat
+    retention, warm-current poleward transport, rain shadows, cold-air
+    drainage.
+  Disposition revised in same session: **primary-source confidence is
+  required** — clearly established by NOAA / IPCC / NASA / NSIDC / USGS
+  / WMO / canonical encyclopedia → ACCEPT; plausible / vibes-based /
+  unpredictable-search → UNVERIFIABLE. The automated gate owns accuracy;
+  no "let the human catch shaky claims" escape clause.
+- **`src/two_bot/prompts/writer_prompt.py`** — NO FABRICATED CONTEXT
+  bullet aligned to the new fact-check framing (drops "95%+ verifiable"
+  language; names NOAA / IPCC / NASA / NSIDC / USGS / WMO as the
+  authoritative sources; calls out canonical scales as fair game; frames
+  external knowledge as the editorial product).
+- **`src/two_bot/prompts/writer_prompt.py`** — two narrow new bullets:
+  - **NO SNAPSHOT-TREND CLAIMS** — trend language ("still climbing,"
+    "approaching," "closing on") requires a bundle trend / streak /
+    rate-of-change field; a single DHW value, single °C reading, or
+    single SST anomaly is a snapshot, not a direction.
+  - **NO RELATIVE-POSITION CLAIMS THAT DON'T COMPUTE** — "halfway,"
+    "midway," "closer to A than B" must be arithmetically true given
+    the bundle numbers (a DHW of 5.2 between 4 and 8 is 30% above the
+    floor, not "halfway").
+- **`tests/two_bot/test_prompts.py`** — 36 structural assertions guarding
+  the new posture (canonical-scale allow-list survives, the 95%+
+  quantitative bar stays dropped, primary-source requirement stays
+  required, narrow UNVERIFIABLE guards stay tight, JSON output contract
+  unchanged, writer-prompt nudges present).
+
+### Added — F3 second-pass editorial critic (#120)
+
+The deferred lever from the 0.7.0.0 handoff. Runs after fact_check
+passes and acts as the final editorial gate before a draft enters the
+human-approval queue. PASS/KILL only in v1 — no rewrite loop.
+
+- **`src/two_bot/prompts/critic_prompt.py`** — editorial-bar prompt.
+  Two gates (stop-mid-scroll, send-it-to-a-friend). Kill conditions
+  split into editorial / template-repetition / voice-craft / scale
+  buckets. **Bias toward KILL on borderline** — asymmetric cost: missed
+  kill = boring feed erodes signal-to-noise; missed pass = good draft
+  will return tomorrow when the event re-fires.
+- **`src/two_bot/critic.py`** — Gemini 2.5 Pro call with
+  `HttpOptions(timeout=90000)` (90s in MILLISECONDS, regression-guarded).
+  `_collect_pending_today` filters drafts by UTC-date prefix and
+  excludes the in-flight `event_id` — gives the critic cross-draft
+  awareness the writer lacks (writer only sees shipped / 24h-cooldown
+  history). Compact `_format_pending_block` / `_format_shipped_block`
+  helpers keep prompt tokens bounded (~3K input + 200 output ⇒ ~$0.006
+  per call; daily ~$0.30–$0.60).
+- **`src/two_bot/types.py`** — `CriticResult` dataclass with
+  passed/kill_reason invariants enforced in `__post_init__`.
+- **`src/config.py`** — `CRITIC_MODEL = "gemini-2.5-pro"`, env-overridable
+  via `THEHEAT_CRITIC_MODEL`. Comment explicitly bans Flash per
+  `feedback_theheat_flash_no_taste.md` — never Flash for taste-bearing
+  roles.
+- **`src/two_bot/pipeline.py`** — critic wired between fact_check pass
+  and draft return. `THEHEAT_CRITIC_ENABLED=0` operations kill-switch
+  for emergency disable without a deploy. Metadata records critic
+  verdict + model name; dashboard can show "critic-approved" badge.
+- **`src/orchestrator/common.py`** — `kill_stage` comment updated to
+  include `"critic"` alongside writer/safety/fact_check/pipeline_error.
+
+### Added — JSON-parse retry parity for Gemini callers (#121)
+
+Production audit during the #120 verification cron found a Somalia
+coral_bleaching pipeline_error with
+`ValueError: invalid JSON: Expecting "," delimiter: line 7 column 384`.
+Two prior 2026-05-12 errors on Nettles Is, Florida record_low were the
+same class. ~1 in 50 drafts hits a stochastic Gemini refusal (empty
+body, mid-truncation, prose preamble) that the existing
+`call_with_retries` layer doesn't catch — JSON parse runs AFTER the API
+call returns. The writer already had the right pattern; the two
+Gemini-side callers didn't.
+
+- **`src/two_bot/fact_check.py`** — added `JSON_PARSE_RETRY_BUDGET = 1`
+  (matching writer). `_call_gemini` gains optional `retry_suffix: str = ""`
+  kwarg, appended to the user prompt before sending. `fact_check()` wraps
+  `_call_gemini` + `_parse_fact_check_json` in a retry loop. On
+  exhaustion: `FactCheckResult(passed=False, failures=["fact-checker
+  returned invalid JSON across 2 attempts: ..."])`. Fail-closed — the
+  gate blocks the draft when it can't read the verdict.
+- **`src/two_bot/critic.py`** — identical shape. On exhaustion:
+  `CriticResult(passed=False, kill_reason="critic returned invalid JSON
+  across 2 attempts: ...")`. Fail-closed.
+
+### Production observed at session close
+
+- **27 critic kills** in the first post-deploy alerts run (last 50
+  suppressions). Kill reasons: `template_convergence: one of nine
+  similar coral drafts today, but its 4.9°C-week signal is much weaker
+  than others (e.g., Galapagos at 24.5)`; `recycled_phrasing: system
+  clause explaining the 4/8°C-week thresholds echoes shipped East
+  Java/Bali tweet`; `interesting_but_not_memorable: 4.1°C-weeks is the
+  entry threshold for bleaching, not an extraordinary signal that
+  passes the 'Wait, what?' test`; `underwhelming_scale: 4.3°C-weeks is
+  a low-impact signal`.
+- **Fact-check kills dropped 22 → 13** in the last 50 (~40% reduction).
+- **Pending coral_bleaching: 6 → 8.** Lead draft is Galapagos at
+  24.5°C-weeks (DHW Alert Level 5, score 88) — *"double the 12°C-week
+  tier where coral mortality is expected. The Galapagos sits where cold
+  upwelling normally buffers heat; when that buffer..."*
+- **Voice-regression green** against the new prompts (no fixture
+  changes needed; replay path doesn't go through the critic).
+
+### Tests
+
+1235 passing (was 1151 at 0.7.0.0 close; +84 across this release):
+- `tests/two_bot/test_prompts.py` — 36 structural assertions
+  guarding both the loosened-WORLD_KNOWLEDGE bar and the critic-prompt
+  shape (kill conditions, output contract, user-prompt template keys).
+- `tests/two_bot/test_critic.py` — 38 tests covering JSON parse,
+  CriticResult invariants, pending-today filtering, prompt-block
+  formatting, mocked-Gemini PASS/KILL paths, JSON-parse retry, timeout
+  regression guard.
+- `tests/two_bot/test_fact_check.py` — 12 new tests for the JSON-parse
+  retry shape (mirrors writer's `TestJsonParseRetry`).
+- `tests/two_bot/test_pipeline.py` — +4 critic-integration tests +1
+  module-scoped autouse fixture so pre-existing pipeline tests stay
+  green without per-test edits.
+
+### Architecture
+
+```
+writer (Sonnet 4.6) → safety → claim_extractor (Gemini Flash) → fact_check (Gemini Flash) → critic (Gemini 2.5 Pro) → pending
+```
+
+The critic adds two structural lifts the writer can't self-deliver:
+**different model family** (Gemini 2.5 Pro vs Sonnet writer = different
+blind spots) and **cross-draft awareness** (the writer can't see its
+siblings produced in the same cron run; the critic can).
+
+### Cost
+
+- Critic: ~$0.30–$0.60/day at current volume (Gemini 2.5 Pro: $1.25/M
+  input, $10/M output; no free tier for 2.5 Pro).
+- Fact-check: unchanged (Gemini 2.5 Flash, existing paid Gemini key).
+- Writer: unchanged (Sonnet 4.6, existing Anthropic key, ~$22/month).
+
 ## [0.7.0.0] - 2026-05-15
 
 The largest single landing in @theheat's history. 23 PRs merged in ~6 hours

@@ -1,18 +1,24 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-05-15 (post-overnight wave: Plan A + Plans B-F + F2 + threshold registry + monolith decomposition — see [CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0).
+**Last updated:** 2026-05-15 (post-editorial-architecture release: PRs #119 + #120 + #121 — see [CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.1.0).
 
-**Architecture status (post-2026-05-15):** Monolithic `src/main.py` decomposed into `src/orchestrator/` (per-source runner files), `src/editorial/scoring/` (per-category), `src/two_bot/intern/` (per-category). 23 sources tracked. Score-gate thresholds centralized in `src/editorial/thresholds.py`. F2 bundle enrichment via `src/data/_climate_context.py` (38 curated climate regions, Wikipedia-sourced for fact-check verifiability). Source-health observability via `state.source_health` rolling 7-day record + dashboard `/health` view.
+**Architecture status (post-2026-05-15 v2):** Three-Gemini pipeline plus Sonnet writer. `writer (Sonnet 4.6) → safety → claim_extractor (Gemini Flash) → fact_check (Gemini Flash) → critic (Gemini 2.5 Pro) → pending`. The fact-checker accepts the writer's external climate-science / oceanography / geography knowledge as WORLD_KNOWLEDGE (canonical scales, named geography, IPCC AR6 framings, basic ocean / atmospheric mechanism) with primary-source confidence required; bundle stuffing is *not* the answer to UNVERIFIABLE rejections. The critic is the editorial-bar gate: cross-family with the writer for taste diversity, cross-draft-aware (sees today's pending queue) for template-convergence detection. Source layer unchanged from 0.7.0.0: 23 sources, `src/orchestrator/sources/`, `src/editorial/scoring/`, `src/two_bot/intern/`, thresholds centralized in `src/editorial/thresholds.py`, F2 enrichment via `src/data/_climate_context.py`.
 
 A manufacturing-style flowchart showing how climate data becomes a tweet.
 
 Each stage has a specific job; failure at any stage kills the draft rather than compromising quality. "Quality over volume" is enforced at multiple stages — operationally, **quality means passing the two-gate shareability test: stop-mid-scroll + send-it-to-a-friend**. Both gates required.
 
-**Two-bot writer is live since 2026-05-04** (CHANGELOG 0.2.0.0). The voice generator is no longer reached on any live signal path — Sonnet 4.6 writes every audience-facing tweet, Gemini Flash runs claim extraction + fact-check.
+**Two-bot writer is live since 2026-05-04** (CHANGELOG 0.2.0.0). The voice generator is no longer reached on any live signal path — Sonnet 4.6 writes every audience-facing tweet, Gemini Flash runs claim extraction + fact-check, Gemini 2.5 Pro runs the second-pass editorial critic.
 
-**Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate` | `writer` | `fact_check` | `pipeline_error`) — the dashboard's `Suppressed` tab surfaces them in real time.
+**Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x; extended for `critic` stage in CHANGELOG 0.7.1.0 / #120). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate | writer | safety | fact_check | critic | pipeline_error | cycle_cap | unknown`) — the dashboard's `Suppressed` tab surfaces them in real time.
 
 **Writer-side guardrails are live since 2026-05-12** (CHANGELOG 0.5.0.0 + 0.5.1.0). The Sonnet writer is wrapped in two retry loops with declarative-only feedback: a **length-cap retry** (#76) reattempts up to 2x if a tweet > 280 chars, then KILLS with `kill_reason`; a **JSON-parse retry** (#82) reattempts 1x if the model returns non-JSON, then KILLS with `kill_reason`. Neither path crashes the pipeline. Twitter never sees over-length or malformed output regardless of model sampling.
+
+**JSON-parse retry parity for Gemini callers is live since 2026-05-15** (CHANGELOG 0.7.1.0 / #121). The writer's JSON-parse retry pattern is now mirrored into `fact_check.fact_check()` and `critic.critic_review()`. Each `_call_gemini` gains an optional `retry_suffix` kwarg appended to the user prompt; the caller wraps `_call_gemini` + `_parse_*_json` in a retry loop (`JSON_PARSE_RETRY_BUDGET = 1`) and appends a contract-reinforcement message on the second attempt. On exhaustion, both fail-closed with structured KILL/REJECT — `FactCheckResult(passed=False, failures=["...invalid JSON across 2 attempts..."])` and `CriticResult(passed=False, kill_reason="...invalid JSON across 2 attempts...")` — so the suppression ledger categorizes the failure as a clean fact_check / critic kill instead of pipeline_error.
+
+**F3 second-pass editorial critic is live since 2026-05-15** (CHANGELOG 0.7.1.0 / #120). After fact_check passes, Gemini 2.5 Pro reviews the draft against the editorial bar (stop-mid-scroll + send-it-to-a-friend) AND against today's pending drafts (cross-draft awareness — catches template convergence the writer can't self-detect because the writer's `recent_categories` only fires against shipped / 24h-cooldown history, not in-flight siblings). PASS/KILL only in v1; no rewrite loop. Bias toward KILL on borderline. Operations kill-switch via `THEHEAT_CRITIC_ENABLED=0`. Cost: ~$0.30–$0.60/day at current volume.
+
+**Fact-check WORLD_KNOWLEDGE is generous since 2026-05-15** (CHANGELOG 0.7.1.0 / #119). The fact-checker treats canonical published scales (NOAA Coral Reef Watch DHW Alert Levels 1–5, Saffir-Simpson, Beaufort, Fujita/EF, VEI, Drought Monitor D0–D4, GDACS tiers), named marine + physical geography (seas, channels, basins, reef systems, archipelagos, currents), IPCC AR6-grade climate framings, and basic ocean / atmospheric mechanism as WORLD_KNOWLEDGE — they don't need to be in the bundle. Narrow UNVERIFIABLE guards still catch named-facility specifics (Hoover Dam MW etc.), snapshot-trend claims without a bundle trend field, arithmetic that doesn't compute, ungrounded comparative superlatives, and fabricated archive specifics. Disposition: primary-source confidence is required (clearly established by NOAA / IPCC / NASA / NSIDC / USGS / WMO → ACCEPT; plausible / vibes-based → UNVERIFIABLE).
 
 **Bundle-side normalization is live since 2026-05-12** (CHANGELOG 0.5.0.0 + 0.5.1.0). FRP gets `round(fire.frp, 1)` in `intern.build_fire_bundle` (#80); GHCN station names get COOP (`4 NE`) + military (`ANG`) suffix stripping in `normalize_station_name` (#82). Bundle becomes the single source of truth so the fact-checker's exact-match contract holds naturally.
 
@@ -80,12 +86,16 @@ flowchart TD
     EXTRACT --> FACTCHECK["Gemini Flash<br/>Fact-checker<br/>(90s timeout)<br/>strict entity match vs bundle"]:::gen
 
     FACTCHECK -.->|UNVERIFIABLE / mismatch| SUPP3[("suppressions<br/>stage=fact_check")]:::state
-    FACTCHECK -->|passed=true| MEMORY["Record in memory<br/>(banned moves, era anchors,<br/>shipped texts)"]:::gen
+    FACTCHECK -->|passed=true| CRITIC["Gemini 2.5 Pro<br/>F3 Editorial Critic<br/>(90s timeout)<br/>• cross-draft awareness<br/>(today's pending queue)<br/>• cross-family taste vs Sonnet writer<br/>• PASS/KILL only (v1)<br/>• env kill-switch:<br/>THEHEAT_CRITIC_ENABLED=0"]:::gen
 
-    %% Pipeline-error capture: any exception in writer / extractor / fact-check
+    CRITIC -.->|template_convergence /<br/>recycled_phrasing /<br/>interesting_but_not_memorable /<br/>underwhelming_scale /<br/>dead_system_clause / etc.| SUPP_CRITIC[("suppressions<br/>stage=critic<br/>+ kill_reason")]:::state
+    CRITIC -->|passed=true| MEMORY["Record in memory<br/>(banned moves, era anchors,<br/>shipped texts)"]:::gen
+
+    %% Pipeline-error capture: any exception in writer / extractor / fact-check / critic
     WRITER -.->|exception| SUPP4[("suppressions<br/>stage=pipeline_error<br/>+ kill_reason")]:::state
     EXTRACT -.->|exception| SUPP4
     FACTCHECK -.->|exception| SUPP4
+    CRITIC -.->|exception| SUPP4
 
     MEMORY --> CAP["Per-cycle cap<br/>max 3 drafts<br/>keep top by signal score"]:::gate
 
