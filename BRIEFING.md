@@ -1,23 +1,21 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-15 (post-overnight wave — Plans A-F + F2 + threshold registry + monolith decomposition all shipped).
-**Status:** **DATA LAYER COMPLETE; 23 SOURCES LIVE; ARCHITECTURE DECOMPOSED; POSTING STILL PAUSED PENDING EDITORIAL QUALITY BAR.** Massive overnight landing: 23 PRs merged in ~6 hours via parallel Conductor + Claude Code workspaces. See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.0.0 for the full release notes and [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15.md) for the current next-session prompt.
+**Last updated:** 2026-05-15 (post-editorial-architecture release — PRs #119 + #120 + #121 landed; F3 critic operating in production).
+**Status:** **DATA LAYER COMPLETE; 23 SOURCES LIVE; EDITORIAL PIPELINE COMPLETE; POSTING STILL PAUSED PENDING A-RATE SIGNAL ON NEW ARCHITECTURE.** The 0.7.0.0 overnight wave (Plans A-F + F2 + threshold registry + monolith decomposition) addressed coverage; this release (0.7.1.0) addresses the editorial ceiling that 0.7.0.0 couldn't move from the data layer. See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.1.0 for the full release notes and [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15-v2.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15-v2.md) for the current next-session prompt.
 
-**What landed:**
+**What landed (this session):**
 
-- **Plan A (5 phases)** — source-health observability platform, restored broken sources (`ocean_sst`, `river_gauges` flood-stage, FIRMS retry hardening), open_meteo "degraded" calibration fix, state.json self-pruning (`trim_drafts` drops rejected >30d), dashboard `/health` view.
-- **Plans B + C + D + E + F** — 9 new sources: Coral Reef Watch DHW + CH4 methane, NHC + JTWC tropical cyclones, Copernicus EMS global floods, GPM-IMERG precip + NSIDC snow extremes, NAO/AO/PDO + Antarctic ozone hole.
-- **F2 — Bundle enrichment** for system clauses: `src/data/_climate_context.py` with 38 curated climate regions, Wikipedia-sourced for fact-check verifiability. Writer's "western Pacific warm pool" / "Androscoggin Valley" framings now pass fact-check.
-- **Threshold registry** — 32-entry `src/editorial/thresholds.py` centralizes every score-gate threshold. Calibration is one-config-table edit.
-- **Monolith decomposition** — `src/main.py` 3,070 → 96 lines. `src/orchestrator/sources/<source>.py` (22 files), `src/editorial/scoring/<category>.py` (9 files), `src/two_bot/intern/<category>.py`. `__init__.py` re-exports preserve all imports. Future source-adds land parallel-safe.
+- **#119 — fact-check WORLD_KNOWLEDGE widened.** Writer's external climate-science / oceanography / geography knowledge is the editorial product, not noise to strip. Concrete allow-list: canonical published scales (NOAA Coral Reef Watch DHW Alert Levels 1–5, Saffir-Simpson, Beaufort, Fujita, VEI, Drought Monitor, GDACS tiers); named marine + physical geography; IPCC AR6-grade framings; basic ocean / atmospheric mechanism. Disposition: primary-source confidence required (clearly established by NOAA / IPCC / NASA / NSIDC / USGS / WMO → ACCEPT; plausible / vibes-based → UNVERIFIABLE). Narrow guards preserved: named-facility specifics, snapshot-trend, arithmetic miscalcs, ungrounded superlatives, fabricated archive specifics.
+- **#120 — F3 second-pass editorial critic.** New pipeline stage between fact_check pass and pending draft. Gemini 2.5 Pro (cross-family with Sonnet writer = different blind spots). Two structural lifts over writer self-discipline: different model family + cross-draft awareness (writer can't see siblings in same cron run; critic can). PASS/KILL only in v1. Bias toward KILL on borderline. `THEHEAT_CRITIC_ENABLED=0` operations kill-switch.
+- **#121 — JSON-parse retry parity for Gemini callers.** The 2026-05-15 alerts cron logged a Somalia coral pipeline_error (`Expecting "," delimiter line 7 col 384`). Writer already had the retry pattern; fact_check + critic didn't. Now both wrap their `_call_gemini` + `_parse_*_json` pair in a retry loop with a contract-reminder suffix on the second attempt; on exhaustion, fail-closed with structured KILL/REJECT instead of letting ValueError surface as pipeline_error.
 
-**Architecture status:** post-decomposition. New sources go in `src/orchestrator/sources/`, scoring in `src/editorial/scoring/<category>.py`, bundles in `src/two_bot/intern/<category>.py`. Thresholds in `src/editorial/thresholds.py`. F2 enrichment via `local_climate_context(lat, lon, category)`.
+**Architecture status:** post-editorial-loop. Pipeline is `writer (Sonnet 4.6) → safety → claim_extractor (Gemini Flash) → fact_check (Gemini Flash) → critic (Gemini 2.5 Pro) → pending`. Suppression `stage` values are now `writer | safety | fact_check | critic | pipeline_error | cycle_cap | score_gate | unknown`.
 
-**Production state:** state.json 906 KB, 12 pending drafts (up from 6 — new sources firing), 24 sources in `source_health`, zero score_gate kills in 24h, 1151 tests passing.
+**Production state (post-deploy alerts cron at session close):** state.json 1.2 MB, 14 pending drafts (was 12), led by Galapagos 24.5°C-weeks DHW Alert Level 5 (score 88). Last 50 suppressions: critic 27, fact_check 13, writer 6, cycle_cap 4, safety 1, pipeline_error 1. Fact-check kill rate dropped 22 → 13 (~40%) since #119. 1235 tests passing on main, mypy clean across 90 source files.
 
-**Open PRs:** typically 1 (daily-plan auto-PR from grading agent at 15:03 UTC). The wave's PRs (#96, #98-103, #105-117) are all merged.
+**Open PRs:** typically 1 (daily-plan auto-PR from grading agent at 15:03 UTC). The session's PRs (#119, #120, #121) are all merged.
 
-**Posting status:** still **manual_only** for all categories. Structural blocker is now exclusively editorial quality (A-grade rate from grading-agent cycle), not infrastructure or coverage.
+**Posting status:** still **manual_only** for all categories. The structural blocker is now: does the post-architecture batch move A-rate? Yesterday's grading agent reported 0% A on PR #92. Today's 15:03 UTC grading-agent run will be the first signal for the new architecture.
 
 ---
 
