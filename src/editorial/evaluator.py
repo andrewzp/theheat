@@ -219,10 +219,19 @@ def evaluate_candidate(
             f'TWEET TO EVALUATE:\n"{candidate_text}"'
         )
 
+        # Mark the system prompt for ephemeral prompt caching; cuts cached-
+        # prefix input cost ~90% on repeat evaluator calls inside the 5-min
+        # TTL. The user content is the only varying part.
         response = client.messages.create(
             model=EVALUATOR_MODEL,
             max_tokens=1024,
-            system=EVALUATOR_PROMPT,
+            system=[
+                {
+                    "type": "text",
+                    "text": EVALUATOR_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_content}],
         )
 
