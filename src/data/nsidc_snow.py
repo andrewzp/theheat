@@ -10,6 +10,7 @@ from typing import Any
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 SNOW_TODAY_SWE_URL = "https://nsidc.org/api/snow-today/snow-water-equivalent/points/swe.json"
@@ -19,6 +20,7 @@ BLIZZARD_DAY_MIN_MM = 12.7
 BLIZZARD_TOTAL_MIN_MM = 50.8
 SEASONAL_RECORD_MARGIN_MM = 25.4
 SNOW_HISTORY_DAYS = 10
+SNOW_TODAY_MAX_AGE_DAYS = 7
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,7 @@ def fetch_snow_today(*, strict: bool = False) -> list[SnowReading]:
         if not isinstance(metadata, Mapping) or not isinstance(rows, list):
             raise SourceFetchError("NSIDC Snow Today schema drift: bad metadata/data shape")
         reading_date = str(metadata.get("last_date_with_data") or date.today().isoformat())
+        assert_freshness(reading_date, "NSIDC Snow Today", SNOW_TODAY_MAX_AGE_DAYS)
 
         readings: list[SnowReading] = []
         for row in rows:
@@ -112,11 +115,11 @@ def detect_snow_extremes(
     events: list[SnowExtremeEvent] = []
     for reading in readings:
         delta = reading.swe_delta_mm
-        if delta is None:
+        if delta is None or delta <= 0:
             continue
         prior = daily_records.get(_daily_gain_key(reading))
         previous_mm = _record_mm(prior)
-        if previous_mm is not None and delta >= previous_mm + daily_margin_mm:
+        if previous_mm is not None and previous_mm > 0 and delta >= previous_mm + daily_margin_mm:
             events.append(_snow_event(
                 kind="daily_swe_gain_record",
                 reading=reading,
@@ -163,7 +166,7 @@ def update_snow_tracking(
 
     for reading in readings:
         delta = reading.swe_delta_mm
-        if delta is not None:
+        if delta is not None and delta > 0:
             daily_key = _daily_gain_key(reading)
             current = daily.get(daily_key) if isinstance(daily, MutableMapping) else None
             current_mm = _record_mm(current)

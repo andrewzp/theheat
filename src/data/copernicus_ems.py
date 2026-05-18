@@ -31,6 +31,7 @@ SOURCE_NAME = "copernicus_ems"
 _REQUEST_HEADERS = {"User-Agent": "(theheat-bot, contact@theheat.app)"}
 
 POPULATION_THRESHOLD = 100_000
+MAJOR_AREA_THRESHOLD_KM2 = 100.0
 _FLOOD_CATEGORY = "Flood"
 _SUMMARY_MAX_AGE_DAYS = 45
 _SEVERITY_ORDER = {
@@ -150,11 +151,7 @@ def _classify_severity(
     """Derive a conservative tier because the public API has no severity field."""
     if populations_affected >= 250_000 or affected_area_km2 >= 500:
         return "Extreme"
-    if (
-        populations_affected >= POPULATION_THRESHOLD
-        or affected_area_km2 >= 100
-        or not closed
-    ):
+    if populations_affected >= POPULATION_THRESHOLD or affected_area_km2 >= MAJOR_AREA_THRESHOLD_KM2:
         return "Major"
     if populations_affected >= 10_000 or affected_area_km2 >= 10:
         return "Moderate"
@@ -297,6 +294,12 @@ def detect_flood_events(
     events: list[CopernicusFloodActivation] = []
     for activation in activations:
         current_rank = _severity_rank(activation.severity)
+        has_major_impact = (
+            activation.populations_affected >= POPULATION_THRESHOLD
+            or activation.affected_area_km2 >= MAJOR_AREA_THRESHOLD_KM2
+        )
+        if current_rank >= _SEVERITY_ORDER["Major"] and not has_major_impact:
+            continue
         if current_rank < _SEVERITY_ORDER["Major"] and (
             activation.populations_affected < POPULATION_THRESHOLD
         ):

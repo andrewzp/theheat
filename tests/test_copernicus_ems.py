@@ -143,8 +143,9 @@ def test_detail_failure_non_strict_keeps_summary_activation():
     events = fetch_active_flood_activations()
 
     assert len(events) == 1
-    assert events[0].severity == "Major"
+    assert events[0].severity == "Minor"
     assert events[0].populations_affected == 0
+    assert detect_flood_events(events, {}) == []
 
 
 @responses.activate
@@ -223,6 +224,12 @@ def test_detector_ignores_unknown_severity_without_population_threshold():
     assert detect_flood_events([event], {}) == []
 
 
+def test_detector_suppresses_major_without_major_impact_evidence():
+    event = _activation(severity="Major", population=0, area_km2=0.0)
+
+    assert detect_flood_events([event], {}) == []
+
+
 def test_score_global_flood_passes_major_population_threshold():
     score = score_global_flood("Major", 100_000, 20.0, "Colombia")
 
@@ -235,6 +242,13 @@ def test_score_global_flood_suppresses_minor_low_impact():
     score = score_global_flood("Minor", 3000, 1.0, "Italy")
 
     assert not score.passes
+
+
+def test_score_global_flood_suppresses_major_without_impact_evidence():
+    score = score_global_flood("Major", 0, 0.0, "Italy")
+
+    assert not score.passes
+    assert "below major impact thresholds" in score.reasons
 
 
 def test_score_global_flood_extreme_scores_above_major():
@@ -283,6 +297,12 @@ def _patch_other_alert_sources(monkeypatch):
     monkeypatch.setattr(main.drought, "fetch_drought_data", lambda *a, **k: [])
     monkeypatch.setattr(main.enso, "fetch_enso_data", lambda *a, **k: [])
     monkeypatch.setattr(main.enso, "detect_transition", lambda *a, **k: None)
+    monkeypatch.setattr(main.climate_indices, "fetch_nao", lambda *a, **k: [])
+    monkeypatch.setattr(main.climate_indices, "fetch_ao", lambda *a, **k: [])
+    monkeypatch.setattr(main.climate_indices, "fetch_pdo", lambda *a, **k: [])
+    monkeypatch.setattr(main.climate_indices, "detect_phase_transition", lambda *a, **k: None)
+    monkeypatch.setattr(main.climate_indices, "detect_extreme_excursion", lambda *a, **k: None)
+    monkeypatch.setattr(main.climate_indices, "detect_nao_ao_alignment", lambda *a, **k: None)
     monkeypatch.setattr(main.ocean, "fetch_ocean_conditions", lambda *a, **k: [])
     monkeypatch.setattr(main.ocean, "detect_extreme_waves", lambda *a, **k: [])
     monkeypatch.setattr(main.ocean_sst, "fetch_global_sst", lambda *a, **k: None)
