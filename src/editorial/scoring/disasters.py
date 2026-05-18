@@ -10,6 +10,9 @@ from ._shared import EditorialScore, _build_score
 from src.editorial.thresholds import get_threshold
 
 
+_GLOBAL_FLOOD_POPULATION_THRESHOLD = 100_000
+_GLOBAL_FLOOD_MAJOR_AREA_KM2 = 100.0
+
 
 def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
     event_weight = {
@@ -66,12 +69,18 @@ def score_global_flood(
     affected_area_km2: float,
     country: str,
 ) -> EditorialScore:
+    has_major_impact = (
+        populations_affected >= _GLOBAL_FLOOD_POPULATION_THRESHOLD
+        or affected_area_km2 >= _GLOBAL_FLOOD_MAJOR_AREA_KM2
+    )
     severity_score = {
         "Extreme": 98,
         "Major": 90,
         "Moderate": 68,
         "Minor": 48,
     }.get(severity, 70)
+    if severity in {"Major", "Extreme"} and not has_major_impact:
+        severity_score = min(severity_score, 58)
     population_bonus = min(populations_affected / 25_000, 12)
     area_bonus = min(affected_area_km2 / 50.0, 10)
     reasons = [f"Copernicus EMS {severity} flood activation", country]
@@ -79,6 +88,8 @@ def score_global_flood(
         reasons.append(f"{populations_affected:,} people affected")
     if affected_area_km2 > 0:
         reasons.append(f"{affected_area_km2:.1f} sq km mapped flood extent")
+    if severity in {"Major", "Extreme"} and not has_major_impact:
+        reasons.append("below major impact thresholds")
     return _build_score(
         "global_flood",
         severity=severity_score + population_bonus + area_bonus,

@@ -1,7 +1,11 @@
+from datetime import date, timedelta
+
+import pytest
 import responses
 
 from src.data.nsidc_snow import (
     INCH_TO_MM,
+    SNOW_TODAY_MAX_AGE_DAYS,
     SNOW_TODAY_SWE_URL,
     SnowReading,
     detect_snow_extremes,
@@ -27,11 +31,12 @@ def _reading(station="Albro Lake", day="2026-05-14", swe=15.0, delta=2.0):
 class TestFetchSnowToday:
     @responses.activate
     def test_fetch_snow_today_parses_points(self):
+        today = date.today().isoformat()
         responses.add(
             responses.GET,
             SNOW_TODAY_SWE_URL,
             json={
-                "metadata": {"last_date_with_data": "2026-05-14"},
+                "metadata": {"last_date_with_data": today},
                 "data": [
                     {
                         "name": "Albro Lake",
@@ -51,18 +56,41 @@ class TestFetchSnowToday:
 
         assert len(readings) == 1
         assert readings[0].station == "Albro Lake"
-        assert readings[0].date == "2026-05-14"
+        assert readings[0].date == today
         assert readings[0].swe_mm == 15.5 * INCH_TO_MM
         assert readings[0].swe_delta_mm == -3.3 * INCH_TO_MM
 
     @responses.activate
     def test_fetch_snow_today_strict_raises_on_bad_schema(self):
-        import pytest
         from src.data.source_status import SourceFetchError
 
         responses.add(responses.GET, SNOW_TODAY_SWE_URL, json={"bad": []}, status=200)
 
         with pytest.raises(SourceFetchError):
+            fetch_snow_today(strict=True)
+
+    @responses.activate
+    def test_fetch_snow_today_strict_raises_on_stale_metadata(self):
+        from src.data.source_status import SourceFetchError
+
+        stale_day = (date.today() - timedelta(days=SNOW_TODAY_MAX_AGE_DAYS + 1)).isoformat()
+        responses.add(
+            responses.GET,
+            SNOW_TODAY_SWE_URL,
+            json={
+                "metadata": {"last_date_with_data": stale_day},
+                "data": [
+                    {
+                        "name": "Albro Lake",
+                        "lon": -111.96,
+                        "lat": 45.6,
+                    }
+                ],
+            },
+            status=200,
+        )
+
+        with pytest.raises(SourceFetchError, match="stale data"):
             fetch_snow_today(strict=True)
 
     @responses.activate
@@ -89,6 +117,16 @@ class TestSnowDetection:
 
     def test_daily_swe_gain_record_requires_prior_record(self):
         assert detect_snow_extremes([_reading(delta=2.0)], {"snow_daily_swe_gain_records": {}}) == []
+
+    def test_daily_swe_gain_record_requires_positive_current_and_prior_gain(self):
+        state = {
+            "snow_daily_swe_gain_records": {
+                "albro_lake:05-14": {"mm": -60.0, "year": 2025},
+            }
+        }
+
+        assert detect_snow_extremes([_reading(delta=0.0)], state) == []
+        assert detect_snow_extremes([_reading(delta=0.5)], state) == []
 
     def test_multi_day_blizzard_event(self):
         state = {
@@ -134,6 +172,19 @@ class TestSnowDetection:
 
         assert state["snow_daily_swe_gain_records"]["albro_lake:05-14"]["mm"] == 2.0 * INCH_TO_MM
         assert len(state["snow_recent_by_station"]["albro_lake"]) == 1
+        assert state["seasonal_snow_records"]["albro_lake"]["mm"] == 15.0 * INCH_TO_MM
+
+    def test_update_snow_tracking_skips_nonpositive_daily_gain_records(self):
+        state = {
+            "snow_daily_swe_gain_records": {},
+            "snow_recent_by_station": {},
+            "seasonal_snow_records": {},
+        }
+
+        update_snow_tracking(state, [_reading(delta=-1.0)])
+
+        assert state["snow_daily_swe_gain_records"] == {}
+        assert state["snow_recent_by_station"] == {}
         assert state["seasonal_snow_records"]["albro_lake"]["mm"] == 15.0 * INCH_TO_MM
 
     def test_null_swe_fields_are_accepted(self):
