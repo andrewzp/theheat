@@ -31,12 +31,16 @@ from src.orchestrator.sources.synthesis import run_synthesis
 
 def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Check all alert data sources and save drafts."""
-    """Check all alert data sources and save drafts."""
     _activate_suppression_ctx(
         bot_state,
         source="alerts",
         run_id=(current_run or {}).get("id"),
     )
+    # Guard: drop any stale triage queue from a crashed prior cron. This MUST
+    # run before any source runners so the queue starts fresh each cycle.
+    # (Two-guard pattern: this clears on entry; sqlite_store skips on persist.)
+    # Cast to plain dict: _triage_queue is a transient key not declared in BotState.
+    cast(dict, bot_state).pop("_triage_queue", None)
     drafted = 0
     drafts_before = len(bot_state.get("drafts", []))
     us_city_state_map: dict[str, str] = {}
@@ -118,6 +122,13 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_nsidc_snow(bot_state, current_run)
     drafted += run_ozone_hole(bot_state, current_run)
     drafted += run_synthesis(bot_state, current_run)
+
+    # Drain the triage queue: rank + cap survivors, then call writer for each.
+    # When triage is OFF (default for first PR), writes everything in queue
+    # order. When ON, applies select_survivors(). Source runners not yet
+    # migrated still call _try_two_bot_draft() directly — those drafts bypass
+    # triage and count against MAX_DRAFTS_PER_CYCLE via _prune_weakest_cycle_drafts.
+    _drain_and_write_triage_queue(bot_state, current_run)
 
     drafted = _prune_weakest_cycle_drafts(
         bot_state, drafts_before, current_run, drafted,

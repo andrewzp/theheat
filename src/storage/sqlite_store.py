@@ -152,6 +152,10 @@ _METADATA_JSON_KEYS = (
     "memory",
     "data_source_failures",
     "source_health",
+    # NOTE: bot_state["_triage_queue"] is intentionally NOT in this list.
+    # The triage queue is a per-cron transient; persisting it would cause
+    # stale candidates to re-process next cycle. Guard pair: pop-at-entry
+    # in run_alerts.py + absence from this list. See spec § 6.
 )
 
 

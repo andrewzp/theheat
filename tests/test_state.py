@@ -1634,3 +1634,62 @@ class TestBotStateSchemaRoundTrip:
         assert len(merged["snow_recent_by_station"]["albro_lake"]) == 2
         assert merged["snow_annual_count"]["2026"] == 3
         assert merged["seasonal_snow_records"]["albro_lake"]["mm"] == 350.0
+
+
+class TestSqliteRoundTripDropsTriageQueue:
+    """Guard: _triage_queue must NOT be persisted to SQLite.
+
+    The queue is a per-cron transient. If it survived a round-trip,
+    a crashed cron's queue would re-process next cycle.
+    """
+
+    def _sqlite_round_trip(self, state_in: dict) -> dict:
+        from src.storage import sqlite_store
+        from src.state import DEFAULT_STATE
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "theheat.sqlite")
+            assert sqlite_store.write_state(db_path, state_in)
+            return sqlite_store.read_state(db_path, DEFAULT_STATE)
+
+    def test_sqlite_round_trip_drops_triage_queue(self):
+        """_triage_queue should NOT be present after a sqlite write + read cycle."""
+        from src.two_bot.types import TriageCandidateBundle, StoryBundle
+        from src.editorial.scoring._shared import EditorialScore
+
+        bundle = StoryBundle(
+            signal_kind="coral_bleaching",
+            where="Test",
+            when="2026-05-17",
+            event_id="test_evt",
+            headline_metric={"label": "DHW", "value": 8},
+            current_facts=[],
+        )
+        score = EditorialScore(
+            category="coral_bleaching",
+            severity=80, novelty=80, timeliness=80,
+            confidence=80, shareability=80, sensitivity=0,
+            total=80, threshold=60, reasons=[],
+        )
+        candidate = TriageCandidateBundle(
+            bundle=bundle,
+            score=score,
+            event_id="test_evt",
+            source="coral_dhw",
+            review_context={},
+            city="",
+            tweet_date="2026-05-17",
+            cooldown_exempt=False,
+            legacy_type="coral_bleaching",
+            created_at="2026-05-17T12:00:00Z",
+        )
+
+        state_in = {"_triage_queue": [candidate]}
+        out = self._sqlite_round_trip(state_in)
+
+        # The triage queue must NOT survive the round-trip
+        assert "_triage_queue" not in out, (
+            "_triage_queue survived sqlite round-trip — add it to the skip-list "
+            "in src/storage/sqlite_store.py::_METADATA_JSON_KEYS (or equivalent)"
+        )

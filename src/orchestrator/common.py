@@ -14,7 +14,10 @@ import os
 import secrets
 import sys
 import time
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from src.two_bot.types import TriageCandidateBundle
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
@@ -293,7 +296,7 @@ def _record_downstream_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
-        "stage": kill_stage,  # "writer" | "safety" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "unknown"
+        "stage": kill_stage,  # "writer" | "safety" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "triage_cap" | "unknown"
         "event_id": event_id or None,
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),
@@ -1161,6 +1164,95 @@ def _current_suppression_ctx() -> dict | None:
     return _CURRENT_SUPPRESSION_CTX
 
 
+# ---------------------------------------------------------------------------
+# Triage stage helpers (spec § 10, steps 3-4)
+# ---------------------------------------------------------------------------
+
+def _triage_enabled() -> bool:
+    """Return True when THEHEAT_TRIAGE_ENABLED=1.
+
+    Default is OFF (returns False) for the first PR so behaviour on land
+    is ZERO change. Flip to ON after first source migration.
+    """
+    return os.environ.get("THEHEAT_TRIAGE_ENABLED", "0") == "1"
+
+
+def _enqueue_candidate(bot_state: BotState, candidate: "TriageCandidateBundle") -> None:
+    """Append a TriageCandidateBundle to the per-cycle triage queue.
+
+    Source runners call this instead of _try_two_bot_draft() once migrated.
+    The queue lives at bot_state['_triage_queue'] and is drained at end of
+    cycle by _drain_and_write_triage_queue().
+
+    The '_' prefix is NOT a transient convention in this codebase — the
+    queue must be explicitly excluded from sqlite persistence (see
+    sqlite_store._METADATA_JSON_KEYS) and popped at entry of run_alerts.
+    """
+    # Cast to plain dict: _triage_queue is a transient key not declared in
+    # BotState TypedDict (it's excluded from sqlite persistence intentionally).
+    state_dict: dict = cast(dict, bot_state)
+    queue = state_dict.setdefault("_triage_queue", [])
+    queue.append(candidate)
+
+
+def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> None:
+    """Drain the triage queue and call _try_two_bot_draft() for each survivor.
+
+    Called at the END of run_alerts(), after all source runners have completed.
+
+    When triage is ENABLED (THEHEAT_TRIAGE_ENABLED=1):
+        - Calls triage.select_survivors() to rank + cap
+        - Only survivors reach _try_two_bot_draft()
+
+    When triage is DISABLED (default / kill-switch OFF):
+        - Writes everything in queue order (legacy behaviour)
+
+    If triage raises, logs the error and falls through to legacy (writes
+    everything). Triage MUST NOT take down the whole cron.
+
+    In all cases (including exception), the queue is popped from bot_state
+    before returning so a crashed cron doesn't re-process stale candidates
+    next cycle.
+    """
+    from src import state as _state
+    from src.orchestrator import triage as _triage
+
+    # Cast to plain dict: _triage_queue is a transient key not declared in
+    # BotState TypedDict (it's excluded from sqlite persistence intentionally).
+    state_dict: dict = cast(dict, bot_state)
+    queue = state_dict.pop("_triage_queue", [])
+    if not queue:
+        return
+
+    survivors = queue  # default: legacy passthrough
+    if _triage_enabled():
+        try:
+            survivors = _triage.select_survivors(bot_state, queue)
+        except Exception as exc:
+            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(queue)} candidates)")
+            survivors = queue
+
+    for candidate in survivors:
+        drafted = _try_two_bot_draft(
+            candidate.bundle,
+            bot_state,
+            candidate.score,
+            legacy_type=candidate.legacy_type,
+            event_id=candidate.event_id,
+            review_context=candidate.review_context,
+            city=candidate.city,
+            tweet_date=candidate.tweet_date,
+            cooldown_exempt=candidate.cooldown_exempt,
+        )
+        if drafted:
+            _state.record_event(bot_state, candidate.event_id)
+            # TODO (next PR — coral_dhw migration): credit
+            # `candidate.source` for this drafted survivor in the per-source
+            # run telemetry (spec § 9). Without this, migrated sources will
+            # show `drafted: 0` in current_run["sources"][source] even when
+            # their candidate ships via triage. No-op in this PR because
+            # kill-switch defaults OFF and no source migrates yet, so the
+            # drain helper processes an empty queue.
 
 
 
@@ -1230,6 +1322,9 @@ __all__ = [
     "_suppression_context",
     "_temp_pair_c",
     "_touch_draft",
+    "_triage_enabled",
+    "_enqueue_candidate",
+    "_drain_and_write_triage_queue",
     "_try_two_bot_draft",
     "_two_bot_bundle_for_extreme_signal",
     "_unwrap_generated_result",
