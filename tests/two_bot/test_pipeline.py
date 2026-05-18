@@ -143,6 +143,37 @@ def test_pipeline_claim_extractor_raises_records_stage(mock_writer, mock_extract
     assert not mock_fact_check.called
 
 
+def test_pipeline_budget_exhausted_records_distinct_stage(
+    mock_writer, mock_extract, mock_fact_check
+):
+    """When an LLM stage raises BudgetExhaustedError (provider billing
+    out of credits), the pipeline must record kill_stage=
+    "budget_exhausted" so the dashboard surfaces a billing outage
+    distinctly from a model/code bug. Otherwise operators read retry
+    stack traces to figure out the fix is "top up the key", which is
+    exactly the failure mode the 2026-05-15 → 2026-05-17 silent outage
+    surfaced (182 of 200 suppressions were generic pipeline_error rows
+    with identical "credit balance is too low" text)."""
+    from src.two_bot.retry import BudgetExhaustedError
+
+    mock_writer.side_effect = BudgetExhaustedError(
+        "anthropic writer: provider billing exhausted: BadRequestError: "
+        "Your credit balance is too low to access the Anthropic API."
+    )
+    state = _state_with_memory()
+    result_out: dict = {}
+
+    draft = generate_fire_draft(_fire_event(), state, result_out=result_out)
+
+    assert draft is None
+    assert result_out["kill_stage"] == "budget_exhausted"
+    assert "billing exhausted" in result_out["kill_reason"]
+    # Downstream stages must NOT have been called — the writer is dead.
+    assert not mock_extract.called
+    assert not mock_fact_check.called
+    assert state["memory"]["shipped_tweets"] == []
+
+
 def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_check):
     state = _state_with_memory()
 

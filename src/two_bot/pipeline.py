@@ -8,6 +8,7 @@ from src.data.firms import FireEvent
 from src.state_schema import BotState
 from src.two_bot import claim_extractor, critic, fact_check, memory, writer
 from src.two_bot.intern import build_fire_bundle
+from src.two_bot.retry import BudgetExhaustedError
 from src.two_bot.types import StoryBundle
 from src.voice.safety import run_safety_pipeline
 
@@ -151,6 +152,12 @@ def generate_draft(
             "event_id": bundle.event_id,
             "two_bot_metadata": metadata,
         }
+    except BudgetExhaustedError as exc:
+        print(
+            f"[two_bot.pipeline] Budget exhausted ({bundle.signal_kind}): {exc}"
+        )
+        _record_kill("budget_exhausted", str(exc))
+        return None
     except Exception as exc:
         print(
             f"[two_bot.pipeline] Pipeline error ({bundle.signal_kind}): {exc}"
