@@ -66,11 +66,13 @@ class TestFactCheckPromptWorldKnowledgeAllowList:
         lowered = FACT_CHECK_SYSTEM_PROMPT.lower()
         assert "external knowledge" in lowered or "established climate" in lowered
 
-    def test_says_accept_when_in_doubt(self):
-        # The disposition matters: the default for borderline cases must
-        # be acceptance, not rejection. Reversing this single phrase
-        # would re-create the conservative-Gemini failure mode.
-        assert "When in doubt, ACCEPT" in FACT_CHECK_SYSTEM_PROMPT
+    def test_requires_primary_source_for_borderline_world_knowledge(self):
+        # The fact-checker should allow established framing, but uncertainty
+        # must stay inside the automated gate instead of being passed onward
+        # for a human to hopefully catch later.
+        assert "When in doubt, ACCEPT" not in FACT_CHECK_SYSTEM_PROMPT
+        assert "primary source" in FACT_CHECK_SYSTEM_PROMPT
+        assert "human approval gate will catch" not in FACT_CHECK_SYSTEM_PROMPT
 
 
 class TestFactCheckPromptNarrowGuardsRemain:

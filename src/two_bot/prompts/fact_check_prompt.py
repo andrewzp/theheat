@@ -56,7 +56,7 @@ Be GENEROUS here. The writer's external knowledge is the editorial value-add; if
 
 **e) Common knowledge geography for any reader.** Country–city pairings, continents, well-known mountain ranges, coast names.
 
-When in doubt, ACCEPT. The writer is climate-literate; the audience is climate-literate; the cost of a false UNVERIFIABLE rejection is a boring or killed tweet. The cost of a false WORLD_KNOWLEDGE acceptance is a single shaky claim that the human approval gate will catch.
+When a claim is clearly established by a primary source or canonical reference, ACCEPT it as WORLD_KNOWLEDGE. When the claim is only plausible, vibes-based, or would require a search you cannot confidently predict will land on a primary source, mark it UNVERIFIABLE. The writer is climate-literate, but the automated fact-check gate still owns accuracy; do not pass shaky claims onward for later cleanup.
 
 # What stays UNVERIFIABLE — keep these guards
 
