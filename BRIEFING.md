@@ -727,7 +727,12 @@ responses>=0.25
 | `GH_GIST_TOKEN` | PAT with `gist` scope for state writes |
 | `NASA_FIRMS_API_KEY` | NASA fire satellite detection |
 | `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | Bluesky cross-post |
-| `EARTHDATA_TOKEN` | NASA Earthdata Login bearer token, used by the GRACE-FO ice-mass lane. Generate at https://urs.earthdata.nasa.gov/ (profile → "Generate Token"). Optional: if unset the ice_mass lane short-circuits to skipped and the rest of the pipeline runs normally. |
+| `EARTHDATA_TOKEN` | NASA Earthdata Login bearer token, used by the GRACE-FO ice-mass lane AND the GPM-IMERG precipitation lane (PR #116, 2026-05-13). Generate at https://urs.earthdata.nasa.gov/ (profile → "Generate Token"). **Also requires authorizing the GES DISC application** in the Earthdata profile's "Authorized Apps" — without that, OPeNDAP requests return 401 even with a valid bearer token. If unset, both lanes short-circuit to skipped. PR #128 (CHANGELOG 0.7.2.0) added per-city diagnostic logging so future failures surface `HTTP 401 from <opendap-url>` instead of an opaque `(N failed)` count. |
+| `GPM_IMERG_MAX_CITIES` | (Optional) Cap on the per-cron GPM-IMERG city scan. Default 75 (was 638 in PR #116). Must be ≥ 1. Tune up only after the EARTHDATA_TOKEN + GES DISC authorization issue is resolved. Added in PR #126 (CHANGELOG 0.7.2.0). |
+| `THEHEAT_CRITIC_ENABLED` | (Optional) Operations kill-switch for the F3 second-pass editorial critic (Gemini 2.5 Pro). Set to `0` / `false` / `off` / `no` to disable the critic stage without a deploy. Default enabled. Use if the critic over-kills in production. Added in #120 (CHANGELOG 0.7.1.0). |
+| `THEHEAT_CRITIC_MODEL` | (Optional) Override the critic model ID. Default `gemini-2.5-pro`. **Never set to a Flash model** per `feedback_theheat_flash_no_taste.md` — taste-bearing roles require Pro-tier. |
+| `THEHEAT_TRIAGE_ENABLED` *(spec'd, not yet wired)* | Future operations kill-switch for the deterministic pre-writer triage stage spec'd in [docs/superpowers/specs/2026-05-17-code-first-triage-design.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-17-code-first-triage-design.md). When implemented, will let ops disable triage and fall back to direct-write semantics. |
+| `THEHEAT_PER_CATEGORY_CAP` *(spec'd, not yet wired)* | Future per-category cap for the triage stage (max N candidates per `signal_kind` per cron). Default 2 per spec. Spec'd not implemented; landing in a follow-up PR. |
 
 ### Fire footprint source (no secret required)
 

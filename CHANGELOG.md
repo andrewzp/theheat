@@ -2,6 +2,143 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.2.0] - 2026-05-17
+
+The post-hardening release. Four PRs landed in one session: a 7-theme
+post-wave hardening patchset that had been sitting uncommitted on main,
+plus two new bugfixes surfaced by a 2026-05-15 → 2026-05-17 Anthropic
+credit-exhaustion outage that revealed two missing diagnostic surfaces
+(billing failures looked identical to model bugs; GPM-IMERG per-city
+failures returned an opaque "638 failed" count). Plus a fully-reviewed
+architecture spec for deterministic pre-writer triage — the next
+session's implementation work.
+
+Production verdict at session close: pipeline healthy, fresh Costa Rica
+coral_bleaching draft created at 01:30 UTC, suppression mix back to
+normal (critic 22 / writer 4 / fact_check 3 / pipeline_error 1).
+
+### Added — post-wave hardening (#126)
+
+Six orthogonal fixes that closed gaps the 0.7.0.0 + 0.7.1.0 waves
+opened. The patchset was in the working tree from a prior session and
+had never been branched. All themes have tests.
+
+- **State schema completeness** (`src/storage/sqlite_store.py` +
+  `dashboard/lib/state-store.js`) — register Plan E (precip, snow,
+  flood) and Plan F (cyclone, NAO/AO/PDO, ozone) state keys in BOTH
+  the alt-SQLite metadata-JSON-keys tuple AND the dashboard JS
+  allow-list. Without this, those state shapes would silently
+  round-trip-lose on every dashboard write.
+- **GPM-IMERG city cap** (`src/data/gpm_imerg.py` +
+  `src/orchestrator/sources/gpm_imerg.py` + `.github/workflows/bot.yml`)
+  — default 638-city scan overwhelms per-cycle runtime. Cap to 75 with
+  `GPM_IMERG_MAX_CITIES` env override (>= 1 required).
+- **Prune mapping covers new draft types**
+  (`src/orchestrator/finalize.py`) — `_PRUNE_SOURCE_KEY_BY_TYPE` was
+  missing `precipitation_extreme`, `snow_extreme`,
+  `seasonal_snow_record`, `oscillation_alignment`, `ozone_hole_peak`.
+  Pruned drafts couldn't get attributed back to source telemetry.
+  Added `review_context.source_key` fallback path.
+- **Claim-extractor JSON-parse retry parity**
+  (`src/two_bot/claim_extractor.py`) — mirrors the #121 generalization
+  (writer / fact_check / critic got retry, claim_extractor was missed).
+  Single retry with contract-reminder suffix before raising.
+- **Pipeline records claim_extractor failures as
+  `kill_stage="claim_extractor"`** (`src/two_bot/pipeline.py`) instead
+  of generic `pipeline_error`. New suppression stage row visible in the
+  dashboard `Suppressed` tab.
+- **Open-Meteo telemetry counter fix**
+  (`src/orchestrator/sources/open_meteo.py`) — two missing
+  `source_drafted += 1` increments in record_streak and country-
+  similarity draft paths.
+
+### Added — BudgetExhaustedError short-circuit + distinct kill_stage (#127)
+
+Production observed 2026-05-15 → 2026-05-17: bot Anthropic key ran
+dry; 182 of last 200 suppressions were `pipeline_error` rows with
+identical "credit balance is too low" text, each chewing through 3
+retries + exponential backoff before bubbling (~5s wasted per draft).
+Dashboard surfaced nothing operationally useful — operators had to
+read retry stack traces to realize the fix was "top up the key."
+
+- **`src/two_bot/retry.py`** — new `BudgetExhaustedError(RuntimeError)`.
+  Substring-match on `"credit balance is too low"` (the Anthropic 400
+  pattern). On match, the retry helper short-circuits on attempt 1 and
+  raises `BudgetExhaustedError` — no sleeps, no duplicate ledger rows.
+  Pattern list intentionally narrow — only patterns observed in prod
+  (adding patterns that DO resolve on retry would swallow real
+  transients).
+- **`src/two_bot/pipeline.py`** — catch `BudgetExhaustedError` before
+  generic `Exception` and record `kill_stage="budget_exhausted"`.
+- **`src/orchestrator/common.py`** — extend the kill_stage docstring
+  with the new `budget_exhausted` stage plus the `claim_extractor`
+  stage added in #126.
+- **Tests** — `tests/two_bot/test_retry.py` adds 3 cases (short-circuit
+  on budget pattern, normal-error pass-through unchanged, pre-classified
+  error reraise without wrapping). `tests/two_bot/test_pipeline.py`
+  adds 1 case (pipeline records distinct `budget_exhausted` stage).
+
+### Added — GPM-IMERG per-city failure diagnostic logging (#128)
+
+PR #116 shipped GPM-IMERG 2026-05-13. Over the next 4 days the lane
+ran 17 cron failures with `success=0`; production
+`source_health.last_error` gave only `"(N failed)"` — no HTTP status,
+no URL, no exception type. Diagnosing auth-vs-endpoint-vs-outage
+required curling NASA by hand.
+
+- **`src/data/gpm_imerg.py`** — captures the first per-city failure
+  and threads it into both the strict-mode `SourceFetchError` and a
+  one-line stdout log. For `requests.HTTPError`: `"HTTP {status} from
+  {url}"`. For everything else: `"{ExceptionType}: {message}"`.
+  Production behavior after this lands: a fresh
+  `source_health.last_error` reads `"GPM IMERG fetch returned no city
+  readings for 2026-05-17 (75 failed); first error: HTTP 401 from
+  <opendap-url>"`. 401 → token expired or GES DISC application not
+  authorized in Earthdata profile; 403 → token lacks scope; 404 →
+  endpoint changed; TimeoutError → NASA outage. The fix does not
+  address the underlying auth root cause — that's an operator action
+  (rotate token, authorize GES DISC application). What it does is
+  convert blind failure into one-line diagnosis the next time this
+  happens.
+- **Tests** — `tests/test_gpm_imerg.py` adds 2 cases (multi-city 401
+  bundle surfaces "HTTP 401" + "GPM_3IMERGDL.07" in error message;
+  single-city 404 short-circuit surfaces "HTTP 404").
+
+### Added — Code-first triage spec (#129, doc-only)
+
+[docs/superpowers/specs/2026-05-17-code-first-triage-design.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-17-code-first-triage-design.md)
+— architecture spec for moving the per-cycle writer-call cap from
+post-writer (current `_prune_weakest_cycle_drafts` in `finalize.py`)
+to pre-writer (new deterministic triage stage between bundle build and
+LLM stages). Target: **source-growth-proof flat-line cost** —
+doubling sources should not double credit burn.
+
+Spec walked through `/plan-eng-review` interactively. Six findings
+folded in (3 architecture + 3 test gaps): queue persistence bug fixed
+with explicit two-guard pattern (pop-on-entry + skip-in-persist);
+coalescing rule redefined as same-event-across-sources, not
+same-geographic-bucket; partial-migration / queue-cleanup-on-exception
+/ telemetry-attribution tests added. Verdict: **ENG CLEARED**, ready
+to implement. Three open questions in spec § 12 are knobs for the
+implementation plan, not blockers (default cap values, tiebreaker,
+kill-switch default).
+
+No code changes in this PR — implementation follows in subsequent PRs
+once the next session begins.
+
+### Deferred (still in working tree, not landed)
+
+- **Fact-check disposition reversal** — modification to
+  `src/two_bot/prompts/fact_check_prompt.py` + `tests/two_bot/test_prompts.py`
+  that walks back the #119 "When in doubt, ACCEPT" disposition toward
+  "primary-source confidence required, otherwise UNVERIFIABLE." Held
+  for explicit sign-off because it contradicts the
+  `TheHeat fact-checker is generous` memory hook the #119 work
+  established. The change has merit (post-#119 production data may
+  show over-acceptance) but it's a deliberate voice/editorial-policy
+  reversal, not a bugfix — Andrew's call. Files remain in the working
+  tree on `main` for review.
+
 ## [0.7.1.0] - 2026-05-15
 
 The editorial-architecture release. Three PRs landed in one session to lift
