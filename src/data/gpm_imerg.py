@@ -94,6 +94,7 @@ def fetch_daily_precip(
     headers = {"Authorization": f"Bearer {token}"}
     readings: list[CityPrecipReading] = []
     failures = 0
+    first_failure_detail: str | None = None
 
     for city in selected:
         try:
@@ -110,8 +111,16 @@ def fetch_daily_precip(
             )
         except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
             failures += 1
+            if first_failure_detail is None:
+                first_failure_detail = _diagnose_city_failure(exc)
+                print(
+                    f"[gpm_imerg] first per-city failure: {first_failure_detail}",
+                    flush=True,
+                )
             if strict and cities is not None and len(selected) == 1:
-                raise SourceFetchError(f"GPM IMERG city fetch failed: {exc}") from exc
+                raise SourceFetchError(
+                    f"GPM IMERG city fetch failed: {first_failure_detail}"
+                ) from exc
             continue
 
         if mm_total is None:
@@ -132,11 +141,29 @@ def fetch_daily_precip(
         ))
 
     if strict and not readings:
+        detail = (
+            f"; first error: {first_failure_detail}"
+            if first_failure_detail
+            else ""
+        )
         raise SourceFetchError(
             f"GPM IMERG fetch returned no city readings for {requested_date.isoformat()} "
-            f"({failures} failed)"
+            f"({failures} failed){detail}"
         )
     return readings
+
+
+def _diagnose_city_failure(exc: Exception) -> str:
+    """Short diagnostic for a per-city fetch failure: HTTP status + URL for
+    HTTPError, exception type + message otherwise. The 2026-05-13 GPM-IMERG
+    lane shipped (PR #116) and silently failed for 4 days with a "638 failed"
+    summary that masked whether the cause was auth (401), endpoint drift
+    (404), or NASA outage (5xx/Timeout). Surfacing the first failure's
+    status + URL converts blind failure into one-line diagnosis.
+    """
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return f"HTTP {exc.response.status_code} from {exc.response.url}"
+    return f"{type(exc).__name__}: {exc}"
 
 
 def detect_precip_records(

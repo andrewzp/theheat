@@ -81,6 +81,63 @@ class TestGpmFetch:
         with pytest.raises(SourceSkipped):
             fetch_daily_precip([{"city": "Paris", "country": "France", "lat": 1, "lon": 1}], strict=True)
 
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_strict_fetch_failure_surfaces_http_status_in_error(self, _env):
+        """When per-city OPeNDAP calls return 401/403/404 (auth or endpoint
+        drift), the strict-mode SourceFetchError must include the HTTP
+        status and URL of the first failure. Without this, the production
+        source_health.last_error is a useless "N failed" count and the
+        operator cannot distinguish auth-vs-endpoint-vs-outage from logs.
+        """
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*"),
+            status=401,
+            body="Unauthorized",
+        )
+
+        import pytest
+        from src.data.source_status import SourceFetchError
+
+        with pytest.raises(SourceFetchError) as exc_info:
+            fetch_daily_precip(
+                [
+                    {"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"},
+                    {"city": "Tokyo", "country": "Japan", "lat": "35.68", "lon": "139.69"},
+                ],
+                target_date=date(2026, 5, 14),
+                strict=True,
+            )
+
+        msg = str(exc_info.value)
+        assert "2 failed" in msg
+        assert "HTTP 401" in msg
+        # URL of the first failure must be in the error for diagnosability.
+        assert "GPM_3IMERGDL.07" in msg
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_strict_single_city_failure_surfaces_http_status(self, _env):
+        """The single-city short-circuit path also needs the diagnostic
+        — it is the path the orchestrator's debug helpers use."""
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*"),
+            status=404,
+            body="Not Found",
+        )
+
+        import pytest
+        from src.data.source_status import SourceFetchError
+
+        with pytest.raises(SourceFetchError, match="HTTP 404"):
+            fetch_daily_precip(
+                [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+                target_date=date(2026, 5, 14),
+                strict=True,
+            )
+
     def test_late_product_url_uses_month_folder_and_v07c(self):
         url = _ascii_subset_url(
             lat=48.85,
