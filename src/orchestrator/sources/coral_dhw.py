@@ -50,9 +50,20 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
             coral_bundle = build_coral_bleaching_bundle(coral_event)
             # Enqueue for triage rather than calling _try_two_bot_draft directly.
             # The drain step (_drain_and_write_triage_queue) handles ranking,
-            # capping, and writing — and credits this source's drafted counter.
-            # state.record_event + state.update_coral_dhw_tier + annual count
-            # increments are deferred to the drain step on successful draft.
+            # capping, writing, and credits this source's `drafted` counter.
+            #
+            # state.record_event, state.update_coral_dhw_tier, and the annual
+            # count must ALL fire only when a draft actually ships. If we updated
+            # tier on enqueue, triage-spilled candidates would mark their crossing
+            # as "consumed" and never re-detect on the next cron — violating spec
+            # § 7 ("Spilled candidates are NOT auto-queued for next cron —
+            # re-detection is the source's responsibility"). For coral_dhw the
+            # tier update IS the re-detection cooldown; gating it on draft success
+            # preserves the contract.
+            #
+            # `state.record_event` is fired by the drain step directly.
+            # `state.update_coral_dhw_tier` and `state.increment_coral_dhw_annual_count`
+            # fire in the on_draft_success callback below.
             # Capture loop variables for the closure (avoid late-binding bug).
             _region_id = coral_event.region_id
             _dhw_tier = coral_event.dhw_tier
@@ -62,11 +73,15 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
                 _rid: str = _region_id,
                 _tier: int = _dhw_tier,
             ) -> None:
-                """Increment the annual count when a draft actually ships.
+                """Fire side effects gated on a successful draft.
 
-                Only fires if _try_two_bot_draft() returns True in the drain step,
-                so triage-spilled candidates don't consume annual cap quota.
+                Runs only if _try_two_bot_draft() returns True in the drain step.
+                Triage-spilled candidates skip this callback entirely, so the
+                tier update stays unmade and `detect_dhw_events` will re-detect
+                the same crossing on the next cron (until it eventually drafts
+                or is naturally superseded by a higher tier).
                 """
+                state.update_coral_dhw_tier(_bs, _rid, _tier)
                 state.increment_coral_dhw_annual_count(_bs)
 
             _enqueue_candidate(
@@ -85,10 +100,6 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
                     on_draft_success=_on_success,
                 ),
             )
-            # Record tier update immediately so we don't re-detect the same
-            # tier on the next check within this cycle. The annual cap count
-            # and event dedup are incremented in the drain step on success.
-            state.update_coral_dhw_tier(bot_state, coral_event.region_id, coral_event.dhw_tier)
         _record_source_run(
             current_run, bot_state, "coral_dhw", coral_start,
             status="success",

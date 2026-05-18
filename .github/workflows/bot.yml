@@ -171,8 +171,9 @@ jobs:
           # Bound per-cycle point OPeNDAP requests; full city scans are too slow
           # for the scheduled alerts job.
           GPM_IMERG_MAX_CITIES: "75"
-          # Triage stage active: coral_dhw migrated (PR #133). Kill-switch default
-          # in code stays "0"; production overrides here. Rollback: set to "0" + push.
+          # Triage stage active: MVP infra in PR #132, coral_dhw migrated in PR #134.
+          # Kill-switch default in code stays "0"; production overrides here.
+          # Rollback: set to "0" and push — next cycle reverts to legacy passthrough.
           THEHEAT_TRIAGE_ENABLED: "1"
           # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
           # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.

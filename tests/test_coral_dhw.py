@@ -270,6 +270,64 @@ class TestCoralDHWSourceRunnerMigration:
         assert source_entry is not None
         assert source_entry["promoted"] == 2
 
+    def test_enqueue_does_not_update_tier_until_on_draft_success_fires(self, monkeypatch):
+        """Tier updates and the annual count are gated on on_draft_success
+        firing — NOT on enqueue. This preserves the spec § 7 contract:
+        triage-spilled candidates re-detect on the next cron because the
+        source's "cooldown" (tier update) is gated on actually drafting.
+        """
+        from src.orchestrator.sources.coral_dhw import run_coral_dhw
+
+        bot_state = deepcopy(DEFAULT_STATE)
+        event = _make_coral_event(region_id="gbr_northern", dhw_tier=8)
+        reading = _make_reading(region_id="gbr_northern")
+
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.coral_dhw.fetch_coral_dhw",
+            lambda **kw: [reading],
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.coral_dhw.detect_dhw_thresholds",
+            lambda readings, last_tiers: [event],
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
+            lambda ev: MagicMock(signal_kind="coral_bleaching"),
+        )
+
+        current_run = {"sources": []}
+        run_coral_dhw(bot_state, current_run)
+
+        # After enqueue but BEFORE on_draft_success fires, the tier must
+        # NOT be in coral_dhw_last_tier — a spilled candidate must be
+        # re-detectable on the next cron.
+        last_tiers = bot_state.get("coral_dhw_last_tier", {})
+        assert "gbr_northern" not in last_tiers or last_tiers.get("gbr_northern") != 8, (
+            "Tier was updated on enqueue — spilled candidates will not re-detect "
+            "on next cron, violating spec § 7"
+        )
+
+        # Now simulate the drain step firing the on_draft_success callback
+        # for the enqueued candidate.
+        queue = bot_state["_triage_queue"]
+        assert len(queue) == 1
+        candidate = queue[0]
+        assert candidate.on_draft_success is not None
+        candidate.on_draft_success()
+
+        # After the callback fires, tier IS updated.
+        last_tiers = bot_state.get("coral_dhw_last_tier", {})
+        assert last_tiers.get("gbr_northern") == 8, (
+            "Tier should be updated after on_draft_success fires"
+        )
+        # And annual count incremented (counts dict is keyed by year string).
+        from datetime import date
+        year = str(date.today().year)
+        counts = bot_state.get("coral_dhw_annual_count", {})
+        assert counts.get(year, 0) >= 1, (
+            "Annual count should be incremented after on_draft_success"
+        )
+
 
 class TestDrainTelemetry:
     """Verify _drain_and_write_triage_queue correctly credits per-source drafted

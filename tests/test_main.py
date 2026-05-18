@@ -1045,8 +1045,12 @@ class TestCoralDHWAlerts:
         assert candidate.event_id == "coral_dhw_gbr_northern_tier8"
         assert candidate.cooldown_exempt is False
 
-        # Tier update happens immediately in source runner (to prevent re-detection).
-        assert state["coral_dhw_last_tier"]["gbr_northern"] == 8
+        # Tier update is gated on on_draft_success — spec § 7 says spilled
+        # candidates must re-detect on next cron, and for coral_dhw the tier
+        # update IS the re-detection cooldown. On enqueue alone, the tier must
+        # NOT yet be in coral_dhw_last_tier.
+        last_tiers = state.get("coral_dhw_last_tier", {})
+        assert "gbr_northern" not in last_tiers or last_tiers.get("gbr_northern") != 8
 
         # Source run telemetry: observed=1, promoted=1 (drafted is deferred to drain).
         source = next(item for item in current_run["sources"] if item["source"] == "coral_dhw")
