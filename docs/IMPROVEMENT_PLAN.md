@@ -8,13 +8,13 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Bot commit | `17db622` (PR #134 — coral_dhw migration + triage kill-switch ON; latest on origin/main 2026-05-17) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + F3 critic + triage stage (ON)** (Sonnet 4.6 writer + Gemini Flash fact-check/claim-extract + Gemini 2.5 Pro critic; triage stage active since 2026-05-17 PR #134) |
+| Last cycle A-rate | **9%** (May 18, 1 A- out of 11 gradable drafts; coral bleaching batch, template convergence dominant failure mode) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | **41 pp** (50% − 9%) |
 | Posting | paused until bar cleared |
-| Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
+| Coverage | **638 cities × 180 countries** |
 
 ## Active proposals
 
@@ -217,11 +217,16 @@ next daily grading agent run (A-rate lift target: >50% sustained).
 Gemini converged on the most-explicit ones (era anchors). Unnamed mechanics (idiom-flip,
 accelerating-warming, ecosystem specificity) appeared inconsistently. In the two-bot
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
-palette is named.
+palette is named. **May 18 confirmation:** 11 new two-bot drafts graded; zero used a
+named comic mechanic (comic triple, period-and-restate, idiom-flip, understatement
+closer). The writer produces data + system/mechanism explanation as its default shape
+for every signal type — correct but capped below A-grade because no move operates.
+Costa Rica (A-) and Madagascar (B+) succeeded through ecosystem specificity + declarative
+consequence, not through any named comic mechanic. The palette is still unspecified.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 18 (3 cycles; mechanic convergence on default
+shapes across old and new pipelines).
+**Last seen:** 2026-05-18.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -230,10 +235,75 @@ ecosystem-specific specificity. Conclude: *"None of these are mandatory. When th
 alone is striking, deliver the data plainly. Forced humor breaks the spell."*
 
 **Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default.
+on the data+explanation default shape.
 
-**Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+**Status:** Drafted. Target: `src/two_bot/prompts/writer_prompt.py`. Awaiting human
+implementation. Highest-leverage proposal in the active stack: naming mechanics addresses
+the root of template convergence across all signal types.
+
+### P6 — Coral bleaching template convergence
+
+**Observed:** 2026-05-18 — 8 of 9 coral bleaching drafts in the May 18 graded batch
+follow identical two-sentence structure: (1) "[Location] has accumulated X°C-weeks —
+[threshold relationship]." (2) "[Geographic/system context]; [DHW mechanism or
+consequence]." This is the same failure mode as the shipped ~~P6~~ fire template
+convergence, now appearing in coral bleaching signals. The writer defaults to the
+most-reinforced structural pattern when no explicit alternatives are named for this
+signal type. All 9 drafts passed the F3 critic — the critic does not catch structural
+convergence within a signal type.
+
+**Cycles observed:** May 18 (1 cycle; 8 of 9 coral drafts affected).
+**Last seen:** 2026-05-18.
+**Proposed fix:** Add a "Coral bleaching sentence-1 alternatives" section to the coral
+bleaching framing in `src/two_bot/prompts/writer_prompt.py`. Name at least 4 alternative
+forms with examples:
+1. Lead with consequence: "Galapagos reefs crossed the mortality threshold 2.1 times
+   over. The cold upwelling that normally caps heat here has failed."
+2. Lead with trajectory: "Western Madagascar's reef system: 10.2°C-weeks and climbing
+   — past the 8-week floor where bleaching is expected."
+3. Lead with the ecosystem's baseline: "The Austral Islands sit where the South Pacific
+   Convergence Zone's influence fades. Bleaching stress has followed it south."
+4. Lead with isolation: "Nauru sits at the center of the equatorial warm pool with no
+   cold buffer. Its reefs have now accumulated 8.2°C-weeks."
+Ban the "[Location] has accumulated X°C-weeks — past the [N]°C-week threshold" formula
+as the default when an alternative applies.
+
+**Expected impact:** Structural variety in coral bleaching batch → fewer template-
+identical drafts → higher A-rate on multi-draft coral cycles. Same fix class as shipped
+~~P6~~ (fire template), which broke the fire formula in one PR.
+
+**Status:** Active. Awaiting human implementation in `writer_prompt.py`.
+
+### P7 — DHW explanation formula over-deployed
+
+**Observed:** 2026-05-18 — At least 4 of 9 coral bleaching drafts (drafts 7, 9, 10, 11)
+use the same second-sentence formula: "DHW measures heat [duration/persistence]; [it is
+persistence / persistence is what] kills coral." Drafts 9 (Nauru) and 10 (Nicobar) are
+near-verbatim: "DHW measures heat duration, not just intensity; it's persistence above
+the tolerance ceiling that kills coral" vs. "DHW measures heat persistence, not just
+intensity; it is duration above the tolerance ceiling that kills coral." The DHW
+explanation is not wrong — it's accurate and useful for readers — but 4 consecutive
+drafts deploying it identically makes the format invisible. Also: drafts that use the
+DHW explanation don't have room for a location-specific second sentence, losing the
+ecosystem specificity that carried Costa Rica (A-) and Madagascar (B+).
+
+**Cycles observed:** May 18 (1 cycle; 4 of 9 drafts; sub-case of P6).
+**Last seen:** 2026-05-18.
+**Proposed fix:** Add a "DHW explanation ban when used consecutively" rule to the coral
+bleaching section of `writer_prompt.py`: "The 'DHW measures duration, not just
+intensity; persistence is what kills' explanation is now a known formula. Use it at most
+once per batch of coral drafts. When DHW has already been explained in a sibling draft
+in this run, skip the explanation and use the second sentence for location-specific
+consequence or trajectory instead." Also: add the DHW explanation to the memory's
+`used_framings` so the writer can check cross-draft reuse — this is the exact use case
+`used_framings` was designed for.
+
+**Expected impact:** Breaks the identical-second-sentence convergence. Forces the writer
+to use the second sentence for location-specific work (ecosystem context, consequence,
+trajectory) rather than repeating the DHW definition.
+
+**Status:** Active. Awaiting human implementation. Closely related to P6; can be
+addressed in the same PR.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 

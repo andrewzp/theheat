@@ -19,15 +19,36 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
 | 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 | 2026-05-13 | 4 | 0 | 1 | 3 | 0 | **0%** | ✗ | First graded two-bot cycle. 3 fire drafts (Mali, Campeche, Mongolia) all used identical formula opener + seasonal-explanation structure — fire template convergence identified as new failure mode (P6). Chuuk FSM monthly_high (76-year record) is the one B: clean data, no Wodehouse violation, but expository second sentence instead of a punchline. P3 self-kill failure not observed (positive). FRP bundle rounding (#80) confirmed working (309.6, 364.7, 307.6 MW values clean). |
+| 2026-05-18 | 12 | 1 | 7 | 3 | 0 | **9%** | ✗ | First coral bleaching batch (9 drafts). Template convergence: 8 of 9 coral drafts share identical 2-sentence structure; 4 use near-verbatim DHW-persistence formula as second sentence. Costa Rica Pacific (A-): "heat that builds has nowhere to drain" — best closer since Apr 26 Mali. Galapagos (B+, score 88): strongest signal but conditional closer costs the A-. P3 self-kills and P4 Wodehouse violations both absent (fixes holding). Triage ON (PR #134, 2026-05-17) — sub-threshold coral drafts (7.2, 4.4°C-weeks) in this queue predate triage; expect fewer in next cycle. New proposals: coral bleaching template convergence (P6) + DHW formula over-deployment (P7). Staleness: 4 fire drafts flagged (BC explicit "today" + 3 fire "is radiating" >5 days); bulk-reject skipped — `gh` CLI unavailable; operator must use dashboard. |
 
 **Trend interpretation:**
-The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
+The May 13 and May 18 cycles both graded 9% A-rate, establishing the two-bot baseline at the same level as the Apr 24 pre-voice-engine baseline. The two-bot pipeline has traded fire template convergence (May 13, fixed in PR #85) for coral template convergence (May 18, not yet fixed). P3 and P4 fixes are holding — no self-kills, no Wodehouse violations. The A-rate ceiling is the template convergence problem: the writer defaults to the most-reinforced structure for each signal type. P5 (name available voice moves) and the new P6 (coral bleaching structural alternatives) are the primary levers. Triage-ON (PR #134) is expected to reduce sub-threshold coral clutter in next cycle.
 
-We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
+We've been in the 0-9% band for two-bot cycles. Need to clear 50% sustained.
 
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-18 — Staleness bulk-reject: skipped (`gh` CLI unavailable)
+
+**Why:** 4 fire drafts are > 48 hours old with real-time-baked content and should be
+rejected. Stale candidates:
+
+| Draft ID | Created | Age | Staleness flag |
+|---|---|---|---|
+| `draft_20260512_180320_159` | 2026-05-12T18:03Z | 141h | Present-tense "is radiating" — active fire signal, almost certainly ended |
+| `draft_20260512_212510_160` | 2026-05-12T21:25Z | 138h | Present-tense "is radiating" — same |
+| `draft_20260513_103313_162` | 2026-05-13T10:33Z | 124h | Present-tense "is radiating" — same |
+| `draft_20260514_211447_164` | 2026-05-14T21:14Z | 90h | Explicit "burning today" — directly date-baked |
+
+Bulk-reject attempted via `gh api -X PATCH` — `gh` CLI not installed in this execution
+environment. Operator must manually reject these 4 drafts via the dashboard bulk-reject
+API or individual reject buttons. Coral bleaching drafts (7–14, 82–84h old, created
+2026-05-15) were evaluated but NOT flagged: DHW accumulation is a multi-week metric with
+no "today" or "forecast" language; the general fact (reef system reached X°C-weeks) remains
+valid. Temp-record drafts (Bethel Maine, Chuuk FSM) also not flagged: specific past dates
+("hit 28°F on May 9") are historical records, not "forecast to hit today."
 
 ### 2026-05-13 — Staleness bulk-reject: not needed (no stale drafts)
 
