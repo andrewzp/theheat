@@ -106,12 +106,22 @@ def _call_anthropic(user_prompt: str) -> str:
     # well-tolerated by GitHub Actions cron headroom and prevents the
     # "drafts vanish on slow API days" failure mode.
     client = anthropic.Anthropic(api_key=api_key, timeout=180.0)
+    # The writer system prompt is large (~5,700 tokens) and byte-identical
+    # across every call in a cron. Marking it for ephemeral prompt caching
+    # cuts input-token cost ~90% on the cached prefix for repeat calls
+    # within the 5-minute TTL.
     response = call_with_retries(
         "anthropic writer",
         lambda: client.messages.create(
             model=WRITER_MODEL,
             max_tokens=1024,
-            system=WRITER_SYSTEM_PROMPT,
+            system=[
+                {
+                    "type": "text",
+                    "text": WRITER_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=[{"role": "user", "content": user_prompt}],
         ),
     )
