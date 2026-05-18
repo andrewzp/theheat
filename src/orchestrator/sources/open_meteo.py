@@ -432,6 +432,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                                     ):
                                         state.record_event(bot_state, streak_event_id)
                                         drafted += 1
+                                        source_drafted += 1
                                         signal_counts["streak"] += 1
 
             # Append a per-bundle row to the dashboard event log. Captured
@@ -544,6 +545,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     ):
                         state.record_event(bot_state, sim_event_id)
                         drafted += 1
+                        source_drafted += 1
 
         # Country-level records — the biggest story our pipeline produces.
         # Aggregates across every sampled city in a country; fires when

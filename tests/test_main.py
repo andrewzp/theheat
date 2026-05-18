@@ -1926,6 +1926,59 @@ class TestPerCycleCapCleanup:
         greenland = next(s for s in current_run["sources"] if s["source"] == "ice_mass_greenland")
         assert greenland["drafted"] == 0
 
+    def test_new_source_types_roll_back_source_drafted_telemetry(self):
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict = _fresh_state()
+        draft_types = ["record", "record_low", "monthly_high", "precipitation_extreme"]
+        for i, draft_type in enumerate(draft_types):
+            state_dict["drafts"].append({
+                "id": f"d{i}",
+                "event_id": f"evt_{i}",
+                "type": draft_type,
+                "status": "pending",
+                "score": {"total": 90 - i},
+                "review_context": {"source_key": "gpm_imerg"} if draft_type == "precipitation_extreme" else {},
+            })
+            state_dict["posted_events"].append(f"evt_{i}")
+        current_run = {
+            "sources": [
+                {"source": "open_meteo_extreme_signals", "drafted": MAX_DRAFTS_PER_CYCLE},
+                {"source": "gpm_imerg", "drafted": 1},
+            ],
+        }
+
+        _prune_weakest_cycle_drafts(state_dict, 0, current_run, MAX_DRAFTS_PER_CYCLE + 1)
+
+        gpm = next(s for s in current_run["sources"] if s["source"] == "gpm_imerg")
+        assert gpm["drafted"] == 0
+
+    def test_review_context_source_key_does_not_override_prune_mapping(self):
+        from src.main import _prune_weakest_cycle_drafts, MAX_DRAFTS_PER_CYCLE
+
+        state_dict = _fresh_state()
+        draft_types = ["record", "record_low", "monthly_high", "record_streak"]
+        for i, draft_type in enumerate(draft_types):
+            state_dict["drafts"].append({
+                "id": f"d{i}",
+                "event_id": f"evt_{i}",
+                "type": draft_type,
+                "status": "pending",
+                "score": {"total": 90 - i},
+                "review_context": {"source_key": draft_type},
+            })
+            state_dict["posted_events"].append(f"evt_{i}")
+        current_run = {
+            "sources": [
+                {"source": "open_meteo_extreme_signals", "drafted": MAX_DRAFTS_PER_CYCLE + 1},
+            ],
+        }
+
+        _prune_weakest_cycle_drafts(state_dict, 0, current_run, MAX_DRAFTS_PER_CYCLE + 1)
+
+        source_run = current_run["sources"][0]
+        assert source_run["drafted"] == MAX_DRAFTS_PER_CYCLE
+
 
 class TestSynthesisRecording:
     def test_fire_in_us_records_component(self, monkeypatch):

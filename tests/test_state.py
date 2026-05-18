@@ -1053,6 +1053,21 @@ class TestSqliteRoundTripLaneKeys:
         assert out["flood_activation_tiers"] == {"EMSR999": "Major"}
         assert out["flood_annual_count"] == {"2026": 2}
 
+    def test_round_trip_preserves_cyclone_state(self):
+        state_in = {
+            "cyclone_tiers": {"nhc:al012026": 3},
+            "cyclone_wind_history": {
+                "nhc:al012026": [
+                    {"issued_at": "2026-05-14T00:00:00Z", "wind_kt": 80},
+                ],
+            },
+            "cyclone_annual_count": {"2026": 1},
+        }
+        out = self._sqlite_round_trip(state_in)
+        assert out["cyclone_tiers"] == {"nhc:al012026": 3}
+        assert out["cyclone_wind_history"]["nhc:al012026"][0]["wind_kt"] == 80
+        assert out["cyclone_annual_count"] == {"2026": 1}
+
     def test_round_trip_preserves_lane14_state(self):
         state_in = {
             "nao_annual_count": {"2026": 2},

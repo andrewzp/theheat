@@ -17,7 +17,13 @@ def run_gpm_imerg(
     source_promoted = 0
     try:
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
-        max_cities = int(max_cities_raw) if max_cities_raw else None
+        max_cities = (
+            int(max_cities_raw)
+            if max_cities_raw
+            else gpm_imerg.DEFAULT_CITY_LIMIT
+        )
+        if max_cities < 1:
+            raise ValueError("GPM_IMERG_MAX_CITIES must be >= 1")
         readings = _fetch_strict(
             gpm_imerg.fetch_daily_precip,
             cities=cities,

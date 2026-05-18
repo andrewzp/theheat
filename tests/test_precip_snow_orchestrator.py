@@ -35,6 +35,29 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
     assert bot_state["source_health"]["gpm_imerg"]["success"] == 1
 
 
+def test_run_gpm_imerg_uses_default_city_cap_when_env_absent(monkeypatch):
+    from src.orchestrator.sources import gpm_imerg as runner
+
+    bot_state = _fresh_state()
+    captured = {}
+
+    def fake_fetch_daily_precip(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.delenv("GPM_IMERG_MAX_CITIES", raising=False)
+    monkeypatch.setattr(runner.gpm_imerg, "fetch_daily_precip", fake_fetch_daily_precip)
+
+    drafted = runner.run_gpm_imerg(
+        bot_state,
+        None,
+        [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+    )
+
+    assert drafted == 0
+    assert captured["max_cities"] == runner.gpm_imerg.DEFAULT_CITY_LIMIT
+
+
 def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch):
     from src.orchestrator.sources import nsidc_snow as runner
 

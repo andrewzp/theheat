@@ -16,6 +16,7 @@ from src.two_bot.types import ExtractedClaim
 
 CLAIM_EXTRACT_MODEL = os.environ.get("THEHEAT_CLAIM_EXTRACT_MODEL", CHEAP_MODEL)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+JSON_PARSE_RETRY_BUDGET = 1
 _VALID_KINDS = {
     "number",
     "date",
@@ -49,7 +50,7 @@ def _parse_claims_json(raw: str) -> list[ExtractedClaim]:
     return claims
 
 
-def _call_gemini(tweet: str) -> str:
+def _call_gemini(tweet: str, *, retry_suffix: str = "") -> str:
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is required for claim extraction")
@@ -65,6 +66,8 @@ def _call_gemini(tweet: str) -> str:
         http_options=genai_types.HttpOptions(timeout=90000),
     )
     user_prompt = CLAIM_EXTRACT_USER_PROMPT_TEMPLATE.format(tweet=tweet)
+    if retry_suffix:
+        user_prompt = f"{user_prompt}{retry_suffix}"
     response = call_with_retries(
         "gemini claim extraction",
         lambda: client.models.generate_content(
@@ -82,4 +85,23 @@ def _call_gemini(tweet: str) -> str:
 def extract_claims(tweet: str) -> list[ExtractedClaim]:
     """Extract concrete claims from tweet text via Gemini Flash."""
 
-    return _parse_claims_json(_call_gemini(tweet))
+    last_parse_error: str | None = None
+    for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
+        retry_suffix = ""
+        if parse_attempt > 0 and last_parse_error is not None:
+            retry_suffix = (
+                "\n\n[JSON-output retry: the previous attempt did not return "
+                "valid JSON. Return ONLY the JSON array specified above — "
+                "no prose before or after, no markdown fences, no chain-of-"
+                "thought. Use [] only when the tweet contains no concrete claims.]"
+            )
+        raw = _call_gemini(tweet, retry_suffix=retry_suffix)
+        try:
+            return _parse_claims_json(raw)
+        except ValueError as exc:
+            last_parse_error = str(exc)
+
+    raise ValueError(
+        f"claim extractor returned invalid JSON across "
+        f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
+    )

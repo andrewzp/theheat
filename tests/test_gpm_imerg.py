@@ -6,6 +6,7 @@ import responses
 
 from src.data.gpm_imerg import (
     CityPrecipReading,
+    DEFAULT_CITY_LIMIT,
     PrecipExtremeEvent,
     _ascii_subset_url,
     _lat_index,
@@ -50,6 +51,27 @@ class TestGpmFetch:
         assert readings[0].mm_total == 42.5
         assert readings[0].event_id == "gpm_imerg_france_paris_2026-05-14"
         assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
+
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_fetch_daily_precip_defaults_to_bounded_city_limit(self, _env, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        calls = []
+
+        def fake_fetch_city_precip(**kwargs):
+            calls.append(kwargs)
+            return 1.0
+
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fake_fetch_city_precip)
+        cities = [
+            {"city": f"City {i}", "country": "Testland", "lat": "0", "lon": "0"}
+            for i in range(DEFAULT_CITY_LIMIT + 10)
+        ]
+
+        readings = fetch_daily_precip(cities, target_date=date(2026, 5, 14), strict=True)
+
+        assert len(readings) == DEFAULT_CITY_LIMIT
+        assert len(calls) == DEFAULT_CITY_LIMIT
 
     @patch("src.data.gpm_imerg.os.environ.get", return_value="")
     def test_missing_token_strict_raises_skipped(self, _env):

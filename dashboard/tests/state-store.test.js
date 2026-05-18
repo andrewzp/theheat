@@ -233,6 +233,27 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
       fire_complex_tiers: { complex_1: 3 },
       record_streaks: { station_1: { days: 2, last_date: "2026-05-08" } },
       ice_mass_last_seen: { greenland: "2026-03" },
+      cyclone_tiers: { "nhc:al012026": 3 },
+      cyclone_wind_history: {
+        "nhc:al012026": [{ issued_at: "2026-05-14T00:00:00Z", wind_kt: 80 }],
+      },
+      cyclone_annual_count: { 2026: 1 },
+      precip_daily_records: { "france:paris:05-14": { mm: 75, year: 2026 } },
+      precip_recent_by_city: { "france:paris": [{ date: "2026-05-14", mm: 75 }] },
+      snow_daily_swe_gain_records: { albro_lake: { mm: 50, year: 2026 } },
+      snow_recent_by_station: { albro_lake: [{ date: "2026-05-14", mm: 50 }] },
+      snow_annual_count: { 2026: 1 },
+      seasonal_snow_records: { albro_lake: { mm: 800, year: 2026 } },
+      flood_activation_tiers: { EMSR999: "Major" },
+      flood_annual_count: { 2026: 2 },
+      nao_annual_count: { 2026: 2 },
+      ao_annual_count: { 2026: 3 },
+      pdo_annual_count: { 2026: 1 },
+      nao_last_phase: "Negative",
+      ao_last_phase: "Negative",
+      pdo_last_phase: "Positive",
+      ozone_hole_last_peak: { 2026: { peak_date: "2026-09-20", area_million_km2: 23 } },
+      ozone_hole_annual_count: { 2026: 1 },
     }
 
     await stateStore.writeStateStore(sourceState)
@@ -257,6 +278,25 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     assert.deepEqual(loaded.fire_complex_tiers, { complex_1: 3 })
     assert.deepEqual(loaded.record_streaks, sourceState.record_streaks)
     assert.deepEqual(loaded.ice_mass_last_seen, { greenland: "2026-03" })
+    assert.deepEqual(loaded.cyclone_tiers, sourceState.cyclone_tiers)
+    assert.deepEqual(loaded.cyclone_wind_history, sourceState.cyclone_wind_history)
+    assert.deepEqual(loaded.cyclone_annual_count, sourceState.cyclone_annual_count)
+    assert.deepEqual(loaded.precip_daily_records, sourceState.precip_daily_records)
+    assert.deepEqual(loaded.precip_recent_by_city, sourceState.precip_recent_by_city)
+    assert.deepEqual(loaded.snow_daily_swe_gain_records, sourceState.snow_daily_swe_gain_records)
+    assert.deepEqual(loaded.snow_recent_by_station, sourceState.snow_recent_by_station)
+    assert.deepEqual(loaded.snow_annual_count, sourceState.snow_annual_count)
+    assert.deepEqual(loaded.seasonal_snow_records, sourceState.seasonal_snow_records)
+    assert.deepEqual(loaded.flood_activation_tiers, sourceState.flood_activation_tiers)
+    assert.deepEqual(loaded.flood_annual_count, sourceState.flood_annual_count)
+    assert.deepEqual(loaded.nao_annual_count, sourceState.nao_annual_count)
+    assert.deepEqual(loaded.ao_annual_count, sourceState.ao_annual_count)
+    assert.deepEqual(loaded.pdo_annual_count, sourceState.pdo_annual_count)
+    assert.equal(loaded.nao_last_phase, "Negative")
+    assert.equal(loaded.ao_last_phase, "Negative")
+    assert.equal(loaded.pdo_last_phase, "Positive")
+    assert.deepEqual(loaded.ozone_hole_last_peak, sourceState.ozone_hole_last_peak)
+    assert.deepEqual(loaded.ozone_hole_annual_count, sourceState.ozone_hole_annual_count)
     assert.equal(loaded.suppressions.length, 1)
     assert.equal(loaded.suppressions[0].stage, "fact_check")
   } finally {

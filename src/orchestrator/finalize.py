@@ -42,8 +42,26 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
     "cyclone_tier_crossing": "nhc",
     "cyclone_landfall": "nhc",
     "cyclone_basin_record": "nhc",
+    "precipitation_extreme": "gpm_imerg",
+    "snow_extreme": "nsidc_snow",
+    "seasonal_snow_record": "nsidc_snow",
+    "oscillation_alignment": "nao_ao_alignment",
+    "ozone_hole_peak": "ozone_hole",
     "synthesis_fire_drought_heat": "synthesis_fire_drought_heat",
 }
+
+
+def _prune_source_keys_for_draft(draft: dict) -> list[str]:
+    source_keys: list[str] = []
+    mapped_source = _PRUNE_SOURCE_KEY_BY_TYPE.get(draft.get("type") or "")
+    if mapped_source:
+        source_keys.append(mapped_source)
+    review_context = draft.get("review_context")
+    if isinstance(review_context, dict):
+        source_key = review_context.get("source_key")
+        if isinstance(source_key, str) and source_key and source_key not in source_keys:
+            source_keys.append(source_key)
+    return source_keys
 
 
 def _prune_weakest_cycle_drafts(
@@ -83,16 +101,18 @@ def _prune_weakest_cycle_drafts(
         ]
         if current_run is not None:
             for d in pruned:
-                src = _PRUNE_SOURCE_KEY_BY_TYPE.get(d.get("type") or "")
-                if not src:
-                    continue
+                source_keys = _prune_source_keys_for_draft(d)
                 for s_run in current_run.get("sources", []):
-                    if (
-                        s_run.get("source") == src
-                        or s_run.get("source", "").startswith(f"{src}_")
-                    ) and s_run.get("drafted", 0) > 0:
-                        s_run["drafted"] -= 1
-                        break
+                    for src in source_keys:
+                        if (
+                            s_run.get("source") == src
+                            or s_run.get("source", "").startswith(f"{src}_")
+                        ) and s_run.get("drafted", 0) > 0:
+                            s_run["drafted"] -= 1
+                            break
+                    else:
+                        continue
+                    break
 
     print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
     for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
