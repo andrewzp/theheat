@@ -17,20 +17,6 @@ _INDEX_CAPS = {"NAO": 6, "AO": 6, "PDO": 3}
 
 def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
     drafted = 0
-    if date.today().day != 1:
-        for index_name, _fetcher_name in _INDEX_FETCHERS:
-            skipped_start = time.perf_counter()
-            _record_source_run(
-                current_run, bot_state, index_name.lower(), skipped_start,
-                status="skipped", note="Runs on the 1st of the month",
-            )
-        skipped_start = time.perf_counter()
-        _record_source_run(
-            current_run, bot_state, "nao_ao_alignment", skipped_start,
-            status="skipped", note="Runs on the 1st of the month",
-        )
-        return drafted
-
     print("[alerts] Checking climate-mode indices...")
     readings_by_index = {}
     for index_name, fetcher_name in _INDEX_FETCHERS:

@@ -1,7 +1,12 @@
 """Tests for NOAA climate-mode index sources."""
 
+from copy import deepcopy
+from datetime import date
+from unittest.mock import MagicMock
+
 import responses
 
+import src.orchestrator.sources.climate_indices as climate_source
 from src.data.climate_indices import (
     AO_URL,
     NAO_URL,
@@ -15,6 +20,7 @@ from src.data.climate_indices import (
     fetch_nao,
     fetch_pdo,
 )
+from src.state import DEFAULT_STATE
 
 
 NAO_SAMPLE = """1950    1    0.9200
@@ -163,3 +169,42 @@ class TestNaoAoAlignment:
         ao = _series("AO", [0.4, -0.4] * 12 + [-2.2, -2.3])
 
         assert detect_nao_ao_alignment(nao, ao) is None
+
+
+class TestClimateIndexRunner:
+    def test_run_climate_indices_fetches_after_first_of_month(self, monkeypatch):
+        class MidMonthDate(date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 5, 17)
+
+        fetch_nao = MagicMock(return_value=[])
+        fetch_ao = MagicMock(return_value=[])
+        fetch_pdo = MagicMock(return_value=[])
+        monkeypatch.setattr(climate_source, "date", MidMonthDate)
+        monkeypatch.setattr(climate_source.climate_indices, "fetch_nao", fetch_nao)
+        monkeypatch.setattr(climate_source.climate_indices, "fetch_ao", fetch_ao)
+        monkeypatch.setattr(climate_source.climate_indices, "fetch_pdo", fetch_pdo)
+        monkeypatch.setattr(climate_source.climate_indices, "detect_phase_transition", lambda readings: None)
+        monkeypatch.setattr(climate_source.climate_indices, "detect_extreme_excursion", lambda readings: None)
+        monkeypatch.setattr(
+            climate_source.climate_indices,
+            "detect_nao_ao_alignment",
+            lambda nao_readings, ao_readings: None,
+        )
+        bot_state = deepcopy(DEFAULT_STATE)
+        current_run = {"id": "run_1", "sources": []}
+
+        drafted = climate_source.run_climate_indices(bot_state, current_run)
+
+        assert drafted == 0
+        fetch_nao.assert_called_once()
+        fetch_ao.assert_called_once()
+        fetch_pdo.assert_called_once()
+        statuses = {item["source"]: item["status"] for item in current_run["sources"]}
+        assert statuses == {
+            "nao": "success",
+            "ao": "success",
+            "pdo": "success",
+            "nao_ao_alignment": "success",
+        }
