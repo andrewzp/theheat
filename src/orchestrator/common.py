@@ -1195,6 +1195,30 @@ def _enqueue_candidate(bot_state: BotState, candidate: "TriageCandidateBundle") 
     queue.append(candidate)
 
 
+def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: int = 1) -> None:
+    """Increment the ``drafted`` counter on an existing source run entry.
+
+    Source runners write their telemetry entry (via ``_record_source_run``)
+    with ``drafted=0`` because at that point their candidates are still in
+    the triage queue — the writer hasn't run yet. When the drain step
+    successfully calls ``_try_two_bot_draft()`` for a survivor, it calls
+    this helper to credit the originating source.
+
+    Finds the *last* entry whose ``source`` key matches (the most recent
+    record for that source in this cycle). If no matching entry is found,
+    no-ops silently — the spec § 9 says the per-source counter is a
+    best-effort telemetry enhancement, not a hard correctness gate.
+    """
+    if current_run is None:
+        return
+    sources_list: list[dict] = current_run.get("sources") or []
+    # Walk in reverse to find the most recent entry for this source
+    for entry in reversed(sources_list):
+        if entry.get("source") == source:
+            entry["drafted"] = entry.get("drafted", 0) + amount
+            return
+
+
 def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> None:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
@@ -1213,6 +1237,12 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
     In all cases (including exception), the queue is popped from bot_state
     before returning so a crashed cron doesn't re-process stale candidates
     next cycle.
+
+    Per-source telemetry (spec § 9):
+        - On successful draft: increments ``drafted`` on the source's run
+          entry via ``_bump_source_drafted_in_run``.
+        - Source runners record ``drafted=0`` at their own call site; the
+          drain step credits the actual count once survivors are written.
     """
     from src import state as _state
     from src.orchestrator import triage as _triage
@@ -1246,13 +1276,17 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
         )
         if drafted:
             _state.record_event(bot_state, candidate.event_id)
-            # TODO (next PR — coral_dhw migration): credit
-            # `candidate.source` for this drafted survivor in the per-source
-            # run telemetry (spec § 9). Without this, migrated sources will
-            # show `drafted: 0` in current_run["sources"][source] even when
-            # their candidate ships via triage. No-op in this PR because
-            # kill-switch defaults OFF and no source migrates yet, so the
-            # drain helper processes an empty queue.
+            # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).
+            # Source runners write drafted=0 at their call site because candidates
+            # are still queued then; the drain step is where drafts actually happen.
+            _bump_source_drafted_in_run(current_run, candidate.source)
+            # Fire source-specific post-success callback if provided (e.g.
+            # incrementing an annual counter that should only tick on actual drafts).
+            if candidate.on_draft_success is not None:
+                try:
+                    candidate.on_draft_success()
+                except Exception as cb_exc:
+                    print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
 
 
 
@@ -1324,6 +1358,7 @@ __all__ = [
     "_touch_draft",
     "_triage_enabled",
     "_enqueue_candidate",
+    "_bump_source_drafted_in_run",
     "_drain_and_write_triage_queue",
     "_try_two_bot_draft",
     "_two_bot_bundle_for_extreme_signal",
