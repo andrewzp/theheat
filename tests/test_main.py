@@ -2067,3 +2067,209 @@ class TestSynthesisStage:
         # Cooldown must have been recorded so a second cycle is suppressed.
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
         assert "California" in cooldown
+
+
+# ---------------------------------------------------------------------------
+# Triage integration tests (spec § 8, engineering-review T1/T2 tests)
+# ---------------------------------------------------------------------------
+
+def _make_triage_candidate(
+    *,
+    signal_kind: str = "coral_bleaching",
+    total: int = 80,
+    source: str = "coral_dhw",
+    event_id: str = "evt_001",
+    created_at: str = "2026-05-17T12:00:00Z",
+):
+    """Build a minimal TriageCandidateBundle for integration tests."""
+    from src.two_bot.types import TriageCandidateBundle
+    from src.two_bot.types import StoryBundle
+    from src.editorial.scoring._shared import EditorialScore
+
+    bundle = StoryBundle(
+        signal_kind=signal_kind,
+        where="Test Location",
+        when="2026-05-17",
+        event_id=event_id,
+        headline_metric={"label": "Test", "value": 1},
+        current_facts=[],
+    )
+    score = EditorialScore(
+        category=signal_kind,
+        severity=total,
+        novelty=total,
+        timeliness=total,
+        confidence=total,
+        shareability=total,
+        sensitivity=0,
+        total=total,
+        threshold=60,
+        reasons=[],
+    )
+    return TriageCandidateBundle(
+        bundle=bundle,
+        score=score,
+        event_id=event_id,
+        source=source,
+        review_context={},
+        city="",
+        tweet_date="2026-05-17",
+        cooldown_exempt=False,
+        legacy_type=signal_kind,
+        created_at=created_at,
+    )
+
+
+class TestTriageIntegration:
+    """Integration tests for the _drain_and_write_triage_queue path in run_alerts."""
+
+    def test_run_alerts_drains_triage_queue_after_sources(self, monkeypatch):
+        """After all sources run, _drain_and_write_triage_queue processes the queue."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        c = _make_triage_candidate()
+        bot_state["_triage_queue"] = [c]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+        monkeypatch.setattr(
+            "src.orchestrator.triage.select_survivors",
+            lambda state, queue, **kw: queue,  # pass-through
+        )
+
+        current_run = {"sources": []}
+        common._drain_and_write_triage_queue(bot_state, current_run)
+
+        assert written == [c.event_id]
+        # Queue should be gone after drain
+        assert "_triage_queue" not in bot_state
+
+    def test_run_alerts_only_calls_writer_for_survivors(self, monkeypatch):
+        """When triage is ON, only survivors reach _try_two_bot_draft."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        survivor = _make_triage_candidate(event_id="survivor", total=90)
+        spilled = _make_triage_candidate(event_id="spilled", total=70)
+        bot_state["_triage_queue"] = [survivor, spilled]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+        monkeypatch.setattr(
+            "src.orchestrator.triage.select_survivors",
+            lambda state, queue, **kw: [survivor],  # triage selects only the survivor
+        )
+
+        current_run = {"sources": []}
+        common._drain_and_write_triage_queue(bot_state, current_run)
+
+        assert written == ["survivor"]
+
+    def test_run_alerts_with_triage_disabled_writes_all_candidates(self, monkeypatch):
+        """When THEHEAT_TRIAGE_ENABLED=0, all candidates in queue are written."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        c1 = _make_triage_candidate(event_id="c1", total=90)
+        c2 = _make_triage_candidate(event_id="c2", total=70)
+        c3 = _make_triage_candidate(event_id="c3", total=60)
+        bot_state["_triage_queue"] = [c1, c2, c3]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        current_run = {"sources": []}
+        common._drain_and_write_triage_queue(bot_state, current_run)
+
+        # All 3 should be written regardless of score ordering
+        assert sorted(written) == ["c1", "c2", "c3"]
+
+    def test_partial_migration_respects_global_cap(self, monkeypatch, mock_alerts_pipeline_sources):
+        """Mixed cycle: some sources legacy (direct _try_two_bot_draft), some via triage queue.
+        Total drafts must stay ≤ MAX_DRAFTS_PER_CYCLE even in mixed state.
+
+        This is the steady-state during source migration rollout.
+        """
+        monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        import src.main as main_mod
+        from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
+
+        bot_state = _fresh_state()
+        draft_call_count = [0]
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            # Each call adds a draft directly (simulating legacy sources)
+            draft_call_count[0] += 1
+            draft_text = f"draft_{draft_call_count[0]}"
+            from src.orchestrator.common import save_draft
+            save_draft(draft_text, state, kwargs.get("legacy_type", "record"), kwargs.get("event_id", "e"))
+            return True
+
+        monkeypatch.setattr("src.main._try_two_bot_draft", fake_try_two_bot_draft)
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        monkeypatch.setattr("src.main.gpm_imerg.fetch_daily_precip", MagicMock(return_value=[]))
+
+        # Pre-seed a triage queue (as if one migrated source added candidates)
+        triage_candidates = [
+            _make_triage_candidate(event_id=f"triage_{i}", signal_kind=f"cat_{i}", total=90 - i * 5)
+            for i in range(4)
+        ]
+        bot_state["_triage_queue"] = triage_candidates
+
+        current_run = {"sources": []}
+        main_mod.run_alerts(bot_state, current_run=current_run)
+
+        # Total drafts in state must not exceed MAX_DRAFTS_PER_CYCLE
+        all_drafts = bot_state.get("drafts", [])
+        assert len(all_drafts) <= MAX_DRAFTS_PER_CYCLE, (
+            f"Expected ≤ {MAX_DRAFTS_PER_CYCLE} drafts, got {len(all_drafts)}"
+        )
+
+    def test_run_alerts_pops_stale_queue_on_entry(self, monkeypatch, mock_alerts_pipeline_sources):
+        """The bot_state.pop('_triage_queue') at the top of run_alerts drops stale queues."""
+        import src.main as main_mod
+        from src.two_bot.types import TriageCandidateBundle
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")  # disable triage so no writes happen
+        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        monkeypatch.setattr("src.main.gpm_imerg.fetch_daily_precip", MagicMock(return_value=[]))
+        monkeypatch.setattr("src.main._try_two_bot_draft", MagicMock(return_value=False))
+
+        bot_state = _fresh_state()
+        # Simulate a stale queue from a crashed prior cron
+        stale_candidate = _make_triage_candidate(event_id="stale_evt")
+        bot_state["_triage_queue"] = [stale_candidate]
+
+        # run_alerts should pop the stale queue at entry
+        # After the run, the stale candidate should NOT have been processed
+        # (the queue is cleared at entry, then drained fresh)
+        current_run = {"sources": []}
+        main_mod.run_alerts(bot_state, current_run=current_run)
+
+        # _triage_queue should not be in bot_state after the run completes
+        assert "_triage_queue" not in bot_state

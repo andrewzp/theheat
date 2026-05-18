@@ -117,6 +117,31 @@ class FactCheckResult:
         }
 
 
+@dataclass(frozen=True)
+class TriageCandidateBundle:
+    """A scored bundle queued for the triage stage. Source runners build
+    these and append to bot_state['_triage_queue']; the triage stage
+    ranks/caps them and the survivors enter the writer pipeline.
+
+    Carries all the arguments _try_two_bot_draft() needs so the writer
+    call site stays unchanged.
+
+    NOTE: This is distinct from src.editorial.candidates.CandidateBundle
+    which is the voice-generator's multi-candidate evaluator type. This
+    type is for the pre-LLM triage queue.
+    """
+    bundle: Any  # StoryBundle — use Any to avoid circular import
+    score: Any   # EditorialScore — use Any to avoid circular import
+    event_id: str
+    source: str                 # source_key for telemetry
+    review_context: dict        # for save_draft
+    city: str                   # for city cooldown
+    tweet_date: str             # for same-day dedup
+    cooldown_exempt: bool       # for elite-signal bypass
+    legacy_type: str            # for save_draft type field
+    created_at: str             # iso8601 — used as triage tiebreaker
+
+
 @dataclass
 class CriticResult:
     """Second-pass editorial critic verdict.
