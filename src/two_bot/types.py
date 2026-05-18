@@ -1,5 +1,6 @@
 """Type definitions for the two-bot pipeline."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -140,6 +141,12 @@ class TriageCandidateBundle:
     cooldown_exempt: bool       # for elite-signal bypass
     legacy_type: str            # for save_draft type field
     created_at: str             # iso8601 — used as triage tiebreaker
+    # Optional zero-argument callable invoked by the drain step on successful
+    # draft. Use for source-specific side effects that must only fire when a
+    # draft actually ships (e.g. incrementing an annual count, updating a
+    # last-seen tier). Defaults to None = no-op. NOT persisted (queue is
+    # transient and never written to sqlite).
+    on_draft_success: Callable[[], None] | None = None
 
 
 @dataclass

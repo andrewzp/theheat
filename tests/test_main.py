@@ -981,23 +981,26 @@ class TestCH4Alerts:
 
 
 class TestCoralDHWAlerts:
-    @patch("src.main._try_two_bot_draft")
-    def test_run_alerts_drafts_coral_bleaching_threshold(
+    def test_run_alerts_coral_dhw_enqueues_to_triage_queue(
         self,
-        mock_two_bot,
         monkeypatch,
         mock_alerts_pipeline_sources,
     ):
-        import src.main as main
+        """coral_dhw is now migrated to the triage path. When run_coral_dhw
+        processes a passing-score event, it enqueues a TriageCandidateBundle
+        instead of calling _try_two_bot_draft directly.
 
-        monkeypatch.setattr("src.main.open_meteo.load_cities", MagicMock(return_value=[]))
-        monkeypatch.setattr(
-            "src.main.open_meteo.check_extreme_signals_for_cities",
-            MagicMock(return_value=([], [])),
-        )
-        monkeypatch.setattr("src.main.firms.fetch_fires", MagicMock(return_value=[]))
-        monkeypatch.setattr("src.main.co2.fetch_co2_data", MagicMock(return_value=[]))
-        monkeypatch.setattr("src.main.co2.detect_milestone", MagicMock(return_value=None))
+        We test this by calling run_coral_dhw in isolation (not through run_alerts,
+        which runs all sources and has Python 3.14 specialization issues with
+        module-level monkeypatching).
+
+        The drain step behavior (drafted counter, annual count) is tested separately
+        in TestDrainTelemetry and TestCoralDHWSourceRunnerMigration.
+        """
+        import src.orchestrator.sources.coral_dhw as coral_source
+        from src.two_bot.types import TriageCandidateBundle
+        from src.orchestrator.sources.coral_dhw import run_coral_dhw
+
         reading = CoralDHWReading(
             region_id="gbr_northern",
             region_full_name="Northern GBR",
@@ -1020,24 +1023,36 @@ class TestCoralDHWAlerts:
             lon=145.975,
             event_id="coral_dhw_gbr_northern_tier8",
         )
-        main.coral_dhw.fetch_coral_dhw.return_value = [reading]
-        main.coral_dhw.detect_dhw_thresholds.return_value = [event]
-        mock_two_bot.return_value = True
+        # Patch the data module in the namespace where run_coral_dhw actually looks it up.
+        coral_data_mock = MagicMock()
+        coral_data_mock.fetch_coral_dhw.return_value = [reading]
+        coral_data_mock.detect_dhw_thresholds.return_value = [event]
+        monkeypatch.setattr(coral_source, "coral_dhw", coral_data_mock)
 
         state = _fresh_state()
         current_run = {"sources": []}
-        run_alerts(state, current_run=current_run)
+        # Call the source runner directly (not through run_alerts) to avoid
+        # Python 3.14 adaptive specialization caching issues with monkeypatching.
+        run_coral_dhw(state, current_run)
 
-        mock_two_bot.assert_any_call(
-            ANY,
-            state,
-            ANY,
-            legacy_type="coral_bleaching",
-            event_id="coral_dhw_gbr_northern_tier8",
-            review_context=ANY,
-        )
-        assert state["coral_dhw_last_tier"]["gbr_northern"] == 8
-        assert state["coral_dhw_annual_count"][str(date.today().year)] == 1
+        # The source runner should have enqueued exactly one candidate.
+        queue = state.get("_triage_queue", [])
+        assert len(queue) == 1
+        candidate = queue[0]
+        assert isinstance(candidate, TriageCandidateBundle)
+        assert candidate.source == "coral_dhw"
+        assert candidate.legacy_type == "coral_bleaching"
+        assert candidate.event_id == "coral_dhw_gbr_northern_tier8"
+        assert candidate.cooldown_exempt is False
+
+        # Tier update is gated on on_draft_success — spec § 7 says spilled
+        # candidates must re-detect on next cron, and for coral_dhw the tier
+        # update IS the re-detection cooldown. On enqueue alone, the tier must
+        # NOT yet be in coral_dhw_last_tier.
+        last_tiers = state.get("coral_dhw_last_tier", {})
+        assert "gbr_northern" not in last_tiers or last_tiers.get("gbr_northern") != 8
+
+        # Source run telemetry: observed=1, promoted=1 (drafted is deferred to drain).
         source = next(item for item in current_run["sources"] if item["source"] == "coral_dhw")
         assert source["observed"] == 1
         assert source["promoted"] == 1
