@@ -14,7 +14,10 @@ import os
 import secrets
 import sys
 import time
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from src.two_bot.types import TriageCandidateBundle
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
@@ -1174,7 +1177,7 @@ def _triage_enabled() -> bool:
     return os.environ.get("THEHEAT_TRIAGE_ENABLED", "0") == "1"
 
 
-def _enqueue_candidate(bot_state: BotState, candidate) -> None:
+def _enqueue_candidate(bot_state: BotState, candidate: "TriageCandidateBundle") -> None:
     """Append a TriageCandidateBundle to the per-cycle triage queue.
 
     Source runners call this instead of _try_two_bot_draft() once migrated.
@@ -1243,8 +1246,13 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
         )
         if drafted:
             _state.record_event(bot_state, candidate.event_id)
-
-
+            # TODO (next PR — coral_dhw migration): credit
+            # `candidate.source` for this drafted survivor in the per-source
+            # run telemetry (spec § 9). Without this, migrated sources will
+            # show `drafted: 0` in current_run["sources"][source] even when
+            # their candidate ships via triage. No-op in this PR because
+            # kill-switch defaults OFF and no source migrates yet, so the
+            # drain helper processes an empty queue.
 
 
 

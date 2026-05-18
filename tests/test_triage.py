@@ -125,12 +125,12 @@ class TestSelectSurvivors:
         assert {r.event_id for r in result} == {"c1", "c2"}
 
     def test_per_category_cap_respects_env_override(self, monkeypatch):
-        """THEHEAT_PER_CATEGORY_CAP=1 → only 1 candidate per category survives."""
+        """THEHEAT_PER_CATEGORY_CAP=1 → only 1 candidate per category survives.
+
+        _per_category_cap() reads os.environ at call time (no module-level
+        cache), so monkeypatch.setenv is sufficient — no module reload needed.
+        """
         monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "1")
-        from src.orchestrator import triage as triage_mod
-        # Reload the per-category cap function to pick up env change
-        import importlib
-        importlib.reload(triage_mod)
         from src.orchestrator.triage import select_survivors
 
         bot_state = _fresh_state()
@@ -255,8 +255,18 @@ class TestTriageExceptionHandling:
 
 class TestTriageTelemetry:
 
-    def test_per_source_triage_counters_updated_correctly(self, monkeypatch):
-        """triaged_in increments for every enqueued candidate; triaged_out for spilled."""
+    def test_spill_records_source_attribution_for_dashboard(self, monkeypatch):
+        """Spilled candidates land in the suppression ledger with their source
+        attached, so the dashboard can attribute spills back to the source
+        runner that produced them.
+
+        NOTE: The spec § 9 also calls for per-source `triaged_in` and
+        `triaged_out` running counters in `current_run["sources"][source]`.
+        Those are deferred to a follow-up PR alongside the first source
+        migration (coral_dhw) where the telemetry surface actually lights
+        up — see TODO in `_drain_and_write_triage_queue` in
+        src/orchestrator/common.py.
+        """
         monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
         from src.orchestrator.triage import select_survivors
         bot_state = _fresh_state()
@@ -274,10 +284,13 @@ class TestTriageTelemetry:
         assert len(spilled) == 1
         assert spilled[0].event_id == "c3"
 
-        # The suppression record for the spilled candidate exists
+        # The suppression record for the spilled candidate exists AND
+        # captures its source so the dashboard can attribute it.
         suppressions = bot_state.get("suppressions", [])
         triage_supps = [s for s in suppressions if s.get("stage") == "triage_cap"]
         assert len(triage_supps) == 1
+        assert triage_supps[0]["source"] == "coral_dhw"
+        assert triage_supps[0]["event_id"] == "c3"
 
 
 # ---------------------------------------------------------------------------
