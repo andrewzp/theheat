@@ -49,10 +49,35 @@ def test_extract_claims_accepts_fenced_preamble_response(mock_gemini):
 
 
 def test_extract_claims_raises_on_invalid_json(mock_gemini):
-    mock_gemini.return_value = "not json"
+    mock_gemini.side_effect = ["not json", "still not json"]
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="invalid JSON across"):
         extract_claims("anything")
+    assert mock_gemini.call_count == 2
+
+
+def test_extract_claims_retries_on_invalid_json(mock_gemini):
+    mock_gemini.side_effect = [
+        "not json",
+        json.dumps([{"text": "361 MW", "kind": "number"}]),
+    ]
+
+    claims = extract_claims("Mali fire is 361 MW.")
+
+    assert [claim.text for claim in claims] == ["361 MW"]
+    assert mock_gemini.call_count == 2
+
+
+def test_extract_claims_retry_passes_contract_reminder_suffix(mock_gemini):
+    mock_gemini.side_effect = [
+        "",
+        json.dumps([{"text": "Mali", "kind": "named_entity"}]),
+    ]
+
+    extract_claims("Mali fire.")
+
+    assert mock_gemini.call_args_list[0].kwargs.get("retry_suffix", "") == ""
+    assert "JSON-output retry" in mock_gemini.call_args_list[1].kwargs.get("retry_suffix", "")
 
 
 def test_claim_extractor_prompt_requires_canonical_anchor():

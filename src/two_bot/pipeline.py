@@ -86,7 +86,16 @@ def generate_draft(
             _record_kill("safety", safety_reason or "unknown")
             return None
 
-        extracted = claim_extractor.extract_claims(writer_result.tweet)
+        try:
+            extracted = claim_extractor.extract_claims(writer_result.tweet)
+        except Exception as exc:
+            print(
+                f"[two_bot.pipeline] Claim extraction rejected {bundle.signal_kind} "
+                f"draft: {exc}"
+            )
+            _record_kill("claim_extractor", f"{type(exc).__name__}: {exc}")
+            return None
+
         fact_result = fact_check.fact_check(
             writer_result.tweet, extracted, bundle, state
         )
