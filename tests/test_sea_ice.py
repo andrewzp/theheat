@@ -25,7 +25,7 @@ class TestFetchSeaIce:
     def test_happy_path_arctic(self):
         responses.add(
             responses.GET,
-            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv",
+            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv",
             body=SAMPLE_CSV,
             status=200,
         )
@@ -39,7 +39,7 @@ class TestFetchSeaIce:
     def test_happy_path_antarctic(self):
         responses.add(
             responses.GET,
-            "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v3.0.csv",
+            "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v4.0.csv",
             body=SAMPLE_CSV,
             status=200,
         )
@@ -51,7 +51,7 @@ class TestFetchSeaIce:
     def test_api_error_returns_empty(self):
         responses.add(
             responses.GET,
-            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv",
+            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv",
             status=500,
         )
         assert fetch_sea_ice(hemisphere="Arctic") == []
@@ -66,7 +66,7 @@ class TestFetchSeaIce:
 """
         responses.add(
             responses.GET,
-            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv",
+            "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv",
             body=bad_csv,
             status=200,
         )
