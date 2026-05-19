@@ -79,15 +79,52 @@ HDR
 2026.292   -5500.0 120.0
 """
 
+# Dataset URL the CMR lookup is expected to return for greenland in the new
+# PO.DAAC Earthdata Cloud archive. The filename embeds a data range; we pick
+# one representative spelling for tests.
+NEW_GREENLAND_URL = (
+    "https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/"
+    "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4/"
+    "greenland_mass_200204_202603.txt"
+)
+
+
+def _cmr_response(href: str) -> dict:
+    """Build the minimal CMR /search/granules.json shape the resolver reads."""
+    return {
+        "feed": {
+            "entry": [
+                {
+                    "title": "greenland_mass_200204_202603",
+                    "links": [
+                        {"rel": "http://esipfed.org/ns/fedsearch/1.1/data#", "href": href},
+                    ],
+                }
+            ]
+        }
+    }
+
+
+def _mock_cmr(short_name: str, href: str | None) -> None:
+    """Register a CMR mock that returns one granule with `href` (or empty if None)."""
+    body = _cmr_response(href) if href else {"feed": {"entry": []}}
+    responses.add(
+        responses.GET,
+        "https://cmr.earthdata.nasa.gov/search/granules.json",
+        json=body,
+        status=200,
+        match=[responses.matchers.query_param_matcher({"short_name": short_name, "page_size": "1", "sort_key": "-start_date"})],
+    )
+
 
 class TestFetchGraceMass:
     @responses.activate
     @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
     def test_happy_path_greenland(self, _env):
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
         responses.add(
             responses.GET,
-            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            NEW_GREENLAND_URL,
             body=SAMPLE_GREENLAND,
             status=200,
         )
@@ -100,16 +137,16 @@ class TestFetchGraceMass:
         assert readings[-1].month == "2026-04"
         assert readings[-1].mass_gt == -5500.0
         assert readings[-1].event_id == "ice_mass_greenland_2026-04"
-        # Auth header must be set
-        assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
+        # Auth header must be set on the data fetch (the 2nd call; 1st is CMR).
+        assert responses.calls[1].request.headers["Authorization"] == "Bearer fake-token"
 
     @responses.activate
     @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
     def test_http_error_returns_empty(self, _env):
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
         responses.add(
             responses.GET,
-            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            NEW_GREENLAND_URL,
             status=500,
         )
         assert fetch_grace_mass(region="greenland") == []
@@ -117,10 +154,10 @@ class TestFetchGraceMass:
     @responses.activate
     @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
     def test_unauthorized_returns_empty(self, _env):
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
         responses.add(
             responses.GET,
-            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            NEW_GREENLAND_URL,
             status=401,
         )
         assert fetch_grace_mass(region="greenland") == []
@@ -139,10 +176,10 @@ class TestFetchGraceMass:
             "not a number    bad    data\n"
             "2026.292   -5500.0   120.0\n"
         )
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
         responses.add(
             responses.GET,
-            "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-            "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt",
+            NEW_GREENLAND_URL,
             body=body,
             status=200,
         )
@@ -153,6 +190,24 @@ class TestFetchGraceMass:
 
     def test_unknown_region_returns_empty(self):
         assert fetch_grace_mass(region="mars") == []
+
+    @responses.activate
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_cmr_returns_no_granules_skips(self, _env):
+        # When CMR returns an empty result, fetch_grace_mass must return [] and
+        # never attempt a data fetch (so no responses mock for the data URL).
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", None)
+        assert fetch_grace_mass(region="greenland") == []
+
+    @responses.activate
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_cmr_http_failure_skips(self, _env):
+        responses.add(
+            responses.GET,
+            "https://cmr.earthdata.nasa.gov/search/granules.json",
+            status=503,
+        )
+        assert fetch_grace_mass(region="greenland") == []
 
 
 def _reading(region: str, month: str, mass_gt: float) -> IceMassReading:

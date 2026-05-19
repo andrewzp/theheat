@@ -16,8 +16,11 @@ import requests
 
 from src.data.source_status import SourceFetchError
 
-ARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv"
-ANTARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v3.0.csv"
+# NSIDC bumped these CSVs from v3.0 to v4.0 sometime in early 2026; the v3.0
+# paths now 404. Schema unchanged (Year, Month, Day, Extent, Missing, Source Data)
+# with two header rows — confirmed via curl before this change.
+ARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv"
+ANTARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v4.0.csv"
 
 
 @dataclass

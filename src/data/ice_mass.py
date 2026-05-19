@@ -3,9 +3,18 @@
 Level-4 mascon time series from JPL, served via PO.DAAC. Monthly cadence
 with a 1-2 month publication lag. Requires Earthdata Login — set
 `EARTHDATA_TOKEN` to a user-generated app token from
-https://urs.earthdata.nasa.gov/.
+https://urs.earthdata.nasa.gov/. The user account must also authorize
+the PO.DAAC Cumulus OPS application in URS (Approve Applications page),
+otherwise archive.podaac.earthdata.nasa.gov returns 401.
 
 Records start 2002.
+
+PO.DAAC migrated these products from podaac-tools.jpl.nasa.gov/drive
+(decommissioned 2024-2025) to archive.podaac.earthdata.nasa.gov in
+Earthdata Cloud. The granule filename now embeds the data range
+(e.g. greenland_mass_200204_202603.txt), so the bot resolves the
+current granule URL via NASA CMR before each fetch rather than
+hardcoding.
 """
 
 from __future__ import annotations
@@ -18,17 +27,17 @@ import requests
 
 from src.data.source_status import SourceFetchError, SourceSkipped
 
-# Pinned product URLs. Update constants when the product version bumps.
-GREENLAND_URL = (
-    "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-    "RL06.3v04/mascon_CRI/GRN-ICE-MASS-anomaly-time-series.txt"
-)
-ANTARCTICA_URL = (
-    "https://podaac-tools.jpl.nasa.gov/drive/files/allData/tellus/L4/ice_mass/"
-    "RL06.3v03/mascon_CRI/ANT-ICE-MASS-anomaly-time-series.txt"
-)
+# CMR collection short_names for the two TIME_SERIES products. CMR maps these
+# to the latest granule's download URL on archive.podaac.earthdata.nasa.gov.
+GREENLAND_CMR_SHORT_NAME = "GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4"
+ANTARCTICA_CMR_SHORT_NAME = "ANTARCTICA_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4"
 
-REGION_URLS = {"greenland": GREENLAND_URL, "antarctica": ANTARCTICA_URL}
+REGION_CMR_SHORT_NAMES = {
+    "greenland": GREENLAND_CMR_SHORT_NAME,
+    "antarctica": ANTARCTICA_CMR_SHORT_NAME,
+}
+
+CMR_GRANULES_URL = "https://cmr.earthdata.nasa.gov/search/granules.json"
 
 GRACE_START_YEAR = 2002
 MILESTONE_STEP_GT = 1000.0
@@ -67,14 +76,56 @@ class IceMassRecord:
     event_id: str
 
 
+def _resolve_latest_url(short_name: str) -> str | None:
+    """Return the most recent granule's HTTPS download URL from CMR.
+
+    Queries `https://cmr.earthdata.nasa.gov/search/granules.json` for the
+    given collection sorted by start_date DESC and picks the first
+    granule's `.txt` link on `archive.podaac.earthdata.nasa.gov`. Returns
+    None on any failure so the caller can treat the lane as skipped.
+    """
+    try:
+        resp = requests.get(
+            CMR_GRANULES_URL,
+            params={
+                "short_name": short_name,
+                "page_size": 1,
+                "sort_key": "-start_date",
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        print(f"[ice_mass] CMR query failed for {short_name}: {exc}")
+        return None
+
+    try:
+        entries = resp.json().get("feed", {}).get("entry", [])
+    except ValueError as exc:
+        print(f"[ice_mass] CMR JSON parse failed for {short_name}: {exc}")
+        return None
+    if not entries:
+        return None
+
+    for link in entries[0].get("links", []):
+        href = link.get("href", "")
+        if (
+            href.startswith("https://archive.podaac.earthdata.nasa.gov/")
+            and href.endswith(".txt")
+            and "cumulus-protected" in href
+        ):
+            return href
+    return None
+
+
 def fetch_grace_mass(region: str, *, strict: bool = False) -> list[IceMassReading]:
     """Fetch the PODAAC Level-4 mass anomaly time series for a region.
 
     Returns readings sorted oldest → newest. Returns [] on any failure
-    (missing token, HTTP error, parse error) so callers can treat the
-    lane as skipped rather than crashing.
+    (missing token, CMR lookup failure, HTTP error, parse error) so
+    callers can treat the lane as skipped rather than crashing.
     """
-    if region not in REGION_URLS:
+    if region not in REGION_CMR_SHORT_NAMES:
         if strict:
             raise SourceSkipped(f"Unknown ice-mass region: {region}")
         return []
@@ -86,9 +137,17 @@ def fetch_grace_mass(region: str, *, strict: bool = False) -> list[IceMassReadin
             raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
 
+    url = _resolve_latest_url(REGION_CMR_SHORT_NAMES[region])
+    if not url:
+        msg = f"CMR returned no granule URL for {region}"
+        print(f"[ice_mass] {msg}")
+        if strict:
+            raise SourceFetchError(f"Ice mass fetch failed for {region}: {msg}")
+        return []
+
     try:
         resp = requests.get(
-            REGION_URLS[region],
+            url,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30,
         )
