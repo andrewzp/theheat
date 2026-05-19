@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import MagicMock
 
 import pytest
@@ -174,6 +175,23 @@ def test_pipeline_budget_exhausted_records_distinct_stage(
     assert state["memory"]["shipped_tweets"] == []
 
 
+def test_pipeline_evidence_contract_blocks_writer_before_token_spend(
+    mock_writer, mock_extract, mock_fact_check
+):
+    state = _state_with_memory()
+    result_out: dict = {}
+    bad_bundle = replace(_bundle(), event_id="")
+
+    draft = generate_draft(bad_bundle, state, result_out=result_out)
+
+    assert draft is None
+    assert result_out["kill_stage"] == "evidence_contract"
+    assert result_out["kill_reason"] == "missing_event_id"
+    assert not mock_writer.called
+    assert not mock_extract.called
+    assert not mock_fact_check.called
+
+
 def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_check):
     state = _state_with_memory()
 
@@ -235,7 +253,10 @@ def _monthly_high_bundle() -> StoryBundle:
             "month": "May",
             "margin_c": 1.1,
         },
-        raw_signal_dump={},
+        raw_signal_dump={
+            "source": "test",
+            "event_id": "meteo_monthly_Conakry_2026-05-01",
+        },
     )
 
 

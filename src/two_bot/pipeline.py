@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 
 from src.data.firms import FireEvent
 from src.state_schema import BotState
 from src.two_bot import claim_extractor, critic, fact_check, memory, writer
+from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
 from src.two_bot.types import StoryBundle
@@ -24,6 +26,34 @@ def _critic_enabled() -> bool:
 
     raw = os.environ.get("THEHEAT_CRITIC_ENABLED", "").strip().lower()
     return raw not in {"0", "false", "off", "no"}
+
+
+def _audit_bundle_for_generation(
+    bundle: StoryBundle,
+    *,
+    record_kill: Callable[[str, str], None] | None = None,
+    prefix: str = "",
+) -> bool:
+    audit = audit_story_bundle(bundle)
+    warning_codes = [issue.code for issue in audit.issues if issue.severity == "warning"]
+    if warning_codes:
+        print(
+            f"[two_bot.pipeline] {prefix}Evidence warnings "
+            f"({bundle.signal_kind}): {', '.join(warning_codes)}"
+        )
+
+    if audit.prompt_ready:
+        return True
+
+    error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
+    reason = ", ".join(error_codes) or "unknown"
+    print(
+        f"[two_bot.pipeline] {prefix}Evidence contract rejected "
+        f"{bundle.signal_kind} draft: {reason}"
+    )
+    if record_kill is not None:
+        record_kill("evidence_contract", reason)
+    return False
 
 
 def generate_draft(
@@ -62,6 +92,9 @@ def generate_draft(
             result_out["kill_reason"] = reason
 
     try:
+        if not _audit_bundle_for_generation(bundle, record_kill=_record_kill):
+            return None
+
         memory_slice = memory.build_memory_slice(state, bundle)
         writer_result = writer.write_tweet(bundle, memory_slice)
         if writer_result.tweet is None:
@@ -208,6 +241,9 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
     """
 
     try:
+        if not _audit_bundle_for_generation(bundle, prefix="Shadow "):
+            return None
+
         memory_slice = memory.build_memory_slice(state, bundle)
         writer_result = writer.write_tweet(bundle, memory_slice)
         if writer_result.tweet is None:
