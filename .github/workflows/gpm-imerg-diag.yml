@@ -1,0 +1,50 @@
+name: gpm-imerg-diag
+
+# One-shot diagnostic — verifies whether EARTHDATA_TOKEN + GES DISC app
+# authorization currently grant access to the GPM-IMERG OPeNDAP endpoint
+# the bot uses. Manual-trigger only. Burns zero LLM credits.
+#
+# Re-added 2026-05-19 to verify the GES DISC app authorization fix.
+# Delete after use.
+on:
+  workflow_dispatch:
+
+jobs:
+  curl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: HEAD GPM-IMERG OPeNDAP with bearer token
+        env:
+          EARTHDATA_TOKEN: ${{ secrets.EARTHDATA_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${EARTHDATA_TOKEN:-}" ]; then
+            echo "::error::EARTHDATA_TOKEN secret is empty or unset"
+            exit 1
+          fi
+          echo "Token length: ${#EARTHDATA_TOKEN} chars (masked)"
+
+          URL='https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDL.07/2026/05/3B-DAY-L.MS.MRG.3IMERG.20260517-S000000-E235959.V07C.nc4.ascii?precipitation%5B0:1:0%5D%5B1873:1:1873%5D%5B951:1:951%5D'
+
+          echo ""
+          echo "Performing HEAD request..."
+          status=$(curl -sIL -o /tmp/headers.txt -w "%{http_code}" \
+            -H "Authorization: Bearer $EARTHDATA_TOKEN" "$URL")
+
+          echo ""
+          echo "==============================="
+          echo "FINAL HTTP STATUS: $status"
+          echo "==============================="
+
+          echo ""
+          echo "Response header chain (token already masked by GH Actions):"
+          cat /tmp/headers.txt || true
+
+          case "$status" in
+            200) echo "::notice::OK — GPM-IMERG OPeNDAP returns 200. Token + GES DISC authorization are good." ;;
+            401) echo "::error::401 — token invalid OR GES DISC app not authorized for this account."; exit 2 ;;
+            403) echo "::error::403 — token authenticated but lacks scope. Re-authorize GES DISC app."; exit 3 ;;
+            404) echo "::error::404 — endpoint moved (not a token problem). Inspect src/data/gpm_imerg.py URL builder."; exit 4 ;;
+            *)   echo "::warning::Unexpected status $status — could be a NASA outage. Retry."; exit 5 ;;
+          esac
