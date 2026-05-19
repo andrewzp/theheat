@@ -52,8 +52,15 @@ def test_score_coral_bleaching_passes_warning_threshold():
 
 
 def test_fetch_coral_dhw_uses_index_and_station_byte_ranges(monkeypatch):
-    index = """
-Latest Data Date: May. 13, 2026
+    # Build dates dynamically so the freshness check (max_age_days=5 by default)
+    # passes regardless of when CI runs. Previously hardcoded to 2026-05-13,
+    # which began failing every cron after 2026-05-18 because `assert_freshness`
+    # (added by the Codex source-hardening pass) rejected anything > 5 days old.
+    from datetime import date, timedelta
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    index = f"""
+Latest Data Date: {today:%b}. {today.day}, {today.year}
 <tr>
   <td><a href="timeseries/great_barrier_reef.php#gbr_northern">Northern GBR</a></td>
   <td style="background-color:#FF0000"><a href="gauges/gbr_northern.php">Alert Level 1</a></td>
@@ -65,9 +72,9 @@ Latest Data Date: May. 13, 2026
   <td><a href="data/florida_keys.txt">txt</a></td>
 </tr>
 """
-    tail = """
-2026 05 12 27.8300 30.4600 29.6000      3.2680       0.0000    7.9000            2
-2026 05 13 28.0800 30.4800 29.7700      3.2560       0.1700    8.2000            3
+    tail = f"""
+{yesterday.year} {yesterday.month:02d} {yesterday.day:02d} 27.8300 30.4600 29.6000      3.2680       0.0000    7.9000            2
+{today.year} {today.month:02d} {today.day:02d} 28.0800 30.4800 29.7700      3.2560       0.1700    8.2000            3
 """
     head = """
 Name:
