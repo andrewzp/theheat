@@ -47,6 +47,39 @@ class TestLoadEraAnchors:
         for y in range(years[0], years[-1] + 1):
             assert y in anchors, f"missing year {y}"
 
+    def test_default_anchors_respect_safety_curation_rules(self):
+        # Mirrors data/era_anchors.json selection_criteria: do not use deaths,
+        # disasters, political handovers, or divisive public-figure drama as
+        # scaffolding for climate-record copy.
+        banned_fragments = [
+            "death stopped the world",
+            "returned to China",
+            "SARS swept",
+            "Pope John Paul II died",
+            "Heath Ledger died",
+            "Michael Jackson died",
+            "Steve Jobs died",
+            "Pope Francis was elected",
+            "Robin Williams died",
+            "both died",
+            "Notre Dame burned",
+            "Greta Thunberg",
+            "COVID lockdowns",
+            "Queen Elizabeth II died",
+            "fired Sam Altman",
+            "Titan submersible imploded",
+            "dating Travis Kelce",
+        ]
+        anchors = load_era_anchors()
+        offenders = [
+            (year, anchor, fragment)
+            for year, year_anchors in anchors.items()
+            for anchor in year_anchors
+            for fragment in banned_fragments
+            if fragment.lower() in anchor.lower()
+        ]
+        assert offenders == []
+
     def test_missing_file_returns_empty_dict(self, tmp_path):
         result = load_era_anchors(str(tmp_path / "nonexistent.json"))
         assert result == {}

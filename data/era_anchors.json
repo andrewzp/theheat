@@ -25,10 +25,10 @@
     "Hotmail was new",
     "AOL still mailed CD-ROMs"
   ],
-  "1997": [
-    "Princess Diana's death stopped the world",
-    "Hong Kong was returned to China",
-    "Titanic was about to break every box-office record",
+    "1997": [
+      "the first Harry Potter book was published",
+      "Tamagotchi became a global craze",
+      "DVD players started reaching living rooms",
     "Mars Pathfinder landed",
     "Hale-Bopp comet was visible everywhere",
     "Deep Blue beat Kasparov at chess",
@@ -40,7 +40,7 @@
     "Windows 98 was new",
     "the iMac was the future of computing",
     "Viagra was approved",
-    "Saving Private Ryan changed war movies",
+      "The Truman Show opened in theaters",
     "Friends was the most-watched show",
     "the euro currency wasn't in circulation yet",
     "MP3 players didn't exist"
@@ -87,7 +87,7 @@
     "Concorde made its final flight",
     "Friends had its final season",
     "Finding Nemo was the summer hit",
-    "SARS swept Asia",
+      "the Human Genome Project was declared complete",
     "Skype was founded",
     "Apple released iTunes for Windows"
   ],
@@ -101,7 +101,7 @@
   ],
   "2005": [
     "YouTube was founded",
-    "Pope John Paul II died",
+      "Google Maps launched",
     "Reddit launched",
     "the Boeing 787 Dreamliner was unveiled",
     "the iPod nano debuted",
@@ -131,12 +131,12 @@
     "The Dark Knight broke every record",
     "Spotify launched in Europe",
     "Iron Man kicked off the MCU",
-    "Heath Ledger died before The Dark Knight came out"
+      "Google Chrome launched"
   ],
   "2009": [
     "Bitcoin's whitepaper was published",
     "Avatar in 3D shocked theaters",
-    "Michael Jackson died",
+      "Minecraft was first released",
     "WhatsApp was founded",
     "Slumdog Millionaire won Best Picture",
     "Susan Boyle made everyone cry on Britain's Got Talent"
@@ -151,8 +151,8 @@
     "Toy Story 3 made adults cry"
   ],
   "2011": [
-    "Steve Jobs died",
-    "Will and Kate got married",
+      "Minecraft officially launched",
+      "The Elder Scrolls V: Skyrim launched",
     "Game of Thrones premiered on HBO",
     "Snapchat launched",
     "Adele's 21 became the bestselling album of the decade",
@@ -168,7 +168,7 @@
     "Felix Baumgartner skydived from space"
   ],
   "2013": [
-    "Pope Francis was elected",
+      "the PlayStation 4 and Xbox One launched",
     "Twitter went public",
     "Breaking Bad ended",
     "Iron Man 3 made a billion",
@@ -177,7 +177,7 @@
   ],
   "2014": [
     "the Sochi Winter Olympics happened",
-    "Robin Williams died",
+      "Interstellar opened in theaters",
     "the ALS Ice Bucket Challenge took over Facebook",
     "Frozen's 'Let It Go' was inescapable",
     "the World Cup in Brazil opened"
@@ -191,7 +191,7 @@
   ],
   "2016": [
     "Pokémon GO had everyone walking outside",
-    "Prince and David Bowie both died",
+      "the Nintendo Switch was revealed",
     "Stranger Things premiered",
     "the Rio Olympics happened",
     "Hamilton was the hottest ticket on Broadway",
@@ -215,23 +215,23 @@
     "A Star Is Born remade brought back power ballads"
   ],
   "2019": [
-    "Notre Dame burned",
+      "The Mandalorian launched on Disney+",
     "Game of Thrones ended",
     "Avengers: Endgame closed the saga",
     "Joker was the cultural lightning rod",
     "the first photo of a black hole was published",
     "TikTok hit critical mass globally",
-    "Greta Thunberg crossed the Atlantic by sailboat",
+      "5G phones began entering the mainstream",
     "Disney+ launched"
   ],
   "2020": [
-    "COVID lockdowns reshaped everything",
+      "the PlayStation 5 and Xbox Series X launched",
     "Zoom became a verb",
     "Tiger King was a pandemic phenomenon",
     "the Tokyo Olympics were postponed",
     "Among Us was the lockdown game",
     "TikTok hit 1 billion downloads",
-    "stay-at-home was a way of life"
+      "Animal Crossing: New Horizons became a global comfort game"
   ],
   "2021": [
     "the Suez Canal got blocked by the Ever Given",
@@ -243,7 +243,7 @@
     "the James Webb Space Telescope launched"
   ],
   "2022": [
-    "Queen Elizabeth II died after 70 years on the throne",
+      "Elden Ring became the year's defining game",
     "FTX collapsed in days",
     "Wordle was bought by the New York Times",
     "Top Gun: Maverick saved theaters",
@@ -254,8 +254,8 @@
     "ChatGPT became part of everyday life",
     "Barbie and Oppenheimer opened the same weekend",
     "Taylor Swift's Eras Tour grossed over a billion",
-    "the OpenAI board fired Sam Altman, then unfired him",
-    "the Titan submersible imploded",
+      "Baldur's Gate 3 became a phenomenon",
+      "the Las Vegas Sphere opened",
     "Beyoncé's Renaissance Tour broke records"
   ],
   "2024": [
@@ -264,7 +264,7 @@
     "'Brat summer' became a global aesthetic",
     "Apple Vision Pro launched",
     "the SpaceX Starship caught its booster mid-air",
-    "Taylor Swift kept dating Travis Kelce"
+      "Inside Out 2 topped the global box office"
   ],
   "2025": [
     "DeepSeek made the world rethink AI costs",
