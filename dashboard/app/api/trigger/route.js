@@ -1,4 +1,5 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
+import { readJsonObject } from "../../../lib/request-json.js"
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
@@ -12,7 +13,11 @@ export async function POST(request) {
     return Response.json({ error: "No GitHub token configured" }, { status: 500 })
   }
 
-  const { mode } = await request.json()
+  const { body, error } = await readJsonObject(request)
+  if (error) {
+    return error
+  }
+  const { mode } = body
   if (!["alerts", "leaderboard", "both"].includes(mode)) {
     return Response.json({ error: "Invalid mode" }, { status: 400 })
   }

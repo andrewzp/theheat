@@ -118,9 +118,12 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 def _find_draft(bot_state: BotState, draft_id: str = "", tweet_text: str = "") -> dict | None:
     """Find a draft by explicit id first, then by approved tweet text fallback."""
@@ -197,6 +200,7 @@ def _near_miss_gap() -> int:
     except (TypeError, ValueError):
         return 15
 
+@contextlib.contextmanager
 def _suppression_context(bot_state: BotState, *, source: str, run_id: str | None = None):
     """Activate suppression capture for `_should_draft()` calls inside the block."""
     global _CURRENT_SUPPRESSION_CTX
@@ -1219,7 +1223,7 @@ def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: i
             return
 
 
-def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> None:
+def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> int:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
     Called at the END of run_alerts(), after all source runners have completed.
@@ -1238,6 +1242,8 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
     before returning so a crashed cron doesn't re-process stale candidates
     next cycle.
 
+    Returns the number of survivor drafts that were actually written.
+
     Per-source telemetry (spec § 9):
         - On successful draft: increments ``drafted`` on the source's run
           entry via ``_bump_source_drafted_in_run``.
@@ -1252,7 +1258,7 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
     state_dict: dict = cast(dict, bot_state)
     queue = state_dict.pop("_triage_queue", [])
     if not queue:
-        return
+        return 0
 
     survivors = queue  # default: legacy passthrough
     if _triage_enabled():
@@ -1262,6 +1268,7 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
             print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(queue)} candidates)")
             survivors = queue
 
+    drafted_count = 0
     for candidate in survivors:
         drafted = _try_two_bot_draft(
             candidate.bundle,
@@ -1275,6 +1282,7 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
             cooldown_exempt=candidate.cooldown_exempt,
         )
         if drafted:
+            drafted_count += 1
             _state.record_event(bot_state, candidate.event_id)
             # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).
             # Source runners write drafted=0 at their call site because candidates
@@ -1287,6 +1295,8 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
                     candidate.on_draft_success()
                 except Exception as cb_exc:
                     print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+
+    return drafted_count
 
 
 

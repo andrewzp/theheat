@@ -176,8 +176,8 @@ def cities_to_state_map(cities: list[dict]) -> dict[str, str]:
         if not isinstance(c, dict):
             continue
         name = c.get("city") or c.get("name")
-        lat = c.get("latitude")
-        lon = c.get("longitude")
+        lat = c.get("latitude", c.get("lat"))
+        lon = c.get("longitude", c.get("lon"))
         if not name or lat is None or lon is None:
             continue
         try:

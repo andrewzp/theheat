@@ -203,6 +203,28 @@ class TestSelectSurvivors:
         assert {r.event_id for r in result} == {"c1", "c2"}
 
 
+class TestSuppressionContext:
+
+    def test_context_manager_sets_and_restores_context(self):
+        from src.orchestrator.common import (
+            _clear_suppression_ctx,
+            _current_suppression_ctx,
+            _suppression_context,
+        )
+
+        bot_state = _fresh_state()
+        _clear_suppression_ctx()
+
+        with _suppression_context(bot_state, source="test_source", run_id="run_1"):
+            ctx = _current_suppression_ctx()
+            assert ctx is not None
+            assert ctx["bot_state"] is bot_state
+            assert ctx["source"] == "test_source"
+            assert ctx["run_id"] == "run_1"
+
+        assert _current_suppression_ctx() is None
+
+
 class TestTriageExceptionHandling:
 
     def test_triage_exception_falls_through_to_legacy(self, monkeypatch):
@@ -227,10 +249,11 @@ class TestTriageExceptionHandling:
         monkeypatch.setattr("src.orchestrator.triage.select_survivors", boom)
 
         current_run = {"sources": []}
-        common._drain_and_write_triage_queue(bot_state, current_run)
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
         # Both candidates should have been written (fallback to full queue)
         assert len(written) == 2
+        assert drafted == 2
 
     def test_triage_exception_clears_queue_for_next_cron(self, monkeypatch):
         """Even if triage raises, the queue key is removed from bot_state after drain."""
@@ -247,10 +270,11 @@ class TestTriageExceptionHandling:
         )
 
         current_run = {"sources": []}
-        common._drain_and_write_triage_queue(bot_state, current_run)
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
         # Queue must be gone from bot_state so next cron doesn't re-process stale candidates
         assert "_triage_queue" not in bot_state
+        assert drafted == 1
 
 
 class TestTriageTelemetry:

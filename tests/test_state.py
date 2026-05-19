@@ -1635,6 +1635,28 @@ class TestBotStateSchemaRoundTrip:
         assert merged["snow_annual_count"]["2026"] == 3
         assert merged["seasonal_snow_records"]["albro_lake"]["mm"] == 350.0
 
+    def test_merge_state_handles_mixed_naive_and_utc_timestamps(self):
+        from src.state import _merge_state
+
+        base = {
+            "suppressions": [{
+                "id": "supp_1",
+                "ts": "2026-05-14T10:00:00Z",
+                "stage": "writer",
+            }],
+        }
+        incoming = {
+            "suppressions": [{
+                "id": "supp_1",
+                "ts": "2026-05-14T10:05:00",
+                "stage": "fact_check",
+            }],
+        }
+
+        merged = _merge_state(base, incoming)
+
+        assert merged["suppressions"][0]["stage"] == "fact_check"
+
 
 class TestSqliteRoundTripDropsTriageQueue:
     """Guard: _triage_queue must NOT be persisted to SQLite.

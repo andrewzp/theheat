@@ -49,6 +49,21 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
       { id: "draft_1", text: "Original draft", status: "pending", created_at: "2026-04-09T00:00:00Z" },
       { id: "draft_2", text: "Fresh bot draft", status: "pending", created_at: "2026-04-09T00:05:00Z" },
     ],
+    last_hot10: {
+      date: "2026-05-14",
+      cities: [{ city: "Phoenix", anomaly_c: 9.1 }],
+    },
+    streaks: {
+      Phoenix: { consecutive_days: 3, last_seen: "2026-05-14" },
+    },
+    pending_confirmations: [
+      {
+        event_id: "pending_1",
+        detected: "2026-05-14",
+        source: "open_meteo",
+        city: "Phoenix",
+      },
+    ],
     posted_events: ["event_1", "event_2"],
     run_history: [
       { id: "run_2", mode: "alerts", status: "success", sources: [] },
@@ -102,6 +117,9 @@ test("updateDraftStore merges an edited draft into the latest gist state", async
     assert.equal(written.drafts.length, 2)
     assert.equal(written.drafts.find((draft) => draft.id === "draft_1").status, "approved")
     assert.equal(written.drafts.find((draft) => draft.id === "draft_2").text, "Fresh bot draft")
+    assert.deepEqual(written.last_hot10, latestState.last_hot10)
+    assert.deepEqual(written.streaks, latestState.streaks)
+    assert.deepEqual(written.pending_confirmations, latestState.pending_confirmations)
     assert.deepEqual(written.memory, latestState.memory)
     assert.deepEqual(written.data_source_failures, { ghcn: 2 })
 
@@ -199,11 +217,18 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
   try {
     const stateStore = await importFresh("lib/state-store.js")
     const sourceState = {
-      last_hot10: { date: null, cities: [] },
-      streaks: {},
+      last_hot10: { date: "2026-05-14", cities: [{ city: "Phoenix", anomaly_c: 9.1 }] },
+      streaks: { Phoenix: { consecutive_days: 3, last_seen: "2026-05-14" } },
       posted_events: [],
       daily_tweet_count: {},
-      pending_confirmations: [],
+      pending_confirmations: [
+        {
+          event_id: "pending_1",
+          detected: "2026-05-14",
+          source: "open_meteo",
+          city: "Phoenix",
+        },
+      ],
       drafts: [],
       run_history: [],
       errors: [],
@@ -270,6 +295,9 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     const loaded = await stateStore.readStateStore()
 
     assert.equal(loaded.drafts[0].text, "Dashboard-only partial write")
+    assert.deepEqual(loaded.last_hot10, sourceState.last_hot10)
+    assert.deepEqual(loaded.streaks, sourceState.streaks)
+    assert.deepEqual(loaded.pending_confirmations, sourceState.pending_confirmations)
     assert.deepEqual(loaded.memory.used_era_anchors, ["Spider-Man 2002"])
     assert.deepEqual(loaded.memory.ongoing_events, sourceState.memory.ongoing_events)
     assert.deepEqual(loaded.data_source_failures, { ghcn: 2 })

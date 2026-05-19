@@ -52,6 +52,13 @@ class TestCitiesToStateMap:
             "Austin": "Texas",
         }
 
+    def test_csv_lat_lon_headers_are_mapped(self):
+        from src.editorial._regions import cities_to_state_map
+        cities = [
+            {"city": "Sacramento", "lat": "38.58", "lon": "-121.49", "country": "United States"},
+        ]
+        assert cities_to_state_map(cities) == {"Sacramento": "California"}
+
     def test_non_us_cities_skipped(self):
         from src.editorial._regions import cities_to_state_map
         cities = [

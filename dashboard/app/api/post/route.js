@@ -1,4 +1,5 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
+import { readJsonObject } from "../../../lib/request-json.js"
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = "andrewzp/theheat"
@@ -12,8 +13,12 @@ export async function POST(request) {
     return Response.json({ error: "No GitHub token configured" }, { status: 500 })
   }
 
-  const { tweet } = await request.json()
-  if (!tweet || tweet.length < 5 || tweet.length > 280) {
+  const { body, error } = await readJsonObject(request)
+  if (error) {
+    return error
+  }
+  const { tweet } = body
+  if (typeof tweet !== "string" || tweet.length < 5 || tweet.length > 280) {
     return Response.json({ error: "Tweet must be 5-280 characters" }, { status: 400 })
   }
 

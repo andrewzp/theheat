@@ -128,7 +128,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # order. When ON, applies select_survivors(). Source runners not yet
     # migrated still call _try_two_bot_draft() directly — those drafts bypass
     # triage and count against MAX_DRAFTS_PER_CYCLE via _prune_weakest_cycle_drafts.
-    _drain_and_write_triage_queue(bot_state, current_run)
+    drafted += _drain_and_write_triage_queue(bot_state, current_run)
 
     drafted = _prune_weakest_cycle_drafts(
         bot_state, drafts_before, current_run, drafted,
