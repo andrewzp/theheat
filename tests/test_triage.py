@@ -170,6 +170,49 @@ class TestSelectSurvivors:
         assert len(triage_supps) == 1
         assert triage_supps[0]["event_id"] == "spilled"
 
+    def test_spill_reason_distinguishes_per_category_cap(self, monkeypatch):
+        """A1: per-category-capped spills emit reasons=['per_category_cap=N']."""
+        monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
+        from src.orchestrator.triage import select_survivors
+        bot_state = _fresh_state()
+        # 3 same-category candidates, generous global_cap so only per-category fires
+        candidates = [
+            _candidate(total=90, event_id="c1", signal_kind="coral_bleaching"),
+            _candidate(total=85, event_id="c2", signal_kind="coral_bleaching"),
+            _candidate(total=70, event_id="c3_spilled", signal_kind="coral_bleaching"),
+        ]
+        select_survivors(bot_state, candidates, global_cap=10)
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "c3_spilled"
+        assert supps[0]["reasons"][0].startswith("per_category_cap="), (
+            f"expected per_category_cap=... reason, got {supps[0]['reasons']}"
+        )
+
+    def test_spill_reason_distinguishes_global_cap(self, monkeypatch):
+        """A1: global-capped spills emit reasons=['global_cap=N']."""
+        monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
+        from src.orchestrator.triage import select_survivors
+        bot_state = _fresh_state()
+        # 5 candidates across 5 distinct categories: none hit per-category cap
+        # of 2 (one each), but global_cap=3 spills the bottom 2.
+        candidates = [
+            _candidate(total=90, event_id="c1", signal_kind="coral_bleaching"),
+            _candidate(total=85, event_id="c2", signal_kind="fire"),
+            _candidate(total=80, event_id="c3", signal_kind="record"),
+            _candidate(total=75, event_id="c4_spilled", signal_kind="ice_loss"),
+            _candidate(total=70, event_id="c5_spilled", signal_kind="snow_extreme"),
+        ]
+        survivors = select_survivors(bot_state, candidates, global_cap=3)
+        assert len(survivors) == 3
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 2
+        for s in supps:
+            assert s["reasons"][0].startswith("global_cap="), (
+                f"expected global_cap=... reason, got {s['reasons']}"
+            )
+        assert {s["event_id"] for s in supps} == {"c4_spilled", "c5_spilled"}
+
     def test_score_tie_broken_by_created_at_desc(self, monkeypatch):
         """When two candidates tie on score, the more recent one (created_at DESC) wins."""
         monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
@@ -275,6 +318,55 @@ class TestTriageExceptionHandling:
         # Queue must be gone from bot_state so next cron doesn't re-process stale candidates
         assert "_triage_queue" not in bot_state
         assert drafted == 1
+
+    def test_triage_exception_records_suppression_and_source_health(self, monkeypatch):
+        """A2: When triage raises, drain step records both a triage_error
+        suppression row AND a source_health['triage'] entry while preserving
+        the legacy passthrough behavior (all queued candidates still drafted).
+        Without these signals, broken triage is invisible to the dashboard.
+        """
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _candidate(event_id="c1"),
+            _candidate(event_id="c2"),
+        ]
+
+        written: list[str | None] = []
+        monkeypatch.setattr(
+            "src.orchestrator.common._try_two_bot_draft",
+            lambda bundle, state, score, **kwargs: (
+                written.append(kwargs.get("event_id")) or True
+            ),
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.triage.select_survivors",
+            lambda s, q, **k: (_ for _ in ()).throw(RuntimeError("triage exploded")),
+        )
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        # Legacy passthrough preserved — both candidates still drafted.
+        assert drafted == 2
+        assert len(written) == 2
+
+        # (a) Suppression row records the triage stage failure.
+        triage_errors = [
+            s for s in bot_state.get("suppressions", [])
+            if s.get("stage") == "triage_error"
+        ]
+        assert len(triage_errors) == 1
+        assert triage_errors[0]["source"] == "triage"
+        assert "triage exploded" in triage_errors[0]["reasons"][0]
+
+        # (b) source_health['triage'] entry surfaces the error in the dashboard.
+        health_map = bot_state.get("source_health", {})
+        triage_health = health_map.get("triage")
+        assert triage_health is not None, "source_health['triage'] must exist after drain failure"
+        assert triage_health.get("degraded", 0) + triage_health.get("failed", 0) >= 1
+        assert "triage exploded" in (triage_health.get("last_error") or "")
 
 
 class TestTriageTelemetry:

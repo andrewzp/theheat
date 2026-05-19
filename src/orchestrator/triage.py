@@ -47,12 +47,16 @@ def _record_triage_suppression(
     candidate: "TriageCandidateBundle",
     *,
     cap: int,
+    global_cap: int,
+    reason: str,
 ) -> None:
     """Record a triage-cap suppression in the bot_state suppression ledger.
 
-    Sets kill_stage="triage_cap". Stores the per-category cap and the
-    candidate's score_total so the dashboard can render attribution:
-    "9 coral_bleaching candidates this cycle, 2 promoted, 7 capped."
+    Sets kill_stage="triage_cap". ``reason`` distinguishes which gate spilled
+    the candidate ("per_category_cap" vs "global_cap") so dashboard
+    attribution can tell apart "more coral than we promote per cron" from
+    "more total signals than MAX_DRAFTS_PER_CYCLE allows". Both pin the
+    relevant numeric limit into the reasons string for at-a-glance triage.
     """
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
@@ -61,6 +65,11 @@ def _record_triage_suppression(
     score_total = int(getattr(score, "total", 0) or 0)
     category = getattr(getattr(candidate, "bundle", None), "signal_kind", None) or ""
     threshold = int(getattr(score, "threshold", 0) or 0)
+
+    if reason == "global_cap":
+        reasons_field = [f"global_cap={global_cap}"]
+    else:
+        reasons_field = [f"per_category_cap={cap}"]
 
     suppressions.append({
         "id": f"supp_{ts}_{rand}",
@@ -73,7 +82,7 @@ def _record_triage_suppression(
         "score_total": score_total,
         "threshold": threshold,
         "per_category_cap": cap,
-        "reasons": [f"per_category_cap={cap}"],
+        "reasons": reasons_field,
         "summary": getattr(getattr(candidate, "bundle", None), "where", None) or candidate.city or None,
     })
     if len(suppressions) > 200:
@@ -111,22 +120,30 @@ def select_survivors(
     cap = _per_category_cap()
     by_category: dict[str, int] = {}
     survivors: list["TriageCandidateBundle"] = []
-    spilled: list["TriageCandidateBundle"] = []
+    # (candidate, reason) — reason is "per_category_cap" or "global_cap".
+    spilled: list[tuple["TriageCandidateBundle", str]] = []
 
     for i, candidate in enumerate(ranked):
         category = getattr(getattr(candidate, "bundle", None), "signal_kind", "") or ""
         used = by_category.get(category, 0)
         if used >= cap:
-            spilled.append(candidate)
+            spilled.append((candidate, "per_category_cap"))
             continue
         if len(survivors) >= global_cap:
-            # Global cap already hit — all remaining spill.
-            spilled.extend(ranked[i:])
+            # Global cap already hit — all remaining spill via the global gate.
+            for remaining in ranked[i:]:
+                spilled.append((remaining, "global_cap"))
             break
         survivors.append(candidate)
         by_category[category] = used + 1
 
-    for candidate in spilled:
-        _record_triage_suppression(bot_state, candidate, cap=cap)
+    for candidate, reason in spilled:
+        _record_triage_suppression(
+            bot_state,
+            candidate,
+            cap=cap,
+            global_cap=global_cap,
+            reason=reason,
+        )
 
     return survivors
