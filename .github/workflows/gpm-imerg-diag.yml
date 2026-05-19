@@ -28,8 +28,8 @@ jobs:
           URL='https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDL.07/2026/05/3B-DAY-L.MS.MRG.3IMERG.20260517-S000000-E235959.V07C.nc4.ascii?precipitation%5B0:1:0%5D%5B1873:1:1873%5D%5B951:1:951%5D'
 
           echo ""
-          echo "Performing HEAD request..."
-          status=$(curl -sIL -o /tmp/headers.txt -w "%{http_code}" \
+          echo "Performing GET request (OPeNDAP doesn't accept HEAD on data endpoints)..."
+          status=$(curl -sL -o /tmp/body.txt -D /tmp/headers.txt -w "%{http_code}" \
             -H "Authorization: Bearer $EARTHDATA_TOKEN" "$URL")
 
           echo ""
@@ -40,6 +40,10 @@ jobs:
           echo ""
           echo "Response header chain (token already masked by GH Actions):"
           cat /tmp/headers.txt || true
+
+          echo ""
+          echo "First 8 lines of response body (DAP ASCII for one cell):"
+          head -8 /tmp/body.txt || true
 
           case "$status" in
             200) echo "::notice::OK — GPM-IMERG OPeNDAP returns 200. Token + GES DISC authorization are good." ;;
