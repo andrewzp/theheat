@@ -1,4 +1,5 @@
 import { requireDashboardAuth } from "../../../lib/auth.js"
+import { readJsonObject } from "../../../lib/request-json.js"
 
 // Manual-compose endpoint used by the dashboard "Generate Preview"
 // button. Routed to Anthropic Sonnet on 2026-05-04 alongside the rest
@@ -84,8 +85,12 @@ export async function POST(request) {
     return Response.json({ error: "No Anthropic API key configured" }, { status: 500 })
   }
 
-  const { prompt } = await request.json()
-  if (!prompt || prompt.length < 5) {
+  const { body, error } = await readJsonObject(request)
+  if (error) {
+    return error
+  }
+  const { prompt } = body
+  if (typeof prompt !== "string" || prompt.length < 5) {
     return Response.json({ error: "Prompt too short" }, { status: 400 })
   }
 

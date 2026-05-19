@@ -1605,6 +1605,28 @@ class TestProcessDueDrafts:
         assert result["drafts"][0]["status"] == "pending"
         assert result["drafts"][0]["post_error"] == "Auto-approval blocked by policy"
 
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_naive_auto_approval_timestamp_is_treated_as_utc(self, mock_safety, mock_post):
+        mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [{
+            "id": "draft_1",
+            "text": "Queued draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00",
+            "approval_policy": {
+                "mode": "armed_auto",
+                "can_auto_approve": True,
+            },
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_called_once_with("Queued draft", state)
+        assert result["drafts"][0]["status"] == "posted"
+
 
 class TestRunAlertsIceMass:
     def test_monday_with_record_drafts(self, monkeypatch):
@@ -2160,9 +2182,10 @@ class TestTriageIntegration:
         )
 
         current_run = {"sources": []}
-        common._drain_and_write_triage_queue(bot_state, current_run)
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
         assert written == [c.event_id]
+        assert drafted == 1
         # Queue should be gone after drain
         assert "_triage_queue" not in bot_state
 
@@ -2189,9 +2212,10 @@ class TestTriageIntegration:
         )
 
         current_run = {"sources": []}
-        common._drain_and_write_triage_queue(bot_state, current_run)
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
         assert written == ["survivor"]
+        assert drafted == 1
 
     def test_run_alerts_with_triage_disabled_writes_all_candidates(self, monkeypatch):
         """When THEHEAT_TRIAGE_ENABLED=0, all candidates in queue are written."""
@@ -2213,10 +2237,56 @@ class TestTriageIntegration:
         monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
 
         current_run = {"sources": []}
-        common._drain_and_write_triage_queue(bot_state, current_run)
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
 
         # All 3 should be written regardless of score ordering
         assert sorted(written) == ["c1", "c2", "c3"]
+        assert drafted == 3
+
+    def test_run_alerts_reports_drafts_written_by_triage_drain(self, monkeypatch, capsys):
+        """The top-level saved count must include drafts written in the drain step."""
+        import importlib
+
+        alerts_mod = importlib.import_module("src.orchestrator.run_alerts")
+
+        monkeypatch.setattr(alerts_mod.open_meteo, "load_cities", lambda: [])
+        monkeypatch.setattr(alerts_mod, "cities_to_state_map", lambda cities: {})
+        for name in (
+            "run_extreme_signals",
+            "run_firms",
+            "run_fire_footprint",
+            "run_co2",
+            "run_methane",
+            "run_nws_alerts",
+            "run_gdacs",
+            "run_copernicus_ems",
+            "_process_cyclone_source",
+            "run_sea_ice",
+            "run_drought",
+            "run_enso",
+            "run_climate_indices",
+            "run_ocean",
+            "run_ocean_sst",
+            "run_coral_dhw",
+            "run_water_levels",
+            "run_river_gauges",
+            "run_ice_mass",
+            "run_gpm_imerg",
+            "run_nsidc_snow",
+            "run_ozone_hole",
+            "run_synthesis",
+        ):
+            monkeypatch.setattr(alerts_mod, name, lambda *args, **kwargs: 0)
+        monkeypatch.setattr(alerts_mod, "_drain_and_write_triage_queue", lambda *args, **kwargs: 2)
+        monkeypatch.setattr(
+            alerts_mod,
+            "_prune_weakest_cycle_drafts",
+            lambda bot_state, drafts_before, current_run, drafted: drafted,
+        )
+
+        alerts_mod.run_alerts(_fresh_state(), current_run={"sources": []})
+
+        assert "[alerts] Done. Saved 2 drafts." in capsys.readouterr().out
 
     def test_partial_migration_respects_global_cap(self, monkeypatch, mock_alerts_pipeline_sources):
         """Mixed cycle: some sources legacy (direct _try_two_bot_draft), some via triage queue.

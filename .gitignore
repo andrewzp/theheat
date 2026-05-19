@@ -8,6 +8,7 @@ build/
 .DS_Store
 .superpowers/
 .gstack/
+.clawpatch/
 # GHCN-Daily bootstrap artifacts — large binaries stored as GH Release assets
 data/station_thresholds.sqlite
 data/station_thresholds.sqlite-shm

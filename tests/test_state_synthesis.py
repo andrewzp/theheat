@@ -97,6 +97,15 @@ class TestCooldown:
             timestamp=_now_iso(offset_days=5))
         assert is_synthesis_on_cooldown(fresh_state, "fire_drought_heat", "California") is True
 
+    def test_naive_timestamp_is_treated_as_utc(self, fresh_state):
+        record_synthesis_fired(
+            fresh_state,
+            "fire_drought_heat",
+            "California",
+            timestamp="2999-01-01T00:00:00",
+        )
+        assert is_synthesis_on_cooldown(fresh_state, "fire_drought_heat", "California") is True
+
     def test_after_14_days_not_on_cooldown(self, fresh_state):
         record_synthesis_fired(fresh_state, "fire_drought_heat", "California",
             timestamp=_now_iso(offset_days=16))
@@ -202,6 +211,16 @@ class TestSynthesisMergePreservesState:
         ca = merged["synthesis_cooldown"]["synthesis_fire_drought_heat"]
         assert ca["California"] == "2026-04-20T12:00:00Z"
         assert ca["Arizona"] == "2026-04-10T12:00:00Z"
+
+    def test_merge_cooldown_compares_offsets_by_instant(self):
+        from src.state import _merge_state
+
+        merged = _merge_state(
+            {"synthesis_cooldown": {"rule": {"California": "2026-04-20T12:00:00Z"}}},
+            {"synthesis_cooldown": {"rule": {"California": "2026-04-20T13:00:00+02:00"}}},
+        )
+
+        assert merged["synthesis_cooldown"]["rule"]["California"] == "2026-04-20T12:00:00Z"
 
     def test_empty_base_accepts_incoming_synthesis(self):
         from src.state import _merge_state

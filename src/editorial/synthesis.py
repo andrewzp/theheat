@@ -50,6 +50,10 @@ def _snapshot_is_fresh(snapshot: DroughtSnapshot | dict, ttl_days: int = SNAPSHO
         dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    else:
+        dt = dt.astimezone(UTC)
     return (datetime.now(UTC) - dt) < timedelta(days=ttl_days)
 
 

@@ -209,13 +209,16 @@ def _configured_backend() -> str:
 
 
 def _parse_state_timestamp(value: str | None) -> datetime:
-    parsed = datetime.fromtimestamp(0, UTC)
+    fallback = datetime.fromtimestamp(0, UTC)
     if not value:
-        return parsed
+        return fallback
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        return parsed
+        return fallback
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _merge_ordered_unique(current: list, incoming: list, max_items: int | None = None) -> list:
@@ -926,7 +929,11 @@ def _merge_synthesis_cooldown(
         for region in set(list(b_rule.keys()) + list(n_rule.keys())):
             a_ts = b_rule.get(region, "")
             c_ts = n_rule.get(region, "")
-            rule_merged[region] = a_ts if a_ts >= c_ts else c_ts
+            rule_merged[region] = (
+                a_ts
+                if _parse_state_timestamp(a_ts) >= _parse_state_timestamp(c_ts)
+                else c_ts
+            )
         merged[rule] = rule_merged
     return merged
 
@@ -1646,6 +1653,10 @@ def is_synthesis_on_cooldown(
         last_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return False
+    if last_dt.tzinfo is None:
+        last_dt = last_dt.replace(tzinfo=UTC)
+    else:
+        last_dt = last_dt.astimezone(UTC)
     return (datetime.now(UTC) - last_dt) < timedelta(days=days)
 
 

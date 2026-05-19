@@ -379,6 +379,11 @@ function mergeState(current, incoming) {
   const base = normalizeState(current)
   const next = normalizeState(incoming)
   const rawIncoming = incoming || {}
+  const incomingOrBase = (key, fallback) => structuredClone(
+    Object.prototype.hasOwnProperty.call(rawIncoming, key)
+      ? (rawIncoming[key] ?? fallback)
+      : base[key]
+  )
   const pythonOwnedMetadata = Object.fromEntries(
     PYTHON_OWNED_METADATA_KEYS.map((key) => [
       key,
@@ -399,14 +404,14 @@ function mergeState(current, incoming) {
     ...base,
     ...next,
     // Explicit merge logic for keys the dashboard does manage:
-    last_hot10: structuredClone(next.last_hot10 || base.last_hot10),
-    streaks: structuredClone(next.streaks || base.streaks),
+    last_hot10: incomingOrBase("last_hot10", DEFAULT_STATE.last_hot10),
+    streaks: incomingOrBase("streaks", DEFAULT_STATE.streaks),
     posted_events: mergeOrderedUnique(base.posted_events, next.posted_events, 500),
     daily_tweet_count: {
       ...(base.daily_tweet_count || {}),
       ...(next.daily_tweet_count || {}),
     },
-    pending_confirmations: structuredClone(next.pending_confirmations || []),
+    pending_confirmations: incomingOrBase("pending_confirmations", DEFAULT_STATE.pending_confirmations),
     drafts: mergeDrafts(base.drafts, next.drafts),
     run_history: mergeRunHistory(base.run_history, next.run_history),
     errors: mergeErrors(base.errors, next.errors),

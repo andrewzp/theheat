@@ -1,5 +1,6 @@
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
+import { readJsonObject } from "../../../lib/request-json.js"
 
 export const runtime = "nodejs"
 
@@ -41,7 +42,11 @@ export async function POST(request) {
   if (authError) {
     return authError
   }
-  const { action, draftId, editedText, delayMinutes, candidateRank } = await request.json()
+  const { body, error } = await readJsonObject(request)
+  if (error) {
+    return error
+  }
+  const { action, draftId, editedText, delayMinutes, candidateRank } = body
 
   if (!["approve", "reject", "edit", "auto_approve", "cancel_auto_approve", "select_candidate", "bulk_reject_below"].includes(action)) {
     return Response.json({ error: "Invalid action" }, { status: 400 })
@@ -91,7 +96,7 @@ export async function POST(request) {
     }
 
     if (action === "edit") {
-      if (!editedText || editedText.length > 280) {
+      if (typeof editedText !== "string" || !editedText || editedText.length > 280) {
         return Response.json({ error: "Invalid text" }, { status: 400 })
       }
       await updateDraftStore(draftId, async (draftRecord) => {

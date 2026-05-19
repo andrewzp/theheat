@@ -128,6 +128,83 @@ test("generate route preserves Anthropic rate-limit failures", async () => {
   }
 })
 
+test("authenticated POST routes reject malformed JSON bodies", async () => {
+  process.env.NODE_ENV = "production"
+  process.env.DASHBOARD_USERNAME = "reviewer"
+  process.env.DASHBOARD_PASSWORD = "secret-pass"
+  process.env.ANTHROPIC_API_KEY = "anthropic_test_key"
+  process.env.GITHUB_TOKEN = "token_123"
+
+  const routes = [
+    ["app/api/generate/route.js", "http://localhost/api/generate"],
+    ["app/api/drafts/route.js", "http://localhost/api/drafts"],
+    ["app/api/post/route.js", "http://localhost/api/post"],
+    ["app/api/trigger/route.js", "http://localhost/api/trigger"],
+  ]
+
+  for (const [modulePath, url] of routes) {
+    const { POST } = await importFresh(modulePath)
+    const response = await POST(new Request(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        authorization: basicAuth("reviewer", "secret-pass"),
+      },
+      body: "{",
+    }))
+
+    assert.equal(response.status, 400)
+    assert.match((await response.json()).error, /invalid json/i)
+  }
+})
+
+test("POST routes reject non-string text fields", async () => {
+  process.env.NODE_ENV = "production"
+  process.env.DASHBOARD_USERNAME = "reviewer"
+  process.env.DASHBOARD_PASSWORD = "secret-pass"
+  process.env.ANTHROPIC_API_KEY = "anthropic_test_key"
+  process.env.GITHUB_TOKEN = "token_123"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
+  process.env.THEHEAT_DB_PATH = ""
+  process.env.GIST_ID = "gist_123"
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => gistResponse({
+    drafts: [
+      { id: "draft_1", status: "pending", text: "Pending draft", created_at: "2026-04-09T00:00:00Z" },
+    ],
+  })
+
+  try {
+    const cases = [
+      ["app/api/generate/route.js", "http://localhost/api/generate", { prompt: { text: "not a string" } }, /prompt/i],
+      ["app/api/post/route.js", "http://localhost/api/post", { tweet: { text: "not a string" } }, /tweet/i],
+      ["app/api/drafts/route.js", "http://localhost/api/drafts", {
+        action: "edit",
+        draftId: "draft_1",
+        editedText: { text: "not a string" },
+      }, /invalid text/i],
+    ]
+
+    for (const [modulePath, url, body, errorPattern] of cases) {
+      const { POST } = await importFresh(modulePath)
+      const response = await POST(new Request(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          authorization: basicAuth("reviewer", "secret-pass"),
+        },
+        body: JSON.stringify(body),
+      }))
+
+      assert.equal(response.status, 400)
+      assert.match((await response.json()).error, errorPattern)
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("middleware blocks public dashboard access", async () => {
   process.env.NODE_ENV = "production"
   process.env.DASHBOARD_USERNAME = "reviewer"

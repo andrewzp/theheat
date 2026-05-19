@@ -103,6 +103,10 @@ class TestFireDroughtHeatStaleness:
         state_ca_all_three["synthesis_components"]["drought_snapshot"]["updated_at"] = _iso(offset_days=20)
         assert detect_fire_drought_heat(state_ca_all_three) == []
 
+    def test_naive_snapshot_timestamp_is_treated_as_utc(self, state_ca_all_three):
+        state_ca_all_three["synthesis_components"]["drought_snapshot"]["updated_at"] = "2999-01-01T00:00:00"
+        assert len(detect_fire_drought_heat(state_ca_all_three)) == 1
+
 
 class TestFireDroughtHeatCooldown:
     def test_within_cooldown_no_signal(self, state_ca_all_three):

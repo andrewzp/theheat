@@ -99,9 +99,10 @@ export async function GET(request) {
           s.status === "failed" ||
           s.status === "partial_failure" ||
           s.status === "degraded"
-        if (agg.last_error_at == null && isProblemStatus) {
+        const diagnostic = s.error || s.note || null
+        if (agg.last_error_at == null && isProblemStatus && diagnostic) {
           agg.last_error_at = runStartedAt
-          agg.last_error = s.error || s.note || null
+          agg.last_error = diagnostic
         }
       }
     }

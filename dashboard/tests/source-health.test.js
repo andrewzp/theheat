@@ -263,6 +263,48 @@ test("source-health last_error stays null when only success/skipped runs exist",
   }
 })
 
+test("source-health falls back to the latest problem row with a diagnostic", async () => {
+  process.env.THEHEAT_STATE_BACKEND = "gist"
+  process.env.THEHEAT_DB_PATH = ""
+  process.env.GIST_ID = "gist_123"
+  process.env.GITHUB_TOKEN = "token_123"
+  process.env.NODE_ENV = "production"
+  process.env.DASHBOARD_USERNAME = "reviewer"
+  process.env.DASHBOARD_PASSWORD = "secret-pass"
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    gistResponse({
+      run_history: [
+        {
+          id: "run_new",
+          started_at: "2026-05-14T12:00:00Z",
+          sources: [{ source: "ocean_sst", status: "degraded", note: "" }],
+        },
+        {
+          id: "run_old",
+          started_at: "2026-05-14T08:00:00Z",
+          sources: [{ source: "ocean_sst", status: "failed", error: "provider timeout" }],
+        },
+      ],
+    })
+
+  try {
+    const { GET } = await importFresh("app/api/source-health/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/source-health", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      })
+    )
+    assert.equal(response.status, 200)
+    const payload = await response.json()
+    assert.equal(payload.sources[0].last_error, "provider timeout")
+    assert.equal(payload.sources[0].last_error_at, "2026-05-14T08:00:00Z")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("source-health sorts worst-first so problem sources surface", async () => {
   setupEnv()
   const originalFetch = globalThis.fetch

@@ -67,7 +67,7 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
                         if ice_record.kind == "monthly_loss_record":
                             assert ice_record.monthly_delta_gt is not None
                             assert ice_record.month is not None
-                            headline = f"{ice_record.region.title()}: largest monthly ice loss on ice_record"
+                            headline = f"{ice_record.region.title()}: largest monthly ice loss on record"
                         else:
                             assert ice_record.threshold_gt is not None
                             assert ice_record.current_mass_gt is not None
