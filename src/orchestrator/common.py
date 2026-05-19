@@ -300,7 +300,7 @@ def _record_downstream_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
-        "stage": kill_stage,  # "writer" | "safety" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "triage_cap" | "unknown"
+        "stage": kill_stage,  # "writer" | "safety" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "triage_cap" | "triage_error" | "unknown"
         "event_id": event_id or None,
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),
@@ -336,6 +336,35 @@ def _record_save_rejection(
         kill_reason=kill_reason,
         summary=summary,
     )
+
+
+def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None:
+    """Append a `stage='triage_error'` row when the triage drain raises.
+
+    Stage-level failure (not candidate-level), so there's no event_id /
+    score / category. Pairs with a `source_health['triage']` update so both
+    the suppression ledger and the source-health dashboard surface the
+    failure.
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": None,
+        "source": "triage",
+        "stage": "triage_error",
+        "event_id": None,
+        "category": None,
+        "score_total": 0,
+        "threshold": 0,
+        "reasons": [err_text] if err_text else [],
+        "summary": None,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
 
 def _should_draft(
     score: EditorialScore,
@@ -1265,7 +1294,14 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
         try:
             survivors = _triage.select_survivors(bot_state, queue)
         except Exception as exc:
+            # Legacy passthrough preserves draft production (the cycle still
+            # produces drafts even if the triage stage breaks). But we MUST
+            # surface the failure to the dashboard — silent broken triage is
+            # worse than loud broken triage.
+            err_text = str(exc)[:200]
             print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(queue)} candidates)")
+            _record_triage_error_suppression(bot_state, err_text)
+            _state.record_source_health(bot_state, "triage", "degraded", err_text)
             survivors = queue
 
     drafted_count = 0
