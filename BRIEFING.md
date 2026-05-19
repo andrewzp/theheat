@@ -1,21 +1,39 @@
 # @theheat — Project Briefing
 
-**Last updated:** 2026-05-15 (post-editorial-architecture release — PRs #119 + #120 + #121 landed; F3 critic operating in production).
-**Status:** **DATA LAYER COMPLETE; 23 SOURCES LIVE; EDITORIAL PIPELINE COMPLETE; POSTING STILL PAUSED PENDING A-RATE SIGNAL ON NEW ARCHITECTURE.** The 0.7.0.0 overnight wave (Plans A-F + F2 + threshold registry + monolith decomposition) addressed coverage; this release (0.7.1.0) addresses the editorial ceiling that 0.7.0.0 couldn't move from the data layer. See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.7.1.0 for the full release notes and [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15-v2.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-15-v2.md) for the current next-session prompt.
+**Last updated:** 2026-05-19 (post-cost-and-cap release — PRs #131 + #132 + #133 + #134 + #136 landed; Anthropic prompt caching live, triage stage active in production with coral_dhw migrated, kill-switch ON).
+**Status:** **DATA LAYER COMPLETE; 23 SOURCES LIVE; EDITORIAL PIPELINE COMPLETE; TRIAGE STAGE LIVE FOR coral_dhw; POSTING STILL PAUSED PENDING A-RATE SIGNAL ON NEW ARCHITECTURE.** The 0.7.1.0 release added the editorial loop (F3 critic). The 0.7.2.0 release added post-wave hardening + the triage spec. **The 0.8.0.0 release (this one) implements the triage spec end-to-end — both MVP infrastructure and first source migration — plus turns on Anthropic prompt caching to compound the cost win.** See [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.8.0.0 for the full release notes and [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-19.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-19.md) for the current next-session prompt.
 
 **What landed (this session):**
+
+- **#131 — Anthropic prompt caching on writer + evaluator.** Both Anthropic call sites mark their system prompt with `cache_control={"type": "ephemeral"}`. Cached-prefix input cost drops ~90% (reads ~0.1×; writes 1.25×; break-even at 2 reads). Writer system prompt is ~5,732 tokens, byte-stable across calls, fires 5–30× per cron — the cache pays for itself the same cycle. Tests assert byte-identity to prevent silent invalidators.
+- **#132 — Deterministic pre-writer triage stage MVP (infrastructure-only).** New `src/orchestrator/triage.py` with `select_survivors()` — ranks by `(score.total, created_at)` DESC, per-category cap default 2, global cap `MAX_DRAFTS_PER_CYCLE = 3`. New `TriageCandidateBundle` type. New `_enqueue_candidate` + `_drain_and_write_triage_queue` helpers. Two-guard queue persistence (pop-at-entry + sqlite-allowlist absence). Kill-switch `THEHEAT_TRIAGE_ENABLED` defaults OFF in code. Spilled candidates record `kill_stage="triage_cap"`.
+- **#133 — Codex source-hardening (3 bug fixes).** Copernicus EMS flood classifier no longer auto-promotes OPEN activations. NSIDC Snow Today gains stale-data + zero-delta guards. Disasters scoring caps flood severity below impact thresholds. All three reject low-quality signals before the writer. Fourth Codex change (`climate_indices` cadence) parked on `wip/climate-indices-cadence`.
+- **#134 — coral_dhw triage migration + I2 telemetry fix + kill-switch ON.** First source on triage path. `state.update_coral_dhw_tier` + annual count moved into `on_draft_success` callback (preserves spec § 7 cooldown contract on spill). New `_bump_source_drafted_in_run` helper credits `candidate.source` for `drafted` counter in run telemetry. `.github/workflows/bot.yml` sets `THEHEAT_TRIAGE_ENABLED: "1"` — **triage is live in production**. Rollback: set to `"0"` and push.
+- **#136 — fix(test): unblock scheduled cron.** Date-rollover on 2026-05-19 caused a stale-fixture test to fail; `run` job gated on `test` silently skipped for several crons. Fix: parameterize fixture dates dynamically from `date.today()`.
+
+**Architecture status:** triage stage now active in production for `coral_dhw`. Pipeline is `sources (coral_dhw enqueues into bot_state["_triage_queue"]; legacy sources still call _try_two_bot_draft directly) → TRIAGE (cap by category + global) → writer (Sonnet 4.6, prompt-cached) → safety → claim_extractor (Gemini Flash) → fact_check (Gemini Flash) → critic (Gemini 2.5 Pro) → pending`. Suppression `stage` values now include `triage_cap` alongside `writer | safety | claim_extractor | fact_check | critic | budget_exhausted | pipeline_error | cycle_cap | score_gate | unknown`.
+
+**Production state (at session close):** scheduled cron unblocked at 03:50:12Z (#136 merge); next cron will be the first triage-active production run. Watch `source_health["coral_dhw"]` and the suppression ledger's `triage_cap` stage for the first signal. GPM-IMERG still failing HTTP 401 — operator action queued (rotate `EARTHDATA_TOKEN` or authorize GES DISC app). 1287 tests passing on main, mypy clean across 91 source files.
+
+**Open PRs:** typically 1-2 (daily-plan auto-PR from grading agent at 15:03 UTC). The session's PRs (#131, #132, #133, #134, #136) are all merged.
+
+**Posting status:** still **manual_only** for all categories. The triage stage is the structural lever for cost; A-rate movement is the lever for posting flip. Both are now in measurable production trajectory.
+
+---
+
+## Earlier this stack (2026-05-17 — release 0.7.2.0)
+
+The post-hardening release. Four PRs: post-wave hardening patchset (#126), `BudgetExhaustedError` short-circuit + distinct `kill_stage` (#127), GPM-IMERG HTTP-status diagnostic (#128), and the triage-stage spec (#129) — the spec this 0.8.0.0 release implements.
+
+---
+
+## Earlier this stack (2026-05-15 — release 0.7.1.0)
+
+**What landed (2026-05-15 session):**
 
 - **#119 — fact-check WORLD_KNOWLEDGE widened.** Writer's external climate-science / oceanography / geography knowledge is the editorial product, not noise to strip. Concrete allow-list: canonical published scales (NOAA Coral Reef Watch DHW Alert Levels 1–5, Saffir-Simpson, Beaufort, Fujita, VEI, Drought Monitor, GDACS tiers); named marine + physical geography; IPCC AR6-grade framings; basic ocean / atmospheric mechanism. Disposition: primary-source confidence required (clearly established by NOAA / IPCC / NASA / NSIDC / USGS / WMO → ACCEPT; plausible / vibes-based → UNVERIFIABLE). Narrow guards preserved: named-facility specifics, snapshot-trend, arithmetic miscalcs, ungrounded superlatives, fabricated archive specifics.
 - **#120 — F3 second-pass editorial critic.** New pipeline stage between fact_check pass and pending draft. Gemini 2.5 Pro (cross-family with Sonnet writer = different blind spots). Two structural lifts over writer self-discipline: different model family + cross-draft awareness (writer can't see siblings in same cron run; critic can). PASS/KILL only in v1. Bias toward KILL on borderline. `THEHEAT_CRITIC_ENABLED=0` operations kill-switch.
 - **#121 — JSON-parse retry parity for Gemini callers.** The 2026-05-15 alerts cron logged a Somalia coral pipeline_error (`Expecting "," delimiter line 7 col 384`). Writer already had the retry pattern; fact_check + critic didn't. Now both wrap their `_call_gemini` + `_parse_*_json` pair in a retry loop with a contract-reminder suffix on the second attempt; on exhaustion, fail-closed with structured KILL/REJECT instead of letting ValueError surface as pipeline_error.
-
-**Architecture status:** post-editorial-loop. Pipeline is `writer (Sonnet 4.6) → safety → claim_extractor (Gemini Flash) → fact_check (Gemini Flash) → critic (Gemini 2.5 Pro) → pending`. Suppression `stage` values are now `writer | safety | fact_check | critic | pipeline_error | cycle_cap | score_gate | unknown`.
-
-**Production state (post-deploy alerts cron at session close):** state.json 1.2 MB, 14 pending drafts (was 12), led by Galapagos 24.5°C-weeks DHW Alert Level 5 (score 88). Last 50 suppressions: critic 27, fact_check 13, writer 6, cycle_cap 4, safety 1, pipeline_error 1. Fact-check kill rate dropped 22 → 13 (~40%) since #119. 1235 tests passing on main, mypy clean across 90 source files.
-
-**Open PRs:** typically 1 (daily-plan auto-PR from grading agent at 15:03 UTC). The session's PRs (#119, #120, #121) are all merged.
-
-**Posting status:** still **manual_only** for all categories. The structural blocker is now: does the post-architecture batch move A-rate? Yesterday's grading agent reported 0% A on PR #92. Today's 15:03 UTC grading-agent run will be the first signal for the new architecture.
 
 ---
 

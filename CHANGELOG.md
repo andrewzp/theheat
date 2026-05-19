@@ -2,6 +2,175 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0.0] - 2026-05-19
+
+The cost-and-cap release. Five PRs landed in one session: Anthropic
+prompt caching on writer + evaluator (cuts cached-prefix input cost
+~90%), deterministic pre-writer triage stage (spec'd as 0.7.2.0 / #129,
+now shipped as MVP infrastructure in #132 and activated for `coral_dhw`
+in #134), three orthogonal source-hardening bug fixes from a Codex
+review pass (#133), and a cron-unblocking test-fixture date fix (#136).
+
+Triage is now LIVE in production with the kill-switch ON: coral_bleaching
+draft volume is capped at 2 per cron via `PER_CATEGORY_TRIAGE_CAP_DEFAULT=2`
+plus a 3-per-cron global cap (`MAX_DRAFTS_PER_CYCLE` unchanged). The
+target — source-growth-proof flat-line cost — is now structurally in
+reach: doubling sources no longer doubles credit burn, because the writer
+only fires for survivors.
+
+Production verdict at session close: pipeline healthy, scheduled cron
+unblocked (#136 fixed a 2026-05-19 day-rollover test failure that had
+silently halted draft production for several crons), `coral_dhw` is the
+first source on the new triage path, `THEHEAT_TRIAGE_ENABLED="1"` is
+set in `.github/workflows/bot.yml`, and the next observability cycle
+(3-6 hours) will produce the first real `triaged_in` / `triaged_out`
+signal on coral candidates.
+
+### Added — Anthropic prompt caching on writer + evaluator (#131)
+
+Both Anthropic call sites — `src/two_bot/writer.py` (the dominant
+cost driver) and `src/editorial/evaluator.py` — now mark their system
+prompt with `cache_control={"type": "ephemeral"}` on a structured
+content-block list. Cache reads cost ~0.1× base input price (~90% off
+the cached portion); cache writes cost 1.25×; break-even at 2 reads.
+
+The writer's system prompt is ~5,732 tokens and byte-stable across every
+call. After the first call writes the cache, every subsequent call
+within the 5-minute TTL pays ~0.1× on the cached portion. The writer
+typically fires 5–30× per cron, so the cache pays for itself the same
+cycle.
+
+No behavioral change. Tests assert the system prompt text stays
+byte-identical to the prior bare-string form — any future refactor that
+silently invalidates the cache (e.g. interpolating `datetime.now()`
+into the prompt) will fail these tests before it lands.
+
+Surfaced by the Anthropic console dashboard showing "Prompt caching:
+Not enabled" alongside 304% week-over-week token volume growth.
+
+### Added — deterministic pre-writer triage stage MVP (#132)
+
+New `src/orchestrator/triage.py` module implements `select_survivors()`
+per the 2026-05-17 spec (post-`/plan-eng-review`). Ranks candidates by
+`(score.total DESC, created_at DESC)`, applies per-category cap (default
+2 via `THEHEAT_PER_CATEGORY_CAP` env override), applies global cap
+(`MAX_DRAFTS_PER_CYCLE = 3` unchanged). Spilled candidates record
+`kill_stage="triage_cap"` with their score and source for dashboard
+attribution.
+
+Type plumbing: new `TriageCandidateBundle` dataclass in
+`src/two_bot/types.py` (NB: named distinctly from the pre-existing
+`src/editorial/candidates.py::CandidateBundle` which is a different
+type — collision avoided).
+
+Orchestrator wiring: new `_enqueue_candidate()` and
+`_drain_and_write_triage_queue()` helpers in `src/orchestrator/common.py`.
+The drain runs at end-of-cycle. A two-guard pattern prevents queue
+persistence bugs: `bot_state.pop("_triage_queue", None)` at the top of
+`run_alerts.py` (drops stale queues from crashed prior crons) plus
+intentional absence from `src/storage/sqlite_store.py::_METADATA_JSON_KEYS`
+allowlist (queue never round-trips through sqlite).
+
+Triage exceptions fall through to legacy passthrough: if
+`select_survivors` raises, the drain writes everything in queue order
+and logs `[triage] error: ...`. The cycle still produces drafts.
+
+Kill-switch defaults OFF in code (`THEHEAT_TRIAGE_ENABLED="0"`). This
+PR is infrastructure-only — no source migrates here.
+
+### Added — Codex source-hardening bug fixes (#133)
+
+Three orthogonal source-side fixes surfaced by a Codex review pass:
+
+- **Copernicus EMS flood classifier** — `_classify_severity` no longer
+  auto-promotes OPEN activations to "Major" regardless of impact. The
+  trailing `or not closed` clause is removed; Major requires population
+  ≥ 100K **OR** area ≥ 100 km². New filter in `detect_flood_events`
+  drops claimed Major/Extreme activations that don't meet impact
+  thresholds. New named constant `MAJOR_AREA_THRESHOLD_KM2 = 100.0`.
+- **NSIDC Snow Today** — `assert_freshness(reading_date, "NSIDC Snow
+  Today", 7)` rejects data older than 7 days (was silently used).
+  `detect_snow_extremes` now skips `delta <= 0` (snow MELT no longer
+  counts toward "record snow gain"). Record comparison requires
+  `previous_mm > 0` (no zero-baseline false records). `update_snow_tracking`
+  mirrors the same `delta > 0` guard.
+- **Disasters scoring** — `score_global_flood` caps severity at 58
+  (below the 60 promote-to-drafting gate) when impact thresholds
+  aren't met. Belt-and-suspenders with the Copernicus filter above.
+
+All three reject low-quality signals BEFORE they reach the writer,
+which is the right direction for cost — every blocked draft saves a
+writer call.
+
+A fourth Codex change (remove the "1st of month only" cadence
+restriction in `src/orchestrator/sources/climate_indices.py`) was
+parked on `wip/climate-indices-cadence` for separate review — it's a
+cadence behavior change, not a bug fix, and shipping it before triage
+fully matures would have increased per-cron writer-call volume in the
+wrong direction.
+
+### Added — coral_dhw triage migration + I2 telemetry + kill-switch ON (#134)
+
+First source migrated to the triage path:
+
+- `src/orchestrator/sources/coral_dhw.py` no longer calls
+  `_try_two_bot_draft` directly. Instead, it builds a
+  `TriageCandidateBundle` and calls `_enqueue_candidate`. The drain step
+  handles ranking, capping, and writing.
+- `state.update_coral_dhw_tier` and `state.increment_coral_dhw_annual_count`
+  are moved into a new `on_draft_success` callback field on
+  `TriageCandidateBundle` so they fire ONLY on actual draft success
+  (preserves the spec § 7 contract: spilled candidates must re-detect
+  on next cron — for coral_dhw, the tier update IS the re-detection
+  cooldown).
+- New `_bump_source_drafted_in_run` helper in
+  `src/orchestrator/common.py` credits `candidate.source` for the
+  `drafted` counter in `current_run["sources"][source]` when the drain
+  step successfully writes a survivor. Fixes I2 from PR #132's code
+  review — without this, migrated sources would have shown `drafted: 0`
+  in the dashboard even when their candidates shipped.
+- `.github/workflows/bot.yml` sets `THEHEAT_TRIAGE_ENABLED: "1"` —
+  triage is now active in production. Rollback: set to `"0"` and push.
+
+The kill-switch default in code stays `"0"`; only the CI env override
+flips it on.
+
+### Fixed — cron-blocking stale test fixture (#136)
+
+`tests/test_coral_dhw.py::test_fetch_coral_dhw_uses_index_and_station_byte_ranges`
+hardcoded `2026-05-13` as its data point. The freshness check added by
+the Codex source-hardening pass (`assert_freshness(..., max_age_days=5)`)
+correctly rejected anything older than 5 days. After the 2026-05-19
+day-rollover, the fixture became 6 days old → test failed → the `run`
+job (gated on `test`) skipped → the bot silently produced no drafts
+for several scheduled crons. Fix: build fixture dates dynamically from
+`date.today()`.
+
+### Parked (no PR, branches preserved on remote)
+
+- **`wip/fact-check-disposition-tightening`** (commit `3bc54bd`) — the
+  Theme 6 fact-check disposition reversal toward primary-source-required.
+  Held: contradicts the "fact-checker is generous on world knowledge"
+  memory hook and would compound with the critic to push A-rate lower
+  before triage can lift the ceiling. Resume criteria: after triage
+  rolls out further and per-category steady-state observes, if
+  over-acceptance becomes a visible problem at the human approval gate.
+- **`wip/climate-indices-cadence`** (commit `697caa4`) — Codex's
+  removal of the "1st of month only" cadence restriction on NAO/AO/PDO.
+  Held: cadence change, not a bug fix; would increase per-cron volume.
+  Resume criteria: after triage migrates at least 2-3 more sources and
+  per-category caps are bounding NAO/AO/PDO promotion adequately.
+
+### Operator action queued
+
+GPM-IMERG is failing every cron with HTTP 401 (surfaced cleanly by the
+#128 diagnostic). Either rotate `EARTHDATA_TOKEN` (Earthdata profile →
+"Generate Token" → `gh secret set EARTHDATA_TOKEN`) or authorize the
+GES DISC application in the Earthdata profile (most likely cause — a
+valid bearer token alone is not enough; GES DISC needs explicit app
+authorization). Next scheduled cron after the fix flips `gpm_imerg`
+from `failed` to `success` in `source_health`.
+
 ## [0.7.2.0] - 2026-05-17
 
 The post-hardening release. Four PRs landed in one session: a 7-theme
