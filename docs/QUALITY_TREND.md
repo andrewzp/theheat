@@ -19,6 +19,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
 | 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 | 2026-05-13 | 4 | 0 | 1 | 3 | 0 | **0%** | ✗ | First graded two-bot cycle. 3 fire drafts (Mali, Campeche, Mongolia) all used identical formula opener + seasonal-explanation structure — fire template convergence identified as new failure mode (P6). Chuuk FSM monthly_high (76-year record) is the one B: clean data, no Wodehouse violation, but expository second sentence instead of a punchline. P3 self-kill failure not observed (positive). FRP bundle rounding (#80) confirmed working (309.6, 364.7, 307.6 MW values clean). |
+| 2026-05-19 | 14 | 3 | 6 | 5 | 0 | **21%** | ✗ | First graded coral_bleaching batch (9 drafts). 3 A-: Madagascar (DHW contrast-reveal "persistence is what kills"), Galapagos (upwelling-failure + double mortality threshold), Costa Rica Pacific (no-upwelling "nowhere to drain"). 4 B+: Fiji/Nauru/Austral Islands coral + Siberia fire (P6 template broken; timing incongruity embedded). 2 B-: Bethel ME monthly_low + Stahl Peak snow extreme (5× record understated). 5 C/C+: 2 sub-threshold coral + Southern Borneo (low floor threshold) + Nooksack (station artifact "Mf Nooksack") + BC fire (stale). New proposals: P7 coral opener formula convergence, P8 snow ratio as punchline. P5 partially confirmed (fire drafts lack named mechanics). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -28,6 +29,17 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-19 — Staleness bulk-reject: skipped (gh CLI not found in cloud env)
+
+**Why:** 1 draft identified for staleness rejection: `draft_20260514_211447_164` (BC fire,
+"burning today" baked from 2026-05-14T21:14Z — 114 hours old at grading). Bulk-reject
+attempted via `gh api -X PATCH gists/...` — `gh` command not found in managed remote
+execution environment. Operator action required: reject `draft_20260514_211447_164` via
+dashboard or direct Gist edit. Additional observation: 7 coral drafts (Drafts 7–13) are
+4–7 days old with present-tense DHW accumulation claims ("has accumulated X°C-weeks") that
+may no longer reflect current DHW values; they lack explicit "today" language and were not
+bulk-rejected per policy, but operator should review for accuracy before posting.
 
 ### 2026-05-13 — Staleness bulk-reject: not needed (no stale drafts)
 

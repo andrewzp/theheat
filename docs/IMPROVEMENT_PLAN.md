@@ -8,11 +8,11 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Bot commit | `c4e6706` (PR #140 diagnostic; 0.8.0.0 release — PRs #131–#136 + #137–#140 on main) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + triage stage live** (Sonnet 4.6 writer prompt-cached + Gemini fact-checker + Gemini 2.5 Pro critic; triage active for `coral_dhw` via PR #134; `THEHEAT_TRIAGE_ENABLED=1` in CI) |
+| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | **29 pp** (50% − 21%) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -219,9 +219,12 @@ accelerating-warming, ecosystem specificity) appeared inconsistently. In the two
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
 palette is named.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
++ mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
+**Last seen:** May 19 (partial: fire Draft 6 has no named mechanic; fire Draft 18 has
+timing-incongruity embedded but not standalone. Coral drafts show moves without explicit
+naming — mixed evidence for the proposal's core claim, but fire-specific convergence
+holds.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -230,10 +233,67 @@ ecosystem-specific specificity. Conclude: *"None of these are mandatory. When th
 alone is striking, deliver the data plainly. Forced humor breaks the spell."*
 
 **Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default.
+on the easy default. Note: coral drafts in the May 19 cycle produced named-move variants
+without explicit prompting (contrast-reveal, expectation-reversal, understatement closer)
+— the coral writer prompt may already be doing the work. Verify whether `writer_prompt.py`
+has a coral-specific named-moves section before implementing.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+
+### P7 — Coral opener formula convergence
+
+**Observed:** 2026-05-19 — 8 of 9 coral_bleaching drafts use the same opener: "[Location]
+reefs have accumulated X°C-weeks of thermal stress — [threshold label]." Identical to the
+P6 fire template failure but in the new coral_bleaching category. All three A- coral
+drafts deviate from the formula: they use the shorter colon-lead form ("Galapagos, Ecuador
+reefs: 24.5°C-weeks...") or a named upwelling-failure angle rather than the accumulation
+sentence. The formula opener is a structural ceiling at B+.
+
+**Cycles observed:** May 19 (1 cycle; 8 of 9 coral drafts formula-identical).
+**Last seen:** May 19.
+**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` coral/DHW framing section
+(if it exists) or to the fire-variety-forms paragraph (same location as P6's fix in PR
+#85): burn the formula opener for coral. Name 3 alternative sentence-1 forms:
+(1) colon-lead with the ratio ("Galapagos reefs: 24.5°C-weeks — double the mortality tier.");
+(2) upwelling/buffering angle first ("The cold upwelling that normally buffers the Galápagos
+has failed; reefs there have accumulated 24.5°C-weeks of thermal stress.");
+(3) location + mechanism first ("Where Pacific moisture stalls before the Cascades blocks
+it, stress accumulates: 10.2°C-weeks in Western Madagascar."). Add Draft 7's second-sentence
+form as APPROVED EXEMPLAR for the DHW mechanism close: "Corals can survive brief spikes;
+DHW measures how long heat persists, and persistence is what kills."
+
+**Expected impact:** Same as P6 — breaks the writer's convergence on the stated opener
+form. Higher expected yield than P6 because the coral category is newer and the writer
+has had fewer corrections on it.
+
+**Status:** Drafted. Awaiting human implementation.
+
+### P8 — Snow/extreme record: ratio-as-punchline unused
+
+**Observed:** 2026-05-19 — both snow_extreme drafts (Nooksack 2×, Stahl Peak 5×) state
+the ratio in the first sentence as setup context, then pivot to topographic explanation.
+Neither lands the ratio as a punchline. Stahl Peak's "nearly five times the previous
+blizzard record of 50.8 mm" is the most striking number in the queue; the draft continues
+to explain "the northern Rockies funnel Pacific moisture through low passes; when a storm
+stalls, totals compound fast." "Totals compound fast" restates what "five times the record"
+already shows. The period-and-restate mechanic from the voice spec is the right tool —
+"251.5 mm in 3 days. The previous record was 50.8 mm." — and is not used.
+
+**Cycles observed:** May 19 (1 cycle; 2 of 2 snow_extreme drafts miss the ratio-punchline).
+**Last seen:** May 19.
+**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` general record/extreme
+guidance (after the existing SIGNATURE MOVE section): "When a record is broken by a ratio
+(2×, 5×, 10×), the prior record stated plainly IS the punchline — do not over-explain
+with mechanism geography after stating it. The period-and-restate form: '[Current value].
+The previous record was [prior value].' is available. Test: if the ratio is more
+surprising than the mechanism, state the ratio last."
+
+**Expected impact:** Unlocks the "ratio landing" move for snow, fire, and any category
+where the new value is a multiple of the prior. Prevents the writer from diluting a
+naturally strong signal with topographic explanation.
+
+**Status:** Drafted. Awaiting human implementation.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -297,14 +357,17 @@ separate curation path to investigate in the two-bot writer.
 
 ### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
-The voice engine history (v2: 43% A-rate on 7 drafts; v2.5: 9% on 11 drafts) is no
-longer relevant — that pipeline is dead. The two-bot writer is the new baseline. Zero
-graded drafts from two-bot have reached the corpus so far (May 12 queue empty; all prior
-two-bot drafts were rejected before pending or have `evaluator_pass=None`).
+**Updated 2026-05-19:** Two-bot baseline now measurable across two graded cycles (May 13:
+0/4 = 0%; May 19: 3/14 = 21%). Cumulative: 3 A / 18 drafts = 17% A-rate on first two-bot
+graded drafts. First A-grades are coral_bleaching (3 of 3 A-grades came from new category
+on 2026-05-19). Fire and monthly_high categories have not yet produced an A-grade in the
+two-bot era. Voice engine history (v2: 43%; v2.5: 9%) remains reference only — pipeline
+dead.
 
-**Watch for:** first two-bot drafts to reach pending and get graded. A-rate on first 10+
-two-bot drafts establishes the new baseline. Expect different failure modes than the
-voice engine (no era anchor over-deployment; potentially different Wodehouse profile).
+**Watch for:** whether fire category closes the gap between the May-13 0% and the coral
+batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories
+are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
+suppressing A-grade candidates before they reach pending.
 
 ## Resolved (archive)
 
