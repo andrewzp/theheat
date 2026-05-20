@@ -16,6 +16,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
     print("[leaderboard] Generating Hot 10...")
     leaderboard_start = time.perf_counter()
     try:
+        cast(dict, bot_state).pop("_triage_queue", None)
         cities = open_meteo.load_cities()
         normals = open_meteo.load_normals()
         temps = open_meteo.fetch_all_city_temps(cities)
@@ -55,7 +56,6 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         score = score_hot10(top_anomaly, len(hot10), len(changes))
 
         event_id = f"hot10_{date.today().isoformat()}"
-        drafted_count = 0
         if _should_draft(score, event_id):
             leader = hot10[0] if hot10 else None
             review_context = _review_context(
@@ -84,13 +84,15 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             hot10_bundle = build_hot10_bundle(
                 hot10_dicts, changes=changes, event_id=event_id,
             )
-            if _try_two_bot_draft(
-                hot10_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=hot10_bundle,
+                score=score,
+                source="leaderboard",
                 legacy_type="hot10",
                 event_id=event_id,
                 review_context=review_context,
-            ):
-                drafted_count = 1
+            )
 
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
@@ -99,8 +101,9 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         state.update_streaks(bot_state, [ct.city for ct in hot10])
         _record_source_run(
             current_run, bot_state, "leaderboard", leaderboard_start,
-            status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=drafted_count
+            status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=0
         )
+        _drain_and_write_triage_queue(bot_state, current_run)
 
     except Exception as e:
         print(f"[leaderboard] Error: {e}")

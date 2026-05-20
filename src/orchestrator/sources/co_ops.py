@@ -37,15 +37,15 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> int:
             )
             from src.two_bot.intern import build_storm_surge_bundle
             ss_bundle = build_storm_surge_bundle(surge)
-            if _try_two_bot_draft(
-                ss_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=ss_bundle,
+                score=score,
+                source="water_levels",
                 legacy_type="storm_surge",
                 event_id=surge.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, surge.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "water_levels", water_levels_start,
             status="success", observed=len(wl_readings), promoted=source_promoted, drafted=source_drafted

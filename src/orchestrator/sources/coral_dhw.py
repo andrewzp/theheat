@@ -5,7 +5,6 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.two_bot.intern import build_coral_bleaching_bundle
-from src.two_bot.types import TriageCandidateBundle
 
 
 def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
@@ -84,21 +83,18 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
                 state.update_coral_dhw_tier(_bs, _rid, _tier)
                 state.increment_coral_dhw_annual_count(_bs)
 
-            _enqueue_candidate(
+            _enqueue_story_candidate(
                 bot_state,
-                TriageCandidateBundle(
-                    bundle=coral_bundle,
-                    score=score,
-                    event_id=coral_event.event_id,
-                    source="coral_dhw",
-                    review_context=review_context,
-                    city="",
-                    tweet_date=coral_event.date,
-                    cooldown_exempt=False,
-                    legacy_type="coral_bleaching",
-                    created_at=_utc_now_iso(),
-                    on_draft_success=_on_success,
-                ),
+                bundle=coral_bundle,
+                score=score,
+                event_id=coral_event.event_id,
+                source="coral_dhw",
+                review_context=review_context,
+                city="",
+                tweet_date=coral_event.date,
+                cooldown_exempt=False,
+                legacy_type="coral_bleaching",
+                on_draft_success=_on_success,
             )
         _record_source_run(
             current_run, bot_state, "coral_dhw", coral_start,

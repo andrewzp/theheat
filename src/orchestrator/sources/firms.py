@@ -47,44 +47,18 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> int:
                     _fact("Fire radiative power", f"{fire.frp:.0f} MW"),
                 ],
             )
-            # Two-bot pipeline for fire (replaces generator.generate_fire_tweet).
-            # This loop is SERIAL by contract: generate_fire_draft mutates
-            # state["memory"], so concurrent invocations would race on Gist
-            # persistence.
-            from src.two_bot.pipeline import generate_fire_draft
+            from src.two_bot.intern import build_fire_bundle
 
-            pipeline_result: dict = {}
-            draft = generate_fire_draft(
-                fire,
+            fire_bundle = build_fire_bundle(fire)
+            _enqueue_story_candidate(
                 bot_state,
-                result_out=pipeline_result,
-            )
-            if draft is None:
-                ctx = _current_suppression_ctx()
-                if ctx is not None:
-                    _record_downstream_suppression(
-                        bot_state=ctx["bot_state"],
-                        source=ctx.get("source"),
-                        run_id=ctx.get("run_id"),
-                        event_id=fire.event_id,
-                        score=score,
-                        kill_stage=pipeline_result.get("kill_stage", "unknown"),
-                        kill_reason=pipeline_result.get("kill_reason", "unknown"),
-                        summary=fire.nearest_city or fire.country or None,
-                    )
-                continue
-            review_context["two_bot"] = draft["two_bot_metadata"]
-            if save_draft(
-                draft["text"],
-                bot_state,
-                "fire",
-                fire.event_id,
+                bundle=fire_bundle,
                 score=score,
+                source="firms",
+                legacy_type="fire",
+                event_id=fire.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, fire.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
             status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted

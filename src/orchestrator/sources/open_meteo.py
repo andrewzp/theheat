@@ -59,7 +59,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             signal_year = (bundle.signal_date or date.today()).year
             # Default these so the bottom-of-loop event-log capture
             # works whether or not the if-cascade fires.
-            two_bot_saved = False
+            candidate_queued = False
 
             if bundle.all_time_high:
                 ev: AllTimeRecord = bundle.all_time_high
@@ -362,8 +362,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                         )
                     continue
 
-                two_bot_saved = _try_two_bot_draft(
-                    two_bot_bundle, bot_state, strongest_score,
+                candidate_queued = _enqueue_story_candidate(
+                    bot_state,
+                    bundle=two_bot_bundle,
+                    score=strongest_score,
+                    source="open_meteo_extreme_signals",
                     legacy_type=strongest_type,
                     event_id=strongest_event_id,
                     review_context=review_context,
@@ -371,13 +374,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     tweet_date=(bundle.signal_date or date.today()).isoformat(),
                     cooldown_exempt=elite,
                 )
-                voice_gen_saved = False  # voice gen no longer reachable
-                if two_bot_saved:
-                    state.record_event(bot_state, strongest_event_id)
-                    drafted += 1
-                    source_drafted += 1
 
-                if two_bot_saved or voice_gen_saved:
+                if candidate_queued:
                     # Streak tracking — update on any calendar-date high record.
                     # Key: station_id on GHCN path; city name on Open-Meteo path.
                     # Old city-name entries prune naturally via prune_stale_record_streaks.
@@ -421,8 +419,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                                             _fact("Peak temp", _temp_pair_c(streak.get("peak_temp_c", ev_cd.new_temp_c))),
                                         ],
                                     )
-                                    if _try_two_bot_draft(
-                                        streak_bundle, bot_state, streak_score,
+                                    if _enqueue_story_candidate(
+                                        bot_state,
+                                        bundle=streak_bundle,
+                                        score=streak_score,
+                                        source="open_meteo_extreme_signals",
                                         legacy_type="record_streak",
                                         event_id=streak_event_id,
                                         review_context=streak_ctx,
@@ -430,10 +431,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                                         tweet_date=(bundle.signal_date or date.today()).isoformat(),
                                         cooldown_exempt=True,
                                     ):
-                                        state.record_event(bot_state, streak_event_id)
-                                        drafted += 1
-                                        source_drafted += 1
                                         signal_counts["streak"] += 1
+                                        source_promoted += 1
 
             # Append a per-bundle row to the dashboard event log. Captured
             # for every bundle iterated regardless of decision so the UI can
@@ -441,10 +440,10 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # Only the GHCN provider exposes station_id; rows from the
             # Open-Meteo provider get an empty station_id and the city instead.
             if _signals_provider == "ghcn":
-                if strongest_event_id and not two_bot_saved:
+                if strongest_event_id and not candidate_queued:
                     decision = "rejected"
-                elif two_bot_saved:
-                    decision = "drafted"
+                elif candidate_queued:
+                    decision = "queued_for_triage"
                 else:
                     decision = "no_qualifying_signal"
                 ghcn_event_log.append({
@@ -537,15 +536,15 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     sim_bundle = build_simultaneous_records_bundle(
                         sim_stations, event_id=sim_event_id, when=today_iso,
                     )
-                    if _try_two_bot_draft(
-                        sim_bundle, bot_state, sim_score,
+                    _enqueue_story_candidate(
+                        bot_state,
+                        bundle=sim_bundle,
+                        score=sim_score,
+                        source="open_meteo_extreme_signals",
                         legacy_type="simultaneous_records",
                         event_id=sim_event_id,
                         review_context=sim_ctx,
-                    ):
-                        state.record_event(bot_state, sim_event_id)
-                        drafted += 1
-                        source_drafted += 1
+                    )
 
         # Country-level records — the biggest story our pipeline produces.
         # Aggregates across every sampled city in a country; fires when
@@ -588,37 +587,45 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # per-city cooldown — no single city "owns" this story.
             from src.two_bot.intern import build_country_record_bundle
             cr_bundle = build_country_record_bundle(cr)
-            if _try_two_bot_draft(
-                cr_bundle, bot_state, score,
+            syn_state = us_city_state_map.get(cr.peak_city)
+
+            def _on_success(
+                _bs: BotState = bot_state,
+                _country_record = cr,
+                _syn_state: str | None = syn_state,
+            ) -> None:
+                if _country_record.kind == "high" and _syn_state:
+                    state.record_synthesis_component(
+                        _bs,
+                        kind="heat",
+                        region=_syn_state,
+                        event_id=_country_record.event_id,
+                        metadata={
+                            "kind": "all_time",
+                            "city": _country_record.peak_city,
+                            "value_c": float(_country_record.new_temp_c or 0),
+                        },
+                    )
+
+            if _enqueue_story_candidate(
+                bot_state,
+                bundle=cr_bundle,
+                score=score,
+                source="open_meteo_extreme_signals",
                 legacy_type=f"country_{cr.kind}",
                 event_id=cr.event_id,
                 review_context=cr_ctx,
                 tweet_date=(cr.signal_date or date.today()).isoformat(),
+                on_draft_success=_on_success,
             ):
-                state.record_event(bot_state, cr.event_id)
-                drafted += 1
-                source_drafted += 1
                 country_count += 1
-                syn_state = us_city_state_map.get(cr.peak_city)
-                if cr.kind == "high" and syn_state:
-                    state.record_synthesis_component(
-                        bot_state,
-                        kind="heat",
-                        region=syn_state,
-                        event_id=cr.event_id,
-                        metadata={
-                            "kind": "all_time",
-                            "city": cr.peak_city,
-                            "value_c": float(cr.new_temp_c or 0),
-                        },
-                    )
 
         # Prune stale streaks at cycle end
         state.prune_stale_record_streaks(bot_state)
 
         total_observed = sum(signal_counts.values()) + country_count
         # Build a structured note. For GHCN: surface the funnel
-        # (active → with-obs → checked → raw_signals → bundles → drafted)
+        # (active -> with-obs -> checked -> raw_signals -> bundles -> queued)
         # so the dashboard can render pipeline visibility.
         signal_breakdown = (
             f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} "
@@ -640,7 +647,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')} "
                 f"diffs:{diff_fetched}/{diff_attempted} "
                 f"diff_missing:{diff_missing} "
-                f"drafted:{source_drafted}"
+                f"queued:{source_promoted}"
             )
             note = f"provider:ghcn {funnel} | {signal_breakdown}"
             details = {

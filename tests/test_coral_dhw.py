@@ -1,12 +1,12 @@
 """Tests for NOAA Coral Reef Watch DHW source handling."""
 
 from copy import deepcopy
-from unittest.mock import MagicMock, patch
 
 from src.data import coral_dhw
 from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading, detect_dhw_thresholds, fetch_coral_dhw
 from src.editorial.scoring import score_coral_bleaching
 from src.state import DEFAULT_STATE
+from src.two_bot.types import StoryBundle
 
 
 def test_detect_dhw_threshold_crosses_highest_new_tier():
@@ -152,6 +152,26 @@ def _make_reading(
     )
 
 
+def _make_bundle(event: CoralBleachingEvent) -> StoryBundle:
+    return StoryBundle(
+        signal_kind="coral_bleaching",
+        where=event.region_full_name,
+        when=event.date,
+        event_id=event.event_id,
+        headline_metric={"label": "Degree heating weeks", "value": event.dhw_value, "unit": "C-weeks"},
+        current_facts=[
+            {"label": "Region", "value": event.region_full_name},
+            {"label": "DHW", "value": f"{event.dhw_value:.1f} C-weeks"},
+            {"label": "Source", "value": "NOAA Coral Reef Watch"},
+        ],
+        raw_signal_dump={
+            "source": "NOAA Coral Reef Watch",
+            "region_id": event.region_id,
+            "dhw_value": event.dhw_value,
+        },
+    )
+
+
 class TestCoralDHWSourceRunnerMigration:
     """Verify that run_coral_dhw enqueues TriageCandidateBundles instead of
     calling _try_two_bot_draft directly (the triage migration pattern).
@@ -183,7 +203,7 @@ class TestCoralDHWSourceRunnerMigration:
         # Intercept bundle build so we don't need the full intern pipeline
         monkeypatch.setattr(
             "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
-            lambda ev: MagicMock(signal_kind="coral_bleaching"),
+            _make_bundle,
         )
 
         # _try_two_bot_draft must NOT be called
@@ -232,7 +252,7 @@ class TestCoralDHWSourceRunnerMigration:
         )
         monkeypatch.setattr(
             "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
-            lambda ev: MagicMock(signal_kind="coral_bleaching"),
+            _make_bundle,
         )
 
         current_run = {"sources": []}
@@ -265,7 +285,7 @@ class TestCoralDHWSourceRunnerMigration:
         )
         monkeypatch.setattr(
             "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
-            lambda ev: MagicMock(signal_kind="coral_bleaching"),
+            _make_bundle,
         )
 
         current_run = {"sources": []}
@@ -299,7 +319,7 @@ class TestCoralDHWSourceRunnerMigration:
         )
         monkeypatch.setattr(
             "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
-            lambda ev: MagicMock(signal_kind="coral_bleaching"),
+            _make_bundle,
         )
 
         current_run = {"sources": []}

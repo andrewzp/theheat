@@ -49,21 +49,29 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> int:
             from src.two_bot.intern import build_global_flood_bundle
 
             flood_bundle = build_global_flood_bundle(activation)
-            if _try_two_bot_draft(
-                flood_bundle,
+            _activation_id = activation.activation_id
+            _severity = activation.severity
+
+            def _on_success(
+                _bs: BotState = bot_state,
+                _activation_id: str = _activation_id,
+                _severity: str = _severity,
+            ) -> None:
+                state.update_flood_activation_tier(
+                    _bs, _activation_id, _severity
+                )
+                state.increment_flood_annual_count(_bs)
+
+            _enqueue_story_candidate(
                 bot_state,
-                score,
+                bundle=flood_bundle,
+                score=score,
+                source="copernicus_ems",
                 legacy_type="global_flood",
                 event_id=activation.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, activation.event_id)
-                state.update_flood_activation_tier(
-                    bot_state, activation.activation_id, activation.severity
-                )
-                state.increment_flood_annual_count(bot_state)
-                drafted += 1
-                source_drafted += 1
+                on_draft_success=_on_success,
+            )
         _record_source_run(
             current_run, bot_state, "copernicus_ems", copernicus_start,
             status="success", observed=len(activations), promoted=source_promoted, drafted=source_drafted

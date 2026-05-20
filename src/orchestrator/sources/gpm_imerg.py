@@ -63,19 +63,18 @@ def run_gpm_imerg(
             from src.two_bot.intern import build_precipitation_bundle
 
             bundle = build_precipitation_bundle(event)
-            if _try_two_bot_draft(
-                bundle,
+            _enqueue_story_candidate(
                 bot_state,
-                score,
+                bundle=bundle,
+                score=score,
+                source="gpm_imerg",
                 legacy_type="precipitation_extreme",
                 event_id=event.event_id,
                 review_context=review_context,
                 city=event.location if event.kind != "country_precip_event" else "",
                 tweet_date=event.date,
                 cooldown_exempt=event.kind == "country_precip_event",
-            ):
-                state.record_event(bot_state, event.event_id)
-                source_drafted += 1
+            )
 
         gpm_imerg.update_precip_tracking(cast(dict, bot_state), readings)
         _record_source_run(

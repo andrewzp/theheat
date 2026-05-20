@@ -68,20 +68,27 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> int:
                 if event.kind == "seasonal_snow_record"
                 else "snow_extreme"
             )
-            if _try_two_bot_draft(
-                bundle,
+            _event_kind = event.kind
+
+            def _on_success(
+                _bs: BotState = bot_state,
+                _kind: str = _event_kind,
+            ) -> None:
+                if _kind == "seasonal_snow_record":
+                    _increment_snow_annual_count(_bs)
+
+            _enqueue_story_candidate(
                 bot_state,
-                score,
+                bundle=bundle,
+                score=score,
+                source="nsidc_snow",
                 legacy_type=legacy_type,
                 event_id=event.event_id,
                 review_context=review_context,
                 city=event.station,
                 tweet_date=event.date,
-            ):
-                state.record_event(bot_state, event.event_id)
-                if event.kind == "seasonal_snow_record":
-                    _increment_snow_annual_count(bot_state)
-                source_drafted += 1
+                on_draft_success=_on_success,
+            )
 
         nsidc_snow.update_snow_tracking(cast(dict, bot_state), readings)
         _record_source_run(

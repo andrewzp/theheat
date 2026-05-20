@@ -1210,13 +1210,15 @@ class TestRunAlerts:
             "two_bot_metadata": {"angle_chosen": "plain_number"},
         }
         mock_draft.return_value = True
+        mock_two_bot = MagicMock(return_value=True)
+        monkeypatch.setattr("src.main._try_two_bot_draft", mock_two_bot)
 
         state = _fresh_state()
         run_alerts(state)
 
-        mock_generate_fire_draft.assert_called_once()
+        mock_generate_fire_draft.assert_not_called()
+        mock_two_bot.assert_called_once()
         mock_gen.generate_fire_tweet.assert_not_called()
-        mock_draft.assert_called()
 
     def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
         """Day-5 streak crossing → one draft saved under marine_heatwave."""
@@ -2216,6 +2218,40 @@ class TestTriageIntegration:
 
         assert written == ["survivor"]
         assert drafted == 1
+
+    def test_drain_records_triage_and_writer_attempt_telemetry(self, monkeypatch):
+        """Drain credits source telemetry after triage chooses survivors."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        survivor = _make_triage_candidate(event_id="survivor", source="river_gauges", total=90)
+        spilled = _make_triage_candidate(event_id="spilled", source="river_gauges", total=70)
+        bot_state["_triage_queue"] = [survivor, spilled]
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *a, **k: True)
+        monkeypatch.setattr(
+            "src.orchestrator.triage.select_survivors",
+            lambda state, queue, **kw: [survivor],
+        )
+
+        current_run = {
+            "sources": [{
+                "source": "river_gauges",
+                "status": "success",
+                "observed": 2,
+                "promoted": 2,
+                "drafted": 0,
+            }]
+        }
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
+
+        assert drafted == 1
+        row = current_run["sources"][0]
+        assert row["triaged_in"] == 2
+        assert row["triaged_out"] == 1
+        assert row["writer_attempted"] == 1
+        assert row["drafted"] == 1
 
     def test_run_alerts_with_triage_disabled_writes_all_candidates(self, monkeypatch):
         """When THEHEAT_TRIAGE_ENABLED=0, all candidates in queue are written."""

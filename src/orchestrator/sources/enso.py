@@ -37,15 +37,15 @@ def run_enso(bot_state: BotState, current_run: dict | None) -> int:
                 )
                 from src.two_bot.intern import build_enso_bundle
                 enso_bundle = build_enso_bundle(transition)
-                if _try_two_bot_draft(
-                    enso_bundle, bot_state, enso_score,
+                _enqueue_story_candidate(
+                    bot_state,
+                    bundle=enso_bundle,
+                    score=enso_score,
+                    source="enso",
                     legacy_type="enso",
                     event_id=transition["event_id"],
                     review_context=review_context,
-                ):
-                    state.record_event(bot_state, transition["event_id"])
-                    drafted += 1
-                    source_drafted = 1
+                )
             observed = len(enso_readings) if hasattr(enso_readings, "__len__") else 0
             _record_source_run(
                 current_run, bot_state, "enso", enso_start,

@@ -37,15 +37,15 @@ def run_river_gauges(bot_state: BotState, current_run: dict | None) -> int:
             )
             from src.two_bot.intern import build_river_flood_bundle
             rf_bundle = build_river_flood_bundle(flood)
-            if _try_two_bot_draft(
-                rf_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=rf_bundle,
+                score=score,
+                source="river_gauges",
                 legacy_type="river_flood",
                 event_id=flood.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, flood.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "river_gauges", river_start,
             status="success", observed=len(river_readings), promoted=source_promoted, drafted=source_drafted

@@ -49,16 +49,26 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> int:
                     )
                     from src.two_bot.intern import build_fire_footprint_bundle
                     ff_bundle = build_fire_footprint_bundle(fc)
-                    if _try_two_bot_draft(
-                        ff_bundle, bot_state, score,
+                    _complex_id = fc.complex_id
+                    _tier = fc.tier
+
+                    def _on_success(
+                        _bs: BotState = bot_state,
+                        _cid: str = _complex_id,
+                        _tier: int = _tier,
+                    ) -> None:
+                        state.update_fire_complex_tier(_bs, _cid, _tier)
+
+                    _enqueue_story_candidate(
+                        bot_state,
+                        bundle=ff_bundle,
+                        score=score,
+                        source="fire_footprint",
                         legacy_type="fire_footprint",
                         event_id=fc.event_id,
                         review_context=review_context,
-                    ):
-                        state.record_event(bot_state, fc.event_id)
-                        state.update_fire_complex_tier(bot_state, fc.complex_id, fc.tier)
-                        drafted += 1
-                        source_drafted += 1
+                        on_draft_success=_on_success,
+                    )
                 except Exception as fc_err:
                     print(f"[alerts] Fire footprint: error processing {fc.complex_id}: {fc_err}")
                     state.log_error(bot_state, "fire_footprint", f"{fc.complex_id}: {fc_err}")

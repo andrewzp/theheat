@@ -41,15 +41,15 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> int:
             # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_severe_weather_bundle
             sw_bundle = build_severe_weather_bundle(alert)
-            if _try_two_bot_draft(
-                sw_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=sw_bundle,
+                score=score,
+                source="nws_alerts",
                 legacy_type="severe_weather",
                 event_id=alert.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, alert.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "nws_alerts", nws_start,
             status="success", observed=len(alerts), promoted=source_promoted, drafted=source_drafted

@@ -48,17 +48,16 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> int:
                 )
                 from src.two_bot.intern import build_co2_milestone_bundle
                 co2_bundle = build_co2_milestone_bundle(milestone)
-                if _try_two_bot_draft(
-                    co2_bundle, bot_state, score,
+                _enqueue_story_candidate(
+                    bot_state,
+                    bundle=co2_bundle,
+                    score=score,
+                    source="co2",
                     legacy_type="co2_milestone",
                     event_id=milestone.event_id,
                     review_context=review_context,
-                ):
-                    state.record_event(bot_state, milestone.event_id)
-                    _increment_co2_annual_count(bot_state)
-                    drafted += 1
-                    co2_drafted_today = True
-                    source_drafted += 1
+                    on_draft_success=lambda: _increment_co2_annual_count(bot_state),
+                )
         _record_source_run(
             current_run, bot_state, "co2", co2_start,
             status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted

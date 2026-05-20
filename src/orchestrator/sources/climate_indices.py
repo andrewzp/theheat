@@ -91,18 +91,24 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
                 )
                 from src.two_bot.intern import build_oscillation_bundle
                 bundle = build_oscillation_bundle(event)
-                if _try_two_bot_draft(
-                    bundle,
+                _index_name = index_name
+
+                def _on_success(
+                    _bs: BotState = bot_state,
+                    _idx: str = _index_name,
+                ) -> None:
+                    state.increment_oscillation_annual_count(_bs, _idx)
+
+                _enqueue_story_candidate(
                     bot_state,
-                    score,
+                    bundle=bundle,
+                    score=score,
+                    source=index_name.lower(),
                     legacy_type=legacy_type,
                     event_id=event.event_id,
                     review_context=review_context,
-                ):
-                    state.record_event(bot_state, event.event_id)
-                    state.increment_oscillation_annual_count(bot_state, index_name)
-                    drafted += 1
-                    source_drafted += 1
+                    on_draft_success=_on_success,
+                )
 
             _record_source_run(
                 current_run, bot_state, index_name.lower(), source_start,
@@ -178,24 +184,26 @@ def _run_nao_ao_alignment(
         )
         from src.two_bot.intern import build_oscillation_bundle
         bundle = build_oscillation_bundle(event)
-        drafted = 0
-        if _try_two_bot_draft(
-            bundle,
+
+        def _on_success(_bs: BotState = bot_state) -> None:
+            state.increment_oscillation_annual_count(_bs, "NAO")
+            state.increment_oscillation_annual_count(_bs, "AO")
+
+        _enqueue_story_candidate(
             bot_state,
-            score,
+            bundle=bundle,
+            score=score,
+            source="nao_ao_alignment",
             legacy_type="oscillation_alignment",
             event_id=event.event_id,
             review_context=review_context,
-        ):
-            state.record_event(bot_state, event.event_id)
-            state.increment_oscillation_annual_count(bot_state, "NAO")
-            state.increment_oscillation_annual_count(bot_state, "AO")
-            drafted = 1
+            on_draft_success=_on_success,
+        )
         _record_source_run(
             current_run, bot_state, "nao_ao_alignment", source_start,
-            status="success", observed=1, promoted=1, drafted=drafted,
+            status="success", observed=1, promoted=1, drafted=0,
         )
-        return drafted
+        return 0
     except Exception as e:
         print(f"[alerts] NAO/AO alignment error: {e}")
         state.log_error(bot_state, "nao_ao_alignment", str(e))

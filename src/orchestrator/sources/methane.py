@@ -46,20 +46,25 @@ def run_methane(bot_state: BotState, current_run: dict | None) -> int:
                 )
                 from src.two_bot.intern import build_ch4_milestone_bundle
                 ch4_bundle = build_ch4_milestone_bundle(ch4_milestone)
-                if _try_two_bot_draft(
-                    ch4_bundle,
+                _ppb_crossed = ch4_milestone.ppb_crossed
+
+                def _on_success(
+                    _bs: BotState = bot_state,
+                    _ppb: int = _ppb_crossed,
+                ) -> None:
+                    state.update_ch4_last_milestone(_bs, _ppb)
+                    state.increment_ch4_annual_count(_bs)
+
+                _enqueue_story_candidate(
                     bot_state,
-                    score,
+                    bundle=ch4_bundle,
+                    score=score,
+                    source="ch4_milestone",
                     legacy_type="ch4_milestone",
                     event_id=ch4_milestone.event_id,
                     review_context=review_context,
-                ):
-                    state.record_event(bot_state, ch4_milestone.event_id)
-                    state.update_ch4_last_milestone(bot_state, ch4_milestone.ppb_crossed)
-                    state.increment_ch4_annual_count(bot_state)
-                    drafted += 1
-                    ch4_drafted_today = True
-                    source_drafted += 1
+                    on_draft_success=_on_success,
+                )
         _record_source_run(
             current_run, bot_state, "ch4_milestone", ch4_start,
             status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted

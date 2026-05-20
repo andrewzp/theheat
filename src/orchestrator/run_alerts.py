@@ -124,10 +124,8 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_synthesis(bot_state, current_run)
 
     # Drain the triage queue: rank + cap survivors, then call writer for each.
-    # When triage is OFF (default for first PR), writes everything in queue
-    # order. When ON, applies select_survivors(). Source runners not yet
-    # migrated still call _try_two_bot_draft() directly — those drafts bypass
-    # triage and count against MAX_DRAFTS_PER_CYCLE via _prune_weakest_cycle_drafts.
+    # Source runners enqueue StoryBundle candidates; this is the only writer
+    # gateway for ordinary alert sources.
     drafted += _drain_and_write_triage_queue(bot_state, current_run)
 
     drafted = _prune_weakest_cycle_drafts(

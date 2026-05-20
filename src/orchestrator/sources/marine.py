@@ -36,15 +36,15 @@ def run_ocean(bot_state: BotState, current_run: dict | None) -> int:
             )
             from src.two_bot.intern import build_extreme_wave_bundle
             wave_bundle = build_extreme_wave_bundle(wave)
-            if _try_two_bot_draft(
-                wave_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=wave_bundle,
+                score=score,
+                source="ocean",
                 legacy_type="extreme_wave",
                 event_id=wave.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, wave.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "ocean", ocean_start,
             status="success", observed=len(ocean_readings), promoted=source_promoted, drafted=source_drafted
