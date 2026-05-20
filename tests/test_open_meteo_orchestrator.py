@@ -37,11 +37,15 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
     monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: ([bundle], []))
     monkeypatch.setattr(runner, "_should_draft", lambda *args, **kwargs: True)
-    monkeypatch.setattr(runner, "_try_two_bot_draft", lambda *args, **kwargs: True)
+    monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *args, **kwargs: True)
 
     drafted = runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
     source_run = current_run["sources"][0]
-    assert drafted == 2
+    assert drafted == 0
+    assert len(bot_state["_triage_queue"]) == 2
     assert source_run["source"] == "open_meteo_extreme_signals"
+    assert source_run["drafted"] == 0
+
+    assert runner._drain_and_write_triage_queue(bot_state, current_run) == 2
     assert source_run["drafted"] == 2

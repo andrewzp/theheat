@@ -30,6 +30,7 @@ FILL_VALUE = -9999.0
 DEFAULT_RECORD_MARGIN_MM = 20.0
 DEFAULT_CITY_LIMIT = 75
 PRECIP_HISTORY_DAYS = 10
+STRICT_REPEATED_FAILURE_LIMIT = 3
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,7 @@ def fetch_daily_precip(
     readings: list[CityPrecipReading] = []
     failures = 0
     first_failure_detail: str | None = None
+    failure_counts: dict[str, int] = {}
 
     for city in selected:
         try:
@@ -111,6 +113,8 @@ def fetch_daily_precip(
             )
         except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
             failures += 1
+            failure_signature = _failure_signature(exc)
+            failure_counts[failure_signature] = failure_counts.get(failure_signature, 0) + 1
             if first_failure_detail is None:
                 first_failure_detail = _diagnose_city_failure(exc)
                 print(
@@ -120,6 +124,18 @@ def fetch_daily_precip(
             if strict and cities is not None and len(selected) == 1:
                 raise SourceFetchError(
                     f"GPM IMERG city fetch failed: {first_failure_detail}"
+                ) from exc
+            if strict and _is_auth_failure(exc):
+                raise SourceFetchError(
+                    f"GPM IMERG city fetch failed after {failures} failed: "
+                    f"{first_failure_detail}"
+                ) from exc
+            if strict and failure_counts[failure_signature] >= STRICT_REPEATED_FAILURE_LIMIT:
+                raise SourceFetchError(
+                    f"GPM IMERG fetch hit {failure_counts[failure_signature]} "
+                    f"repeated {failure_signature} failures for "
+                    f"{requested_date.isoformat()}; first error: "
+                    f"{first_failure_detail}"
                 ) from exc
             continue
 
@@ -164,6 +180,23 @@ def _diagnose_city_failure(exc: Exception) -> str:
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         return f"HTTP {exc.response.status_code} from {exc.response.url}"
     return f"{type(exc).__name__}: {exc}"
+
+
+def _http_status(exc: Exception) -> int | None:
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return exc.response.status_code
+    return None
+
+
+def _is_auth_failure(exc: Exception) -> bool:
+    return _http_status(exc) in {401, 403}
+
+
+def _failure_signature(exc: Exception) -> str:
+    status = _http_status(exc)
+    if status is not None:
+        return f"HTTP {status}"
+    return type(exc).__name__
 
 
 def detect_precip_records(

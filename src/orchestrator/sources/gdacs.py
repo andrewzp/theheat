@@ -38,15 +38,15 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> int:
             # memory slice as ``recent_tweets_same_event``.
             from src.two_bot.intern import build_global_disaster_bundle
             gd_bundle = build_global_disaster_bundle(disaster)
-            if _try_two_bot_draft(
-                gd_bundle, bot_state, score,
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=gd_bundle,
+                score=score,
+                source="gdacs",
                 legacy_type="global_disaster",
                 event_id=disaster.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, disaster.event_id)
-                drafted += 1
-                source_drafted += 1
+            )
         _record_source_run(
             current_run, bot_state, "gdacs", gdacs_start,
             status="success", observed=len(disasters), promoted=source_promoted, drafted=source_drafted

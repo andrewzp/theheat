@@ -52,19 +52,25 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> int:
                 )
                 from src.two_bot.intern import build_ozone_hole_bundle
                 bundle = build_ozone_hole_bundle(event)
-                if _try_two_bot_draft(
-                    bundle,
+                _event = event
+
+                def _on_success(
+                    _bs: BotState = bot_state,
+                    _ev = _event,
+                ) -> None:
+                    state.record_ozone_hole_peak(_bs, _ev)
+                    state.increment_ozone_hole_annual_count(_bs)
+
+                _enqueue_story_candidate(
                     bot_state,
-                    score,
+                    bundle=bundle,
+                    score=score,
+                    source="ozone_hole",
                     legacy_type="ozone_hole_peak",
                     event_id=event.event_id,
                     review_context=review_context,
-                ):
-                    state.record_event(bot_state, event.event_id)
-                    state.record_ozone_hole_peak(bot_state, event)
-                    state.increment_ozone_hole_annual_count(bot_state)
-                    drafted += 1
-                    source_drafted = 1
+                    on_draft_success=_on_success,
+                )
         _record_source_run(
             current_run, bot_state, "ozone_hole", source_start,
             status="success",

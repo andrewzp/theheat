@@ -112,27 +112,35 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
                             years_of_record=years_of_record,
                             archive_start_year=earliest_year,
                         )
-                        if _try_two_bot_draft(
-                            ice_bundle, bot_state, score,
+                        _ice_record = ice_record
+
+                        def _on_success(
+                            _bs: BotState = bot_state,
+                            _record = _ice_record,
+                        ) -> None:
+                            _increment_ice_annual_count(_bs)
+                            # Update the extreme trackers on success.
+                            if _record.kind == "monthly_loss_record":
+                                assert _record.monthly_delta_gt is not None
+                                assert _record.month is not None
+                                _bs.setdefault("ice_mass_max_loss", {})[_record.region] = {
+                                    "gt": _record.monthly_delta_gt,
+                                    "month": _record.month,
+                                }
+                            else:
+                                assert _record.threshold_gt is not None
+                                _bs.setdefault("ice_mass_last_milestone", {})[_record.region] = _record.threshold_gt
+
+                        _enqueue_story_candidate(
+                            bot_state,
+                            bundle=ice_bundle,
+                            score=score,
+                            source=region_key,
                             legacy_type="ice_mass_record",
                             event_id=ice_record.event_id,
                             review_context=review_context,
-                        ):
-                            state.record_event(bot_state, ice_record.event_id)
-                            _increment_ice_annual_count(bot_state)
-                            drafted += 1
-                            source_drafted = 1
-                            # Update the extreme trackers on success.
-                            if ice_record.kind == "monthly_loss_record":
-                                assert ice_record.monthly_delta_gt is not None
-                                assert ice_record.month is not None
-                                bot_state.setdefault("ice_mass_max_loss", {})[ice_record.region] = {
-                                    "gt": ice_record.monthly_delta_gt,
-                                    "month": ice_record.month,
-                                }
-                            else:
-                                assert ice_record.threshold_gt is not None
-                                bot_state.setdefault("ice_mass_last_milestone", {})[ice_record.region] = ice_record.threshold_gt
+                            on_draft_success=_on_success,
+                        )
 
                 # Always mark the month as seen so we don't reprocess until data updates.
                 bot_state.setdefault("ice_mass_last_seen", {})[region] = latest_month

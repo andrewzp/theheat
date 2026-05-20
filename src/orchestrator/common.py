@@ -14,6 +14,8 @@ import os
 import secrets
 import sys
 import time
+from collections import Counter
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
@@ -147,6 +149,9 @@ def _record_source_run(
     status: str,
     observed: int = 0,
     promoted: int = 0,
+    triaged_in: int = 0,
+    triaged_out: int = 0,
+    writer_attempted: int = 0,
     drafted: int = 0,
     error: str | None = None,
     note: str | None = None,
@@ -170,6 +175,9 @@ def _record_source_run(
         duration_ms=duration_ms,
         observed=observed,
         promoted=promoted,
+        triaged_in=triaged_in,
+        triaged_out=triaged_out,
+        writer_attempted=writer_attempted,
         drafted=drafted,
         error=error,
         note=note,
@@ -765,20 +773,31 @@ def _process_cyclone_source(
                 current_run=current_run,
             )
             bundle = _bundle_for_cyclone_event(event)
-            if _try_two_bot_draft(
-                bundle,
+            _event = event
+
+            def _on_success(
+                _bs: BotState = bot_state,
+                _event = _event,
+            ) -> None:
+                if isinstance(_event, TierCrossingEvent):
+                    state.update_cyclone_tier(
+                        _bs,
+                        f"{_event.source}:{_event.storm_id}".lower(),
+                        _event.to_category,
+                    )
+                state.increment_cyclone_annual_count(_bs)
+
+            _enqueue_story_candidate(
                 bot_state,
-                score,
+                bundle=bundle,
+                score=score,
+                source=source_key,
                 legacy_type=event.kind,
                 event_id=event.event_id,
                 review_context=review_context,
                 cooldown_exempt=True,
-            ):
-                state.record_event(bot_state, event.event_id)
-                if isinstance(event, TierCrossingEvent):
-                    state.update_cyclone_tier(bot_state, f"{event.source}:{event.storm_id}".lower(), event.to_category)
-                state.increment_cyclone_annual_count(bot_state)
-                source_drafted += 1
+                on_draft_success=_on_success,
+            )
 
         for advisory in advisories:
             state.record_cyclone_wind_observation(
@@ -1228,8 +1247,13 @@ def _enqueue_candidate(bot_state: BotState, candidate: "TriageCandidateBundle") 
     queue.append(candidate)
 
 
-def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: int = 1) -> None:
-    """Increment the ``drafted`` counter on an existing source run entry.
+def _bump_source_field_in_run(
+    current_run: dict | None,
+    source: str,
+    field: str,
+    amount: int = 1,
+) -> None:
+    """Increment a numeric counter on an existing source run entry.
 
     Source runners write their telemetry entry (via ``_record_source_run``)
     with ``drafted=0`` because at that point their candidates are still in
@@ -1248,8 +1272,71 @@ def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: i
     # Walk in reverse to find the most recent entry for this source
     for entry in reversed(sources_list):
         if entry.get("source") == source:
-            entry["drafted"] = entry.get("drafted", 0) + amount
+            entry[field] = entry.get(field, 0) + amount
             return
+
+
+def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: int = 1) -> None:
+    """Increment the ``drafted`` counter on an existing source run entry."""
+    _bump_source_field_in_run(current_run, source, "drafted", amount)
+
+
+def _enqueue_story_candidate(
+    bot_state: BotState,
+    *,
+    bundle,
+    score,
+    source: str,
+    legacy_type: str,
+    event_id: str,
+    review_context: dict,
+    city: str = "",
+    tweet_date: str = "",
+    cooldown_exempt: bool = False,
+    on_draft_success: Callable[[], None] | None = None,
+) -> bool:
+    """Audit and enqueue one writer candidate.
+
+    This is the source-runner boundary. Sources collect facts, build a
+    StoryBundle, and submit it here. Only the drain step may later call the
+    writer pipeline for triage survivors.
+    """
+    from src.two_bot.evidence_contract import audit_story_bundle
+    from src.two_bot.types import TriageCandidateBundle
+
+    audit = audit_story_bundle(bundle)
+    error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
+    if error_codes:
+        ctx = _CURRENT_SUPPRESSION_CTX or {}
+        _record_downstream_suppression(
+            bot_state=bot_state,
+            source=source,
+            run_id=ctx.get("run_id"),
+            event_id=event_id,
+            score=score,
+            kill_stage="evidence_contract",
+            kill_reason="; ".join(error_codes),
+            summary=getattr(bundle, "where", None) or city or None,
+        )
+        return False
+
+    _enqueue_candidate(
+        bot_state,
+        TriageCandidateBundle(
+            bundle=bundle,
+            score=score,
+            event_id=event_id,
+            source=source,
+            review_context=review_context,
+            city=city,
+            tweet_date=tweet_date,
+            cooldown_exempt=cooldown_exempt,
+            legacy_type=legacy_type,
+            created_at=_utc_now_iso(),
+            on_draft_success=on_draft_success,
+        ),
+    )
+    return True
 
 
 def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> int:
@@ -1289,6 +1376,10 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
     if not queue:
         return 0
 
+    queued_by_source = Counter(candidate.source for candidate in queue)
+    for source, count in queued_by_source.items():
+        _bump_source_field_in_run(current_run, source, "triaged_in", count)
+
     survivors = queue  # default: legacy passthrough
     if _triage_enabled():
         try:
@@ -1304,18 +1395,29 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
             _state.record_source_health(bot_state, "triage", "degraded", err_text)
             survivors = queue
 
+    survivor_by_source = Counter(candidate.source for candidate in survivors)
+    for source, survivor_count in survivor_by_source.items():
+        _bump_source_field_in_run(current_run, source, "triaged_out", survivor_count)
+
     drafted_count = 0
     for candidate in survivors:
+        _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
+        draft_kwargs = {
+            "legacy_type": candidate.legacy_type,
+            "event_id": candidate.event_id,
+            "review_context": candidate.review_context,
+        }
+        if candidate.city:
+            draft_kwargs["city"] = candidate.city
+        if candidate.tweet_date:
+            draft_kwargs["tweet_date"] = candidate.tweet_date
+        if candidate.cooldown_exempt:
+            draft_kwargs["cooldown_exempt"] = candidate.cooldown_exempt
         drafted = _try_two_bot_draft(
             candidate.bundle,
             bot_state,
             candidate.score,
-            legacy_type=candidate.legacy_type,
-            event_id=candidate.event_id,
-            review_context=candidate.review_context,
-            city=candidate.city,
-            tweet_date=candidate.tweet_date,
-            cooldown_exempt=candidate.cooldown_exempt,
+            **draft_kwargs,
         )
         if drafted:
             drafted_count += 1
@@ -1404,6 +1506,8 @@ __all__ = [
     "_touch_draft",
     "_triage_enabled",
     "_enqueue_candidate",
+    "_enqueue_story_candidate",
+    "_bump_source_field_in_run",
     "_bump_source_drafted_in_run",
     "_drain_and_write_triage_queue",
     "_try_two_bot_draft",

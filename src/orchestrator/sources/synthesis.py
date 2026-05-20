@@ -70,16 +70,26 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> int:
                 "window_days": comps["window_days"],
                 "total_score": score.total if hasattr(score, "total") else None,
             })
-            if _try_two_bot_draft(
-                synth_bundle, bot_state, score,
+            _rule_name = sig.rule_name
+            _region = sig.region
+
+            def _on_success(
+                _bs: BotState = bot_state,
+                _rule: str = _rule_name,
+                _region: str = _region,
+            ) -> None:
+                state.record_synthesis_fired(_bs, _rule, _region)
+
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=synth_bundle,
+                score=score,
+                source="synthesis_fire_drought_heat",
                 legacy_type="synthesis_fire_drought_heat",
                 event_id=sig.event_id,
                 review_context=review_context,
-            ):
-                state.record_event(bot_state, sig.event_id)
-                state.record_synthesis_fired(bot_state, sig.rule_name, sig.region)
-                drafted += 1
-                synthesis_drafted += 1
+                on_draft_success=_on_success,
+            )
         state.prune_stale_synthesis_components(bot_state)
         _record_source_run(
             current_run, bot_state, "synthesis_fire_drought_heat", synthesis_start,

@@ -39,15 +39,15 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> int:
                     )
                     from src.two_bot.intern import build_sea_ice_bundle
                     si_bundle = build_sea_ice_bundle(record)
-                    if _try_two_bot_draft(
-                        si_bundle, bot_state, sea_ice_score,
+                    _enqueue_story_candidate(
+                        bot_state,
+                        bundle=si_bundle,
+                        score=sea_ice_score,
+                        source=f"sea_ice_{hemisphere.lower()}",
                         legacy_type="sea_ice_record",
                         event_id=record.event_id,
                         review_context=review_context,
-                    ):
-                        state.record_event(bot_state, record.event_id)
-                        drafted += 1
-                        source_drafted = 1
+                    )
                 observed = len(readings) if hasattr(readings, "__len__") else 0
                 _record_source_run(
                     current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,

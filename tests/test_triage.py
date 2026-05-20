@@ -430,3 +430,74 @@ class TestEnqueueCandidate:
         _enqueue_candidate(bot_state, c1)
         _enqueue_candidate(bot_state, c2)
         assert bot_state["_triage_queue"] == [c1, c2]
+
+
+class TestEnqueueStoryCandidate:
+
+    def _valid_bundle(self) -> StoryBundle:
+        return StoryBundle(
+            signal_kind="river_flood",
+            where="Ohio River at Cincinnati",
+            when="2026-05-19",
+            event_id="river_flood_1",
+            headline_metric={"label": "Above flood stage", "value": 3.2, "unit": "ft"},
+            current_facts=[
+                {"label": "Gauge", "value": "Ohio River at Cincinnati"},
+                {"label": "Source", "value": "USGS Water"},
+            ],
+            historical_context={"flood_stage_ft": 52.0},
+            raw_signal_dump={
+                "source": "USGS Water",
+                "station": "03255000",
+                "above_by_ft": 3.2,
+            },
+        )
+
+    def test_enqueue_story_candidate_audits_and_enqueues_valid_bundle(self):
+        from src.orchestrator.common import _enqueue_story_candidate
+
+        bot_state = _fresh_state()
+        ok = _enqueue_story_candidate(
+            bot_state,
+            bundle=self._valid_bundle(),
+            score=_score(85, "river_flood"),
+            source="river_gauges",
+            legacy_type="river_flood",
+            event_id="river_flood_1",
+            review_context={"source": "USGS Water"},
+            city="Ohio River at Cincinnati",
+            tweet_date="2026-05-19",
+        )
+
+        assert ok is True
+        queue = bot_state["_triage_queue"]
+        assert len(queue) == 1
+        assert queue[0].source == "river_gauges"
+        assert queue[0].event_id == "river_flood_1"
+        assert queue[0].legacy_type == "river_flood"
+
+    def test_enqueue_story_candidate_rejects_invalid_bundle_before_queue(self):
+        from dataclasses import replace
+
+        from src.orchestrator.common import _enqueue_story_candidate
+
+        bot_state = _fresh_state()
+        bad_bundle = replace(self._valid_bundle(), event_id="")
+
+        ok = _enqueue_story_candidate(
+            bot_state,
+            bundle=bad_bundle,
+            score=_score(85, "river_flood"),
+            source="river_gauges",
+            legacy_type="river_flood",
+            event_id="river_flood_1",
+            review_context={"source": "USGS Water"},
+        )
+
+        assert ok is False
+        assert "_triage_queue" not in bot_state
+        suppressions = bot_state.get("suppressions", [])
+        assert len(suppressions) == 1
+        assert suppressions[0]["source"] == "river_gauges"
+        assert suppressions[0]["stage"] == "evidence_contract"
+        assert suppressions[0]["reasons"] == ["missing_event_id"]

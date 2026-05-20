@@ -83,12 +83,9 @@ class TestGpmFetch:
 
     @responses.activate
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
-    def test_strict_fetch_failure_surfaces_http_status_in_error(self, _env):
-        """When per-city OPeNDAP calls return 401/403/404 (auth or endpoint
-        drift), the strict-mode SourceFetchError must include the HTTP
-        status and URL of the first failure. Without this, the production
-        source_health.last_error is a useless "N failed" count and the
-        operator cannot distinguish auth-vs-endpoint-vs-outage from logs.
+    def test_strict_auth_failure_fails_fast_with_http_status(self, _env):
+        """Auth-class failures must fail fast instead of looping through
+        every monitored city with the same broken token.
         """
         responses.add(
             responses.GET,
@@ -111,10 +108,42 @@ class TestGpmFetch:
             )
 
         msg = str(exc_info.value)
-        assert "2 failed" in msg
+        assert "1 failed" in msg
         assert "HTTP 401" in msg
         # URL of the first failure must be in the error for diagnosability.
         assert "GPM_3IMERGDL.07" in msg
+        assert len(responses.calls) == 1
+
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_strict_repeated_provider_failure_stops_early(self, _env, monkeypatch):
+        import pytest
+        import requests
+        from src.data.source_status import SourceFetchError
+
+        import src.data.gpm_imerg as gpm
+
+        calls = 0
+
+        def fail_city(**kwargs):
+            nonlocal calls
+            calls += 1
+            raise requests.Timeout("provider did not respond")
+
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fail_city)
+
+        cities = [
+            {"city": f"City {i}", "country": "Testland", "lat": "0", "lon": "0"}
+            for i in range(10)
+        ]
+
+        with pytest.raises(SourceFetchError, match="3 repeated Timeout failures"):
+            fetch_daily_precip(
+                cities,
+                target_date=date(2026, 5, 14),
+                strict=True,
+            )
+
+        assert calls == 3
 
     @responses.activate
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
