@@ -9,6 +9,14 @@ from src.two_bot.types import ExtractedClaim
 from tests.two_bot.conftest import _bundle, _state_with_memory
 
 
+def _fact_response(passed=True, failures=None, extracted_claims=None):
+    return json.dumps({
+        "passed": passed,
+        "extracted_claims": extracted_claims or [],
+        "failures": failures or [],
+    })
+
+
 @pytest.fixture
 def mock_gemini(monkeypatch):
     import src.two_bot.fact_check as fact_check_module
@@ -44,7 +52,7 @@ def test_fact_check_deterministic_era_anchor_reuse_via_extraction():
 
 
 def test_fact_check_calls_llm_when_local_passes(mock_gemini):
-    mock_gemini.return_value = '{"passed": true, "failures": []}'
+    mock_gemini.return_value = _fact_response()
 
     result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
 
@@ -58,6 +66,7 @@ def test_fact_check_accepts_fenced_preamble_response(mock_gemini):
 ```json
 {
   "passed": true,
+  "extracted_claims": [],
   "failures": []
 }
 ```
@@ -69,23 +78,52 @@ def test_fact_check_accepts_fenced_preamble_response(mock_gemini):
 
 
 def test_fact_check_propagates_llm_failure(mock_gemini):
-    mock_gemini.return_value = json.dumps(
-        {
-            "passed": False,
-            "failures": [
-                {
-                    "claim": "since 2012",
-                    "category": "BUNDLE_FACT",
-                    "reason": "bundle says 2014",
-                }
-            ],
-        }
+    mock_gemini.return_value = _fact_response(
+        passed=False,
+        failures=[
+            {
+                "claim": "since 2012",
+                "category": "BUNDLE_FACT",
+                "reason": "bundle says 2014",
+            }
+        ],
     )
 
     result = fact_check("...since 2012", [], _bundle(), _state_with_memory())
 
     assert not result.passed
     assert any("since 2012" in failure for failure in result.failures)
+
+
+def test_fact_check_uses_returned_claims_for_reuse_checks(mock_gemini):
+    mock_gemini.return_value = _fact_response(
+        extracted_claims=[
+            {"text": "Spider-Man 2002", "kind": "era_anchor"},
+        ],
+    )
+    state = _state_with_memory(used_era_anchors=["spider-man 2002"])
+
+    result = fact_check(
+        "Last time it was this hot, Spider-Man 2002 was new.",
+        [],
+        _bundle(),
+        state,
+    )
+
+    assert not result.passed
+    assert any("era anchor" in failure for failure in result.failures)
+    assert result.extracted_claims == [
+        ExtractedClaim(text="Spider-Man 2002", kind="era_anchor")
+    ]
+
+
+def test_fact_check_requires_claims_when_combined_path_has_no_preextract(mock_gemini):
+    mock_gemini.return_value = '{"passed": true, "failures": []}'
+
+    result = fact_check("Some clean tweet.", [], _bundle(), _state_with_memory())
+
+    assert not result.passed
+    assert any("extracted_claims" in failure for failure in result.failures)
 
 
 class TestJsonParseRetry:
@@ -104,7 +142,7 @@ class TestJsonParseRetry:
     """
 
     def _ok(self) -> str:
-        return '{"passed": true, "failures": []}'
+        return _fact_response()
 
     def test_retries_on_empty_response(self, mock_gemini):
         """First call returns empty string; second returns valid JSON."""

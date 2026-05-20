@@ -153,11 +153,8 @@ def mock_writer(monkeypatch):
 
 
 @pytest.fixture
-def mock_extract(monkeypatch):
-    from src.two_bot import pipeline
-
+def mock_extract():
     mock = MagicMock()
-    monkeypatch.setattr(pipeline.claim_extractor, "extract_claims", mock)
     return mock
 
 

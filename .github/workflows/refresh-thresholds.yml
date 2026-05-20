@@ -81,10 +81,30 @@ jobs:
           gh release upload "$TAG" data/station_thresholds.sqlite --clobber
           echo "Uploaded station_thresholds.sqlite as release $TAG"
 
-      - name: Commit updated stations.csv
+      - name: Write threshold cache version
+        run: |
+          {
+            echo "release=thresholds-latest"
+            echo "sha256=$(sha256sum data/station_thresholds.sqlite | awk '{print $1}')"
+            echo "bytes=$(wc -c < data/station_thresholds.sqlite | tr -d ' ')"
+            python3 - <<'PYEOF'
+          import sqlite3
+          conn = sqlite3.connect("data/station_thresholds.sqlite")
+          active = conn.execute("SELECT COUNT(*) FROM stations WHERE is_active=1").fetchone()[0]
+          thresh = conn.execute("SELECT COUNT(*) FROM thresholds").fetchone()[0]
+          watermark = conn.execute("SELECT value FROM meta WHERE key='last_diff_date'").fetchone()
+          print(f"last_diff_date={watermark[0] if watermark else ''}")
+          print(f"active_stations={active}")
+          print(f"threshold_rows={thresh}")
+          conn.close()
+          PYEOF
+          } > data/station_thresholds.version
+          cat data/station_thresholds.version
+
+      - name: Commit updated stations.csv and threshold cache version
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f data/stations.csv
+          git add -f data/stations.csv data/station_thresholds.version
           git diff --cached --quiet || git commit -m "chore: refresh stations.csv [skip ci]"
           git push origin HEAD:main || echo "Nothing to push"

@@ -7,7 +7,7 @@ import os
 
 from src.data.firms import FireEvent
 from src.state_schema import BotState
-from src.two_bot import claim_extractor, critic, fact_check, memory, writer
+from src.two_bot import critic, fact_check, memory, writer
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
@@ -120,18 +120,8 @@ def generate_draft(
             _record_kill("safety", safety_reason or "unknown")
             return None
 
-        try:
-            extracted = claim_extractor.extract_claims(writer_result.tweet)
-        except Exception as exc:
-            print(
-                f"[two_bot.pipeline] Claim extraction rejected {bundle.signal_kind} "
-                f"draft: {exc}"
-            )
-            _record_kill("claim_extractor", f"{type(exc).__name__}: {exc}")
-            return None
-
         fact_result = fact_check.fact_check(
-            writer_result.tweet, extracted, bundle, state
+            writer_result.tweet, [], bundle, state
         )
         if not fact_result.passed:
             failures_str = "; ".join(fact_result.failures)
@@ -164,7 +154,7 @@ def generate_draft(
                 _record_kill("critic", critic_result.kill_reason or "unknown")
                 return None
 
-        canonical_claims = fact_result.extracted_claims or extracted
+        canonical_claims = fact_result.extracted_claims
         memory.record_shipped(state, bundle, writer_result, canonical_claims)
         metadata = {
             "signal_kind": bundle.signal_kind,
@@ -261,9 +251,8 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
             )
             return None
 
-        extracted = claim_extractor.extract_claims(writer_result.tweet)
         fact_result = fact_check.fact_check(
-            writer_result.tweet, extracted, bundle, state
+            writer_result.tweet, [], bundle, state
         )
         if not fact_result.passed:
             print(

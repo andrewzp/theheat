@@ -24,10 +24,19 @@ def run_gpm_imerg(
         )
         if max_cities < 1:
             raise ValueError("GPM_IMERG_MAX_CITIES must be >= 1")
+        max_workers_raw = os.environ.get("GPM_IMERG_MAX_WORKERS")
+        max_workers = (
+            int(max_workers_raw)
+            if max_workers_raw
+            else gpm_imerg.DEFAULT_MAX_WORKERS
+        )
+        if max_workers < 1:
+            raise ValueError("GPM_IMERG_MAX_WORKERS must be >= 1")
         readings = _fetch_strict(
             gpm_imerg.fetch_daily_precip,
             cities=cities,
             max_cities=max_cities,
+            max_workers=max_workers,
         )
         events = gpm_imerg.detect_precip_records(readings, cast(dict, bot_state))
         for event in events:

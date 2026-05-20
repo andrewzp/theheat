@@ -134,6 +134,13 @@ class SourceHealthRun(TypedDict, total=False):
     ts: str
     status: str
     error: str | None
+    duration_ms: int
+    observed: int
+    promoted: int
+    triaged_in: int
+    triaged_out: int
+    writer_attempted: int
+    drafted: int
 
 
 class SourceHealth(TypedDict, total=False):
@@ -143,6 +150,15 @@ class SourceHealth(TypedDict, total=False):
     degraded: int
     failed: int
     skipped: int
+    total_duration_ms: int
+    avg_duration_ms: int | None
+    max_duration_ms: int
+    total_observed: int
+    total_promoted: int
+    total_triaged_in: int
+    total_triaged_out: int
+    total_writer_attempted: int
+    total_drafted: int
     last_success_ts: str | None
     last_error: str | None
     last_error_ts: str | None

@@ -81,7 +81,7 @@ The memory slice shows what The Heat has already said. The library shrinks monot
 - **`used_era_anchors`** — cultural/historical references already used. Pick a different one or skip the era-anchor angle.
 - **`used_peer_comparisons`** — named comparison objects already used. Pick a different one.
 - **`used_framings`** — editorial-frame labels already used. The specific labeled frame is spent.
-- **`shipped_tweet_texts`** — last 100 published tweets. Do not echo phrasing.
+- **`shipped_tweet_texts`** — last 20 published tweets. Do not echo phrasing.
 
 ## Per-day category cooldown
 

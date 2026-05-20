@@ -72,6 +72,32 @@ def test_build_memory_slice_exposes_recent_tweets_for_event_base():
     ]
 
 
+def test_build_memory_slice_limits_global_shipped_texts_but_keeps_same_event_context():
+    rows = []
+    for i in range(30):
+        rows.append(
+            {
+                "tweet_text": f"published tweet {i}",
+                "signal_kind": "fire",
+                "event_id": "fire_target_a_old" if i == 25 else f"fire_other_{i}",
+                "country": "ML",
+                "shipped_at": _iso_hours_ago(i + 1),
+            }
+        )
+    state = _state_with_memory(shipped_tweets=rows)
+    bundle = _bundle(event_id="fire_target_a_new", country="ML")
+
+    memory_slice = build_memory_slice(state, bundle)
+
+    assert memory_slice.shipped_tweet_texts == [
+        f"published tweet {i}" for i in range(20)
+    ]
+    assert memory_slice.recent_tweets_same_country == [
+        f"published tweet {i}" for i in range(5)
+    ]
+    assert memory_slice.recent_tweets_same_event == ["published tweet 25"]
+
+
 def test_memory_slice_groups_severe_weather_by_event_type_and_area():
     state = _empty_memory_state()
     bundle = StoryBundle(

@@ -122,7 +122,7 @@ def test_pipeline_writer_raises(mock_writer, mock_extract, mock_fact_check):
     assert "api down" in result_out["kill_reason"]
 
 
-def test_pipeline_claim_extractor_raises_records_stage(mock_writer, mock_extract, mock_fact_check):
+def test_pipeline_fact_check_raises_records_stage(mock_writer, mock_extract, mock_fact_check):
     mock_writer.return_value = WriterResult(
         tweet="Mali fire is 361 MW.",
         kill_reason=None,
@@ -131,17 +131,22 @@ def test_pipeline_claim_extractor_raises_records_stage(mock_writer, mock_extract
         peer_comparison_used=None,
         reasoning="test",
     )
-    mock_extract.side_effect = ValueError("claim extractor returned invalid JSON across 2 attempts")
+    mock_fact_check.return_value = FactCheckResult(
+        passed=False,
+        failures=["fact-checker returned invalid JSON across 2 attempts"],
+        raw_response="(json-parse retry exhausted)",
+        extracted_claims=[],
+    )
     state = _state_with_memory()
     result_out = {}
 
     draft = generate_fire_draft(_fire_event(), state, result_out=result_out)
 
     assert draft is None
-    assert result_out["kill_stage"] == "claim_extractor"
+    assert result_out["kill_stage"] == "fact_check"
     assert "invalid JSON across" in result_out["kill_reason"]
     assert state["memory"]["shipped_tweets"] == []
-    assert not mock_fact_check.called
+    assert mock_fact_check.called
 
 
 def test_pipeline_budget_exhausted_records_distinct_stage(
@@ -224,7 +229,12 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
         reasoning="test",
     )
     mock_extract.return_value = [ExtractedClaim(text="Spider-Man 2002", kind="era_anchor")]
-    mock_fact_check.side_effect = real_fact_check
+    mock_fact_check.side_effect = lambda tweet, extracted, bundle, state: real_fact_check(
+        tweet,
+        [ExtractedClaim(text="Spider-Man 2002", kind="era_anchor")],
+        bundle,
+        state,
+    )
 
     draft2 = generate_fire_draft(_fire_event(event_id="fire_second"), state)
 

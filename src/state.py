@@ -1280,6 +1280,22 @@ def add_source_run(
 
 SOURCE_HEALTH_WINDOW_DAYS = 7
 _SOURCE_HEALTH_COUNTERS = ("success", "degraded", "failed", "skipped")
+_SOURCE_HEALTH_METRICS = (
+    "duration_ms",
+    "observed",
+    "promoted",
+    "triaged_in",
+    "triaged_out",
+    "writer_attempted",
+    "drafted",
+)
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    try:
+        return max(int(value), 0)
+    except (TypeError, ValueError):
+        return None
 
 
 def _source_health_status(status: str) -> str:
@@ -1308,6 +1324,15 @@ def _empty_source_health() -> SourceHealth:
         "degraded": 0,
         "failed": 0,
         "skipped": 0,
+        "total_duration_ms": 0,
+        "avg_duration_ms": None,
+        "max_duration_ms": 0,
+        "total_observed": 0,
+        "total_promoted": 0,
+        "total_triaged_in": 0,
+        "total_triaged_out": 0,
+        "total_writer_attempted": 0,
+        "total_drafted": 0,
         "last_success_ts": None,
         "last_error": None,
         "last_error_ts": None,
@@ -1331,6 +1356,7 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
     cutoff = _source_health_window_cutoff(runs)
     seen = set()
     ordered: list[SourceHealthRun] = []
+    duration_values: list[int] = []
     for run in sorted(runs, key=lambda row: _parse_state_timestamp(row.get("ts"))):
         ts = _format_state_timestamp(run.get("ts"))
         if _parse_state_timestamp(ts) < cutoff:
@@ -1345,14 +1371,34 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
         entry: SourceHealthRun = {"ts": ts, "status": status}
         if error_text:
             entry["error"] = error_text
+        entry_writeable = cast(dict, entry)
+        for metric in _SOURCE_HEALTH_METRICS:
+            raw_value = run.get(metric)
+            value = _nonnegative_int(raw_value)
+            if value is None:
+                continue
+            entry_writeable[metric] = value
         ordered.append(entry)
         health_counts = cast(dict, health)
         health_counts[status] = int(health_counts.get(status, 0)) + 1
+        for metric in _SOURCE_HEALTH_METRICS:
+            if metric not in entry_writeable:
+                continue
+            value = int(entry_writeable[metric])
+            if metric == "duration_ms":
+                health["total_duration_ms"] = int(health.get("total_duration_ms") or 0) + value
+                health["max_duration_ms"] = max(int(health.get("max_duration_ms") or 0), value)
+                duration_values.append(value)
+            else:
+                health_key = f"total_{metric}"
+                health_counts[health_key] = int(health_counts.get(health_key, 0)) + value
         if status == "success":
             health["last_success_ts"] = ts
         elif status in {"degraded", "failed"} and error_text:
             health["last_error"] = error_text
             health["last_error_ts"] = ts
+    if duration_values:
+        health["avg_duration_ms"] = round(sum(duration_values) / len(duration_values))
     health["runs"] = ordered
     return health
 
@@ -1364,6 +1410,7 @@ def record_source_health(
     error: str | None = None,
     *,
     timestamp: datetime | str | None = None,
+    metrics: dict | None = None,
 ) -> None:
     """Append a source-health observation and keep a rolling 7-day summary."""
     if not source:
@@ -1378,6 +1425,15 @@ def record_source_health(
     }
     if error:
         run["error"] = str(error)
+    run_writeable = cast(dict, run)
+    for metric in _SOURCE_HEALTH_METRICS:
+        if metrics is None or metric not in metrics:
+            continue
+        value = metrics.get(metric)
+        coerced = _nonnegative_int(value)
+        if coerced is None:
+            continue
+        run_writeable[metric] = coerced
     runs.append(run)
     health_writeable[source] = _rebuild_source_health(runs)
 

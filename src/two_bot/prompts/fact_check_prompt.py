@@ -112,10 +112,15 @@ Return ONLY a JSON object:
 
 {
   "passed": true | false,
+  "extracted_claims": [
+    {"text": "<exact concrete claim substring>", "kind": "number|date|named_entity|comparison|era_anchor|peer_comparison"}
+  ],
   "failures": [
     {"claim": "<exact substring of tweet>", "category": "BUNDLE_FACT|WORLD_KNOWLEDGE|UNVERIFIABLE", "reason": "<why it failed>"}
   ]
 }
+
+`extracted_claims` is required even when the tweet passes. Include every concrete claim you checked. Use [] only when the tweet contains no concrete claims.
 
 passed=true ONLY if failures is empty. No markdown, no code fences.
 """

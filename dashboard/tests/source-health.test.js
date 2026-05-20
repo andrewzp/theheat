@@ -47,7 +47,7 @@ const RUN_HISTORY_STATE = {
       started_at: NOW,
       ended_at: NOW,
       sources: [
-        { source: "nws_alerts", status: "success", observed: 10, promoted: 1, drafted: 1 },
+        { source: "nws_alerts", status: "success", observed: 10, promoted: 1, drafted: 1, duration_ms: 1000 },
         { source: "ocean", status: "failed", error: "503 Service Unavailable" },
         { source: "drought", status: "skipped", note: "Friday only" },
       ],
@@ -58,7 +58,7 @@ const RUN_HISTORY_STATE = {
       started_at: HOUR_AGO,
       ended_at: HOUR_AGO,
       sources: [
-        { source: "nws_alerts", status: "success", observed: 12, promoted: 0, drafted: 0 },
+        { source: "nws_alerts", status: "success", observed: 12, promoted: 0, drafted: 0, duration_ms: 500 },
         { source: "ocean", status: "failed", error: "timeout" },
       ],
     },
@@ -68,7 +68,7 @@ const RUN_HISTORY_STATE = {
       started_at: TWO_HOURS_AGO,
       ended_at: TWO_HOURS_AGO,
       sources: [
-        { source: "nws_alerts", status: "success", observed: 8, promoted: 0, drafted: 0 },
+        { source: "nws_alerts", status: "success", observed: 8, promoted: 0, drafted: 0, duration_ms: 1500 },
         { source: "ocean", status: "success", observed: 5, promoted: 0, drafted: 0 },
       ],
     },
@@ -112,6 +112,9 @@ test("source-health API aggregates per-source success/failure across run_history
     assert.equal(byKey.nws_alerts.health, "healthy")
     assert.equal(byKey.nws_alerts.total_observed, 30)
     assert.equal(byKey.nws_alerts.total_drafted, 1)
+    assert.equal(byKey.nws_alerts.total_duration_ms, 3000)
+    assert.equal(byKey.nws_alerts.avg_duration_ms, 1000)
+    assert.equal(byKey.nws_alerts.max_duration_ms, 1500)
 
     // ocean: 1 success + 2 failures over 3 runs → success_rate ~0.33, last run failed → unhealthy
     assert.equal(byKey.ocean.runs, 3)
@@ -125,6 +128,62 @@ test("source-health API aggregates per-source success/failure across run_history
     assert.equal(byKey.drought.skipped, 1)
     assert.equal(byKey.drought.last_run_status, "skipped")
     assert.notEqual(byKey.drought.health, "unhealthy")
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test("source-health API prefers durable source_health metrics over capped run_history", async () => {
+  setupEnv()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () =>
+    gistResponse({
+      ...RUN_HISTORY_STATE,
+      run_history: [],
+      source_health: {
+        ghcn: {
+          success: 1,
+          degraded: 1,
+          failed: 0,
+          skipped: 0,
+          total_duration_ms: 3000,
+          avg_duration_ms: 1500,
+          max_duration_ms: 2000,
+          total_observed: 150,
+          total_promoted: 6,
+          total_triaged_in: 2,
+          total_triaged_out: 4,
+          total_writer_attempted: 1,
+          total_drafted: 1,
+          last_success_ts: "2026-05-09T03:00:00Z",
+          last_error: "late diff",
+          last_error_ts: "2026-05-09T04:00:00Z",
+          runs: [
+            { ts: "2026-05-09T03:00:00Z", status: "success", duration_ms: 1000, observed: 100 },
+            { ts: "2026-05-09T04:00:00Z", status: "degraded", error: "late diff", duration_ms: 2000, observed: 50 },
+          ],
+        },
+      },
+    })
+
+  try {
+    const { GET } = await importFresh("app/api/source-health/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/source-health", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      })
+    )
+
+    assert.equal(response.status, 200)
+    const payload = await response.json()
+    assert.equal(payload.stats.runs_analyzed, 2)
+    assert.equal(payload.sources.length, 1)
+    assert.equal(payload.sources[0].source, "ghcn")
+    assert.equal(payload.sources[0].total_observed, 150)
+    assert.equal(payload.sources[0].total_writer_attempted, 1)
+    assert.equal(payload.sources[0].avg_duration_ms, 1500)
+    assert.equal(payload.sources[0].last_run_status, "degraded")
+    assert.equal(payload.sources[0].last_error, "late diff")
   } finally {
     globalThis.fetch = originalFetch
   }

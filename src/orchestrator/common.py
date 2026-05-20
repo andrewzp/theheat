@@ -158,16 +158,30 @@ def _record_source_run(
     details: dict | None = None,
 ) -> None:
     """Track a source result when run telemetry is enabled."""
+    duration_ms = max(int((time.perf_counter() - started_at) * 1000), 0)
     if bot_state is not None:
         health_error = error
         if not health_error and status in {"failed", "degraded", "partial_failure"}:
             health_error = note
-        state.record_source_health(bot_state, source, status, health_error)
+        state.record_source_health(
+            bot_state,
+            source,
+            status,
+            health_error,
+            metrics={
+                "duration_ms": duration_ms,
+                "observed": observed,
+                "promoted": promoted,
+                "triaged_in": triaged_in,
+                "triaged_out": triaged_out,
+                "writer_attempted": writer_attempted,
+                "drafted": drafted,
+            },
+        )
 
     if current_run is None:
         return
 
-    duration_ms = max(int((time.perf_counter() - started_at) * 1000), 0)
     state.add_source_run(
         current_run,
         source=source,

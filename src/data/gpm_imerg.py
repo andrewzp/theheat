@@ -8,6 +8,7 @@ months and is not suitable for "today" checks.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, MutableMapping
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, timedelta
 import csv
@@ -29,6 +30,7 @@ LAT_CELLS = 1800
 FILL_VALUE = -9999.0
 DEFAULT_RECORD_MARGIN_MM = 20.0
 DEFAULT_CITY_LIMIT = 75
+DEFAULT_MAX_WORKERS = 8
 PRECIP_HISTORY_DAYS = 10
 STRICT_REPEATED_FAILURE_LIMIT = 3
 
@@ -74,6 +76,7 @@ def fetch_daily_precip(
     target_date: date | None = None,
     product: str = "late",
     max_cities: int | None = DEFAULT_CITY_LIMIT,
+    max_workers: int | None = DEFAULT_MAX_WORKERS,
     strict: bool = False,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities.
@@ -93,59 +96,30 @@ def fetch_daily_precip(
     rows = cities if cities is not None else load_cities()
     selected = list(rows if max_cities is None else rows[:max_cities])
     headers = {"Authorization": f"Bearer {token}"}
-    readings: list[CityPrecipReading] = []
+    readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
     failures = 0
     first_failure_detail: str | None = None
     failure_counts: dict[str, int] = {}
+    worker_count = _bounded_worker_count(max_workers, len(selected))
 
-    for city in selected:
-        try:
-            city_name = str(city["city"])
-            country = str(city["country"])
-            lat = float(city["lat"])
-            lon = float(city["lon"])
-            mm_total = _fetch_city_precip(
-                lat=lat,
-                lon=lon,
-                target_date=requested_date,
-                product=product,
-                headers=headers,
-            )
-        except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
-            failures += 1
-            failure_signature = _failure_signature(exc)
-            failure_counts[failure_signature] = failure_counts.get(failure_signature, 0) + 1
-            if first_failure_detail is None:
-                first_failure_detail = _diagnose_city_failure(exc)
-                print(
-                    f"[gpm_imerg] first per-city failure: {first_failure_detail}",
-                    flush=True,
-                )
-            if strict and cities is not None and len(selected) == 1:
-                raise SourceFetchError(
-                    f"GPM IMERG city fetch failed: {first_failure_detail}"
-                ) from exc
-            if strict and _is_auth_failure(exc):
-                raise SourceFetchError(
-                    f"GPM IMERG city fetch failed after {failures} failed: "
-                    f"{first_failure_detail}"
-                ) from exc
-            if strict and failure_counts[failure_signature] >= STRICT_REPEATED_FAILURE_LIMIT:
-                raise SourceFetchError(
-                    f"GPM IMERG fetch hit {failure_counts[failure_signature]} "
-                    f"repeated {failure_signature} failures for "
-                    f"{requested_date.isoformat()}; first error: "
-                    f"{first_failure_detail}"
-                ) from exc
-            continue
-
+    def fetch_one(index: int, city: Mapping[str, Any]) -> tuple[int, CityPrecipReading | None]:
+        city_name = str(city["city"])
+        country = str(city["country"])
+        lat = float(city["lat"])
+        lon = float(city["lon"])
+        mm_total = _fetch_city_precip(
+            lat=lat,
+            lon=lon,
+            target_date=requested_date,
+            product=product,
+            headers=headers,
+        )
         if mm_total is None:
-            continue
-
+            return index, None
         city_key = _safe_key(city_name)
         country_key = _safe_key(country)
         date_key = requested_date.isoformat()
-        readings.append(CityPrecipReading(
+        return index, CityPrecipReading(
             city=city_name,
             country=country,
             lat=lat,
@@ -154,8 +128,71 @@ def fetch_daily_precip(
             mm_total=mm_total,
             source_product=product,
             event_id=f"gpm_imerg_{country_key}_{city_key}_{date_key}",
-        ))
+        )
 
+    def handle_failure(exc: Exception) -> None:
+        nonlocal failures, first_failure_detail
+        failures += 1
+        failure_signature = _failure_signature(exc)
+        failure_counts[failure_signature] = failure_counts.get(failure_signature, 0) + 1
+        if first_failure_detail is None:
+            first_failure_detail = _diagnose_city_failure(exc)
+            print(
+                f"[gpm_imerg] first per-city failure: {first_failure_detail}",
+                flush=True,
+            )
+        if strict and cities is not None and len(selected) == 1:
+            raise SourceFetchError(
+                f"GPM IMERG city fetch failed: {first_failure_detail}"
+            ) from exc
+        if strict and _is_auth_failure(exc):
+            raise SourceFetchError(
+                f"GPM IMERG city fetch failed after {failures} failed: "
+                f"{first_failure_detail}"
+            ) from exc
+        if strict and failure_counts[failure_signature] >= STRICT_REPEATED_FAILURE_LIMIT:
+            raise SourceFetchError(
+                f"GPM IMERG fetch hit {failure_counts[failure_signature]} "
+                f"repeated {failure_signature} failures for "
+                f"{requested_date.isoformat()}; first error: "
+                f"{first_failure_detail}"
+            ) from exc
+
+    # Strict mode probes the first few cities serially so broken auth or a
+    # provider-wide outage fails fast before the scheduled job fans out.
+    probe_count = min(len(selected), STRICT_REPEATED_FAILURE_LIMIT) if strict else 0
+    for index, city in enumerate(selected[:probe_count]):
+        try:
+            idx, reading = fetch_one(index, city)
+        except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+            handle_failure(exc)
+            continue
+        readings_by_index[idx] = reading
+
+    remaining = list(enumerate(selected[probe_count:], start=probe_count))
+    if worker_count <= 1:
+        for index, city in remaining:
+            try:
+                idx, reading = fetch_one(index, city)
+            except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+                handle_failure(exc)
+                continue
+            readings_by_index[idx] = reading
+    elif remaining:
+        with ThreadPoolExecutor(max_workers=min(worker_count, len(remaining))) as executor:
+            futures = {
+                executor.submit(fetch_one, index, city): index
+                for index, city in remaining
+            }
+            for future in as_completed(futures):
+                try:
+                    idx, reading = future.result()
+                except (KeyError, TypeError, ValueError, requests.RequestException) as exc:
+                    handle_failure(exc)
+                    continue
+                readings_by_index[idx] = reading
+
+    readings = [reading for reading in readings_by_index if reading is not None]
     if strict and not readings:
         detail = (
             f"; first error: {first_failure_detail}"
@@ -167,6 +204,18 @@ def fetch_daily_precip(
             f"({failures} failed){detail}"
         )
     return readings
+
+
+def _bounded_worker_count(max_workers: int | None, selected_count: int) -> int:
+    if selected_count <= 1:
+        return 1
+    if max_workers is None:
+        return min(DEFAULT_MAX_WORKERS, selected_count)
+    try:
+        value = int(max_workers)
+    except (TypeError, ValueError):
+        return min(DEFAULT_MAX_WORKERS, selected_count)
+    return min(max(value, 1), selected_count)
 
 
 def _diagnose_city_failure(exc: Exception) -> str:

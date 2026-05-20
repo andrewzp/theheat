@@ -916,6 +916,7 @@ function SourcesView({ sources, stats }) {
           <span>Success rate</span>
           <span>Observed</span>
           <span>Drafted</span>
+          <span>Latency</span>
           <span>Last run</span>
         </div>
         {sources.map((s) => (
@@ -930,6 +931,7 @@ function SourcesView({ sources, stats }) {
             </span>
             <span className="source-num">{s.total_observed}</span>
             <span className="source-num">{s.total_drafted}</span>
+            <span className="source-num">{s.avg_duration_ms != null ? formatDuration(s.avg_duration_ms) : "—"}</span>
             <span className="source-time">
               {s.last_run_at ? timeAgo(s.last_run_at) : "—"}
               {s.last_run_status === "failed" && (
@@ -960,7 +962,7 @@ function SourcesView({ sources, stats }) {
         }
         .source-row {
           display: grid;
-          grid-template-columns: 1.5fr 1fr 1.2fr 1fr 1fr 1.4fr;
+          grid-template-columns: 1.5fr 1fr 1.2fr 1fr 1fr 1fr 1.4fr;
           gap: 12px;
           padding: 10px 0;
           border-bottom: 1px solid #1a1a1a;
@@ -1200,32 +1202,27 @@ export default function Dashboard() {
     setRefreshing(true)
     setRefreshError(null)
     try {
-      const suppQuery = suppressionsSourceFilter
-        ? `/api/suppressions?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
-        : "/api/suppressions?limit=50"
-      const [stateRes, draftsRes, suppRes, configRes, sourcesRes] = await Promise.all([
-        fetch("/api/state"),
-        fetch("/api/drafts"),
-        fetch(suppQuery),
-        fetch("/api/config"),
-        fetch("/api/source-health"),
-      ])
-      setData(await stateRes.json())
-      const d = await draftsRes.json()
-      setDrafts(d.drafts || [])
-      if (suppRes.ok) {
-        const s = await suppRes.json()
-        setSuppressions(s.suppressions || [])
-        setSuppressionsStats(s.stats || null)
+      const dashboardUrl = suppressionsSourceFilter
+        ? `/api/dashboard?limit=50&source=${encodeURIComponent(suppressionsSourceFilter)}`
+        : "/api/dashboard?limit=50"
+      const dashboardRes = await fetch(dashboardUrl)
+      if (!dashboardRes.ok) {
+        throw new Error(`dashboard refresh failed: ${dashboardRes.status}`)
       }
-      if (configRes.ok) {
-        setModelConfig(await configRes.json())
-      }
-      if (sourcesRes.ok) {
-        const sh = await sourcesRes.json()
-        setSources(sh.sources || [])
-        setSourcesStats(sh.stats || null)
-      }
+      const payload = await dashboardRes.json()
+      setData({
+        state: payload.state,
+        stateBackend: payload.stateBackend,
+        stateError: payload.stateError,
+        runs: payload.runs || [],
+        runsError: payload.runsError,
+      })
+      setDrafts(payload.drafts?.drafts || [])
+      setSuppressions(payload.suppressions?.suppressions || [])
+      setSuppressionsStats(payload.suppressions?.stats || null)
+      setModelConfig(payload.config || null)
+      setSources(payload.sourceHealth?.sources || [])
+      setSourcesStats(payload.sourceHealth?.stats || null)
       setLastUpdated(new Date().toISOString())
     } catch (e) {
       console.error(e)

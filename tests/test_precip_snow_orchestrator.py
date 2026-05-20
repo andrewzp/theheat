@@ -64,6 +64,32 @@ def test_run_gpm_imerg_uses_default_city_cap_when_env_absent(monkeypatch):
 
     assert drafted == 0
     assert captured["max_cities"] == runner.gpm_imerg.DEFAULT_CITY_LIMIT
+    assert captured["max_workers"] == runner.gpm_imerg.DEFAULT_MAX_WORKERS
+
+
+def test_run_gpm_imerg_passes_worker_env(monkeypatch):
+    from src.orchestrator.sources import gpm_imerg as runner
+
+    bot_state = _fresh_state()
+    captured = {}
+
+    def fake_fetch_daily_precip(**kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setenv("GPM_IMERG_MAX_CITIES", "12")
+    monkeypatch.setenv("GPM_IMERG_MAX_WORKERS", "3")
+    monkeypatch.setattr(runner.gpm_imerg, "fetch_daily_precip", fake_fetch_daily_precip)
+
+    drafted = runner.run_gpm_imerg(
+        bot_state,
+        None,
+        [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+    )
+
+    assert drafted == 0
+    assert captured["max_cities"] == 12
+    assert captured["max_workers"] == 3
 
 
 def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch):

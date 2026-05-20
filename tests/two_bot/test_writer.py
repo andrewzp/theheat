@@ -610,7 +610,7 @@ class TestBundleJsonHandlesDates:
                 ),
             )
             captured["prompt"] = user_prompt + retry_suffix
-            return '{"passed": true, "failures": []}'
+            return '{"passed": true, "extracted_claims": [], "failures": []}'
 
         from src.two_bot import fact_check
         monkeypatch.setattr(fact_check, "_call_gemini", fake_call)
@@ -753,4 +753,3 @@ class TestWriterPromptHardRules:
         assert "archive_window_only" in prompt
         # The substitute phrasing must be enumerated so the model has a path
         assert "in N years" in prompt or "in the N-year" in prompt or "since" in prompt
-

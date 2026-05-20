@@ -79,6 +79,7 @@ def _signal_kind_to_category(kind: str) -> str:
 
 
 _CATEGORY_COOLDOWN_SECONDS = 24 * 60 * 60
+_SHIPPED_TWEET_TEXTS_LIMIT = 20
 
 
 def _normalize(s: str) -> str:
@@ -276,7 +277,9 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         used_era_anchors=list(memory.get("used_era_anchors", []))[-200:],
         used_peer_comparisons=list(memory.get("used_peer_comparisons", []))[-200:],
         used_framings=list(memory.get("used_framings", []))[-200:],
-        shipped_tweet_texts=[_tweet_text(row) for row in shipped_rows[:100]],
+        shipped_tweet_texts=[
+            _tweet_text(row) for row in shipped_rows[:_SHIPPED_TWEET_TEXTS_LIMIT]
+        ],
         recent_categories=recent_categories,
     )
 

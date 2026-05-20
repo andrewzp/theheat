@@ -1,5 +1,6 @@
 from datetime import date
 import re
+import time
 from unittest.mock import patch
 
 import responses
@@ -72,6 +73,34 @@ class TestGpmFetch:
 
         assert len(readings) == DEFAULT_CITY_LIMIT
         assert len(calls) == DEFAULT_CITY_LIMIT
+
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_fetch_daily_precip_parallel_fetch_preserves_input_order(self, _env, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        def fake_fetch_city_precip(**kwargs):
+            # Force completions to arrive out of order; the public result must
+            # still match input city order for deterministic downstream state.
+            if kwargs["lon"] == 0:
+                time.sleep(0.03)
+            return kwargs["lon"] + 1
+
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fake_fetch_city_precip)
+        cities = [
+            {"city": "Slow", "country": "Testland", "lat": "0", "lon": "0"},
+            {"city": "Fast", "country": "Testland", "lat": "0", "lon": "1"},
+            {"city": "Faster", "country": "Testland", "lat": "0", "lon": "2"},
+        ]
+
+        readings = fetch_daily_precip(
+            cities,
+            target_date=date(2026, 5, 14),
+            strict=False,
+            max_workers=3,
+        )
+
+        assert [reading.city for reading in readings] == ["Slow", "Fast", "Faster"]
+        assert [reading.mm_total for reading in readings] == [1.0, 2.0, 3.0]
 
     @patch("src.data.gpm_imerg.os.environ.get", return_value="")
     def test_missing_token_strict_raises_skipped(self, _env):

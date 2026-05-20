@@ -36,6 +36,54 @@ def test_record_source_health_adds_success_row():
     assert health["last_error"] is None
 
 
+def test_record_source_health_rolls_up_duration_and_funnel_metrics():
+    state = {"source_health": {}}
+
+    record_source_health(
+        state,
+        "ghcn",
+        "success",
+        timestamp="2026-05-14T10:00:00Z",
+        metrics={
+            "duration_ms": 1200,
+            "observed": 100,
+            "promoted": 4,
+            "triaged_in": 2,
+            "triaged_out": 1,
+            "writer_attempted": 1,
+            "drafted": 1,
+        },
+    )
+    record_source_health(
+        state,
+        "ghcn",
+        "degraded",
+        "late diff",
+        timestamp="2026-05-14T14:00:00Z",
+        metrics={
+            "duration_ms": 800,
+            "observed": 50,
+            "promoted": 1,
+            "triaged_in": 0,
+            "triaged_out": 1,
+            "writer_attempted": 0,
+            "drafted": 0,
+        },
+    )
+
+    health = state["source_health"]["ghcn"]
+    assert health["total_duration_ms"] == 2000
+    assert health["avg_duration_ms"] == 1000
+    assert health["max_duration_ms"] == 1200
+    assert health["total_observed"] == 150
+    assert health["total_promoted"] == 5
+    assert health["total_triaged_in"] == 2
+    assert health["total_triaged_out"] == 2
+    assert health["total_writer_attempted"] == 1
+    assert health["total_drafted"] == 1
+    assert health["runs"][0]["duration_ms"] == 1200
+
+
 def test_record_source_health_aggregates_multiple_statuses():
     state = {"source_health": {}}
 

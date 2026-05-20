@@ -27,6 +27,14 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # 384" — single attempt, no retry, surfaced as pipeline_error. Stochastic
 # refusal usually unblocks on a second sampling.
 JSON_PARSE_RETRY_BUDGET = 1
+_VALID_CLAIM_KINDS = {
+    "number",
+    "date",
+    "named_entity",
+    "comparison",
+    "era_anchor",
+    "peer_comparison",
+}
 
 
 def _format_failure(item) -> str:
@@ -41,7 +49,32 @@ def _format_failure(item) -> str:
     return str(item)
 
 
-def _parse_fact_check_json(raw: str) -> tuple[bool, list[str]]:
+def _parse_extracted_claims(value, *, required: bool) -> list[ExtractedClaim]:
+    if value is None:
+        if required:
+            raise ValueError("Fact-checker response must include extracted_claims")
+        return []
+    if not isinstance(value, list):
+        raise ValueError("Fact-checker extracted_claims must be a list")
+    claims: list[ExtractedClaim] = []
+    for item in value:
+        if not isinstance(item, dict):
+            raise ValueError("Fact-checker extracted_claims items must be objects")
+        text = item.get("text")
+        kind = item.get("kind")
+        if not isinstance(text, str) or not isinstance(kind, str):
+            raise ValueError("Fact-checker claims must include text and kind strings")
+        if kind not in _VALID_CLAIM_KINDS:
+            raise ValueError(f"Unsupported extracted claim kind: {kind}")
+        claims.append(ExtractedClaim(text=text, kind=kind))
+    return claims
+
+
+def _parse_fact_check_json(
+    raw: str,
+    *,
+    require_extracted_claims: bool = False,
+) -> tuple[bool, list[str], list[ExtractedClaim]]:
     try:
         parsed = loads_model_json(raw, expected="object")
     except json.JSONDecodeError as exc:
@@ -54,7 +87,15 @@ def _parse_fact_check_json(raw: str) -> tuple[bool, list[str]]:
     failures = parsed.get("failures", [])
     if not isinstance(failures, list):
         raise ValueError("Fact-checker failures must be a list")
-    return parsed["passed"], [_format_failure(item) for item in failures]
+    extracted_claims = _parse_extracted_claims(
+        parsed.get("extracted_claims", parsed.get("claims")),
+        required=require_extracted_claims,
+    )
+    return (
+        parsed["passed"],
+        [_format_failure(item) for item in failures],
+        extracted_claims,
+    )
 
 
 def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> str:
@@ -105,15 +146,21 @@ def fact_check(
     """Run strict local reuse checks, then LLM verification."""
 
     failures: list[str] = []
+    extracted = list(extracted or [])
 
     if memory.is_reuse(state, tweet, "tweet_text"):
         failures.append("reuse: tweet text duplicates shipped tweet")
 
-    for claim in extracted:
-        if claim.kind == "era_anchor" and memory.is_reuse(state, claim.text, "era_anchor"):
-            failures.append(f"reuse: era anchor '{claim.text}' already used")
-        if claim.kind == "peer_comparison" and memory.is_reuse(state, claim.text, "peer_comparison"):
-            failures.append(f"reuse: peer comparison '{claim.text}' already used")
+    def _claim_reuse_failures(claims: list[ExtractedClaim]) -> list[str]:
+        reuse_failures: list[str] = []
+        for claim in claims:
+            if claim.kind == "era_anchor" and memory.is_reuse(state, claim.text, "era_anchor"):
+                reuse_failures.append(f"reuse: era anchor '{claim.text}' already used")
+            if claim.kind == "peer_comparison" and memory.is_reuse(state, claim.text, "peer_comparison"):
+                reuse_failures.append(f"reuse: peer comparison '{claim.text}' already used")
+        return reuse_failures
+
+    failures.extend(_claim_reuse_failures(extracted))
 
     if failures:
         return FactCheckResult(
@@ -142,16 +189,22 @@ def fact_check(
                 "valid JSON. Return ONLY the JSON object specified above — "
                 "no prose before or after, no markdown fences, no chain-of-"
                 "thought. If every claim passes, return "
-                '{"passed": true, "failures": []}.]'
+                '{"passed": true, "extracted_claims": [], "failures": []}.]'
             )
         raw = _call_gemini(tweet, bundle, retry_suffix=retry_suffix)
         try:
-            passed, llm_failures = _parse_fact_check_json(raw)
+            passed, llm_failures, llm_extracted = _parse_fact_check_json(
+                raw,
+                require_extracted_claims=not extracted,
+            )
+            canonical_claims = llm_extracted or extracted
+            all_failures = list(llm_failures)
+            all_failures.extend(_claim_reuse_failures(canonical_claims))
             return FactCheckResult(
-                passed=passed,
-                failures=llm_failures,
+                passed=passed and not all_failures,
+                failures=all_failures,
                 raw_response=raw,
-                extracted_claims=extracted,
+                extracted_claims=canonical_claims,
             )
         except ValueError as exc:
             last_parse_error = str(exc)
