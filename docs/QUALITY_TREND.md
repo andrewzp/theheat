@@ -20,6 +20,11 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 | 2026-05-13 | 4 | 0 | 1 | 3 | 0 | **0%** | ✗ | First graded two-bot cycle. 3 fire drafts (Mali, Campeche, Mongolia) all used identical formula opener + seasonal-explanation structure — fire template convergence identified as new failure mode (P6). Chuuk FSM monthly_high (76-year record) is the one B: clean data, no Wodehouse violation, but expository second sentence instead of a punchline. P3 self-kill failure not observed (positive). FRP bundle rounding (#80) confirmed working (309.6, 364.7, 307.6 MW values clean). |
 | 2026-05-14 | 5 | 0 | 1 | 4 | 0 | **0%** | ✗ | 4 carry-overs from May 13 (grades unchanged: 1B/3C) + 1 new monthly_low (Bethel, ME — 16yr archive, 1°F margin) graded C. Cold-record quality floor identified: writer over-passes shallow-archive cold records that fail the editorial bar Andrew established (Mankato reject May 11). No named mechanics across all 5 drafts. P5 confirmed in two-bot context for 4th consecutive cycle (Apr 25, Apr 27, May 13, May 14). P6 empirical test still pending (fire drafts pre-date PR #89 fix). |
+| 2026-05-15 | 10 | 1 | 5 | 4 | 0 | **10%** | ✗ | First coral_bleaching cycle (8 of 10 drafts); 1 fire (BC, P6 fix confirmed — different opener); 1 monthly_low (Bethel Maine B-). Galapagos A- = first A-grade in two-bot corpus (ratio framing + buffer-failure system clause). 7/8 coral drafts identical two-sentence template → P7 added. ~~P2~~ FRP rounding moved to Resolved (2 clean cycles). ~~P3~~ fire self-kill 3rd cycle without observation (approaching Resolved). P5 (name humor moves) now 4 cycles evidence. |
+| 2026-05-16 | 10 | 1 | 4 | 5 | 0 | **10%** | ✗ | First coral_bleaching cycle. 8 coral drafts; 7 template-converge on DHW-explanation structure (new failure mode P7). Galapagos earns A- (24.5°C-weeks = double mortality threshold; cold upwelling buffer framing = ecosystem incongruity). Austral Islands B+ (geographic expansion framing). BC fire breaks formula opener — P6 fix confirmed empirically. No Wodehouse violations. No P3 fire self-kills (2nd consecutive). 10 new drafts; 4 carryovers from May 13 not re-counted. |
+| 2026-05-17 | 14 | 1 | 7 | 6 | 0 | **7%** | ✗ | 14 pending: 4 carry-over fire/record from May 12-13, 1 monthly_low (Bethel Maine), 1 fire (BC), 8 coral_bleaching (first appearance of signal type). Single A-: Galapagos coral (24.5°C-weeks, double mortality tier; cold-upwelling incongruity + "stress accumulates fast" deadpan closer). 3 B+: Madagascar coral + Austral Islands coral (location-specific second sentences doing real work) + Chuuk carry-over. DHW explanation convergence: 5 of 8 coral drafts use near-identical second-sentence explanation by draft [10]; new failure mode → P7 added. BC fire [6] confirms PR #85 opener-variety fix working but "today" baked in (stale). Fire carry-overs [1]/[2]/[4] also stale (4-5 days; operator-reject needed). P5 cycles updated (4 cycles). F3 critic (PR #120) now in pipeline; unclear whether coral batch passed through it. |
+| 2026-05-18 | 12 | 1 | 7 | 3 | 0 | **9%** | ✗ | First coral bleaching batch (9 drafts). Template convergence: 8 of 9 coral drafts share identical 2-sentence structure; 4 use near-verbatim DHW-persistence formula as second sentence. Costa Rica Pacific (A-): "heat that builds has nowhere to drain" — best closer since Apr 26 Mali. Galapagos (B+, score 88): strongest signal but conditional closer costs the A-. P3 self-kills and P4 Wodehouse violations both absent (fixes holding). Triage ON (PR #134, 2026-05-17) — sub-threshold coral drafts (7.2, 4.4°C-weeks) in this queue predate triage; expect fewer in next cycle. New proposals: coral bleaching template convergence (P6) + DHW formula over-deployment (P7). Staleness: 4 fire drafts flagged (BC explicit "today" + 3 fire "is radiating" >5 days); bulk-reject skipped — `gh` CLI unavailable; operator must use dashboard. |
+| 2026-05-19 | 14 | 3 | 6 | 5 | 0 | **21%** | ✗ | First graded coral_bleaching batch (9 drafts). 3 A-: Madagascar (DHW contrast-reveal "persistence is what kills"), Galapagos (upwelling-failure + double mortality threshold), Costa Rica Pacific (no-upwelling "nowhere to drain"). 4 B+: Fiji/Nauru/Austral Islands coral + Siberia fire (P6 template broken; timing incongruity embedded). 2 B-: Bethel ME monthly_low + Stahl Peak snow extreme (5× record understated). 5 C/C+: 2 sub-threshold coral + Southern Borneo (low floor threshold) + Nooksack (station artifact "Mf Nooksack") + BC fire (stale). New proposals: P7 coral opener formula convergence, P8 snow ratio as punchline. P5 partially confirmed (fire drafts lack named mechanics). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -29,6 +34,64 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-19 — Staleness bulk-reject: skipped (gh CLI not found in cloud env)
+
+**Why:** 1 draft identified for staleness rejection: `draft_20260514_211447_164` (BC fire,
+"burning today" baked from 2026-05-14T21:14Z — 114 hours old at grading). Bulk-reject
+attempted via `gh api -X PATCH gists/...` — `gh` command not found in managed remote
+execution environment. Operator action required: reject `draft_20260514_211447_164` via
+dashboard or direct Gist edit. Additional observation: 7 coral drafts (Drafts 7–13) are
+4–7 days old with present-tense DHW accumulation claims ("has accumulated X°C-weeks") that
+may no longer reflect current DHW values; they lack explicit "today" language and were not
+bulk-rejected per policy, but operator should review for accuracy before posting.
+
+### 2026-05-18 — Staleness bulk-reject: skipped (`gh` CLI unavailable)
+
+**Why:** 4 fire drafts are > 48 hours old with real-time-baked content and should be
+rejected. Stale candidates:
+
+| Draft ID | Created | Age | Staleness flag |
+|---|---|---|---|
+| `draft_20260512_180320_159` | 2026-05-12T18:03Z | 141h | Present-tense "is radiating" — active fire signal, almost certainly ended |
+| `draft_20260512_212510_160` | 2026-05-12T21:25Z | 138h | Present-tense "is radiating" — same |
+| `draft_20260513_103313_162` | 2026-05-13T10:33Z | 124h | Present-tense "is radiating" — same |
+| `draft_20260514_211447_164` | 2026-05-14T21:14Z | 90h | Explicit "burning today" — directly date-baked |
+
+Bulk-reject attempted via `gh api -X PATCH` — `gh` CLI not installed in this execution
+environment. Operator must manually reject these 4 drafts via the dashboard bulk-reject
+API or individual reject buttons. Coral bleaching drafts (7–14, 82–84h old, created
+2026-05-15) were evaluated but NOT flagged: DHW accumulation is a multi-week metric with
+no "today" or "forecast" language; the general fact (reef system reached X°C-weeks) remains
+valid. Temp-record drafts (Bethel Maine, Chuuk FSM) also not flagged: specific past dates
+("hit 28°F on May 9") are historical records, not "forecast to hit today."
+
+### 2026-05-17 — Staleness bulk-reject: skipped (gh CLI unavailable)
+
+**Stale drafts identified (4):**
+- `draft_20260512_180320_159` — Mali fire, "is radiating", created May 12 (~119h old)
+- `draft_20260512_212510_160` — Campeche fire, "is radiating", created May 12 (~117h old)
+- `draft_20260513_103313_162` — Mongolia fire, "is radiating", created May 13 (~102h old)
+- `draft_20260514_211447_164` — BC fire, "burning today" (explicit date baked), created May 14 (~66h old)
+
+**Why skipped:** `gh` CLI not installed in this remote execution environment. Gist write not
+possible. Operator should bulk-reject these four fire drafts via the dashboard. The Chuuk and
+Bethel drafts are NOT stale — they reference historical observation dates (May 9), not "today."
+Coral bleaching drafts [7]-[14] are ~60-70h old but contain no real-time-baked date language.
+
+### 2026-05-16 — Staleness bulk-reject: skipped (no qualifying drafts; gh CLI unavailable)
+
+**Why:** 14 pending drafts reviewed. No draft meets both criteria (>48h AND real-time-baked
+content). Draft [6] BC fire has "burning today" language but is only ~42 hours old at grading
+time (created 2026-05-14T21:14Z). Drafts [1]-[4] are >48h old but use present-tense satellite
+detection framing without "today/tonight/forecast" language — per the May 13 grading agent's
+precedent, these do not trigger the staleness policy. Gist write skipped: `gh` CLI not available
+in the remote execution environment. Operator should bulk-reject via dashboard if manual staleness
+cleanup is desired on drafts [1]-[4] (Mali, Campeche, Chuuk, Mongolia, all May 12-13).
+
+### 2026-05-15 — Staleness bulk-reject: not applicable + gist write blocked
+
+**Why not applicable:** 14 pending drafts reviewed. Drafts 1-4 (carryovers, 2-3 days old) use present-tense satellite-detection framing with no "today"-baked content; Chuuk "May 9" is an observation date, not a "today" reference (same ruling as 2026-05-13 review). No draft qualifies under the "forecast-to-hit-today, dated references" criterion. **Gist write status:** `gh` CLI not available in this remote exec environment; `curl` to REST API returns 403 rate-limited. Staleness write would have been a no-op regardless.
 
 ### 2026-05-14 — Staleness bulk-reject: not needed; gh CLI unavailable
 
