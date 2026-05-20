@@ -25,6 +25,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-17 | 14 | 1 | 7 | 6 | 0 | **7%** | ✗ | 14 pending: 4 carry-over fire/record from May 12-13, 1 monthly_low (Bethel Maine), 1 fire (BC), 8 coral_bleaching (first appearance of signal type). Single A-: Galapagos coral (24.5°C-weeks, double mortality tier; cold-upwelling incongruity + "stress accumulates fast" deadpan closer). 3 B+: Madagascar coral + Austral Islands coral (location-specific second sentences doing real work) + Chuuk carry-over. DHW explanation convergence: 5 of 8 coral drafts use near-identical second-sentence explanation by draft [10]; new failure mode → P7 added. BC fire [6] confirms PR #85 opener-variety fix working but "today" baked in (stale). Fire carry-overs [1]/[2]/[4] also stale (4-5 days; operator-reject needed). P5 cycles updated (4 cycles). F3 critic (PR #120) now in pipeline; unclear whether coral batch passed through it. |
 | 2026-05-18 | 12 | 1 | 7 | 3 | 0 | **9%** | ✗ | First coral bleaching batch (9 drafts). Template convergence: 8 of 9 coral drafts share identical 2-sentence structure; 4 use near-verbatim DHW-persistence formula as second sentence. Costa Rica Pacific (A-): "heat that builds has nowhere to drain" — best closer since Apr 26 Mali. Galapagos (B+, score 88): strongest signal but conditional closer costs the A-. P3 self-kills and P4 Wodehouse violations both absent (fixes holding). Triage ON (PR #134, 2026-05-17) — sub-threshold coral drafts (7.2, 4.4°C-weeks) in this queue predate triage; expect fewer in next cycle. New proposals: coral bleaching template convergence (P6) + DHW formula over-deployment (P7). Staleness: 4 fire drafts flagged (BC explicit "today" + 3 fire "is radiating" >5 days); bulk-reject skipped — `gh` CLI unavailable; operator must use dashboard. |
 | 2026-05-19 | 14 | 3 | 6 | 5 | 0 | **21%** | ✗ | First graded coral_bleaching batch (9 drafts). 3 A-: Madagascar (DHW contrast-reveal "persistence is what kills"), Galapagos (upwelling-failure + double mortality threshold), Costa Rica Pacific (no-upwelling "nowhere to drain"). 4 B+: Fiji/Nauru/Austral Islands coral + Siberia fire (P6 template broken; timing incongruity embedded). 2 B-: Bethel ME monthly_low + Stahl Peak snow extreme (5× record understated). 5 C/C+: 2 sub-threshold coral + Southern Borneo (low floor threshold) + Nooksack (station artifact "Mf Nooksack") + BC fire (stale). New proposals: P7 coral opener formula convergence, P8 snow ratio as punchline. P5 partially confirmed (fire drafts lack named mechanics). |
+| 2026-05-20 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 18 carry-overs from May 12–18, all previously graded. Draft [18] (Siberia fire "today") newly crosses 48h staleness threshold (~69h). 5 fire drafts total await operator rejection (Drafts 1, 2, 4, 6, 18). No new proposals; no active proposal evidence updates. Triage ON; no-draft cause unconfirmed (triage-cap/score-gate/writer-kill cascade possible — operator should check suppression ledger). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -34,6 +35,18 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-20 — Staleness bulk-reject: skipped (gh CLI unavailable); Draft 18 newly stale
+
+**Why:** `draft_20260518_180600_112` (Siberia fire, "detected in eastern Siberia today",
+created 2026-05-18T18:06Z) crosses the 48-hour threshold for the first time (~69h old at
+grading). Explicit "today" language = staleness-positive. Added to operator reject list.
+`draft_20260514_211447_164` (BC fire, "burning today") remains flagged from prior cycles
+(7 days old). Fire drafts `draft_20260512_180320_159` (Mali), `draft_20260512_212510_160`
+(Campeche), `draft_20260513_103313_162` (Mongolia) are ~180–192h old with present-tense
+satellite detection framing — operator should reject all three via dashboard.
+Bulk-reject attempted via `gh api -X PATCH` — `gh` CLI not installed in remote execution
+environment. All 5 require operator dashboard action.
 
 ### 2026-05-19 — Staleness bulk-reject: skipped (gh CLI not found in cloud env)
 

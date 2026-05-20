@@ -8,11 +8,11 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `13f8d64` (source-to-triage gateway merged on main; daily grading state reflects the May 19 corpus snapshot) |
+| Bot commit | `13f8d64` (source-to-triage gateway merged on main; daily grading state reflects the May 20 corpus snapshot) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + triage stage live** (Sonnet 4.6 writer prompt-cached + Gemini fact-checker + Gemini 2.5 Pro critic; triage active for `coral_dhw` via PR #134; `THEHEAT_TRIAGE_ENABLED=1` in CI) |
-| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era) |
+| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-05-20; prior cycle: **21%** on 2026-05-19) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **29 pp** (50% − 21%) |
+| Gap | **N/A** this cycle; 29 pp standing from 2026-05-19 (50% − 21%) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -259,7 +259,10 @@ cleaner voice. The writer has no self-kill gate for weak cold records the way it
 strong self-kill instincts for low-confidence fire framings.
 
 **Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
-**Last seen:** May 14.
+**Last seen:** May 14. **Note (2026-05-20):** No cold-record signals have appeared in the
+pending queue since May 14. The failure mode cannot be re-observed until a `monthly_low` or
+`country_low` draft reaches pending. Retirement clock not started — signal type absent, not
+failure mode resolved.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 cold-record framing section:
@@ -396,17 +399,21 @@ separate curation path to investigate in the two-bot writer.
 
 ### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
-**Updated 2026-05-19:** Two-bot baseline now measurable across two graded cycles (May 13:
-0/4 = 0%; May 19: 3/14 = 21%). Cumulative: 3 A / 18 drafts = 17% A-rate on first two-bot
-graded drafts. First A-grades are coral_bleaching (3 of 3 A-grades came from new category
-on 2026-05-19). Fire and monthly_high categories have not yet produced an A-grade in the
-two-bot era. Voice engine history (v2: 43%; v2.5: 9%) remains reference only — pipeline
-dead.
+**Updated 2026-05-20:** May 20 = 0 fresh drafts (no new graded cycle). Two-bot baseline
+across two graded cycles remains: May 13: 0/4 = 0%; May 19: 3/14 = 21%; May 20: N/A.
+Cumulative: 3 A / 18 gradable drafts = 17% A-rate. First A-grades are coral_bleaching
+(all 3 came from that category on 2026-05-19). Fire and monthly_high categories have not
+yet produced an A-grade in the two-bot era. No new drafts entered the queue between
+May 18T18:06Z and the May 20 grading run; triage + pipeline kills appear to be suppressing
+signals before they reach pending. Voice engine history (v2: 43%; v2.5: 9%) remains
+reference only — pipeline dead.
 
 **Watch for:** whether fire category closes the gap between the May-13 0% and the coral
 batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories
 are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
-suppressing A-grade candidates before they reach pending.
+suppressing A-grade candidates before they reach pending. Whether two consecutive no-draft
+cycles appear — that pattern would warrant checking the suppression ledger for triage-cap
+or score-gate over-filtering.
 
 ## Resolved (archive)
 
