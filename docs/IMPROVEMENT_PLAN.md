@@ -8,13 +8,13 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `48ee110` (PR #82 — four production fixes; latest on origin/main 2026-05-12 evening) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + length+JSON retries** (Sonnet 4.6 writer + Gemini fact-checker; `src/voice/generator.py` dead since 2026-05-04; writer wrapped in retry+kill guardrails since 2026-05-12) |
-| Last cycle A-rate | — (May 12, 0 pending drafts because every alerts run today killed; 18:39 UTC is the first run with #82's four fixes) |
+| Bot commit | `dc25f7b` (PR #121 — JSON-parse retry for fact_check + critic; latest on origin/main 2026-05-21) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + F3 editorial critic** (Sonnet 4.6 writer + Gemini fact-checker + Gemini 2.5 Pro critic; `src/voice/generator.py` dead since 2026-05-04; F3 critic added PR #120 2026-05-15; WORLD_KNOWLEDGE fact-check widened PR #119) |
+| Last cycle A-rate | **7%** (May 21; 1/14 new drafts; first A-grade from two-bot pipeline: Costa Rica coral 12.0 DHW, A-) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | 50 pp (last measured Apr 29; current cycle unmeasurable) |
+| Gap | 43 pp |
 | Posting | paused until bar cleared |
-| Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
+| Coverage | **638 cities × 180 countries** |
 
 ## Active proposals
 
@@ -217,23 +217,83 @@ next daily grading agent run (A-rate lift target: >50% sustained).
 Gemini converged on the most-explicit ones (era anchors). Unnamed mechanics (idiom-flip,
 accelerating-warming, ecosystem specificity) appeared inconsistently. In the two-bot
 context, the Sonnet writer also defaults to the most-stated patterns unless the full
-palette is named.
+palette is named. **May 13 two-bot confirmation:** all four graded drafts had no named
+comic mechanic operating (P6 fire template + expository system clauses). **May 21
+confirmation:** 13 of 14 new drafts have no named comic mechanic. The one A-grade
+(Costa Rica) used comparative framing + understatement closer — both are in the named
+palette but are not yet explicitly listed in the writer prompt. The B+ Siberia fire used
+a timing-race framing that is close to the timing-anomaly pattern but also unnamed.
 
-**Cycles observed:** Apr 25, Apr 27 (2 cycles; era anchor over-deployment + mechanic
-convergence).
-**Last seen:** Apr 27 (pending two-bot confirmation once record drafts reach pending).
+**Cycles observed:** Apr 25, Apr 27, May 13, May 21 (4 cycles; mechanic convergence
+confirmed in two-bot pipeline across fire, coral_bleaching, snow_extreme, monthly types).
+**Last seen:** May 21.
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
-period-and-restate (Anchorage move), deadpan delivery, accelerating-warming, era anchor,
+period-and-restate (Anchorage move), deadpan delivery, accelerating-warming,
+**comparative framing** (name the system that normally prevents this), era anchor,
 ecosystem-specific specificity. Conclude: *"None of these are mandatory. When the number
 alone is striking, deliver the data plainly. Forced humor breaks the spell."*
 
+The A-grade Costa Rica draft provides a concrete positive exemplar: mortality-tier DHW,
+Galápagos cold-upwelling contrast, "heat that builds has nowhere to drain." This is the
+comparative-framing + understatement-closer combination. Worth adding as an approved
+exemplar once the operator confirms the Costa Rica draft is A-quality.
+
 **Expected impact:** Richer move palette → more variety across drafts → less convergence
-on the easy default.
+on the easy default. Currently the B→A gap is primarily the absence of a named closing
+move. Naming the palette should lift the ceiling without changing the floor (which the
+F3 critic now guards).
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. **Evidence base
+is now 4 cycles — highest-leverage unimplemented proposal.**
+
+### P6-coral — Coral bleaching type template convergence
+
+**Observed:** May 21 cycle — 7 of 8 coral bleaching drafts in the pending queue use an
+identical or near-identical sentence-1: "[Location]'s reefs have accumulated X.X°C-weeks
+of thermal stress — [threshold/alert-level frame]" (or colon-lead variant with the same
+threshold frame). This is the direct analog of the fire template convergence (original
+P6) that shipped in PR #85.
+
+**Cycles observed:** May 21 (1 cycle; 7 of 8 coral drafts template-convergent).
+**Last seen:** May 21.
+
+**Context:** The F3 critic's system prompt explicitly names this failure mode: *"Six
+coral drafts opening '[Place]'s reefs have accumulated X.X°C-weeks of thermal stress —
+past the Y°C-week threshold…' is the failure mode."* The May 15 coral batch pre-dates
+the F3 critic's deployment (drafts created 2026-05-15 03:01–05:20Z; critic went live
+~05:11Z); they entered pending without critic review and are now historical artifacts in
+the queue. For new runs, the critic will kill template-convergent duplicates at runtime.
+However: the writer needs variety guidance to produce multiple non-convergent options
+per run, so the critic has something to choose among rather than killing most of them.
+
+**Proposed fix:** Add a coral_bleaching variety section to
+`src/two_bot/prompts/writer_prompt.py` analogous to the fire-variety guidance in
+PR #85. Four alternative sentence-1 forms with full example tweets:
+1. Lead with DHW number and threshold contrast in one beat:
+   *"Galapagos, Ecuador reefs: 24.5°C-weeks of thermal stress — double the mortality
+   tier."*
+2. Lead with the ecological role of the location:
+   *"The Galápagos sits where cold upwelling normally buffers equatorial heat. That
+   buffer has accumulated 24.5°C-weeks of thermal stress."*
+3. Lead with the consequence (bleaching vs mortality distinction):
+   *"At 12.0°C-weeks of thermal stress, Costa Rica's Pacific reefs are in the coral
+   mortality tier — past bleaching, into die-off."*
+4. Lead with the system that normally prevents this (comparative framing):
+   *"Costa Rica's Pacific coast lacks the cold upwelling that buffers the Galápagos.
+   Its reefs have accumulated 12.0°C-weeks of thermal stress."*
+
+Close with: *"The '[Location] has accumulated X°C-weeks' formula is spent. If no
+alternative form works, check whether the DHW value is extraordinary enough to ship —
+the critic will kill a template echo even if the data is real."*
+
+**Expected impact:** Variety guidance → multiple distinct opener forms per run → the
+critic can pass the strongest one and kill the rest rather than killing most of them
+because they echo each other. Analogous to the fire-variety fix in PR #85.
+
+**Status:** Drafted. Awaiting human implementation.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -298,13 +358,20 @@ separate curation path to investigate in the two-bot writer.
 ### A2 — Two-bot writer sample-size baseline (replaces v2.5 sample-size question)
 
 The voice engine history (v2: 43% A-rate on 7 drafts; v2.5: 9% on 11 drafts) is no
-longer relevant — that pipeline is dead. The two-bot writer is the new baseline. Zero
-graded drafts from two-bot have reached the corpus so far (May 12 queue empty; all prior
-two-bot drafts were rejected before pending or have `evaluator_pass=None`).
+longer relevant — that pipeline is dead. The two-bot writer is the new baseline.
 
-**Watch for:** first two-bot drafts to reach pending and get graded. A-rate on first 10+
-two-bot drafts establishes the new baseline. Expect different failure modes than the
-voice engine (no era anchor over-deployment; potentially different Wodehouse profile).
+**Baseline so far (2 graded cycles):**
+- May 13: 0/4 A-grade (0%) — pre-critic; fire template convergence dominant failure mode
+- May 21: 1/14 A-grade (7%) — post-critic for May 18 sub-batch; coral template
+  convergence in May 15 pre-critic sub-batch; first A-grade observed
+
+Cumulative: 1/18 graded two-bot drafts are A-grade (5.6%). Pre-critic floor: 0%.
+Post-critic floor: some B drafts passing, 1 A. The F3 critic has been live for <1 week;
+need 3+ more graded cycles to assess its sustained impact on the A-rate.
+
+**Watch for:** A-rate trajectory on post-critic-only cycles (May 18+ drafts). If A-rate
+stays at 0–7% for 2+ more cycles, the ceiling constraint (not floor) is confirmed as
+the binding problem — which is what P5 addresses.
 
 ## Resolved (archive)
 

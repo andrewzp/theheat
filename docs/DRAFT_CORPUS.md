@@ -13,6 +13,417 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-21 — First post-critic cycle, new signal types (14 new drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
+drafts total — 4 are May 12–13 carryovers already graded in the 2026-05-13 corpus section
+(Mali fire C+, Campeche fire C, Chuuk monthly_high B, Mongolia fire C; still pending, not
+published or rejected). This entry grades the 14 new drafts (5–18) created since then.
+
+**Pipeline state:** Two notable additions since the May 13 cycle: (1) **PR #119** widened
+the WORLD_KNOWLEDGE fact-check gate so the writer's external knowledge (geographic
+mechanisms, climate system descriptions) can ship without a data-bundle anchor.
+(2) **PR #120** added the **F3 second-pass editorial critic** (Gemini 2.5 Pro, PASS/KILL
+only, no rewrite) as the final gate before the human-approval queue. The F3 critic went
+live ~2026-05-15T05:11Z. The May 15 coral batch (drafts 7–14) was created 03:01–05:20Z
+on the same day — mostly in the same cron cycle that preceded deployment — and reached
+pending **without critic review**. The May 18 batch (drafts 15–18) was created three days
+later and passed the critic. **PR #121** added JSON-parse retry for fact_check and critic.
+
+**Grade distribution (14 new drafts):** 1 A, 8 B-range, 5 C-range, 0 D/F.
+**A-rate: 7% (1/14).** Gap from resumption bar: 43 points.
+
+### Per-draft
+
+#### [5] Bethel, Maine monthly_low — 28°F / -2.2°C — **B-**
+
+> *Bethel, Maine hit 28°F (-2.2°C) on May 9 — coldest May low in 16 years of records, a
+> degree below the 2017 mark. The upper Androscoggin Valley sits in a bowl surrounded by
+> the White Mountain foothills; cold air drains into it on still nights and holds.*
+
+**Score:** 80 (threshold 76). Created 2026-05-13T21:29Z.
+
+Humor lens:
+- **Violation:** Coldest May low in 16 years. Present.
+- **Benign?** Yes — factual, calm.
+- **Setup→Punchline?** Data is setup. Second sentence is geographic mechanism: why the
+  valley records cold extremes. No punchline.
+- **Named mechanic?** None. Ecosystem specificity (bowl topography, cold air drainage).
+- **Wodehouse rule?** Clean. No restate-padding, no defensive justification, no
+  approximation-when-exact-available.
+
+Voice spec met: specific location, both scales (°F/°C), observation date (May 9),
+archive depth (16 years), prior record year (2017), margin (1 degree). The geographic
+second sentence is competent — "cold air drains into it on still nights and holds" is a
+mechanism, not just a description. But 16-year archive is shallow, the 1°F margin is
+small, and cold records in May carry less editorial weight than heat records. No named
+mechanic operating. B- for meeting the spec without landing a punch.
+
+#### [6] British Columbia fire — 426.8 MW — **C+**
+
+> *British Columbia has a 426.8 MW fire burning today, satellite-detected at 95%
+> confidence — high-intensity tier. The Rocky Mountain Trench funnels downslope winds
+> that can accelerate spread before spring humidity builds.*
+
+**Score:** 66 (threshold 64). Created 2026-05-14T21:14Z.
+
+Humor lens:
+- **Violation:** 426.8 MW high-intensity fire. Present.
+- **Benign?** Yes.
+- **Setup→Punchline?** Data is setup. Second sentence: geographic wind mechanism.
+  Explanation, not punchline.
+- **Named mechanic?** None. Ecosystem specificity (Rocky Mountain Trench, downslope
+  winds).
+- **Wodehouse rule?** Clean. "can accelerate spread" hedges slightly but not a
+  try-hard signal.
+
+Two improvements over the May 13 fire formula (P6): different opener structure
+("has a 426.8 MW fire burning today" vs. "is radiating X MW"), and uses the FRP
+tier label ("high-intensity tier"). "today" is baked into the text — draft is 7 days
+old and stale per the 48-hour policy. Second sentence is geographic explanation
+without a kicker. C+ for opener variety and tier label, held back by "today" staleness
+and no punchline.
+
+**Staleness flag:** "today" baked in; created 2026-05-14, >48h old. Bulk-reject
+candidate.
+
+#### [7] Western Madagascar coral bleaching — 10.2 DHW — **B**
+
+> *Western Madagascar's reef system has accumulated 10.2°C-weeks of thermal stress —
+> past the 8°C-week threshold where mass bleaching is expected. Corals can survive brief
+> spikes; DHW measures how long heat persists, and persistence is what kills.*
+
+**Score:** 81 (threshold 76). Created 2026-05-15T03:01Z.
+
+Humor lens:
+- **Violation:** 10.2 DHW past the 8°C-week mass-bleaching threshold. Real signal.
+- **Benign?** Yes — calm, factual register.
+- **Setup→Punchline?** Second sentence teaches the DHW metric while landing a point:
+  "persistence is what kills." Setup = "corals can survive brief spikes." Punchline =
+  "persistence is what kills." The pivot has setup-punchline shape.
+- **Named mechanic?** Near-understatement: "persistence is what kills" is direct, final,
+  bare. The closest thing to a voice punch in the coral batch.
+- **Wodehouse rule?** Clean.
+
+First coral bleaching draft in the corpus. The DHW framing requires explanation for
+general audiences; this draft delivers it efficiently and ends with a punchy phrase.
+"Persistence is what kills" does more work than a pure geography line. B for competent
+new signal type with a functional closing move; withheld from B+ because the mechanic
+is implicit rather than fully landed.
+
+#### [8] Fiji coral bleaching — 10.1 DHW — **B-**
+
+> *Fiji's reefs have accumulated 10.1°C-weeks of thermal stress — past the 8°C-week
+> threshold where mass bleaching is expected. The South Pacific Convergence Zone keeps
+> waters here warm; sustained heat above the tolerance ceiling is what turns stress into
+> die-off.*
+
+**Score:** 81 (threshold 76). Created 2026-05-15T03:02Z.
+
+Same opener structure as Draft [7]: "[Location]'s reefs have accumulated X.X°C-weeks
+of thermal stress — past the N°C-week threshold where mass bleaching is expected."
+Second sentence adds geographic context (SPCZ) then a mechanism statement: "sustained
+heat above the tolerance ceiling is what turns stress into die-off." The SPCZ
+specificity is valid; the closer is longer and more technical than Draft [7]'s
+"persistence is what kills." Template convergence beginning: same sentence-1 as Draft
+[7], same threshold frame, similar mechanism closer. B- for the softer closer and
+onset of template pattern.
+
+#### [9] Nauru coral bleaching — 8.2 DHW — **C+**
+
+> *Nauru's reefs have accumulated 8.2°C-weeks of thermal stress — past the 8°C-week
+> threshold where mass bleaching is expected. DHW measures heat duration, not just
+> intensity; it's persistence above the tolerance ceiling that kills coral.*
+
+**Score:** 80 (threshold 76). Created 2026-05-15T03:04Z.
+
+Third instance of identical sentence-1 structure. Second sentence: "DHW measures heat
+duration, not just intensity; it's persistence above the tolerance ceiling that kills
+coral." This is explicit metric explanation. "Not just intensity" contrast is a common
+science-communication shape. The phrase "kills coral" echoes Draft [7]'s "kills"
+closer but is more diluted ("that kills coral" vs. "persistence is what kills"). Third
+coral draft with the same opener formula. Template convergence confirmed. C+ for the
+formula repetition, narrowly above C because the second sentence does explain the metric.
+
+#### [10] Great Nicobar, India coral — 7.2 DHW — **C**
+
+> *Great Nicobar, India: 7.2°C-weeks of thermal stress — Bleaching Alert Level 1,
+> closing in on the 8°C-week threshold where mass bleaching is expected. DHW measures
+> heat persistence, not just intensity; it is duration above the tolerance ceiling that
+> kills coral.*
+
+**Score:** 75 (threshold 74). Created 2026-05-15T03:47Z.
+
+Below the 8°C-week mass-bleaching threshold (7.2 DHW = Alert Level 1, not mass
+bleaching expected). The framing acknowledges this: "closing in on 8." Second sentence
+is nearly identical to Draft [9]'s second sentence. Fourth coral draft. Opener shifted
+to a colon structure ("Great Nicobar, India: 7.2°C-weeks") which is different from
+"has accumulated" — slight variety. But below-threshold signal + repeated DHW
+explanation = C.
+
+#### [11] Chagos Archipelago coral — 7.2 DHW — **C**
+
+> *Chagos Archipelago reefs have accumulated 7.2°C-weeks of thermal stress — Bleaching
+> Alert Level 1, approaching the 8°C-week threshold where mass bleaching is expected.
+> DHW counts how long heat persists above the tolerance ceiling; proximity to 8 is what
+> matters.*
+
+**Score:** 75 (threshold 74). Created 2026-05-15T03:48Z.
+
+Below-threshold, same 7.2 DHW as Draft [10]. Opener reverts to "has accumulated"
+structure. Second sentence: "proximity to 8 is what matters" is a slight variation —
+has some edge compared to the previous iteration's metric explainer. But fifth coral
+draft with the same general opener shape and below-threshold signal. C.
+
+#### [12] Southern Borneo coral — 4.4 DHW — **C**
+
+> *Southern Borneo's reefs have reached 4.4°C-weeks of thermal stress — crossing the
+> 4°C-week floor where bleaching begins. Borneo sits at the heart of the Maritime
+> Continent, where warm seas and island topography drive the convection that keeps
+> surrounding waters persistently hot.*
+
+**Score:** 74 (threshold 74). Created 2026-05-15T03:55Z.
+
+Floor-crossing (4.4 DHW, bleaching-watch level), not threshold-exceeded. Sixth coral
+draft. Second sentence is geographic: "Borneo sits at the heart of the Maritime
+Continent" — Maritime Continent is a real climate-science term, and the
+island-topography/convection framing is specific. But the geographic context explains
+why Borneo is warm in general; it doesn't explain why this reading matters now or what
+the floor-crossing signals. C for lowest-tier signal + geographic-explanation second
+sentence.
+
+#### [13] Galapagos coral bleaching — 24.5 DHW — **B+**
+
+> *Galapagos, Ecuador reefs: 24.5°C-weeks of thermal stress — double the 12°C-week
+> tier where coral mortality is expected. The Galapagos sits where cold upwelling
+> normally buffers heat; when that buffer fails, stress accumulates fast.*
+
+**Score:** 88 (threshold 74). Created 2026-05-15T05:16Z.
+
+Strongest coral draft by signal magnitude and framing. Three things separate this:
+1. 24.5 DHW is double the 12°C-week CORAL MORTALITY tier (not just bleaching). The
+   most extreme signal in the coral batch by a wide margin.
+2. Opener uses colon-lead ("Galapagos, Ecuador reefs: 24.5°C-weeks") — different
+   structure from the "has accumulated" pattern.
+3. "The Galapagos sits where cold upwelling normally buffers heat; when that buffer
+   fails, stress accumulates fast." — this is the first coral second sentence that
+   names a system and its failure. Establishes what should prevent this, then names
+   that it has failed. The Galapagos cold-upwelling/Darwin-biodiversity narrative is
+   real; the buffer-failure framing is doing voice work.
+
+"Stress accumulates fast" is slightly flat as a landing after "when that buffer fails"
+— the punch is set up but doesn't fully land. B+ for strongest signal, real mechanism
+framing, and genuine incongruity in the system clause. Narrowly misses A- because the
+closer doesn't complete the punch.
+
+#### [14] Austral Islands coral — 8.6 DHW — **B-**
+
+> *Austral Islands reefs: 8.6°C-weeks of thermal stress — past the 8°C-week threshold
+> where mass bleaching is expected. The Austral chain sits at the southern edge of the
+> South Pacific Convergence Zone; heat that persists this far from the warm pool signals
+> the band has stretched.*
+
+**Score:** 80 (threshold 74). Created 2026-05-15T05:20Z.
+
+Threshold-exceeded (8.6 DHW). Colon-lead opener (like Drafts [10] and [13]). Second
+sentence makes the location do voice work: southern edge of the SPCZ, "heat that
+persists this far from the warm pool." The "band has stretched" framing gestures at
+something: the SPCZ or warm-pool boundary is expanding. This is the closest the
+coral batch comes to a geographic-anomaly framing (place is the unusual part, not just
+the number). But "the band has stretched" is underdeveloped — it asserts a trend
+without quantifying it. B- for geographic voice move that doesn't quite land.
+
+#### [15] Costa Rica Pacific coral — 12.0 DHW — **A-**
+
+> *Costa Rica Pacific reefs: 12.0°C-weeks of thermal stress — at the tier where NOAA
+> Coral Reef Watch expects coral mortality. The Pacific coast here lacks the cold
+> upwelling that buffers the Galápagos; heat that builds has nowhere to drain.*
+
+**Score:** 86 (threshold 74). Created 2026-05-18T01:30Z. **Post-F3 critic.**
+
+Humor lens:
+- **Violation:** 12.0 DHW at the coral mortality tier. Strong signal.
+- **Benign?** Yes, calm authority throughout.
+- **Setup→Punchline?** "lacks the cold upwelling that buffers the Galápagos; heat that
+  builds has nowhere to drain." First clause establishes what's missing (by contrast
+  to the Galápagos); second clause lands the consequence. Setup→punchline shape.
+- **Named mechanic?** Comparative framing (Galápagos contrast) + understatement closer
+  ("nowhere to drain"). "Nowhere to drain" is British-dry understatement: the coastal
+  ecology is described as a system with no escape valve; "drain" is precise and flat.
+- **Wodehouse rule?** Clean. "nowhere to drain" does not try too hard. The comparison
+  does not overexplain.
+
+The Galápagos comparison is load-bearing: it establishes the cold upwelling mechanism
+in the reader's mind (Draft [13] introduced it) and uses it as a contrast baseline.
+"Heat that builds has nowhere to drain" is the best closer in the full pending batch.
+First A-grade from the two-bot pipeline. The critic passed it; it passes the
+stop-mid-scroll / send-it-to-a-friend bar. Deduct for A (vs. A) because the
+comparative framing relies on reader recall of Galápagos context rather than carrying
+it in full; as a standalone tweet the "buffers the Galápagos" reference assumes
+knowledge.
+
+#### [16] Nooksack, WA snow extreme — 109.2 mm SWE — **B-**
+
+> *Mf Nooksack, Washington: 109.2 mm of snow-water equivalent fell over 3 days — more
+> than double the previous blizzard record of 50.8 mm. At 1,515 m on the wet side of
+> the Cascades, this station sits where Pacific moisture stalls before the range blocks
+> it from the interior.*
+
+**Score:** 82 (threshold 76). Created 2026-05-18T03:27Z. **Post-F3 critic.**
+
+Humor lens:
+- **Violation:** 109.2 mm SWE, >2× the previous blizzard record. Real signal.
+- **Benign?** Yes.
+- **Setup→Punchline?** Second sentence: orographic geography ("Pacific moisture stalls
+  before the range blocks it"). Mechanism explanation, not a punchline.
+- **Named mechanic?** None. Ecosystem specificity (Cascades wet-side, orographic
+  forcing).
+- **Wodehouse rule?** Clean.
+
+The 2× signal is strong. Voice spec met (specific location, SWE units, elevation, 3-day
+window, prior record). Critic passed. Two deductions: (1) "Mf Nooksack" — the "Mf"
+station prefix is a data artifact, not a place name; if the station is "Mt. Baker /
+Nooksack" or similar, the tweet reads as a garbled name. (2) Second sentence explains
+the geography without landing a punch. No timing-anomaly framing (May blizzard in the
+Cascades — is this unusual for this date? The draft doesn't say). B- for meeting the
+spec without a named mechanic or timing kicker.
+
+#### [17] Stahl Peak, Montana snow extreme — 251.5 mm SWE — **B**
+
+> *Stahl Peak, Montana: 251.5 mm of snow-water equivalent fell in 3 days — nearly five
+> times the previous blizzard record of 50.8 mm. The northern Rockies funnel Pacific
+> moisture through low passes; when a storm stalls, totals compound fast.*
+
+**Score:** 82 (threshold 76). Created 2026-05-18T15:52Z. **Post-F3 critic.**
+
+Humor lens:
+- **Violation:** 251.5 mm SWE, ~5× the previous blizzard record. Very strong signal.
+- **Benign?** Yes.
+- **Setup→Punchline?** "when a storm stalls, totals compound fast" — causal chain with
+  energy. Not a punchline, but more dynamic than pure geography.
+- **Named mechanic?** None. Closest to an accelerating-rate framing ("totals compound
+  fast").
+- **Wodehouse rule?** Clean.
+
+5× the previous blizzard record is the most extreme relative signal in the snow batch.
+The second sentence is tighter than Draft [16]'s: "when a storm stalls, totals compound
+fast" has a conditional mechanism that reads more energetically than static orographic
+description. Critic passed. B for strong signal + functional second sentence; withheld
+from B+ because "totals compound fast" is explanation of mechanics, not a voice punch.
+No timing anomaly (May blizzard in northern Rockies — is this unusual?) left unexploited.
+
+#### [18] Siberia fire — 601.1 MW — **B+**
+
+> *601.1 MW of radiative heat detected in eastern Siberia today — very-high-intensity
+> fire, satellite-confirmed at 95% confidence. At this latitude, snowmelt exposes dry
+> litter fast; May fires here ignite before the understory has greened enough to resist.*
+
+**Score:** 70 (threshold 64). Created 2026-05-18T18:06Z. **Post-F3 critic.**
+
+Humor lens:
+- **Violation:** 601.1 MW very-high-intensity Siberia fire. Strong signal (top tier by
+  FRP intensity).
+- **Benign?** Yes.
+- **Setup→Punchline?** "May fires here ignite before the understory has greened enough
+  to resist" — this is near-timing-incongruity. Spring greenery is racing against fire;
+  the fire is winning. The "before" construction names the race and its outcome.
+- **Named mechanic?** Near-timing-anomaly: fire outpacing spring greenup is specific and
+  visual. Not a named comic mechanic in the traditional sense but the closest thing to a
+  functioning punchline in the fire portion of this batch.
+- **Wodehouse rule?** Clean. "601.1 MW" is exact, no approximation. "snowmelt exposes
+  dry litter fast" is direct.
+
+Best fire draft in the full pending queue. Three improvements over May 13 fire drafts:
+(1) number-first opener ("601.1 MW") breaks the P6 formula; (2) "very-high-intensity
+fire" uses the FRP tier; (3) second sentence establishes a timing race with some
+consequential weight. "today" is baked in — stale at 3 days. Grading on voice quality
+irrespective of staleness: B+. Would be A- if "today" were removed and "at this
+latitude" were replaced with a named region.
+
+**Staleness flag:** "today" baked in; created 2026-05-18, >48h old. Bulk-reject
+candidate.
+
+### Patterns named in this batch
+
+1. **Coral bleaching template convergence (new failure mode).** Seven of eight coral
+   drafts use an identical or near-identical sentence-1: "[Location]'s reefs have
+   accumulated X.X°C-weeks of thermal stress — [threshold frame]" (or colon-lead
+   variant). The F3 critic's system prompt explicitly names this pattern as a kill
+   condition ("Six coral drafts opening [same structure] is the failure mode"). However,
+   the May 15 coral batch pre-dates the critic's deployment; these drafts entered pending
+   without critic review. Going forward, the critic should kill template-convergent coral
+   drafts at the gate — but the writer needs variety guidance to produce
+   non-convergent options for the critic to choose among. Direct analog to P6 (fire
+   template convergence, shipped PR #85).
+
+2. **A-rate ceiling confirmed at B+ without named humor mechanics.** The B-range drafts
+   (8 of 14) meet the voice spec and pass the critic's bar; they have non-dead system
+   clauses and no Wodehouse violations. But none deploy a named comic mechanic. The
+   A-grade (Costa Rica) uses comparative framing + understatement closer. The B+ drafts
+   (Galapagos, Siberia) approach this but don't complete the punch. P5's named-mechanics
+   palette remains the theoretical lever to move from B to A.
+
+3. **F3 critic is lifting the floor.** May 18 post-critic drafts (Costa Rica, Nooksack,
+   Stahl Peak, Siberia) show a noticeably cleaner signal: no dead system clauses, no
+   template convergence within the May 18 run, no effort signals. The critic is working
+   as designed. May 15 pre-critic coral batch shows what the floor looks like without it
+   (6 formula openers in one run, two below-threshold readings). The floor/ceiling
+   framing: critic raises the floor; P5's named-mechanics guidance raises the ceiling.
+
+4. **First A-grade from the two-bot pipeline (Costa Rica).** The mechanic: comparative
+   framing (Galápagos contrast) + understatement closer ("nowhere to drain"). Three
+   observations: (a) the comparison made the system clause load-bearing without being
+   expository; (b) "nowhere to drain" is physically precise and dry — it names the
+   consequence without editorializing; (c) the WORLD_KNOWLEDGE widening (PR #119)
+   likely contributed — "lacks the cold upwelling that buffers the Galápagos" is exactly
+   the class of geographic knowledge-claim that #119 unlocked.
+
+5. **Snow extreme drafts pass the critic but plateau at B/B-.** Both snow drafts (Nooksack,
+   Stahl Peak) passed the critic with clean voice and non-dead system clauses, but neither
+   has a timing-anomaly kicker that would establish May as an unusual month for Cascades
+   or northern Rockies blizzards. The signal magnitude (2× and 5× records) does the
+   heavy lifting; the voice adds mechanism context without establishing incongruity.
+
+6. **Wodehouse violations: zero observed.** P4 (Wodehouse rule, PR #85) continues to
+   hold across three post-critic drafts and the pre-critic coral batch. No restate-padding,
+   no explicit-gap math, no defensive justification, no poetry-attempt closers.
+
+### Followups
+
+1. Add coral bleaching variety guidance to writer_prompt.py — analogous to the P6
+   fire-variety fix from PR #85. Four alternative sentence-1 forms for coral: lead with
+   DHW number, lead with location's ecological role, lead with consequence (bleaching vs
+   mortality distinction), lead with the buffer/upwelling system. The F3 critic kills
+   template convergence at runtime, but the writer needs options to produce varied
+   outputs for the critic to evaluate.
+2. Watch for the Costa Rica A- mechanic to recur — next time a post-critic draft uses
+   comparative framing + dry consequence closer, note whether 3+ A-grade drafts share
+   the pattern (would justify promoting the mechanic in the writer prompt per P5
+   evidence standard).
+3. Staleness: bulk-reject Draft [6] (BC fire, "today" baked, 7 days old) and Draft [18]
+   (Siberia fire, "today" baked, 3 days old). Gh CLI not available in this run; operator
+   should reject via dashboard.
+4. "Mf Nooksack" station name artifact — the "Mf" prefix should be stripped before the
+   draft is approved. Not a voice-engine issue (source data artifact); dashboard reviewer
+   should catch it.
+
+### Numbers
+
+- New drafts graded this cycle: 14 (1 monthly_low, 1 fire, 8 coral_bleaching, 2
+  snow_extreme, 1 fire + 1 coral_bleaching post-critic)
+- May 13 carryovers still pending: 4 (unchanged grades)
+- Total pending queue: 18
+- A-rate (new drafts): 7% (1/14)
+- Grade distribution: 1 A / 8 B-range / 5 C-range / 0 D/F
+- Stale bulk-reject: SKIPPED — gh CLI unavailable in this run; 2 candidates (Drafts 6,
+  18) flagged for operator action. Token scope not determinable.
+- First A-grade from two-bot pipeline: Draft [15] Costa Rica coral (A-)
+- P4 (Wodehouse rule) violations: 0
+- F3 critic confirmed passing: Drafts 15–18 (post-critic; all passed critic gate)
+- New failure mode identified: coral_bleaching template convergence
+
+---
+
 ## 2026-05-13 — First two-bot pipeline drafts graded (4 drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 4 pending

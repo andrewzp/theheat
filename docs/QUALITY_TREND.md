@@ -19,6 +19,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-04-29 | 3 | 0 | 2 | 0 | 0 | **0%** | ✗ | Three records, all using era anchors — third cycle with this pattern. User direction same day: park era anchors at 1-in-10. Voice engine v3 shipped: gate + addendum-mismatch fix + SYSTEM_PROMPT vehicle-agnostic rewrite. Next 3 cycles will show whether the gate empirically works. |
 | 2026-05-12 | 0 | — | — | — | — | **—** | ✗ | No pending drafts (queue empty). All four production kills diagnosed and fixed: PR #82 (station-name regex for `4 NE` + ANG suffix), PR #80 (FRP bundle-side rounding), PR #82 (ocean_sst User-Agent header), PR #82 (river_gauges graceful degradation). PR #76 also added writer-side length-cap retry + KILL; PR #82 added JSON-parse retry + KILL. The 18:39 UTC alerts run is the first cycle against the fixes — first chance for fresh drafts to reach pending under the new voice + guardrails. Andrew also manually rejected Mankato cold record 2026-05-11 with voice direction: "defensive 'A record is a record' closer" (now banned via PR #74 HARD RULE). |
 | 2026-05-13 | 4 | 0 | 1 | 3 | 0 | **0%** | ✗ | First graded two-bot cycle. 3 fire drafts (Mali, Campeche, Mongolia) all used identical formula opener + seasonal-explanation structure — fire template convergence identified as new failure mode (P6). Chuuk FSM monthly_high (76-year record) is the one B: clean data, no Wodehouse violation, but expository second sentence instead of a punchline. P3 self-kill failure not observed (positive). FRP bundle rounding (#80) confirmed working (309.6, 364.7, 307.6 MW values clean). |
+| 2026-05-21 | 14 | 1 | 8 | 5 | 0 | **7%** | ✗ | First post-F3-critic graded cycle. 1 A-: Costa Rica coral at 12.0 DHW mortality tier (comparative framing + "nowhere to drain" understatement closer — first A from two-bot pipeline). 8 coral bleaching drafts in queue, 7 with template-convergent openers (pre-critic May 15 batch; F3 critic was not yet deployed). Post-critic May 18 batch (4 drafts) shows cleaner floor: no dead system clauses, no Wodehouse violations. Staleness bulk-reject skipped (gh CLI unavailable); 2 candidates flagged (BC fire "today", Siberia fire "today"). New failure mode: coral_bleaching template convergence. P5 (name humor moves) confirmed as A-rate ceiling lever (4 cycles). |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -28,6 +29,22 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-21 — Staleness bulk-reject: SKIPPED (gh CLI unavailable)
+
+**Stale candidates identified:** 2 drafts contain "today" baked into their text and are
+>48 hours old:
+- `draft_20260514_211447_164` (BC fire, 7 days old): "British Columbia has a 426.8 MW
+  fire burning **today**"
+- `draft_20260518_180600_112` (Siberia fire, 3 days old): "601.1 MW of radiative heat
+  detected in eastern Siberia **today**"
+
+**Why skipped:** `gh` CLI is not installed in this execution environment. Gist write
+via `gh api -X PATCH` cannot proceed. Operator should bulk-reject both candidates via
+the dashboard. Note: no other drafts contain explicit "forecast-to-hit-today" or "It is
+[date]" baked language — the remaining 16 pending drafts use present-state framing
+(DHW accumulation, satellite-detection past tense, observation dates for records) and
+are not stale by the policy definition.
 
 ### 2026-05-13 — Staleness bulk-reject: not needed (no stale drafts)
 
