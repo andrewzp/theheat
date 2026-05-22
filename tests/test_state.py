@@ -1715,3 +1715,64 @@ class TestSqliteRoundTripDropsTriageQueue:
             "_triage_queue survived sqlite round-trip — add it to the skip-list "
             "in src/storage/sqlite_store.py::_METADATA_JSON_KEYS (or equivalent)"
         )
+
+
+class TestAutomationMerge:
+    """The routine writes state.automation; concurrent cron _merge_state must
+    preserve it. The merge rule is "current wins" because only the routine
+    writes this field; the cron's incoming snapshot is always stale relative
+    to a recent routine beacon.
+    """
+
+    def test_merge_preserves_automation_when_only_base_has_it(self):
+        """Routine wrote first; cron's later write must not erase the beacon."""
+        from src.state import _merge_state
+
+        current = {
+            "automation": {
+                "routine_last_run_at": "2026-05-22T15:04:58Z",
+                "routine_last_run_outcome": "graded",
+            }
+        }
+        incoming = {"drafts": [{"id": "draft_x", "status": "pending"}]}
+
+        merged = _merge_state(current, incoming)
+
+        assert merged.get("automation", {}).get("routine_last_run_at") == "2026-05-22T15:04:58Z"
+        assert merged.get("automation", {}).get("routine_last_run_outcome") == "graded"
+
+    def test_merge_automation_current_wins(self):
+        """When both base and incoming have automation, current (gist) wins."""
+        from src.state import _merge_state
+
+        current = {
+            "automation": {
+                "routine_last_run_at": "2026-05-22T15:04:58Z",
+                "routine_last_run_outcome": "graded",
+            }
+        }
+        incoming = {
+            "automation": {
+                "routine_last_run_at": "2026-05-21T15:00:00Z",
+                "routine_last_run_outcome": "error",
+            }
+        }
+
+        merged = _merge_state(current, incoming)
+
+        # Current (latest gist) wins
+        assert merged["automation"]["routine_last_run_at"] == "2026-05-22T15:04:58Z"
+        assert merged["automation"]["routine_last_run_outcome"] == "graded"
+
+    def test_merge_missing_automation_uses_default(self):
+        """Older gist payloads have no automation field; merge must not crash."""
+        from src.state import _merge_state
+
+        current = {}
+        incoming = {}
+
+        merged = _merge_state(current, incoming)
+
+        assert "automation" in merged
+        assert merged["automation"].get("routine_last_run_at") is None
+        assert merged["automation"].get("routine_last_run_outcome") is None

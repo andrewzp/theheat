@@ -88,6 +88,15 @@ DEFAULT_STATE: BotState = {
     # Populated from alert run telemetry so every source row gets a durable
     # health observation, not just the last 20-run dashboard window.
     "source_health": {},
+    # Routine-written + dashboard-read indicators. The daily-plan routine writes
+    # the two fields at end of every cycle (Step 9.5 of its prompt). The python
+    # pipeline NEVER writes this field; `_merge_state` preserves it from the
+    # latest gist state ("current wins") so concurrent cron writes don't erase
+    # the routine's beacon. Dashboard reads via /api/automation.
+    "automation": {
+        "routine_last_run_at": None,
+        "routine_last_run_outcome": None,
+    },
     # Global ocean SST archive-high streak. Two-field state:
     # seeded flips True after first observation (enables silent bootstrap);
     # last_milestone_fired tracks which milestone we last tweeted so
@@ -651,6 +660,12 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
     merged["source_health"] = _merge_source_health(
         base.get("source_health"),
         next_state.get("source_health"),
+    )
+    # automation: routine-written + dashboard-read; cron never touches it.
+    # Preserve the latest gist value (current/base), not the run's in-memory
+    # snapshot, so a stale cron write can't erase the routine's beacon.
+    merged["automation"] = deepcopy(
+        base.get("automation", DEFAULT_STATE["automation"])
     )
     # ocean_sst_streak — always-take-incoming, same semantics as record_streaks above.
     merged["ocean_sst_streak"] = deepcopy(
