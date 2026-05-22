@@ -13,6 +13,71 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-22 — Daily corpus grading (0 fresh drafts; 18 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
+drafts, all carry-overs from prior graded cycles (May 12–18). Zero drafts added since the
+2026-05-19 grading session. No fresh drafts to grade this cycle.
+
+**Why no fresh drafts:** The 18-draft queue has been static for 7 days (May 15–22). Six
+cron runs/day × 3 days since May 19 = ~18 unobserved cron cycles without new pending
+drafts. Possible causes: (1) seasonal quiet in extreme signals globally; (2) triage stage
+(PR #134, coral_dhw migrated) capping new coral drafts while no other categories are
+firing at the threshold; (3) pipeline kills (writer/fact-check/critic) preventing drafts
+from reaching pending; (4) existing carry-over fire drafts occupying category slots
+(unlikely — fire is not on the triage path per the May 19 briefing). Operator should
+check run telemetry (`source_health` and suppression ledger's `triage_cap` stage) to
+diagnose. If `triage_cap` kill counts are near-zero, the stall is upstream (no qualifying
+extreme signals detected), not in the triage layer.
+
+**Staleness review:** As of 2026-05-22 15:00 UTC, 5 drafts contain real-time-baked content
+and are >48 hours old:
+
+| Draft ID | Age | Staleness flag |
+|---|---|---|
+| `draft_20260512_180320_159` | ~10 days | "is radiating" present-tense fire detection |
+| `draft_20260512_212510_160` | ~10 days | "is radiating" present-tense fire detection |
+| `draft_20260513_103313_162` | ~9 days | "is radiating" present-tense fire detection |
+| `draft_20260514_211447_164` | ~8 days | "burning today" — explicit date bake |
+| `draft_20260518_180600_112` | ~4 days | "detected in eastern Siberia today" — explicit date bake |
+
+Bulk-reject attempted: `gh` CLI not found in managed remote execution environment — skipped
+(consistent with all prior cycles since 2026-05-13; **seventh consecutive failed attempt**).
+Operator action required: reject these 5 drafts via dashboard.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+**Active proposals:** No evidence gained or lost this cycle (no fresh drafts to observe
+failure modes in).
+
+### Patterns / operational notes
+
+1. **Queue stuck since May 15.** No new drafts added in 7 days. The 5 stale fire drafts
+   have been flagged across 6 consecutive grading cycles (May 13 through May 22) without
+   operator action. Coral DHW drafts (7–14) are now 7 days old — DHW accumulation values
+   may no longer reflect current reef stress. Operator should consider batch-rejecting the
+   stale fire queue to force fresh signal ingestion on the next cron cycle.
+
+2. **Triage stage telemetry watch.** PR #134 activated triage for coral_dhw; the 2026-05-19
+   corpus was the first graded cycle post-activation. If triage is capping new coral drafts
+   and no other categories are generating qualifying signals, queue stagnation is expected
+   behavior, not a bug. The `triage_cap` kill_stage counter in the suppression ledger is the
+   diagnostic. Worth checking against `source_health["coral_dhw"]` counts for this period.
+
+3. **No new proposals.** Queue stagnation is operational/infra — not a voice quality issue.
+   No new failure modes observable without fresh drafts to grade.
+
+### Numbers
+
+- Pending drafts in queue: 18 (all carry-overs from May 12–18)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 5 drafts identified; skipped — gh CLI absent (7th consecutive skip,
+  2026-05-13 through 2026-05-22)
+- Queue static since: 2026-05-15 (most recent pending draft created: 2026-05-18T18:06Z)
+
+---
+
 ## 2026-05-19 — Daily corpus grading (14 fresh drafts; 4 May-13 carry-overs excluded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
