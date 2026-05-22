@@ -32,6 +32,91 @@ function SourceStatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{label}</span>
 }
 
+function AutomationDot({ name, color, tooltip }) {
+  const colorClass = {
+    green: "automation-dot-green",
+    yellow: "automation-dot-yellow",
+    gray: "automation-dot-gray",
+    red: "automation-dot-red",
+  }[color] || "automation-dot-gray"
+  return (
+    <span className={`automation-dot ${colorClass}`} title={tooltip}>
+      <span className="automation-dot-label">{name}</span>
+    </span>
+  )
+}
+
+function dotColorForWorkflow(wf) {
+  if (wf.error) return "red"
+  if (wf.state === "disabled_manually") return "gray"
+  if (wf.state === "active" && wf.last_run_conclusion === "success") return "green"
+  if (wf.state === "active" && wf.last_run_conclusion === "failure") return "yellow"
+  if (wf.state === "active") return "green"
+  return "gray"
+}
+
+function dotColorForRoutine(routine) {
+  if (!routine?.last_run_at) return "gray"
+  // Routine fires daily; mark gray if last beacon older than 25h.
+  const ageMs = Date.now() - new Date(routine.last_run_at).getTime()
+  if (Number.isNaN(ageMs)) return "gray"
+  if (ageMs > 25 * 60 * 60 * 1000) return "gray"
+  if (routine.last_run_outcome === "error") return "yellow"
+  return "green"
+}
+
+function AutomationStatusStrip({ status, error }) {
+  if (error) {
+    return (
+      <div className="automation-strip automation-strip-error">
+        <span className="automation-title">Automation</span>
+        <span className="automation-error">unavailable: {error}</span>
+      </div>
+    )
+  }
+  if (!status) {
+    return (
+      <div className="automation-strip">
+        <span className="automation-title">Automation</span>
+        <span className="automation-loading">loading…</span>
+      </div>
+    )
+  }
+  const workflows = status.workflows || []
+  const routine = status.routine || {}
+  const pm = status.posting_mode_summary || {}
+
+  return (
+    <div className="automation-strip">
+      <span className="automation-title">Automation</span>
+      {workflows.map((wf) => (
+        <AutomationDot
+          key={wf.file}
+          name={wf.name}
+          color={dotColorForWorkflow(wf)}
+          tooltip={`${wf.name} — state: ${wf.state}, last run: ${
+            wf.last_run_at ? new Date(wf.last_run_at).toUTCString() : "never"
+          }, conclusion: ${wf.last_run_conclusion || "none"}${
+            wf.error ? `, ERROR: ${wf.error}` : ""
+          }`}
+        />
+      ))}
+      <AutomationDot
+        name="routine"
+        color={dotColorForRoutine(routine)}
+        tooltip={`${routine.name || "routine"} — last run: ${
+          routine.last_run_at ? new Date(routine.last_run_at).toUTCString() : "never"
+        }, outcome: ${routine.last_run_outcome || "unknown"}`}
+      />
+      <span className="automation-spacer" />
+      <span className="automation-posting-mode">
+        {pm.manual_only_count ?? 0} manual / {pm.armed_auto_count ?? 0} auto /{" "}
+        {pm.suggested_count ?? 0} suggested
+      </span>
+    </div>
+  )
+}
+
 function formatDuration(ms) {
   if (ms === undefined || ms === null) return "—"
   if (ms < 1000) return `${ms}ms`
@@ -1198,6 +1283,11 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [refreshError, setRefreshError] = useState(null)
 
+  // Automation status strip — separate from dashboard data so a dashboard
+  // fetch failure doesn't suppress automation refresh, and vice versa.
+  const [automation, setAutomation] = useState(null)
+  const [automationError, setAutomationError] = useState(null)
+
   const fetchData = useCallback(async () => {
     setRefreshing(true)
     setRefreshError(null)
@@ -1230,6 +1320,23 @@ export default function Dashboard() {
     } finally {
       setLoading(false)
       setRefreshing(false)
+    }
+
+    // Automation status — independent of dashboard fetch. A failure here is
+    // non-fatal and must NOT suppress the dashboard state set above. Sits
+    // outside the dashboard try/catch by design (Codex flagged the nested
+    // version as the cause of automation going stale during dashboard outages).
+    try {
+      const automationRes = await fetch("/api/automation")
+      if (automationRes.ok) {
+        const automationPayload = await automationRes.json()
+        setAutomation(automationPayload)
+        setAutomationError(null)
+      } else {
+        setAutomationError(`/api/automation ${automationRes.status}`)
+      }
+    } catch (err) {
+      setAutomationError(err?.message || String(err))
     }
   }, [suppressionsSourceFilter])
 
@@ -1949,7 +2056,57 @@ export default function Dashboard() {
         .error-msg { color: #888; display: block; margin-top: 2px; }
         .empty { color: #333; font-size: 13px; font-style: italic; }
         .loading { text-align: center; color: #333; padding: 60px; font-size: 14px; }
+
+        /* Automation status strip — top-of-page, all views. */
+        .automation-strip {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 8px 16px;
+          background: #0f0f0f;
+          border-bottom: 1px solid #2a2a2a;
+          color: #e5e5e5;
+          font-size: 13px;
+          font-family: inherit;
+        }
+        .automation-strip-error {
+          background: #2a0f0f;
+          color: #fca5a5;
+        }
+        .automation-title {
+          font-weight: 600;
+          color: #a3a3a3;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          font-size: 11px;
+        }
+        .automation-dot {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: #1a1a1a;
+          cursor: help;
+        }
+        .automation-dot::before {
+          content: "";
+          display: inline-block;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+        .automation-dot-green::before { background: #22c55e; }
+        .automation-dot-yellow::before { background: #eab308; }
+        .automation-dot-gray::before { background: #6b7280; }
+        .automation-dot-red::before { background: #ef4444; }
+        .automation-dot-label { font-size: 12px; }
+        .automation-spacer { flex: 1; }
+        .automation-posting-mode { font-size: 12px; color: #a3a3a3; }
+        .automation-error, .automation-loading { font-size: 12px; color: #a3a3a3; }
       `}</style>
+
+      <AutomationStatusStrip status={automation} error={automationError} />
 
       <div className="dash">
         <header>

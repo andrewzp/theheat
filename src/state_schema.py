@@ -165,6 +165,22 @@ class SourceHealth(TypedDict, total=False):
     runs: list[SourceHealthRun]
 
 
+class AutomationState(TypedDict, total=False):
+    """Routine-written + dashboard-read automation indicators.
+
+    The routine writes routine_last_run_at + routine_last_run_outcome at end of
+    every cycle (Step 9.5 of the routine prompt). The dashboard reads this field
+    to display the "routine" indicator on the automation status strip.
+
+    The python pipeline NEVER writes this field. ``_merge_state()`` preserves it
+    from the latest gist state (current wins) so concurrent cron writes don't
+    erase the routine's beacon.
+    """
+
+    routine_last_run_at: str | None
+    routine_last_run_outcome: str | None
+
+
 class BotState(TypedDict, total=False):
     """Top-level durable state for the @theheat orchestrator.
 
@@ -201,6 +217,7 @@ class BotState(TypedDict, total=False):
     record_streaks: dict[str, RecordStreakEntry]
     data_source_failures: dict[str, int]
     source_health: dict[str, SourceHealth]
+    automation: AutomationState
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]
     ice_mass_last_milestone: dict[str, float]
