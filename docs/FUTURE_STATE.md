@@ -2,6 +2,8 @@
 
 Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress against plan" below for what's actually shipped since).
 
+> **Current state pointer (2026-05-22):** This doc hasn't been meaningfully refreshed since April. For the actual current state see [/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md](/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md), [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.9.0.0, and the active handoff at [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md). The editorial pipeline (sources → triage → evidence contract → writer → safety → fact_check → critic) is now complete end-to-end across all 23 sources; `theheat-bot` is currently paused pending Andrew's re-enable signal.
+
 ## Progress against plan (as of 2026-05-12)
 
 - **Phase 0 (Stabilize production)** — largely shipped. Suppression ledger (#54-#60), source-health visibility (#64, #71), CI on PRs (#56), hermeticity gate (#57), anti-fabrication safety (#58-#60), nightly voice-replay regression (#61), ruff + mypy gates (#62-#63, #72), fact-checker as third boundary (#82). Database migration off Gist *not yet started*; Gist remains the durable state with a `BotState` TypedDict (#72) now enforcing structure in-process.
