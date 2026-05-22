@@ -320,19 +320,21 @@ function workflowRunsResponse(runs = []) {
   }
 }
 
-function gistResponseBytes(state) {
+function gistResponseWithFiles(stateJson, beaconJson) {
+  // The gist REST API returns BOTH files in one response. readStateStore and
+  // readRoutineBeacon both hit the same gist URL but extract different files.
   return {
     ok: true,
     status: 200,
     async json() {
-      return {
-        files: {
-          "state.json": {
-            content: JSON.stringify(state),
-            truncated: false,
-          },
-        },
+      const files = { "state.json": { content: JSON.stringify(stateJson), truncated: false } }
+      if (beaconJson !== undefined) {
+        files["routine_beacon.json"] = { content: JSON.stringify(beaconJson) }
       }
+      return { files }
+    },
+    async text() {
+      return JSON.stringify({ state: stateJson, beacon: beaconJson })
     },
   }
 }
@@ -382,40 +384,38 @@ test("fetchWorkflowLastRun returns null when no runs exist", async () => {
   assert.equal(result, null)
 })
 
-test("readAutomationField returns automation block from gist", async () => {
+test("readRoutineBeacon returns parsed routine_beacon.json from gist", async () => {
   global.fetch = async () =>
-    gistResponseBytes({
-      automation: {
+    gistResponseWithFiles(
+      { drafts: [] },
+      {
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       },
-      drafts: [],
-    })
+    )
   process.env.GITHUB_TOKEN = "ghp_test"
-  process.env.STATE_BACKEND = "gist"
+  process.env.GIST_ID = "test_gist_id"
 
-  const { readAutomationField } = await importFresh("../lib/automation.js")
-  const result = await readAutomationField()
+  const { readRoutineBeacon } = await importFresh("../lib/automation.js")
+  const result = await readRoutineBeacon()
 
   assert.equal(result.routine_last_run_at, "2026-05-22T15:04:58Z")
   assert.equal(result.routine_last_run_outcome, "graded")
 })
 
-test("readAutomationField returns null when gist missing automation", async () => {
-  global.fetch = async () => gistResponseBytes({ drafts: [] })
+test("readRoutineBeacon returns null when gist has no beacon file", async () => {
+  global.fetch = async () => gistResponseWithFiles({ drafts: [] }, undefined)
   process.env.GITHUB_TOKEN = "ghp_test"
-  process.env.STATE_BACKEND = "gist"
+  process.env.GIST_ID = "test_gist_id"
 
-  const { readAutomationField } = await importFresh("../lib/automation.js")
-  const result = await readAutomationField()
+  const { readRoutineBeacon } = await importFresh("../lib/automation.js")
+  const result = await readRoutineBeacon()
 
   assert.equal(result, null)
 })
 
 test("getAutomationStatus composes workflows + routine + posting mode", async () => {
-  let callCount = 0
   global.fetch = async (url) => {
-    callCount++
     if (url.includes("/runs?")) {
       return workflowRunsResponse([
         {
@@ -429,20 +429,26 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
     if (url.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    return gistResponseBytes({
-      automation: {
+    // Gist URL — both readStateStore + readRoutineBeacon land here.
+    return gistResponseWithFiles(
+      {
+        drafts: [
+          { status: "pending", approval_policy: { mode: "manual_only" } },
+          { status: "pending", approval_policy: { mode: "manual_only" } },
+          { status: "pending", approval_policy: { mode: "armed_auto" } },
+          { status: "pending", approval_policy: { mode: "suggested_auto" } },
+        ],
+      },
+      {
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       },
-      drafts: [
-        { status: "pending", approval_policy: { mode: "manual_only" } },
-        { status: "pending", approval_policy: { mode: "manual_only" } },
-        { status: "pending", approval_policy: { mode: "armed_auto" } },
-      ],
-    })
+    )
   }
   process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.GIST_ID = "test_gist_id"
   process.env.STATE_BACKEND = "gist"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
 
   const { getAutomationStatus } = await importFresh("../lib/automation.js")
   const status = await getAutomationStatus()
@@ -452,6 +458,7 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
   assert.equal(status.routine.last_run_outcome, "graded")
   assert.equal(status.posting_mode_summary.manual_only_count, 2)
   assert.equal(status.posting_mode_summary.armed_auto_count, 1)
+  assert.equal(status.posting_mode_summary.suggested_count, 1)
 })
 ```
 
@@ -463,11 +470,14 @@ Expected: All 6 tests fail with `Cannot find module '../lib/automation.js'`.
 
 - [ ] **Step 3: Create `dashboard/lib/automation.js`**
 
+Architecture note from Codex round 3 review: routine writes its beacon to a **separate** gist file (`routine_beacon.json`) instead of `state.json.automation`, to eliminate the lost-update race with concurrent python pipeline writers. The dashboard reads `routine_beacon.json` directly via the gist REST API (the file is small enough — ~150 bytes — that the 1MB truncation threshold never applies). Posting-mode summary still reads from `state.json` via the existing `readStateStore` helper.
+
 ```javascript
-import { readGistState } from "./state-store.js"
+import { readStateStore } from "./state-store.js"
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 const REPO = process.env.THEHEAT_REPO || "andrewzp/theheat"
+const GIST_ID = process.env.GIST_ID || ""
 
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
@@ -521,12 +531,26 @@ export async function fetchWorkflowLastRun(file) {
   }
 }
 
-export async function readAutomationField() {
-  const state = await readGistState()
-  if (!state || typeof state !== "object") return null
-  const a = state.automation
-  if (!a || typeof a !== "object") return null
-  return a
+export async function readRoutineBeacon() {
+  // Reads routine_beacon.json from the gist (separate file from state.json).
+  // The routine writes this every cycle in Step 9.5. ~150 bytes so the gist
+  // API's 1MB truncation never applies — we don't need the git-clone path.
+  if (!GITHUB_TOKEN || !GIST_ID) {
+    return null
+  }
+  const url = `https://api.github.com/gists/${GIST_ID}`
+  const res = await fetch(url, { headers: ghHeaders() })
+  if (!res.ok) {
+    throw new Error(`readRoutineBeacon: gist read failed: ${res.status}`)
+  }
+  const data = await res.json()
+  const content = data.files?.["routine_beacon.json"]?.content
+  if (!content) return null
+  try {
+    return JSON.parse(content)
+  } catch {
+    return null
+  }
 }
 
 function summarizePostingModes(drafts) {
@@ -536,7 +560,7 @@ function summarizePostingModes(drafts) {
     const mode = d?.approval_policy?.mode
     if (mode === "manual_only") summary.manual_only_count++
     else if (mode === "armed_auto") summary.armed_auto_count++
-    else if (mode === "suggested") summary.suggested_count++
+    else if (mode === "suggested_auto") summary.suggested_count++
   }
   return summary
 }
@@ -566,13 +590,13 @@ async function fetchWorkflowFull(spec) {
 }
 
 export async function getAutomationStatus() {
-  const [workflows, automation, gistState] = await Promise.all([
+  const [workflows, beacon, stateRecord] = await Promise.all([
     Promise.all(WORKFLOWS.map(fetchWorkflowFull)),
-    readAutomationField().catch(() => null),
-    readGistState().catch(() => null),
+    readRoutineBeacon().catch(() => null),
+    readStateStore().catch(() => null),
   ])
 
-  const drafts = gistState?.drafts ?? []
+  const drafts = stateRecord?.state?.drafts ?? stateRecord?.drafts ?? []
   const posting_mode_summary = summarizePostingModes(drafts)
 
   return {
@@ -580,8 +604,8 @@ export async function getAutomationStatus() {
     routine: {
       name: ROUTINE.name,
       cron: ROUTINE.cron,
-      last_run_at: automation?.routine_last_run_at ?? null,
-      last_run_outcome: automation?.routine_last_run_outcome ?? null,
+      last_run_at: beacon?.routine_last_run_at ?? null,
+      last_run_outcome: beacon?.routine_last_run_outcome ?? null,
     },
     posting_mode_summary,
   }
@@ -646,7 +670,9 @@ test("GET /api/automation returns combined status with valid auth", async () => 
   process.env.DASHBOARD_USERNAME = "admin"
   process.env.DASHBOARD_PASSWORD = "secret"
   process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.GIST_ID = "test_gist_id"
   process.env.STATE_BACKEND = "gist"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
 
   global.fetch = async (url) => {
     if (url.includes("/runs?")) {
@@ -662,13 +688,13 @@ test("GET /api/automation returns combined status with valid auth", async () => 
     if (url.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    return gistResponseBytes({
-      automation: {
+    return gistResponseWithFiles(
+      { drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }] },
+      {
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       },
-      drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }],
-    })
+    )
   }
 
   const { GET } = await importFresh("../app/api/automation/route.js")
@@ -684,13 +710,17 @@ test("GET /api/automation returns combined status with valid auth", async () => 
   assert.equal(body.posting_mode_summary.manual_only_count, 1)
 })
 
-test("GET /api/automation returns 500 when GH API throws", async () => {
+test("GET /api/automation degrades to 200 with workflow errors when GH API throws", async () => {
+  // getAutomationStatus catches per-workflow + per-helper errors and returns a
+  // degraded-but-valid response. The dashboard strip should then show red dots
+  // (per-workflow .error populated) rather than the whole strip failing.
   process.env.DASHBOARD_USERNAME = "admin"
   process.env.DASHBOARD_PASSWORD = "secret"
   process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.GIST_ID = "test_gist_id"
   process.env.STATE_BACKEND = "gist"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
 
-  // Force fetch to throw (simulates GH API outage)
   global.fetch = async () => {
     throw new Error("ECONNREFUSED")
   }
@@ -702,8 +732,15 @@ test("GET /api/automation returns 500 when GH API throws", async () => {
   const res = await GET(req)
   const body = await res.json()
 
-  assert.equal(res.status, 500)
-  assert.match(body.error, /ECONNREFUSED|fetch failed|automation status/i)
+  assert.equal(res.status, 200, "degraded — getAutomationStatus catches errors")
+  assert.equal(body.workflows.length, 3, "all 3 workflow rows present")
+  for (const wf of body.workflows) {
+    assert.ok(wf.error, `workflow ${wf.name} should have .error populated`)
+    assert.match(wf.error, /ECONNREFUSED|fetch failed/i)
+  }
+  // Routine + posting-mode helpers also return null on fetch fail.
+  assert.equal(body.routine.last_run_at, null)
+  assert.equal(body.posting_mode_summary.manual_only_count, 0)
 })
 ```
 
@@ -868,27 +905,44 @@ Inside `Dashboard()` (line ~1154), add two new state hooks alongside the existin
   const [automationError, setAutomationError] = useState(null)
 ```
 
-- [ ] **Step 4: Add the automation fetch alongside the existing data fetch**
+- [ ] **Step 4: Add the automation fetch as an INDEPENDENT try-catch (not nested in dashboard's)**
 
-Locate the `fetchData` `useCallback` block (~line 1208). Inside the same `useCallback`, after the existing dashboard fetch but before `setRefreshing(false)`, add a parallel call:
+Locate the `fetchData` `useCallback` block (~line 1201). The existing block has a single `try { ... } catch { setRefreshError } finally { setRefreshing(false) }`. If `/api/dashboard` fails (e.g., its 500), the catch fires and any code added inside `try` would be skipped. Putting the automation fetch inside that try would silently hide automation state during a dashboard outage — the exact issue Codex flagged.
+
+Add the automation fetch as a SECOND, independent try-catch AFTER the existing `finally` block (within the same `useCallback`). Run it sequentially with the dashboard fetch but with independent error handling:
 
 ```javascript
-      // Automation status (read-only; failures non-fatal).
-      try {
-        const automationRes = await fetch("/api/automation")
-        if (automationRes.ok) {
-          const automationPayload = await automationRes.json()
-          setAutomation(automationPayload)
-          setAutomationError(null)
-        } else {
-          setAutomationError(`/api/automation ${automationRes.status}`)
-        }
-      } catch (err) {
-        setAutomationError(err.message)
+  const fetchData = useCallback(async () => {
+    setRefreshing(true)
+    setRefreshError(null)
+    try {
+      // ... existing dashboard fetch + state setters, unchanged ...
+    } catch (e) {
+      console.error(e)
+      setRefreshError(e?.message || String(e))
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+
+    // Automation status — independent of dashboard fetch. A failure here is
+    // non-fatal and must NOT suppress the dashboard state set above.
+    try {
+      const automationRes = await fetch("/api/automation")
+      if (automationRes.ok) {
+        const automationPayload = await automationRes.json()
+        setAutomation(automationPayload)
+        setAutomationError(null)
+      } else {
+        setAutomationError(`/api/automation ${automationRes.status}`)
       }
+    } catch (err) {
+      setAutomationError(err?.message || String(err))
+    }
+  }, [suppressionsSourceFilter])
 ```
 
-This piggybacks on the existing 30s `setInterval(fetchData, 30000)` — no new interval needed.
+This piggybacks on the existing 30s `setInterval(fetchData, 30000)` — no new interval needed. The dashboard's existing `setRefreshing(false)` runs in its `finally`, so the global "refreshing…" indicator doesn't await automation. Automation updates a few ms later than the dashboard data, which is fine.
 
 - [ ] **Step 5: Render `AutomationStatusStrip` at the top of the dashboard layout**
 
@@ -1051,7 +1105,7 @@ git clean -fd
 (b) Insert this **NEW Step 9.5** immediately after existing "9. Print to stdout: A-rate, gap from bar..." and before the `## Hard constraints` heading:
 
 ```
-9.5. **Write the routine health beacon.** Regardless of grading outcome, write a routine_last_run_at + routine_last_run_outcome value to the gist so the dashboard knows when this cycle ran. Best-effort: a beacon write failure logs a warning but doesn't fail the cycle.
+9.5. **Write the routine health beacon to a separate gist file.** Regardless of grading outcome, write a routine_last_run_at + routine_last_run_outcome to `routine_beacon.json` in the same gist. The beacon lives in a SEPARATE file (not state.json) to eliminate the lost-update race against concurrent python pipeline writers — GitHub's gist PATCH API can update individual files without touching others. Best-effort: a beacon write failure logs a warning but doesn't fail the cycle.
 
 ```bash
 # Set OUTCOME based on what happened above:
@@ -1061,28 +1115,27 @@ git clean -fd
 OUTCOME="graded"
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-BEACON_DIR=$(mktemp -d)
-if ! git clone --depth=1 https://gist.github.com/06c02c97ffc0d11458687f1ed998d9e5.git "$BEACON_DIR" 2>/dev/null; then
-  echo "WARN: beacon skipped — could not clone gist" >&2
-  exit 0
-fi
+# Build the beacon JSON in memory; no need to clone the gist (we're writing,
+# not merging). The beacon is a self-contained ~150-byte document.
+BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "$OUTCOME" '
+  {
+    routine_last_run_at: $now,
+    routine_last_run_outcome: $outcome
+  }
+')
 
-UPDATED_PATH="$BEACON_DIR/state-updated.json"
-jq --arg now "$NOW" --arg outcome "$OUTCOME" '
-  .automation = (.automation // {}) |
-  .automation.routine_last_run_at = $now |
-  .automation.routine_last_run_outcome = $outcome
-' "$BEACON_DIR/state.json" > "$UPDATED_PATH"
+# Wrap in the gist PATCH envelope. Only routine_beacon.json gets updated —
+# state.json is left untouched on the server side.
+PATCH_PAYLOAD=$(jq -n --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
 
-PAYLOAD_PATH="$BEACON_DIR/patch-payload.json"
-jq -n --rawfile c "$UPDATED_PATH" '{files: {"state.json": {content: $c}}}' > "$PAYLOAD_PATH"
-
-if ! gh api -X PATCH "gists/06c02c97ffc0d11458687f1ed998d9e5" --input "$PAYLOAD_PATH" > /dev/null 2>&1; then
+if ! echo "$PATCH_PAYLOAD" | gh api -X PATCH "gists/06c02c97ffc0d11458687f1ed998d9e5" --input - > /dev/null 2>&1; then
   echo "WARN: beacon write failed (likely gist:write scope missing); cycle output unaffected" >&2
   exit 0
 fi
-echo "Beacon written: routine_last_run_at=$NOW outcome=$OUTCOME" >&2
+echo "Beacon written to routine_beacon.json: routine_last_run_at=$NOW outcome=$OUTCOME" >&2
 ```
+
+This pivot (vs. patching state.json.automation) was forced by Codex round 3 review of the plan: a routine-time PATCH of full state.json would overwrite any concurrent python cron write that lands during the routine's clone-to-PATCH window. Writing a separate file eliminates the race entirely — the PATCH endpoint only touches the file listed in the request body.
 ```
 
 Save the assembled new prompt to `/tmp/routine-update/new-prompt.txt`.
@@ -1114,32 +1167,30 @@ for f in /tmp/routine-update/block-*.sh; do
   bash -n "$f" && echo "OK: $f" || { echo "SYNTAX ERROR in $f"; exit 1; }
 done
 
-# Dry-run the jq filter from Step 9.5 against the live state.json (read-only).
-# This validates the jq expression compiles AND produces a valid JSON output —
-# the most common Step 9.5 failure mode would be a malformed jq filter.
-mkdir -p /tmp/routine-update/dry-run
-git clone --depth=1 https://gist.github.com/06c02c97ffc0d11458687f1ed998d9e5.git /tmp/routine-update/dry-run/gist 2>/dev/null
+# Dry-run the jq filters from Step 9.5: build the beacon JSON and the PATCH payload
+# exactly as Step 9.5 would, but stop short of the actual gh api PATCH.
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-jq --arg now "$NOW" --arg outcome "graded" '
-  .automation = (.automation // {}) |
-  .automation.routine_last_run_at = $now |
-  .automation.routine_last_run_outcome = $outcome
-' /tmp/routine-update/dry-run/gist/state.json > /tmp/routine-update/dry-run/updated.json && echo "jq filter OK" || { echo "JQ FILTER ERROR"; exit 1; }
+BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "graded" '
+  {
+    routine_last_run_at: $now,
+    routine_last_run_outcome: $outcome
+  }
+') && echo "beacon JSON OK" || { echo "BEACON JSON ERROR"; exit 1; }
 
-# Verify the dry-run output is still valid JSON of expected size:
-jq -e '.automation.routine_last_run_at and .automation.routine_last_run_outcome' /tmp/routine-update/dry-run/updated.json > /dev/null && echo "automation fields present" || { echo "AUTOMATION FIELDS MISSING"; exit 1; }
+# Verify the beacon is valid JSON with the expected fields:
+echo "$BEACON_PAYLOAD" | jq -e '.routine_last_run_at and .routine_last_run_outcome' > /dev/null && echo "beacon fields present" || { echo "BEACON FIELDS MISSING"; exit 1; }
 
-# Build the same payload Step 9.5 would PATCH and verify it parses:
-jq -n --rawfile c /tmp/routine-update/dry-run/updated.json '{files: {"state.json": {content: $c}}}' > /tmp/routine-update/dry-run/patch-payload.json
-jq -e '.files."state.json".content' /tmp/routine-update/dry-run/patch-payload.json > /dev/null && echo "patch payload OK" || { echo "PATCH PAYLOAD ERROR"; exit 1; }
+# Build the PATCH envelope and verify it parses:
+PATCH_PAYLOAD=$(jq -n --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
+echo "$PATCH_PAYLOAD" | jq -e '.files."routine_beacon.json".content' > /dev/null && echo "patch payload OK" || { echo "PATCH PAYLOAD ERROR"; exit 1; }
 ```
 
-Expected output: `OK: ...block-1.sh`, `OK: ...block-2.sh`, `jq filter OK`, `automation fields present`, `patch payload OK`. If any error appears, **do not proceed to Step 4**; fix the bash blocks in `/tmp/routine-update/new-prompt.txt` and re-run this step.
+Expected output: `OK: ...block-1.sh`, `OK: ...block-2.sh`, `beacon JSON OK`, `beacon fields present`, `patch payload OK`. If any error appears, **do not proceed to Step 4**; fix the bash blocks in `/tmp/routine-update/new-prompt.txt` and re-run this step.
 
 Cleanup after validation:
 
 ```bash
-rm -rf /tmp/routine-update/dry-run /tmp/routine-update/block-*.sh
+rm -f /tmp/routine-update/block-*.sh
 ```
 
 - [ ] **Step 4: Push the update via `RemoteTrigger`**
