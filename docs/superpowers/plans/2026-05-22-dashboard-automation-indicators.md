@@ -1116,8 +1116,10 @@ OUTCOME="graded"
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Build the beacon JSON in memory; no need to clone the gist (we're writing,
-# not merging). The beacon is a self-contained ~150-byte document.
-BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "$OUTCOME" '
+# not merging). The beacon is a self-contained ~150-byte document. Use jq -nc
+# (compact) — jq's pretty-output mode produces invalid JSON when --arg nests
+# a multi-line string (verified by pre-push validation; see also commit msg).
+BEACON_PAYLOAD=$(jq -nc --arg now "$NOW" --arg outcome "$OUTCOME" '
   {
     routine_last_run_at: $now,
     routine_last_run_outcome: $outcome
@@ -1125,8 +1127,8 @@ BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "$OUTCOME" '
 ')
 
 # Wrap in the gist PATCH envelope. Only routine_beacon.json gets updated —
-# state.json is left untouched on the server side.
-PATCH_PAYLOAD=$(jq -n --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
+# state.json is left untouched on the server side. Also -nc for safety.
+PATCH_PAYLOAD=$(jq -nc --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
 
 if ! echo "$PATCH_PAYLOAD" | gh api -X PATCH "gists/06c02c97ffc0d11458687f1ed998d9e5" --input - > /dev/null 2>&1; then
   echo "WARN: beacon write failed (likely gist:write scope missing); cycle output unaffected" >&2
@@ -1168,9 +1170,11 @@ for f in /tmp/routine-update/block-*.sh; do
 done
 
 # Dry-run the jq filters from Step 9.5: build the beacon JSON and the PATCH payload
-# exactly as Step 9.5 would, but stop short of the actual gh api PATCH.
+# exactly as Step 9.5 would, but stop short of the actual gh api PATCH. Use jq -nc
+# (compact) — jq's pretty-output mode produces invalid JSON when --arg nests a
+# multi-line string that contains real newlines.
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "graded" '
+BEACON_PAYLOAD=$(jq -nc --arg now "$NOW" --arg outcome "graded" '
   {
     routine_last_run_at: $now,
     routine_last_run_outcome: $outcome
@@ -1180,9 +1184,10 @@ BEACON_PAYLOAD=$(jq -n --arg now "$NOW" --arg outcome "graded" '
 # Verify the beacon is valid JSON with the expected fields:
 echo "$BEACON_PAYLOAD" | jq -e '.routine_last_run_at and .routine_last_run_outcome' > /dev/null && echo "beacon fields present" || { echo "BEACON FIELDS MISSING"; exit 1; }
 
-# Build the PATCH envelope and verify it parses:
-PATCH_PAYLOAD=$(jq -n --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
-echo "$PATCH_PAYLOAD" | jq -e '.files."routine_beacon.json".content' > /dev/null && echo "patch payload OK" || { echo "PATCH PAYLOAD ERROR"; exit 1; }
+# Build the PATCH envelope and verify it parses + the inner content roundtrips:
+PATCH_PAYLOAD=$(jq -nc --arg c "$BEACON_PAYLOAD" '{files: {"routine_beacon.json": {content: $c}}}')
+echo "$PATCH_PAYLOAD" | jq -e '.files."routine_beacon.json".content' > /dev/null && echo "patch envelope OK" || { echo "PATCH ENVELOPE ERROR"; exit 1; }
+echo "$PATCH_PAYLOAD" | jq -r '.files."routine_beacon.json".content' | jq -e . > /dev/null && echo "inner content parses as JSON" || { echo "INNER CONTENT BROKEN"; exit 1; }
 ```
 
 Expected output: `OK: ...block-1.sh`, `OK: ...block-2.sh`, `beacon JSON OK`, `beacon fields present`, `patch payload OK`. If any error appears, **do not proceed to Step 4**; fix the bash blocks in `/tmp/routine-update/new-prompt.txt` and re-run this step.
