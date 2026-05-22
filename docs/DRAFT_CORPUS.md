@@ -13,6 +13,152 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-22 — Daily corpus grading (0 fresh drafts; 18 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
+drafts, all carry-overs from prior graded cycles (May 12–18). Zero drafts added since the
+2026-05-19 grading session. No fresh drafts to grade this cycle.
+
+**Why no fresh drafts:** The 18-draft queue has been static for 7 days (May 15–22). Six
+cron runs/day × 3 days since May 19 = ~18 unobserved cron cycles without new pending
+drafts. Possible causes: (1) seasonal quiet in extreme signals globally; (2) triage stage
+(PR #134, coral_dhw migrated) capping new coral drafts while no other categories are
+firing at the threshold; (3) pipeline kills (writer/fact-check/critic) preventing drafts
+from reaching pending; (4) existing carry-over fire drafts occupying category slots
+(unlikely — fire is not on the triage path per the May 19 briefing). Operator should
+check run telemetry (`source_health` and suppression ledger's `triage_cap` stage) to
+diagnose. If `triage_cap` kill counts are near-zero, the stall is upstream (no qualifying
+extreme signals detected), not in the triage layer.
+
+**Staleness review:** As of 2026-05-22 15:00 UTC, 5 drafts contain real-time-baked content
+and are >48 hours old:
+
+| Draft ID | Age | Staleness flag |
+|---|---|---|
+| `draft_20260512_180320_159` | ~10 days | "is radiating" present-tense fire detection |
+| `draft_20260512_212510_160` | ~10 days | "is radiating" present-tense fire detection |
+| `draft_20260513_103313_162` | ~9 days | "is radiating" present-tense fire detection |
+| `draft_20260514_211447_164` | ~8 days | "burning today" — explicit date bake |
+| `draft_20260518_180600_112` | ~4 days | "detected in eastern Siberia today" — explicit date bake |
+
+Bulk-reject attempted: `gh` CLI not found in managed remote execution environment — skipped
+(consistent with all prior cycles since 2026-05-13; **seventh consecutive failed attempt**).
+Operator action required: reject these 5 drafts via dashboard.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+**Active proposals:** No evidence gained or lost this cycle (no fresh drafts to observe
+failure modes in).
+
+### Patterns / operational notes
+
+1. **Queue stuck since May 15.** No new drafts added in 7 days. The 5 stale fire drafts
+   have been flagged across 6 consecutive grading cycles (May 13 through May 22) without
+   operator action. Coral DHW drafts (7–14) are now 7 days old — DHW accumulation values
+   may no longer reflect current reef stress. Operator should consider batch-rejecting the
+   stale fire queue to force fresh signal ingestion on the next cron cycle.
+
+2. **Triage stage telemetry watch.** PR #134 activated triage for coral_dhw; the 2026-05-19
+   corpus was the first graded cycle post-activation. If triage is capping new coral drafts
+   and no other categories are generating qualifying signals, queue stagnation is expected
+   behavior, not a bug. The `triage_cap` kill_stage counter in the suppression ledger is the
+   diagnostic. Worth checking against `source_health["coral_dhw"]` counts for this period.
+
+3. **No new proposals.** Queue stagnation is operational/infra — not a voice quality issue.
+   No new failure modes observable without fresh drafts to grade.
+
+### Numbers
+
+- Pending drafts in queue: 18 (all carry-overs from May 12–18)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 5 drafts identified; skipped — gh CLI absent (7th consecutive skip,
+  2026-05-13 through 2026-05-22)
+- Queue static since: 2026-05-15 (most recent pending draft created: 2026-05-18T18:06Z)
+
+---
+## 2026-05-20 — Daily corpus grading (0 fresh drafts; 18 carry-overs from prior cycles)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending drafts
+— all carry-overs from graded cycles spanning 2026-05-12 through 2026-05-18. No draft has
+been added to the pending queue since 2026-05-18T18:06Z (Siberia fire). Cron fires 6×/day;
+multiple runs between the May 19 session and this run produced 0 new pending drafts. Possible
+causes: score-gate kills, writer self-kills, triage-cap spills, or quiet signal window. One
+cycle without new drafts is within normal variance — no new proposal warranted on this fact alone.
+
+**Grade distribution (0 fresh drafts):** N/A.
+**A-rate: N/A.** Gap from resumption bar: untracked this cycle (prior cycle: 29 pp).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade (last session) | Staleness |
+|---|---|---|---|---|---|
+| [1] | Mali fire — 309.6 MW | fire | May 12T18:03Z | C+ | ~192h; "is radiating" |
+| [2] | Campeche fire — 364.7 MW | fire | May 12T21:25Z | C | ~192h; "is radiating" |
+| [3] | Chuuk monthly_high — 34.4°C | monthly_high | May 13T10:32Z | B | ~174h; no real-time language |
+| [4] | Mongolia fire — 307.6 MW | fire | May 13T10:33Z | C | ~174h; "is radiating" |
+| [5] | Bethel, Maine monthly_low | monthly_low | May 13T21:29Z | B- | ~162h; "May 9" obs date, not "today" |
+| [6] | BC fire — 426.8 MW | fire | May 14T21:14Z | C+ | ~168h; "burning today" — STALE |
+| [7] | Madagascar coral — 10.2°C-weeks | coral_bleaching | May 15T03:01Z | A- | ~132h; DHW metric, no "today" |
+| [8] | Fiji coral — 10.1°C-weeks | coral_bleaching | May 15T03:02Z | B+ | ~132h |
+| [9] | Nauru coral — 8.2°C-weeks | coral_bleaching | May 15T03:04Z | B+ | ~132h |
+| [10] | Great Nicobar — 7.2°C-weeks | coral_bleaching | May 15T03:47Z | C+ | ~131h |
+| [11] | Chagos — 7.2°C-weeks | coral_bleaching | May 15T03:48Z | C+ | ~131h |
+| [12] | Southern Borneo — 4.4°C-weeks | coral_bleaching | May 15T03:55Z | C | ~131h |
+| [13] | Galapagos coral — 24.5°C-weeks | coral_bleaching | May 15T05:16Z | A- | ~129h |
+| [14] | Austral Islands coral — 8.6°C-weeks | coral_bleaching | May 15T05:20Z | B+ | ~129h |
+| [15] | Costa Rica Pacific coral — 12.0°C-weeks | coral_bleaching | May 18T01:30Z | A- | ~61h |
+| [16] | Mf Nooksack — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | ~59h |
+| [17] | Stahl Peak — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | ~47h |
+| [18] | Siberia fire — 601.1 MW | fire | May 18T18:06Z | B+ | ~69h; "today" baked in — STALE |
+
+### Staleness review as of 2026-05-20 ~15:00 UTC
+
+Two drafts newly cross the 48-hour staleness threshold with real-time language:
+
+- **[18] Siberia fire** (`draft_20260518_180600_112`, created May 18T18:06Z, ~69h old):
+  "601.1 MW of radiative heat detected in eastern Siberia **today**" — explicit date-baked
+  language. First cycle crossing 48h. Should be bulk-rejected.
+- **[6] BC fire** (`draft_20260514_211447_164`, created May 14T21:14Z, ~168h old):
+  "British Columbia has a 426.8 MW fire **burning today**" — flagged since May 17.
+  Continues to need operator rejection.
+
+Three additional fire drafts meet practical staleness criteria:
+- **[1] Mali** (`draft_20260512_180320_159`, ~192h): "is radiating" satellite fire signal
+  8 days old. Active fire reading is point-in-time; operator reject recommended.
+- **[2] Campeche** (`draft_20260512_212510_160`, ~192h): same class. Operator reject.
+- **[4] Mongolia** (`draft_20260513_103313_162`, ~174h): same class. Operator reject.
+
+Bulk-reject attempted via `gh api -X PATCH gists/06c02c97ffc0d11458687f1ed998d9e5` —
+`gh` CLI not available in managed remote execution environment (persistent across all
+2026-05-13 through 2026-05-20 runs). Operator action required: reject drafts [1], [2],
+[4], [6], [18] via dashboard.
+
+### No-draft cause analysis
+
+Queue aged from 18 items (May 19) to 18 items (May 20) with no net additions. Key
+considerations:
+1. **Triage cap active**: PR #134 coral_dhw triage ON; global cap 3 drafts/cycle. If
+   signals are appearing but being spilled at the triage stage, the suppression ledger
+   will show `kill_stage="triage_cap"` entries. Operator should check dashboard suppressions.
+2. **Writer self-kills**: The new quality-floor instincts (cold-record self-kill in P_new,
+   seasonal deadpan guidance) may be suppressing borderline drafts that previously reached
+   pending. Net-positive if they're suppressing weak signals; net-negative if over-strict.
+3. **Score-gate**: Signals below threshold (64–82 by type) never reach the writer.
+4. **Quiet climate window**: Low extreme-signal frequency is a legitimate explanation for
+   one cycle. Two consecutive no-draft cycles would be worth investigating.
+
+### Numbers
+
+- Fresh drafts graded: 0
+- A-rate: N/A
+- Carry-overs: 18 (graded May 13–19; grades stand)
+- Stale drafts newly flagged: [18] (Siberia fire "today", ~69h old, first crossing 48h)
+- Previously flagged still pending: [1] Mali, [2] Campeche, [4] Mongolia (present-tense
+  satellite fire, 8 days old), [6] BC fire ("burning today", 7 days old)
+- Staleness rejection: skipped — `gh` CLI unavailable; operator must use dashboard
+
+---
 ## 2026-05-19 — Daily corpus grading (14 fresh drafts; 4 May-13 carry-overs excluded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
