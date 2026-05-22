@@ -2,6 +2,214 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0.0] - 2026-05-22
+
+The end-to-end-trustworthy-pipeline release. Five distinct work streams
+landed in one multi-day push: source-to-writer evidence contract,
+universal triage routing (all sources, not just `coral_dhw`),
+pipeline efficiency tightening (fact-check now also extracts claims,
+collapsing two Gemini calls into one), two dead-source resurrections
+(`sea_ice` v3.0→v4.0 URL bump, `ice_mass` re-routed through NASA CMR
+after PO.DAAC Drive decommissioning), and a consolidated daily-plan
+analytics corpus.
+
+Two operator actions completed alongside the code: **NASA GESDISC
+DATA ARCHIVE** and **PO.DAAC Cumulus OPS** apps now authorized on
+the Earthdata account, unblocking GPM-IMERG and GRACE-FO ice_mass
+respectively. Both verified end-to-end with one-shot diagnostic
+workflows that returned HTTP 200 against the production endpoints
+(zero LLM credits, diagnostic workflows added + removed cleanly
+across paired PRs).
+
+Production state at this release: bot workflows (`theheat-bot`,
+`voice-regression`) remain disabled pending Andrew's call to re-enable
+under the new (all-sources-triage + evidence-contract + dual-purpose
+fact_check) architecture. `refresh-thresholds` continues to fire
+(data-only, no LLM). mypy clean across 91 source files; pytest 1348
+passing on main.
+
+### Added — Source-to-writer evidence contract (00837f2)
+
+New `src/two_bot/evidence_contract.py` module defines a deterministic
+pre-writer audit that scrutinizes a `StoryBundle` before any LLM call.
+The audit returns an `EvidenceAudit(signal_kind, event_id, prompt_ready,
+issues)` value; `issues` carry severity (`error` | `warning`), code,
+field, and message. Errors block the writer (`prompt_ready=False`),
+warnings pass through with a logged note.
+
+Pipeline wiring at [/Users/andrewpuschel/Documents/Claude/theheat/src/two_bot/pipeline.py](/Users/andrewpuschel/Documents/Claude/theheat/src/two_bot/pipeline.py): new `_audit_bundle_for_generation`
+helper called at the top of `generate_draft`. On error, the helper
+records `kill_stage="evidence_contract"` and the writer is never
+invoked. `kill_stage` docstring on `src/orchestrator/common.py`
+extended to list the new stage as a source-of-truth signal for the
+dashboard.
+
+New `tests/two_bot/test_evidence_contract.py` (+593 lines) covers
+every issue code with a representative bundle, plus regression
+fixtures that prove a borderline-passing bundle still reaches the
+writer.
+
+Design context lives at
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/source-to-writer-evidence-contract.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/source-to-writer-evidence-contract.md)
+and the eng-reviewed spec at
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-19-source-to-writer-evidence-contract.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-19-source-to-writer-evidence-contract.md).
+The motivating problem: bundles that passed the editorial score gate
+could still reach the writer missing the source artifacts the writer
+needed to ground its claims — producing tweets that fact-check
+couldn't disprove but couldn't fully verify either. The contract
+makes that boundary explicit at code level.
+
+### Added — All sources routed through triage gateway (PR #150 / 13f8d64)
+
+Completes the triage migration that 0.8.0.0 / #134 started for
+`coral_dhw`. Every alert source (`climate_indices`, `co2`, `co_ops`,
+`copernicus_ems`, `coral_dhw`, `drought`, `enso`, `firms`, `gdacs`,
+`gpm_imerg`, `ice_mass`, `nhc`, `jtwc`, `nsidc_snow`, `ocean`,
+`ocean_sst`, `open_meteo`, `ozone_hole`, `river_gauges`, `sea_ice`,
+`synthesis`) now builds `TriageCandidateBundle` instances and enqueues
+them via the new `_enqueue_story_candidate` helper instead of calling
+`_try_two_bot_draft` directly.
+
+The per-cycle drain at end of `run_alerts` ranks the entire cycle's
+queue by `(score.total DESC, created_at DESC)`, applies per-category
++ global caps, and only then routes survivors to the writer. Source
+runners' per-success side effects (e.g. `state.update_coral_dhw_tier`,
+`increment_co2_annual_count`) moved into `on_draft_success` callbacks
+on the candidate — so cooldown / counter ticks only fire on actual
+drafts, not on cycle-cap spills. Pattern is now reusable.
+
+GPM-IMERG also gained a `strict` fail-fast path in this commit: when
+the fetcher can't get a single city reading, it now raises
+`SourceFetchError` instead of silently emitting an empty bundle, so
+operators see the failure on the dashboard instead of an
+inexplicably empty cycle.
+
+New `tests/test_source_triage_migration.py` covers the cross-source
+boundary; existing `tests/test_coral_dhw.py`, `tests/test_gpm_imerg.py`,
+`tests/test_main.py`, `tests/test_precip_snow_orchestrator.py`,
+`tests/test_open_meteo_orchestrator.py`, and `tests/test_triage.py`
+updated to mock the new enqueue path.
+
+### Changed — Fact-check now extracts claims in-place (d2b5f53)
+
+The Gemini Flash fact-checker now extracts the structured-claim list
+itself instead of relying on a separate `claim_extractor` invocation.
+Validation logic in `_parse_extracted_claims` accepts five claim
+kinds (`number`, `date`, `named_entity`, `comparison`, `era_anchor`,
+`peer_comparison`); malformed claims surface as a fact-check
+rejection (with the standard JSON-parse retry budget from 0.7.1.0).
+
+Net effect: ~1 Gemini Flash call per draft instead of 2 for the
+extract→fact-check sequence. claim_extractor remains in
+`src/two_bot/claim_extractor.py` for use elsewhere but is no longer on
+the per-draft hot path. Cost win compounds with the 0.8.0.0 prompt
+caching.
+
+Touches: `src/two_bot/fact_check.py`, `src/two_bot/memory.py`,
+`src/two_bot/pipeline.py`, `src/two_bot/prompts/fact_check_prompt.py`,
+`src/two_bot/prompts/writer_prompt.py`, `src/state_schema.py`. Test
+suite expanded: `tests/two_bot/test_fact_check.py` (+64 lines),
+`tests/two_bot/test_memory.py` (+26), `tests/two_bot/test_pipeline.py`
+(+20), new `tests/test_source_health.py` (+48).
+
+### Fixed — `sea_ice` URLs bumped to v4.0 (PR #146)
+
+NSIDC silently moved their daily sea-ice extent CSVs from `v3.0` to
+`v4.0` in early 2026. The `noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v3.0.csv`
+(and Antarctic equivalent) paths now return 404, while
+`...v4.0.csv` returns 200 with the unchanged 4-column schema (Year,
+Month, Day, Extent, Missing, Source Data). Both lanes had been
+failing in production for at least 7 Monday crons (0 successes / 7
+failures / no `last_success_ts` ever) — invisible because the lanes
+only fire weekly. Surfaced during the dead-source audit triggered by
+the GPM-IMERG operator action.
+
+[/Users/andrewpuschel/Documents/Claude/theheat/src/data/sea_ice.py](/Users/andrewpuschel/Documents/Claude/theheat/src/data/sea_ice.py)
+constants bumped; parser untouched. Existing happy-path tests at
+`tests/test_sea_ice.py` updated to mock the v4.0 URLs.
+
+### Fixed — `ice_mass` re-routed through NASA CMR (PR #146)
+
+PO.DAAC Drive (`podaac-tools.jpl.nasa.gov`) was decommissioned during
+NASA's Earthdata Cloud migration; that domain now `ConnectTimeout`s.
+GRACE-FO mascon ice mass anomaly time-series products migrated to
+`archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/...`,
+but the granule filenames now embed a data range (e.g.
+`greenland_mass_200204_202603.txt`), making a single hardcoded URL
+go stale every monthly data release.
+
+[/Users/andrewpuschel/Documents/Claude/theheat/src/data/ice_mass.py](/Users/andrewpuschel/Documents/Claude/theheat/src/data/ice_mass.py)
+rewritten to:
+- Track CMR collection short_names (`GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4`
+  and `ANTARCTICA_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4`) as
+  constants instead of hardcoded URLs.
+- Resolve the latest granule URL on each fetch via
+  `cmr.earthdata.nasa.gov/search/granules.json` (`_resolve_latest_url`
+  helper, returns `None` on any failure for graceful skip).
+- Bearer-auth + parser unchanged.
+
+Two new test methods cover CMR failure paths:
+`test_cmr_returns_no_granules_skips`, `test_cmr_http_failure_skips`.
+Existing happy-path tests updated to mock CMR + the new archive URL.
+
+End-to-end verified post-merge via a one-shot GitHub Actions
+diagnostic that hit both regions and confirmed HTTP 200 with real
+DAP-headers + JPL RL06.3Mv4 mascon body content (PR #147 add + #149
+remove, both admin-merged; zero LLM credits).
+
+### Added — Earthdata operator actions completed (this session)
+
+The two NASA Earthdata app authorizations the bot depends on are now
+both on Andrew's account:
+- **NASA GESDISC DATA ARCHIVE** — for GPM-IMERG OPeNDAP. Without it,
+  bearer requests return 401 even with a valid token.
+- **PO.DAAC Cumulus OPS** — for the new GRACE-FO ice_mass archive
+  on `archive.podaac.earthdata.nasa.gov`. Same authorization pattern.
+
+[/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md](/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md)
+`EARTHDATA_TOKEN` env-var documentation expanded to enumerate both
+required apps and the Earthdata Cloud migration context.
+
+Both authorizations verified end-to-end against the production
+endpoints via paired diagnostic workflows that landed and were
+removed cleanly (PRs #140–#149, several pairs).
+
+### Added — Daily-plan analytics corpus (ffb0a5c + 73b0f9a)
+
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/DRAFT_CORPUS.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/DRAFT_CORPUS.md)
+(+1228 lines, new) captures graded drafts across recent cycles.
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/IMPROVEMENT_PLAN.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/IMPROVEMENT_PLAN.md)
+(+108 lines) and
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/QUALITY_TREND.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/QUALITY_TREND.md)
+(+63 lines) consolidate the trailing daily-plan refinement PRs.
+
+These docs become the corpus the upcoming writer-payload-slimming
+work (Tier B3 in the optimization test plan at
+[/Users/andrewpuschel/.gstack/projects/andrewzp-theheat/test-plan-triage-optimization.md](/Users/andrewpuschel/.gstack/projects/andrewzp-theheat/test-plan-triage-optimization.md))
+will evaluate prompt changes against.
+
+### Operations notes
+
+- Bot workflows (`theheat-bot`, `voice-regression`) **remain disabled**
+  in CI. Re-enable via `gh workflow enable theheat-bot && gh workflow
+  enable voice-regression`. Andrew has not yet given the
+  re-enable signal under the new architecture.
+- Two diagnostic workflow ghost records in GitHub's registry have
+  been disabled (orphans from iCloud "keep both files" duplicates
+  during the diagnostic add-and-remove cycles). `.gitignore`
+  extended to cover `*" 2.yml"`, `*" 2.yaml"`, `*" 2.json"` so the
+  pattern doesn't recur.
+- Two `wip/` branches remain parked from 2026-05-17 awaiting
+  editorial sign-off: [`wip/fact-check-disposition-tightening`](https://github.com/andrewzp/theheat/tree/wip/fact-check-disposition-tightening)
+  (Theme 6) and [`wip/climate-indices-cadence`](https://github.com/andrewzp/theheat/tree/wip/climate-indices-cadence)
+  (Codex #4). A third (and newer) parked branch
+  [`wip/era-anchors-safety-curation`](https://github.com/andrewzp/theheat/tree/wip/era-anchors-safety-curation)
+  carries an era-anchor curation policy change (removes deaths /
+  politics from cultural-era scaffolding) — voice/editorial decision
+  pending Andrew's review.
+
+---
+
 ## [0.8.0.0] - 2026-05-19
 
 The cost-and-cap release. Five PRs landed in one session: Anthropic

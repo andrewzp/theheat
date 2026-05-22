@@ -2,6 +2,8 @@
 
 Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest section at top.
 
+> **Active handoff (2026-05-22):** This file is the historical log of session-to-session transitions. The current resume prompt + verification block + parked work lives in [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md). Start there for a fresh session pickup.
+
 ---
 
 # 2026-05-14 — Brand kit correction + @theheat profile live + PR #93 closed
