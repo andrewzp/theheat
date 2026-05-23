@@ -2,6 +2,171 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1.0] - 2026-05-22 (late session)
+
+The visibility-and-routine-hygiene release. Same-day follow-up to 0.9.0.0:
+adds the dashboard's "Automation" status strip + a daily-plan routine
+prompt rewrite that fixes two distinct routine bugs the prior session
+surfaced. No pipeline architecture changes; bot workflows still paused
+pending operator re-enable signal.
+
+### Added — Dashboard automation status strip (PR #156)
+
+New persistent strip at the top of every dashboard view: four colored
+dots (one per automation: `theheat-bot`, `voice-regression`,
+`refresh-thresholds`, daily-plan Claude routine) plus a posting-mode
+pill (counts of pending drafts by approval mode). Read-only — no
+buttons, no destructive actions. Dot colors:
+
+- Green: workflow active + last run succeeded (or routine recently
+  graded / no-fresh-drafts)
+- Yellow: workflow active + last run failed (or routine outcome=error)
+- Gray: workflow `disabled_manually` or routine beacon stale (>25h
+  since last write)
+- Red: dashboard API error reading state
+
+Tooltip on hover shows full name + last-run UTC timestamp + last-run
+conclusion. The posting-mode pill reads pending drafts and counts by
+`approval_policy.mode`.
+
+Implementation: new `dashboard/lib/automation.js` with read helpers
+(`fetchWorkflowState`, `fetchWorkflowLastRun`, `readRoutineBeacon`,
+`getAutomationStatus`). New `dashboard/app/api/automation/route.js` —
+read-only `GET` endpoint, basic auth via the existing
+`requireDashboardAuth` middleware. Status strip component in
+`dashboard/app/page.js` with styled-jsx (no separate CSS file; matches
+existing dashboard pattern). Fetch piggybacks on the existing 30-second
+poll interval in `Dashboard.fetchData`, but lives in its **own**
+try/catch outside the dashboard fetch so dashboard outages don't
+suppress automation refresh and vice versa.
+
+Read paths chosen to avoid race conditions:
+
+- **Workflows** read from GitHub Actions API (`GET /repos/{owner}/{repo}/actions/workflows/{file}` and `/runs?per_page=1`).
+- **Routine** reads from a NEW `routine_beacon.json` file in the gist
+  (not `state.json.automation`) — lets the routine write its beacon
+  via per-file `PATCH` without touching `state.json`, eliminating the
+  lost-update race against concurrent python pipeline writers that an
+  earlier design iteration would have introduced.
+- **Posting mode** reads pending drafts via the existing
+  `readStateStore` helper (the same path the rest of the dashboard
+  uses).
+
+Tests: 9 new unit + route tests in `dashboard/tests/automation.test.js`.
+Dashboard suite 30 → 39 passing.
+
+### Added — Python `AutomationState` schema (commits c4009bb, 011063a)
+
+New `AutomationState` TypedDict in `src/state_schema.py` with two
+optional fields (`routine_last_run_at`, `routine_last_run_outcome`).
+Added to `BotState` adjacent to `source_health`. Added to
+`DEFAULT_STATE` in `src/state.py` so `_fresh_state()` includes it.
+`_merge_state()` extended to preserve the `automation` field with a
+"current wins" rule — only the routine writes this field (and even
+that goes to a separate gist file in v0.9.1.0, not `state.json`), so
+the merge rule is defensive future-proofing: if anything ever does
+write `automation` through python, concurrent crons can't erase it.
+Three new tests cover the round-trip, current-wins ordering, and
+missing-field defaulting.
+
+mypy clean across 92 source files (was 91). pytest 1348 → 1351 (+3
+merge-preservation tests).
+
+### Changed — Daily-plan routine prompt: Step 0 + Step 9.5
+
+Two new steps inserted into the live routine (`trig_016PGeHZgEYWmeQhx1xGmYg6`) via the claude.ai RemoteTrigger API:
+
+- **New Step 0 — stale-snapshot sync.** Forces the routine to
+  `git fetch origin main && git checkout -B main origin/main &&
+  git reset --hard origin/main && git clean -fd` before any other
+  work. Fixes the bug where the CCR environment reuses a stale git
+  checkout across runs — this is what caused PR #152's confused
+  re-grade on 2026-05-21 (the routine operated from a snapshot 4
+  days behind main, re-graded drafts that main's `2026-05-19`
+  corpus section had already graded with different verdicts).
+- **New Step 9.5 — health beacon write.** Writes a 2-field JSON
+  document (`routine_last_run_at`, `routine_last_run_outcome`) to
+  `routine_beacon.json` in the gist regardless of grading outcome.
+  Best-effort: on `gh api -X PATCH` failure (most likely cause:
+  routine's stored token lacks `gist:write` scope), logs a warning
+  and exits 0 to keep the cycle alive. Beacon outcomes:
+  `"graded"`, `"no-fresh-drafts"`, `"error"`.
+
+Step 9.5 uses `jq -nc` (compact) instead of pretty output. The
+default pretty output produces invalid JSON when `--arg` nests a
+multi-line string (the inner string ends up with literal newlines
+rather than `\n` escapes), which would have shipped a broken Step
+9.5. Caught by pre-push validation that ran `bash -n` on every
+bash block and dry-ran the jq pipeline before pushing to the live
+routine.
+
+### Operator action this release (Andrew)
+
+- Rejected 5 stale fire drafts from the gist pending queue (Mali,
+  Campeche, Mongolia, BC, Siberia — all 4–10 days old with
+  present-tense fire-detection or "today" language baked in). Cleaned
+  via direct gist PATCH (the routine's stored token lacks
+  `gist:write` scope in the managed CCR environment, so the routine
+  itself can't bulk-reject).
+- Consolidated three stacked daily-plan auto-PRs (#151, #152, #153)
+  into one squash commit on main (PR #155) using the same pattern
+  Codex used on 2026-05-19 (`ffb0a5c`). #152's section was skipped
+  — it was a confused re-grade of drafts already in main's
+  `2026-05-19` corpus section (the routine had run from a stale
+  snapshot, which is what motivated the Step 0 fix above).
+- Updated the routine prompt earlier in the session (before the v0.9.1.0
+  scope was finalized) to use a rolling `daily-plan-current` branch +
+  single persistent PR (the "Step 8" rewrite). Combined with the new
+  Step 0 + Step 9.5, the routine now: (a) syncs to fresh main, (b)
+  grades the queue, (c) writes a rolling PR, (d) writes the beacon.
+
+### Notes on the design journey
+
+The shipped scope is intentionally **less** than what the v1/v2 design
+specs explored:
+
+- v1 design proposed a full "Pause Everything" control plane that would
+  pause workflows + the routine atomically. Codex adversarial review
+  surfaced 11 issues including merge race, partial-failure traps, and
+  python sqlite-roundtrip drops.
+- v2 design pivoted to repo-variable + workflow `if:` guards. Codex
+  round 2 surfaced 11 more issues — the merge race + two-store
+  coordination didn't have clean fixes without a compare-and-swap
+  layer.
+- v3 (this release) descopes pause control entirely and ships only
+  read-only indicators + routine fixes. The pause control space is
+  parked; reopen if there's clear demand. Three spec versions
+  (`docs/superpowers/specs/2026-05-22-dashboard-pause-and-automation-indicators-design{,-v2}.md` and `2026-05-22-dashboard-automation-indicators-design-v3-descoped.md`) and one plan
+  (`docs/superpowers/plans/2026-05-22-dashboard-automation-indicators.md`) are retained for historical record.
+
+### Production state at this release
+
+bot workflows (`theheat-bot`, `voice-regression`) remain
+`disabled_manually` pending Andrew's re-enable signal. `refresh-thresholds` continues. The new routine prompt fires for the first time at 2026-05-23T15:07 UTC.
+
+mypy clean across 92 source files. pytest 1351 passing. Dashboard
+test suite 39 passing (was 30). next build passes.
+
+### Files added / modified
+
+- `dashboard/lib/automation.js` (new, 141 lines)
+- `dashboard/app/api/automation/route.js` (new, 16 lines)
+- `dashboard/app/page.js` (+157 lines: `AutomationStatusStrip` component + dot helpers + styled-jsx)
+- `dashboard/tests/automation.test.js` (new, 267 lines, 9 tests)
+- `src/state_schema.py` (+17 lines: `AutomationState` TypedDict + field on `BotState`)
+- `src/state.py` (+15 lines: `DEFAULT_STATE` entry + `_merge_state` copy block)
+- `tests/test_state.py` (+61 lines: 3 new tests in `TestAutomationMerge`)
+- `docs/superpowers/specs/2026-05-22-dashboard-pause-and-automation-indicators-design.md` (new, v1 retained for history)
+- `docs/superpowers/specs/2026-05-22-dashboard-pause-and-automation-indicators-design-v2.md` (new, v2 retained for history)
+- `docs/superpowers/specs/2026-05-22-dashboard-automation-indicators-design-v3-descoped.md` (new, the approved scope)
+- `docs/superpowers/plans/2026-05-22-dashboard-automation-indicators.md` (new)
+- `PIPELINE.md` (added "Automation status strip" + "Routine Health Beacon" subsections)
+- Daily-plan routine prompt updated via RemoteTrigger (not in repo diff; `trig_016PGeHZgEYWmeQhx1xGmYg6`).
+
+PRs merged: #155 (consolidate daily-plan refinements), #156 (dashboard
+automation indicators + python schema). All other operator actions
+(routine prompt update, gist draft rejection) are out-of-repo.
+
 ## [0.9.0.0] - 2026-05-22
 
 The end-to-end-trustworthy-pipeline release. Five distinct work streams
