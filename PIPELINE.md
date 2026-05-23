@@ -232,6 +232,11 @@ ranking → evaluator → rewrite validation) and stored with
 ### Dashboard
 Next.js 15 + React 19 on Vercel free tier. Dark terminal aesthetic. Shows pending drafts sorted by signal + candidate score. Human approves, edits, or rejects.
 
+Persistent **Automation status strip** at the top of every view (added 0.9.1.0): 4 colored dots showing the state of `theheat-bot`, `voice-regression`, `refresh-thresholds`, and the daily-plan Claude routine, plus a posting-mode pill (manual / auto / suggested counts across pending drafts). Read-only — no buttons. Backed by `GET /api/automation` which fans out to the GitHub Actions API for workflow state + last-run, and reads `routine_beacon.json` from the gist for routine status. Polls on the existing 30s cadence; failures are non-fatal.
+
+### Routine Health Beacon
+The daily-plan Claude routine writes `routine_last_run_at` + `routine_last_run_outcome` to a separate `routine_beacon.json` file in the same gist as `state.json` at the end of every cycle (added 0.9.1.0, Step 9.5 of the routine prompt). Lives in a separate file (not `state.json`) so the routine never has to PATCH the full state — eliminates the lost-update race with concurrent python pipeline writers. Best-effort: a beacon write failure logs a warning but doesn't fail the routine cycle. Dashboard's automation strip reads this beacon to color the routine indicator.
+
 ### Post
 Tweepy posts to X. If successful, cross-posts to Bluesky via AT Protocol. On rate-limit (429), stays pending for retry next hour.
 
