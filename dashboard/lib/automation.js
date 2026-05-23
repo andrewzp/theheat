@@ -1,8 +1,6 @@
 import { readStateStore } from "./state-store.js"
 
-const GITHUB_TOKEN = process.env.GITHUB_TOKEN
-const REPO = process.env.THEHEAT_REPO || "andrewzp/theheat"
-const GIST_ID = process.env.GIST_ID || ""
+const DEFAULT_PRODUCTION_BRANCH = "main"
 
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
@@ -16,17 +14,30 @@ const ROUTINE = {
 }
 
 function ghHeaders() {
+  const githubToken = process.env.GITHUB_TOKEN || ""
   return {
-    Authorization: `token ${GITHUB_TOKEN}`,
+    ...(githubToken ? { Authorization: `token ${githubToken}` } : {}),
     Accept: "application/vnd.github.v3+json",
   }
 }
 
+function repo() {
+  return process.env.THEHEAT_REPO || "andrewzp/theheat"
+}
+
+function gistId() {
+  return process.env.GIST_ID || ""
+}
+
+function productionBranch() {
+  return process.env.THEHEAT_AUTOMATION_BRANCH || DEFAULT_PRODUCTION_BRANCH
+}
+
 export async function fetchWorkflowState(file) {
-  if (!GITHUB_TOKEN) {
+  if (!process.env.GITHUB_TOKEN) {
     throw new Error("GITHUB_TOKEN not configured")
   }
-  const url = `https://api.github.com/repos/${REPO}/actions/workflows/${file}`
+  const url = `https://api.github.com/repos/${repo()}/actions/workflows/${file}`
   const res = await fetch(url, { headers: ghHeaders() })
   if (!res.ok) {
     throw new Error(`fetchWorkflowState(${file}) failed: ${res.status}`)
@@ -36,10 +47,14 @@ export async function fetchWorkflowState(file) {
 }
 
 export async function fetchWorkflowLastRun(file) {
-  if (!GITHUB_TOKEN) {
+  if (!process.env.GITHUB_TOKEN) {
     throw new Error("GITHUB_TOKEN not configured")
   }
-  const url = `https://api.github.com/repos/${REPO}/actions/workflows/${file}/runs?per_page=1`
+  const params = new URLSearchParams({
+    branch: productionBranch(),
+    per_page: "1",
+  })
+  const url = `https://api.github.com/repos/${repo()}/actions/workflows/${file}/runs?${params.toString()}`
   const res = await fetch(url, { headers: ghHeaders() })
   if (!res.ok) {
     throw new Error(`fetchWorkflowLastRun(${file}) failed: ${res.status}`)
@@ -64,10 +79,10 @@ export async function readRoutineBeacon() {
   //
   // Living in a separate file (not state.json) eliminates the lost-update race
   // where a routine PATCH would overwrite a concurrent python cron write.
-  if (!GITHUB_TOKEN || !GIST_ID) {
+  if (!process.env.GITHUB_TOKEN || !gistId()) {
     return null
   }
-  const url = `https://api.github.com/gists/${GIST_ID}`
+  const url = `https://api.github.com/gists/${gistId()}`
   const res = await fetch(url, { headers: ghHeaders() })
   if (!res.ok) {
     throw new Error(`readRoutineBeacon: gist read failed: ${res.status}`)
@@ -118,15 +133,28 @@ async function fetchWorkflowFull(spec) {
   }
 }
 
+async function readPostingModeSummary() {
+  try {
+    const stateRecord = await readStateStore()
+    const drafts = stateRecord?.state?.drafts ?? stateRecord?.drafts ?? []
+    return {
+      posting_mode_summary: summarizePostingModes(drafts),
+      posting_mode_error: null,
+    }
+  } catch (e) {
+    return {
+      posting_mode_summary: null,
+      posting_mode_error: e?.message || String(e),
+    }
+  }
+}
+
 export async function getAutomationStatus() {
-  const [workflows, beacon, stateRecord] = await Promise.all([
+  const [workflows, beacon, postingMode] = await Promise.all([
     Promise.all(WORKFLOWS.map(fetchWorkflowFull)),
     readRoutineBeacon().catch(() => null),
-    readStateStore().catch(() => null),
+    readPostingModeSummary(),
   ])
-
-  const drafts = stateRecord?.state?.drafts ?? stateRecord?.drafts ?? []
-  const posting_mode_summary = summarizePostingModes(drafts)
 
   return {
     workflows,
@@ -136,6 +164,7 @@ export async function getAutomationStatus() {
       last_run_at: beacon?.routine_last_run_at ?? null,
       last_run_outcome: beacon?.routine_last_run_outcome ?? null,
     },
-    posting_mode_summary,
+    posting_mode_summary: postingMode.posting_mode_summary,
+    posting_mode_error: postingMode.posting_mode_error,
   }
 }

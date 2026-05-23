@@ -69,7 +69,10 @@ test("fetchWorkflowState returns state + updated_at", async () => {
 })
 
 test("fetchWorkflowLastRun returns the most recent run", async () => {
-  global.fetch = async () =>
+  const calls = []
+  global.fetch = async (url) => {
+    calls.push(String(url))
+    return (
     workflowRunsResponse([
       {
         id: 999,
@@ -78,13 +81,17 @@ test("fetchWorkflowLastRun returns the most recent run", async () => {
         created_at: "2026-05-22T08:00:00Z",
       },
     ])
+    )
+  }
   process.env.GITHUB_TOKEN = "ghp_test"
+  delete process.env.THEHEAT_AUTOMATION_BRANCH
 
   const { fetchWorkflowLastRun } = await importFresh("lib/automation.js")
   const result = await fetchWorkflowLastRun("bot.yml")
 
   assert.equal(result.id, 999)
   assert.equal(result.conclusion, "success")
+  assert.match(calls[0], /branch=main/)
 })
 
 test("fetchWorkflowLastRun returns null when no runs exist", async () => {
@@ -172,6 +179,34 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
   assert.equal(status.posting_mode_summary.manual_only_count, 2)
   assert.equal(status.posting_mode_summary.armed_auto_count, 1)
   assert.equal(status.posting_mode_summary.suggested_count, 1)
+})
+
+test("getAutomationStatus reports posting mode unavailable when state store read fails", async () => {
+  global.fetch = async (url) => {
+    if (url.includes("/runs?")) {
+      return workflowRunsResponse([
+        {
+          id: 1,
+          status: "completed",
+          conclusion: "success",
+          created_at: "2026-05-22T08:00:00Z",
+        },
+      ])
+    }
+    if (url.includes("/actions/workflows/")) {
+      return workflowResponse("active")
+    }
+    throw new Error("gist unavailable")
+  }
+  process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.GIST_ID = "test_gist_id"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
+
+  const { getAutomationStatus } = await importFresh("lib/automation.js")
+  const status = await getAutomationStatus()
+
+  assert.equal(status.posting_mode_summary, null)
+  assert.match(status.posting_mode_error, /gist unavailable|fetch failed/i)
 })
 
 test("GET /api/automation returns 401 without auth when configured", async () => {
@@ -263,5 +298,55 @@ test("GET /api/automation degrades to 200 with workflow errors when GH API throw
   }
   // Routine + posting-mode helpers also return null on fetch fail.
   assert.equal(body.routine.last_run_at, null)
-  assert.equal(body.posting_mode_summary.manual_only_count, 0)
+  assert.equal(body.posting_mode_summary, null)
+  assert.match(body.posting_mode_error, /ECONNREFUSED|fetch failed/i)
+})
+
+test("GET /api/automation reuses the short-lived status cache", async () => {
+  process.env.DASHBOARD_USERNAME = "admin"
+  process.env.DASHBOARD_PASSWORD = "secret"
+  process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.GIST_ID = "test_gist_id"
+  process.env.THEHEAT_STATE_BACKEND = "gist"
+  delete process.env.THEHEAT_AUTOMATION_CACHE_TTL_MS
+
+  let actionCalls = 0
+  let gistCalls = 0
+  global.fetch = async (url) => {
+    if (url.includes("/runs?")) {
+      actionCalls++
+      return workflowRunsResponse([
+        {
+          id: 7,
+          status: "completed",
+          conclusion: "success",
+          created_at: "2026-05-22T08:00:00Z",
+        },
+      ])
+    }
+    if (url.includes("/actions/workflows/")) {
+      actionCalls++
+      return workflowResponse("active")
+    }
+    gistCalls++
+    return gistResponseWithFiles(
+      { drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }] },
+      {
+        routine_last_run_at: "2026-05-22T15:04:58Z",
+        routine_last_run_outcome: "graded",
+      },
+    )
+  }
+
+  const { GET } = await importFresh("app/api/automation/route.js")
+  const req = new Request("http://localhost/api/automation", {
+    headers: { authorization: basicAuth("admin", "secret") },
+  })
+  const first = await GET(req)
+  const second = await GET(req)
+
+  assert.equal(first.status, 200)
+  assert.equal(second.status, 200)
+  assert.equal(actionCalls, 6)
+  assert.equal(gistCalls, 2)
 })

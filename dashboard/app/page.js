@@ -84,7 +84,7 @@ function AutomationStatusStrip({ status, error }) {
   }
   const workflows = status.workflows || []
   const routine = status.routine || {}
-  const pm = status.posting_mode_summary || {}
+  const pm = status.posting_mode_summary
 
   return (
     <div className="automation-strip">
@@ -109,10 +109,16 @@ function AutomationStatusStrip({ status, error }) {
         }, outcome: ${routine.last_run_outcome || "unknown"}`}
       />
       <span className="automation-spacer" />
-      <span className="automation-posting-mode">
-        {pm.manual_only_count ?? 0} manual / {pm.armed_auto_count ?? 0} auto /{" "}
-        {pm.suggested_count ?? 0} suggested
-      </span>
+      {pm ? (
+        <span className="automation-posting-mode">
+          {pm.manual_only_count ?? 0} manual / {pm.armed_auto_count ?? 0} auto /{" "}
+          {pm.suggested_count ?? 0} suggested
+        </span>
+      ) : (
+        <span className="automation-posting-mode automation-posting-mode-error" title={status.posting_mode_error || ""}>
+          posting status unavailable
+        </span>
+      )}
     </div>
   )
 }
@@ -2103,6 +2109,7 @@ export default function Dashboard() {
         .automation-dot-label { font-size: 12px; }
         .automation-spacer { flex: 1; }
         .automation-posting-mode { font-size: 12px; color: #a3a3a3; }
+        .automation-posting-mode-error { color: #fca5a5; }
         .automation-error, .automation-loading { font-size: 12px; color: #a3a3a3; }
       `}</style>
 
