@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2.0] - 2026-05-22
+
+Dashboard automation hardening. The automation strip now reports production
+workflow status and posting-mode state more honestly, without creating a
+GitHub API call storm from every open dashboard tab.
+
+### Changed
+
+- Scoped automation workflow "last run" reads to the production branch
+  (`main` by default, configurable via `THEHEAT_AUTOMATION_BRANCH`) so PR
+  workflow runs cannot masquerade as live bot health.
+- Added a short server-side cache for `GET /api/automation`
+  (`THEHEAT_AUTOMATION_CACHE_TTL_MS`, default 15s) so repeated dashboard
+  polls share one status fetch instead of fanning out to GitHub on every
+  browser refresh.
+
+### Fixed
+
+- The posting-mode pill now shows `posting status unavailable` when the
+  state store cannot be read, instead of falsely reporting `0 manual / 0
+  auto / 0 suggested`.
+- Routine-beacon prompt examples now default to `no-fresh-drafts` unless
+  the routine sets a real `ROUTINE_OUTCOME`, preventing copied prompt
+  snippets from hard-coding `graded`.
+
 ## [0.9.1.0] - 2026-05-22 (late session)
 
 The visibility-and-routine-hygiene release. Same-day follow-up to 0.9.0.0:
