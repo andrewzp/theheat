@@ -13,6 +13,65 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-23 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from prior graded cycles (May 13–18). Operator rejected the 5
+stale fire drafts (Mali, Campeche, Mongolia fire + BC fire + Siberia fire) on 2026-05-22
+per BRIEFING.md; queue dropped 18 → 13. No new drafts since 2026-05-18T15:52Z (Stahl Peak
+snow). Queue static 5 days; 4th consecutive no-fresh-draft grading cycle since May 19.
+
+**Grade distribution (0 fresh drafts):** N/A.
+**A-rate: N/A.** Most recent graded cycle: **21%** (3/14, 2026-05-19). Gap from bar:
+untracked this cycle (prior: 29 pp).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade (last session) | Staleness |
+|---|---|---|---|---|---|
+| [1] | Chuuk monthly_high — 34.4°C | monthly_high | May 13T10:32Z | B | No real-time language; "May 9" observation date |
+| [2] | Bethel, Maine monthly_low — 28°F | monthly_low | May 13T21:29Z | B- | No real-time language; "May 9" observation date |
+| [3] | Western Madagascar coral — 10.2°C-wks | coral_bleaching | May 15T03:01Z | A- | No "today"; DHW multi-week metric |
+| [4] | Fiji coral — 10.1°C-wks | coral_bleaching | May 15T03:02Z | B+ | No "today"; DHW multi-week metric |
+| [5] | Nauru coral — 8.2°C-wks | coral_bleaching | May 15T03:04Z | B+ | No "today"; DHW multi-week metric |
+| [6] | Great Nicobar coral — 7.2°C-wks | coral_bleaching | May 15T03:47Z | C+ | No "today"; DHW multi-week metric |
+| [7] | Chagos coral — 7.2°C-wks | coral_bleaching | May 15T03:48Z | C+ | No "today"; DHW multi-week metric |
+| [8] | Southern Borneo coral — 4.4°C-wks | coral_bleaching | May 15T03:55Z | C | No "today"; DHW multi-week metric |
+| [9] | Galapagos coral — 24.5°C-wks | coral_bleaching | May 15T05:16Z | A- | No "today"; DHW multi-week metric |
+| [10] | Austral Islands coral — 8.6°C-wks | coral_bleaching | May 15T05:20Z | B+ | No "today"; DHW multi-week metric |
+| [11] | Costa Rica Pacific coral — 12.0°C-wks | coral_bleaching | May 18T01:30Z | A- | No "today"; DHW multi-week metric |
+| [12] | Mf Nooksack snow — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | No "today"; past-event framing |
+| [13] | Stahl Peak snow — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | No "today"; past-event framing |
+
+### Staleness review as of 2026-05-23 ~15:00 UTC
+
+**0 new stale draft candidates.** The 5 previously-flagged fire drafts (Mali, Campeche,
+Mongolia "is radiating" + BC "burning today" + Siberia "detected... today") were rejected
+by the operator on 2026-05-22, confirmed in BRIEFING.md. All 13 remaining drafts: no
+"today," "tonight," or forecast-to-hit-today language. DHW coral drafts use multi-week
+metrics — no staleness per policy (consistent with all rulings since 2026-05-15). Snow
+drafts frame a completed event ("fell over 3 days"). Bulk-reject: not triggered.
+
+Note: the 8 oldest coral drafts (Great Nicobar, Chagos, Southern Borneo, Galapagos,
+Austral Islands, Western Madagascar, Fiji, Nauru) are now ~8 days old (created May 15).
+DHW accumulation values may no longer reflect current reef stress. Operator should verify
+freshness before posting.
+
+Staleness bulk-reject: not triggered. `gh` CLI unavailable in this remote execution
+environment (consistent with all cycles since 2026-05-13). No write attempted.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs from May 13–18)
+- Fresh drafts graded: 0
+- A-rate: N/A (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle (no fresh drafts to observe failure modes in)
+- Staleness bulk-reject: not triggered (0 new stale candidates; 5 prior stale fire drafts cleared by operator on 2026-05-22)
+- Queue static since: 2026-05-18T15:52Z (4th consecutive no-fresh-draft grading cycle)
+- Operator note: pipeline telemetry check recommended — `triage_cap` and `evidence_contract` kill counts may explain why no drafts have reached pending since May 18
+
+---
+
 ## 2026-05-22 — Daily corpus grading (0 fresh drafts; 18 carry-overs, all previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending

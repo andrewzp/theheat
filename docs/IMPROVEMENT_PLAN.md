@@ -10,9 +10,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `13f8d64` (source-to-triage gateway merged on main; daily grading state reflects the May 19 corpus snapshot) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + triage stage live** (Sonnet 4.6 writer prompt-cached + Gemini fact-checker + Gemini 2.5 Pro critic; triage active for `coral_dhw` via PR #134; `THEHEAT_TRIAGE_ENABLED=1` in CI) |
-| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era) |
+| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era); 3 no-fresh-draft cycles since (May 20/22/23) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **29 pp** (50% − 21%) |
+| Gap | **29 pp** (50% − 21%); untracked May 20/22/23 (no fresh drafts) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -246,40 +246,6 @@ has a coral-specific named-moves section before implementing.
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
 
-### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
-
-**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
-threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
-bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
-violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
-manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
-margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
-archive, trivial margin, location where cold is architecturally expected — but with
-cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
-strong self-kill instincts for low-confidence fire framings.
-
-**Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
-**Last seen:** May 14.
-
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-cold-record framing section:
-
-> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
-> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
-> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
-> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
-> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
-> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
-> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
-> correct on the same grounds.
-
-**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
-(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
-drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
-only — does not affect monthly_high or other record types.
-
-**Status:** Drafted. Awaiting human implementation.
-
 ### P7 — Coral opener formula convergence
 
 **Observed:** 2026-05-19 — 8 of 9 coral_bleaching drafts use the same opener: "[Location]
@@ -333,6 +299,44 @@ where the new value is a multiple of the prior. Prevents the writer from dilutin
 naturally strong signal with topographic explanation.
 
 **Status:** Drafted. Awaiting human implementation.
+
+### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
+
+**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
+threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
+bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
+violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
+manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
+margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
+archive, trivial margin, location where cold is architecturally expected — but with
+cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
+strong self-kill instincts for low-confidence fire framings.
+
+**Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
+**Last seen:** May 14.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+cold-record framing section:
+
+> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
+> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
+> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
+> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
+> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
+> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
+> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
+> correct on the same grounds.
+
+**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
+(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
+drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
+only — does not affect monthly_high or other record types.
+
+**Status:** Drafted. Awaiting human implementation. Note: Bethel, Maine (the exemplar
+case) remains in the pending queue as of 2026-05-23 — the failure mode is live, not
+theoretical. 5 fresh graded cycles have passed since the proposal was first observed
+(May 15/16/17/18/19) with no new cold-record evidence surfacing, but the original
+draft persists.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
