@@ -8,11 +8,11 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `13f8d64` (source-to-triage gateway merged on main; daily grading state reflects the May 19 corpus snapshot) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + triage stage live** (Sonnet 4.6 writer prompt-cached + Gemini fact-checker + Gemini 2.5 Pro critic; triage active for `coral_dhw` via PR #134; `THEHEAT_TRIAGE_ENABLED=1` in CI) |
-| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era); 3 no-fresh-draft cycles since (May 20/22/23) |
+| Bot commit | `8c5e09b` (0.9.1.0 — dashboard automation indicators + routine prompt rewrite; all 23 sources on triage path + evidence contract live since 0.9.0.0) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker + Gemini 2.5 Pro critic; all 23 sources on triage path via PR #150; evidence contract gates writer via PR 0.9.0.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes `routine_beacon.json` to gist each cycle) |
+| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 4 consecutive no-draft cycles since: May 20, 22, 23, 24) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **29 pp** (50% − 21%); untracked May 20/22/23 (no fresh drafts) |
+| Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24 (no fresh drafts) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 
@@ -313,7 +313,9 @@ cleaner voice. The writer has no self-kill gate for weak cold records the way it
 strong self-kill instincts for low-confidence fire framings.
 
 **Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
-**Last seen:** May 14.
+**Last seen:** May 14. Note: no new cold-record drafts appeared in 5 subsequent fresh-draft
+cycles (May 15–19), so the failure mode is dormant but not confirmed resolved. The absence
+is likely upstream (score-gate/triage), not a structural fix.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 cold-record framing section:
@@ -333,7 +335,7 @@ drafts' existing self-kill instincts on low-confidence framings. Scoped to cold 
 only — does not affect monthly_high or other record types.
 
 **Status:** Drafted. Awaiting human implementation. Note: Bethel, Maine (the exemplar
-case) remains in the pending queue as of 2026-05-23 — the failure mode is live, not
+case) remains in the pending queue as of 2026-05-24 — the failure mode is live, not
 theoretical. 5 fresh graded cycles have passed since the proposal was first observed
 (May 15/16/17/18/19) with no new cold-record evidence surfacing, but the original
 draft persists.

@@ -13,6 +13,75 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-24 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from graded cycles 2026-05-13 through 2026-05-18. Between the
+2026-05-22 session and now, the operator rejected the 5 stale fire drafts flagged across
+seven consecutive grading cycles (Mali / Campeche / Mongolia "is radiating" + BC
+"burning today" + Siberia "detected today"), dropping the queue from 18 → 13. No new
+drafts have been added since 2026-05-18T18:06Z (the Siberia fire, now rejected). Six
+cron cycles per day × 6 days = ~36 unobserved cron cycles without a new pending draft.
+
+**Why no fresh drafts:** Queue static for 6 days (May 18 → May 24). Four plausible
+causes in descending probability: (1) **Evidence contract gate** (PR 0.9.0.0) — the new
+`audit_story_bundle` step at the top of `generate_draft` blocks writer invocation when
+structurally-required evidence is missing; this was introduced with the 0.9.0.0 release
+and is the most likely new bottleneck; check `evidence_contract` suppression ledger
+entries for May 18–24. (2) **Score-gate kills** — borderline signals failing category
+thresholds; check `source_health` for live detections that die at scoring. (3) **Triage
+cap** — PR #134 coral_dhw triage active (global cap 3/cycle); if coral signals dominate,
+other categories spill; check `triage_cap` stage in suppression ledger. (4) **Seasonal
+quiet** — low global extreme-signal frequency plausible for a 6-day stretch.
+
+**Staleness review:** 13 pending drafts, ages 6–11 days. None contain real-time-baked
+language ("today," "tonight," "forecast to hit today"):
+
+| # | Draft | Type | Age | Staleness flag |
+|---|---|---|---|---|
+| [1] | Chuuk FSM monthly_high | monthly_high | ~11d | "on May 9" — historical obs date, not "today" |
+| [2] | Bethel, Maine monthly_low | monthly_low | ~11d | "on May 9" — historical obs date |
+| [3]–[10] | Coral bleaching (8 drafts) | coral_bleaching | ~9d | "has accumulated X°C-weeks" — cumulative metric, no today-language |
+| [11] | Costa Rica Pacific coral | coral_bleaching | ~6d | same; no today-language |
+| [12] | Mf Nooksack snow | snow_extreme | ~6d | "fell over 3 days" — no today-language |
+| [13] | Stahl Peak snow | snow_extreme | ~6d | same |
+
+No bulk-reject candidates by policy. Staleness bulk-reject via `gh` remains unavailable
+(8th consecutive skip; `gh` CLI absent in managed remote execution environment). Operator
+should verify that the 9-day-old coral DHW values (drafts [3]–[10], created 2026-05-15)
+still reflect current reef stress before any publish decision, as NOAA CRW DHW
+accumulation updates daily.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+**Active proposals:** No evidence updates (no fresh drafts to observe failure modes in).
+
+### Operational note
+
+Operator rejection of the 5 stale fire drafts is the most significant queue hygiene
+action since the 2026-04-26 bulk-reject. Seven consecutive grading cycles flagged these
+drafts; they're gone. The 13-draft carry-over queue that remains is clean by the
+staleness policy.
+
+The deeper concern is queue stagnation. If the evidence contract gate is the bottleneck
+(the most likely new variable), the operator can check the suppression ledger's
+`stage="evidence_contract"` entries for May 18–24. A high count here would confirm the
+gate is active and explain why borderline bundles that previously reached pending no
+longer do. That would be net-positive for quality but the A-rate signal needs fresh
+drafts to measure.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs; queue 18 → 13 after operator rejections)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: no qualifying candidates by policy; `gh` CLI absent (8th
+  consecutive skip, 2026-05-13 through 2026-05-24)
+- Queue static since: 2026-05-18T18:06Z (Siberia fire, now rejected by operator)
+- Operator action confirmed: 5 stale fire drafts rejected (queue 18 → 13)
+
+---
+
 ## 2026-05-23 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending

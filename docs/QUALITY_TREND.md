@@ -28,6 +28,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-20 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 18 carry-overs from May 12–18, all previously graded. Draft [18] (Siberia fire "today") newly crosses 48h staleness threshold (~69h). 5 fire drafts total await operator rejection (Drafts 1, 2, 4, 6, 18). No new proposals; no active proposal evidence updates. Triage ON; no-draft cause unconfirmed (triage-cap/score-gate/writer-kill cascade possible — operator should check suppression ledger). |
 | 2026-05-22 | 0 | — | — | — | — | **—** | ✗ | No fresh drafts. 18 carry-overs all graded in prior cycles (May 13–19). 5 stale fire drafts identified for bulk-reject (drafts 1/2/4/6 fire + draft 18 Siberia "today"); bulk-reject skipped — gh CLI absent (7th consecutive skip). Queue static since May 15; 7 days without new drafts reaching pending. Likely cause: seasonal quiet or triage stage filtering; check `triage_cap` suppression ledger and `source_health`. No proposal evidence updates. |
 | 2026-05-23 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 13 carry-overs (down from 18 — operator rejected 5 stale fire drafts on 2026-05-22 per BRIEFING.md: Mali + Campeche + Mongolia fire + BC fire + Siberia fire). 0 new staleness candidates; all 13 remaining drafts lack real-time-baked language. 4th consecutive no-fresh-draft grading cycle. Queue static since 2026-05-18T15:52Z. Routine beacon write attempted under new 0.9.1.0 Step 9.5 prompt. Proposals re-ordered by leverage (P5 > P7 > P8 > P_new). No proposal evidence updates. |
+| 2026-05-24 | 0 | — | — | — | — | **—** | — | No fresh drafts. 13 carry-overs (same queue as May 23; no new operator actions). 0 bulk-reject candidates by policy; gh CLI absent (8th consecutive skip). Queue static since May 18T18:06Z. Most likely new suppression bottleneck: evidence contract gate (0.9.0.0) — operator should check `stage="evidence_contract"` suppression ledger for May 18–24. No proposal evidence updates. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -37,6 +38,17 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-05-24 — Staleness bulk-reject: no qualifying candidates; gh CLI absent (8th consecutive skip)
+
+**Status:** 13 pending drafts reviewed. None contain real-time-baked language ("today,"
+"tonight," "forecast to hit today"). Chuuk/Bethel cite "May 9" as a historical observation
+date (consistent with all prior staleness rulings). Coral DHW drafts use cumulative metric
+language without date-baking. Snow extreme drafts ("fell over 3 days") similarly clear.
+No drafts trigger the staleness policy. `gh` CLI not installed in managed remote execution
+environment — 8th consecutive skip (May 13 through May 24). No operator dashboard action
+needed on staleness grounds, but operator should verify that 9-day-old coral DHW values
+(May 15 drafts) still reflect current NOAA CRW readings before publishing.
 
 ### 2026-05-23 — Staleness bulk-reject: not triggered (0 new candidates; 5 prior stale fire drafts cleared by operator on 2026-05-22)
 
