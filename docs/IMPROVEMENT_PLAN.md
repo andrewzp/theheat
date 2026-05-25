@@ -10,11 +10,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `8c5e09b` (0.9.1.0 — dashboard automation indicators + routine prompt rewrite; all 23 sources on triage path + evidence contract live since 0.9.0.0) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker + Gemini 2.5 Pro critic; all 23 sources on triage path via PR #150; evidence contract gates writer via PR 0.9.0.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes `routine_beacon.json` to gist each cycle) |
-| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 4 consecutive no-draft cycles since: May 20, 22, 23, 24) |
+| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 5 consecutive no-draft cycles since: May 20, 22, 23, 24, 25) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24 (no fresh drafts) |
+| Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24/25 (no fresh drafts) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
+| Queue status | Static since 2026-05-18; 5th consecutive no-fresh-draft graded cycle. Check `evidence_contract` suppression stage kills in dashboard — most likely new bottleneck. |
 
 ## Active proposals
 
@@ -408,6 +409,14 @@ graded drafts. First A-grades are coral_bleaching (3 of 3 A-grades came from new
 on 2026-05-19). Fire and monthly_high categories have not yet produced an A-grade in the
 two-bot era. Voice engine history (v2: 43%; v2.5: 9%) remains reference only — pipeline
 dead.
+
+**Updated 2026-05-25:** Five consecutive graded cycles (May 20, 22, 23, 24, 25) produced
+0 fresh drafts. Queue static since 2026-05-18T15:52Z (~7 days). Two-bot A-rate baseline
+unchanged: May 13 0/4 = 0%; May 19 3/14 = 21%; cumulative 3A / 18 = 17%. The 0.9.0.0
+release (2026-05-22) wired all 23 sources through the evidence contract for the first time
+— `stage="evidence_contract"` suppression kills are now possible on every signal type and
+are unverified empirically. A non-trivial kill count here would explain queue stagnation
+without invoking seasonal quiet. Next measurement when queue resumes.
 
 **Watch for:** whether fire category closes the gap between the May-13 0% and the coral
 batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories

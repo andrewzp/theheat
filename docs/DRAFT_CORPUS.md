@@ -13,6 +13,81 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-25 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from graded cycles 2026-05-13 through 2026-05-18. The 5 stale
+fire drafts were confirmed removed by operator (per 0.9.1.0 briefing; queue 18 → 13).
+Zero new drafts since 2026-05-18T15:52Z (Stahl Peak snow_extreme). Today is the 5th
+consecutive no-fresh-draft graded cycle.
+
+**Why no fresh drafts:** Queue static for 7 days (May 18–25). ~42 cron cycles (6/day × 7
+days) without a new pending draft. Same candidate causes as May 24 cycle: evidence contract
+gate (`stage="evidence_contract"`, new as of 0.9.0.0) is the most likely new bottleneck;
+score-gate kills and triage-cap spills are secondary candidates; seasonal quiet is
+plausible for a stretch this long. Operator: check `evidence_contract` suppression stage
+counts since May 22. If non-trivial (several kills per cron cycle), the contract may be
+over-strict on currently-live signal types. Note: queue was already static 4 days before
+0.9.0.0 merged, so the gate is not the sole cause.
+
+**Staleness review as of 2026-05-25 ~15:00 UTC:**
+
+No remaining drafts contain "today/tonight/forecast" language — no new staleness-policy
+triggers. The 9 coral drafts (created 2026-05-15 to 2026-05-18) are 7–10 days old. DHW
+accumulation values are updated daily by NOAA CRW. Operator should verify current DHW
+against NOAA CRW before publishing any coral draft — the cited °C-week values are editorial
+substance; stale figures are a factual error.
+
+Bulk-reject: no qualifying candidates by policy. `gh` CLI absent — 9th consecutive skip
+(May 13 → May 25).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade | Staleness |
+|---|---|---|---|---|---|
+| [1] | Chuuk FSM — 34.4°C (94°F) | monthly_high | May 13T10:32Z | B | Historical obs date |
+| [2] | Bethel, Maine — 28°F (-2.2°C) | monthly_low | May 13T21:29Z | B- | Historical obs date |
+| [3] | Madagascar coral — 10.2°C-weeks | coral_bleaching | May 15T03:01Z | A- | DHW; ~10 days old |
+| [4] | Fiji coral — 10.1°C-weeks | coral_bleaching | May 15T03:02Z | B+ | DHW; ~10 days old |
+| [5] | Nauru coral — 8.2°C-weeks | coral_bleaching | May 15T03:04Z | B+ | DHW; ~10 days old |
+| [6] | Great Nicobar — 7.2°C-weeks | coral_bleaching | May 15T03:47Z | C+ | DHW; ~10 days old |
+| [7] | Chagos — 7.2°C-weeks | coral_bleaching | May 15T03:48Z | C+ | DHW; ~10 days old |
+| [8] | Southern Borneo — 4.4°C-weeks | coral_bleaching | May 15T03:55Z | C | DHW; ~10 days old |
+| [9] | Galapagos — 24.5°C-weeks | coral_bleaching | May 15T05:16Z | A- | DHW; ~10 days old |
+| [10] | Austral Islands — 8.6°C-weeks | coral_bleaching | May 15T05:20Z | B+ | DHW; ~10 days old |
+| [11] | Costa Rica Pacific — 12.0°C-weeks | coral_bleaching | May 18T01:30Z | A- | DHW; ~7 days old |
+| [12] | Mf Nooksack — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | No real-time language |
+| [13] | Stahl Peak — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | No real-time language |
+
+### Patterns / operational notes
+
+1. **5th consecutive no-fresh-draft cycle.** Prior runs identified the evidence contract
+   gate as the most probable new bottleneck. Still unverified — the operator has not yet
+   confirmed whether `evidence_contract` suppression stage kills are non-trivial. This is
+   the diagnostic action with highest priority before declaring queue stagnation a data
+   problem vs. a filtering problem.
+
+2. **Coral DHW freshness.** The 3 A-grade drafts (Madagascar 10.2, Galapagos 24.5, Costa
+   Rica Pacific 12.0°C-weeks) are 7–10 days old. NOAA CRW DHW updates daily; these values
+   are up to 10 daily updates stale. Before publishing any coral draft, verify current DHW
+   levels. If the values have changed by ≥1°C-week, the draft needs an update.
+
+3. **No new proposals.** No fresh drafts = no observable voice failure modes. Active
+   proposals (P5, P7, P8, P_new) unchanged.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs; 5 stale fire drafts removed by operator)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 qualifying; `gh` CLI absent (9th consecutive skip, May 13→May 25)
+- Queue static since: 2026-05-18T15:52Z
+
+---
+
 ## 2026-05-24 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
