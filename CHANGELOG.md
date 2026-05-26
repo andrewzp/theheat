@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.3.0] - 2026-05-26
+
+Beacon-write path moved off the gist. The 0.9.1.0 routine prompt's Step 9.5
+attempted to PATCH `routine_beacon.json` into the state gist, but the CCR
+environment's stored gh token lacks `gist:write` scope — beacon writes
+silently failed across the first four fires (5/23 through 5/26) and the
+dashboard's routine indicator stayed gray despite a healthy routine. The
+routine already has `repo` scope (uses it for `daily-plan-current` pushes),
+so the fix relocates the beacon to a dedicated `beacon-current` orphan
+branch and writes it via the Contents API — same authorization the routine
+already holds.
+
+### Changed
+
+- `dashboard/lib/automation.js`: `readRoutineBeacon()` now fetches
+  `beacon.json` from the `beacon-current` branch via the Contents API
+  (`application/vnd.github.v3.raw`). Configurable via `THEHEAT_BEACON_BRANCH`
+  and `THEHEAT_BEACON_PATH`. 404 is treated as "no beacon yet" (gray dot),
+  matching the prior empty-gist-file behavior.
+- Routine prompt Step 9.5 (managed via RemoteTrigger, not in repo): writes
+  the beacon via `gh api PUT /repos/.../contents/beacon.json?ref=beacon-current`
+  instead of the gist PATCH. Preserves the `|| exit 0` fallback semantics —
+  beacon write failures still log a warning and let the cycle succeed.
+
+### Fixed
+
+- Dashboard routine dot now actually flips green when the routine completes
+  cleanly. Prior to this change, the gist PATCH silently failed every fire
+  and the dot stayed gray indefinitely.
+
 ## [0.9.2.0] - 2026-05-22
 
 Dashboard automation hardening. The automation strip now reports production

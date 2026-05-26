@@ -1,6 +1,8 @@
 import { readStateStore } from "./state-store.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
+const DEFAULT_BEACON_BRANCH = "beacon-current"
+const DEFAULT_BEACON_PATH = "beacon.json"
 
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
@@ -25,12 +27,16 @@ function repo() {
   return process.env.THEHEAT_REPO || "andrewzp/theheat"
 }
 
-function gistId() {
-  return process.env.GIST_ID || ""
-}
-
 function productionBranch() {
   return process.env.THEHEAT_AUTOMATION_BRANCH || DEFAULT_PRODUCTION_BRANCH
+}
+
+function beaconBranch() {
+  return process.env.THEHEAT_BEACON_BRANCH || DEFAULT_BEACON_BRANCH
+}
+
+function beaconPath() {
+  return process.env.THEHEAT_BEACON_PATH || DEFAULT_BEACON_PATH
 }
 
 export async function fetchWorkflowState(file) {
@@ -72,23 +78,29 @@ export async function fetchWorkflowLastRun(file) {
 }
 
 export async function readRoutineBeacon() {
-  // Reads routine_beacon.json from the gist (separate file from state.json).
-  // The routine writes this every cycle in Step 9.5 of its prompt. ~150 bytes
-  // per write, so the gist API's 1MB truncation never applies — we don't need
-  // the git-clone path the routine itself uses for state.json reads.
+  // Reads beacon.json from a dedicated `beacon-current` branch in the repo.
+  // The routine writes this every cycle in Step 9.5 of its prompt via the
+  // Contents API, which uses `repo` scope (already held by the routine's
+  // stored token). The earlier gist-based path required `gist:write` scope
+  // that the CCR environment's token didn't have, so beacon writes silently
+  // failed and the dashboard's routine dot stayed gray. Moving to a repo
+  // branch eliminates the scope-mismatch problem entirely.
   //
-  // Living in a separate file (not state.json) eliminates the lost-update race
-  // where a routine PATCH would overwrite a concurrent python cron write.
-  if (!process.env.GITHUB_TOKEN || !gistId()) {
+  // 404 is treated as "no beacon yet" (gray dot) — same as the prior empty-
+  // gist-file behavior. Non-404 non-OK throws so callers can surface the
+  // failure as an error state.
+  if (!process.env.GITHUB_TOKEN) {
     return null
   }
-  const url = `https://api.github.com/gists/${gistId()}`
-  const res = await fetch(url, { headers: ghHeaders() })
+  const url = `https://api.github.com/repos/${repo()}/contents/${beaconPath()}?ref=${beaconBranch()}`
+  const res = await fetch(url, {
+    headers: { ...ghHeaders(), Accept: "application/vnd.github.v3.raw" },
+  })
+  if (res.status === 404) return null
   if (!res.ok) {
-    throw new Error(`readRoutineBeacon: gist read failed: ${res.status}`)
+    throw new Error(`readRoutineBeacon: contents read failed: ${res.status}`)
   }
-  const data = await res.json()
-  const content = data.files?.["routine_beacon.json"]?.content
+  const content = await res.text()
   if (!content) return null
   try {
     return JSON.parse(content)

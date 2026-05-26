@@ -29,21 +29,35 @@ function workflowRunsResponse(runs = []) {
   }
 }
 
-function gistResponseWithFiles(stateJson, beaconJson) {
-  // The gist REST API returns BOTH files in one response. readStateStore and
-  // readRoutineBeacon both hit the same gist URL but extract different files.
+function gistStateResponse(stateJson) {
+  // readStateStore still hits the gist for state.json. The beacon moved off
+  // the gist entirely (now lives on the beacon-current branch).
   return {
     ok: true,
     status: 200,
     async json() {
-      const files = { "state.json": { content: JSON.stringify(stateJson), truncated: false } }
-      if (beaconJson !== undefined) {
-        files["routine_beacon.json"] = { content: JSON.stringify(beaconJson) }
+      return {
+        files: { "state.json": { content: JSON.stringify(stateJson), truncated: false } },
       }
-      return { files }
     },
     async text() {
-      return JSON.stringify({ state: stateJson, beacon: beaconJson })
+      return JSON.stringify({ state: stateJson })
+    },
+  }
+}
+
+function beaconContentsResponse(beaconJson) {
+  // readRoutineBeacon now hits the Contents API with Accept: application/vnd.github.v3.raw,
+  // which returns raw file content (no JSON envelope, no base64).
+  if (beaconJson === undefined) {
+    return { ok: false, status: 404, async text() { return "Not Found" } }
+  }
+  const raw = JSON.stringify(beaconJson)
+  return {
+    ok: true,
+    status: 200,
+    async text() {
+      return raw
     },
   }
 }
@@ -104,29 +118,31 @@ test("fetchWorkflowLastRun returns null when no runs exist", async () => {
   assert.equal(result, null)
 })
 
-test("readRoutineBeacon returns parsed routine_beacon.json from gist", async () => {
-  global.fetch = async () =>
-    gistResponseWithFiles(
-      { drafts: [] },
-      {
-        routine_last_run_at: "2026-05-22T15:04:58Z",
-        routine_last_run_outcome: "graded",
-      },
-    )
+test("readRoutineBeacon returns parsed beacon from beacon-current branch", async () => {
+  const calls = []
+  global.fetch = async (url, opts) => {
+    calls.push({ url: String(url), accept: opts?.headers?.Accept })
+    return beaconContentsResponse({
+      routine_last_run_at: "2026-05-22T15:04:58Z",
+      routine_last_run_outcome: "graded",
+    })
+  }
   process.env.GITHUB_TOKEN = "ghp_test"
-  process.env.GIST_ID = "test_gist_id"
+  delete process.env.THEHEAT_BEACON_BRANCH
+  delete process.env.THEHEAT_BEACON_PATH
 
   const { readRoutineBeacon } = await importFresh("lib/automation.js")
   const result = await readRoutineBeacon()
 
   assert.equal(result.routine_last_run_at, "2026-05-22T15:04:58Z")
   assert.equal(result.routine_last_run_outcome, "graded")
+  assert.match(calls[0].url, /\/contents\/beacon\.json\?ref=beacon-current$/)
+  assert.equal(calls[0].accept, "application/vnd.github.v3.raw")
 })
 
-test("readRoutineBeacon returns null when gist has no beacon file", async () => {
-  global.fetch = async () => gistResponseWithFiles({ drafts: [] }, undefined)
+test("readRoutineBeacon returns null on 404 (branch or file missing)", async () => {
+  global.fetch = async () => beaconContentsResponse(undefined)
   process.env.GITHUB_TOKEN = "ghp_test"
-  process.env.GIST_ID = "test_gist_id"
 
   const { readRoutineBeacon } = await importFresh("lib/automation.js")
   const result = await readRoutineBeacon()
@@ -134,9 +150,31 @@ test("readRoutineBeacon returns null when gist has no beacon file", async () => 
   assert.equal(result, null)
 })
 
+test("readRoutineBeacon honors THEHEAT_BEACON_BRANCH + THEHEAT_BEACON_PATH overrides", async () => {
+  const calls = []
+  global.fetch = async (url) => {
+    calls.push(String(url))
+    return beaconContentsResponse({
+      routine_last_run_at: "2026-05-22T15:04:58Z",
+      routine_last_run_outcome: "no-fresh-drafts",
+    })
+  }
+  process.env.GITHUB_TOKEN = "ghp_test"
+  process.env.THEHEAT_BEACON_BRANCH = "alt-beacon"
+  process.env.THEHEAT_BEACON_PATH = "ops/beacon.json"
+
+  const { readRoutineBeacon } = await importFresh("lib/automation.js")
+  await readRoutineBeacon()
+
+  assert.match(calls[0], /\/contents\/ops\/beacon\.json\?ref=alt-beacon$/)
+  delete process.env.THEHEAT_BEACON_BRANCH
+  delete process.env.THEHEAT_BEACON_PATH
+})
+
 test("getAutomationStatus composes workflows + routine + posting mode", async () => {
   global.fetch = async (url) => {
-    if (url.includes("/runs?")) {
+    const u = String(url)
+    if (u.includes("/runs?")) {
       return workflowRunsResponse([
         {
           id: 1,
@@ -146,24 +184,24 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
         },
       ])
     }
-    if (url.includes("/actions/workflows/")) {
+    if (u.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    // Gist URL — both readStateStore + readRoutineBeacon land here.
-    return gistResponseWithFiles(
-      {
-        drafts: [
-          { status: "pending", approval_policy: { mode: "manual_only" } },
-          { status: "pending", approval_policy: { mode: "manual_only" } },
-          { status: "pending", approval_policy: { mode: "armed_auto" } },
-          { status: "pending", approval_policy: { mode: "suggested_auto" } },
-        ],
-      },
-      {
+    if (u.includes("/contents/")) {
+      return beaconContentsResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
-      },
-    )
+      })
+    }
+    // Falls through to the gist URL for state.json.
+    return gistStateResponse({
+      drafts: [
+        { status: "pending", approval_policy: { mode: "manual_only" } },
+        { status: "pending", approval_policy: { mode: "manual_only" } },
+        { status: "pending", approval_policy: { mode: "armed_auto" } },
+        { status: "pending", approval_policy: { mode: "suggested_auto" } },
+      ],
+    })
   }
   process.env.GITHUB_TOKEN = "ghp_test"
   process.env.GIST_ID = "test_gist_id"
@@ -233,7 +271,8 @@ test("GET /api/automation returns combined status with valid auth", async () => 
   process.env.THEHEAT_STATE_BACKEND = "gist"
 
   global.fetch = async (url) => {
-    if (url.includes("/runs?")) {
+    const u = String(url)
+    if (u.includes("/runs?")) {
       return workflowRunsResponse([
         {
           id: 7,
@@ -243,16 +282,18 @@ test("GET /api/automation returns combined status with valid auth", async () => 
         },
       ])
     }
-    if (url.includes("/actions/workflows/")) {
+    if (u.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    return gistResponseWithFiles(
-      { drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }] },
-      {
+    if (u.includes("/contents/")) {
+      return beaconContentsResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
-      },
-    )
+      })
+    }
+    return gistStateResponse({
+      drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }],
+    })
   }
 
   const { GET } = await importFresh("app/api/automation/route.js")
@@ -312,8 +353,10 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
 
   let actionCalls = 0
   let gistCalls = 0
+  let beaconCalls = 0
   global.fetch = async (url) => {
-    if (url.includes("/runs?")) {
+    const u = String(url)
+    if (u.includes("/runs?")) {
       actionCalls++
       return workflowRunsResponse([
         {
@@ -324,18 +367,21 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
         },
       ])
     }
-    if (url.includes("/actions/workflows/")) {
+    if (u.includes("/actions/workflows/")) {
       actionCalls++
       return workflowResponse("active")
     }
-    gistCalls++
-    return gistResponseWithFiles(
-      { drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }] },
-      {
+    if (u.includes("/contents/")) {
+      beaconCalls++
+      return beaconContentsResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
-      },
-    )
+      })
+    }
+    gistCalls++
+    return gistStateResponse({
+      drafts: [{ status: "pending", approval_policy: { mode: "manual_only" } }],
+    })
   }
 
   const { GET } = await importFresh("app/api/automation/route.js")
@@ -347,6 +393,11 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
 
   assert.equal(first.status, 200)
   assert.equal(second.status, 200)
+  // 3 workflows × 2 calls (state + runs) = 6, but cache dedupes the second
+  // request entirely. After moving the beacon off the gist, the gist is only
+  // hit by readStateStore (1 call per first-pass), and the beacon endpoint
+  // is hit once by readRoutineBeacon. The second GET is a cache hit on all.
   assert.equal(actionCalls, 6)
-  assert.equal(gistCalls, 2)
+  assert.equal(gistCalls, 1)
+  assert.equal(beaconCalls, 1)
 })
