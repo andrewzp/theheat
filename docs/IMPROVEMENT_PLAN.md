@@ -10,12 +10,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `8c5e09b` (0.9.1.0 — dashboard automation indicators + routine prompt rewrite; all 23 sources on triage path + evidence contract live since 0.9.0.0) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker + Gemini 2.5 Pro critic; all 23 sources on triage path via PR #150; evidence contract gates writer via PR 0.9.0.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes `routine_beacon.json` to gist each cycle) |
-| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 5 consecutive no-draft cycles since: May 20, 22, 23, 24, 25) |
+| Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 6 consecutive no-draft cycles since: May 20, 22, 23, 24, 25, 26) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24/25 (no fresh drafts) |
+| Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24/25/26 (no fresh drafts) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | Static since 2026-05-18; 5th consecutive no-fresh-draft graded cycle. Check `evidence_contract` suppression stage kills in dashboard — most likely new bottleneck. |
+| Queue status | Static since 2026-05-18 (8 days, ~48 cron cycles); **6th consecutive no-fresh-draft graded cycle**. Check `evidence_contract` suppression stage kills in suppression ledger for May 22–26 — most likely new bottleneck. Also check `source_health` for whether any source is generating qualifying signals. Coral drafts 8–11 days old; operator must verify NOAA CRW DHW values before publishing. |
 
 ## Active proposals
 
