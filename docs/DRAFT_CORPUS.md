@@ -13,6 +13,289 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-05-26 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from graded cycles 2026-05-13 through 2026-05-18. No new drafts
+since 2026-05-18T15:52Z (Stahl Peak snow_extreme). Today is the **6th consecutive
+no-fresh-draft graded cycle** (May 20, 22, 23, 24, 25, 26).
+
+**Why no fresh drafts:** Queue static for 8 days (~48 cron cycles at 6/day). Candidate
+bottlenecks in priority order: (1) evidence contract gate (`stage="evidence_contract"`,
+live since 0.9.0.0 / merged ~May 22) — operator should check kill counts in suppression
+ledger for May 22–26; (2) score-gate suppression (threshold varies 72–82 by type);
+(3) triage-cap spill (`triage_cap` kill_stage); (4) genuine signal drought. The initial
+stall started May 18, 4 days before evidence contract went live — so the gate is not the
+sole cause, but may now be compounding. If `evidence_contract` kill counts are negligible,
+operator should check `source_health` to determine whether any source is generating
+qualifying signals at all.
+
+**Staleness review as of 2026-05-26 ~15:00 UTC:**
+
+No remaining drafts contain "today/tonight/forecast" language — no new staleness-policy
+triggers since May 25. Coral drafts ([3]–[11], created May 15–18) are now 8–11 days old.
+NOAA CRW DHW accumulation values are updated daily; the cited °C-week figures may no
+longer reflect current reef thermal stress. Operator must verify against current NOAA CRW
+readings before publishing any coral draft. Snow drafts ([12]–[13]) are 8 days old;
+text uses past-tense historical record framing with no date-baked language — within policy,
+but freshness check recommended before publication.
+
+Bulk-reject: no qualifying candidates by policy. `gh` CLI absent — **10th consecutive
+skip** (May 13 → May 26).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade | Staleness |
+|---|---|---|---|---|---|
+| [1] | Chuuk FSM — 34.4°C (94°F) | monthly_high | May 13T10:32Z | B | Historical obs date (May 9) |
+| [2] | Bethel, Maine — 28°F | monthly_low | May 13T21:29Z | B- | Historical obs date (May 9) |
+| [3] | Madagascar coral — 10.2°C-weeks | coral_bleaching | May 15T03:01Z | A- | 11 days; DHW values may be stale |
+| [4] | Fiji coral — 10.1°C-weeks | coral_bleaching | May 15T03:02Z | B+ | 11 days; DHW values may be stale |
+| [5] | Nauru coral — 8.2°C-weeks | coral_bleaching | May 15T03:04Z | B+ | 11 days; DHW values may be stale |
+| [6] | Great Nicobar — 7.2°C-weeks | coral_bleaching | May 15T03:47Z | C+ | 11 days; DHW values may be stale |
+| [7] | Chagos — 7.2°C-weeks | coral_bleaching | May 15T03:48Z | C+ | 11 days; DHW values may be stale |
+| [8] | Southern Borneo — 4.4°C-weeks | coral_bleaching | May 15T03:55Z | C | 11 days; DHW values may be stale |
+| [9] | Galapagos coral — 24.5°C-weeks | coral_bleaching | May 15T05:16Z | A- | 11 days; DHW values may be stale |
+| [10] | Austral Islands coral — 8.6°C-weeks | coral_bleaching | May 15T05:20Z | B+ | 11 days; DHW values may be stale |
+| [11] | Costa Rica Pacific coral — 12.0°C-weeks | coral_bleaching | May 18T01:30Z | A- | 8 days; DHW values may be stale |
+| [12] | Mf Nooksack — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | 8 days; past-tense record framing |
+| [13] | Stahl Peak — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | 8 days; past-tense record framing |
+
+### Patterns / operational notes
+
+1. **6th consecutive no-draft cycle.** Queue static since May 18T15:52Z (~48 cron cycles
+   without a new pending draft). Sequence: May 20, 22, 23, 24, 25, 26. Prior record for
+   consecutive no-draft cycles was 0 (this run is the longest stall in the corpus history).
+   Operator action needed: inspect suppression ledger for `evidence_contract` kill counts
+   post-May 22; check `source_health` for active source signal counts.
+
+2. **Coral draft freshness urgency rising.** The 9 coral drafts are now 8–11 days old. NOAA
+   CRW DHW is updated daily. The Galapagos draft (A-, 24.5°C-weeks) could have shifted
+   significantly — current NOAA CRW May 26 values may show higher or lower accumulation.
+   Operator should not publish without re-verifying. Stale-value publication would undermine
+   the bot's credibility even on A-quality framing.
+
+3. **No active proposal evidence updates.** Without fresh drafts, failure modes are
+   unobservable. All 4 active proposals (P5 name humor moves, P7 coral opener convergence,
+   P8 snow ratio punchline, P_new cold record quality floor) remain at last evidence counts.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs from May 13–18)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: no qualifying candidates; `gh` CLI absent (10th consecutive skip,
+  May 13 → May 26)
+- Queue static since: 2026-05-18T15:52Z (8 days, ~48 cron cycles)
+
+---
+
+## 2026-05-25 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from graded cycles 2026-05-13 through 2026-05-18. The 5 stale
+fire drafts were confirmed removed by operator (per 0.9.1.0 briefing; queue 18 → 13).
+Zero new drafts since 2026-05-18T15:52Z (Stahl Peak snow_extreme). Today is the 5th
+consecutive no-fresh-draft graded cycle.
+
+**Why no fresh drafts:** Queue static for 7 days (May 18–25). ~42 cron cycles (6/day × 7
+days) without a new pending draft. Same candidate causes as May 24 cycle: evidence contract
+gate (`stage="evidence_contract"`, new as of 0.9.0.0) is the most likely new bottleneck;
+score-gate kills and triage-cap spills are secondary candidates; seasonal quiet is
+plausible for a stretch this long. Operator: check `evidence_contract` suppression stage
+counts since May 22. If non-trivial (several kills per cron cycle), the contract may be
+over-strict on currently-live signal types. Note: queue was already static 4 days before
+0.9.0.0 merged, so the gate is not the sole cause.
+
+**Staleness review as of 2026-05-25 ~15:00 UTC:**
+
+No remaining drafts contain "today/tonight/forecast" language — no new staleness-policy
+triggers. The 9 coral drafts (created 2026-05-15 to 2026-05-18) are 7–10 days old. DHW
+accumulation values are updated daily by NOAA CRW. Operator should verify current DHW
+against NOAA CRW before publishing any coral draft — the cited °C-week values are editorial
+substance; stale figures are a factual error.
+
+Bulk-reject: no qualifying candidates by policy. `gh` CLI absent — 9th consecutive skip
+(May 13 → May 25).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade | Staleness |
+|---|---|---|---|---|---|
+| [1] | Chuuk FSM — 34.4°C (94°F) | monthly_high | May 13T10:32Z | B | Historical obs date |
+| [2] | Bethel, Maine — 28°F (-2.2°C) | monthly_low | May 13T21:29Z | B- | Historical obs date |
+| [3] | Madagascar coral — 10.2°C-weeks | coral_bleaching | May 15T03:01Z | A- | DHW; ~10 days old |
+| [4] | Fiji coral — 10.1°C-weeks | coral_bleaching | May 15T03:02Z | B+ | DHW; ~10 days old |
+| [5] | Nauru coral — 8.2°C-weeks | coral_bleaching | May 15T03:04Z | B+ | DHW; ~10 days old |
+| [6] | Great Nicobar — 7.2°C-weeks | coral_bleaching | May 15T03:47Z | C+ | DHW; ~10 days old |
+| [7] | Chagos — 7.2°C-weeks | coral_bleaching | May 15T03:48Z | C+ | DHW; ~10 days old |
+| [8] | Southern Borneo — 4.4°C-weeks | coral_bleaching | May 15T03:55Z | C | DHW; ~10 days old |
+| [9] | Galapagos — 24.5°C-weeks | coral_bleaching | May 15T05:16Z | A- | DHW; ~10 days old |
+| [10] | Austral Islands — 8.6°C-weeks | coral_bleaching | May 15T05:20Z | B+ | DHW; ~10 days old |
+| [11] | Costa Rica Pacific — 12.0°C-weeks | coral_bleaching | May 18T01:30Z | A- | DHW; ~7 days old |
+| [12] | Mf Nooksack — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | No real-time language |
+| [13] | Stahl Peak — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | No real-time language |
+
+### Patterns / operational notes
+
+1. **5th consecutive no-fresh-draft cycle.** Prior runs identified the evidence contract
+   gate as the most probable new bottleneck. Still unverified — the operator has not yet
+   confirmed whether `evidence_contract` suppression stage kills are non-trivial. This is
+   the diagnostic action with highest priority before declaring queue stagnation a data
+   problem vs. a filtering problem.
+
+2. **Coral DHW freshness.** The 3 A-grade drafts (Madagascar 10.2, Galapagos 24.5, Costa
+   Rica Pacific 12.0°C-weeks) are 7–10 days old. NOAA CRW DHW updates daily; these values
+   are up to 10 daily updates stale. Before publishing any coral draft, verify current DHW
+   levels. If the values have changed by ≥1°C-week, the draft needs an update.
+
+3. **No new proposals.** No fresh drafts = no observable voice failure modes. Active
+   proposals (P5, P7, P8, P_new) unchanged.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs; 5 stale fire drafts removed by operator)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 qualifying; `gh` CLI absent (9th consecutive skip, May 13→May 25)
+- Queue static since: 2026-05-18T15:52Z
+
+---
+
+## 2026-05-24 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from graded cycles 2026-05-13 through 2026-05-18. Between the
+2026-05-22 session and now, the operator rejected the 5 stale fire drafts flagged across
+seven consecutive grading cycles (Mali / Campeche / Mongolia "is radiating" + BC
+"burning today" + Siberia "detected today"), dropping the queue from 18 → 13. No new
+drafts have been added since 2026-05-18T18:06Z (the Siberia fire, now rejected). Six
+cron cycles per day × 6 days = ~36 unobserved cron cycles without a new pending draft.
+
+**Why no fresh drafts:** Queue static for 6 days (May 18 → May 24). Four plausible
+causes in descending probability: (1) **Evidence contract gate** (PR 0.9.0.0) — the new
+`audit_story_bundle` step at the top of `generate_draft` blocks writer invocation when
+structurally-required evidence is missing; this was introduced with the 0.9.0.0 release
+and is the most likely new bottleneck; check `evidence_contract` suppression ledger
+entries for May 18–24. (2) **Score-gate kills** — borderline signals failing category
+thresholds; check `source_health` for live detections that die at scoring. (3) **Triage
+cap** — PR #134 coral_dhw triage active (global cap 3/cycle); if coral signals dominate,
+other categories spill; check `triage_cap` stage in suppression ledger. (4) **Seasonal
+quiet** — low global extreme-signal frequency plausible for a 6-day stretch.
+
+**Staleness review:** 13 pending drafts, ages 6–11 days. None contain real-time-baked
+language ("today," "tonight," "forecast to hit today"):
+
+| # | Draft | Type | Age | Staleness flag |
+|---|---|---|---|---|
+| [1] | Chuuk FSM monthly_high | monthly_high | ~11d | "on May 9" — historical obs date, not "today" |
+| [2] | Bethel, Maine monthly_low | monthly_low | ~11d | "on May 9" — historical obs date |
+| [3]–[10] | Coral bleaching (8 drafts) | coral_bleaching | ~9d | "has accumulated X°C-weeks" — cumulative metric, no today-language |
+| [11] | Costa Rica Pacific coral | coral_bleaching | ~6d | same; no today-language |
+| [12] | Mf Nooksack snow | snow_extreme | ~6d | "fell over 3 days" — no today-language |
+| [13] | Stahl Peak snow | snow_extreme | ~6d | same |
+
+No bulk-reject candidates by policy. Staleness bulk-reject via `gh` remains unavailable
+(8th consecutive skip; `gh` CLI absent in managed remote execution environment). Operator
+should verify that the 9-day-old coral DHW values (drafts [3]–[10], created 2026-05-15)
+still reflect current reef stress before any publish decision, as NOAA CRW DHW
+accumulation updates daily.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+**Active proposals:** No evidence updates (no fresh drafts to observe failure modes in).
+
+### Operational note
+
+Operator rejection of the 5 stale fire drafts is the most significant queue hygiene
+action since the 2026-04-26 bulk-reject. Seven consecutive grading cycles flagged these
+drafts; they're gone. The 13-draft carry-over queue that remains is clean by the
+staleness policy.
+
+The deeper concern is queue stagnation. If the evidence contract gate is the bottleneck
+(the most likely new variable), the operator can check the suppression ledger's
+`stage="evidence_contract"` entries for May 18–24. A high count here would confirm the
+gate is active and explain why borderline bundles that previously reached pending no
+longer do. That would be net-positive for quality but the A-rate signal needs fresh
+drafts to measure.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs; queue 18 → 13 after operator rejections)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: no qualifying candidates by policy; `gh` CLI absent (8th
+  consecutive skip, 2026-05-13 through 2026-05-24)
+- Queue static since: 2026-05-18T18:06Z (Siberia fire, now rejected by operator)
+- Operator action confirmed: 5 stale fire drafts rejected (queue 18 → 13)
+
+---
+
+## 2026-05-23 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
+drafts — all carry-overs from prior graded cycles (May 13–18). Operator rejected the 5
+stale fire drafts (Mali, Campeche, Mongolia fire + BC fire + Siberia fire) on 2026-05-22
+per BRIEFING.md; queue dropped 18 → 13. No new drafts since 2026-05-18T15:52Z (Stahl Peak
+snow). Queue static 5 days; 4th consecutive no-fresh-draft grading cycle since May 19.
+
+**Grade distribution (0 fresh drafts):** N/A.
+**A-rate: N/A.** Most recent graded cycle: **21%** (3/14, 2026-05-19). Gap from bar:
+untracked this cycle (prior: 29 pp).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade (last session) | Staleness |
+|---|---|---|---|---|---|
+| [1] | Chuuk monthly_high — 34.4°C | monthly_high | May 13T10:32Z | B | No real-time language; "May 9" observation date |
+| [2] | Bethel, Maine monthly_low — 28°F | monthly_low | May 13T21:29Z | B- | No real-time language; "May 9" observation date |
+| [3] | Western Madagascar coral — 10.2°C-wks | coral_bleaching | May 15T03:01Z | A- | No "today"; DHW multi-week metric |
+| [4] | Fiji coral — 10.1°C-wks | coral_bleaching | May 15T03:02Z | B+ | No "today"; DHW multi-week metric |
+| [5] | Nauru coral — 8.2°C-wks | coral_bleaching | May 15T03:04Z | B+ | No "today"; DHW multi-week metric |
+| [6] | Great Nicobar coral — 7.2°C-wks | coral_bleaching | May 15T03:47Z | C+ | No "today"; DHW multi-week metric |
+| [7] | Chagos coral — 7.2°C-wks | coral_bleaching | May 15T03:48Z | C+ | No "today"; DHW multi-week metric |
+| [8] | Southern Borneo coral — 4.4°C-wks | coral_bleaching | May 15T03:55Z | C | No "today"; DHW multi-week metric |
+| [9] | Galapagos coral — 24.5°C-wks | coral_bleaching | May 15T05:16Z | A- | No "today"; DHW multi-week metric |
+| [10] | Austral Islands coral — 8.6°C-wks | coral_bleaching | May 15T05:20Z | B+ | No "today"; DHW multi-week metric |
+| [11] | Costa Rica Pacific coral — 12.0°C-wks | coral_bleaching | May 18T01:30Z | A- | No "today"; DHW multi-week metric |
+| [12] | Mf Nooksack snow — 109.2 mm SWE | snow_extreme | May 18T03:27Z | C | No "today"; past-event framing |
+| [13] | Stahl Peak snow — 251.5 mm SWE | snow_extreme | May 18T15:52Z | B- | No "today"; past-event framing |
+
+### Staleness review as of 2026-05-23 ~15:00 UTC
+
+**0 new stale draft candidates.** The 5 previously-flagged fire drafts (Mali, Campeche,
+Mongolia "is radiating" + BC "burning today" + Siberia "detected... today") were rejected
+by the operator on 2026-05-22, confirmed in BRIEFING.md. All 13 remaining drafts: no
+"today," "tonight," or forecast-to-hit-today language. DHW coral drafts use multi-week
+metrics — no staleness per policy (consistent with all rulings since 2026-05-15). Snow
+drafts frame a completed event ("fell over 3 days"). Bulk-reject: not triggered.
+
+Note: the 8 oldest coral drafts (Great Nicobar, Chagos, Southern Borneo, Galapagos,
+Austral Islands, Western Madagascar, Fiji, Nauru) are now ~8 days old (created May 15).
+DHW accumulation values may no longer reflect current reef stress. Operator should verify
+freshness before posting.
+
+Staleness bulk-reject: not triggered. `gh` CLI unavailable in this remote execution
+environment (consistent with all cycles since 2026-05-13). No write attempted.
+
+### Numbers
+
+- Pending drafts in queue: 13 (all carry-overs from May 13–18)
+- Fresh drafts graded: 0
+- A-rate: N/A (no fresh drafts; most recent graded cycle: 21% on 2026-05-19)
+- Active proposals: no evidence updates this cycle (no fresh drafts to observe failure modes in)
+- Staleness bulk-reject: not triggered (0 new stale candidates; 5 prior stale fire drafts cleared by operator on 2026-05-22)
+- Queue static since: 2026-05-18T15:52Z (4th consecutive no-fresh-draft grading cycle)
+- Operator note: pipeline telemetry check recommended — `triage_cap` and `evidence_contract` kill counts may explain why no drafts have reached pending since May 18
+
+---
+
 ## 2026-05-22 — Daily corpus grading (0 fresh drafts; 18 carry-overs, all previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 18 pending
