@@ -182,7 +182,11 @@ This handles:
      and whether it succeeded.
 
      ```bash
-     OUTCOME="graded"  # set to "no-fresh-drafts" if 0 drafts graded; "error" on caught failure
+     OUTCOME="${ROUTINE_OUTCOME:-no-fresh-drafts}"  # graded | no-fresh-drafts | error
+     case "$OUTCOME" in
+       graded|no-fresh-drafts|error) ;;
+       *) OUTCOME="error" ;;
+     esac
      NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
      # Clone latest gist (avoids API truncation; ~1.6MB file)

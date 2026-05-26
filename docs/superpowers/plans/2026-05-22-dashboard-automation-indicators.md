@@ -740,7 +740,8 @@ test("GET /api/automation degrades to 200 with workflow errors when GH API throw
   }
   // Routine + posting-mode helpers also return null on fetch fail.
   assert.equal(body.routine.last_run_at, null)
-  assert.equal(body.posting_mode_summary.manual_only_count, 0)
+  assert.equal(body.posting_mode_summary, null)
+  assert.match(body.posting_mode_error, /ECONNREFUSED|fetch failed/i)
 })
 ```
 
@@ -1108,11 +1109,18 @@ git clean -fd
 9.5. **Write the routine health beacon to a separate gist file.** Regardless of grading outcome, write a routine_last_run_at + routine_last_run_outcome to `routine_beacon.json` in the same gist. The beacon lives in a SEPARATE file (not state.json) to eliminate the lost-update race against concurrent python pipeline writers — GitHub's gist PATCH API can update individual files without touching others. Best-effort: a beacon write failure logs a warning but doesn't fail the cycle.
 
 ```bash
-# Set OUTCOME based on what happened above:
+# Set ROUTINE_OUTCOME earlier in the routine based on what happened above:
 #   "graded"           if at least one fresh draft was graded this cycle
 #   "no-fresh-drafts"  if queue had only carry-overs (Step 3 graded nothing new)
 #   "error"            if Step 1-9 caught a recoverable failure
-OUTCOME="graded"
+#
+# If an older prompt has not set ROUTINE_OUTCOME yet, fall back to the safe
+# non-lying value for the paused/empty-queue case instead of hard-coding graded.
+OUTCOME="${ROUTINE_OUTCOME:-no-fresh-drafts}"
+case "$OUTCOME" in
+  graded|no-fresh-drafts|error) ;;
+  *) OUTCOME="error" ;;
+esac
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 # Build the beacon JSON in memory; no need to clone the gist (we're writing,
@@ -1382,4 +1390,3 @@ Synthesized from this review. Each task derives from a specific finding above.
 - **CODEX:** Spec v1 → v2 → v3-descoped journey was driven by 2 rounds of adversarial review. v3 implements only what survived as safe.
 - **UNRESOLVED:** 0 decisions left open.
 - **VERDICT:** ENG REVIEW CLEARED — ready to implement.
-

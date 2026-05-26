@@ -345,7 +345,11 @@ After the existing Step 9 (print summary), before exit:
      of daily-plan-current).
 
      ```bash
-     OUTCOME="graded"  # or "no-fresh-drafts" if 0 drafts graded, or "error" if anything failed
+     OUTCOME="${ROUTINE_OUTCOME:-no-fresh-drafts}"  # graded | no-fresh-drafts | error
+     case "$OUTCOME" in
+       graded|no-fresh-drafts|error) ;;
+       *) OUTCOME="error" ;;
+     esac
      NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
      # Read latest gist (post-PR-create), update routine fields, write back.
      GIST_LATEST_DIR=$(mktemp -d)
