@@ -1,8 +1,7 @@
 import { readStateStore } from "./state-store.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
-const DEFAULT_BEACON_BRANCH = "beacon-current"
-const DEFAULT_BEACON_PATH = "beacon.json"
+const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
 
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
@@ -29,14 +28,6 @@ function repo() {
 
 function productionBranch() {
   return process.env.THEHEAT_AUTOMATION_BRANCH || DEFAULT_PRODUCTION_BRANCH
-}
-
-function beaconBranch() {
-  return process.env.THEHEAT_BEACON_BRANCH || DEFAULT_BEACON_BRANCH
-}
-
-function beaconPath() {
-  return process.env.THEHEAT_BEACON_PATH || DEFAULT_BEACON_PATH
 }
 
 export async function fetchWorkflowState(file) {
@@ -78,32 +69,20 @@ export async function fetchWorkflowLastRun(file) {
 }
 
 export async function readRoutineBeacon() {
-  // Reads beacon.json from a dedicated `beacon-current` branch in the repo.
-  // The routine writes this every cycle in Step 9.5 of its prompt via the
-  // Contents API, which uses `repo` scope (already held by the routine's
-  // stored token). The earlier gist-based path required `gist:write` scope
-  // that the CCR environment's token didn't have, so beacon writes silently
-  // failed and the dashboard's routine dot stayed gray. Moving to a repo
-  // branch eliminates the scope-mismatch problem entirely.
-  //
-  // 404 is treated as "no beacon yet" (gray dot) — same as the prior empty-
-  // gist-file behavior. Non-404 non-OK throws so callers can surface the
-  // failure as an error state.
-  if (!process.env.GITHUB_TOKEN) {
-    return null
-  }
-  const url = `https://api.github.com/repos/${repo()}/contents/${beaconPath()}?ref=${beaconBranch()}`
-  const res = await fetch(url, {
-    headers: { ...ghHeaders(), Accept: "application/vnd.github.v3.raw" },
-  })
+  // Reads the ROUTINE_BEACON repository variable. The routine writes it
+  // each cycle via `gh variable set` in Step 9.5 — uses the routine's
+  // existing `repo` scope, sidestepping the gist:write scope mismatch
+  // that broke the prior gist-based beacon.
+  if (!process.env.GITHUB_TOKEN) return null
+  const url = `https://api.github.com/repos/${repo()}/actions/variables/${ROUTINE_BEACON_VARIABLE}`
+  const res = await fetch(url, { headers: ghHeaders() })
   if (res.status === 404) return null
   if (!res.ok) {
-    throw new Error(`readRoutineBeacon: contents read failed: ${res.status}`)
+    throw new Error(`readRoutineBeacon: variable read failed: ${res.status}`)
   }
-  const content = await res.text()
-  if (!content) return null
+  const { value } = await res.json()
   try {
-    return JSON.parse(content)
+    return JSON.parse(value)
   } catch {
     return null
   }

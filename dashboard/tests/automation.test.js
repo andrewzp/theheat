@@ -31,7 +31,7 @@ function workflowRunsResponse(runs = []) {
 
 function gistStateResponse(stateJson) {
   // readStateStore still hits the gist for state.json. The beacon moved off
-  // the gist entirely (now lives on the beacon-current branch).
+  // the gist entirely (now lives in a repository variable).
   return {
     ok: true,
     status: 200,
@@ -46,18 +46,18 @@ function gistStateResponse(stateJson) {
   }
 }
 
-function beaconContentsResponse(beaconJson) {
-  // readRoutineBeacon now hits the Contents API with Accept: application/vnd.github.v3.raw,
-  // which returns raw file content (no JSON envelope, no base64).
+function beaconVariableResponse(beaconJson) {
+  // readRoutineBeacon now hits /repos/.../actions/variables/ROUTINE_BEACON,
+  // which returns {name, value, created_at, updated_at} — value is the
+  // beacon JSON serialized as a string.
   if (beaconJson === undefined) {
     return { ok: false, status: 404, async text() { return "Not Found" } }
   }
-  const raw = JSON.stringify(beaconJson)
   return {
     ok: true,
     status: 200,
-    async text() {
-      return raw
+    async json() {
+      return { name: "ROUTINE_BEACON", value: JSON.stringify(beaconJson) }
     },
   }
 }
@@ -118,57 +118,33 @@ test("fetchWorkflowLastRun returns null when no runs exist", async () => {
   assert.equal(result, null)
 })
 
-test("readRoutineBeacon returns parsed beacon from beacon-current branch", async () => {
+test("readRoutineBeacon returns parsed value from ROUTINE_BEACON variable", async () => {
   const calls = []
-  global.fetch = async (url, opts) => {
-    calls.push({ url: String(url), accept: opts?.headers?.Accept })
-    return beaconContentsResponse({
+  global.fetch = async (url) => {
+    calls.push(String(url))
+    return beaconVariableResponse({
       routine_last_run_at: "2026-05-22T15:04:58Z",
       routine_last_run_outcome: "graded",
     })
   }
   process.env.GITHUB_TOKEN = "ghp_test"
-  delete process.env.THEHEAT_BEACON_BRANCH
-  delete process.env.THEHEAT_BEACON_PATH
 
   const { readRoutineBeacon } = await importFresh("lib/automation.js")
   const result = await readRoutineBeacon()
 
   assert.equal(result.routine_last_run_at, "2026-05-22T15:04:58Z")
   assert.equal(result.routine_last_run_outcome, "graded")
-  assert.match(calls[0].url, /\/contents\/beacon\.json\?ref=beacon-current$/)
-  assert.equal(calls[0].accept, "application/vnd.github.v3.raw")
+  assert.match(calls[0], /\/actions\/variables\/ROUTINE_BEACON$/)
 })
 
-test("readRoutineBeacon returns null on 404 (branch or file missing)", async () => {
-  global.fetch = async () => beaconContentsResponse(undefined)
+test("readRoutineBeacon returns null on 404 (variable unset)", async () => {
+  global.fetch = async () => beaconVariableResponse(undefined)
   process.env.GITHUB_TOKEN = "ghp_test"
 
   const { readRoutineBeacon } = await importFresh("lib/automation.js")
   const result = await readRoutineBeacon()
 
   assert.equal(result, null)
-})
-
-test("readRoutineBeacon honors THEHEAT_BEACON_BRANCH + THEHEAT_BEACON_PATH overrides", async () => {
-  const calls = []
-  global.fetch = async (url) => {
-    calls.push(String(url))
-    return beaconContentsResponse({
-      routine_last_run_at: "2026-05-22T15:04:58Z",
-      routine_last_run_outcome: "no-fresh-drafts",
-    })
-  }
-  process.env.GITHUB_TOKEN = "ghp_test"
-  process.env.THEHEAT_BEACON_BRANCH = "alt-beacon"
-  process.env.THEHEAT_BEACON_PATH = "ops/beacon.json"
-
-  const { readRoutineBeacon } = await importFresh("lib/automation.js")
-  await readRoutineBeacon()
-
-  assert.match(calls[0], /\/contents\/ops\/beacon\.json\?ref=alt-beacon$/)
-  delete process.env.THEHEAT_BEACON_BRANCH
-  delete process.env.THEHEAT_BEACON_PATH
 })
 
 test("getAutomationStatus composes workflows + routine + posting mode", async () => {
@@ -187,8 +163,8 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
     if (u.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    if (u.includes("/contents/")) {
-      return beaconContentsResponse({
+    if (u.includes("/actions/variables/")) {
+      return beaconVariableResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       })
@@ -285,8 +261,8 @@ test("GET /api/automation returns combined status with valid auth", async () => 
     if (u.includes("/actions/workflows/")) {
       return workflowResponse("active")
     }
-    if (u.includes("/contents/")) {
-      return beaconContentsResponse({
+    if (u.includes("/actions/variables/")) {
+      return beaconVariableResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       })
@@ -371,9 +347,9 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
       actionCalls++
       return workflowResponse("active")
     }
-    if (u.includes("/contents/")) {
+    if (u.includes("/actions/variables/")) {
       beaconCalls++
-      return beaconContentsResponse({
+      return beaconVariableResponse({
         routine_last_run_at: "2026-05-22T15:04:58Z",
         routine_last_run_outcome: "graded",
       })
