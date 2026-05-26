@@ -1,6 +1,7 @@
 import { readStateStore } from "./state-store.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
+const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
 
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
@@ -23,10 +24,6 @@ function ghHeaders() {
 
 function repo() {
   return process.env.THEHEAT_REPO || "andrewzp/theheat"
-}
-
-function gistId() {
-  return process.env.GIST_ID || ""
 }
 
 function productionBranch() {
@@ -72,26 +69,20 @@ export async function fetchWorkflowLastRun(file) {
 }
 
 export async function readRoutineBeacon() {
-  // Reads routine_beacon.json from the gist (separate file from state.json).
-  // The routine writes this every cycle in Step 9.5 of its prompt. ~150 bytes
-  // per write, so the gist API's 1MB truncation never applies — we don't need
-  // the git-clone path the routine itself uses for state.json reads.
-  //
-  // Living in a separate file (not state.json) eliminates the lost-update race
-  // where a routine PATCH would overwrite a concurrent python cron write.
-  if (!process.env.GITHUB_TOKEN || !gistId()) {
-    return null
-  }
-  const url = `https://api.github.com/gists/${gistId()}`
+  // Reads the ROUTINE_BEACON repository variable. The routine writes it
+  // each cycle via `gh variable set` in Step 9.5 — uses the routine's
+  // existing `repo` scope, sidestepping the gist:write scope mismatch
+  // that broke the prior gist-based beacon.
+  if (!process.env.GITHUB_TOKEN) return null
+  const url = `https://api.github.com/repos/${repo()}/actions/variables/${ROUTINE_BEACON_VARIABLE}`
   const res = await fetch(url, { headers: ghHeaders() })
+  if (res.status === 404) return null
   if (!res.ok) {
-    throw new Error(`readRoutineBeacon: gist read failed: ${res.status}`)
+    throw new Error(`readRoutineBeacon: variable read failed: ${res.status}`)
   }
-  const data = await res.json()
-  const content = data.files?.["routine_beacon.json"]?.content
-  if (!content) return null
+  const { value } = await res.json()
   try {
-    return JSON.parse(content)
+    return JSON.parse(value)
   } catch {
     return null
   }
