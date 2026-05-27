@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.4.0] - 2026-05-26
+
+Dead-code cleanup post-0.9.3.0. After the beacon migrated from the gist
+to a repository variable in 0.9.3.0, the python `state.json` was still
+carrying an `automation` field with a full schema type, default value,
+and a special `_merge_state` "current wins" branch — all defending a
+gist-beacon path that no longer exists. Nothing on the python side
+writes or reads the field; the dashboard reads the repo variable, not
+the gist. This release removes the vestigial scaffolding so the schema
+is honest.
+
+### Removed
+
+- `src/state_schema.py`: `AutomationState` TypedDict + the `automation`
+  field on `BotState`.
+- `src/state.py`: `DEFAULT_STATE["automation"]` + the dedicated
+  `automation` branch in `_merge_state`.
+- `tests/test_state.py`: `TestAutomationMerge` class (3 tests that
+  exercised the dead merge logic).
+
+### Changed
+
+- `BRIEFING.md`: replaced stale references to the gist-based beacon
+  with the post-#160 repo-variable path; noted that the three previously
+  parked `wip/` branches are now archived as `archive/wip/*` tags.
+- `docs/IMPROVEMENT_PLAN.md`: updated the "Voice engine version" cell
+  to describe the current beacon write path.
+
 ## [0.9.3.0] - 2026-05-26
 
 Beacon storage moved from a gist file to a GitHub Actions repository
