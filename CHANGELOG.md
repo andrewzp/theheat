@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.7.0] - 2026-06-01
+
+Critic prompt fix: assess signals relative to available data, not against
+an implied "must have a 100-year baseline" bar. After 0.9.6.0 verified the
+pipeline was running end-to-end and producing 0 drafts, the suppression
+ledger showed every critic kill citing variations of "26-year period of
+record is too short to be an extraordinary climate signal." That was
+**wrong reasoning** by the critic — most weather-station histories are
+25-50 years; the bot's job IS to surface records relative to available
+data. Rejecting every station-record signal as "baseline too short" made
+the bot structurally silent.
+
+### Changed
+
+- `src/two_bot/prompts/critic_prompt.py`: added an explicit
+  "**Period-of-record length is NOT a kill condition**" bullet under
+  Scale/impact. Clarified that the existing "Underwhelming numbers" rule
+  is about *absolute magnitude* (a 70 MW fire, a 1.2°C anomaly, a DHW of
+  2 — small in absolute terms), NOT about how long the underlying
+  baseline is. The new bullet:
+  - Cites the broken pattern verbatim ("a 26-year period of record is
+    too short") so the model can't drift back into it
+  - Frames the bar: assess relative to data that exists; a station record
+    breaking its 26-year history IS the climate signal
+  - Permits tweets that name the period explicitly ("hottest in 26 years
+    of records") rather than dismissing them
+
+### Tests
+
+- `tests/two_bot/test_prompts.py`: +1 regression test
+  `test_period_of_record_length_is_not_a_kill_condition` locking the new
+  guidance into the prompt structure. 36 → 37 prompt tests passing.
+
+### Expected impact
+
+Station-record candidates from `open_meteo_extreme_signals` and other
+finite-baseline sources can now pass the critic when the data warrants
+it. The 0-drafts-for-5-days drought should end — pending queue will
+diversify with non-coral signals as soon as the next cron's candidates
+clear writer → fact_check → critic.
+
 ## [0.9.6.0] - 2026-06-01
 
 Pending-queue diversity gate. The pre-0.9.0.0 unbounded coral_dhw promoter

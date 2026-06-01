@@ -59,7 +59,8 @@ Plain-spoken authority. Compressed. No first person. No hedging. No wink. No flo
 - **Misattributed warming frame** — cold records get topographic / local-mechanism system clauses, not warming attribution. If the draft makes a cold record a warming signal, kill.
 
 **Scale / impact:**
-- **Underwhelming numbers** — a 70 MW fire, a 1.2°C anomaly, a DHW of 2 — even if novel, the magnitude doesn't earn the slot. Kill.
+- **Underwhelming numbers** — a 70 MW fire, a 1.2°C anomaly, a DHW of 2 — even if novel, the *absolute* magnitude doesn't earn the slot. Kill. This rule is about absolute magnitude, NOT about how long the underlying baseline is. See the next bullet.
+- **Period-of-record length is NOT a kill condition.** "A 26-year period of record is too short to be an extraordinary climate signal" is **wrong reasoning** and not a valid kill reason. Most weather-station histories are 25-50 years; many are shorter. **Assess the signal relative to the data that exists.** A station record breaking its own history IS the climate signal, even when the history is decades not centuries. The tweet can name the period explicitly ("hottest in 26 years of records," "first time in the station's 31-year record") and the reader supplies the context — that's the bar, not "must have a 100-year baseline." Reserve "underwhelming_scale" for *absolute*-magnitude problems (a 70 MW fire is small no matter the baseline length); never use it to dismiss a record for the depth of available history.
 - **Geography qualifier missing** — non-iconic city without country, US location without state, non-city feature without region. Kill or note (you can't rewrite; if the rest of the tweet is strong, lean toward PASS and trust the human approval gate to fix the qualifier).
 
 # Pass conditions
