@@ -1383,6 +1383,20 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
     from src import state as _state
     from src.orchestrator import triage as _triage
 
+    # Pending-queue TTL sweep — auto-reject stale drafts BEFORE triage so the
+    # freshly-opened slots are immediately available to incoming candidates
+    # via the pending-type cap. Errors here must NOT block the cycle: a
+    # broken TTL only fails to GC stale drafts, the rest of the pipeline
+    # still runs.
+    try:
+        ttl_rejected = _triage.apply_pending_ttl_sweep(bot_state)
+        if ttl_rejected > 0:
+            print(
+                f"[triage] pending TTL sweep rejected {ttl_rejected} stale draft(s)"
+            )
+    except Exception as exc:
+        print(f"[triage] TTL sweep error (continuing): {exc!r}")
+
     # Cast to plain dict: _triage_queue is a transient key not declared in
     # BotState TypedDict (it's excluded from sqlite persistence intentionally).
     state_dict: dict = cast(dict, bot_state)

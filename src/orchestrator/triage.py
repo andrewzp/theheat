@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
@@ -26,6 +26,17 @@ if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
 
 PER_CATEGORY_TRIAGE_CAP_DEFAULT = 2
+# Pending-queue diversity gate. The triage per-category cap bounds INPUT per
+# cycle but the pending queue can still drift to monoculture over many cycles
+# when one source produces continuously and others produce intermittently
+# (the May 2026 coral_bleaching pile-up). This cap is the structural fix —
+# no more than N drafts of any one `legacy_type` may sit in pending at once.
+PENDING_TYPE_CAP_DEFAULT = 3
+# Pending-queue TTL — drafts older than this auto-reject so the queue self-
+# cleans rather than accumulating stale signals indefinitely. 7 days matches
+# the longest credible "still current" window for the slow continuous sources
+# (DHW), comfortably catches the fast point-in-time signals.
+PENDING_TTL_DAYS_DEFAULT = 7
 
 
 def _per_category_cap() -> int:
@@ -36,6 +47,83 @@ def _per_category_cap() -> int:
         return max(v, 1)
     except (TypeError, ValueError):
         return PER_CATEGORY_TRIAGE_CAP_DEFAULT
+
+
+def _pending_type_cap() -> int:
+    """Read pending-queue per-type cap from env, falling back to default."""
+    raw = os.environ.get("THEHEAT_PENDING_TYPE_CAP", "")
+    try:
+        v = int(raw) if raw else PENDING_TYPE_CAP_DEFAULT
+        return max(v, 1)
+    except (TypeError, ValueError):
+        return PENDING_TYPE_CAP_DEFAULT
+
+
+def _pending_ttl_days() -> int:
+    """Read pending-queue TTL (in days) from env, falling back to default."""
+    raw = os.environ.get("THEHEAT_PENDING_TTL_DAYS", "")
+    try:
+        v = int(raw) if raw else PENDING_TTL_DAYS_DEFAULT
+        return max(v, 1)
+    except (TypeError, ValueError):
+        return PENDING_TTL_DAYS_DEFAULT
+
+
+def _pending_count_for_type(bot_state: Any, draft_type: str) -> int:
+    """Count drafts with status='pending' and matching legacy_type."""
+    drafts = bot_state.get("drafts", []) or []
+    return sum(
+        1
+        for d in drafts
+        if isinstance(d, dict)
+        and d.get("status") == "pending"
+        and d.get("type") == draft_type
+    )
+
+
+def apply_pending_ttl_sweep(
+    bot_state: Any,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Reject pending drafts older than the configured TTL.
+
+    Old drafts become structurally stale — their underlying data has drifted,
+    the queue stops reflecting current reality, and they crowd out fresh
+    signals via the per-type cap. Auto-rejecting them keeps the queue
+    actionable. Operator can re-approve from the rejected pile if a signal
+    still applies.
+
+    Mutates ``bot_state["drafts"]`` in place. Returns the count of drafts
+    newly rejected this call.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+    ttl_days = _pending_ttl_days()
+    cutoff_iso = (
+        (now - timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z")
+    )
+    now_iso = now.isoformat().replace("+00:00", "Z")
+    drafts = bot_state.get("drafts", []) or []
+    rejected_count = 0
+    for d in drafts:
+        if not isinstance(d, dict):
+            continue
+        if d.get("status") != "pending":
+            continue
+        created_at = d.get("created_at")
+        if not isinstance(created_at, str) or not created_at:
+            continue
+        # ISO-8601 strings (with trailing Z) sort lexicographically =
+        # chronologically. Safer than datetime parsing — no failure mode
+        # if the field has unexpected formatting.
+        if created_at >= cutoff_iso:
+            continue
+        d["status"] = "rejected"
+        d["rejected_reason"] = f"staleness_ttl_{ttl_days}d"
+        d["rejected_at"] = now_iso
+        rejected_count += 1
+    return rejected_count
 
 
 def _utc_now_iso() -> str:
@@ -68,6 +156,8 @@ def _record_triage_suppression(
 
     if reason == "global_cap":
         reasons_field = [f"global_cap={global_cap}"]
+    elif reason == "pending_type_cap":
+        reasons_field = [f"pending_type_cap={_pending_type_cap()}"]
     else:
         reasons_field = [f"per_category_cap={cap}"]
 
@@ -118,9 +208,15 @@ def select_survivors(
     )
 
     cap = _per_category_cap()
+    pending_cap = _pending_type_cap()
     by_category: dict[str, int] = {}
+    # Cache per-type pending counts so we don't re-scan bot_state.drafts
+    # for every candidate. Incremented for each survivor we admit so the
+    # next candidate of the same type sees the post-admit count.
+    pending_counts: dict[str, int] = {}
     survivors: list["TriageCandidateBundle"] = []
-    # (candidate, reason) — reason is "per_category_cap" or "global_cap".
+    # (candidate, reason) — reason is "per_category_cap", "pending_type_cap",
+    # or "global_cap".
     spilled: list[tuple["TriageCandidateBundle", str]] = []
 
     for i, candidate in enumerate(ranked):
@@ -129,6 +225,20 @@ def select_survivors(
         if used >= cap:
             spilled.append((candidate, "per_category_cap"))
             continue
+        # Pending-queue diversity gate: if the pending queue already holds
+        # `pending_cap` drafts of this `legacy_type`, refuse to promote
+        # another one. The candidate gets logged as `pending_type_cap` so
+        # the dashboard can attribute the kill to queue concentration vs
+        # cycle-cap vs global-cap.
+        draft_type = getattr(candidate, "legacy_type", "") or ""
+        if draft_type:
+            if draft_type not in pending_counts:
+                pending_counts[draft_type] = _pending_count_for_type(
+                    bot_state, draft_type
+                )
+            if pending_counts[draft_type] >= pending_cap:
+                spilled.append((candidate, "pending_type_cap"))
+                continue
         if len(survivors) >= global_cap:
             # Global cap already hit — all remaining spill via the global gate.
             for remaining in ranked[i:]:
@@ -136,6 +246,10 @@ def select_survivors(
             break
         survivors.append(candidate)
         by_category[category] = used + 1
+        if draft_type:
+            # Account for the just-admitted survivor so consecutive same-type
+            # candidates see the bumped count.
+            pending_counts[draft_type] = pending_counts.get(draft_type, 0) + 1
 
     for candidate, reason in spilled:
         _record_triage_suppression(

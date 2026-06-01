@@ -2,6 +2,56 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.6.0] - 2026-06-01
+
+Pending-queue diversity gate. The pre-0.9.0.0 unbounded coral_dhw promoter
+left 10 coral_bleaching drafts in pending, drowning out the editorial goal
+of "full picture of warming" — the queue read as a coral monoculture
+instead of a balanced view of climate extremes. The per-category triage cap
+(2/cycle) bounded INPUT but did nothing about pending-queue COMPOSITION
+over many cycles. This release adds the queue-aware backstop.
+
+### Added
+
+- `src/orchestrator/triage.py`:
+  - New `THEHEAT_PENDING_TYPE_CAP` env var (default 3). Triage refuses to
+    promote a new candidate when the pending queue already holds N drafts
+    of that `legacy_type`. Spilled candidates are recorded with
+    `stage="triage_cap"` and `reasons=["pending_type_cap=N"]` so dashboard
+    attribution can tell "queue saturated for this type" apart from "cycle
+    cap hit" and "global cap hit".
+  - New `apply_pending_ttl_sweep(bot_state, *, now=None)` function. Marks
+    pending drafts older than `THEHEAT_PENDING_TTL_DAYS` (default 7) as
+    `status="rejected"` with `rejected_reason="staleness_ttl_Nd"` and a
+    `rejected_at` timestamp. Wired into `_drain_and_write_triage_queue`
+    so it runs at the start of every cycle, freeing pending-type-cap slots
+    for fresh candidates immediately. Errors here are caught — TTL must
+    not block the rest of the pipeline.
+  - Within `select_survivors`, the cap check increments a per-type cache
+    after each survivor is admitted so consecutive same-type candidates in
+    one cycle don't all squeeze into the last open slot.
+
+### Tests
+
+- `tests/test_triage.py`: +10 tests covering pending-type cap (admit/block,
+  rejected-don't-count, consecutive-bump, env override) and TTL sweep
+  (reject-old, preserve-fresh, only-pending, malformed-created-at,
+  env override). 1348 → 1358 passing.
+
+### Operational knobs
+
+- `THEHEAT_PENDING_TYPE_CAP=3` — max pending drafts per `legacy_type`. Lower
+  if 3 still feels too redundant. Higher if specific types feel
+  under-represented.
+- `THEHEAT_PENDING_TTL_DAYS=7` — auto-reject pending drafts older than this.
+
+### Expected impact
+
+Going forward, pending-queue concentration is a structural property of the
+pipeline, not a manual operator burden. The May 2026 coral pile-up becomes
+impossible by construction. Diverse-supply weeks produce diverse-pending
+queues. Single-source-dominant weeks produce a small queue with no monoculture.
+
 ## [0.9.5.0] - 2026-06-01
 
 GPM IMERG reliability fix. The precipitation source has been showing a 13%
