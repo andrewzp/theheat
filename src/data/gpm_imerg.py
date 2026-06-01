@@ -14,6 +14,7 @@ from datetime import date, timedelta
 import csv
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,14 @@ DEFAULT_CITY_LIMIT = 75
 DEFAULT_MAX_WORKERS = 8
 PRECIP_HISTORY_DAYS = 10
 STRICT_REPEATED_FAILURE_LIMIT = 3
+# NASA GES DISC OPeNDAP service is intermittently slow under load — it
+# generates `.nc4.ascii` subsets on-the-fly per request and that work can
+# routinely take 30-55s. The bot's prior 30s hard timeout was too aggressive
+# and produced a 13% success rate on the source-health dashboard. 60s catches
+# the long tail without false-positive stalls; env var lets us tune if NASA's
+# behavior shifts.
+DEFAULT_REQUEST_TIMEOUT_S = 60.0
+DEFAULT_RETRY_BACKOFF_S = 10.0
 
 
 @dataclass(frozen=True)
@@ -319,6 +328,48 @@ def update_precip_tracking(
         recent[city_key] = rows[-max_history_days:]
 
 
+def _request_timeout_s() -> float:
+    """Per-request OPeNDAP timeout. Configurable via GPM_IMERG_TIMEOUT_S."""
+    raw = os.environ.get("GPM_IMERG_TIMEOUT_S")
+    if not raw:
+        return DEFAULT_REQUEST_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_REQUEST_TIMEOUT_S
+    return value if value > 0 else DEFAULT_REQUEST_TIMEOUT_S
+
+
+def _retry_backoff_s() -> float:
+    """Sleep between retry attempts. Configurable via GPM_IMERG_RETRY_BACKOFF_S.
+
+    Tests set this to 0 to avoid real-time sleeps.
+    """
+    raw = os.environ.get("GPM_IMERG_RETRY_BACKOFF_S")
+    if not raw:
+        return DEFAULT_RETRY_BACKOFF_S
+    try:
+        value = float(raw)
+    except ValueError:
+        return DEFAULT_RETRY_BACKOFF_S
+    return value if value >= 0 else DEFAULT_RETRY_BACKOFF_S
+
+
+def _is_transient_request_error(exc: BaseException) -> bool:
+    """Return True for errors worth retrying once.
+
+    Transient: connection errors, read/connect timeouts, and 5xx HTTP responses.
+    Persistent (NOT retried): 4xx responses — auth (401/403), not found (404),
+    validation (400). Re-trying those just wastes the source's runtime budget
+    on guaranteed-to-fail repeats.
+    """
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        return 500 <= exc.response.status_code < 600
+    return False
+
+
 def _fetch_city_precip(
     *,
     lat: float,
@@ -327,6 +378,13 @@ def _fetch_city_precip(
     product: str,
     headers: Mapping[str, str],
 ) -> float | None:
+    """Fetch one city's daily precip from GPM IMERG OPeNDAP.
+
+    Retries ONCE on transient errors (read timeout, connection error, 5xx).
+    Persistent errors (4xx auth, 404, validation) raise immediately so the
+    strict-mode probe can fail fast on real outages without burning retry
+    budget on guaranteed failures.
+    """
     variable = "precipitation"
     url = _ascii_subset_url(
         lat=lat,
@@ -335,8 +393,19 @@ def _fetch_city_precip(
         product=product,
         variable=variable,
     )
-    resp = requests.get(url, headers=dict(headers), timeout=30)
-    resp.raise_for_status()
+    timeout_s = _request_timeout_s()
+    request_headers = dict(headers)
+    try:
+        resp = requests.get(url, headers=request_headers, timeout=timeout_s)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        if not _is_transient_request_error(exc):
+            raise
+        backoff_s = _retry_backoff_s()
+        if backoff_s > 0:
+            time.sleep(backoff_s)
+        resp = requests.get(url, headers=request_headers, timeout=timeout_s)
+        resp.raise_for_status()
     value = _parse_ascii_value(resp.text, variable)
     if value is None or value <= FILL_VALUE:
         return None

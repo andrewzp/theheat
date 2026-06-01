@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.5.0] - 2026-06-01
+
+GPM IMERG reliability fix. The precipitation source has been showing a 13%
+success rate (1/8) on the source-health dashboard because NASA's GES DISC
+OPeNDAP service is intermittently slow under load — its `.nc4.ascii` subset
+generation routinely takes 30-55 seconds, but the bot's hardcoded 30s
+timeout was too aggressive and the single-shot fetch had no retry. Result:
+zero precipitation drafts ever, and the pending queue lost a whole story
+class (flash floods, monsoon record days, atmospheric rivers), reinforcing
+the coral-monoculture problem flagged in the diversity discussion.
+
+### Changed
+
+- `src/data/gpm_imerg.py`:
+  - Default OPeNDAP request timeout raised from 30s to 60s. Configurable
+    via `GPM_IMERG_TIMEOUT_S` env var (positive number; junk values fall
+    back to default).
+  - Added one retry per city on transient errors only: `ReadTimeout`,
+    `ConnectionError`, and HTTP 5xx responses. 10s default backoff between
+    attempts, configurable via `GPM_IMERG_RETRY_BACKOFF_S` (tests set to 0).
+  - 4xx responses (401 auth, 404 not-found, 400 validation) raise
+    immediately — they're persistent and re-trying wastes the source's
+    runtime budget on guaranteed-to-fail repeats.
+  - Strict-mode probe still fails fast after 3 same-signature failures, so
+    a real NASA outage still kills the run quickly. The retry layer
+    promotes a single transient blip from a city-skip into a recovered read.
+
+### Tests
+
+- `tests/test_gpm_imerg.py`: +4 tests covering retry-on-ReadTimeout,
+  retry-on-5xx, no-retry-on-4xx, and the timeout env override. 16 → 20.
+
+### Expected impact
+
+NASA GES DISC's actual server-side behavior is unchanged, but the bot now
+tolerates the transient slowness. Source-health success rate should rise
+from ~13% to ~70-85% under current NASA conditions, surfacing
+precipitation/flood drafts that the prior architecture silently dropped.
+
 ## [0.9.4.0] - 2026-05-26
 
 Dead-code cleanup post-0.9.3.0. After the beacon migrated from the gist
