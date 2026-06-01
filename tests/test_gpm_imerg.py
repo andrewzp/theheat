@@ -196,6 +196,105 @@ class TestGpmFetch:
                 strict=True,
             )
 
+    @responses.activate
+    @patch("src.data.gpm_imerg.time.sleep")
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_fetch_city_precip_retries_once_on_read_timeout(self, _env, sleep_mock):
+        """Transient ReadTimeout retries once. Second attempt's 200 yields a reading.
+
+        NASA GES DISC OPeNDAP is intermittently slow under load — the 0.9.5.0
+        retry layer turns a single transient timeout from a city-skip into a
+        recovered read, materially improving end-to-end source success rate.
+        """
+        import requests as r
+
+        url_pattern = re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*")
+        responses.add(responses.GET, url_pattern, body=r.exceptions.ReadTimeout("flaky"))
+        responses.add(
+            responses.GET,
+            url_pattern,
+            body="Dataset\nprecipitation[0][1823][1388], 7.5\n",
+            status=200,
+        )
+
+        readings = fetch_daily_precip(
+            [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+            target_date=date(2026, 5, 14),
+            strict=True,
+        )
+
+        assert len(responses.calls) == 2  # original + 1 retry
+        assert len(readings) == 1
+        assert readings[0].mm_total == 7.5
+        sleep_mock.assert_called_once()  # backoff invoked between attempts
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.time.sleep")
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_fetch_city_precip_retries_once_on_5xx(self, _env, sleep_mock):
+        """503 Server Error retries once. Same NASA-overload pattern as ReadTimeout."""
+        url_pattern = re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*")
+        responses.add(responses.GET, url_pattern, status=503, body="server overloaded")
+        responses.add(
+            responses.GET,
+            url_pattern,
+            body="Dataset\nprecipitation[0][1823][1388], 12.0\n",
+            status=200,
+        )
+
+        readings = fetch_daily_precip(
+            [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+            target_date=date(2026, 5, 14),
+            strict=True,
+        )
+
+        assert len(responses.calls) == 2
+        assert len(readings) == 1
+        assert readings[0].mm_total == 12.0
+        sleep_mock.assert_called_once()
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.time.sleep")
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_fetch_city_precip_does_not_retry_on_4xx(self, _env, sleep_mock):
+        """Persistent 4xx (auth, 404) must not retry — wastes runtime budget on
+        guaranteed-to-fail repeats. Single call, immediate fail-fast.
+        """
+        import pytest
+        from src.data.source_status import SourceFetchError
+
+        url_pattern = re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*")
+        responses.add(responses.GET, url_pattern, status=401, body="Unauthorized")
+
+        with pytest.raises(SourceFetchError):
+            fetch_daily_precip(
+                [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+                target_date=date(2026, 5, 14),
+                strict=True,
+            )
+
+        assert len(responses.calls) == 1  # no retry
+        sleep_mock.assert_not_called()
+
+    def test_request_timeout_env_override(self, monkeypatch):
+        """GPM_IMERG_TIMEOUT_S overrides default; junk values fall back safely."""
+        from src.data.gpm_imerg import DEFAULT_REQUEST_TIMEOUT_S, _request_timeout_s
+
+        monkeypatch.delenv("GPM_IMERG_TIMEOUT_S", raising=False)
+        assert _request_timeout_s() == DEFAULT_REQUEST_TIMEOUT_S
+
+        monkeypatch.setenv("GPM_IMERG_TIMEOUT_S", "120")
+        assert _request_timeout_s() == 120.0
+
+        monkeypatch.setenv("GPM_IMERG_TIMEOUT_S", "not-a-number")
+        assert _request_timeout_s() == DEFAULT_REQUEST_TIMEOUT_S  # ValueError → fallback
+
+        monkeypatch.setenv("GPM_IMERG_TIMEOUT_S", "-5")
+        assert _request_timeout_s() == DEFAULT_REQUEST_TIMEOUT_S  # negative → fallback
+
+        monkeypatch.setenv("GPM_IMERG_TIMEOUT_S", "0")
+        assert _request_timeout_s() == DEFAULT_REQUEST_TIMEOUT_S  # zero → fallback
+
     def test_late_product_url_uses_month_folder_and_v07c(self):
         url = _ascii_subset_url(
             lat=48.85,
