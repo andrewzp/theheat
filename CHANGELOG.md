@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.8.0] - 2026-06-01
+
+Fact-check: skip claims with unknown `kind` instead of killing the whole
+tweet. After 0.9.7.0 fixed the critic's "period of record too short" kill,
+the next gate in the funnel — fact_check — turned out to have a different
+structural failure: Gemini Flash sometimes returns `kind: "factual_assertion"`
+or other off-script kinds not in the prompt's enumerated list (`number`,
+`date`, `named_entity`, `comparison`, `era_anchor`, `peer_comparison`).
+The old parser raised on any unknown kind, invalidating the whole response,
+retrying once with the same result, then killing the candidate. Observed
+2026-06-01: 14+ candidates killed across the day with reason "Unsupported
+extracted claim kind: factual_assertion." Wrong failure mode — pass/fail
+is independent of claim kinds.
+
+### Changed
+
+- `src/two_bot/fact_check.py`: `_parse_extracted_claims` now drops claims
+  with unknown `kind` (with a logged warning) and continues parsing the
+  rest of the response. Structural failures (missing fields, wrong types)
+  still raise — those indicate the response is too malformed to trust.
+- `src/two_bot/claim_extractor.py`: same fix in `_parse_claims_json` for
+  consistency. (claim_extractor.py is the standalone path; fact_check.py
+  is the combined path that's actually wired into the production pipeline.)
+
+### Tests
+
+- `tests/two_bot/test_fact_check.py`: +2 tests — one verifies unknown-
+  kind claims are dropped while valid claims pass through and the tweet
+  still ships; one verifies structurally-malformed claims (missing
+  `kind` field entirely) still fail the response. 1361 → 1363 passing.
+
+### Expected impact
+
+The 14+ daily fact-check kills attributed to claim-kind-validation should
+drop to ~0 immediately. Combined with 0.9.7.0's critic fix, the writer →
+fact_check → critic funnel should now produce drafts at the editorial
+rate the architecture was designed for, instead of the 0-drafts-for-5-days
+silence caused by parser strictness.
+
 ## [0.9.7.0] - 2026-06-01
 
 Critic prompt fix: assess signals relative to available data, not against

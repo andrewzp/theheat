@@ -126,6 +126,60 @@ def test_fact_check_requires_claims_when_combined_path_has_no_preextract(mock_ge
     assert any("extracted_claims" in failure for failure in result.failures)
 
 
+def test_fact_check_skips_claims_with_unknown_kind_instead_of_killing(mock_gemini, capsys):
+    """Gemini Flash sometimes returns claim kinds outside the prompt's
+    enumerated list (observed 2026-06-01: 14+ candidates killed across
+    the day with 'Unsupported extracted claim kind: factual_assertion').
+    The parser must drop the unknown-kind claims gracefully, NOT kill the
+    whole tweet — pass/fail is independent of claim kinds.
+    """
+    mock_gemini.return_value = json.dumps({
+        "passed": True,
+        "failures": [],
+        "extracted_claims": [
+            {"text": "12.0 °C-weeks", "kind": "number"},
+            {"text": "the broader signal", "kind": "factual_assertion"},  # off-script kind
+            {"text": "Western India", "kind": "named_entity"},
+        ],
+    })
+
+    result = fact_check(
+        "Western India: 12.0 °C-weeks of thermal stress.",
+        [],
+        _bundle(),
+        _state_with_memory(),
+    )
+
+    # Tweet should pass: pass/fail doesn't depend on claim kinds.
+    assert result.passed
+    # The 2 valid claims survive; the 1 unknown-kind claim is dropped.
+    assert len(result.extracted_claims) == 2
+    assert {c.kind for c in result.extracted_claims} == {"number", "named_entity"}
+    # And we logged the drop so the operator can see it in the cron output.
+    captured = capsys.readouterr()
+    assert "factual_assertion" in captured.out
+    assert "unsupported kind" in captured.out.lower()
+
+
+def test_fact_check_still_raises_on_structurally_bad_claim(mock_gemini):
+    """Unknown KIND → skip. But missing/wrong-type FIELDS still raise.
+    A response missing required structure is fundamentally untrusted.
+    """
+    mock_gemini.return_value = json.dumps({
+        "passed": True,
+        "failures": [],
+        "extracted_claims": [
+            {"text": "missing kind field entirely"},  # structural failure
+        ],
+    })
+
+    result = fact_check("Some tweet.", [], _bundle(), _state_with_memory())
+
+    # Structurally-broken response → tweet fails fact-check (the retry
+    # path returned a structured KILL after parse_budget exhausted).
+    assert not result.passed
+
+
 class TestJsonParseRetry:
     """Fact-check-side defense: if Gemini returns empty / non-JSON / mid-
     truncation output, retry once with a stronger contract reminder. If

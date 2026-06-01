@@ -50,6 +50,20 @@ def _format_failure(item) -> str:
 
 
 def _parse_extracted_claims(value, *, required: bool) -> list[ExtractedClaim]:
+    """Parse the fact-checker's extracted_claims list.
+
+    Unknown ``kind`` values are SKIPPED (with a warning), not raised. The
+    fact-checker's pass/fail decision is independent of claim kinds; only
+    the era_anchor / peer_comparison memory-reuse check downstream cares
+    about specific kinds, and a "factual_assertion"-style off-script kind
+    wouldn't have matched those filters anyway. Skipping is the right
+    failure mode — raising killed real candidates that were otherwise
+    fine, as observed 2026-06-01 (14+ kills across the day citing
+    "Unsupported extracted claim kind: factual_assertion").
+
+    Structural integrity errors (missing fields, wrong types) still raise
+    — those indicate the response is too malformed to trust.
+    """
     if value is None:
         if required:
             raise ValueError("Fact-checker response must include extracted_claims")
@@ -65,7 +79,11 @@ def _parse_extracted_claims(value, *, required: bool) -> list[ExtractedClaim]:
         if not isinstance(text, str) or not isinstance(kind, str):
             raise ValueError("Fact-checker claims must include text and kind strings")
         if kind not in _VALID_CLAIM_KINDS:
-            raise ValueError(f"Unsupported extracted claim kind: {kind}")
+            print(
+                f"[two_bot.fact_check] dropping claim with unsupported kind={kind!r}; "
+                f"valid kinds: {sorted(_VALID_CLAIM_KINDS)}"
+            )
+            continue
         claims.append(ExtractedClaim(text=text, kind=kind))
     return claims
 
