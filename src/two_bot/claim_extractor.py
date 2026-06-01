@@ -28,6 +28,14 @@ _VALID_KINDS = {
 
 
 def _parse_claims_json(raw: str) -> list[ExtractedClaim]:
+    """Parse the claim-extractor's JSON list.
+
+    Unknown ``kind`` values are SKIPPED (with a warning), not raised. See
+    fact_check._parse_extracted_claims for the rationale — the model
+    sometimes invents a generic kind like "factual_assertion" not in the
+    prompt's enumerated list, and dropping that single claim is the right
+    failure mode rather than killing the whole response.
+    """
     try:
         parsed = loads_model_json(raw, expected="array")
     except json.JSONDecodeError as exc:
@@ -45,7 +53,11 @@ def _parse_claims_json(raw: str) -> list[ExtractedClaim]:
         if not isinstance(text, str) or not isinstance(kind, str):
             raise ValueError("Claim extractor item must include text and kind strings")
         if kind not in _VALID_KINDS:
-            raise ValueError(f"Unsupported extracted claim kind: {kind}")
+            print(
+                f"[two_bot.claim_extractor] dropping claim with unsupported "
+                f"kind={kind!r}; valid kinds: {sorted(_VALID_KINDS)}"
+            )
+            continue
         claims.append(ExtractedClaim(text=text, kind=kind))
     return claims
 
