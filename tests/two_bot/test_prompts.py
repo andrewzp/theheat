@@ -245,6 +245,24 @@ class TestCriticPromptKillConditions:
         # looks like — otherwise it converges on always-KILL.
         assert "Pass conditions" in CRITIC_SYSTEM_PROMPT
 
+    def test_period_of_record_length_is_not_a_kill_condition(self):
+        """The critic was emitting kill reasons like "a 26-year period of
+        record is too short to be an extraordinary climate signal" — wrong
+        reasoning, since most weather-station histories are 25-50yr and the
+        signal IS the record-vs-available-baseline. Andrew's 2026-06-01
+        directive: "if super long records don't exist then the critic needs
+        to assess relative to the data that exists." Lock that into the
+        prompt as a regression test.
+        """
+        lowered = CRITIC_SYSTEM_PROMPT.lower()
+        # Must explicitly call out that POR length is NOT a valid kill axis.
+        assert "period-of-record length is not a kill condition" in lowered
+        # Must include the "relative to data that exists" framing.
+        assert "data that exists" in lowered
+        # Must concretely cite the broken pattern so the model can't drift
+        # back into it.
+        assert "26-year" in CRITIC_SYSTEM_PROMPT or "26 years" in CRITIC_SYSTEM_PROMPT
+
 
 class TestCriticPromptOutputContract:
     """JSON output contract — downstream parsing in src/two_bot/critic.py
