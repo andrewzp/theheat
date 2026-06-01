@@ -501,3 +501,256 @@ class TestEnqueueStoryCandidate:
         assert suppressions[0]["source"] == "river_gauges"
         assert suppressions[0]["stage"] == "evidence_contract"
         assert suppressions[0]["reasons"] == ["missing_event_id"]
+
+
+# ---------------------------------------------------------------------------
+# Pending-queue diversity gate (0.9.6.0)
+# ---------------------------------------------------------------------------
+
+class TestPendingTypeCap:
+    """Triage refuses to promote new candidates of a type the pending queue
+    already saturates.
+
+    This is the structural fix for the May 2026 coral-bleaching pile-up: the
+    pre-0.9.0.0 unbounded promoter let 10 coral_bleaching drafts accumulate
+    in pending. The per-category cycle cap bounds new INPUT per cron but does
+    nothing about pending-queue COMPOSITION over many cycles. This cap is
+    the queue-aware backstop.
+    """
+
+    def test_blocks_promotion_when_pending_already_at_cap(self, monkeypatch):
+        monkeypatch.delenv("THEHEAT_PENDING_TYPE_CAP", raising=False)
+        # Raise the per-category cycle cap so it doesn't gate this test —
+        # we want pending_type_cap to be the killing gate, not per_category_cap.
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        # Pending already at default cap (3) for coral_bleaching.
+        bot_state["drafts"] = [
+            {"type": "coral_bleaching", "status": "pending", "id": f"d{i}"}
+            for i in range(3)
+        ]
+        candidate = _candidate(
+            signal_kind="coral_bleaching",
+            total=95,
+            event_id="new_coral",
+        )
+
+        result = select_survivors(bot_state, [candidate], global_cap=10)
+
+        assert result == []
+        suppressions = bot_state.get("suppressions", [])
+        assert len(suppressions) == 1
+        assert suppressions[0]["stage"] == "triage_cap"
+        assert suppressions[0]["reasons"] == ["pending_type_cap=3"]
+        assert suppressions[0]["event_id"] == "new_coral"
+
+    def test_admits_promotion_when_pending_below_cap(self, monkeypatch):
+        monkeypatch.delenv("THEHEAT_PENDING_TYPE_CAP", raising=False)
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"type": "coral_bleaching", "status": "pending", "id": "d1"},
+        ]  # 1 pending — under default cap of 3
+        candidate = _candidate(signal_kind="coral_bleaching", total=90)
+
+        result = select_survivors(bot_state, [candidate], global_cap=10)
+
+        assert len(result) == 1
+        assert result[0].event_id == candidate.event_id
+
+    def test_rejected_drafts_do_not_count_toward_cap(self, monkeypatch):
+        """Only status='pending' drafts gate the cap. Rejected/posted free
+        the slot — the cap is about CURRENT queue composition, not history."""
+        monkeypatch.delenv("THEHEAT_PENDING_TYPE_CAP", raising=False)
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"type": "coral_bleaching", "status": "rejected", "id": "old1"},
+            {"type": "coral_bleaching", "status": "rejected", "id": "old2"},
+            {"type": "coral_bleaching", "status": "posted", "id": "old3"},
+            {"type": "coral_bleaching", "status": "pending", "id": "current1"},
+        ]  # 4 with this type, but only 1 pending — under cap
+        candidate = _candidate(signal_kind="coral_bleaching", total=90)
+
+        result = select_survivors(bot_state, [candidate], global_cap=10)
+
+        assert len(result) == 1
+
+    def test_consecutive_same_type_survivors_increment_pending_count(self, monkeypatch):
+        """First survivor of a type bumps the pending count for the next
+        candidate of the same type — prevents over-admission within one
+        cycle if pending was already close to cap."""
+        monkeypatch.delenv("THEHEAT_PENDING_TYPE_CAP", raising=False)
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        # Pending has 2 — one slot left before hitting cap of 3.
+        bot_state["drafts"] = [
+            {"type": "snow_extreme", "status": "pending", "id": "s1"},
+            {"type": "snow_extreme", "status": "pending", "id": "s2"},
+        ]
+        # Two new snow_extreme candidates from this cycle.
+        c1 = _candidate(signal_kind="snow_extreme", total=90, event_id="snow_new_1")
+        c2 = _candidate(signal_kind="snow_extreme", total=88, event_id="snow_new_2")
+
+        result = select_survivors(bot_state, [c1, c2], global_cap=10)
+
+        # Only one can pass (filling the last pending slot); the other spills.
+        assert len(result) == 1
+        assert result[0].event_id == "snow_new_1"  # highest score wins ranking
+        suppressions = bot_state.get("suppressions", [])
+        assert len(suppressions) == 1
+        assert suppressions[0]["reasons"] == ["pending_type_cap=3"]
+
+    def test_pending_type_cap_respects_env_override(self, monkeypatch):
+        monkeypatch.setenv("THEHEAT_PENDING_TYPE_CAP", "1")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"type": "coral_bleaching", "status": "pending", "id": "d1"},
+        ]
+        candidate = _candidate(signal_kind="coral_bleaching", total=95)
+
+        result = select_survivors(bot_state, [candidate], global_cap=10)
+
+        assert result == []  # cap=1 means 1 pending is full
+
+
+class TestPendingTtlSweep:
+    """The TTL sweep auto-rejects pending drafts older than the configured
+    TTL window. Wired into _drain_and_write_triage_queue so it runs every
+    cycle, freeing pending-type-cap slots for fresh signals.
+    """
+
+    def test_rejects_drafts_older_than_ttl(self, monkeypatch):
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "old1",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=13)).isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "id": "old2",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=8)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 2
+        for d in bot_state["drafts"]:
+            assert d["status"] == "rejected"
+            assert d["rejected_reason"] == "staleness_ttl_7d"
+            assert "rejected_at" in d
+
+    def test_preserves_drafts_inside_ttl_window(self, monkeypatch):
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "fresh",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=3)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 0
+        assert bot_state["drafts"][0]["status"] == "pending"
+
+    def test_only_affects_pending_status(self, monkeypatch):
+        """Already-rejected and posted drafts are not double-processed."""
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        stale_ts = (now - timedelta(days=30)).isoformat().replace("+00:00", "Z")
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"id": "r1", "status": "rejected", "created_at": stale_ts},
+            {"id": "p1", "status": "posted", "created_at": stale_ts},
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 0
+        assert bot_state["drafts"][0]["status"] == "rejected"  # unchanged
+        assert bot_state["drafts"][1]["status"] == "posted"  # unchanged
+
+    def test_handles_missing_or_malformed_created_at(self, monkeypatch):
+        """Drafts without a usable created_at field are left alone — better
+        to leak a stale draft than to mass-reject everything if a field
+        rename slips through."""
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        from datetime import UTC, datetime
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"id": "no_field", "status": "pending"},
+            {"id": "null_field", "status": "pending", "created_at": None},
+            {"id": "empty_field", "status": "pending", "created_at": ""},
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 0
+        for d in bot_state["drafts"]:
+            assert d["status"] == "pending"
+
+    def test_ttl_respects_env_override(self, monkeypatch):
+        monkeypatch.setenv("THEHEAT_PENDING_TTL_DAYS", "3")
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "d_4d_old",
+                "status": "pending",
+                "created_at": (now - timedelta(days=4)).isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "id": "d_2d_old",
+                "status": "pending",
+                "created_at": (now - timedelta(days=2)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 1
+        statuses = {d["id"]: d["status"] for d in bot_state["drafts"]}
+        assert statuses["d_4d_old"] == "rejected"
+        assert statuses["d_2d_old"] == "pending"
+        rejected = next(d for d in bot_state["drafts"] if d["id"] == "d_4d_old")
+        assert rejected["rejected_reason"] == "staleness_ttl_3d"
