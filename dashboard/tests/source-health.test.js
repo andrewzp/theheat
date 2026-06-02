@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import { importFresh } from "./helpers/import-fresh.js"
+import { buildSourceHealthPayload } from "../lib/source-health.js"
 
 function basicAuth(username, password) {
   return `Basic ${Buffer.from(`${username}:${password}`, "utf-8").toString("base64")}`
@@ -411,4 +412,123 @@ test("source-health returns empty payload when no run_history", async () => {
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+// ---------------------------------------------------------------------------
+// Direct lib tests: success-rate fraction denominator + recency-aware health.
+// These exercise buildSourceHealthPayload against the durable source_health
+// path (the one fed by src/state.py's 7-day rolling window).
+// ---------------------------------------------------------------------------
+
+function skip(ts) {
+  return { ts, status: "skipped" }
+}
+function ok(ts) {
+  return { ts, status: "success" }
+}
+function fail(ts) {
+  return { ts, status: "failed", error: "boom" }
+}
+
+test("success-rate fraction uses active runs (skips excluded), not total runs", () => {
+  // ice_mass-style: 1 success, 2 failed, 7 skipped over 10 runs.
+  // The displayed fraction denominator must be `active` (3) — matching the
+  // success_rate % — NOT `runs` (10), which renders a nonsensical "33% (1/10)".
+  const runs = [
+    skip("2026-05-20T00:00:00Z"),
+    skip("2026-05-21T00:00:00Z"),
+    skip("2026-05-22T00:00:00Z"),
+    skip("2026-05-23T00:00:00Z"),
+    skip("2026-05-24T00:00:00Z"),
+    skip("2026-05-25T00:00:00Z"),
+    skip("2026-05-26T00:00:00Z"),
+    ok("2026-05-27T00:00:00Z"),
+    fail("2026-05-28T00:00:00Z"),
+    fail("2026-05-29T00:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      ice_mass_greenland: { success: 1, failed: 2, degraded: 0, skipped: 7, runs },
+    },
+  })
+  const row = sources.find((s) => s.source === "ice_mass_greenland")
+  assert.equal(row.active, 3, "active excludes the 7 skips")
+  assert.equal(row.runs, 10, "runs is the full count including skips")
+  assert.equal(row.skipped, 7)
+  assert.equal(Math.round(row.success_rate * 100), 33)
+  assert.equal(
+    row.successes / row.active,
+    row.success_rate,
+    "fraction numerator/denominator must equal the displayed percent"
+  )
+})
+
+test("a recovering source (recent runs all succeed) is degraded, not unhealthy", () => {
+  // gpm_imerg-style: terrible 7-day cumulative (5 success / 28 failed) but the
+  // most recent runs all succeeded. A recovering source must not stay red.
+  const oldFailures = Array.from({ length: 28 }, (_, i) =>
+    fail(`2026-05-31T${String(i % 24).padStart(2, "0")}:30:00Z`)
+  )
+  const recentSuccesses = Array.from({ length: 5 }, (_, i) =>
+    ok(`2026-06-01T${String(18 + i).padStart(2, "0")}:00:00Z`)
+  )
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      gpm_imerg: {
+        success: 5,
+        failed: 28,
+        degraded: 0,
+        skipped: 0,
+        runs: [...oldFailures, ...recentSuccesses],
+        last_error: "HTTP 503",
+      },
+    },
+  })
+  const row = sources.find((s) => s.source === "gpm_imerg")
+  assert.equal(row.last_run_status, "success")
+  assert.equal(row.health, "degraded", "recent window is clean → recovering, not unhealthy")
+})
+
+test("last run failed but recent window recovering → degraded, not unhealthy", () => {
+  // Cumulative is bad enough to be unhealthy, but 3 of the last 5 runs
+  // succeeded — a recovering source whose latest run was a blip.
+  const oldFailures = Array.from({ length: 25 }, (_, i) =>
+    fail(`2026-05-31T${String(i % 24).padStart(2, "0")}:30:00Z`)
+  )
+  const recent = [
+    ok("2026-06-01T18:00:00Z"),
+    ok("2026-06-01T19:00:00Z"),
+    ok("2026-06-01T20:00:00Z"),
+    fail("2026-06-01T21:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      recov: { success: 3, failed: 26, degraded: 0, skipped: 0, runs: [...oldFailures, ...recent], last_error: "503" },
+    },
+  })
+  const row = sources.find((s) => s.source === "recov")
+  assert.equal(row.last_run_status, "failed")
+  assert.equal(row.health, "degraded")
+})
+
+test("last run succeeded but recent window mostly failing → unhealthy (early degradation)", () => {
+  // Source had a great cumulative history but has just started failing; the
+  // last run happened to succeed. Recency should catch the degradation early.
+  const oldSuccesses = Array.from({ length: 25 }, (_, i) =>
+    ok(`2026-05-30T${String(i % 24).padStart(2, "0")}:30:00Z`)
+  )
+  const recent = [
+    fail("2026-06-01T17:00:00Z"),
+    fail("2026-06-01T18:00:00Z"),
+    fail("2026-06-01T19:00:00Z"),
+    ok("2026-06-01T20:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      degrading: { success: 26, failed: 3, degraded: 0, skipped: 0, runs: [...oldSuccesses, ...recent], last_error: "newly broken" },
+    },
+  })
+  const row = sources.find((s) => s.source === "degrading")
+  assert.equal(row.last_run_status, "success")
+  assert.equal(row.health, "unhealthy", "3 of the last 4 active runs failed → currently broken")
 })
