@@ -8,8 +8,8 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.4.0` (post-#160 beacon migration to repo variable + dead-code cleanup; all 23 sources on triage path + evidence contract live since 0.9.0.0) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker + Gemini 2.5 Pro critic; all 23 sources on triage path via PR #150; evidence contract gates writer via PR 0.9.0.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
+| Bot commit | `0.9.8.0` (post-#165 fact-check claim-kind parser hardening; on top of #164 critic POR fix, #163 pending-queue diversity gate, #162 gpm_imerg retry; all 23 sources on triage path + evidence contract live since 0.9.0.0; bot re-enabled 2026-06-01) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + 7d TTL sweep via 0.9.6.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
 | Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 6 consecutive no-draft cycles since: May 20, 22, 23, 24, 25, 26) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | **29 pp** (50% − 21%); untracked May 20/22/23/24/25/26 (no fresh drafts) |
