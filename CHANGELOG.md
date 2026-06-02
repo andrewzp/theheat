@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.10.0] - 2026-06-02
+
+gpm_imerg date walk-back — the single biggest source-reliability win. The GPM
+IMERG "Late" daily product publishes ~1-2 days after the observation date, but
+`fetch_daily_precip` always requested *yesterday* and treated the resulting
+HTTP 404 as non-retryable (correctly) — so whenever NASA hadn't posted yet, the
+entire source silently failed. This was the dominant gpm_imerg failure on the
+source-health dashboard (the bulk of its 30+ failures over the 7-day window were
+404s, not NASA outages). Source review on 2026-06-02 surfaced it after a tweet
+went live and reliable precipitation signal became load-bearing.
+
+### Changed
+
+- `src/data/gpm_imerg.py`: on the default path (no explicit `target_date`),
+  `fetch_daily_precip` now resolves the latest *published* date via a new
+  `_resolve_available_date` probe that walks back day-by-day until a file
+  exists:
+  - HTTP 200 → published, use it.
+  - HTTP 404 → not yet posted, try the day before.
+  - anything else (5xx / timeout / connection error) → not a date-availability
+    signal, so stop and use the current candidate; per-city fetches retry and
+    surface transient outages exactly as before.
+  - Walks back at most `GPM_IMERG_MAX_LOOKBACK_DAYS` (default 5), then degrades
+    to the old fixed-"yesterday" behavior — never worse than before.
+  - Explicit `target_date` callers (tests, backfill) bypass walk-back entirely,
+    staying deterministic.
+
+### Tests
+
+- `tests/test_gpm_imerg.py`: +3 — walk-back past an unpublished 404 to the prior
+  published day; stop (don't walk back) on a transient 5xx; default path routes
+  through `_resolve_available_date`. 1365 → 1368 passing.
+
+### Expected impact
+
+gpm_imerg should climb from ~16% toward healthy whenever NASA is reachable —
+the 404 "data not published yet" class is eliminated. Remaining gpm failures
+(503 overload, occasional IPv6-unreachable) are addressed separately: 503 is
+upstream; IPv6 is the next PR (shared HTTP IPv4 forcing).
+
 ## [0.9.9.0] - 2026-06-02
 
 Dashboard source-health panel: fix the success-rate fraction denominator and

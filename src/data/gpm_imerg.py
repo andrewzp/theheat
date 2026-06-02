@@ -42,6 +42,14 @@ STRICT_REPEATED_FAILURE_LIMIT = 3
 # behavior shifts.
 DEFAULT_REQUEST_TIMEOUT_S = 60.0
 DEFAULT_RETRY_BACKOFF_S = 10.0
+# The Late daily product publishes ~1-2 days after the observation date, so the
+# default "yesterday" request is frequently a 404. Walk back up to this many
+# days to the most recent file that actually exists. Env-tunable.
+DEFAULT_MAX_LOOKBACK_DAYS = 5
+# Reference point for the date-availability probe — any valid grid cell works;
+# we only care whether the file exists (200 vs 404), not the precip value.
+_PROBE_REFERENCE_LAT = 0.0
+_PROBE_REFERENCE_LON = 0.0
 
 
 @dataclass(frozen=True)
@@ -101,10 +109,21 @@ def fetch_daily_precip(
             raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
 
-    requested_date = target_date or date.today() - timedelta(days=1)
+    headers = {"Authorization": f"Bearer {token}"}
+    if target_date is not None:
+        requested_date = target_date
+    else:
+        # No explicit date: walk back to the latest published Late file rather
+        # than blindly requesting yesterday (a 404 before NASA posts it, which
+        # is correctly non-retryable and so silently failed the whole source).
+        requested_date = _resolve_available_date(
+            start_date=_default_start_date(),
+            product=product,
+            headers=headers,
+            max_lookback=_max_lookback_days(),
+        )
     rows = cities if cities is not None else load_cities()
     selected = list(rows if max_cities is None else rows[:max_cities])
-    headers = {"Authorization": f"Bearer {token}"}
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
     failures = 0
     first_failure_detail: str | None = None
@@ -353,6 +372,77 @@ def _retry_backoff_s() -> float:
     except ValueError:
         return DEFAULT_RETRY_BACKOFF_S
     return value if value >= 0 else DEFAULT_RETRY_BACKOFF_S
+
+
+def _default_start_date() -> date:
+    """First date to try for the Late daily product: yesterday."""
+    return date.today() - timedelta(days=1)
+
+
+def _max_lookback_days() -> int:
+    """How many days to walk back probing for a published file.
+
+    Configurable via GPM_IMERG_MAX_LOOKBACK_DAYS (tests bound it; ops can widen
+    it if NASA's publish latency grows).
+    """
+    raw = os.environ.get("GPM_IMERG_MAX_LOOKBACK_DAYS")
+    if not raw:
+        return DEFAULT_MAX_LOOKBACK_DAYS
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MAX_LOOKBACK_DAYS
+    return value if value >= 0 else DEFAULT_MAX_LOOKBACK_DAYS
+
+
+def _resolve_available_date(
+    *,
+    start_date: date,
+    product: str,
+    headers: Mapping[str, str],
+    max_lookback: int,
+) -> date:
+    """Find the most recent date whose IMERG file is actually published.
+
+    The Late daily product lags 1-2 days, so the default "yesterday" request is
+    frequently a 404 — NASA has not posted it yet. That 404 is (correctly) not
+    retried, so historically it silently failed the entire source. Probe one
+    reference point per candidate date and step back until a file exists:
+
+      - HTTP 200  -> published; use this date.
+      - HTTP 404  -> not yet published; try the day before.
+      - anything else (5xx, timeout, connection error) -> NOT a date-availability
+        signal, so stop and use the current candidate; the per-city fetches retry
+        and surface transient outages exactly as before.
+
+    Walks back at most ``max_lookback`` days, then returns the oldest candidate
+    (per-city fetches then fail as they did pre-fix — safe degradation, never
+    worse than the old fixed-"yesterday" behavior).
+    """
+    candidate = start_date
+    timeout_s = _request_timeout_s()
+    request_headers = dict(headers)
+    for _ in range(max(max_lookback, 0) + 1):
+        url = _ascii_subset_url(
+            lat=_PROBE_REFERENCE_LAT,
+            lon=_PROBE_REFERENCE_LON,
+            target_date=candidate,
+            product=product,
+            variable="precipitation",
+        )
+        try:
+            resp = requests.get(url, headers=request_headers, timeout=timeout_s)
+            resp.raise_for_status()
+            return candidate
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status == 404:
+                candidate = candidate - timedelta(days=1)
+                continue
+            return candidate
+        except requests.RequestException:
+            return candidate
+    return candidate
 
 
 def _is_transient_request_error(exc: BaseException) -> bool:

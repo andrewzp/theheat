@@ -53,6 +53,77 @@ class TestGpmFetch:
         assert readings[0].event_id == "gpm_imerg_france_paris_2026-05-14"
         assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
 
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_resolve_available_date_walks_back_past_unpublished_404(self, _env):
+        """The Late daily product lags 1-2 days, so 'yesterday' is often a 404.
+        Walk back to the most recent date whose file is actually published."""
+        from src.data.gpm_imerg import _resolve_available_date
+
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG\.20260601.*\.ascii.*"),
+            status=404,
+            body="Not Found",
+        )
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG\.20260531.*\.ascii.*"),
+            status=200,
+            body="Dataset\nprecipitation[0][1799][1799], 1.0\n",
+        )
+
+        resolved = _resolve_available_date(
+            start_date=date(2026, 6, 1),
+            product="late",
+            headers={"Authorization": "Bearer fake-token"},
+            max_lookback=5,
+        )
+
+        assert resolved == date(2026, 5, 31)
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_resolve_available_date_stops_on_transient_error(self, _env):
+        """A 5xx is NOT a date-availability signal. Don't walk back — keep the
+        start date so the per-city fetches retry/surface it exactly as before."""
+        from src.data.gpm_imerg import _resolve_available_date
+
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG\.20260601.*\.ascii.*"),
+            status=503,
+            body="Service Unavailable",
+        )
+
+        resolved = _resolve_available_date(
+            start_date=date(2026, 6, 1),
+            product="late",
+            headers={"Authorization": "Bearer fake-token"},
+            max_lookback=5,
+        )
+
+        assert resolved == date(2026, 6, 1)
+
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_default_path_resolves_available_date(self, _env, monkeypatch):
+        """With no explicit target_date, the fetch resolves the latest published
+        date via walk-back instead of blindly requesting yesterday."""
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setattr(
+            gpm, "_resolve_available_date", lambda **kw: date(2026, 5, 28), raising=False
+        )
+        monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: 3.0)
+
+        readings = fetch_daily_precip(
+            [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+            strict=False,
+        )
+
+        assert len(readings) == 1
+        assert readings[0].date == "2026-05-28"
+
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
     def test_fetch_daily_precip_defaults_to_bounded_city_limit(self, _env, monkeypatch):
         import src.data.gpm_imerg as gpm
