@@ -1017,7 +1017,8 @@ function SourcesView({ sources, stats }) {
             <span className="source-rate">
               {s.success_rate != null ? `${Math.round(s.success_rate * 100)}%` : "—"}
               <span style={{ color: "#555", marginLeft: 8, fontSize: 11 }}>
-                ({s.successes}/{s.runs})
+                ({s.successes}/{s.active ?? s.runs}
+                {s.skipped ? `, ${s.skipped} skipped` : ""})
               </span>
             </span>
             <span className="source-num">{s.total_observed}</span>

@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.9.0] - 2026-06-02
+
+Dashboard source-health panel: fix the success-rate fraction denominator and
+make the health badge recency-aware. Both surfaced from a review of the panel
+on 2026-06-02, where it flagged "3 unhealthy / 2 degraded" — but the reds were
+dominated by a one-day NASA GES DISC HTTP-503 storm (22 of gpm_imerg's 28
+failures landed on 05-31), not bot bugs, and gpm_imerg was already recovering
+(its last 4 runs all succeeded post-0.9.5.0). The 7-day cumulative window kept
+it red anyway, and the displayed fraction was mathematically inconsistent for
+cadence-gated sources.
+
+### Changed
+
+- `dashboard/lib/source-health.js`:
+  - `addDerivedFields` now exposes `active` (= success + failed + degraded +
+    partial_failures, i.e. non-skip attempts) — the shared denominator for
+    both `success_rate` and the rendered "(N/M)" fraction.
+  - `classifyHealth` is now recency-aware. When a recent sub-window is present
+    (the durable `source_health` path), it classifies on the last
+    `RECENT_WINDOW` (5) runs instead of the 7-day cumulative counters: a
+    recovering source (recent runs mostly succeeding) is at worst `degraded`,
+    never `unhealthy`; a freshly-degrading source (recent runs mostly failing)
+    flips to `unhealthy` even if its cumulative history is good. The
+    `run_history` fallback path is unchanged — it is already a recent window.
+  - `aggregateFromSourceHealth` computes the recent sub-window
+    (`recent_successes`, `recent_active`) from the runs array.
+- `dashboard/app/page.js`: the Sources-tab table renders the fraction as
+  `(successes/active)` with skips shown separately
+  (e.g. `33% (1/3, 30 skipped)`), replacing `(successes/runs)`, which produced
+  nonsensical displays like `33% (1/10)` and `100% (8/10)` for sources that
+  skip most crons (ice_mass runs Mondays-only; ao is event-gated).
+
+### Tests
+
+- `dashboard/tests/source-health.test.js`: +4 tests — fraction uses `active`
+  (skips excluded); recovering source → degraded not unhealthy; last-run-failed
+  but recent-recovering → degraded; last-run-succeeded but recent-failing →
+  unhealthy (early degradation). Dashboard suite 41 → 45 passing.
+
+### Expected impact
+
+On current production state the panel flips from "3 unhealthy / 2 degraded" to
+"2 unhealthy / 3 degraded": gpm_imerg is correctly demoted from red to
+recovering (degraded), while ice_mass greenland/antarctica stay red (real,
+ongoing NASA 502s). No source-fetch code changed — NASA intermittency is
+watched, not thrashed.
+
 ## [0.9.8.0] - 2026-06-01
 
 Fact-check: skip claims with unknown `kind` instead of killing the whole

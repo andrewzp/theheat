@@ -10,6 +10,13 @@ const HEALTH_METRIC_TOTALS = [
   "total_drafted",
 ]
 
+// How many of the most-recent runs define "now" for health classification.
+// The cumulative counters span src/state.py's 7-day window, so a single bad
+// day (e.g. a NASA 503 storm) can dominate them for days. Classifying on a
+// recent sub-window keeps the badge honest: recovering sources stop being red,
+// freshly-degrading sources stop hiding behind stale successes.
+const RECENT_WINDOW = 5
+
 function classifyHealth(s) {
   // No runs OR every run was a skip (e.g. drought on a non-Friday) -> idle.
   // Skipped is a deliberate "this source isn't due today," not a failure.
@@ -19,12 +26,31 @@ function classifyHealth(s) {
 
   const successRate = s.successes / active
 
-  // Most recent run failed: at minimum "degraded", "unhealthy" if the
-  // pattern is consistent.
+  // Recent sub-window (durable source_health path only). When present it takes
+  // priority over the cumulative counters for the unhealthy/degraded decision.
+  const recentActive =
+    typeof s.recent_active === "number" ? s.recent_active : null
+  const recentSuccessRate =
+    recentActive && recentActive > 0 ? s.recent_successes / recentActive : null
+
+  // Most recent run failed: unhealthy unless the recent window shows the source
+  // is mostly working (a one-off blip amid a recovering streak).
   if (s.last_run_status === "failed" || s.last_run_status === "partial_failure") {
+    if (recentSuccessRate != null) {
+      return recentSuccessRate >= 0.5 ? "degraded" : "unhealthy"
+    }
     return successRate < 0.5 ? "unhealthy" : "degraded"
   }
   if (s.last_run_status === "degraded") return "degraded"
+
+  // Last run succeeded (or skipped). Prefer the recent window when we have it
+  // so a stale failure storm doesn't keep a recovering source red, and a fresh
+  // run of failures still flips a long-healthy source.
+  if (recentSuccessRate != null) {
+    if (recentSuccessRate < 0.5) return "unhealthy"
+    if (recentSuccessRate < 1 || degradedRuns > 0 || successRate < 0.95) return "degraded"
+    return "healthy"
+  }
   if (s.failures / active >= 0.5) return "unhealthy"
   if (degradedRuns > 0 || successRate < 0.95) return "degraded"
   return "healthy"
@@ -36,9 +62,14 @@ function numberOrZero(value) {
 }
 
 function addDerivedFields(s) {
+  // active = runs that actually attempted the fetch (skips excluded). This is
+  // the denominator for both success_rate AND the displayed "(N/M)" fraction —
+  // using s.runs (which includes skips) made the fraction contradict the % for
+  // cadence-gated sources (e.g. ice_mass: "33% (1/10)" instead of "33% (1/3)").
   const active = s.successes + s.failures + s.degraded + s.partial_failures
   return {
     ...s,
+    active,
     success_rate: active > 0 ? s.successes / active : null,
     health: classifyHealth(s),
   }
@@ -48,6 +79,21 @@ function aggregateFromSourceHealth(sourceHealth) {
   return Object.entries(sourceHealth || {}).map(([source, health]) => {
     const runs = Array.isArray(health?.runs) ? health.runs : []
     const lastRun = runs.length > 0 ? runs[runs.length - 1] : null
+
+    // Recent sub-window: the last RECENT_WINDOW runs (runs is oldest-first per
+    // src/state.py:record_source_health). Skips are not "active" attempts.
+    let recentSuccesses = 0
+    let recentActive = 0
+    for (const r of runs.slice(-RECENT_WINDOW)) {
+      const st = r?.status
+      if (st === "success") {
+        recentSuccesses += 1
+        recentActive += 1
+      } else if (st === "failed" || st === "degraded" || st === "partial_failure") {
+        recentActive += 1
+      }
+    }
+
     const row = {
       source,
       runs: runs.length,
@@ -56,6 +102,8 @@ function aggregateFromSourceHealth(sourceHealth) {
       degraded: numberOrZero(health?.degraded),
       partial_failures: 0,
       skipped: numberOrZero(health?.skipped),
+      recent_successes: recentSuccesses,
+      recent_active: recentActive,
       last_error: health?.last_error || null,
       last_error_at: health?.last_error_ts || null,
       last_run_at: lastRun?.ts || null,
