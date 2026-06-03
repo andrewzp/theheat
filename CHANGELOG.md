@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.11.1] - 2026-06-03
+
+Cap the cost of a doomed `gpm_imerg` fetch — PR 4 of the source-reliability
+sweep. The 0.9.10.0/0.9.11.0 fixes did their job (the 404 and IPv6
+`Network unreachable` failure classes are gone), but they surfaced a hidden
+cost: when NASA's OPeNDAP service times out *intermittently*, the threaded
+city fan-out kept running every doomed fetch to completion, so a single run
+burned ~28 minutes before failing. The read-timeout itself is upstream and not
+fixable on our side; the wasted wall-clock was ours.
+
+### Fixed
+
+- `src/data/gpm_imerg.py`: once the strict repeated-failure limit trips
+  mid-fan-out, cancel the queued city fetches instead of waiting on them. The
+  threaded branch previously exited through `with ThreadPoolExecutor()`, whose
+  implicit `shutdown(wait=True)` drained every submitted future before the
+  `SourceFetchError` could propagate — so an intermittent NASA outage paid the
+  full 75-city timeout bill (~28 min) after the source had already decided to
+  fail. Now it `shutdown(wait=False, cancel_futures=True)`s, capping the doomed
+  tail at one in-flight wave (~130 s). The success path is unchanged (nothing
+  is pending when all fetches complete). +1 regression test
+  (`test_strict_fanout_cancels_pending_after_failure_limit`) covering the
+  fan-out abort that the existing serial-probe short-circuit test didn't reach.
+
 ## [0.9.11.0] - 2026-06-02
 
 Shared HTTP hardening — PR 2 of the source-reliability sweep (PR 1 was the
