@@ -115,7 +115,9 @@ def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
     site_map = {s[0]: (s[1], s[2]) for s in MAJOR_STATIONS}
 
     try:
-        resp = requests.get(
+        # Routed through fetch_with_retry for retry+backoff and a polite UA,
+        # matching the NWPS flood-stage leg.
+        resp = fetch_with_retry(
             USGS_URL,
             params={
                 "format": "json",
@@ -123,9 +125,9 @@ def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
                 "parameterCd": GAUGE_HEIGHT_CODE,
                 "siteStatus": "active",
             },
+            headers=_REQUEST_HEADERS,
             timeout=30,
         )
-        resp.raise_for_status()
         data = resp.json()
 
         flood_stages = _fetch_flood_stages(strict=strict)

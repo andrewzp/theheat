@@ -141,15 +141,28 @@ class TestFetchGraceMass:
         assert responses.calls[1].request.headers["Authorization"] == "Bearer fake-token"
 
     @responses.activate
+    @patch("src.data._http.time.sleep")
     @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
-    def test_http_error_returns_empty(self, _env):
+    def test_http_error_returns_empty(self, _env, _sleep):
         _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
-        responses.add(
-            responses.GET,
-            NEW_GREENLAND_URL,
-            status=500,
-        )
+        # Data fetch is routed through fetch_with_retry, so a persistent 5xx is
+        # retried before the source gives up and returns [].
+        for _ in range(3):
+            responses.add(responses.GET, NEW_GREENLAND_URL, status=500)
         assert fetch_grace_mass(region="greenland") == []
+
+    @responses.activate
+    @patch("src.data._http.time.sleep")
+    @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
+    def test_data_fetch_recovers_after_transient_5xx(self, _env, _sleep):
+        # The PO.DAAC data fetch is routed through fetch_with_retry, so a
+        # transient 502 (the observed ice_mass failure) recovers on retry
+        # instead of dropping the whole region.
+        _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
+        responses.add(responses.GET, NEW_GREENLAND_URL, status=502)
+        responses.add(responses.GET, NEW_GREENLAND_URL, body=SAMPLE_GREENLAND, status=200)
+        readings = fetch_grace_mass(region="greenland")
+        assert len(readings) == 5
 
     @responses.activate
     @patch("src.data.ice_mass.os.environ.get", return_value="fake-token")
