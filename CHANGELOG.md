@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.11.0] - 2026-06-02
+
+Shared HTTP hardening — PR 2 of the source-reliability sweep (PR 1 was the
+gpm_imerg date walk-back). Mops up the residual `[Errno 101] Network is
+unreachable` failures (firms + a few gpm ConnectionErrors): GitHub-hosted
+runners have broken IPv6, but NASA EOSDIS hosts (gpm1.gesdisc, firms.modaps)
+publish AAAA records — confirmed via `dig` — so `requests` tries IPv6 first and
+dies. (The 403s on coral_dhw/jtwc/river_gauges/copernicus_ems were tested and
+are NOT User-Agent blocks — every UA returns 200 — so they're left alone as
+intermittent rate-limits.)
+
+### Changed
+
+- `src/data/_http.py`:
+  - New `force_ipv4()` flips `urllib3.util.connection.HAS_IPV6 = False`,
+    forcing every connection onto IPv4. Called at import; the bot imports all
+    source modules at startup (`src/main.py`), so it runs before any fetch.
+    Strictly correct here — every source has an A record and the runner can't
+    reach IPv6 anyway.
+  - `fetch_with_retry` now injects a default `User-Agent`
+    (`(theheat-bot, contact@theheat.app)`) when the caller doesn't set one, so
+    no-UA callers (firms) stop sending a bare `python-requests` UA. A caller's
+    explicit UA is preserved.
+- `src/data/ice_mass.py`: the PO.DAAC data fetch (where the 502s land) now
+  routes through `fetch_with_retry` — a transient 502 retries with backoff
+  instead of dropping the whole region.
+- `src/data/river_gauges.py`: the USGS gauge-height call routes through
+  `fetch_with_retry` too (retry + polite UA), matching the NWPS flood-stage leg.
+
+### Tests
+
+- `tests/test_http_retry.py`: +3 — force_ipv4 flips the flag; default UA is
+  injected; a caller's UA is preserved.
+- `tests/test_ice_mass.py`: +1 (502 → 200 recovers on retry); existing 5xx test
+  updated for the retry path.
+- `tests/test_river_gauges.py`: USGS error test updated to assert the retry.
+- 1368 → 1372 passing. mypy clean.
+
+### Expected impact
+
+The IPv6-unreachable failure class disappears on the runner; firms returns to
+~100% and gpm sheds its ConnectionError tail (its 404 cause was already fixed in
+0.9.10.0). ice_mass 502s now self-heal within a cycle. Remaining yellow
+(NASA 503/502 overload, intermittent gov 403s) is upstream and self-recovers
+next cron.
+
 ## [0.9.10.0] - 2026-06-02
 
 gpm_imerg date walk-back — the single biggest source-reliability win. The GPM

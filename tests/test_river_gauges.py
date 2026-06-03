@@ -120,9 +120,15 @@ class TestFetchRiverLevels:
         assert br.above_flood is False
 
     @responses.activate
-    def test_api_error_returns_empty(self):
-        responses.add(responses.GET, USGS_URL, status=500)
+    @patch("src.data._http.time.sleep")
+    def test_api_error_returns_empty(self, _sleep):
+        # The USGS call is routed through fetch_with_retry, so a persistent 5xx
+        # is retried (3 attempts) before fetch_river_levels gives up.
+        for _ in range(3):
+            responses.add(responses.GET, USGS_URL, status=500)
         assert fetch_river_levels() == []
+        usgs_calls = [c for c in responses.calls if c.request.url.startswith(USGS_URL)]
+        assert len(usgs_calls) == 3
 
 
 class TestDetectFloods:

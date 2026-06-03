@@ -25,6 +25,7 @@ import os
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 # CMR collection short_names for the two TIME_SERIES products. CMR maps these
@@ -146,12 +147,13 @@ def fetch_grace_mass(region: str, *, strict: bool = False) -> list[IceMassReadin
         return []
 
     try:
-        resp = requests.get(
+        # Routed through fetch_with_retry so the observed PO.DAAC 502s retry
+        # with backoff instead of dropping the region on a single blip.
+        resp = fetch_with_retry(
             url,
             headers={"Authorization": f"Bearer {token}"},
             timeout=30,
         )
-        resp.raise_for_status()
     except requests.RequestException as e:
         print(f"[ice_mass] {region} fetch error: {e}")
         if strict:
