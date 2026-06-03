@@ -245,6 +245,56 @@ class TestGpmFetch:
 
         assert calls == 3
 
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_strict_fanout_cancels_pending_after_failure_limit(self, _env, monkeypatch):
+        """Once the strict failure limit trips mid-fan-out, queued city fetches
+        must be cancelled rather than run to completion.
+
+        The threaded fan-out exited via `with ThreadPoolExecutor()`, whose
+        implicit shutdown(wait=True) blocked until every submitted future
+        finished — so an intermittent NASA outage burned ~28 min running all 75
+        doomed city fetches even after deciding to fail. Cancelling pending
+        futures caps the doomed tail at one in-flight wave.
+        """
+        import pytest
+        import requests
+        from src.data.source_status import SourceFetchError
+
+        import src.data.gpm_imerg as gpm
+
+        calls = 0
+
+        def fetch_city(**kwargs):
+            nonlocal calls
+            calls += 1
+            # First three cities (the serial probe) succeed, forcing the abort
+            # onto the threaded fan-out instead of short-circuiting serially.
+            if kwargs["lon"] < 3:
+                return 1.0
+            # Doomed fetches block briefly so the bulk are still queued (not yet
+            # started) when the limit trips and we cancel them.
+            time.sleep(0.03)
+            raise requests.Timeout("provider did not respond")
+
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fetch_city)
+
+        cities = [
+            {"city": f"City {i}", "country": "Testland", "lat": "0", "lon": str(i)}
+            for i in range(40)
+        ]
+
+        with pytest.raises(SourceFetchError, match="3 repeated Timeout failures"):
+            fetch_daily_precip(
+                cities,
+                target_date=date(2026, 5, 14),
+                strict=True,
+                max_workers=2,
+            )
+
+        # 3 serial-probe successes + a small fan-out wave before the trip; the
+        # rest are cancelled. The bug ran all 40; the fix stops well short.
+        assert calls < len(cities)
+
     @responses.activate
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
     def test_strict_single_city_failure_surfaces_http_status(self, _env):

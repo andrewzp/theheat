@@ -207,7 +207,8 @@ def fetch_daily_precip(
                 continue
             readings_by_index[idx] = reading
     elif remaining:
-        with ThreadPoolExecutor(max_workers=min(worker_count, len(remaining))) as executor:
+        executor = ThreadPoolExecutor(max_workers=min(worker_count, len(remaining)))
+        try:
             futures = {
                 executor.submit(fetch_one, index, city): index
                 for index, city in remaining
@@ -219,6 +220,17 @@ def fetch_daily_precip(
                     handle_failure(exc)
                     continue
                 readings_by_index[idx] = reading
+        finally:
+            # Once we've decided to fail (handle_failure raised), don't block on
+            # the rest of the doomed fan-out. A plain `with ThreadPoolExecutor()`
+            # exits via shutdown(wait=True), which runs every queued city fetch
+            # to completion — so an intermittent NASA outage burned ~28 min
+            # finishing all 75 doomed fetches after the strict failure limit
+            # already tripped. Cancel pending futures and don't wait on in-flight
+            # ones; the source fails immediately and the orphaned fetches die on
+            # their own timeout. On the success path nothing is pending, so this
+            # is a no-op.
+            executor.shutdown(wait=False, cancel_futures=True)
 
     readings = [reading for reading in readings_by_index if reading is not None]
     if strict and not readings:
