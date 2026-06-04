@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.12.3] - 2026-06-04
+
+Sentinel: sustained outages now escalate, fixing the 0.9.12.1 overcorrection.
+0.9.12.0 escalated any 10-consecutive-failure source (false-flagged gpm on a
+transient 503 stretch); 0.9.12.1 swung the other way and made hard-upstream
+errors NEVER escalate — so a source dark for a week on 503s would have stayed
+silent forever. Both were wrong. A *transient* upstream outage self-heals
+(silent); one that lasts a *significant length of time* is no longer safely
+"just NASA" — a moved/decommissioned endpoint or a persistently rejected request
+that needs a look.
+
+### Changed
+
+- `scripts/source_health_sentinel.py`: the long-outage escalation is now keyed
+  on **wall-clock days since last success** (`last_success_ts`), not a raw
+  consecutive-failure count — which was a terrible proxy because cadence varies
+  (10 failures ≈ 1.5 days for gpm but ≈ 10 weeks for weekly ice_mass). A
+  currently-failing source escalates when the error is ours OR it has been dark
+  ≥ `OUTAGE_DAYS` (default 3, tunable via the `SENTINEL_OUTAGE_DAYS` repo var) —
+  regardless of whether the error is hard or soft upstream. A source that has
+  never once succeeded and is failing also escalates. Removed the hard/soft
+  distinction (the duration threshold replaces it). Test suite rewritten around
+  the timestamp model (17 tests).
+- `.github/workflows/source-health-sentinel.yml`: passes `SENTINEL_OUTAGE_DAYS`
+  from a repo variable so the threshold is tunable without a code push.
+
+### Notes
+
+- On live data: gpm_imerg (dark 2.0 days) stays silent; ice_mass
+  antarctica/greenland (dark 3.6 days on PO.DAAC 502s) now escalate — exactly
+  the sustained-outage signal that 0.9.12.1 was suppressing.
+
 ## [0.9.12.2] - 2026-06-04
 
 ### Fixed

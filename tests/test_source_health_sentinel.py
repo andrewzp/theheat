@@ -1,11 +1,14 @@
 """Tests for the daily source-health sentinel classifier.
 
 The sentinel reads the gist source_health and decides, per source, whether a
-failure is UPSTREAM (NASA/gov/network — self-heals, stay silent) or OUR_BUG
-(code error, auth/token, moved endpoint, or an abnormally long outage — open an
-issue and ping the operator). The whole point is to stop crying wolf on NASA
-flakiness while never missing a failure that is actually ours to fix.
+failure is UPSTREAM (NASA/gov/network — transient, self-heals, stay silent) or
+OUR_BUG (code error, auth/token, moved endpoint, OR an outage that has lasted a
+significant length of time — open an issue and ping). "Significant length" is
+measured in wall-clock days since the last success (cadence-independent), not a
+raw consecutive-failure count.
 """
+
+from datetime import datetime, timezone
 
 from scripts.source_health_sentinel import (
     classify_error,
@@ -13,8 +16,13 @@ from scripts.source_health_sentinel import (
     run_sentinel,
 )
 
+NOW = datetime(2026, 6, 4, 18, 0, 0, tzinfo=timezone.utc)
+RECENT = "2026-06-04T17:00:00Z"        # ~1h ago — a transient blip
+ONE_DAY_AGO = "2026-06-03T18:00:00Z"   # transient outage (< OUTAGE_DAYS)
+FIVE_DAYS_AGO = "2026-05-30T18:00:00Z"  # sustained outage (>= OUTAGE_DAYS)
 
-def _src(*, statuses, last_error="", success=None, failed=None):
+
+def _src(*, statuses, last_error="", last_success_ts=RECENT, success=None, failed=None):
     """Build a gist-shaped source_health entry from a list of run statuses."""
     runs = [{"status": s} for s in statuses]
     active = [s for s in statuses if s != "skipped"]
@@ -25,6 +33,7 @@ def _src(*, statuses, last_error="", success=None, failed=None):
         "skipped": statuses.count("skipped"),
         "runs": runs,
         "last_error": last_error,
+        "last_success_ts": last_success_ts,
     }
 
 
@@ -39,8 +48,6 @@ class TestClassifyError:
             "https://coralreefwatch.noaa.gov/...",
             "FIRMS fetch failed: HTTPSConnectionPool(host='firms.modaps.eosdis."
             "nasa.gov', port=443): Max retries exceeded",
-            "Ocean SST fetch failed: HTTPSConnectionPool(host='climatereanalyzer."
-            "org', port=443): Max retries",
             "503 Service Unavailable",
             "ConnectionError: [Errno 101] Network is unreachable",
             "429 Too Many Requests",
@@ -72,111 +79,128 @@ class TestClassifyError:
         assert classify_error(None) == "none"
 
     def test_unrecognized_nonempty_error_is_unknown(self):
-        # An unmatched, non-empty error is suspicious — the sentinel escalates
-        # unknowns rather than silently filing them as upstream.
         assert classify_error("something nobody has ever seen before") == "unknown"
 
 
 class TestClassifySource:
     def test_healthy_source_not_flagged(self):
-        s = _src(statuses=["success"] * 5, last_error="")
-        assert classify_source("co2", s)["category"] == "healthy"
+        s = _src(statuses=["success"] * 5)
+        assert classify_source("co2", s, now=NOW)["category"] == "healthy"
 
-    def test_cadence_skips_only_is_idle_not_flagged(self):
+    def test_cadence_skips_only_is_idle(self):
         # ice_mass on a non-Monday: recent rows are all skips. Must NOT alarm.
-        s = _src(statuses=["skipped"] * 6, last_error="")
-        assert classify_source("ice_mass_antarctica", s)["category"] == "idle"
+        s = _src(statuses=["skipped"] * 6, last_success_ts=None)
+        assert classify_source("ice_mass_antarctica", s, now=NOW)["category"] == "idle"
 
-    def test_recently_failing_upstream_is_upstream(self):
+    def test_transient_upstream_stays_silent(self):
+        # Failing now, but succeeded a day ago — a transient blip, self-heals.
         s = _src(
             statuses=["success", "failed", "failed", "failed"],
             last_error="Ice mass fetch failed: 502 Server Error: Bad Gateway",
+            last_success_ts=ONE_DAY_AGO,
         )
-        assert classify_source("ice_mass_greenland", s)["category"] == "upstream"
+        assert classify_source("ice_mass_greenland", s, now=NOW)["category"] == "upstream"
 
-    def test_recently_failing_our_bug_is_flagged(self):
+    def test_transient_hard_upstream_503_stays_silent(self):
+        # The original false positive (#174): a SHORT 503 stretch must NOT escalate.
+        s = _src(
+            statuses=["failed"] * 6,
+            last_error="GPM IMERG fetch hit 3 repeated HTTP 503 failures",
+            last_success_ts=ONE_DAY_AGO,
+        )
+        assert classify_source("gpm_imerg", s, now=NOW)["category"] == "upstream"
+
+    def test_recently_failing_our_bug_escalates(self):
         s = _src(
             statuses=["success", "failed", "failed", "failed"],
             last_error="KeyError: 'temperature'",
         )
-        v = classify_source("open_meteo_extreme_signals", s)
-        assert v["category"] == "our_bug"
+        assert classify_source("open_meteo_extreme_signals", s, now=NOW)["category"] == "our_bug"
 
-    def test_intermittent_upstream_stays_silent_not_escalated(self):
-        # gpm-style: fails a lot but still succeeds sometimes (not a dead source).
-        s = _src(
-            statuses=["success", "failed", "failed", "success", "failed", "failed"],
-            last_error="GPM IMERG fetch hit 3 repeated ReadTimeout failures",
-        )
-        assert classify_source("gpm_imerg", s)["category"] == "upstream"
-
-    def test_upstream_but_dead_too_long_escalates(self):
-        # Even an upstream error, if the source is fully dark for many consecutive
-        # active attempts, likely means a moved endpoint / expired credential.
-        s = _src(
-            statuses=["failed"] * 14,
-            last_error="403 Client Error: Forbidden for url: ...",
-        )
-        v = classify_source("jtwc", s, long_failure_threshold=10)
-        assert v["category"] == "our_bug"
-        assert "long" in v["reason"].lower() or "consecutive" in v["reason"].lower()
-
-    def test_sustained_hard_upstream_never_escalates(self):
-        # NASA can 503 / ReadTimeout for days. No duration turns a server outage
-        # into our bug. Regression: the sentinel's first live run escalated a
-        # 10-deep run of HTTP 503 from GES DISC as a "moved endpoint" (issue #174).
+    def test_sustained_hard_upstream_escalates(self):
+        # The gap: a hard-upstream outage (503 / 502 / ReadTimeout) that persists
+        # for a significant length of time IS ours to investigate — a moved or
+        # decommissioned endpoint, or a persistently rejected request — not
+        # silent forever. (Reverses the wrong assertion shipped in 0.9.12.1.)
         for err in (
             "GPM IMERG fetch hit 3 repeated HTTP 503 failures; first error: "
             "HTTP 503 from https://gpm1.gesdisc.eosdis.nasa.gov/...",
             "Ice mass fetch failed: 502 Server Error: Bad Gateway",
             "ReadTimeout: HTTPSConnectionPool(host='gpm1.gesdisc...', port=443)",
         ):
-            s = _src(statuses=["failed"] * 14, last_error=err)
-            v = classify_source("gpm_imerg", s, long_failure_threshold=10)
-            assert v["category"] == "upstream", err
+            s = _src(statuses=["failed"] * 8, last_error=err, last_success_ts=FIVE_DAYS_AGO)
+            v = classify_source("gpm_imerg", s, now=NOW, outage_days=3)
+            assert v["category"] == "our_bug", err
+            assert "day" in v["reason"].lower()
+
+    def test_sustained_soft_upstream_403_escalates(self):
+        s = _src(
+            statuses=["failed"] * 8,
+            last_error="403 Client Error: Forbidden for url: ...",
+            last_success_ts=FIVE_DAYS_AGO,
+        )
+        assert classify_source("jtwc", s, now=NOW, outage_days=3)["category"] == "our_bug"
+
+    def test_never_succeeded_and_failing_escalates(self):
+        # A source that has never once succeeded and is failing is worth a look
+        # regardless of error class — it has never worked.
+        s = _src(statuses=["failed"] * 4, last_error="503 Service Unavailable", last_success_ts=None)
+        assert classify_source("new_source", s, now=NOW)["category"] == "our_bug"
 
     def test_intermittent_flaky_above_half_not_escalated(self):
-        # Mostly-succeeding source with the odd failure is not "failing".
         s = _src(
             statuses=["success", "success", "failed", "success", "success"],
             last_error="503 Service Unavailable",
         )
-        assert classify_source("nhc", s)["category"] in ("healthy", "degraded")
+        assert classify_source("nhc", s, now=NOW)["category"] in ("healthy", "degraded")
 
 
 class TestRunSentinel:
     def test_todays_real_failures_are_a_silent_day(self):
-        # The exact production snapshot: gpm ReadTimeout + ice_mass 502 + gov 403s.
-        # Every one is upstream → has_our_bugs must be False (no ping).
+        # Real production snapshot. gpm last succeeded ~2 days ago (< 3-day
+        # threshold), so its sustained 503 stretch is still transient → silent.
         source_health = {
             "gpm_imerg": _src(
-                statuses=["success", "failed", "failed", "failed", "failed", "failed"],
-                last_error="GPM IMERG fetch hit 3 repeated ReadTimeout failures",
+                statuses=["failed"] * 6,
+                last_error="GPM IMERG fetch hit 3 repeated HTTP 503 failures",
+                last_success_ts="2026-06-02T19:50:09Z",
             ),
             "ice_mass_antarctica": _src(
                 statuses=["success", "failed", "failed", "skipped", "skipped"],
                 last_error="Ice mass fetch failed for antarctica: 502 Server Error: Bad Gateway",
+                last_success_ts="2026-06-02T12:00:00Z",
             ),
             "coral_dhw": _src(
                 statuses=["success"] * 4 + ["failed"],
                 last_error="coral_dhw fetch failed: 403 Client Error: Forbidden",
             ),
-            "co2": _src(statuses=["success"] * 5, last_error=""),
+            "co2": _src(statuses=["success"] * 5),
         }
-        report = run_sentinel(source_health)
+        report = run_sentinel(source_health, now=NOW, outage_days=3)
         assert report["has_our_bugs"] is False
-        flagged = {v["source"] for v in report["our_bug"]}
-        assert flagged == set()
+        assert {v["source"] for v in report["our_bug"]} == set()
 
-    def test_a_real_bug_is_escalated_and_pings(self):
+    def test_a_real_bug_is_escalated(self):
         source_health = {
-            "co2": _src(statuses=["success"] * 5, last_error=""),
+            "co2": _src(statuses=["success"] * 5),
             "open_meteo_extreme_signals": _src(
                 statuses=["success", "failed", "failed", "failed"],
                 last_error="AttributeError: 'NoneType' object has no attribute 'get'",
             ),
         }
-        report = run_sentinel(source_health)
+        report = run_sentinel(source_health, now=NOW, outage_days=3)
         assert report["has_our_bugs"] is True
-        flagged = {v["source"] for v in report["our_bug"]}
-        assert flagged == {"open_meteo_extreme_signals"}
+        assert {v["source"] for v in report["our_bug"]} == {"open_meteo_extreme_signals"}
+
+    def test_sustained_outage_is_escalated(self):
+        # gpm dark for 5 days on 503s → escalate even though the error is upstream.
+        source_health = {
+            "gpm_imerg": _src(
+                statuses=["failed"] * 12,
+                last_error="GPM IMERG fetch hit 3 repeated HTTP 503 failures",
+                last_success_ts=FIVE_DAYS_AGO,
+            ),
+        }
+        report = run_sentinel(source_health, now=NOW, outage_days=3)
+        assert report["has_our_bugs"] is True
+        assert {v["source"] for v in report["our_bug"]} == {"gpm_imerg"}
