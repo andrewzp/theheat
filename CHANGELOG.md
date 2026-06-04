@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.12.0] - 2026-06-04
+
+Daily source-health sentinel — stop hand-triaging the dashboard. Most red on the
+source-health panel is upstream NASA/gov flakiness (GES DISC ReadTimeouts,
+PO.DAAC 502s, gov 403 rate-limits) that self-heals; a few failures would be ours
+to fix (a code error, an expired credential, a moved endpoint). The dashboard
+renders both the same, so every NASA hiccup looked like an emergency. The
+sentinel does that triage automatically and only escalates the real ones.
+
+### Added
+
+- `scripts/source_health_sentinel.py`: deterministic classifier over the gist
+  `source_health`. Per source it decides healthy / degraded / idle / **upstream**
+  (external, self-heals → silent) / **our_bug** (escalate). `our_bug` covers code
+  exceptions, auth/token (401, `EARTHDATA_TOKEN`), moved endpoints (sustained
+  404/410), an unrecognized error, or any source dark for ≥10 consecutive active
+  attempts (a "transient" outage that long is probably a real endpoint/credential
+  change). Cadence skips never consume the window or trip an alarm.
+- `.github/workflows/source-health-sentinel.yml`: daily 13:00 UTC cron (after the
+  12:00 bot run). Fetches the gist, classifies, and **stays silent on
+  upstream-only days**. On a real `our_bug` it opens or updates one rolling
+  GitHub issue (label `source-health-sentinel`) with the diagnosis and assigns
+  the operator. Stdlib-only — no pip install, near-zero cost.
+- `tests/test_source_health_sentinel.py`: 14 tests, including the production
+  snapshot (gpm ReadTimeout + ice_mass 502 + gov 403s → silent day) and a
+  synthetic `KeyError`/`401` that must escalate.
+
+### Notes
+
+- Verified against today's live `state.json`: 33 sources → 0 our_bug, 3 upstream
+  (gpm_imerg, ice_mass_antarctica, ice_mass_greenland), 30 healthy. Correctly a
+  silent day.
+- The auto-fix→PR step (an LLM diagnosing and fixing the flagged bug in CI) is a
+  follow-on; this ships the detection + triage + escalation, which is what gets
+  the operator out of the monitoring loop. The complementary dashboard "external"
+  (amber) tier for upstream failures is a separate fast-follow.
+
 ## [0.9.11.2] - 2026-06-04
 
 Review follow-up hardening from the 2026-06-02 source/dash/triage sweep. The
