@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.12.1] - 2026-06-04
+
+Sentinel false-positive fix, caught on its own first live run. The 0.9.12.0
+long-outage rule escalated *any* source dark for ≥10 consecutive attempts —
+including gpm_imerg, which had hit 10 straight `HTTP 503`s from NASA GES DISC. A
+sustained server outage is still upstream, not a moved endpoint, so the sentinel
+cried wolf about the exact thing it exists to suppress (issue #174).
+
+### Fixed
+
+- `scripts/source_health_sentinel.py`: the long-outage escalation now applies
+  only to **soft** upstream errors (403/429 rate-limits — a persistent one can
+  signal a real access change). **Hard** upstream errors (5xx, read/connect
+  timeouts, connection/network failures) never escalate on duration: NASA can be
+  down for days and it is still not ours to fix. New `_is_hard_upstream()` +
+  regression test covering sustained 503 / 502 / ReadTimeout. Re-verified on the
+  live state that triggered #174: 0 our_bug, 3 upstream (silent).
+
 ## [0.9.12.0] - 2026-06-04
 
 Daily source-health sentinel — stop hand-triaging the dashboard. Most red on the

@@ -68,6 +68,27 @@ _UPSTREAM_RE = re.compile(
     re.IGNORECASE,
 )
 
+# HARD upstream: the server is down or unreachable (5xx, timeouts, connection /
+# network failures). These NEVER escalate on duration — NASA can be down for
+# days and that is still not our bug. SOFT upstream (403/429 rate-limits) is the
+# only upstream class the long-outage rule escalates, because a rate-limit that
+# never clears can signal a real access change worth a look.
+_HARD_UPSTREAM_RE = re.compile(
+    r"\b50\d\b"
+    r"|Server Error|Bad Gateway|Service Unavailable|Gateway Time"
+    r"|ReadTimeout|ConnectTimeout|Timeout|timed out"
+    r"|ConnectionError|Connection refused|Connection reset|Max retries"
+    r"|Network is unreachable|Name or service not known"
+    r"|Temporary failure in name resolution|HTTPSConnectionPool|HTTPConnectionPool",
+    re.IGNORECASE,
+)
+
+
+def _is_hard_upstream(last_error: str | None) -> bool:
+    """True when the error means the server is down/unreachable (5xx, timeout,
+    connection) — definitively external, regardless of how long it persists."""
+    return bool(_HARD_UPSTREAM_RE.search(str(last_error or "")))
+
 
 def classify_error(last_error: str | None) -> str:
     """Classify a ``last_error`` string into none / our_bug / upstream / unknown.
@@ -156,11 +177,16 @@ def classify_source(
             f"{error_class} failure — {last_error[:140]}",
             health, error_class, recent_rate, consecutive,
         )
-    if consecutive >= long_failure_threshold:
+    # Long-outage escalation applies ONLY to soft upstream (403/429). A hard
+    # upstream error (5xx/timeout/connection) stays upstream no matter how long
+    # the source has been dark — a server outage is never ours to fix, and
+    # escalating it is exactly the wolf-crying the sentinel exists to stop.
+    if consecutive >= long_failure_threshold and not _is_hard_upstream(last_error):
         return _verdict(
             name, "our_bug",
-            f"down {consecutive} consecutive attempts — likely a moved endpoint or "
-            f"expired credential, not transient ({last_error[:100]})",
+            f"down {consecutive} consecutive attempts with a persistent "
+            f"rate-limit/access error — may be a real access change, not transient "
+            f"({last_error[:100]})",
             health, error_class, recent_rate, consecutive,
         )
     return _verdict(
