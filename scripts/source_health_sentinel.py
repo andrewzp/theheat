@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """Daily source-health sentinel.
 
-Reads the bot's gist ``state.json`` and classifies every source's recent health
-so the operator does not have to triage the dashboard by hand. The core question
-for each failing source: is this UPSTREAM (NASA / gov / network — transient,
-self-heals, stay silent) or OUR_BUG (a code error, expired credential, moved
-endpoint, or an abnormally long outage — open an issue and ping)?
+Reads the bot's gist ``state.json`` and turns every currently-failing source into
+a tracked GitHub issue, so the operator never has to watch the dashboard. The
+governing idea: EVERY failure is our problem, because every failure is a gap in
+the product (a tweet we can't make). The sentinel does not decide whether a
+failure is "worth" surfacing — if a source is failing, it gets an issue.
 
-The whole point is to stop crying wolf on NASA flakiness — which is the
-overwhelming majority of red on the dashboard — while never missing a failure
-that is actually ours to fix.
+The upstream/ours classification survives only as a LABEL on the issue that tells
+the operator the right fix:
+  - ``ours``     — patch our code, rotate a credential, update a moved endpoint.
+  - ``external`` — NASA/gov is down; confirm the outage and, if it persists,
+    switch product/endpoint or find an alternate feed so the product stays whole.
 
-Classification is deterministic and unit-tested (see
-``tests/test_source_health_sentinel.py``). ``main()`` is the thin I/O wrapper the
-GitHub Actions workflow calls; it stays silent on upstream-only days and writes
-an issue body only when ``has_our_bugs`` is true.
+Issues auto-close when the source succeeds again, so the open-issues list is a
+self-maintaining view of what is broken right now.
+
+Classification + the create/close PLAN are pure and unit-tested (see
+``tests/test_source_health_sentinel.py``). ``main()`` reconciles real issues via
+``gh`` (live in CI; dry-run locally unless ``--apply``).
 """
 
 from __future__ import annotations
@@ -23,31 +27,27 @@ from datetime import datetime, timezone
 import json
 import os
 import re
+import subprocess
 import sys
 from typing import Any
 
-# Recent sub-window: how many of the last ACTIVE (non-skip) attempts decide
-# whether a source is "currently failing". Mirrors the dashboard's RECENT_WINDOW.
+# How many of the last ACTIVE (non-skip) attempts decide a source's state.
 RECENT_WINDOW = 5
-# How long a source may be dark before even an upstream outage escalates. A
-# transient NASA/gov outage self-heals within hours; one that lasts this many
-# WALL-CLOCK days is no longer safely "just NASA" — a moved/decommissioned
-# endpoint or a persistently rejected request needs a look (switch product,
-# update the endpoint, find an alternate source). Wall-clock, not a raw
-# consecutive-failure count, because cadence varies wildly (one count means ~1.5
-# days for gpm but ~10 weeks for weekly ice_mass). Tunable via SENTINEL_OUTAGE_DAYS.
-OUTAGE_DAYS = 3.0
+# Below this recent success rate, a source is "failing" (mostly broken → issue).
+# At or above it the source is degraded (occasional blips) or healthy — still
+# producing data, so no issue. A single transient blip never opens an issue.
+FAILING_RATE = 0.5
 
-# Statuses that count as a real attempt. "skipped" is a deliberate cadence idle
-# (e.g. "runs Mondays only") and must never consume the window or trip an alarm.
+LABEL = "source-health-sentinel"
+TITLE_PREFIX = "Source down: "
+
+# "skipped" is a deliberate cadence idle (e.g. "runs Mondays only") and must
+# never count as an attempt or trip an alarm.
 _ACTIVE_STATUSES = {"success", "failed", "degraded", "partial_failure"}
 
-# OUR_BUG: actionable on our side. Checked FIRST so an auth/code/parse failure
-# wins over a coincidental network token in the same string.
-#   - \b401|404|410\b : auth / moved-endpoint HTTP codes (403 is a gov rate-limit
-#     and lives in UPSTREAM, not here).
-#   - EARTHDATA_TOKEN (the env-var name) NOT bare "EARTHDATA" — the NASA hostname
-#     earthdata.nasa.gov appears in upstream URLs and must not match.
+# OUR_BUG: actionable in our code. Checked FIRST so auth/code/parse wins over a
+# coincidental network token. EARTHDATA_TOKEN (the env-var name) NOT bare
+# "EARTHDATA" — the NASA hostname earthdata.nasa.gov appears in upstream URLs.
 _OUR_BUG_RE = re.compile(
     r"\b(401|404|410)\b"
     r"|Unauthorized|EARTHDATA_TOKEN|invalid token|token expired|expired token|credential"
@@ -58,10 +58,8 @@ _OUR_BUG_RE = re.compile(
     r"|could not parse|invalid literal|Not Found",
     re.IGNORECASE,
 )
-
-# UPSTREAM: external and transient. NASA 5xx, read/connect timeouts, connection
-# failures, and gov rate-limits (403/429 — empirically rate-limits, not UA/auth
-# blocks, for theheat's sources).
+# UPSTREAM: external. NASA 5xx, read/connect timeouts, connection failures, gov
+# rate-limits (403/429 — empirically rate-limits, not UA/auth blocks here).
 _UPSTREAM_RE = re.compile(
     r"\b(403|429|50\d)\b"
     r"|Server Error|Bad Gateway|Service Unavailable|Gateway Time"
@@ -73,34 +71,18 @@ _UPSTREAM_RE = re.compile(
     re.IGNORECASE,
 )
 
-def _days_since(ts: str | None, now: datetime) -> float | None:
-    """Wall-clock days between an ISO timestamp and ``now``. None if unparseable
-    or absent (e.g. a source that has never once succeeded)."""
-    if not ts:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return (now - parsed).total_seconds() / 86400.0
-
-
-def _is_hard_upstream(last_error: str | None) -> bool:
-    """True when the error means the server is down/unreachable (5xx, timeout,
-    connection) — definitively external, regardless of how long it persists."""
-    return bool(_HARD_UPSTREAM_RE.search(str(last_error or "")))
+# error_class -> (cause label, what-to-do hint shown in the issue)
+_CAUSE = {
+    "our_bug": ("ours", "Patch on our side — a code error, expired credential, or a moved endpoint."),
+    "upstream": ("external", "NASA/gov is down. Confirm the outage; if it persists, switch product/endpoint or find an alternate feed so the product doesn't go dark."),
+    "unknown": ("unknown", "Unrecognized failure — investigate the error directly."),
+    "none": ("unknown", "Failing with no recorded error — investigate."),
+}
 
 
 def classify_error(last_error: str | None) -> str:
-    """Classify a ``last_error`` string into none / our_bug / upstream / unknown.
-
-    OUR_BUG is checked before UPSTREAM so an auth/code/parse failure is never
-    masked by a network word in the same message. A non-empty string that
-    matches neither is ``unknown`` — the sentinel escalates unknowns (better to
-    glance at a novel failure than silently file it as upstream).
-    """
+    """none / our_bug / upstream / unknown. our_bug is checked first; a non-empty
+    string matching neither is ``unknown`` (escalated, never silently filed)."""
     if last_error is None:
         return "none"
     text = str(last_error).strip()
@@ -113,27 +95,16 @@ def classify_error(last_error: str | None) -> str:
     return "unknown"
 
 
-def _verdict(
-    name: str,
-    category: str,
-    reason: str,
-    health: dict[str, Any],
-    error_class: str,
-    recent_success_rate: float | None = None,
-    days_since_success: float | None = None,
-) -> dict[str, Any]:
-    return {
-        "source": name,
-        "category": category,
-        "reason": reason,
-        "error_class": error_class,
-        "last_error": (health.get("last_error") or "")[:300],
-        "last_success_ts": health.get("last_success_ts"),
-        "recent_success_rate": recent_success_rate,
-        "days_since_success": (
-            round(days_since_success, 1) if days_since_success is not None else None
-        ),
-    }
+def _days_since(ts: str | None, now: datetime) -> float | None:
+    if not ts:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (now - parsed).total_seconds() / 86400.0
 
 
 def classify_source(
@@ -141,20 +112,13 @@ def classify_source(
     health: dict[str, Any],
     *,
     now: datetime | None = None,
-    outage_days: float = OUTAGE_DAYS,
     recent_window: int = RECENT_WINDOW,
 ) -> dict[str, Any]:
-    """Classify one source into healthy / degraded / idle / upstream / our_bug.
+    """Classify one source into healthy / degraded / idle / failing.
 
-    Only ``upstream`` and ``our_bug`` describe a currently-failing source;
-    ``our_bug`` is the only category that escalates. ``idle`` means the recent
-    rows are all cadence skips (e.g. a Monday-only source mid-week) — never an
-    alarm.
-
-    A currently-failing source escalates when the error is ours (code/auth/moved
-    endpoint/unknown) OR when it has been dark for ``outage_days`` wall-clock days
-    — even on an upstream error. A transient upstream outage stays silent; one
-    that has lasted that long is no longer safely "just NASA".
+    Only ``failing`` opens an issue. ``failing`` = the source is broken right now
+    (recent active success rate below FAILING_RATE), regardless of cause or how
+    long it has been down. ``idle`` = recent rows are all cadence skips.
     """
     now = now or datetime.now(timezone.utc)
     runs = health.get("runs") or []
@@ -165,158 +129,189 @@ def classify_source(
     days_dark = _days_since(health.get("last_success_ts"), now)
 
     if not active:
-        return _verdict(name, "idle", "no active attempts (cadence skips only)",
-                        health, error_class, days_since_success=days_dark)
+        category = "idle"
+    else:
+        recent = active[-recent_window:]
+        rate = recent.count("success") / len(recent)
+        if rate >= 1.0:
+            category = "healthy"
+        elif rate >= FAILING_RATE:
+            category = "degraded"
+        else:
+            category = "failing"
+        recent_rate = rate
 
-    recent = active[-recent_window:]
-    recent_rate = recent.count("success") / len(recent)
+    if not active:
+        recent_rate = None  # type: ignore[assignment]
 
-    if recent_rate >= 0.5:
-        category = "healthy" if recent_rate == 1.0 else "degraded"
-        return _verdict(name, category, f"recent success rate {recent_rate:.0%}",
-                        health, error_class, recent_rate, days_dark)
-
-    # Currently failing (most recent active attempts are failures).
-    if error_class in ("our_bug", "unknown"):
-        return _verdict(name, "our_bug", f"{error_class} failure — {last_error[:140]}",
-                        health, error_class, recent_rate, days_dark)
-
-    # Upstream error. Escalate only if the outage has lasted a significant length
-    # of WALL-CLOCK time (or the source has never once succeeded) — at that point
-    # a server outage is more likely a real upstream change (moved/decommissioned
-    # endpoint, persistently rejected request) that needs a fix on our side, not
-    # a transient blip. Below the threshold it self-heals → stay silent.
-    if days_dark is None:
-        return _verdict(name, "our_bug",
-                        f"has never succeeded and is failing — {last_error[:120]}",
-                        health, error_class, recent_rate, days_dark)
-    if days_dark >= outage_days:
-        return _verdict(name, "our_bug",
-                        f"down {days_dark:.1f} days — an outage this long likely "
-                        f"means a real upstream change (moved/decommissioned endpoint "
-                        f"or persistently rejected request), not transient "
-                        f"({last_error[:90]})",
-                        health, error_class, recent_rate, days_dark)
-    return _verdict(name, "upstream", f"upstream failure — {last_error[:140]}",
-                    health, error_class, recent_rate, days_dark)
+    cause, action = _CAUSE.get(error_class, _CAUSE["unknown"])
+    return {
+        "source": name,
+        "category": category,
+        "cause": cause if category == "failing" else None,
+        "suggested_action": action if category == "failing" else None,
+        "error_class": error_class,
+        "last_error": (last_error or "")[:300],
+        "last_success_ts": health.get("last_success_ts"),
+        "days_since_success": round(days_dark, 1) if days_dark is not None else None,
+        "recent_success_rate": recent_rate,
+    }
 
 
 def run_sentinel(
     source_health: dict[str, Any] | None,
     *,
     now: datetime | None = None,
-    outage_days: float = OUTAGE_DAYS,
     recent_window: int = RECENT_WINDOW,
 ) -> dict[str, Any]:
-    """Classify all sources and bucket them. ``has_our_bugs`` gates the alert."""
+    """Classify all sources and bucket them. ``has_failures`` gates the issues."""
     now = now or datetime.now(timezone.utc)
     verdicts = [
-        classify_source(
-            name, health,
-            now=now,
-            outage_days=outage_days,
-            recent_window=recent_window,
-        )
+        classify_source(name, health, now=now, recent_window=recent_window)
         for name, health in sorted((source_health or {}).items())
         if isinstance(health, dict)
     ]
-    our_bug = [v for v in verdicts if v["category"] == "our_bug"]
-    upstream = [v for v in verdicts if v["category"] == "upstream"]
-    healthy = [v for v in verdicts if v["category"] in ("healthy", "degraded", "idle")]
+    failing = [v for v in verdicts if v["category"] == "failing"]
+    degraded = [v for v in verdicts if v["category"] == "degraded"]
+    healthy = [v for v in verdicts if v["category"] in ("healthy", "idle")]
     return {
-        "has_our_bugs": len(our_bug) > 0,
-        "our_bug": our_bug,
-        "upstream": upstream,
+        "has_failures": len(failing) > 0,
+        "failing": failing,
+        "degraded": degraded,
         "healthy": healthy,
         "summary": {
-            "our_bug": len(our_bug),
-            "upstream": len(upstream),
+            "failing": len(failing),
+            "degraded": len(degraded),
             "healthy": len(healthy),
             "total": len(verdicts),
         },
     }
 
 
-def build_issue_body(report: dict[str, Any]) -> str:
-    """Markdown body for the GitHub issue opened when there are our-side bugs."""
-    lines = [
-        "The daily source-health sentinel found a failure that looks like **ours to fix**, "
-        "not upstream NASA/gov flakiness.",
+def plan_issue_actions(
+    failing: set[str],
+    open_issues: dict[str, int],
+) -> list[dict[str, Any]]:
+    """Reconcile the failing set against currently-open sentinel issues.
+
+    Create an issue for every failing source without one; close the issue of
+    every source that has recovered (open issue but no longer failing). Sources
+    that are still failing and already have an issue are left untouched (no spam).
+    """
+    actions: list[dict[str, Any]] = []
+    for source in sorted(failing - set(open_issues)):
+        actions.append({"action": "create", "source": source})
+    for source in sorted(set(open_issues) - failing):
+        actions.append({"action": "close", "source": source, "number": open_issues[source]})
+    return actions
+
+
+def build_issue_body(v: dict[str, Any]) -> str:
+    """Markdown body for a single failing source's issue."""
+    days = v["days_since_success"]
+    last_success = v["last_success_ts"] or "never"
+    when = f"{last_success} ({days} days ago)" if days is not None else last_success
+    rate = v["recent_success_rate"]
+    rate_str = f"{rate:.0%}" if rate is not None else "n/a"
+    return "\n".join([
+        f"**`{v['source']}` is failing** — it can't contribute to the product right now.",
         "",
-        "## Needs a fix",
-    ]
-    for v in report["our_bug"]:
-        lines += [
-            f"### `{v['source']}` — {v['error_class']}",
-            f"- **Why flagged:** {v['reason']}",
-            f"- **Last error:** `{v['last_error']}`",
-            f"- **Recent success rate:** {v['recent_success_rate']:.0%}"
-            if v["recent_success_rate"] is not None else "- **Recent success rate:** n/a",
-            f"- **Days since last success:** {v['days_since_success']}"
-            if v["days_since_success"] is not None else "- **Days since last success:** never succeeded",
-            f"- **Last success:** `{v['last_success_ts'] or 'never'}`",
-            "",
-        ]
-    if report["upstream"]:
-        names = ", ".join(f"`{v['source']}`" for v in report["upstream"])
-        lines += [
-            "## Upstream (no action — self-heals)",
-            f"Failing but external, left alone: {names}",
-            "",
-        ]
-    lines.append(
-        "_Auto-filed by `scripts/source_health_sentinel.py`. Upstream-only days file nothing._"
-    )
-    return "\n".join(lines)
+        f"- **Cause:** {v['cause']} ({v['error_class']})",
+        f"- **What to do:** {v['suggested_action']}",
+        f"- **Last error:** `{v['last_error']}`",
+        f"- **Last success:** `{when}`",
+        f"- **Recent success rate:** {rate_str}",
+        "",
+        f"_Auto-filed by the source-health sentinel. Auto-closes when `{v['source']}` succeeds again._",
+    ])
 
 
 def _print_report(report: dict[str, Any]) -> None:
     s = report["summary"]
     print(
         f"[sentinel] {s['total']} sources: "
-        f"{s['our_bug']} our_bug, {s['upstream']} upstream, {s['healthy']} healthy/idle"
+        f"{s['failing']} failing, {s['degraded']} degraded, {s['healthy']} healthy/idle"
     )
-    for v in report["our_bug"]:
-        print(f"  OUR_BUG  {v['source']}: {v['reason']}")
-    for v in report["upstream"]:
-        print(f"  upstream {v['source']}: {v['last_error'][:80]}")
+    for v in report["failing"]:
+        print(f"  FAILING  {v['source']} [{v['cause']}]: {v['last_error'][:80]}")
+
+
+def _run_gh(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["gh", *args], capture_output=True, text=True, check=check)
+
+
+def _list_open_sentinel_issues() -> dict[str, int]:
+    """Map source name -> open issue number, from issues this sentinel filed."""
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list issues: {exc!r}", file=sys.stderr)
+        return {}
+    result: dict[str, int] = {}
+    for it in items:
+        title = it.get("title", "")
+        if title.startswith(TITLE_PREFIX):
+            result[title[len(TITLE_PREFIX):].strip()] = it["number"]
+    return result
+
+
+def _create_issue(v: dict[str, Any]) -> None:
+    title = f"{TITLE_PREFIX}{v['source']}"
+    body = build_issue_body(v)
+    base = ["issue", "create", "--title", title, "--label", LABEL, "--body", body]
+    r = _run_gh([*base, "--assignee", "andrewzp"], check=False)
+    if r.returncode != 0:  # assignee may be invalid in some envs — file anyway
+        _run_gh(base, check=False)
+    print(f"[sentinel] opened issue: {title}")
+
+
+def _close_issue(number: int, source: str) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         f"`{source}` is succeeding again — recovered. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed issue #{number} ({source} recovered)")
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI for CI: read state.json, classify, emit report + GitHub Actions outputs.
+    """Read state.json, classify, and reconcile per-source issues via gh.
 
-    Always exits 0 — the sentinel is a reporter, never a gate. Usage:
-        python scripts/source_health_sentinel.py <state.json> [issue_body_out.md]
+    Live in CI (GITHUB_ACTIONS=true) or with --apply; otherwise dry-run (prints
+    the failing set, mutates nothing). Always exits 0 — a reporter, never a gate.
     """
     argv = argv if argv is not None else sys.argv[1:]
-    state_path = argv[0] if argv else "state.json"
-    issue_out = argv[1] if len(argv) > 1 else "/tmp/sentinel-issue.md"
+    positional = [a for a in argv if not a.startswith("--")]
+    state_path = positional[0] if positional else "state.json"
+    apply = "--apply" in argv or os.environ.get("GITHUB_ACTIONS") == "true"
 
     try:
         with open(state_path, encoding="utf-8") as f:
             state = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         print(f"[sentinel] could not read {state_path}: {exc!r}", file=sys.stderr)
-        return 0  # never fail the workflow on a read hiccup
+        return 0
 
-    try:
-        outage_days = float(os.environ.get("SENTINEL_OUTAGE_DAYS") or OUTAGE_DAYS)
-    except ValueError:
-        outage_days = OUTAGE_DAYS
-    report = run_sentinel(state.get("source_health") or {}, outage_days=outage_days)
+    report = run_sentinel(state.get("source_health") or {})
     _print_report(report)
 
-    gh_output = os.environ.get("GITHUB_OUTPUT")
-    if gh_output:
-        with open(gh_output, "a", encoding="utf-8") as f:
-            f.write(f"has_our_bugs={'true' if report['has_our_bugs'] else 'false'}\n")
-            f.write(f"our_bug_count={report['summary']['our_bug']}\n")
+    if not apply:
+        print("[sentinel] dry-run — pass --apply or run in CI to open/close issues.")
+        return 0
 
-    if report["has_our_bugs"]:
-        with open(issue_out, "w", encoding="utf-8") as f:
-            f.write(build_issue_body(report))
-        print(f"[sentinel] wrote issue body to {issue_out}")
-
+    _run_gh(["label", "create", LABEL, "-c", "B60205",
+             "-d", "Auto-filed by the daily source-health sentinel"], check=False)
+    failing_map = {v["source"]: v for v in report["failing"]}
+    open_issues = _list_open_sentinel_issues()
+    for action in plan_issue_actions(set(failing_map), open_issues):
+        if action["action"] == "create":
+            _create_issue(failing_map[action["source"]])
+        else:
+            _close_issue(action["number"], action["source"])
     return 0
 
 

@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.13.0] - 2026-06-04
+
+Sentinel rebuilt around the right principle: **every failure is our problem.** A
+failing source is a gap in the product (a tweet we can't make), so it gets a
+tracked issue — full stop. The earlier "is it upstream NASA? then stay silent /
+wait N days" gate was wrong: if NASA goes dark, that IS our problem (find an
+alternate feed, switch product, escalate), not something to ignore. The
+upstream/ours classification now survives only as a **label** on the issue that
+points at the right fix.
+
+### Changed
+
+- `scripts/source_health_sentinel.py`: a source is `failing` (→ issue) whenever
+  it's broken right now — recent active success rate below 50%, regardless of
+  cause or how long it's been down. No grace period. Each issue is labeled
+  `ours` (patch our code/credential/endpoint) or `external` (NASA/gov down —
+  confirm, then switch product/endpoint or find an alternate feed). A single
+  transient blip (still mostly succeeding) does not open an issue; a degraded
+  source (succeeding the majority of the time) doesn't either.
+- **Per-source issues that auto-close.** New pure `plan_issue_actions()`
+  reconciles the failing set against open sentinel issues: open one issue per
+  newly-failing source (`Source down: <name>`, assigned), and **close the issue
+  of any source that has recovered**. `main()` executes the plan via `gh` (live
+  in CI, dry-run locally unless `--apply`). The open-issues list is now a
+  self-maintaining view of what's broken.
+- `.github/workflows/source-health-sentinel.yml`: runs every 4h (`30 */4 * * *`,
+  after each bot cycle) so failures surface within ~4h and recoveries close
+  within ~4h. Idempotent reconciliation means frequent runs never spam. Removed
+  the `SENTINEL_OUTAGE_DAYS` grace knob (no grace anymore).
+
+### Notes
+
+- On live data: gpm_imerg + ice_mass antarctica/greenland (all `external`, NASA
+  down) each get an issue immediately — exactly the visibility the grace-period
+  versions were suppressing.
+
 ## [0.9.12.3] - 2026-06-04
 
 Sentinel: sustained outages now escalate, fixing the 0.9.12.1 overcorrection.
