@@ -1,16 +1,19 @@
 name: source-health-sentinel
 
-# Daily triage of the bot's source health so the operator doesn't have to read
-# the dashboard by hand. Reads the gist state.json, classifies every failing
-# source as upstream (NASA/gov/network — self-heals, stay silent) or our_bug
-# (code/auth/moved-endpoint/long-outage — open an issue and ping). Upstream-only
-# days file nothing. Classification lives in scripts/source_health_sentinel.py
-# and is unit-tested; this workflow is just the daily I/O wrapper.
+# Turns every currently-failing source into a tracked GitHub issue so the
+# operator never has to watch the dashboard. Every failure is a product gap, so
+# every failing source gets an issue (labeled `ours` vs `external` so the fix is
+# obvious); issues auto-close when the source recovers. The classifier and the
+# create/close plan live in scripts/source_health_sentinel.py and are
+# unit-tested; this workflow fetches the gist and runs the reconciler.
 
 on:
   schedule:
-    # 13:00 UTC — ~1h after the 12:00 UTC bot run, so state.json is fresh.
-    - cron: '0 13 * * *'
+    # Every 4h at :30 — shortly after each bot alert cycle (00/04/08/12/16/20
+    # UTC) writes fresh state, so a failure is surfaced within ~4h and a recovery
+    # closes its issue within ~4h. The reconciler is idempotent, so frequent runs
+    # never spam: it only creates an issue a source doesn't already have.
+    - cron: '30 */4 * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -36,32 +39,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
         run: gh gist view "${{ secrets.GIST_ID }}" -f state.json > /tmp/state.json
 
-      - name: Classify source health
-        id: classify
-        env:
-          # How many wall-clock days dark before an upstream outage escalates.
-          # Empty repo var → code default (3). Raise it to give chronically-flaky
-          # low-cadence NASA sources a longer leash.
-          SENTINEL_OUTAGE_DAYS: ${{ vars.SENTINEL_OUTAGE_DAYS }}
-        run: python scripts/source_health_sentinel.py /tmp/state.json /tmp/sentinel-issue.md
-
-      # Only fires when something is genuinely ours to fix. One rolling issue —
-      # comment if it's already open, otherwise create and assign the operator.
-      - name: Open or update issue
-        if: steps.classify.outputs.has_our_bugs == 'true'
+      # Opens an issue for each currently-failing source, closes the issue of any
+      # source that has recovered. Runs live because GITHUB_ACTIONS=true.
+      - name: Reconcile source-failure issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh label create source-health-sentinel \
-            -c B60205 -d "Auto-filed by the daily source-health sentinel" 2>/dev/null || true
-          EXISTING=$(gh issue list --label source-health-sentinel --state open \
-            --json number -q '.[0].number // empty')
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body-file /tmp/sentinel-issue.md
-          else
-            gh issue create \
-              --title "Source-health sentinel: a source needs a fix" \
-              --label source-health-sentinel \
-              --assignee andrewzp \
-              --body-file /tmp/sentinel-issue.md
-          fi
+        run: python scripts/source_health_sentinel.py /tmp/state.json
