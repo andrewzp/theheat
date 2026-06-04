@@ -463,6 +463,31 @@ test("success-rate fraction uses active runs (skips excluded), not total runs", 
   )
 })
 
+test("recent health window counts active attempts, not skipped rows", () => {
+  // A cadence-gated source can intentionally skip after its last real attempt.
+  // Skips must not push that last active success out of the recency window and
+  // leave the dashboard red on stale cumulative history.
+  const runs = [
+    fail("2026-05-25T00:00:00Z"),
+    ok("2026-05-26T00:00:00Z"),
+    skip("2026-05-27T00:00:00Z"),
+    skip("2026-05-28T00:00:00Z"),
+    skip("2026-05-29T00:00:00Z"),
+    skip("2026-05-30T00:00:00Z"),
+    skip("2026-05-31T00:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      cadence_source: { success: 1, failed: 1, degraded: 0, skipped: 5, runs },
+    },
+  })
+  const row = sources.find((s) => s.source === "cadence_source")
+  assert.equal(row.last_run_status, "skipped")
+  assert.equal(row.recent_active, 2)
+  assert.equal(row.recent_successes, 1)
+  assert.equal(row.health, "degraded", "last active success should keep it out of red")
+})
+
 test("a recovering source (recent runs all succeed) is degraded, not unhealthy", () => {
   // gpm_imerg-style: terrible 7-day cumulative (5 success / 28 failed) but the
   // most recent runs all succeeded. A recovering source must not stay red.
