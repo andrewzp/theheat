@@ -121,6 +121,20 @@ class TestClassifySource:
         assert v["category"] == "our_bug"
         assert "long" in v["reason"].lower() or "consecutive" in v["reason"].lower()
 
+    def test_sustained_hard_upstream_never_escalates(self):
+        # NASA can 503 / ReadTimeout for days. No duration turns a server outage
+        # into our bug. Regression: the sentinel's first live run escalated a
+        # 10-deep run of HTTP 503 from GES DISC as a "moved endpoint" (issue #174).
+        for err in (
+            "GPM IMERG fetch hit 3 repeated HTTP 503 failures; first error: "
+            "HTTP 503 from https://gpm1.gesdisc.eosdis.nasa.gov/...",
+            "Ice mass fetch failed: 502 Server Error: Bad Gateway",
+            "ReadTimeout: HTTPSConnectionPool(host='gpm1.gesdisc...', port=443)",
+        ):
+            s = _src(statuses=["failed"] * 14, last_error=err)
+            v = classify_source("gpm_imerg", s, long_failure_threshold=10)
+            assert v["category"] == "upstream", err
+
     def test_intermittent_flaky_above_half_not_escalated(self):
         # Mostly-succeeding source with the odd failure is not "failing".
         s = _src(
