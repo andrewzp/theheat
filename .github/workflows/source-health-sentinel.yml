@@ -1,0 +1,62 @@
+name: source-health-sentinel
+
+# Daily triage of the bot's source health so the operator doesn't have to read
+# the dashboard by hand. Reads the gist state.json, classifies every failing
+# source as upstream (NASA/gov/network — self-heals, stay silent) or our_bug
+# (code/auth/moved-endpoint/long-outage — open an issue and ping). Upstream-only
+# days file nothing. Classification lives in scripts/source_health_sentinel.py
+# and is unit-tested; this workflow is just the daily I/O wrapper.
+
+on:
+  schedule:
+    # 13:00 UTC — ~1h after the 12:00 UTC bot run, so state.json is fresh.
+    - cron: '0 13 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: source-health-sentinel
+  cancel-in-progress: false
+
+jobs:
+  sentinel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Fetch state.json from gist
+        env:
+          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+        run: gh gist view "${{ secrets.GIST_ID }}" -f state.json > /tmp/state.json
+
+      - name: Classify source health
+        id: classify
+        run: python scripts/source_health_sentinel.py /tmp/state.json /tmp/sentinel-issue.md
+
+      # Only fires when something is genuinely ours to fix. One rolling issue —
+      # comment if it's already open, otherwise create and assign the operator.
+      - name: Open or update issue
+        if: steps.classify.outputs.has_our_bugs == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create source-health-sentinel \
+            -c B60205 -d "Auto-filed by the daily source-health sentinel" 2>/dev/null || true
+          EXISTING=$(gh issue list --label source-health-sentinel --state open \
+            --json number -q '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body-file /tmp/sentinel-issue.md
+          else
+            gh issue create \
+              --title "Source-health sentinel: a source needs a fix" \
+              --label source-health-sentinel \
+              --assignee andrewzp \
+              --body-file /tmp/sentinel-issue.md
+          fi
