@@ -1492,7 +1492,9 @@ export default function Dashboard() {
           display: flex; justify-content: space-between; align-items: center;
           margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #222;
         }
-        h1 { font-size: 20px; font-weight: 600; color: #ff4d00; }
+        h1 { font-size: 20px; font-weight: 600; color: #ff4d00; cursor: pointer; user-select: none; }
+        h1:hover { opacity: 0.85; }
+        h1:focus-visible { outline: 2px solid #ff4d00; outline-offset: 4px; border-radius: 4px; }
         h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
         .refresh-group {
           display: flex; align-items: center; gap: 12px;
@@ -2118,7 +2120,25 @@ export default function Dashboard() {
 
       <div className="dash">
         <header>
-          <h1>@theheat <span>control panel</span></h1>
+          <h1
+            role="button"
+            tabIndex={0}
+            title="Back to dashboard"
+            aria-label="@theheat control panel — back to dashboard"
+            onClick={() => {
+              setActiveTab("dashboard")
+              window.scrollTo({ top: 0, behavior: "smooth" })
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                setActiveTab("dashboard")
+                window.scrollTo({ top: 0, behavior: "smooth" })
+              }
+            }}
+          >
+            @theheat <span>control panel</span>
+          </h1>
           <div className="refresh-group">
             {refreshError && (
               <span className="refresh-error" title={refreshError}>

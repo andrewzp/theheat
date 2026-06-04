@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.12.2] - 2026-06-04
+
+### Fixed
+
+- Dashboard: the `@theheat control panel` wordmark is now a home control —
+  clicking it (or Enter/Space when focused) returns to the Dashboard tab and
+  scrolls to top, the way a logo is expected to behave. Previously it was inert
+  text. Adds pointer cursor, hover, and a keyboard focus ring.
+
 ## [0.9.12.1] - 2026-06-04
 
 Sentinel false-positive fix, caught on its own first live run. The 0.9.12.0
