@@ -194,10 +194,18 @@ jobs:
           # Fetch bounded city batches concurrently after strict-mode probes catch
           # broken auth/provider-wide failures.
           GPM_IMERG_MAX_WORKERS: "8"
+          # Optional repo-variable knobs for NASA GES DISC behavior. Empty vars
+          # fall back to code defaults.
+          GPM_IMERG_TIMEOUT_S: ${{ vars.GPM_IMERG_TIMEOUT_S }}
+          GPM_IMERG_RETRY_BACKOFF_S: ${{ vars.GPM_IMERG_RETRY_BACKOFF_S }}
+          GPM_IMERG_MAX_LOOKBACK_DAYS: ${{ vars.GPM_IMERG_MAX_LOOKBACK_DAYS }}
           # Triage stage active: MVP infra in PR #132, coral_dhw migrated in PR #134.
           # Kill-switch default in code stays "0"; production overrides here.
-          # Rollback: set to "0" and push — next cycle reverts to legacy passthrough.
-          THEHEAT_TRIAGE_ENABLED: "1"
+          # Rollback: gh variable set THEHEAT_TRIAGE_ENABLED --body 0 --repo andrewzp/theheat
+          THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
+          # Optional repo-variable knobs for pending-queue diversity and TTL.
+          THEHEAT_PENDING_TYPE_CAP: ${{ vars.THEHEAT_PENDING_TYPE_CAP }}
+          THEHEAT_PENDING_TTL_DAYS: ${{ vars.THEHEAT_PENDING_TTL_DAYS }}
           # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
           # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.
           THEHEAT_SIGNALS_PROVIDER: ghcn

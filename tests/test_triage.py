@@ -230,6 +230,27 @@ class TestSelectSurvivors:
         from src.orchestrator.common import _triage_enabled
         assert not _triage_enabled()
 
+    def test_kill_switch_disables_pending_ttl_sweep(self, monkeypatch):
+        """THEHEAT_TRIAGE_ENABLED=0 must not mutate pending drafts via TTL."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "old_pending",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": "2026-05-01T00:00:00Z",
+            }
+        ]
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert drafted == 0
+        assert bot_state["drafts"][0]["status"] == "pending"
+        assert "rejected_reason" not in bot_state["drafts"][0]
+
     def test_cooldown_exempt_still_subject_to_triage_cap(self, monkeypatch):
         """cooldown_exempt=True doesn't bypass the triage cap."""
         monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)

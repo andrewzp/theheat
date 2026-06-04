@@ -431,10 +431,12 @@ def _resolve_available_date(
     (per-city fetches then fail as they did pre-fix — safe degradation, never
     worse than the old fixed-"yesterday" behavior).
     """
-    candidate = start_date
     timeout_s = _request_timeout_s()
     request_headers = dict(headers)
-    for _ in range(max(max_lookback, 0) + 1):
+    oldest_candidate = start_date
+    for offset in range(max(max_lookback, 0) + 1):
+        candidate = start_date - timedelta(days=offset)
+        oldest_candidate = candidate
         url = _ascii_subset_url(
             lat=_PROBE_REFERENCE_LAT,
             lon=_PROBE_REFERENCE_LON,
@@ -449,12 +451,11 @@ def _resolve_available_date(
         except requests.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status == 404:
-                candidate = candidate - timedelta(days=1)
                 continue
             return candidate
         except requests.RequestException:
             return candidate
-    return candidate
+    return oldest_candidate
 
 
 def _is_transient_request_error(exc: BaseException) -> bool:

@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.11.2] - 2026-06-04
+
+Review follow-up hardening from the 2026-06-02 source/dash/triage sweep. The
+prior fixes were directionally right, but three edge paths still violated their
+operator contract: triage-off still ran the TTL rejection side effect, GPM
+walk-back exhaustion could return an unprobed date, and documented repo-variable
+knobs were not exported into the GitHub Actions process.
+
+### Fixed
+
+- `src/orchestrator/common.py`: pending-draft TTL sweep now respects
+  `THEHEAT_TRIAGE_ENABLED`. When triage is disabled, the drain path is true
+  legacy passthrough again: no ranking, no pending-type cap, and no TTL
+  auto-rejection.
+- `src/data/gpm_imerg.py`: `_resolve_available_date` now returns the oldest
+  date it actually probed after exhausting `GPM_IMERG_MAX_LOOKBACK_DAYS`, never
+  the next unprobed day.
+- `dashboard/lib/source-health.js`: recency classification now samples the last
+  five active attempts, not the last five total rows. Skipped cadence rows no
+  longer push a recovering source's last active success out of the window.
+- `.github/workflows/bot.yml`: exports the repo-variable knobs used by the new
+  code paths: GPM timeout/backoff/lookback, pending type cap, pending TTL, and
+  the triage kill-switch. `THEHEAT_TRIAGE_ENABLED` still defaults to on in
+  production but can now be changed with a repo variable instead of a code push.
+- `PIPELINE.md` / `BRIEFING.md`: current operator docs now point routine-beacon
+  status at the `ROUTINE_BEACON` repository variable, clarify that disabled
+  triage is true legacy passthrough, and describe skip-aware source-health
+  recency.
+
+### Tests
+
+- Added regression coverage for disabled-triage TTL behavior, GPM walk-back
+  exhaustion, and skip-aware source-health recency.
+
 ## [0.9.11.1] - 2026-06-03
 
 Cap the cost of a doomed `gpm_imerg` fetch — PR 4 of the source-reliability

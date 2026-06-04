@@ -84,6 +84,31 @@ class TestGpmFetch:
 
     @responses.activate
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_resolve_available_date_exhaustion_returns_oldest_probed_date(self, _env):
+        """The walk-back must never return a date it did not probe."""
+        from src.data.gpm_imerg import _resolve_available_date
+
+        for day in ("20260601", "20260531", "20260530"):
+            responses.add(
+                responses.GET,
+                re.compile(rf".*3B-DAY-L\.MS\.MRG\.3IMERG\.{day}.*\.ascii.*"),
+                status=404,
+                body="Not Found",
+            )
+
+        resolved = _resolve_available_date(
+            start_date=date(2026, 6, 1),
+            product="late",
+            headers={"Authorization": "Bearer fake-token"},
+            max_lookback=2,
+        )
+
+        assert resolved == date(2026, 5, 30)
+        assert len(responses.calls) == 3
+        assert all("20260529" not in call.request.url for call in responses.calls)
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
     def test_resolve_available_date_stops_on_transient_error(self, _env):
         """A 5xx is NOT a date-availability signal. Don't walk back — keep the
         start date so the per-city fetches retry/surface it exactly as before."""

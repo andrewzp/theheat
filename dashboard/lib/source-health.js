@@ -80,11 +80,13 @@ function aggregateFromSourceHealth(sourceHealth) {
     const runs = Array.isArray(health?.runs) ? health.runs : []
     const lastRun = runs.length > 0 ? runs[runs.length - 1] : null
 
-    // Recent sub-window: the last RECENT_WINDOW runs (runs is oldest-first per
-    // src/state.py:record_source_health). Skips are not "active" attempts.
+    // Recent sub-window: the last RECENT_WINDOW active attempts (runs is
+    // oldest-first per src/state.py:record_source_health). Skips are deliberate
+    // idle rows, so they must not consume the recovery/degradation window.
     let recentSuccesses = 0
     let recentActive = 0
-    for (const r of runs.slice(-RECENT_WINDOW)) {
+    for (let i = runs.length - 1; i >= 0 && recentActive < RECENT_WINDOW; i--) {
+      const r = runs[i]
       const st = r?.status
       if (st === "success") {
         recentSuccesses += 1
