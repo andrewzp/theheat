@@ -38,6 +38,11 @@ jobs:
 
       - name: Classify source health
         id: classify
+        env:
+          # How many wall-clock days dark before an upstream outage escalates.
+          # Empty repo var → code default (3). Raise it to give chronically-flaky
+          # low-cadence NASA sources a longer leash.
+          SENTINEL_OUTAGE_DAYS: ${{ vars.SENTINEL_OUTAGE_DAYS }}
         run: python scripts/source_health_sentinel.py /tmp/state.json /tmp/sentinel-issue.md
 
       # Only fires when something is genuinely ours to fix. One rolling issue —

@@ -19,6 +19,7 @@ an issue body only when ``has_our_bugs`` is true.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 import re
@@ -28,10 +29,14 @@ from typing import Any
 # Recent sub-window: how many of the last ACTIVE (non-skip) attempts decide
 # whether a source is "currently failing". Mirrors the dashboard's RECENT_WINDOW.
 RECENT_WINDOW = 5
-# A source dark for this many consecutive active attempts is treated as our_bug
-# even when the error looks upstream: a NASA endpoint that has 403/404'd for ~10
-# straight runs has probably MOVED or our credential expired — not transient.
-LONG_FAILURE_THRESHOLD = 10
+# How long a source may be dark before even an upstream outage escalates. A
+# transient NASA/gov outage self-heals within hours; one that lasts this many
+# WALL-CLOCK days is no longer safely "just NASA" — a moved/decommissioned
+# endpoint or a persistently rejected request needs a look (switch product,
+# update the endpoint, find an alternate source). Wall-clock, not a raw
+# consecutive-failure count, because cadence varies wildly (one count means ~1.5
+# days for gpm but ~10 weeks for weekly ice_mass). Tunable via SENTINEL_OUTAGE_DAYS.
+OUTAGE_DAYS = 3.0
 
 # Statuses that count as a real attempt. "skipped" is a deliberate cadence idle
 # (e.g. "runs Mondays only") and must never consume the window or trip an alarm.
@@ -68,20 +73,18 @@ _UPSTREAM_RE = re.compile(
     re.IGNORECASE,
 )
 
-# HARD upstream: the server is down or unreachable (5xx, timeouts, connection /
-# network failures). These NEVER escalate on duration — NASA can be down for
-# days and that is still not our bug. SOFT upstream (403/429 rate-limits) is the
-# only upstream class the long-outage rule escalates, because a rate-limit that
-# never clears can signal a real access change worth a look.
-_HARD_UPSTREAM_RE = re.compile(
-    r"\b50\d\b"
-    r"|Server Error|Bad Gateway|Service Unavailable|Gateway Time"
-    r"|ReadTimeout|ConnectTimeout|Timeout|timed out"
-    r"|ConnectionError|Connection refused|Connection reset|Max retries"
-    r"|Network is unreachable|Name or service not known"
-    r"|Temporary failure in name resolution|HTTPSConnectionPool|HTTPConnectionPool",
-    re.IGNORECASE,
-)
+def _days_since(ts: str | None, now: datetime) -> float | None:
+    """Wall-clock days between an ISO timestamp and ``now``. None if unparseable
+    or absent (e.g. a source that has never once succeeded)."""
+    if not ts:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (now - parsed).total_seconds() / 86400.0
 
 
 def _is_hard_upstream(last_error: str | None) -> bool:
@@ -117,7 +120,7 @@ def _verdict(
     health: dict[str, Any],
     error_class: str,
     recent_success_rate: float | None = None,
-    consecutive_failures: int | None = None,
+    days_since_success: float | None = None,
 ) -> dict[str, Any]:
     return {
         "source": name,
@@ -125,8 +128,11 @@ def _verdict(
         "reason": reason,
         "error_class": error_class,
         "last_error": (health.get("last_error") or "")[:300],
+        "last_success_ts": health.get("last_success_ts"),
         "recent_success_rate": recent_success_rate,
-        "consecutive_failures": consecutive_failures,
+        "days_since_success": (
+            round(days_since_success, 1) if days_since_success is not None else None
+        ),
     }
 
 
@@ -134,8 +140,9 @@ def classify_source(
     name: str,
     health: dict[str, Any],
     *,
+    now: datetime | None = None,
+    outage_days: float = OUTAGE_DAYS,
     recent_window: int = RECENT_WINDOW,
-    long_failure_threshold: int = LONG_FAILURE_THRESHOLD,
 ) -> dict[str, Any]:
     """Classify one source into healthy / degraded / idle / upstream / our_bug.
 
@@ -143,71 +150,72 @@ def classify_source(
     ``our_bug`` is the only category that escalates. ``idle`` means the recent
     rows are all cadence skips (e.g. a Monday-only source mid-week) — never an
     alarm.
+
+    A currently-failing source escalates when the error is ours (code/auth/moved
+    endpoint/unknown) OR when it has been dark for ``outage_days`` wall-clock days
+    — even on an upstream error. A transient upstream outage stays silent; one
+    that has lasted that long is no longer safely "just NASA".
     """
+    now = now or datetime.now(timezone.utc)
     runs = health.get("runs") or []
     statuses = [r.get("status") for r in runs if isinstance(r, dict)]
     active = [s for s in statuses if s in _ACTIVE_STATUSES]
     last_error = health.get("last_error") or ""
     error_class = classify_error(last_error)
+    days_dark = _days_since(health.get("last_success_ts"), now)
 
     if not active:
-        return _verdict(name, "idle", "no active attempts (cadence skips only)", health, error_class)
+        return _verdict(name, "idle", "no active attempts (cadence skips only)",
+                        health, error_class, days_since_success=days_dark)
 
     recent = active[-recent_window:]
     recent_rate = recent.count("success") / len(recent)
 
-    # Trailing consecutive non-success among active runs, newest first.
-    consecutive = 0
-    for status in reversed(active):
-        if status == "success":
-            break
-        consecutive += 1
-
     if recent_rate >= 0.5:
         category = "healthy" if recent_rate == 1.0 else "degraded"
-        return _verdict(
-            name, category, f"recent success rate {recent_rate:.0%}",
-            health, error_class, recent_rate, consecutive,
-        )
+        return _verdict(name, category, f"recent success rate {recent_rate:.0%}",
+                        health, error_class, recent_rate, days_dark)
 
     # Currently failing (most recent active attempts are failures).
     if error_class in ("our_bug", "unknown"):
-        return _verdict(
-            name, "our_bug",
-            f"{error_class} failure — {last_error[:140]}",
-            health, error_class, recent_rate, consecutive,
-        )
-    # Long-outage escalation applies ONLY to soft upstream (403/429). A hard
-    # upstream error (5xx/timeout/connection) stays upstream no matter how long
-    # the source has been dark — a server outage is never ours to fix, and
-    # escalating it is exactly the wolf-crying the sentinel exists to stop.
-    if consecutive >= long_failure_threshold and not _is_hard_upstream(last_error):
-        return _verdict(
-            name, "our_bug",
-            f"down {consecutive} consecutive attempts with a persistent "
-            f"rate-limit/access error — may be a real access change, not transient "
-            f"({last_error[:100]})",
-            health, error_class, recent_rate, consecutive,
-        )
-    return _verdict(
-        name, "upstream",
-        f"upstream failure — {last_error[:140]}",
-        health, error_class, recent_rate, consecutive,
-    )
+        return _verdict(name, "our_bug", f"{error_class} failure — {last_error[:140]}",
+                        health, error_class, recent_rate, days_dark)
+
+    # Upstream error. Escalate only if the outage has lasted a significant length
+    # of WALL-CLOCK time (or the source has never once succeeded) — at that point
+    # a server outage is more likely a real upstream change (moved/decommissioned
+    # endpoint, persistently rejected request) that needs a fix on our side, not
+    # a transient blip. Below the threshold it self-heals → stay silent.
+    if days_dark is None:
+        return _verdict(name, "our_bug",
+                        f"has never succeeded and is failing — {last_error[:120]}",
+                        health, error_class, recent_rate, days_dark)
+    if days_dark >= outage_days:
+        return _verdict(name, "our_bug",
+                        f"down {days_dark:.1f} days — an outage this long likely "
+                        f"means a real upstream change (moved/decommissioned endpoint "
+                        f"or persistently rejected request), not transient "
+                        f"({last_error[:90]})",
+                        health, error_class, recent_rate, days_dark)
+    return _verdict(name, "upstream", f"upstream failure — {last_error[:140]}",
+                    health, error_class, recent_rate, days_dark)
 
 
 def run_sentinel(
     source_health: dict[str, Any] | None,
     *,
+    now: datetime | None = None,
+    outage_days: float = OUTAGE_DAYS,
     recent_window: int = RECENT_WINDOW,
-    long_failure_threshold: int = LONG_FAILURE_THRESHOLD,
 ) -> dict[str, Any]:
     """Classify all sources and bucket them. ``has_our_bugs`` gates the alert."""
+    now = now or datetime.now(timezone.utc)
     verdicts = [
         classify_source(
             name, health,
+            now=now,
+            outage_days=outage_days,
             recent_window=recent_window,
-            long_failure_threshold=long_failure_threshold,
         )
         for name, health in sorted((source_health or {}).items())
         if isinstance(health, dict)
@@ -244,7 +252,9 @@ def build_issue_body(report: dict[str, Any]) -> str:
             f"- **Last error:** `{v['last_error']}`",
             f"- **Recent success rate:** {v['recent_success_rate']:.0%}"
             if v["recent_success_rate"] is not None else "- **Recent success rate:** n/a",
-            f"- **Consecutive failures:** {v['consecutive_failures']}",
+            f"- **Days since last success:** {v['days_since_success']}"
+            if v["days_since_success"] is not None else "- **Days since last success:** never succeeded",
+            f"- **Last success:** `{v['last_success_ts'] or 'never'}`",
             "",
         ]
     if report["upstream"]:
@@ -289,7 +299,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[sentinel] could not read {state_path}: {exc!r}", file=sys.stderr)
         return 0  # never fail the workflow on a read hiccup
 
-    report = run_sentinel(state.get("source_health") or {})
+    try:
+        outage_days = float(os.environ.get("SENTINEL_OUTAGE_DAYS") or OUTAGE_DAYS)
+    except ValueError:
+        outage_days = OUTAGE_DAYS
+    report = run_sentinel(state.get("source_health") or {}, outage_days=outage_days)
     _print_report(report)
 
     gh_output = os.environ.get("GITHUB_OUTPUT")
