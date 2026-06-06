@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.13.1] - 2026-06-06
+
+Sentinel: idle low-cadence sources are no longer flagged as failing on stale
+attempts. The 0.9.13.0 classifier stripped cadence skips from the *entire* run
+history and judged a source on its last N *actual* attempts — so a weekly source
+(ice_mass, Mondays only) that succeeded, then had a redundant same-day fetch hit
+a transient 502, kept showing `failing` for days while it sat idle and the cause
+had long cleared (live issues #180/#181).
+
+### Fixed
+
+- `scripts/source_health_sentinel.py`: `classify_source` now judges the recent
+  **run** window (skips included), not all-time active attempts. If the recent
+  window is all cadence skips, the source is `idle` (not attempting → not
+  currently failing); a recent *active* attempt that failed still classifies as
+  `failing`. Daily sources are unaffected (they never have all-skip windows);
+  only idle low-cadence sources stop being false-flagged. +2 tests.
+
+### Notes
+
+- Resolves the open ice_mass issues: confirmed PO.DAAC recovered (granule URL
+  returns 303, not 502) and ice_mass holds its 06-01 monthly value, so it's idle,
+  not broken. gpm_imerg's issue already auto-closed when it recovered (80% recent
+  success) — the open/close loop working end-to-end.
+
 ## [0.9.13.0] - 2026-06-04
 
 Sentinel rebuilt around the right principle: **every failure is our problem.** A

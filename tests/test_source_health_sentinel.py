@@ -119,6 +119,28 @@ class TestClassifySource:
             )
             assert v["category"] == "failing", ts
 
+    def test_idle_source_with_stale_failures_is_idle_not_failing(self):
+        # A low-cadence source (ice_mass: Mondays only) whose recent runs are all
+        # cadence skips is IDLE — not "failing" — even if its last actual attempt,
+        # days ago and outside the recent window, failed. It is not attempting now,
+        # so it is not currently failing. (Regression: the live reconciler flagged
+        # ice_mass as failing on 5-day-stale 502s while it sat idle — issues #180/#181.)
+        s = _src(
+            statuses=["success", "failed", "failed"] + ["skipped"] * 6,
+            last_error="Ice mass fetch failed: 502 Server Error: Bad Gateway",
+        )
+        assert classify_source("ice_mass_antarctica", s, now=NOW)["category"] == "idle"
+
+    def test_recent_failed_attempt_among_skips_is_failing(self):
+        # But if there IS a recent active attempt in the window and it failed, the
+        # source is actively failing — a low-cadence source that just attempted
+        # and failed still gets an issue.
+        s = _src(
+            statuses=["skipped", "skipped", "failed", "skipped"],
+            last_error="Ice mass fetch failed: 502 Server Error: Bad Gateway",
+        )
+        assert classify_source("ice_mass_antarctica", s, now=NOW)["category"] == "failing"
+
     def test_degraded_mostly_working_is_not_failing(self):
         # A source succeeding the majority of recent attempts is degraded, not
         # failing — it's still producing data, so no issue.

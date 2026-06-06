@@ -123,26 +123,29 @@ def classify_source(
     now = now or datetime.now(timezone.utc)
     runs = health.get("runs") or []
     statuses = [r.get("status") for r in runs if isinstance(r, dict)]
-    active = [s for s in statuses if s in _ACTIVE_STATUSES]
     last_error = health.get("last_error") or ""
     error_class = classify_error(last_error)
     days_dark = _days_since(health.get("last_success_ts"), now)
 
-    if not active:
+    # Judge the RECENT run window (skips included), not all-time active attempts.
+    # A source whose recent runs are all cadence skips is IDLE — it isn't
+    # attempting right now, so it isn't currently failing, no matter how its last
+    # attempt (days ago, outside the window) went. Reaching back past the skips to
+    # stale attempts is what wrongly flagged idle low-cadence sources as failing.
+    recent = [s for s in statuses[-recent_window:] if s in _ACTIVE_STATUSES]
+    recent_rate: float | None
+    if not recent:
         category = "idle"
+        recent_rate = None
     else:
-        recent = active[-recent_window:]
         rate = recent.count("success") / len(recent)
+        recent_rate = rate
         if rate >= 1.0:
             category = "healthy"
         elif rate >= FAILING_RATE:
             category = "degraded"
         else:
             category = "failing"
-        recent_rate = rate
-
-    if not active:
-        recent_rate = None  # type: ignore[assignment]
 
     cause, action = _CAUSE.get(error_class, _CAUSE["unknown"])
     return {
