@@ -2,13 +2,15 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **⚠️ The grading agent has been DOWN since 2026-05-26** (the claude.ai RemoteTrigger fires but produces no artifacts; operator-gated re-auth/rebuild — see [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-06.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-06.md)). **This plan is NOT currently being auto-refined.** Note: the *source-health* sentinel shipped 2026-06-06 is a different system (it tracks data-fetch health, not voice quality).
+
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
 ## Current state
 
 | | |
 |---|---|
-| Bot commit | `0.9.8.0` (post-#165 fact-check claim-kind parser hardening; on top of #164 critic POR fix, #163 pending-queue diversity gate, #162 gpm_imerg retry; all 23 sources on triage path + evidence contract live since 0.9.0.0; bot re-enabled 2026-06-01) |
+| Bot commit | `0.9.14.0` (voice engine unchanged since 0.9.8.0's fact-check claim-kind hardening; the 0.9.9.0–0.9.14.0 work is source reliability + observability: gpm_imerg date walk-back/IPv4/fan-out-cap/walk-back-exhaustion, the daily source-health sentinel [0.9.12–0.9.13], and the dashboard external/idle tier [0.9.14.0]. all 23 sources on triage path + evidence contract live since 0.9.0.0; bot active) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + 7d TTL sweep via 0.9.6.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
 | Last cycle A-rate | **21%** (3/14 fresh drafts, 2026-05-19; first A-grades in two-bot era; 6 consecutive no-draft cycles since: May 20, 22, 23, 24, 25, 26) |
 | Resumption bar | majority A (>50%) sustained |
