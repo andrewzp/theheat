@@ -997,6 +997,11 @@ function SourcesView({ sources, stats }) {
                 {stats.degraded_count} degraded
               </span>
             )}
+            {stats?.external_count > 0 && (
+              <span style={{ color: "#fb923c", marginLeft: 8 }}>
+                {stats.external_count} external (NASA/gov)
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -1096,6 +1101,11 @@ function SourcesView({ sources, stats }) {
           background: #2a0a0a;
           color: #f87171;
           border: 1px solid #4a1a1a;
+        }
+        .badge.source-external {
+          background: #2a1a05;
+          color: #fb923c;
+          border: 1px solid #4a3015;
         }
         .badge.source-idle {
           background: #1a1a1a;
