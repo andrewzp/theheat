@@ -548,3 +548,350 @@ class TestPrecipDetection:
 
         assert event.mm_total == 55.0
         assert event.previous_record_year == 2020
+
+
+def _make_grid_bytes(values_by_index, *, group=None, shape=None):
+    """Serialize a synthetic IMERG-shaped HDF5 grid in memory.
+
+    ``values_by_index`` maps ``(t, lon_idx, lat_idx)`` tuples to precip values;
+    every other cell is 0.0. gzip keeps the all-zeros payload tiny.
+    """
+    import io as _io
+
+    import h5py
+    import numpy as np
+
+    from src.data.gpm_imerg import LAT_CELLS, LON_CELLS
+
+    if shape is None:
+        shape = (1, LON_CELLS, LAT_CELLS)
+    arr = np.zeros(shape, dtype="float32")
+    for index, value in values_by_index.items():
+        arr[index] = value
+
+    buf = _io.BytesIO()
+    with h5py.File(buf, "w") as handle:
+        target = handle.create_group(group) if group else handle
+        target.create_dataset(
+            "precipitation", data=arr, compression="gzip", compression_opts=1
+        )
+    return buf.getvalue()
+
+
+_PARIS = {"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}
+
+
+class TestGpmGridFetch:
+    def test_imerg_filename_and_relpath(self):
+        from src.data.gpm_imerg import _imerg_filename, _imerg_relpath
+
+        assert (
+            _imerg_filename("late", date(2026, 6, 5))
+            == "3B-DAY-L.MS.MRG.3IMERG.20260605-S000000-E235959.V07C.nc4"
+        )
+        assert (
+            _imerg_filename("final", date(2025, 1, 1))
+            == "3B-DAY.MS.MRG.3IMERG.20250101-S000000-E235959.V07B.nc4"
+        )
+        assert _imerg_relpath("late", date(2026, 6, 5)) == (
+            "GPM_3IMERGDL.07/2026/06/3B-DAY-L.MS.MRG.3IMERG.20260605-S000000-E235959.V07C.nc4"
+        )
+
+    def test_gpm_source_resolution(self, monkeypatch):
+        from src.data.gpm_imerg import _gpm_source
+
+        monkeypatch.delenv("THEHEAT_GPM_SOURCE", raising=False)
+        assert _gpm_source() == "opendap"
+
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "s3")
+        assert _gpm_source() == "s3"
+
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "DataPool")  # case-insensitive
+        assert _gpm_source() == "datapool"
+
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "garbage")  # unknown → legacy
+        assert _gpm_source() == "opendap"
+
+    def test_subset_grid_extracts_city_value(self):
+        from src.data.gpm_imerg import _lat_index, _lon_index, _subset_grid
+
+        lon_i, lat_i = _lon_index(2.35), _lat_index(48.85)
+        grid = _make_grid_bytes({(0, lon_i, lat_i): 42.5})
+
+        readings = _subset_grid(
+            grid, [_PARIS], resolved_date=date(2026, 6, 5), product="late"
+        )
+
+        assert len(readings) == 1
+        assert readings[0].mm_total == 42.5
+        assert readings[0].date == "2026-06-05"
+        assert readings[0].source_product == "late"
+        assert readings[0].event_id == "gpm_imerg_france_paris_2026-06-05"
+
+    def test_subset_grid_skips_fill_value(self):
+        from src.data.gpm_imerg import FILL_VALUE, _lat_index, _lon_index, _subset_grid
+
+        lon_i, lat_i = _lon_index(2.35), _lat_index(48.85)
+        grid = _make_grid_bytes({(0, lon_i, lat_i): FILL_VALUE})
+
+        readings = _subset_grid(
+            grid, [_PARIS], resolved_date=date(2026, 6, 5), product="late"
+        )
+
+        assert readings == []
+
+    def test_subset_grid_finds_precip_under_grid_group(self):
+        from src.data.gpm_imerg import _lat_index, _lon_index, _subset_grid
+
+        lon_i, lat_i = _lon_index(2.35), _lat_index(48.85)
+        grid = _make_grid_bytes({(0, lon_i, lat_i): 12.0}, group="Grid")
+
+        readings = _subset_grid(
+            grid, [_PARIS], resolved_date=date(2026, 6, 5), product="late"
+        )
+
+        assert len(readings) == 1
+        assert readings[0].mm_total == 12.0
+
+    def test_subset_grid_rejects_unexpected_shape(self):
+        import pytest
+
+        from src.data.gpm_imerg import _GridParseError, _subset_grid
+
+        grid = _make_grid_bytes({}, shape=(1, 100, 100))
+
+        with pytest.raises(_GridParseError):
+            _subset_grid(grid, [_PARIS], resolved_date=date(2026, 6, 5), product="late")
+
+    def test_walkback_steps_past_not_found(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        probed = []
+
+        def fake_fetch(source, *, target_date, product, token):
+            probed.append(target_date)
+            if target_date == date(2026, 6, 5):
+                return b"GRID"
+            raise gpm._GridNotFound("not published")
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
+
+        resolved, payload = gpm._fetch_grid_with_walkback(
+            "datapool",
+            start_date=date(2026, 6, 7),
+            product="late",
+            token="tok",
+            max_lookback=5,
+        )
+
+        assert resolved == date(2026, 6, 5)
+        assert payload == b"GRID"
+        assert probed == [date(2026, 6, 7), date(2026, 6, 6), date(2026, 6, 5)]
+
+    def test_walkback_stops_on_transient(self, monkeypatch):
+        import pytest
+
+        import src.data.gpm_imerg as gpm
+
+        probed = []
+
+        def fake_fetch(source, *, target_date, product, token):
+            probed.append(target_date)
+            raise gpm._GridTransient("5xx")
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
+
+        with pytest.raises(gpm._GridTransient):
+            gpm._fetch_grid_with_walkback(
+                "s3",
+                start_date=date(2026, 6, 7),
+                product="late",
+                token="tok",
+                max_lookback=5,
+            )
+
+        # A transient error is not a date signal — stop after the first probe.
+        assert probed == [date(2026, 6, 7)]
+
+    @responses.activate
+    def test_datapool_fetch_returns_bytes_with_bearer(self):
+        import src.data.gpm_imerg as gpm
+
+        responses.add(
+            responses.GET,
+            re.compile(
+                r"https://data\.gesdisc\.earthdata\.nasa\.gov/data/GPM_L3/"
+                r"GPM_3IMERGDL\.07/2026/06/.*\.nc4$"
+            ),
+            body=b"NC4BYTES",
+            status=200,
+        )
+
+        payload = gpm._fetch_grid_bytes_datapool(
+            target_date=date(2026, 6, 5), product="late", token="tok"
+        )
+
+        assert payload == b"NC4BYTES"
+        assert responses.calls[0].request.headers["Authorization"] == "Bearer tok"
+
+    @responses.activate
+    def test_datapool_404_is_not_found(self):
+        import pytest
+
+        import src.data.gpm_imerg as gpm
+
+        responses.add(
+            responses.GET, re.compile(r".*GPM_3IMERGDL.*"), status=404, body="missing"
+        )
+
+        with pytest.raises(gpm._GridNotFound):
+            gpm._fetch_grid_bytes_datapool(
+                target_date=date(2026, 6, 5), product="late", token="tok"
+            )
+
+    @responses.activate
+    def test_datapool_503_is_transient(self):
+        import pytest
+
+        import src.data.gpm_imerg as gpm
+
+        responses.add(
+            responses.GET, re.compile(r".*GPM_3IMERGDL.*"), status=503, body="overloaded"
+        )
+
+        with pytest.raises(gpm._GridTransient):
+            gpm._fetch_grid_bytes_datapool(
+                target_date=date(2026, 6, 5), product="late", token="tok"
+            )
+
+    def test_s3_fetch_builds_key_and_returns_bytes(self, monkeypatch):
+        from datetime import datetime, timezone
+
+        import boto3
+
+        import src.data.gpm_imerg as gpm
+        from src.data._s3credentials import S3Credentials
+
+        monkeypatch.setattr(
+            gpm,
+            "get_s3_credentials",
+            lambda token, **kw: S3Credentials(
+                "AK", "SK", "ST", datetime(2030, 1, 1, tzinfo=timezone.utc)
+            ),
+        )
+
+        captured = {}
+
+        class _Body:
+            def read(self):
+                return b"S3BYTES"
+
+        class _Client:
+            def get_object(self, Bucket, Key):
+                captured["bucket"] = Bucket
+                captured["key"] = Key
+                return {"Body": _Body()}
+
+        monkeypatch.setattr(boto3, "client", lambda *a, **kw: _Client())
+
+        payload = gpm._fetch_grid_bytes_s3(
+            target_date=date(2026, 6, 5), product="late", token="tok"
+        )
+
+        assert payload == b"S3BYTES"
+        assert captured["bucket"] == "gesdisc-cumulus-prod-protected"
+        assert captured["key"] == (
+            "GPM_L3/GPM_3IMERGDL.07/2026/06/"
+            "3B-DAY-L.MS.MRG.3IMERG.20260605-S000000-E235959.V07C.nc4"
+        )
+
+    def test_s3_access_denied_treated_as_not_found(self, monkeypatch):
+        from datetime import datetime, timezone
+
+        import boto3
+        from botocore.exceptions import ClientError
+        import pytest
+
+        import src.data.gpm_imerg as gpm
+        from src.data._s3credentials import S3Credentials
+
+        monkeypatch.setattr(
+            gpm,
+            "get_s3_credentials",
+            lambda token, **kw: S3Credentials(
+                "AK", "SK", "ST", datetime(2030, 1, 1, tzinfo=timezone.utc)
+            ),
+        )
+
+        class _Client:
+            def get_object(self, Bucket, Key):
+                raise ClientError(
+                    {
+                        "Error": {"Code": "AccessDenied"},
+                        "ResponseMetadata": {"HTTPStatusCode": 403},
+                    },
+                    "GetObject",
+                )
+
+        monkeypatch.setattr(boto3, "client", lambda *a, **kw: _Client())
+
+        # No ListBucket perm → a missing key surfaces as 403; the walk-back must
+        # treat it as "not published", not a hard error.
+        with pytest.raises(gpm._GridNotFound):
+            gpm._fetch_grid_bytes_s3(
+                target_date=date(2026, 6, 5), product="late", token="tok"
+            )
+
+    def test_source_datapool_uses_grid_path(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "datapool")
+
+        lon_i, lat_i = gpm._lon_index(2.35), gpm._lat_index(48.85)
+        monkeypatch.setattr(
+            gpm,
+            "_fetch_grid_bytes",
+            lambda *a, **kw: _make_grid_bytes({(0, lon_i, lat_i): 55.0}),
+        )
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        assert len(readings) == 1
+        assert readings[0].mm_total == 55.0
+        assert readings[0].source_product == "late"
+
+    def test_source_s3_falls_back_to_opendap_on_failure(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "s3")
+
+        def boom(*a, **kw):
+            raise gpm._GridTransient("s3 unavailable")
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", boom)
+        monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: 3.0)
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        # Grid path failed → legacy OPeNDAP per-city path delivered the reading.
+        assert len(readings) == 1
+        assert readings[0].mm_total == 3.0
+
+    def test_source_opendap_default_skips_grid_path(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.delenv("THEHEAT_GPM_SOURCE", raising=False)
+
+        def fail_if_called(*a, **kw):
+            raise AssertionError("grid path must not run for the default opendap source")
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fail_if_called)
+        monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: 9.0)
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        assert len(readings) == 1
+        assert readings[0].mm_total == 9.0
