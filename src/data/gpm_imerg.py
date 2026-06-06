@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, timedelta
 import csv
+import io
 import os
 import re
 import time
@@ -20,10 +21,22 @@ from typing import Any
 
 import requests
 
+from src.data._s3credentials import get_s3_credentials
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 LATE_OPENDAP_BASE = "https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDL.07"
 FINAL_OPENDAP_BASE = "https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDF.07"
+
+# Alternate fetch paths that download the full daily grid once and subset every
+# city locally — one request per run instead of 75 per-city OPeNDAP subsets.
+# The legacy OPeNDAP host (gpm1.gesdisc) is the one that intermittently
+# ConnectTimeouts under load; both alternates live on different hosts.
+#   - data-pool: an authenticated HTTPS GET of the .nc4 file (no AWS deps)
+#   - s3:        a direct GetObject from the GES DISC cumulus bucket
+DATAPOOL_BASE = "https://data.gesdisc.earthdata.nasa.gov/data/GPM_L3"
+S3_BUCKET = "gesdisc-cumulus-prod-protected"
+S3_PREFIX = "GPM_L3"
+S3_REGION = "us-west-2"
 
 GRID_STEP_DEGREES = 0.1
 LON_CELLS = 3600
@@ -50,6 +63,32 @@ DEFAULT_MAX_LOOKBACK_DAYS = 5
 # we only care whether the file exists (200 vs 404), not the precip value.
 _PROBE_REFERENCE_LAT = 0.0
 _PROBE_REFERENCE_LON = 0.0
+
+# Fetch source, selectable via THEHEAT_GPM_SOURCE. "opendap" is the proven
+# legacy per-city path and the default; "datapool"/"s3" download the whole grid
+# once and subset locally. An unknown/empty value degrades to "opendap" so a
+# misconfigured var can never make the source worse than today.
+DEFAULT_GPM_SOURCE = "opendap"
+_GPM_SOURCES = frozenset({"opendap", "datapool", "s3"})
+
+
+class _GridNotFound(Exception):
+    """The grid file for a candidate date is not published (404 / S3 403 /
+    NoSuchKey). Walk back to an earlier date."""
+
+
+class _GridTransient(Exception):
+    """A transient grid-fetch failure (5xx, timeout, connection, auth). Not a
+    date-availability signal — stop walking back."""
+
+
+class _GridParseError(Exception):
+    """The downloaded grid could not be opened/parsed into city readings."""
+
+
+class _GridFetchUnavailable(Exception):
+    """The grid path could not deliver readings; the caller falls back to the
+    legacy OPeNDAP per-city path so gpm is never worse than before."""
 
 
 @dataclass(frozen=True)
@@ -108,6 +147,27 @@ def fetch_daily_precip(
         if strict:
             raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
+
+    # Grid sources download the daily file once and subset locally. On any
+    # failure they raise _GridFetchUnavailable and we fall through to the legacy
+    # OPeNDAP per-city path below, so the alternate feed can never regress gpm.
+    source = _gpm_source()
+    if source in ("s3", "datapool"):
+        try:
+            return _fetch_daily_precip_grid(
+                source,
+                cities,
+                target_date=target_date,
+                product=product,
+                max_cities=max_cities,
+                token=token,
+            )
+        except _GridFetchUnavailable as exc:
+            print(
+                f"[gpm_imerg] {source} grid path unavailable ({exc}); "
+                "falling back to opendap",
+                flush=True,
+            )
 
     headers = {"Authorization": f"Bearer {token}"}
     if target_date is not None:
@@ -515,6 +575,45 @@ def _fetch_city_precip(
     return max(value, 0.0)
 
 
+def _gpm_source() -> str:
+    """Resolve the configured fetch source from THEHEAT_GPM_SOURCE.
+
+    Unknown or empty values fall back to the legacy OPeNDAP path, so a typo or a
+    half-rolled-out repo var degrades safely instead of breaking the source.
+    """
+    raw = (os.environ.get("THEHEAT_GPM_SOURCE") or "").strip().lower()
+    return raw if raw in _GPM_SOURCES else DEFAULT_GPM_SOURCE
+
+
+def _imerg_collection(product: str) -> str:
+    product_key = product.lower()
+    if product_key == "final":
+        return "GPM_3IMERGDF.07"
+    if product_key == "late":
+        return "GPM_3IMERGDL.07"
+    raise ValueError(f"unknown GPM IMERG product: {product}")
+
+
+def _imerg_filename(product: str, target_date: date) -> str:
+    """The daily IMERG .nc4 filename, shared by the OPeNDAP, data-pool, and S3
+    paths so the three can never drift on version letter or time suffix."""
+    product_key = product.lower()
+    if product_key == "final":
+        return f"3B-DAY.MS.MRG.3IMERG.{target_date:%Y%m%d}-S000000-E235959.V07B.nc4"
+    if product_key == "late":
+        return f"3B-DAY-L.MS.MRG.3IMERG.{target_date:%Y%m%d}-S000000-E235959.V07C.nc4"
+    raise ValueError(f"unknown GPM IMERG product: {product}")
+
+
+def _imerg_relpath(product: str, target_date: date) -> str:
+    """``<collection>/<YYYY>/<MM>/<filename>`` — the path segment under the
+    shared ``GPM_L3`` root used to build both S3 keys and data-pool URLs."""
+    return (
+        f"{_imerg_collection(product)}/{target_date:%Y}/{target_date:%m}/"
+        f"{_imerg_filename(product, target_date)}"
+    )
+
+
 def _ascii_subset_url(
     *,
     lat: float,
@@ -526,16 +625,11 @@ def _ascii_subset_url(
     product_key = product.lower()
     if product_key == "final":
         base = FINAL_OPENDAP_BASE
-        filename = (
-            f"3B-DAY.MS.MRG.3IMERG.{target_date:%Y%m%d}-S000000-E235959.V07B.nc4"
-        )
     elif product_key == "late":
         base = LATE_OPENDAP_BASE
-        filename = (
-            f"3B-DAY-L.MS.MRG.3IMERG.{target_date:%Y%m%d}-S000000-E235959.V07C.nc4"
-        )
     else:
         raise ValueError(f"unknown GPM IMERG product: {product}")
+    filename = _imerg_filename(product, target_date)
 
     lon_index = _lon_index(lon)
     lat_index = _lat_index(lat)
@@ -557,6 +651,248 @@ def _parse_ascii_value(text: str, variable: str = "precipitation") -> float | No
         except ValueError:
             continue
     return None
+
+
+def _fetch_daily_precip_grid(
+    source: str,
+    cities: list[Mapping[str, Any]] | None,
+    *,
+    target_date: date | None,
+    product: str,
+    max_cities: int | None,
+    token: str,
+) -> list[CityPrecipReading]:
+    """Download the daily IMERG grid once (via ``source``) and subset every
+    monitored city locally. Raises _GridFetchUnavailable on any failure so the
+    caller can fall back to the legacy OPeNDAP per-city path.
+    """
+    rows = cities if cities is not None else load_cities()
+    selected = list(rows if max_cities is None else rows[:max_cities])
+    try:
+        if target_date is not None:
+            resolved_date = target_date
+            grid_bytes = _fetch_grid_bytes(
+                source, target_date=resolved_date, product=product, token=token
+            )
+        else:
+            resolved_date, grid_bytes = _fetch_grid_with_walkback(
+                source,
+                start_date=_default_start_date(),
+                product=product,
+                token=token,
+                max_lookback=_max_lookback_days(),
+            )
+        readings = _subset_grid(
+            grid_bytes, selected, resolved_date=resolved_date, product=product
+        )
+    except (_GridNotFound, _GridTransient, _GridParseError) as exc:
+        raise _GridFetchUnavailable(str(exc)) from exc
+    if not readings:
+        raise _GridFetchUnavailable(
+            f"0 city readings parsed from {source} grid for {resolved_date.isoformat()}"
+        )
+    return readings
+
+
+def _fetch_grid_with_walkback(
+    source: str,
+    *,
+    start_date: date,
+    product: str,
+    token: str,
+    max_lookback: int,
+) -> tuple[date, bytes]:
+    """Walk back from ``start_date`` downloading the first published grid.
+
+    The Late product lags 1-2 days, so the most recent file is usually
+    yesterday's. A not-found candidate steps back; a transient error stops the
+    walk (it is not a date-availability signal) and propagates so we fall back
+    rather than masking an outage as 'no data'.
+    """
+    oldest_probed: date | None = None
+    for offset in range(max(max_lookback, 0) + 1):
+        candidate = start_date - timedelta(days=offset)
+        oldest_probed = candidate
+        try:
+            return candidate, _fetch_grid_bytes(
+                source, target_date=candidate, product=product, token=token
+            )
+        except _GridNotFound:
+            continue
+    raise _GridNotFound(
+        f"no published {source} grid within {max(max_lookback, 0) + 1} days back "
+        f"from {start_date.isoformat()}"
+        + (f" (oldest probed {oldest_probed.isoformat()})" if oldest_probed else "")
+    )
+
+
+def _fetch_grid_bytes(
+    source: str, *, target_date: date, product: str, token: str
+) -> bytes:
+    if source == "datapool":
+        return _fetch_grid_bytes_datapool(
+            target_date=target_date, product=product, token=token
+        )
+    if source == "s3":
+        return _fetch_grid_bytes_s3(
+            target_date=target_date, product=product, token=token
+        )
+    raise ValueError(f"grid fetch not supported for source: {source}")
+
+
+def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -> bytes:
+    """GET the daily .nc4 from the GES DISC data pool (authenticated HTTPS).
+
+    This host (data.gesdisc.earthdata.nasa.gov) is distinct from the overloaded
+    gpm1.gesdisc OPeNDAP host, so it escapes the per-cell subset-compute load
+    with no AWS dependency.
+    """
+    url = f"{DATAPOOL_BASE}/{_imerg_relpath(product, target_date)}"
+    timeout_s = _request_timeout_s()
+    try:
+        resp = requests.get(
+            url, headers={"Authorization": f"Bearer {token}"}, timeout=timeout_s
+        )
+    except (requests.ConnectionError, requests.Timeout) as exc:
+        raise _GridTransient(f"datapool connection error: {exc}") from exc
+    if resp.status_code == 404:
+        raise _GridNotFound(f"datapool 404 for {url}")
+    if resp.status_code in (401, 403):
+        raise _GridTransient(f"datapool auth error HTTP {resp.status_code} for {url}")
+    if resp.status_code >= 500:
+        raise _GridTransient(f"datapool HTTP {resp.status_code} for {url}")
+    try:
+        resp.raise_for_status()
+    except requests.HTTPError as exc:
+        raise _GridTransient(f"datapool HTTP error: {exc}") from exc
+    return resp.content
+
+
+def _fetch_grid_bytes_s3(*, target_date: date, product: str, token: str) -> bytes:
+    """GetObject the daily .nc4 from the GES DISC cumulus S3 bucket using
+    temporary credentials minted from the Earthdata token.
+
+    boto3 is imported lazily so a missing dependency degrades to the fallback
+    chain rather than breaking module import or the default OPeNDAP path.
+    """
+    try:
+        import boto3
+        from botocore.exceptions import BotoCoreError, ClientError
+    except ImportError as exc:  # pragma: no cover - exercised only without boto3
+        raise _GridTransient(f"boto3 not installed: {exc}") from exc
+
+    try:
+        creds = get_s3_credentials(token)
+    except (requests.RequestException, ValueError) as exc:
+        raise _GridTransient(f"s3 credential mint failed: {exc}") from exc
+
+    key = f"{S3_PREFIX}/{_imerg_relpath(product, target_date)}"
+    client = boto3.client(
+        "s3",
+        region_name=S3_REGION,
+        aws_access_key_id=creds.access_key_id,
+        aws_secret_access_key=creds.secret_access_key,
+        aws_session_token=creds.session_token,
+    )
+    try:
+        response = client.get_object(Bucket=S3_BUCKET, Key=key)
+        return bytes(response["Body"].read())
+    except ClientError as exc:
+        meta = getattr(exc, "response", {}) or {}
+        status = meta.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        code = str(meta.get("Error", {}).get("Code", ""))
+        # The temp role has no s3:ListBucket, so a missing key returns
+        # 403/AccessDenied rather than 404 — treat both as "not published".
+        if status in (403, 404) or code in {
+            "404",
+            "403",
+            "NoSuchKey",
+            "AccessDenied",
+            "NoSuchBucket",
+        }:
+            raise _GridNotFound(f"s3 {code or status} for {key}") from exc
+        raise _GridTransient(f"s3 ClientError {code or status} for {key}") from exc
+    except BotoCoreError as exc:
+        raise _GridTransient(f"s3 BotoCoreError: {exc}") from exc
+
+
+def _subset_grid(
+    grid_bytes: bytes,
+    cities: list[Mapping[str, Any]],
+    *,
+    resolved_date: date,
+    product: str,
+) -> list[CityPrecipReading]:
+    """Parse a daily IMERG grid and extract each city's precip via the same
+    lat/lon index math the OPeNDAP path uses. Fill-value cells become skips,
+    exactly as the per-city path returns None for them.
+    """
+    try:
+        import h5py
+    except ImportError as exc:  # pragma: no cover - exercised only without h5py
+        raise _GridParseError(f"h5py not installed: {exc}") from exc
+
+    try:
+        with h5py.File(io.BytesIO(grid_bytes), "r") as handle:
+            dataset = _find_precip_dataset(handle)
+            grid = dataset[...]
+    except OSError as exc:
+        raise _GridParseError(f"could not open IMERG grid: {exc}") from exc
+
+    if grid.ndim != 3 or grid.shape[1] != LON_CELLS or grid.shape[2] != LAT_CELLS:
+        raise _GridParseError(
+            f"unexpected precipitation grid shape {tuple(grid.shape)}; "
+            f"expected (_, {LON_CELLS}, {LAT_CELLS})"
+        )
+
+    date_key = resolved_date.isoformat()
+    readings: list[CityPrecipReading] = []
+    for city in cities:
+        try:
+            city_name = str(city["city"])
+            country = str(city["country"])
+            lat = float(city["lat"])
+            lon = float(city["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        value = float(grid[0, _lon_index(lon), _lat_index(lat)])
+        if value <= FILL_VALUE:
+            continue
+        readings.append(
+            CityPrecipReading(
+                city=city_name,
+                country=country,
+                lat=lat,
+                lon=lon,
+                date=date_key,
+                mm_total=max(value, 0.0),
+                source_product=product,
+                event_id=f"gpm_imerg_{_safe_key(country)}_{_safe_key(city_name)}_{date_key}",
+            )
+        )
+    return readings
+
+
+def _find_precip_dataset(handle: Any) -> Any:
+    """Locate the ``precipitation`` dataset whether the file keeps it at the root
+    or under a ``Grid`` group (IMERG HDF5 layout has varied across products)."""
+    import h5py
+
+    for path in ("precipitation", "Grid/precipitation"):
+        node = handle.get(path)
+        if isinstance(node, h5py.Dataset):
+            return node
+
+    found: list[Any] = []
+
+    def _visit(name: str, obj: Any) -> None:
+        if isinstance(obj, h5py.Dataset) and name.rsplit("/", 1)[-1] == "precipitation":
+            found.append(obj)
+
+    handle.visititems(_visit)
+    if found:
+        return found[0]
+    raise _GridParseError("no 'precipitation' dataset found in IMERG grid")
 
 
 def _lon_index(lon: float) -> int:

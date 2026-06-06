@@ -199,6 +199,12 @@ jobs:
           GPM_IMERG_TIMEOUT_S: ${{ vars.GPM_IMERG_TIMEOUT_S }}
           GPM_IMERG_RETRY_BACKOFF_S: ${{ vars.GPM_IMERG_RETRY_BACKOFF_S }}
           GPM_IMERG_MAX_LOOKBACK_DAYS: ${{ vars.GPM_IMERG_MAX_LOOKBACK_DAYS }}
+          # GPM IMERG fetch path: opendap (legacy per-city, default) | datapool
+          # (one authenticated HTTPS grid download, different host) | s3 (direct
+          # GetObject from the cumulus bucket). Both alternates escape the
+          # overloaded gpm1.gesdisc OPeNDAP host and fall back to opendap on any
+          # failure. Flip to activate: gh variable set THEHEAT_GPM_SOURCE --body datapool --repo andrewzp/theheat
+          THEHEAT_GPM_SOURCE: ${{ vars.THEHEAT_GPM_SOURCE || 'opendap' }}
           # Triage stage active: MVP infra in PR #132, coral_dhw migrated in PR #134.
           # Kill-switch default in code stays "0"; production overrides here.
           # Rollback: gh variable set THEHEAT_TRIAGE_ENABLED --body 0 --repo andrewzp/theheat

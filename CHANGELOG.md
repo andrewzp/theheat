@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.15.0] - 2026-06-06
+
+gpm IMERG can now fetch the daily grid in **one request** off a different host,
+escaping the gpm1.gesdisc OPeNDAP overload that was burning ~28-min ConnectTimeout
+runs. Built behind `THEHEAT_GPM_SOURCE` and **defaulting to the existing `opendap`
+path — zero behavior change until the operator flips the var.** On any failure the
+new paths fall back to opendap, so gpm is never worse than before.
+
+### Added
+
+- **`THEHEAT_GPM_SOURCE` fetch dispatch** in `src/data/gpm_imerg.py`:
+  `opendap` (legacy per-city subsets, default) | `datapool` (one authenticated
+  HTTPS GET of the daily `.nc4` from `data.gesdisc.earthdata.nasa.gov`) | `s3`
+  (direct `GetObject` from `gesdisc-cumulus-prod-protected`, us-west-2). The grid
+  paths download the daily file once and subset every city locally with the
+  existing `_lon_index`/`_lat_index` math — one request per run instead of 75 —
+  then fall back to opendap on any failure.
+- **`src/data/_s3credentials.py`** — mints + caches (55-min TTL) temporary AWS
+  STS credentials from the Earthdata bearer token via the GES DISC
+  `/s3credentials` endpoint.
+- `boto3` + `h5py` dependencies (lazy-imported; only the grid paths load them, so
+  the default opendap path and module import gain no new requirement).
+- 21 tests: synthetic-HDF5 subset extraction, fill-value skips, `Grid`-group
+  fallback, shape guard, date walk-back, datapool/s3 fetch + error mapping,
+  source dispatch, and the s3 → opendap fallback.
+
+### Notes
+
+- **Default is `opendap`** — merging changes nothing in production. Activate with
+  `gh variable set THEHEAT_GPM_SOURCE --body datapool --repo andrewzp/theheat`
+  (or `s3`) and watch the next cron; the sentinel + dashboard already track gpm
+  honestly. Flip back to revert instantly, no code push.
+- O1/O2/O3 (s3credentials endpoint + bearer auth, exact S3 key + `.nc4` format,
+  freshness) were resolved against NASA's CMR granule API, not guessed. The S3
+  temp role has **no `s3:ListBucket`**, so keys are constructed (sharing the
+  OPeNDAP filename builder) and probed by GetObject, treating 403/404 as "not
+  published".
+- The live S3/datapool round-trip is **not locally testable** (needs
+  `EARTHDATA_TOKEN`); first real verification is the operator flip + cron run.
+  Discovery worth noting: the data-pool host differs from the overloaded
+  gpm1.gesdisc OPeNDAP host, so **`datapool` escapes the overload with no
+  AWS/boto3/STS/egress** — likely the simpler robust fix; try it before `s3`.
+
 ## [0.9.14.0] - 2026-06-06
 
 Dashboard tells the truth now — it matches the sentinel instead of contradicting

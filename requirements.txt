@@ -3,6 +3,11 @@ atproto>=0.0.61
 google-genai>=1.0
 anthropic>=0.42
 requests>=2.31
+# GPM IMERG alternate fetch (THEHEAT_GPM_SOURCE=datapool|s3): single daily-grid
+# download + local subset. boto3 is only used by the s3 source; h5py parses the
+# .nc4 grid. Both are lazy-imported, so the default opendap path doesn't need them.
+boto3>=1.34
+h5py>=3.10
 pytest>=8.0
 pytest-mock>=3.12
 responses>=0.25
