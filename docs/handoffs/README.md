@@ -5,7 +5,8 @@ at end-of-session and orients the next session.
 
 **Most recent first:**
 
-- [2026-06-02.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-02.md) — **CURRENT.** 0.9.9.0–0.9.11.0: source-health dashboard panel fixed + deployed; source-fetch reliability sweep (gpm_imerg 404 walk-back, IPv4 force, retry routing). ⚠️ daily-plan grading routine DOWN since 05-26 (operator re-auth needed) — the #1 open thread.
+- [2026-06-06.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-06.md) — **CURRENT.** 0.9.11.1–0.9.14.0: daily source-health sentinel (per-source auto-closing GitHub issues, `ours` vs `external`) + dashboard external/idle tier; gpm_imerg fan-out cap + codex review-follow-up hardening; gpm AWS alternate-feed plan written (build deferred — gpm 0-value). ⚠️ daily-plan grading routine STILL DOWN since 05-26 (operator-gated) — the #1 open thread.
+- [2026-06-02.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-02.md) — 0.9.9.0–0.9.11.0: source-health dashboard panel fixed + deployed; source-fetch reliability sweep (gpm_imerg 404 walk-back, IPv4 force, retry routing). (Superseded by 2026-06-06.)
 - [2026-06-01.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-01.md) — 0.9.4.0–0.9.8.0 auto-fix sweep; bot re-enabled after a 12-day pause. (Superseded — it claimed the routine was healthy and C5 was unbuilt; both wrong, corrected in 2026-06-02.)
 - [2026-05-22-v2.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22-v2.md) — 0.9.1.0–0.9.3.0 dashboard automation indicators + beacon migration.
 - [2026-05-19.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-19.md) — 0.9.0.0 all-sources triage migration + evidence contract.
