@@ -17,43 +17,49 @@ const HEALTH_METRIC_TOTALS = [
 // freshly-degrading sources stop hiding behind stale successes.
 const RECENT_WINDOW = 5
 
+// Mirror of scripts/source_health_sentinel.py classify_error. An upstream error
+// (NASA/gov 5xx, timeouts, connection failures, 403/429 rate-limits) means the
+// failure is external — not our bug — and renders as "external" (amber), not the
+// red/yellow of a real defect. our_bug = code/auth/moved-endpoint we must fix.
+const OUR_BUG_RE = /\b(401|404|410)\b|Unauthorized|EARTHDATA_TOKEN|invalid token|token expired|expired token|credential|AttributeError|KeyError|TypeError|ValueError|IndexError|NameError|UnboundLocalError|ZeroDivisionError|RecursionError|JSONDecodeError|Expecting value|schema drift|missing required field|expected JSON object|could not parse|invalid literal|Not Found/i
+const UPSTREAM_RE = /\b(403|429|50\d)\b|Server Error|Bad Gateway|Service Unavailable|Gateway Time|ReadTimeout|ConnectTimeout|Timeout|timed out|ConnectionError|Connection refused|Connection reset|Max retries|Network is unreachable|Name or service not known|Temporary failure in name resolution|HTTPSConnectionPool|HTTPConnectionPool|Forbidden|Too Many Requests/i
+
+function classifyError(lastError) {
+  if (!lastError) return "none"
+  const t = String(lastError).trim()
+  if (!t || t === "-") return "none"
+  if (OUR_BUG_RE.test(t)) return "our_bug"
+  if (UPSTREAM_RE.test(t)) return "upstream"
+  return "unknown"
+}
+
 function classifyHealth(s) {
-  // No runs OR every run was a skip (e.g. drought on a non-Friday) -> idle.
-  // Skipped is a deliberate "this source isn't due today," not a failure.
+  // No runs OR no active attempts ever -> idle.
   const degradedRuns = s.degraded + s.partial_failures
   const active = s.successes + s.failures + degradedRuns
   if (s.runs === 0 || active === 0) return "idle"
 
-  const successRate = s.successes / active
+  // Recent RUN window is all cadence skips -> idle. The source isn't attempting
+  // right now, so it isn't currently failing — don't judge it on stale attempts
+  // from days ago (matches the sentinel; fixes ice_mass showing red while idle).
+  if (typeof s.recent_active === "number" && s.recent_active === 0) return "idle"
 
-  // Recent sub-window (durable source_health path only). When present it takes
-  // priority over the cumulative counters for the unhealthy/degraded decision.
-  const recentActive =
-    typeof s.recent_active === "number" ? s.recent_active : null
   const recentSuccessRate =
-    recentActive && recentActive > 0 ? s.recent_successes / recentActive : null
+    typeof s.recent_active === "number" && s.recent_active > 0
+      ? s.recent_successes / s.recent_active
+      : null
+  const rate = recentSuccessRate != null ? recentSuccessRate : s.successes / active
 
-  // Most recent run failed: unhealthy unless the recent window shows the source
-  // is mostly working (a one-off blip amid a recovering streak).
-  if (s.last_run_status === "failed" || s.last_run_status === "partial_failure") {
-    if (recentSuccessRate != null) {
-      return recentSuccessRate >= 0.5 ? "degraded" : "unhealthy"
-    }
-    return successRate < 0.5 ? "unhealthy" : "degraded"
-  }
-  if (s.last_run_status === "degraded") return "degraded"
+  // Every recent attempt succeeded and nothing was degraded -> healthy.
+  if (rate >= 1 && degradedRuns === 0) return "healthy"
 
-  // Last run succeeded (or skipped). Prefer the recent window when we have it
-  // so a stale failure storm doesn't keep a recovering source red, and a fresh
-  // run of failures still flips a long-healthy source.
-  if (recentSuccessRate != null) {
-    if (recentSuccessRate < 0.5) return "unhealthy"
-    if (recentSuccessRate < 1 || degradedRuns > 0 || successRate < 0.95) return "degraded"
-    return "healthy"
-  }
-  if (s.failures / active >= 0.5) return "unhealthy"
-  if (degradedRuns > 0 || successRate < 0.95) return "degraded"
-  return "healthy"
+  const hasFailures = s.failures > 0 || s.partial_failures > 0
+  // Hard failures caused by NASA/gov -> "external" (amber), not our red/yellow.
+  if (hasFailures && classifyError(s.last_error) === "upstream") return "external"
+  // Hard failures dominating -> unhealthy (red). Otherwise degraded (yellow):
+  // partial/degraded runs, or a recovering source whose recent rate is back up.
+  if (hasFailures && rate < 0.5) return "unhealthy"
+  return "degraded"
 }
 
 function numberOrZero(value) {
@@ -80,13 +86,13 @@ function aggregateFromSourceHealth(sourceHealth) {
     const runs = Array.isArray(health?.runs) ? health.runs : []
     const lastRun = runs.length > 0 ? runs[runs.length - 1] : null
 
-    // Recent sub-window: the last RECENT_WINDOW active attempts (runs is
-    // oldest-first per src/state.py:record_source_health). Skips are deliberate
-    // idle rows, so they must not consume the recovery/degradation window.
+    // Recent sub-window: active attempts within the last RECENT_WINDOW actual
+    // runs (runs is oldest-first per src/state.py:record_source_health). We look
+    // at the recent RUN window INCLUDING skips — if it's all skips the source is
+    // idle (not attempting now), not "failing" on stale attempts from days ago.
     let recentSuccesses = 0
     let recentActive = 0
-    for (let i = runs.length - 1; i >= 0 && recentActive < RECENT_WINDOW; i--) {
-      const r = runs[i]
+    for (const r of runs.slice(-RECENT_WINDOW)) {
       const st = r?.status
       if (st === "success") {
         recentSuccesses += 1
@@ -197,7 +203,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   const history = durableHealth
     ? []
     : (Array.isArray(state?.run_history) ? state.run_history : []).slice(0, runsLimit)
-  const order = { unhealthy: 0, degraded: 1, healthy: 2, idle: 3 }
+  const order = { unhealthy: 0, degraded: 1, external: 2, healthy: 3, idle: 4 }
   const rawSources = durableHealth
     ? aggregateFromSourceHealth(state.source_health)
     : aggregateFromRunHistory(history)
@@ -215,6 +221,7 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
         : history.length,
       unhealthy_count: sources.filter((s) => s.health === "unhealthy").length,
       degraded_count: sources.filter((s) => s.health === "degraded").length,
+      external_count: sources.filter((s) => s.health === "external").length,
       healthy_count: sources.filter((s) => s.health === "healthy").length,
       idle_count: sources.filter((s) => s.health === "idle").length,
     },

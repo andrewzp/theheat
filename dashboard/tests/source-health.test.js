@@ -117,11 +117,11 @@ test("source-health API aggregates per-source success/failure across run_history
     assert.equal(byKey.nws_alerts.avg_duration_ms, 1000)
     assert.equal(byKey.nws_alerts.max_duration_ms, 1500)
 
-    // ocean: 1 success + 2 failures over 3 runs → success_rate ~0.33, last run failed → unhealthy
+    // ocean: 1 success + 2 failures over 3 runs, last error 503 → upstream → external
     assert.equal(byKey.ocean.runs, 3)
     assert.equal(byKey.ocean.failures, 2)
     assert.equal(byKey.ocean.last_run_status, "failed")
-    assert.equal(byKey.ocean.health, "unhealthy")
+    assert.equal(byKey.ocean.health, "external")
     assert.equal(byKey.ocean.last_error, "503 Service Unavailable")
     assert.equal(byKey.ocean.last_error_at, NOW)
 
@@ -205,7 +205,8 @@ test("source-health stats counts unhealthy and degraded sources", async () => {
 
     const payload = await response.json()
     assert.equal(payload.stats.runs_analyzed, 3)
-    assert.equal(payload.stats.unhealthy_count, 1, "ocean should be unhealthy")
+    assert.equal(payload.stats.unhealthy_count, 0, "ocean's 503 is upstream → external, not unhealthy")
+    assert.equal(payload.stats.external_count, 1, "ocean should be external")
     assert.equal(payload.stats.healthy_count, 1, "nws_alerts should be healthy")
   } finally {
     globalThis.fetch = originalFetch
@@ -463,10 +464,10 @@ test("success-rate fraction uses active runs (skips excluded), not total runs", 
   )
 })
 
-test("recent health window counts active attempts, not skipped rows", () => {
-  // A cadence-gated source can intentionally skip after its last real attempt.
-  // Skips must not push that last active success out of the recency window and
-  // leave the dashboard red on stale cumulative history.
+test("a cadence source whose recent runs are all skips is idle, not red on stale history", () => {
+  // The recent RUN window (last 5) is all cadence skips → the source isn't
+  // attempting right now, so it's idle — never judged "failing" on stale attempts
+  // from days ago. (Matches the sentinel; fixes ice_mass showing red while idle.)
   const runs = [
     fail("2026-05-25T00:00:00Z"),
     ok("2026-05-26T00:00:00Z"),
@@ -483,14 +484,14 @@ test("recent health window counts active attempts, not skipped rows", () => {
   })
   const row = sources.find((s) => s.source === "cadence_source")
   assert.equal(row.last_run_status, "skipped")
-  assert.equal(row.recent_active, 2)
-  assert.equal(row.recent_successes, 1)
-  assert.equal(row.health, "degraded", "last active success should keep it out of red")
+  assert.equal(row.recent_active, 0)
+  assert.equal(row.recent_successes, 0)
+  assert.equal(row.health, "idle", "idle between cadence runs, not red on stale attempts")
 })
 
-test("a recovering source (recent runs all succeed) is degraded, not unhealthy", () => {
+test("a recovering source (recent runs all succeed) is healthy, not red", () => {
   // gpm_imerg-style: terrible 7-day cumulative (5 success / 28 failed) but the
-  // most recent runs all succeeded. A recovering source must not stay red.
+  // most recent runs all succeeded. Recency wins → it has recovered, so healthy.
   const oldFailures = Array.from({ length: 28 }, (_, i) =>
     fail(`2026-05-31T${String(i % 24).padStart(2, "0")}:30:00Z`)
   )
@@ -511,12 +512,12 @@ test("a recovering source (recent runs all succeed) is degraded, not unhealthy",
   })
   const row = sources.find((s) => s.source === "gpm_imerg")
   assert.equal(row.last_run_status, "success")
-  assert.equal(row.health, "degraded", "recent window is clean → recovering, not unhealthy")
+  assert.equal(row.health, "healthy", "recent window all clean → recovered, not red on stale failures")
 })
 
-test("last run failed but recent window recovering → degraded, not unhealthy", () => {
-  // Cumulative is bad enough to be unhealthy, but 3 of the last 5 runs
-  // succeeded — a recovering source whose latest run was a blip.
+test("last run failed with an upstream 503 → external, not unhealthy", () => {
+  // Recovering (3 of the last 5 succeeded) AND the failures are upstream (503),
+  // so it's external (amber, NASA/gov), never our red.
   const oldFailures = Array.from({ length: 25 }, (_, i) =>
     fail(`2026-05-31T${String(i % 24).padStart(2, "0")}:30:00Z`)
   )
@@ -533,7 +534,7 @@ test("last run failed but recent window recovering → degraded, not unhealthy",
   })
   const row = sources.find((s) => s.source === "recov")
   assert.equal(row.last_run_status, "failed")
-  assert.equal(row.health, "degraded")
+  assert.equal(row.health, "external", "upstream 503 → external, not our red")
 })
 
 test("last run succeeded but recent window mostly failing → unhealthy (early degradation)", () => {
@@ -556,4 +557,19 @@ test("last run succeeded but recent window mostly failing → unhealthy (early d
   const row = sources.find((s) => s.source === "degrading")
   assert.equal(row.last_run_status, "success")
   assert.equal(row.health, "unhealthy", "3 of the last 4 active runs failed → currently broken")
+})
+
+test("same failure rate: upstream cause → external (amber), our cause → unhealthy (red)", () => {
+  const failing = Array.from({ length: 5 }, (_, i) =>
+    fail(`2026-06-01T${String(i).padStart(2, "0")}:00:00Z`)
+  )
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      nasa_down: { success: 0, failed: 5, degraded: 0, skipped: 0, runs: failing, last_error: "502 Server Error: Bad Gateway" },
+      our_bug: { success: 0, failed: 5, degraded: 0, skipped: 0, runs: failing, last_error: "KeyError: 'temperature'" },
+    },
+  })
+  const byKey = Object.fromEntries(sources.map((s) => [s.source, s]))
+  assert.equal(byKey.nasa_down.health, "external", "502 is NASA → external, not our problem")
+  assert.equal(byKey.our_bug.health, "unhealthy", "KeyError is our bug → red")
 })

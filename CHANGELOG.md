@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.14.0] - 2026-06-06
+
+Dashboard tells the truth now — it matches the sentinel instead of contradicting
+it. Most red/yellow on the source-health panel was upstream NASA/gov flakiness,
+shown the same as a real bug; and idle low-cadence sources showed red on
+days-old attempts. Both fixed.
+
+### Added
+
+- Dashboard **`external` (amber) health tier.** Sources failing because of
+  NASA/gov (5xx, timeouts, connection errors, 403/429 rate-limits) render as
+  "external" — not the red/yellow of a real defect — via a `classifyError` port
+  of the sentinel's classifier. The Source Health header now shows an
+  "N external (NASA/gov)" tally, and `stats.external_count` is exposed.
+
+### Changed
+
+- `dashboard/lib/source-health.js`: classification now matches
+  `scripts/source_health_sentinel.py`. Recency is judged over the recent **run**
+  window (skips included) — a source whose recent runs are all cadence skips is
+  `idle` (not attempting → not failing), instead of being judged red on stale
+  attempts from days ago. A recovering source (recent window all clean) reads
+  `healthy`, not stuck-degraded. `degraded` status runs still classify as
+  `degraded` (partial success, not a hard failure). Sort order and tab badges
+  treat `external` as non-alarming.
+
+### Notes
+
+- The live panel that showed "2 unhealthy, 7 degraded" now reads ~0 unhealthy:
+  ice_mass → idle (has its data, PO.DAAC recovered), the 403/timeout sources →
+  external (amber, NASA/gov), gpm visible as external with its low % showing it's
+  the one struggling. Dashboard tests 46 → 47.
+
 ## [0.9.13.1] - 2026-06-06
 
 Sentinel: idle low-cadence sources are no longer flagged as failing on stale
