@@ -13,6 +13,67 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-07 — Daily corpus grading (0 fresh drafts; queue empty — TTL sweep cleared backlog)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending
+drafts** — the 13 carry-overs from May 13–18 are gone. The 7-day TTL sweep
+(`apply_pending_ttl_sweep`, 0.9.6.0, `THEHEAT_PENDING_TTL_DAYS=7`) auto-rejected all 13
+carry-overs during the June 1–6 active-bot window (oldest drafts were 20–23 days old at
+clearance). Queue is clean. This is the **first grading cycle since 2026-05-26** — the
+routine was DOWN for 12 days (CCR token failure; see BRIEFING.md ⚠️); this run marks
+the routine restoration.
+
+**Why no fresh drafts:** Bot was re-enabled 2026-06-01 after ~12 days paused. Pipeline
+has been running daily crons since, but the gist shows 0 pending as of grading time
+(2026-06-07 ~15:00 UTC). Candidate bottleneck: evidence contract gate
+(`stage="evidence_contract"`, live since 0.9.0.0) and/or score gates may be suppressing
+candidates. The 0.9.15.0 release (gpm single-request daily-grid fetch via S3, PR #185,
+2026-06-06) changes the gpm data-fetch path; precipitation candidates may be newly
+reachable but haven't reached pending yet. Operator should check suppression ledger for
+`evidence_contract` and `triage_cap` kill counts in the June 1–7 window.
+
+**Staleness review as of 2026-06-07 ~15:00 UTC:** Queue empty — no candidates to evaluate.
+
+Staleness bulk-reject: not attempted; `gh` CLI absent (**11th consecutive skip**, May 13
+→ June 7). No candidates in any case.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+
+### Patterns / operational notes
+
+1. **TTL sweep confirmed working.** The 13 carry-overs (coral DHW May 15–18, snow extreme
+   May 18, Chuuk/Bethel records May 13) aged out via the 7-day TTL sweep (0.9.6.0).
+   The May-cycle carry-over backlog is cleared. Side effect: three A-/B+ coral drafts
+   (Madagascar A-, Galapagos A-, Costa Rica Pacific A-) were auto-rejected by TTL without
+   being published. Operator should consider whether DHW signals warrant a longer TTL than
+   the 7-day default, given that reef stress accumulates on multi-week timescales.
+
+2. **Routine gap: 2026-05-26 → 2026-06-07** (12 days, ~72 missed cron cycles). No corpus
+   entries were written during this period. The routine was dark while the bot was being
+   restored and reliability hardened (0.9.11.2 → 0.9.15.0 arc). The routine now appears
+   operational.
+
+3. **No proposal evidence updates.** 0 fresh drafts → all active proposals (P5, P7, P8,
+   P_new) remain at prior evidence counts. No failure modes observable without drafts.
+
+4. **First grading cycle post-gpm-S3 migration (0.9.15.0).** The gpm source now fetches
+   all cities in one S3 request rather than one per city (PR #185, 2026-06-06). Empirical
+   confirmation of precipitation draft quality not yet possible (0 precipitation drafts in
+   queue). Watch for precipitation category candidates in the next graded cycle.
+
+### Numbers
+
+- Pending drafts in queue: **0** (queue cleared by 7-day TTL sweep; 13 carry-overs from
+  May 13–18 auto-rejected during June 1–6 active-bot window)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent: 21% on 2026-05-19)
+- Active proposals: no evidence updates (0 fresh drafts)
+- Staleness bulk-reject: not attempted; `gh` CLI absent (11th consecutive skip, May 13
+  → June 7); no candidates (empty queue)
+- Routine gap: 12 days (2026-05-26 → 2026-06-07); routine restored this cycle
+
+---
+
 ## 2026-05-26 — Daily corpus grading (0 fresh drafts; 13 carry-overs, all previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 13 pending
