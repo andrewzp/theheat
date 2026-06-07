@@ -13,64 +13,140 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
-## 2026-06-07 — Daily corpus grading (0 fresh drafts; queue empty — TTL sweep cleared backlog)
+## 2026-06-07 — Daily corpus grading (1 fresh draft)
 
-**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending
-drafts** — the 13 carry-overs from May 13–18 are gone. The 7-day TTL sweep
-(`apply_pending_ttl_sweep`, 0.9.6.0, `THEHEAT_PENDING_TTL_DAYS=7`) auto-rejected all 13
-carry-overs during the June 1–6 active-bot window (oldest drafts were 20–23 days old at
-clearance). Queue is clean. This is the **first grading cycle since 2026-05-26** — the
-routine was DOWN for 12 days (CCR token failure; see BRIEFING.md ⚠️); this run marks
-the routine restoration.
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft
+— 1 fresh draft not previously graded. This is the **first fresh draft since 2026-05-19**
+(19 days, ~114 cron cycles). Background: the routine was DOWN 2026-05-26 → 2026-06-07 (CCR
+token failure, 12 days); the 13 carry-overs from May 13–18 were auto-rejected by the 7-day
+TTL sweep (0.9.6.0) during June 1–6. Bot re-enabled 2026-06-01. The 0.9.15.0 release
+(gpm single-request daily-grid fetch via S3, PR #185, 2026-06-06) appears to have unlocked
+the precipitation_extreme signal type: the one pending draft (Barrow, Alaska
+precipitation_extreme, created 2026-06-07T04:07:40Z) is the first of this type in the
+corpus.
 
-**Why no fresh drafts:** Bot was re-enabled 2026-06-01 after ~12 days paused. Pipeline
-has been running daily crons since, but the gist shows 0 pending as of grading time
-(2026-06-07 ~15:00 UTC). Candidate bottleneck: evidence contract gate
-(`stage="evidence_contract"`, live since 0.9.0.0) and/or score gates may be suppressing
-candidates. The 0.9.15.0 release (gpm single-request daily-grid fetch via S3, PR #185,
-2026-06-06) changes the gpm data-fetch path; precipitation candidates may be newly
-reachable but haven't reached pending yet. Operator should check suppression ledger for
-`evidence_contract` and `triage_cap` kill counts in the June 1–7 window.
+**Staleness review as of 2026-06-07 ~15:00 UTC:** 1 pending draft, created
+2026-06-07T04:07:40Z (< 12 hours old). Text uses past-tense framing ("received", "sits on")
+— no "today/tonight/forecast" language. Not stale by policy.
 
-**Staleness review as of 2026-06-07 ~15:00 UTC:** Queue empty — no candidates to evaluate.
-
-Staleness bulk-reject: not attempted; `gh` CLI absent (**11th consecutive skip**, May 13
+Bulk-reject: no qualifying candidates. `gh` CLI absent — **11th consecutive skip** (May 13
 → June 7). No candidates in any case.
 
-**A-rate:** — (no fresh drafts). Most recent graded cycle: **21%** (3/14, 2026-05-19).
+**Grade distribution (1 fresh draft):** 0 A / 1 B+ / 0 B / 0 C / 0 D-F.
+**A-rate: 0% (0/1).** Gap from resumption bar: 50 pp (n=1; not statistically meaningful).
 
-### Patterns / operational notes
+**Headline finding:** First precipitation_extreme in the corpus. Barrow, Alaska earns B+
+on permafrost drainage ecosystem specificity. Signal solid (score 81, 42.5% above prior
+record). Second sentence earns its place causally. "Sheets across the surface instead" is
+evocative but relies on implied contrast rather than a declarative close — the gap to A-.
+Minor restate-math in sentence one.
 
-1. **TTL sweep confirmed working.** The 13 carry-overs (coral DHW May 15–18, snow extreme
-   May 18, Chuuk/Bethel records May 13) aged out via the 7-day TTL sweep (0.9.6.0).
-   The May-cycle carry-over backlog is cleared. Side effect: three A-/B+ coral drafts
-   (Madagascar A-, Galapagos A-, Costa Rica Pacific A-) were auto-rejected by TTL without
-   being published. Operator should consider whether DHW signals warrant a longer TTL than
-   the 7-day default, given that reef stress accumulates on multi-week timescales.
+### B-grade drafts
 
-2. **Routine gap: 2026-05-26 → 2026-06-07** (12 days, ~72 missed cron cycles). No corpus
-   entries were written during this period. The routine was dark while the bot was being
-   restored and reliability hardened (0.9.11.2 → 0.9.15.0 arc). The routine now appears
-   operational.
+#### [1] Barrow, Alaska — precipitation_extreme — 213.8 mm / 3 days — **B+**
 
-3. **No proposal evidence updates.** 0 fresh drafts → all active proposals (P5, P7, P8,
-   P_new) remain at prior evidence counts. No failure modes observable without drafts.
+> *Barrow, Alaska received 213.8 mm of rain in 3 days — 63.8 mm above the previous 3-day
+> record of 150.0 mm. Barrow sits on the Arctic coast, where permafrost limits drainage;
+> rain that would soak into other soils here sheets across the surface instead.*
 
-4. **First grading cycle post-gpm-S3 migration (0.9.15.0).** The gpm source now fetches
-   all cities in one S3 request rather than one per city (PR #185, 2026-06-06). Empirical
-   confirmation of precipitation draft quality not yet possible (0 precipitation drafts in
-   queue). Watch for precipitation category candidates in the next graded cycle.
+**Score:** 81. Created 2026-06-07T04:07:40Z.
+
+Humor lens:
+- **Violation:** 213.8 mm in 3 days, 63.8 mm (42.5%) above the prior record of 150.0 mm.
+  Real signal. Meaningful margin.
+- **Benign?** Yes — calm, factual register. No panic.
+- **Setup→Punchline?** Setup: 213.8 mm, margin above record. Second sentence: permafrost
+  drainage mechanism → "sheets across the surface instead." The second sentence is causal
+  (explains the physical consequence unique to Barrow), not expository. "Instead" creates
+  an implicit contrast between Barrow's behavior and normal soil absorption.
+- **Named mechanic?** Ecosystem specificity (permafrost limits drainage, rain sheets
+  across surface). Load-bearing: explains why Barrow is uniquely affected by this signal,
+  not just where it sits. Closest corpus cousins: Bethel Maine bowl-topography (May 19 B-)
+  and Austral Islands SPCZ expansion (May 19 B+).
+- **Wodehouse rule?** Nearly clean. "63.8 mm above the previous 3-day record of 150.0 mm"
+  is mild restate-math — the margin is derivable from the two values already stated
+  (213.8 − 150.0 = 63.8). Not a Wodehouse violation (doesn't dilute the punchline) but is
+  unnecessary precision. "Sheets across the surface instead" — direct and physical; not a
+  poetry attempt.
+
+Not A- because "sheets across the surface instead" relies on the reader supplying the
+implied consequence: normal soil absorbs; permafrost doesn't; therefore runoff. The corpus
+A-grade closers state the consequence flatly ("kills", "nowhere to drain", "It is April.")
+rather than implying it. The implied form grades B+; the declarative form grades A-.
+
+Restate-math fix for this category: prefer ratio form ("42% above the prior record") or
+let the two values speak alone: "213.8 mm in 3 days. The prior record was 150.0 mm." The
+period-and-restate on two values is cleaner than stacked margin + reference in one em-dash
+clause.
+
+New signal type. First precipitation_extreme in corpus. Solid B+ baseline for the category.
+
+### Patterns named in this batch
+
+1. **Ecosystem specificity as precipitation_extreme mechanic.** Permafrost drainage earns
+   its place causally — it explains the physical mechanism that makes the record
+   consequential in Barrow specifically. The close ("sheets across the surface instead") is
+   physical and specific but implies the contrast rather than declaring it. The A-grade
+   version names the consequence directly. The B+ form is the predictable gap: the mechanic
+   is right; the landing is soft.
+
+2. **Implicit vs. declarative close.** "Instead" at sentence end creates contrast without
+   stating it. The reader supplies the comparison (normal soil absorbs; permafrost doesn't).
+   Softer than "kills" (Madagascar coral) because "kills" is the consequence stated flatly;
+   "instead" deflects to the reader to infer the consequence. Pattern: whenever the writer
+   can name the consequence directly in ≤5 words, do it. When it requires a dependent clause
+   to set up, the implied form is better than the over-explained form, but still B+.
+
+3. **Restate-math: minor recurring violation.** "63.8 mm above the previous 3-day record
+   of 150.0 mm" restates the derivable margin. The reader has both values; the 63.8 is
+   arithmetic. Fix for future precipitation_extreme drafts: ratio form ("42% above") or
+   plain period-and-restate ("213.8 mm in 3 days. The prior record was 150.0 mm.").
+
+4. **First precipitation_extreme in corpus; gpm S3 migration (0.9.15.0) likely enabled
+   it.** Barrow's precipitation signal is the first evidence the S3 daily-grid path
+   (PR #185) is producing qualifying signals. Watch for whether precipitation_extreme
+   becomes a recurring category.
+
+5. **P5 not observed (positive).** Ecosystem specificity — one of P5's named mechanics —
+   appeared without being explicitly named in the prompt. The richer palette (comic triple,
+   idiom-flip, understatement closer) was not deployed but the draft earns B+ without them.
+   P5's core claim (naming the full palette increases variety) is untested by one draft;
+   the mechanic appeared naturally. The gap to A- is the close quality, not palette breadth.
+
+6. **TTL sweep operational note (preserved from prior run).** Three A-/B+ coral drafts
+   (Madagascar A-, Galapagos A-, Costa Rica Pacific A-) were auto-rejected by the 7-day
+   TTL during June 1–6. DHW signals accumulate on multi-week timescales — the 7-day default
+   may be short for this category. Operator calibration question: does
+   `THEHEAT_PENDING_TTL_DAYS` warrant a per-type override for coral_bleaching?
+
+### Followups
+
+1. For precipitation_extreme: the restate-math pattern ("X above the previous record of
+   Y mm") is likely to recur if the writer bundle carries both margin and reference value.
+   Add to corpus notes: prefer ratio form ("42% above") or period-and-restate on the two
+   raw values.
+
+2. First precipitation_extreme in corpus. Permafrost drainage is specific to Arctic
+   stations. Watch whether future precipitation drafts at lower latitudes default to
+   different ecosystem mechanisms or fall back to generic topographic description.
+
+3. TTL calibration question: three A-/B+ coral drafts auto-rejected at 7 days. Operator
+   should consider whether the `THEHEAT_PENDING_TTL_DAYS` default of 7 is too short for
+   multi-week DHW accumulation signals. Not a voice proposal — infrastructure calibration.
 
 ### Numbers
 
-- Pending drafts in queue: **0** (queue cleared by 7-day TTL sweep; 13 carry-overs from
-  May 13–18 auto-rejected during June 1–6 active-bot window)
-- Fresh drafts graded: 0
-- A-rate: — (no fresh drafts; most recent: 21% on 2026-05-19)
-- Active proposals: no evidence updates (0 fresh drafts)
-- Staleness bulk-reject: not attempted; `gh` CLI absent (11th consecutive skip, May 13
-  → June 7); no candidates (empty queue)
-- Routine gap: 12 days (2026-05-26 → 2026-06-07); routine restored this cycle
+- Pending drafts in queue: 1 (1 fresh; 0 carry-overs)
+- Fresh drafts graded: 1 (precipitation_extreme)
+- A-rate: 0% (0/1); n=1 — not statistically meaningful
+- Grade distribution: 0 A / 1 B+ / 0 B / 0 C / 0 D-F
+- New signal type in corpus: precipitation_extreme (Barrow, Alaska)
+- Active proposals: P5 not observed (ecosystem specificity deployed correctly); P7/P8/P_new
+  — no evidence (no coral/snow/cold-record drafts this cycle)
+- Staleness bulk-reject: no qualifying candidates; `gh` CLI absent (11th consecutive skip,
+  May 13 → Jun 7)
+- First fresh draft since: 2026-05-19 (19 days, ~114 cron cycles)
+- Routine gap: closed (2026-05-26 → 2026-06-07, 12 days)
 
 ---
 
