@@ -149,13 +149,14 @@ def fetch_daily_precip(
         return []
 
     # Grid sources download the daily file once and subset locally. On any
-    # failure they raise _GridFetchUnavailable and we fall through to the legacy
-    # OPeNDAP per-city path below, so the alternate feed can never regress gpm.
+    # failure they raise _GridFetchUnavailable and we fall through to the next
+    # configured grid source, then finally the legacy OPeNDAP per-city path, so
+    # alternate feeds can never regress gpm.
     source = _gpm_source()
-    if source in ("s3", "datapool"):
+    for grid_source in _gpm_grid_source_chain(source):
         try:
             return _fetch_daily_precip_grid(
-                source,
+                grid_source,
                 cities,
                 target_date=target_date,
                 product=product,
@@ -163,9 +164,10 @@ def fetch_daily_precip(
                 token=token,
             )
         except _GridFetchUnavailable as exc:
+            next_path = "datapool" if grid_source == "s3" else "opendap"
             print(
-                f"[gpm_imerg] {source} grid path unavailable ({exc}); "
-                "falling back to opendap",
+                f"[gpm_imerg] {grid_source} grid path unavailable ({exc}); "
+                f"falling back to {next_path}",
                 flush=True,
             )
 
@@ -583,6 +585,14 @@ def _gpm_source() -> str:
     """
     raw = (os.environ.get("THEHEAT_GPM_SOURCE") or "").strip().lower()
     return raw if raw in _GPM_SOURCES else DEFAULT_GPM_SOURCE
+
+
+def _gpm_grid_source_chain(source: str) -> tuple[str, ...]:
+    if source == "s3":
+        return ("s3", "datapool")
+    if source == "datapool":
+        return ("datapool",)
+    return ()
 
 
 def _imerg_collection(product: str) -> str:

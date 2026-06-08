@@ -879,6 +879,33 @@ class TestGpmGridFetch:
         assert len(readings) == 1
         assert readings[0].mm_total == 3.0
 
+    def test_source_s3_tries_datapool_before_opendap(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "s3")
+
+        calls = []
+        lon_i, lat_i = gpm._lon_index(2.35), gpm._lat_index(48.85)
+
+        def fake_fetch(source, *, target_date, product, token):
+            calls.append(source)
+            if source == "s3":
+                raise gpm._GridTransient("s3 unavailable")
+            return _make_grid_bytes({(0, lon_i, lat_i): 44.0})
+
+        def fail_opendap(**kw):
+            raise AssertionError("opendap should not run when datapool succeeds")
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fail_opendap)
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        assert calls == ["s3", "datapool"]
+        assert len(readings) == 1
+        assert readings[0].mm_total == 44.0
+
     def test_source_opendap_default_skips_grid_path(self, monkeypatch):
         import src.data.gpm_imerg as gpm
 

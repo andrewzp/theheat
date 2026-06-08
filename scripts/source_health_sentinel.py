@@ -23,6 +23,7 @@ Classification + the create/close PLAN are pure and unit-tested (see
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import json
 import os
@@ -40,6 +41,7 @@ FAILING_RATE = 0.5
 
 LABEL = "source-health-sentinel"
 TITLE_PREFIX = "Source down: "
+CAUSE_LABELS = frozenset({"ours", "external", "unknown"})
 
 # "skipped" is a deliberate cadence idle (e.g. "runs Mondays only") and must
 # never count as an attempt or trip an alarm.
@@ -191,21 +193,99 @@ def run_sentinel(
     }
 
 
+def _issue_labels(v: Mapping[str, Any]) -> list[str]:
+    cause = str(v.get("cause") or "unknown")
+    if cause not in CAUSE_LABELS:
+        cause = "unknown"
+    return [LABEL, cause]
+
+
+def _open_issue_number(issue: Any) -> int:
+    if isinstance(issue, Mapping):
+        return int(issue["number"])
+    return int(issue)
+
+
+def _open_issue_body(issue: Any) -> str:
+    if isinstance(issue, Mapping):
+        return str(issue.get("body") or "")
+    return ""
+
+
+def _open_issue_labels(issue: Any) -> set[str]:
+    labels = issue.get("labels") if isinstance(issue, Mapping) else []
+    names: set[str] = set()
+    for label in labels or []:
+        if isinstance(label, Mapping):
+            name = label.get("name")
+        else:
+            name = label
+        if name:
+            names.add(str(name))
+    return names
+
+
+def _normalise_failing(
+    failing: Mapping[str, Mapping[str, Any]] | set[str],
+) -> dict[str, Mapping[str, Any] | None]:
+    if isinstance(failing, Mapping):
+        return dict(failing)
+    return {source: None for source in failing}
+
+
 def plan_issue_actions(
-    failing: set[str],
-    open_issues: dict[str, int],
+    failing: Mapping[str, Mapping[str, Any]] | set[str],
+    open_issues: dict[str, Any],
 ) -> list[dict[str, Any]]:
     """Reconcile the failing set against currently-open sentinel issues.
 
     Create an issue for every failing source without one; close the issue of
     every source that has recovered (open issue but no longer failing). Sources
-    that are still failing and already have an issue are left untouched (no spam).
+    that are still failing and already have an issue are updated only if their
+    cause label or body changed, so issues don't go stale when an external outage
+    turns into an ours/auth/code failure.
     """
+    failing_map = _normalise_failing(failing)
+    failing_sources = set(failing_map)
     actions: list[dict[str, Any]] = []
-    for source in sorted(failing - set(open_issues)):
-        actions.append({"action": "create", "source": source})
-    for source in sorted(set(open_issues) - failing):
-        actions.append({"action": "close", "source": source, "number": open_issues[source]})
+    for source in sorted(failing_sources - set(open_issues)):
+        verdict = failing_map[source]
+        action = {"action": "create", "source": source}
+        if verdict is not None:
+            action["labels"] = _issue_labels(verdict)
+            action["body"] = build_issue_body(verdict)
+        actions.append(action)
+
+    for source in sorted(failing_sources & set(open_issues)):
+        verdict = failing_map[source]
+        if verdict is None:
+            continue
+        issue = open_issues[source]
+        expected_body = build_issue_body(verdict)
+        expected_labels = _issue_labels(verdict)
+        existing_labels = _open_issue_labels(issue)
+        stale_cause_labels = sorted((existing_labels & CAUSE_LABELS) - set(expected_labels))
+        labels_current = set(expected_labels).issubset(existing_labels) and not stale_cause_labels
+        body_current = _open_issue_body(issue) == expected_body
+        if labels_current and body_current:
+            continue
+        action = {
+            "action": "update",
+            "source": source,
+            "number": _open_issue_number(issue),
+            "labels": expected_labels,
+            "body": expected_body,
+        }
+        if stale_cause_labels:
+            action["remove_labels"] = stale_cause_labels
+        actions.append(action)
+
+    for source in sorted(set(open_issues) - failing_sources):
+        actions.append({
+            "action": "close",
+            "source": source,
+            "number": _open_issue_number(open_issues[source]),
+        })
     return actions
 
 
@@ -243,33 +323,53 @@ def _run_gh(args: list[str], *, check: bool = True) -> subprocess.CompletedProce
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=check)
 
 
-def _list_open_sentinel_issues() -> dict[str, int]:
+def _list_open_sentinel_issues() -> dict[str, dict[str, Any]]:
     """Map source name -> open issue number, from issues this sentinel filed."""
     try:
         out = _run_gh(
             ["issue", "list", "--label", LABEL, "--state", "open",
-             "--json", "number,title", "--limit", "200"]
+             "--json", "number,title,body,labels", "--limit", "200"]
         ).stdout
         items = json.loads(out or "[]")
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
         print(f"[sentinel] could not list issues: {exc!r}", file=sys.stderr)
         return {}
-    result: dict[str, int] = {}
+    result: dict[str, dict[str, Any]] = {}
     for it in items:
         title = it.get("title", "")
         if title.startswith(TITLE_PREFIX):
-            result[title[len(TITLE_PREFIX):].strip()] = it["number"]
+            labels = []
+            for label in it.get("labels") or []:
+                if isinstance(label, dict) and label.get("name"):
+                    labels.append(label["name"])
+            result[title[len(TITLE_PREFIX):].strip()] = {
+                "number": it["number"],
+                "body": it.get("body") or "",
+                "labels": labels,
+            }
     return result
 
 
 def _create_issue(v: dict[str, Any]) -> None:
     title = f"{TITLE_PREFIX}{v['source']}"
     body = build_issue_body(v)
-    base = ["issue", "create", "--title", title, "--label", LABEL, "--body", body]
+    base = ["issue", "create", "--title", title, "--body", body]
+    for label in _issue_labels(v):
+        base.extend(["--label", label])
     r = _run_gh([*base, "--assignee", "andrewzp"], check=False)
     if r.returncode != 0:  # assignee may be invalid in some envs — file anyway
         _run_gh(base, check=False)
     print(f"[sentinel] opened issue: {title}")
+
+
+def _update_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    for label in action.get("remove_labels") or []:
+        args.extend(["--remove-label", str(label)])
+    _run_gh(args)
+    print(f"[sentinel] updated issue #{action['number']} ({action['source']} still failing)")
 
 
 def _close_issue(number: int, source: str) -> None:
@@ -308,11 +408,19 @@ def main(argv: list[str] | None = None) -> int:
 
     _run_gh(["label", "create", LABEL, "-c", "B60205",
              "-d", "Auto-filed by the daily source-health sentinel"], check=False)
+    _run_gh(["label", "create", "ours", "-c", "D73A49",
+             "-d", "Source-health failure likely fixable in our code/auth/config"], check=False)
+    _run_gh(["label", "create", "external", "-c", "FBCA04",
+             "-d", "Source-health failure caused by upstream NASA/gov/provider outage"], check=False)
+    _run_gh(["label", "create", "unknown", "-c", "6A737D",
+             "-d", "Source-health failure cause is not classified yet"], check=False)
     failing_map = {v["source"]: v for v in report["failing"]}
     open_issues = _list_open_sentinel_issues()
-    for action in plan_issue_actions(set(failing_map), open_issues):
+    for action in plan_issue_actions(failing_map, open_issues):
         if action["action"] == "create":
             _create_issue(failing_map[action["source"]])
+        elif action["action"] == "update":
+            _update_issue(action)
         else:
             _close_issue(action["number"], action["source"])
     return 0

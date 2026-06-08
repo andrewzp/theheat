@@ -515,6 +515,36 @@ test("a recovering source (recent runs all succeed) is healthy, not red", () => 
   assert.equal(row.health, "healthy", "recent window all clean → recovered, not red on stale failures")
 })
 
+test("old degraded rows do not keep a recovered durable source yellow", () => {
+  // A single degraded row in the 7-day cumulative counter should not override
+  // five clean recent attempts. The sentinel would call this healthy; the
+  // dashboard must tell the same story.
+  const runs = [
+    { ts: "2026-06-01T00:00:00Z", status: "degraded", error: "old warning" },
+    ok("2026-06-02T00:00:00Z"),
+    ok("2026-06-03T00:00:00Z"),
+    ok("2026-06-04T00:00:00Z"),
+    ok("2026-06-05T00:00:00Z"),
+    ok("2026-06-06T00:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      river_gauges: {
+        success: 5,
+        failed: 0,
+        degraded: 1,
+        skipped: 0,
+        last_error: "old warning",
+        runs,
+      },
+    },
+  })
+  const row = sources.find((s) => s.source === "river_gauges")
+  assert.equal(row.recent_successes, 5)
+  assert.equal(row.recent_active, 5)
+  assert.equal(row.health, "healthy")
+})
+
 test("last run failed with an upstream 503 → external, not unhealthy", () => {
   // Recovering (3 of the last 5 succeeded) AND the failures are upstream (503),
   // so it's external (amber, NASA/gov), never our red.

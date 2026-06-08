@@ -2,7 +2,7 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
-> **Routine restored and grading.** First fresh draft in 19 days reached the queue 2026-06-07 (Barrow, Alaska precipitation_extreme — B+). Pipeline producing signals again post-0.9.15.0 gpm S3 migration. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system — it tracks data-fetch health, not voice quality.
+> **Routine restored and grading.** First fresh draft in 19 days reached the queue 2026-06-07 (Barrow, Alaska precipitation_extreme — B+). Pipeline producing signals again post-0.9.15.0 gpm single-request grid migration. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system — it tracks data-fetch health, not voice quality.
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
@@ -10,14 +10,14 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.15.0` (voice engine unchanged since 0.9.8.0's fact-check claim-kind hardening; 0.9.9.0–0.9.15.0 work is source reliability + observability: gpm_imerg date walk-back/IPv4/fan-out-cap/walk-back-exhaustion, daily source-health sentinel [0.9.12–0.9.13], dashboard external/idle tier [0.9.14.0], gpm single-request daily-grid fetch via S3 [0.9.15.0, PR #185, 2026-06-06]. all 23 sources on triage path + evidence contract live since 0.9.0.0; bot active since 2026-06-01) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + 7d TTL sweep via 0.9.6.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
+| Bot commit | `0.9.16.1` (voice engine unchanged since 0.9.8.0's fact-check claim-kind hardening; 0.9.9.0–0.9.16.1 work is source reliability + observability: gpm_imerg date walk-back/IPv4/fan-out-cap/walk-back-exhaustion, daily source-health sentinel [0.9.12–0.9.13; issue label/body sync tightened in 0.9.16.1], dashboard external/idle/recovery tiers [0.9.14.0/0.9.16.1], gpm single-request daily-grid fetch via datapool/s3 [0.9.15.0, PR #185, 2026-06-06], per-type pending TTL [0.9.16.0]. all 23 sources on triage path + evidence contract live since 0.9.0.0; bot active since 2026-06-01) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
 | Last cycle A-rate | **0%** (0/1 fresh draft, 2026-06-07; n=1 — not statistically meaningful; prior: 21% on 2026-05-19 [3/14, first A-grades in two-bot era]) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | **50 pp** (50% − 0%, n=1); prior measure: 29 pp (50% − 21%, 2026-05-19) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, created 2026-06-07T04:07:40Z, ~35h old as of Jun 8 run — not stale). 13 May carry-overs auto-rejected by TTL sweep (0.9.6.0) during June 1–6. Pipeline active; gpm S3 migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
+| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, created 2026-06-07T04:07:40Z, ~35h old as of Jun 8 run — not stale). 13 May fast-signal carry-overs auto-rejected by TTL sweep during June 1–6; 0.9.16.0 now gives slow coral/DHW drafts a 21d window. Pipeline active; gpm datapool migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
 
 ## Active proposals
 
