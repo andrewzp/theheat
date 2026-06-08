@@ -1,0 +1,3 @@
+# Temp-anomaly + absolute-extreme — SPLIT
+
+This plan was split per eng-review on 2026-06-08 into two separate documents. The combined plan is superseded. See [2026-06-08-absolute-extreme.md](2026-06-08-absolute-extreme.md) (Part A — active, ENG CLEARED, `manual_only` approval at launch) for the `absolute_extreme` latitude-banded detector, which ships first with zero new API calls. See [2026-06-08-reanalysis-anomaly.md](2026-06-08-reanalysis-anomaly.md) (Part B — deferred) for the `reanalysis_anomaly` country/regional-scale detector, which requires a self-built ERA5 daily climatology cache and is not yet eng-reviewed in full.
