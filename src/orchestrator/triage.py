@@ -33,10 +33,20 @@ PER_CATEGORY_TRIAGE_CAP_DEFAULT = 2
 # no more than N drafts of any one `legacy_type` may sit in pending at once.
 PENDING_TYPE_CAP_DEFAULT = 3
 # Pending-queue TTL — drafts older than this auto-reject so the queue self-
-# cleans rather than accumulating stale signals indefinitely. 7 days matches
-# the longest credible "still current" window for the slow continuous sources
-# (DHW), comfortably catches the fast point-in-time signals.
+# cleans rather than accumulating stale signals indefinitely. The default is
+# the window for FAST point-in-time signals (a single day's record), where
+# posting weeks late would falsely imply recency.
 PENDING_TTL_DAYS_DEFAULT = 7
+# Slow continuous signals (coral/DHW) stay editorially current for the duration
+# of the heat-stress event — commonly weeks. A flat 7-day TTL was discarding
+# still-valid coral drafts (it swept 3 good ones while the grading routine was
+# down for 12 days in May 2026), so these types get a longer window. The
+# per-type pending cap (PENDING_TYPE_CAP_DEFAULT) still bounds the queue, so the
+# longer window can't reintroduce a monoculture pile-up. Earlier revisions set a
+# flat 7d on the (wrong) assumption it matched the DHW window; the grading
+# corpus showed it doesn't.
+SLOW_PENDING_TYPES = frozenset({"coral_bleaching"})
+PENDING_TTL_DAYS_SLOW_DEFAULT = 21
 
 
 def _per_category_cap() -> int:
@@ -69,6 +79,24 @@ def _pending_ttl_days() -> int:
         return PENDING_TTL_DAYS_DEFAULT
 
 
+def _pending_ttl_days_slow() -> int:
+    """TTL (in days) for slow continuous signals; env-tunable, default 21."""
+    raw = os.environ.get("THEHEAT_PENDING_TTL_DAYS_SLOW", "")
+    try:
+        v = int(raw) if raw else PENDING_TTL_DAYS_SLOW_DEFAULT
+        return max(v, 1)
+    except (TypeError, ValueError):
+        return PENDING_TTL_DAYS_SLOW_DEFAULT
+
+
+def _pending_ttl_days_for(draft_type: str) -> int:
+    """Per-type TTL: slow continuous signals (coral/DHW) get the longer window,
+    every other type the default. Keyed on the draft's ``type`` field."""
+    if draft_type in SLOW_PENDING_TYPES:
+        return _pending_ttl_days_slow()
+    return _pending_ttl_days()
+
+
 def _pending_count_for_type(bot_state: Any, draft_type: str) -> int:
     """Count drafts with status='pending' and matching legacy_type."""
     drafts = bot_state.get("drafts", []) or []
@@ -99,10 +127,6 @@ def apply_pending_ttl_sweep(
     """
     if now is None:
         now = datetime.now(UTC)
-    ttl_days = _pending_ttl_days()
-    cutoff_iso = (
-        (now - timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z")
-    )
     now_iso = now.isoformat().replace("+00:00", "Z")
     drafts = bot_state.get("drafts", []) or []
     rejected_count = 0
@@ -114,6 +138,10 @@ def apply_pending_ttl_sweep(
         created_at = d.get("created_at")
         if not isinstance(created_at, str) or not created_at:
             continue
+        # Per-type TTL: slow continuous signals (coral/DHW) get a longer window
+        # than fast point-in-time records, so the cutoff is computed per draft.
+        ttl_days = _pending_ttl_days_for(d.get("type") or "")
+        cutoff_iso = (now - timedelta(days=ttl_days)).isoformat().replace("+00:00", "Z")
         # ISO-8601 strings (with trailing Z) sort lexicographically =
         # chronologically. Safer than datetime parsing — no failure mode
         # if the field has unexpected formatting.

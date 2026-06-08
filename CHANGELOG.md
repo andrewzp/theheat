@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.16.0] - 2026-06-08
+
+The pending-queue TTL is now **per signal type**. A flat 7-day TTL was discarding
+still-valid coral/DHW drafts — a bleaching event stays editorially current for
+*weeks*, but the queue swept its drafts at 7 days (it lost 3 good coral drafts
+while the grading routine was down in May). Slow continuous signals now get a
+longer window; fast point-in-time records keep the short one.
+
+### Changed
+
+- **`apply_pending_ttl_sweep` computes the TTL per draft `type`.** Slow continuous
+  signals (`SLOW_PENDING_TYPES` = `coral_bleaching`) use
+  `PENDING_TTL_DAYS_SLOW_DEFAULT` (21d, env `THEHEAT_PENDING_TTL_DAYS_SLOW`); every
+  other type keeps the 7-day default (env `THEHEAT_PENDING_TTL_DAYS`). Posting a
+  day's temperature record weeks late would falsely imply recency, so fast signals
+  stay short — but a coral bleaching alert is current for the duration of the
+  heat-stress event, so its drafts shouldn't be swept at 7 days. The per-type
+  pending cap still bounds the queue, so the longer window can't reintroduce a
+  monoculture pile-up.
+
+### Notes
+
+- **Behavior change:** coral drafts now survive 21 days in pending (was 7). Tune
+  the window with `gh variable set THEHEAT_PENDING_TTL_DAYS_SLOW --body N --repo andrewzp/theheat`
+  (no deploy). Surfaced by the daily grading routine, which flagged that the 7-day
+  sweep had discarded 3 good A- coral drafts during the May routine outage.
+- +2 tests (per-type slow TTL + slow-TTL env override). pytest 1415 pass.
+
 ## [0.9.15.0] - 2026-06-06
 
 gpm IMERG can now fetch the daily grid in **one request** off a different host,

@@ -211,7 +211,11 @@ jobs:
           THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
           # Optional repo-variable knobs for pending-queue diversity and TTL.
           THEHEAT_PENDING_TYPE_CAP: ${{ vars.THEHEAT_PENDING_TYPE_CAP }}
+          # Default TTL = fast point-in-time signals (7d). Slow continuous
+          # signals (coral/DHW) use THEHEAT_PENDING_TTL_DAYS_SLOW (21d) so a
+          # weeks-long bleaching event's drafts aren't discarded as "stale".
           THEHEAT_PENDING_TTL_DAYS: ${{ vars.THEHEAT_PENDING_TTL_DAYS }}
+          THEHEAT_PENDING_TTL_DAYS_SLOW: ${{ vars.THEHEAT_PENDING_TTL_DAYS_SLOW }}
           # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
           # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.
           THEHEAT_SIGNALS_PROVIDER: ghcn
