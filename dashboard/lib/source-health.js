@@ -50,8 +50,11 @@ function classifyHealth(s) {
       : null
   const rate = recentSuccessRate != null ? recentSuccessRate : s.successes / active
 
-  // Every recent attempt succeeded and nothing was degraded -> healthy.
-  if (rate >= 1 && degradedRuns === 0) return "healthy"
+  // If we have a recent active window and every recent attempt succeeded, the
+  // source recovered even if the 7-day cumulative counters still contain an old
+  // degraded/failed row. Without a recent window (run_history fallback), keep the
+  // cumulative guard.
+  if (rate >= 1 && (recentSuccessRate != null || degradedRuns === 0)) return "healthy"
 
   const hasFailures = s.failures > 0 || s.partial_failures > 0
   // Hard failures caused by NASA/gov -> "external" (amber), not our red/yellow.

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.16.1] - 2026-06-08
+
+Review follow-up release. No editorial behavior change; this tightens the
+source-health reconciliation loop and the new GPM grid fallback path, and brings
+the current-state docs up to the 0.9.16.x reality.
+
+### Fixed
+
+- **Source-health sentinel issues now stay current.** Creates and updates carry
+  the sentinel label plus the current cause label (`ours`, `external`, or
+  `unknown`), and existing open issues are edited when the generated body or
+  cause label changes. Recovered issues still auto-close as before.
+- **Dashboard source-health recovery classification matches the sentinel.** If a
+  durable source has a recent active window and every recent attempt succeeded,
+  it is `healthy` even when the older 7-day cumulative counters still contain an
+  old degraded/failed row.
+- **`THEHEAT_GPM_SOURCE=s3` falls back to `datapool` before OPeNDAP.** S3 and
+  datapool are distinct alternate hosts; an S3/STS/GetObject failure should not
+  skip the simpler authenticated HTTPS grid fetch.
+
+### Notes
+
+- +3 regression tests: sentinel issue label/body reconciliation, durable
+  source-health recovery, and s3 -> datapool -> opendap fallback ordering.
+- Verification: pytest 1418 passed / 22 voice-replay deselected, dashboard 48/48,
+  ruff targeted clean, mypy clean across 92 source files, `git diff --check` clean.
+
 ## [0.9.16.0] - 2026-06-08
 
 The pending-queue TTL is now **per signal type**. A flat 7-day TTL was discarding

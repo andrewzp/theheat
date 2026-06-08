@@ -12,6 +12,8 @@ view of what is currently broken.
 from datetime import datetime, timezone
 
 from scripts.source_health_sentinel import (
+    LABEL,
+    build_issue_body,
     classify_error,
     classify_source,
     plan_issue_actions,
@@ -32,6 +34,20 @@ def _src(*, statuses, last_error="", last_success_ts="2026-06-04T17:00:00Z"):
         "runs": runs,
         "last_error": last_error,
         "last_success_ts": last_success_ts,
+    }
+
+
+def _verdict(source, *, cause="external", error_class="upstream", last_error="503"):
+    return {
+        "source": source,
+        "category": "failing",
+        "cause": cause,
+        "suggested_action": "do the thing",
+        "error_class": error_class,
+        "last_error": last_error,
+        "last_success_ts": "2026-06-04T17:00:00Z",
+        "days_since_success": 0.0,
+        "recent_success_rate": 0.0,
     }
 
 
@@ -205,3 +221,44 @@ class TestPlanIssueActions:
 
     def test_nothing_to_do_when_aligned(self):
         assert plan_issue_actions({"a"}, {"a": 1}) == []
+
+    def test_create_action_carries_current_cause_label_and_body(self):
+        failing = {"gpm_imerg": _verdict("gpm_imerg", cause="external")}
+
+        actions = plan_issue_actions(failing, {})
+
+        assert actions == [{
+            "action": "create",
+            "source": "gpm_imerg",
+            "labels": [LABEL, "external"],
+            "body": build_issue_body(failing["gpm_imerg"]),
+        }]
+
+    def test_existing_issue_updates_when_cause_or_body_changes(self):
+        current = _verdict(
+            "gpm_imerg",
+            cause="ours",
+            error_class="our_bug",
+            last_error="KeyError: 'precipitation'",
+        )
+        stale = _verdict("gpm_imerg", cause="external", last_error="503")
+
+        actions = plan_issue_actions(
+            {"gpm_imerg": current},
+            {
+                "gpm_imerg": {
+                    "number": 42,
+                    "labels": [LABEL, "external"],
+                    "body": build_issue_body(stale),
+                }
+            },
+        )
+
+        assert actions == [{
+            "action": "update",
+            "source": "gpm_imerg",
+            "number": 42,
+            "labels": [LABEL, "ours"],
+            "remove_labels": ["external"],
+            "body": build_issue_body(current),
+        }]
