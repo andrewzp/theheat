@@ -13,6 +13,43 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-08 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft
+— carry-over from Jun 7 (Barrow Alaska precipitation_extreme, grade on record: B+). No
+new drafts since 2026-06-07T04:07:40Z. Not re-grading; grade stands from Jun 7 entry.
+
+**Staleness review as of 2026-06-08 ~15:00 UTC:** Draft created 2026-06-07T04:07:40Z,
+~35h old. Past-tense framing ("received", "sits on"), no "today/tonight/forecast" language.
+Under 48h threshold and no real-time-baked content — not a staleness candidate.
+Bulk-reject: 0 candidates. `gh` CLI absent — **12th consecutive skip** (May 13 → Jun 8).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
+
+### Carry-over inventory (not re-graded; grade on record)
+
+| # | Draft | Type | Created | Grade |
+|---|---|---|---|---|
+| [1] | Barrow, Alaska — 213.8 mm / 3-day precipitation record | precipitation_extreme | Jun 7T04:07Z | B+ |
+
+### Patterns / operational notes
+
+1. **No fresh drafts.** 1st carry-over-only cycle since Jun 7's fresh-draft cycle. Queue
+   static since Jun 7T04:07Z (~35h). Normal gap between cron-cycle signal detections.
+
+2. **No active proposal evidence updates.** No fresh drafts = no failure-mode observations.
+   P5/P7/P8/P_new all at last-known counts.
+
+### Numbers
+
+- Pending drafts in queue: 1 (0 fresh; 1 carry-over from Jun 7)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-07)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (12th consecutive skip)
+
+---
+
 ## 2026-06-07 — Daily corpus grading (1 fresh draft)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft

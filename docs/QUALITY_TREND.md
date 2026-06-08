@@ -32,6 +32,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-25 | 0 | — | — | — | — | **—** | — | No fresh drafts. 13 carry-overs (same 13 as May 24). 5th consecutive no-fresh-draft cycle. Queue static since 2026-05-18T15:52Z (7 days, ~42 cron cycles). Evidence contract gate (`stage="evidence_contract"`, 0.9.0.0) remains the most likely suppression bottleneck — operator should verify kill count in suppression ledger before concluding signal drought. Coral drafts 7–10 days old; NOAA CRW DHW updated daily; operator must verify freshness before publishing. `gh` CLI absent (9th consecutive staleness-skip, May 13→May 25). No proposal evidence updates. |
 | 2026-05-26 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 13 carry-overs (same queue as May 25). **6th consecutive no-fresh-draft cycle**; queue static since May 18T15:52Z (8 days, ~48 cron cycles). No bulk-reject candidates by policy; `gh` CLI absent (10th consecutive skip). Coral drafts now 8–11 days old; operator must verify NOAA CRW DHW values before publishing. Evidence contract gate most likely suppression bottleneck — operator should check `evidence_contract` kill counts in suppression ledger for May 22–26. No proposal evidence updates. |
 | 2026-06-07 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | First fresh draft in 19 days. Barrow, Alaska precipitation_extreme (213.8 mm/3d, 42.5% above record): B+ (permafrost drainage ecosystem specificity; "sheets across the surface instead" — implied contrast, soft close vs. A-grade declaratives). Restate-math minor violation (63.8 mm above the record of 150.0 mm). n=1; not statistically meaningful. 0.9.15.0 gpm S3 feed appears to have unlocked precipitation_extreme type. TTL sweep cleared 13 carry-overs including 3 A-/B+ coral drafts. P5 not observed (ecosystem specificity deployed naturally). |
+| 2026-06-08 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Barrow Alaska precipitation_extreme, B+ from Jun 7 — not re-graded). Queue static since Jun 7T04:07Z (~35h). No proposal evidence updates. Staleness check: draft ~35h old, no real-time-baked language — clear. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -41,6 +42,14 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-08 — Staleness bulk-reject: 0 candidates; gh CLI absent (12th consecutive skip)
+
+**Status:** 1 pending draft reviewed. Draft [1] (Barrow Alaska precipitation_extreme,
+created 2026-06-07T04:07:40Z) is ~35h old — under 48h threshold — and contains no
+real-time-baked language (past-tense "received," no "today" or forecast anchors). Not
+a staleness candidate. `gh` CLI absent in remote execution environment; 12th consecutive
+skip (May 13 → Jun 8). No operator action needed.
 
 ### 2026-05-24 — Staleness bulk-reject: no qualifying candidates; gh CLI absent (8th consecutive skip)
 

@@ -17,7 +17,7 @@ Living plan for closing the gap between the bot's current voice quality and the 
 | Gap | **50 pp** (50% − 0%, n=1); prior measure: 29 pp (50% − 21%, 2026-05-19) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, 2026-06-07T04:07:40Z). 13 carry-overs from May 13–18 auto-rejected by TTL sweep (0.9.6.0) during June 1–6. Pipeline active; gpm S3 migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
+| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, created 2026-06-07T04:07:40Z, ~35h old as of Jun 8 run — not stale). 13 May carry-overs auto-rejected by TTL sweep (0.9.6.0) during June 1–6. Pipeline active; gpm S3 migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
 
 ## Active proposals
 
