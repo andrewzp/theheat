@@ -658,15 +658,16 @@ class TestPendingTtlSweep:
         now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
         bot_state = _fresh_state()
         bot_state["drafts"] = [
+            # Fast point-in-time types use the 7-day default TTL.
             {
                 "id": "old1",
-                "type": "coral_bleaching",
+                "type": "monthly_high",
                 "status": "pending",
                 "created_at": (now - timedelta(days=13)).isoformat().replace("+00:00", "Z"),
             },
             {
                 "id": "old2",
-                "type": "coral_bleaching",
+                "type": "monthly_high",
                 "status": "pending",
                 "created_at": (now - timedelta(days=8)).isoformat().replace("+00:00", "Z"),
             },
@@ -775,3 +776,74 @@ class TestPendingTtlSweep:
         assert statuses["d_2d_old"] == "pending"
         rejected = next(d for d in bot_state["drafts"] if d["id"] == "d_4d_old")
         assert rejected["rejected_reason"] == "staleness_ttl_3d"
+
+    def test_slow_types_get_longer_ttl(self, monkeypatch):
+        """Coral/DHW drafts stay editorially current for weeks, so they use the
+        longer slow TTL (21d) — not the 7-day default that swept good coral
+        drafts during the May 2026 routine outage. Fast types keep the default.
+        """
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS_SLOW", raising=False)
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            # coral within the 21d slow window — kept (would have been swept @7d)
+            {
+                "id": "coral_10d",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=10)).isoformat().replace("+00:00", "Z"),
+            },
+            # coral past the 21d slow window — swept
+            {
+                "id": "coral_25d",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=25)).isoformat().replace("+00:00", "Z"),
+            },
+            # fast type past the 7d default — swept
+            {
+                "id": "fast_10d",
+                "type": "monthly_high",
+                "status": "pending",
+                "created_at": (now - timedelta(days=10)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        statuses = {d["id"]: d["status"] for d in bot_state["drafts"]}
+        assert statuses["coral_10d"] == "pending"
+        assert statuses["coral_25d"] == "rejected"
+        assert statuses["fast_10d"] == "rejected"
+        assert n == 2
+        coral_swept = next(d for d in bot_state["drafts"] if d["id"] == "coral_25d")
+        assert coral_swept["rejected_reason"] == "staleness_ttl_21d"
+
+    def test_slow_ttl_respects_env_override(self, monkeypatch):
+        """THEHEAT_PENDING_TTL_DAYS_SLOW tunes the slow window independently."""
+        monkeypatch.delenv("THEHEAT_PENDING_TTL_DAYS", raising=False)
+        monkeypatch.setenv("THEHEAT_PENDING_TTL_DAYS_SLOW", "30")
+        from datetime import UTC, datetime, timedelta
+
+        from src.orchestrator.triage import apply_pending_ttl_sweep
+
+        now = datetime(2026, 5, 27, 18, 30, tzinfo=UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "coral_25d",
+                "type": "coral_bleaching",
+                "status": "pending",
+                "created_at": (now - timedelta(days=25)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+
+        n = apply_pending_ttl_sweep(bot_state, now=now)
+
+        assert n == 0  # 25d < 30d override → kept
+        assert bot_state["drafts"][0]["status"] == "pending"
