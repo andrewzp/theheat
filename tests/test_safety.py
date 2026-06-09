@@ -8,6 +8,36 @@ from src.voice.safety import (
 )
 
 
+class TestRegionalAnomalySafetyGate:
+    """Layer 4 backstop: bundle-blind regexes for bare-region / area-weighted
+    aggregate framings (a regional-anomaly misrepresentation). They must NOT
+    false-positive on legitimate single-city tweets."""
+
+    def test_national_average_temperature_rejected(self):
+        passed, reason = check_regex("France's national average temperature ran 7C above normal.")
+        assert not passed
+        assert "Banned pattern" in reason
+
+    def test_nationwide_average_rejected(self):
+        passed, reason = check_regex("The Sahel posted a nationwide average 8C above its norm.")
+        assert not passed
+
+    def test_area_weighted_rejected(self):
+        passed, reason = check_regex("An area-weighted mean of 7C above normal across the country.")
+        assert not passed
+
+    def test_honest_sampled_cities_form_passes(self):
+        passed, reason = check_regex(
+            "6 sampled cities in France ran 7C above their daily normal."
+        )
+        assert passed, reason
+
+    def test_legit_single_city_average_not_false_flagged(self):
+        # A normal single-city tweet using "averaged" must still pass.
+        passed, reason = check_regex("Phoenix averaged 46C this week, its hottest stretch on record.")
+        assert passed, reason
+
+
 class TestRegexGate:
     def test_clean_tweet_passes(self):
         passed, reason = check_regex("Phoenix hit 119F today. New record.")

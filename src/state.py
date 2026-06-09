@@ -136,6 +136,10 @@ DEFAULT_STATE: BotState = {
     "sst_anom_last_tier": {},
     # Running count of regional SST anomaly tweets per reading calendar year.
     "sst_anom_annual_count": {},
+    # Reanalysis regional-anomaly onset guard. Keyed by region slug; value is the
+    # window_start ISO date of the last attempted event, so a sustained spell does
+    # not re-enter the writer pipeline every day. Written at attempt time (§D).
+    "reganom_last_fired": {},  # {region_slug: "YYYY-MM-DD"}
     # Per-storm NHC/JTWC Saffir-Simpson tier dedup. Keys include source
     # (e.g. "nhc:al012026") so basin identifiers cannot collide.
     "cyclone_tiers": {},
@@ -788,6 +792,17 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
             int(base.get("sst_anom_annual_count", {}).get(year, 0)),
             int(next_state.get("sst_anom_annual_count", {}).get(year, 0)),
         )
+    # Reanalysis regional-anomaly onset guard: keep the latest window_start per
+    # region (lexical max == chronological for bare YYYY-MM-DD dates), so a
+    # concurrent gist/sqlite merge never re-opens a suppressed ongoing event.
+    merged["reganom_last_fired"] = {}
+    for region in set(
+        list(base.get("reganom_last_fired", {}).keys())
+        + list(next_state.get("reganom_last_fired", {}).keys())
+    ):
+        a_fired = base.get("reganom_last_fired", {}).get(region, "")
+        b_fired = next_state.get("reganom_last_fired", {}).get(region, "")
+        merged["reganom_last_fired"][region] = a_fired if a_fired >= b_fired else b_fired
     # Cyclone tier dedup follows the same monotonic semantics: never lose a
     # higher category already observed by a concurrent run.
     merged["cyclone_tiers"] = {}
@@ -1535,6 +1550,19 @@ def increment_sst_anom_annual_count(state: BotState, reading_date: str) -> BotSt
     year = reading_date[:4]
     counts = state.setdefault("sst_anom_annual_count", {})
     counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def set_reganom_last_fired(state: BotState, region_slug: str, window_start: str) -> BotState:
+    """Record the onset guard for a reanalysis regional-anomaly region (§D).
+
+    Monotonic max over the ISO window_start, so an older window never clobbers a
+    newer one (and a re-attempt of the same ongoing spell is a no-op). Written at
+    attempt time in the runner so killed drafts still suppress same-window re-tries.
+    """
+    fired = state.setdefault("reganom_last_fired", {})
+    if window_start > fired.get(region_slug, ""):
+        fired[region_slug] = window_start
     return state
 
 

@@ -126,6 +126,17 @@ class TestApprovalPolicy:
             assert policy.mode == "manual_only"
             assert policy.can_auto_approve is False
 
+    def test_regional_anomaly_requires_manual_review(self):
+        # Without this branch it would default to auto-approve — the opposite of intent.
+        policy = recommend_approval_policy(
+            "regional_anomaly",
+            signal_total=88,
+            candidate_score={"total": 82},
+        )
+        assert policy.mode == "manual_only"
+        assert policy.can_auto_approve is False
+        assert policy.key == "manual_only"  # joins the shared human-impact set
+
 
 class TestIceMassApproval:
     def test_ice_mass_record_policy(self):

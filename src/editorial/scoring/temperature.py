@@ -246,6 +246,37 @@ def score_absolute_extreme(
         reasons=reasons,
     )
 
+def score_regional_anomaly(
+    mean_anomaly_c: float,
+    sustained_days: int,
+    cities_sampled: int,
+) -> EditorialScore:
+    """Score a sustained regional anomaly (a point index over N sampled cities).
+
+    The detection gate (+6C absolute AND >=2sigma AND >=50% point support over
+    >=3 consecutive complete days) is the noise filter; this score is for ranking.
+    Calibration: minimal 6C/3d/3-city -> 78 (clears 76 by +2); elite 8C/7d/6-city -> 83.
+    """
+    margin = mean_anomaly_c - 6.0
+    reasons = [
+        f"{mean_anomaly_c:.1f}C sampled-city mean anomaly above ERA5 daily normal",
+        f"sustained {sustained_days} consecutive days across {cities_sampled} sampled cities",
+        "point index, not an area-weighted national mean",
+    ]
+    if margin >= 2:
+        reasons.append(f"{margin:.1f}C over the +6C regional-anomaly floor")
+    return _build_score(
+        "regional_anomaly",
+        severity=72 + min(margin, 8) * 3 + min(sustained_days - 3, 7) * 2,
+        novelty=84,
+        timeliness=90,
+        confidence=72 + min(cities_sampled, 8) * 1.5,
+        shareability=80 + min(margin, 6) * 2,
+        sensitivity=10,
+        threshold=get_threshold("regional_anomaly"),
+        reasons=reasons,
+    )
+
 def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> EditorialScore:
     """Multiple cities broke records on the same day — a pattern signal."""
     reasons = [

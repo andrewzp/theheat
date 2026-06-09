@@ -15,6 +15,31 @@ from src.two_bot.types import StoryBundle
 from src.voice.safety import run_safety_pipeline
 
 
+def _forbidden_claim_violation(tweet: str, bundle: StoryBundle) -> str | None:
+    """§F deterministic honesty gate (Layer 0) for regional-anomaly drafts.
+
+    For ``signal_kind == "regional_anomaly"`` bundles, reject any draft whose text
+    contains a ``historical_context.forbidden_claims`` substring (case-insensitive).
+    The forbidden list is curated honest-form-safe (see build_regional_anomaly_bundle),
+    so this catches bare-region / national / area-weighted framings without
+    false-killing the honest "N sampled cities in {region}" form. This is the
+    LOAD-BEARING honesty layer; the writer prompt + safety regex are backstops.
+    Returns the matched phrase, or None when clean / not a regional-anomaly bundle.
+    """
+    if bundle.signal_kind != "regional_anomaly":
+        return None
+    # Normalize Unicode curly apostrophes to straight before matching: the writer
+    # is Gemini, which routinely emits U+2019, and the possessive forbidden_claims
+    # ("{region}'s average") use a straight apostrophe — so a curly-apostrophe
+    # draft would otherwise EVADE this load-bearing gate. (safety.py:137 learned
+    # the same lesson for date phrasing.)
+    low = tweet.lower().replace("’", "'").replace("‘", "'")
+    for phrase in bundle.historical_context.get("forbidden_claims", []):
+        if phrase and phrase.lower() in low:
+            return phrase
+    return None
+
+
 def _critic_enabled() -> bool:
     """Operations kill-switch for the critic stage.
 
@@ -118,6 +143,19 @@ def generate_draft(
                 f"draft: {safety_reason}"
             )
             _record_kill("safety", safety_reason or "unknown")
+            return None
+
+        # §F honesty gate (Layer 0): deterministic, bundle-aware, runs BEFORE
+        # fact-check. For regional-anomaly drafts a bare-region / national /
+        # area-weighted aggregate is a factual misrepresentation, not a style
+        # nit — kill it deterministically rather than trusting the LLM checker.
+        forbidden_hit = _forbidden_claim_violation(writer_result.tweet, bundle)
+        if forbidden_hit is not None:
+            print(
+                f"[two_bot.pipeline] Honesty gate rejected {bundle.signal_kind} "
+                f"draft: forbidden claim {forbidden_hit!r}"
+            )
+            _record_kill("honesty_gate", f"forbidden claim: {forbidden_hit!r}")
             return None
 
         fact_result = fact_check.fact_check(
@@ -248,6 +286,14 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
             print(
                 f"[two_bot.pipeline] Shadow safety rejected "
                 f"{bundle.signal_kind} draft: {safety_reason}"
+            )
+            return None
+
+        forbidden_hit = _forbidden_claim_violation(writer_result.tweet, bundle)
+        if forbidden_hit is not None:
+            print(
+                f"[two_bot.pipeline] Shadow honesty gate rejected "
+                f"{bundle.signal_kind} draft: forbidden claim {forbidden_hit!r}"
             )
             return None
 

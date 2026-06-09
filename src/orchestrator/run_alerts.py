@@ -26,6 +26,7 @@ from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 from src.orchestrator.sources.air_quality import run_air_quality
 from src.orchestrator.sources.ozone_hole import run_ozone_hole
 from src.orchestrator.sources.open_meteo import run_extreme_signals
+from src.orchestrator.sources.reanalysis_anomaly import run_reanalysis_anomaly
 from src.orchestrator.sources.river_gauges import run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
 from src.orchestrator.sources.synthesis import run_synthesis
@@ -125,6 +126,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_gpm_imerg(bot_state, current_run, cities)
     drafted += run_nsidc_snow(bot_state, current_run)
     drafted += run_ozone_hole(bot_state, current_run)
+    drafted += run_reanalysis_anomaly(bot_state, current_run)
     drafted += run_synthesis(bot_state, current_run)
 
     # Drain the triage queue: rank + cap survivors, then call writer for each.

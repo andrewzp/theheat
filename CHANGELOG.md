@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.19.0] - 2026-06-09
+
+@extremetemps lane — Part B (reanalysis regional anomaly). Adds the final lane
+signal, `manual_only` and env-gated OFF. **The @extremetemps build lane is now
+complete.**
+
+### Added
+
+- **Reanalysis regional anomaly** (`regional_anomaly`) — detects when a
+  climatically-coherent region's sampled cities run far above their 1991–2020
+  daily ERA5 normal for ≥3 consecutive *complete* days. A POINT INDEX over N
+  sampled cities (never an area-weighted national mean), computed from the
+  Open-Meteo ERA5 archive against a checked-in daily climatology cache
+  (`data/climatology_daily_cache.json`). Curated `REGION_WATCHLIST` of 16
+  cross-hemisphere regions / 100 sample points (Sahel, Pacific Northwest, East
+  Siberia, Indo-Gangetic Plain, Iberia, Central Mediterranean, Southeast
+  Australia, Southern South America…), each anchored to a documented,
+  attribution-studied heat event. Standalone runner (gpm_imerg pattern),
+  env-gated OFF via `THEHEAT_REGANOM_ENABLED`, `manual_only` at launch.
+- **Trigger (§B):** fires only when the point-mean anomaly ≥ +6 °C **and** the
+  mean z-score ≥ 2σ (per-MM-DD sigma from the cache) **and** ≥50 % of the
+  region's points individually exceed +6 °C — so a flat +6 °C means the same
+  thing in the low-variance Sahel and high-variance midlatitudes, and one
+  scorching city can't drag the regional mean over the line.
+- **Honesty defense (5 layers):** bundle framing (`where` = "N sampled cities in
+  X" + `forbidden_claims`), writer-prompt rules, fact-check guards, a
+  deterministic bundle-aware §F gate (load-bearing, runs before fact-check), and
+  a bundle-blind safety-regex backstop. The signal is never framed as a
+  whole-region or national mean.
+- **`scripts/build_climatology_cache.py`** — one-time ERA5 daily-climatology
+  backfill (1991–2020 mean + σ per sample point), 429-aware patient backoff,
+  atomic per-point checkpoint, idempotent resume.
+
+### Notes
+
+- Built directly on Claude-main (Conductor unavailable). Honored the plan's
+  Rev-3 deltas §A–§G; a 6-dimension multi-agent adversarial review substituted
+  for the unavailable cross-model Codex pass.
+- The climatology backfill requests `temperature_2m_max` only — this halves
+  Open-Meteo's weighted per-request cost (the free archive's rate limit is the
+  binding constraint on a 100-point backfill). `mean_min_c` (reserved for the
+  *deferred* cold-anomaly feature, unused in v1) is therefore null for points
+  backfilled this way; re-backfill with `_min` if/when cold-anomaly lands.
+- Landing is zero-change-on-land: the runner returns 0 until an operator sets
+  `THEHEAT_REGANOM_ENABLED=1` (after verifying the committed cache). mypy clean,
+  full pytest suite green, CI green.
+
 ## [0.9.18.0] - 2026-06-08
 
 @extremetemps lane — Wave 2 (SST). Adds the regional SST anomaly signal,
