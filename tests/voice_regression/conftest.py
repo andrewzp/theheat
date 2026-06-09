@@ -435,6 +435,31 @@ def coral_bleaching_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def regional_anomaly_bundle() -> StoryBundle:
+    """A realistic Sahel regional-anomaly bundle, built by the production builder.
+
+    Honesty Layer 1 is baked in (where = "N sampled cities in Sahel",
+    data_kind = point_index_not_area_weighted, forbidden_claims). Used to exercise
+    Layers 2-3 (writer + fact-check prompts) live."""
+    from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+    from src.two_bot.intern import build_regional_anomaly_bundle
+
+    ev = RegionalAnomalyEvent(
+        region="Sahel",
+        region_slug="Sahel",
+        cities_sampled=7,
+        mean_anomaly_c=7.8,
+        mean_zscore=3.4,
+        fraction_exceeding=0.86,
+        sustained_days=5,
+        window_start="2026-06-03",
+        window_end="2026-06-07",
+        event_id="reganom_Sahel_2026-06-07",
+    )
+    return build_regional_anomaly_bundle(ev)
+
+
+@pytest.fixture
 def fresh_memory_slice() -> MemorySlice:
     """Empty memory — all era anchors / peer comparisons / framings
     available. Used in replay tests so writer isn't constrained by

@@ -63,6 +63,8 @@ Be GENEROUS here. The writer's external knowledge is the editorial value-add; if
    - "The Gobi and Taklamakan deserts are primary dust sources for East Asian dust events."
    Reject specific facility emissions, specific storm dates not in the bundle, or specific percentile comparisons without bundle archive support.
 
+**g) Sampled-city regional anomaly framing.** For `regional_anomaly` bundles, the value is a POINT INDEX over N sampled cities (`current_facts.data_kind = "point_index_not_area_weighted"`). ACCEPT the honest framing when it matches the bundle: the mean anomaly cited within ±0.5°C of `headline_metric.value` (`sampled_city_mean_anomaly_c`), the city count exactly `headline_metric.cities_sampled`, attributed as "N sampled cities in [Region]." The reasoning that a coherent region ran above its 1991–2020 daily ERA5 normal — and that a given +X°C is more significant in a low-variance climate (a high z-score) — is sound climatology. ACCEPT.
+
 When in doubt, ACCEPT. The writer is climate-literate; the audience is climate-literate; the cost of a false UNVERIFIABLE rejection is a boring or killed tweet. The cost of a false WORLD_KNOWLEDGE acceptance is a single shaky claim that the human approval gate will catch.
 
 # What stays UNVERIFIABLE — keep these guards
@@ -106,6 +108,8 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
 **h) Wet-bulb physiology.** The approximate 35C TW physiological ceiling for healthy adults is established threshold science. ACCEPT: "above the point where the body can cool by sweating," "the evaporative cooling limit," "where heat dissipation fails." Do NOT accept specific mortality time windows, population-specific claims (children, elderly people, athletes), or direct fatality claims unless the bundle supplies outcome data.
 
 **i) Wet-bulb evidence grade — FORECAST MODEL, not observation.** In `wet_bulb_extreme` bundles, `daily_max_tw_c` is Open-Meteo's `wet_bulb_temperature_2m_max` daily forecast model variable, NOT a station-observed reading. REJECT any draft that: (a) frames the TW value as a confirmed observation; (b) uses "survivability limit" as a factual claim; (c) claims "hottest wet-bulb in N years" without `historical_context.archive_max_tw_c` and `historical_context.archive_years`; (d) states human-health outcomes beyond the supplied `tw_explainer`. Archive fields such as `archive_max_tw_c` are model-derived too; require "model archive" or equivalent wording, not "recorded history."
+
+**j) Bare-region / national aggregate for regional anomalies — UNVERIFIABLE.** A `regional_anomaly` signal is a POINT INDEX over N sampled cities, never a whole-region or national average. Check the tweet against every `historical_context.forbidden_claims` entry — a match is a FAILURE even if the numbers are right. REJECT any draft that: (a) frames the anomaly as "[Region] averaged +X°C," "[Region]'s average temperature," a "national mean," "area-weighted," or "country-wide / nationwide average"; (b) drops the "N sampled cities" attribution and implies the whole region or country was measured. The honest form names the sampled cities; the dishonest form claims an area-weighted national mean the data does not support.
 
 # Archive-window rule
 

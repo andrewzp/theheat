@@ -157,6 +157,10 @@ _METADATA_JSON_KEYS = (
     "memory",
     "data_source_failures",
     "source_health",
+    # Reanalysis regional-anomaly onset guard — must persist (§E) so a sustained
+    # spell stays suppressed across restarts. The transient _reganom_live_cache is
+    # intentionally absent (like _triage_queue): it is rebuilt each cycle.
+    "reganom_last_fired",
     # NOTE: bot_state["_triage_queue"] is intentionally NOT in this list.
     # The triage queue is a per-cron transient; persisting it would cause
     # stale candidates to re-process next cycle. Guard pair: pop-at-entry

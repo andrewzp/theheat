@@ -89,6 +89,14 @@ BANNED_PATTERNS = [
     re.compile(r"flowers are already up", re.IGNORECASE),
     re.compile(r"the ground froze", re.IGNORECASE),
     re.compile(r"fruit trees blooming early", re.IGNORECASE),
+    # Regional-anomaly honesty backstop (Layer 4). The reanalysis-anomaly signal
+    # is a point index over N sampled cities, NOT an area-weighted national mean.
+    # These bundle-blind patterns catch the unambiguous aggregate framings; they
+    # are intentionally narrow so a legitimate single-city "Phoenix averaged 46C"
+    # tweet still passes. (The bundle-aware §F gate in two_bot/pipeline.py is the
+    # load-bearing layer; this is the fail-safe.)
+    re.compile(r"\b(?:national|nationwide|nation-?wide|country-?wide|countrywide)\s+(?:mean|average)\b", re.IGNORECASE),
+    re.compile(r"\barea[- ]?weighted\b", re.IGNORECASE),
 ]
 
 

@@ -30,6 +30,15 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         74,
         "Lowered from 76 in PR #96 so 11-14C anomalies clear while routine 8C swings do not.",
     ),
+    "regional_anomaly": ThresholdEntry(
+        "regional_anomaly",
+        76,
+        "Sampled-city regional anomaly from ERA5 daily climatology; a point index "
+        "over N cities (never an area-weighted national mean), model-derived, "
+        "manual-only at launch. The +6C/3-day/>=2sigma/>=50%-support detection gate "
+        "is the noise filter; this threshold is for ranking, not gating. Distinct "
+        "from regional_sst_anomaly (oceanic).",
+    ),
     "absolute_extreme": ThresholdEntry(
         "absolute_extreme",
         78,

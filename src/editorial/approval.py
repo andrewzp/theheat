@@ -192,6 +192,7 @@ def recommend_approval_policy(
             "dust_event",
             "absolute_extreme",
             "wet_bulb_extreme",
+            "regional_anomaly",
         }
         or tweet_type.startswith("cyclone_")
     ):

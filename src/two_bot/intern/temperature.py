@@ -26,6 +26,8 @@ from src.data.open_meteo import RecordEvent
 
 from src.data.open_meteo import RecordStreakEvent
 
+from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+
 from src.two_bot.types import StoryBundle
 
 from ._shared import _MONTH_NAMES, _audience_unit_facts, _c_to_f, _climate_context_facts, _format_where, _ghcn_observation_facts, _headline_temp_label, _resolve_when
@@ -359,6 +361,80 @@ def build_absolute_extreme_bundle(ev: AbsoluteExtremeEvent) -> StoryBundle:
             "is_forecast": is_forecast,
         },
         raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
+    """Assemble a StoryBundle for a sampled-city regional anomaly (honesty Layer 1).
+
+    The signal is a POINT INDEX over N sampled cities — never an area-weighted
+    national mean. This builder enforces that at the bundle level:
+      * ``where`` names the N sampled cities, never the bare region;
+      * ``signal_kind`` is the BARE literal "regional_anomaly" so the deterministic
+        §F honesty gate (which keys on ``bundle.signal_kind == "regional_anomaly"``)
+        fires;
+      * ``current_facts`` leads with ``data_kind = point_index_not_area_weighted``
+        and keeps ``region`` only as the audience-unit lookup key;
+      * ``forbidden_claims`` lists dishonest aggregate phrasings for the §F gate to
+        substring-match. They are curated to be HONEST-FORM-SAFE: none of them is a
+        substring of "N sampled cities in {region} …", so the gate rejects the
+        bare-region / national / area-weighted framings without false-killing an
+        honest draft. (The naked "{region} averaged X" verb form is steered by the
+        writer prompt + judged by fact-check, not substring-matched here.)
+    """
+    region = ev.region
+    anomaly_f = round(ev.mean_anomaly_c * 1.8, 1)  # an anomaly is a DELTA — no +32 offset
+    return StoryBundle(
+        signal_kind="regional_anomaly",
+        where=f"{ev.cities_sampled} sampled cities in {region}",
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": "sampled_city_mean_anomaly_c",
+            "value": ev.mean_anomaly_c,
+            "unit": "C",
+            "value_f": anomaly_f,
+            "cities_sampled": ev.cities_sampled,
+        },
+        current_facts=[
+            {"label": "data_kind", "value": "point_index_not_area_weighted"},
+            {"label": "cities_sampled", "value": ev.cities_sampled},
+            {"label": "mean_anomaly_c", "value": ev.mean_anomaly_c},
+            {"label": "mean_anomaly_f", "value": anomaly_f},
+            {"label": "mean_zscore", "value": ev.mean_zscore},
+            {"label": "fraction_exceeding_plus6c", "value": ev.fraction_exceeding},
+            {"label": "sustained_days", "value": ev.sustained_days},
+            # ``region`` is retained ONLY to feed _audience_unit_facts; the writer
+            # prompt forbids citing it as a bare aggregate.
+            {"label": "region", "value": region},
+            *_audience_unit_facts(region),
+        ],
+        historical_context={
+            "scope": "sampled_city_daily_era5_anomaly",
+            "anomaly_floor_c": 6.0,
+            "zscore_floor": 2.0,
+            "mean_zscore": ev.mean_zscore,
+            "sustained_days": ev.sustained_days,
+            "window_start": ev.window_start,
+            "window_end": ev.window_end,
+            # Honest-form-safe dishonest phrasings (substring-matched by the §F gate).
+            "forbidden_claims": [
+                "national mean",
+                "national average",
+                "area-weighted",
+                "area weighted",
+                "country-wide average",
+                "countrywide average",
+                "nationwide average",
+                "country-wide mean",
+                f"{region}'s average",
+                f"{region}'s temperature",
+                f"all of {region}",
+                f"the whole of {region}",
+                f"entire {region}",
+                f"{region} as a whole",
+            ],
+        },
+        raw_signal_dump=asdict(ev),
     )
 
 def build_record_streak_bundle(ev: RecordStreakEvent) -> StoryBundle:

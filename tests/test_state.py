@@ -293,6 +293,52 @@ class TestOceanSSTStreak:
         assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": None}
 
 
+class TestReganomState:
+    def test_default_state_has_reganom_last_fired(self):
+        from src.state import DEFAULT_STATE
+        assert DEFAULT_STATE["reganom_last_fired"] == {}
+
+    def test_merge_state_takes_max_iso_per_region(self):
+        from src.state import _merge_state
+        current = {"reganom_last_fired": {"Sahel": "2026-06-01", "France": "2026-05-20"}}
+        incoming = {"reganom_last_fired": {"Sahel": "2026-05-15", "France": "2026-06-10"}}
+        merged = _merge_state(current, incoming)
+        # Per region, the later ISO date wins (lexical == chronological for YYYY-MM-DD).
+        assert merged["reganom_last_fired"]["Sahel"] == "2026-06-01"
+        assert merged["reganom_last_fired"]["France"] == "2026-06-10"
+
+    def test_set_reganom_last_fired_is_monotonic(self):
+        from src.state import set_reganom_last_fired
+        state = _fresh_state()
+        set_reganom_last_fired(state, "Sahel", "2026-06-05")
+        set_reganom_last_fired(state, "Sahel", "2026-06-01")  # older — must not overwrite
+        assert state["reganom_last_fired"]["Sahel"] == "2026-06-05"
+        set_reganom_last_fired(state, "Sahel", "2026-06-09")  # newer — updates
+        assert state["reganom_last_fired"]["Sahel"] == "2026-06-09"
+
+    def test_sqlite_persists_reganom_last_fired_but_not_live_cache(self):
+        # §E: reganom_last_fired must survive a SQLite round-trip; the transient
+        # _reganom_live_cache must NOT (it is absent from _METADATA_JSON_KEYS).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "reganom_last_fired": {"Sahel": "2026-06-05"},
+                "_reganom_live_cache": {"date": "2026-06-08", "results": {"13.51,2.11": []}},
+            }
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+            assert loaded["reganom_last_fired"] == {"Sahel": "2026-06-05"}
+            assert not loaded.get("_reganom_live_cache")
+
+
 class TestCycloneState:
     def test_default_state_has_cyclone_trackers(self):
         assert DEFAULT_STATE["cyclone_tiers"] == {}
