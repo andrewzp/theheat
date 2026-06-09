@@ -12,6 +12,7 @@ SCORING_DIR = Path("src/editorial/scoring")
 EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_all_time_record": {"all_time_record"},
     "score_anomaly": {"anomaly"},
+    "score_absolute_extreme": {"absolute_extreme"},
     "score_ch4_milestone": {"ch4_milestone"},
     "score_co2_milestone": {"co2_milestone"},
     "score_coral_bleaching": {"coral_bleaching"},
@@ -46,6 +47,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_snow_extreme": {"snow_extreme"},
     "score_storm_surge": {"storm_surge"},
     "score_synthesis_fire_drought_heat": {"synthesis_fire_drought_heat"},
+    "score_wet_bulb_extreme": {"wet_bulb_extreme"},
 }
 
 

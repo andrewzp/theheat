@@ -92,6 +92,23 @@ class AnomalyEvent:
 
 
 @dataclass
+class AbsoluteExtremeEvent:
+    """Today's reading exceeds the absolute threshold for its latitude band."""
+    city: str
+    country: str
+    today_temp_c: float
+    band_label: str
+    threshold_c: float
+    kind: str
+    lat: float
+    lon: float
+    event_id: str
+    signal_date: date | None = None
+    state: str | None = None
+    data_source: str = "forecast"
+
+
+@dataclass
 class RecordStreakEvent:
     """A city has broken its daily record multiple days running."""
     city: str
@@ -101,6 +118,30 @@ class RecordStreakEvent:
     peak_temp_c: float
     event_id: str
     signal_date: date | None = None
+
+
+WETBULB_TIERS: list[tuple[int, float, str]] = [
+    (3, 35.0, "tier_3"),
+    (2, 33.0, "extreme"),
+]
+
+
+@dataclass
+class WetBulbEvent:
+    """Forecast daily-max wet-bulb temperature crossed an extreme tier."""
+    city: str
+    country: str
+    daily_max_tw_c: float
+    tier: int
+    tier_label: str
+    tier_threshold_c: float
+    event_id: str
+    signal_date: date | None = None
+    lat: float | None = None
+    lon: float | None = None
+    archive_max_tw_c: float | None = None
+    archive_max_year: int | None = None
+    archive_years: int | None = None
 
 
 @dataclass
@@ -133,6 +174,8 @@ class ExtremeSignalBundle:
     monthly_low: MonthlyRecord | None = None
     anomaly_hot: AnomalyEvent | None = None
     anomaly_cold: AnomalyEvent | None = None
+    absolute_extreme: AbsoluteExtremeEvent | None = None
+    wet_bulb_extreme: WetBulbEvent | None = None
     today_max_c: float | None = None
     today_min_c: float | None = None
     archive_max_c: float | None = None
@@ -366,6 +409,75 @@ def prioritize_cities(cities: list[dict]) -> list[dict]:
 ANOMALY_HOT_THRESHOLD_C = 15.0  # today is 15°C+ above historical mean for this month
 ANOMALY_COLD_THRESHOLD_C = 15.0  # today is 15°C+ below historical mean for this month
 
+# Signed-latitude band table. Do not use abs(lat): N and S hemispheres have
+# distinct thresholds.
+LATITUDE_BANDS: list[tuple[float, float, float, float, str]] = [
+    (66.5, 90.0, 30.0, -50.0, "Arctic"),
+    (55.0, 66.5, 35.0, -40.0, "Sub-Arctic"),
+    (40.0, 55.0, 42.0, -30.0, "N Mid-latitudes"),
+    (23.5, 40.0, 47.0, -15.0, "N Sub-tropical"),
+    (-23.5, 23.5, 50.0, 5.0, "Tropics"),
+    (-40.0, -23.5, 48.0, -20.0, "S Sub-tropical"),
+    (-90.0, -40.0, 40.0, -45.0, "S Mid-latitudes"),
+]
+
+
+def detect_absolute_extreme(
+    lat: float,
+    lon: float,
+    today_max_c: float | None,
+    today_min_c: float | None,
+    city: str,
+    country: str,
+    *,
+    signal_date: date | None = None,
+    state: str | None = None,
+    data_source: str = "forecast",
+) -> AbsoluteExtremeEvent | None:
+    """Fire if today's temp crosses the absolute threshold for this latitude band."""
+    today = signal_date or date.today()
+    today_iso = today.isoformat()
+    city_key = city.replace(" ", "_")
+
+    band = next((b for b in LATITUDE_BANDS if b[0] <= lat < b[1]), None)
+    if band is None:
+        return None
+    _, _, hot_threshold_c, cold_threshold_c, band_label = band
+
+    if today_max_c is not None and today_max_c >= hot_threshold_c:
+        return AbsoluteExtremeEvent(
+            city=city,
+            country=country,
+            today_temp_c=today_max_c,
+            band_label=band_label,
+            threshold_c=hot_threshold_c,
+            kind="hot",
+            lat=lat,
+            lon=lon,
+            event_id=f"absextreme_{city_key}_{today_iso}",
+            signal_date=signal_date,
+            state=state,
+            data_source=data_source,
+        )
+
+    if today_min_c is not None and today_min_c <= cold_threshold_c:
+        return AbsoluteExtremeEvent(
+            city=city,
+            country=country,
+            today_temp_c=today_min_c,
+            band_label=band_label,
+            threshold_c=cold_threshold_c,
+            kind="cold",
+            lat=lat,
+            lon=lon,
+            event_id=f"absextreme_cold_{city_key}_{today_iso}",
+            signal_date=signal_date,
+            state=state,
+            data_source=data_source,
+        )
+
+    return None
+
 
 def detect_extreme_signals(
     lat: float,
@@ -392,7 +504,7 @@ def detect_extreme_signals(
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min",
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
                 "timezone": "auto",
                 "forecast_days": 1,
             },
@@ -402,6 +514,7 @@ def detect_extreme_signals(
         today_data = resp_today.json().get("daily", {})
         today_max = (today_data.get("temperature_2m_max") or [None])[0]
         today_min = (today_data.get("temperature_2m_min") or [None])[0]
+        today_tw_max = (today_data.get("wet_bulb_temperature_2m_max") or [None])[0]
         if today_max is None and today_min is None:
             return None
 
@@ -416,7 +529,7 @@ def detect_extreme_signals(
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min",
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
                 "timezone": "auto",
@@ -428,6 +541,7 @@ def detect_extreme_signals(
         dates = hist_data.get("time", [])
         highs = hist_data.get("temperature_2m_max", [])
         lows = hist_data.get("temperature_2m_min", [])
+        hist_tw_values = hist_data.get("wet_bulb_temperature_2m_max", [])
 
         if not dates:
             return None
@@ -503,6 +617,40 @@ def detect_extreme_signals(
 
     today_iso = today.isoformat()
     city_key = city.replace(" ", "_")
+
+    if today_tw_max is not None:
+        for tier_index, threshold_c, tier_label in WETBULB_TIERS:
+            if today_tw_max < threshold_c:
+                continue
+            valid_hist_tw = [
+                (tw, d_str)
+                for tw, d_str in zip(hist_tw_values, dates)
+                if tw is not None
+            ]
+            archive_max_tw_c = None
+            archive_max_year = None
+            if valid_hist_tw:
+                archive_max_tw_c, archive_max_date = max(valid_hist_tw, key=lambda item: item[0])
+                try:
+                    archive_max_year = int(archive_max_date[:4])
+                except (TypeError, ValueError):
+                    archive_max_year = None
+            bundle.wet_bulb_extreme = WetBulbEvent(
+                city=city,
+                country=country,
+                daily_max_tw_c=today_tw_max,
+                tier=tier_index,
+                tier_label=tier_label,
+                tier_threshold_c=threshold_c,
+                event_id=f"wetbulb_{city_key}_{today_iso}_tier{tier_index}",
+                signal_date=today,
+                lat=lat,
+                lon=lon,
+                archive_max_tw_c=archive_max_tw_c,
+                archive_max_year=archive_max_year,
+                archive_years=archive_years,
+            )
+            break
 
     # Calendar-date records (legacy compatibility)
     if today_max is not None and hist_max_calendar is not None and today_max > hist_max_calendar:
@@ -602,6 +750,10 @@ def detect_extreme_signals(
                 lon=lon,
             )
 
+    abs_ev = detect_absolute_extreme(lat, lon, today_max, today_min, city, country)
+    if abs_ev is not None:
+        bundle.absolute_extreme = abs_ev
+
     return bundle
 
 
@@ -643,6 +795,8 @@ def check_extreme_signals_for_cities(
             bundle.all_time_high, bundle.all_time_low,
             bundle.monthly_high, bundle.monthly_low,
             bundle.anomaly_hot, bundle.anomaly_cold,
+            bundle.absolute_extreme,
+            bundle.wet_bulb_extreme,
         ]):
             bundles.append(bundle)
 

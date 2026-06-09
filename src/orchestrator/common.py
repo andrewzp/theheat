@@ -32,7 +32,14 @@ from src.data.cyclones import (
     TierCrossingEvent,
     latest_advisories_by_storm,
 )
-from src.data.open_meteo import AllTimeRecord, AnomalyEvent, MonthlyRecord, RecordEvent
+from src.data.open_meteo import (
+    AbsoluteExtremeEvent,
+    AllTimeRecord,
+    AnomalyEvent,
+    MonthlyRecord,
+    RecordEvent,
+    WetBulbEvent,
+)
 from src.state_schema import BotState
 from src.data.source_status import SourceSkipped
 from src.editorial import synthesis
@@ -42,6 +49,7 @@ from src.editorial._regions import cities_to_state_map, lat_lon_to_state
 from src.editorial.simultaneous_format import select_roll_call_subset
 from src.editorial.scoring import (
     EditorialScore,
+    score_absolute_extreme,
     score_all_time_record,
     score_anomaly,
     score_ch4_milestone,
@@ -78,6 +86,7 @@ from src.editorial.scoring import (
     score_snow_extreme,
     score_storm_surge,
     score_synthesis_fire_drought_heat,
+    score_wet_bulb_extreme,
 )
 from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
 from src.voice.safety import run_safety_pipeline
@@ -1125,6 +1134,8 @@ def _two_bot_bundle_for_extreme_signal(
             return intern.build_all_time_record_bundle(strongest_signal)
         if strongest_type in ("anomaly_hot", "anomaly_cold"):
             return intern.build_anomaly_bundle(strongest_signal)
+        if strongest_type == "absolute_extreme":
+            return intern.build_absolute_extreme_bundle(strongest_signal)
     except Exception as exc:
         print(f"[two_bot.dispatch] Bundle build failed for {strongest_type}: {exc}")
         if result_out is not None:
@@ -1470,6 +1481,7 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
 
 __all__ = [
     "Any",
+    "AbsoluteExtremeEvent",
     "AllTimeRecord",
     "AnomalyEvent",
     "BasinRecordEvent",
@@ -1491,6 +1503,7 @@ __all__ = [
     "SNOW_ANNUAL_CAP",
     "SourceSkipped",
     "TierCrossingEvent",
+    "WetBulbEvent",
     "_CURRENT_SUPPRESSION_CTX",
     "_activate_suppression_ctx",
     "_bundle_for_cyclone_event",
@@ -1585,6 +1598,7 @@ __all__ = [
     "save_draft",
     "score_all_time_record",
     "score_anomaly",
+    "score_absolute_extreme",
     "score_ch4_milestone",
     "score_co2_milestone",
     "score_coral_bleaching",
@@ -1619,6 +1633,7 @@ __all__ = [
     "score_snow_extreme",
     "score_storm_surge",
     "score_synthesis_fire_drought_heat",
+    "score_wet_bulb_extreme",
     "sea_ice",
     "secrets",
     "select_roll_call_subset",

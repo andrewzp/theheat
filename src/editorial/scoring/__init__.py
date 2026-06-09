@@ -15,6 +15,7 @@ from . import drought as _drought
 from . import hot10 as _hot10
 from . import synthesis as _synthesis
 from . import precipitation as _precipitation
+from . import wetbulb as _wetbulb
 
 _DATE_MODULES = (
     _temperature,
@@ -58,6 +59,11 @@ def score_monthly_record(*args: Any, **kwargs: Any) -> EditorialScore:
 def score_anomaly(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _temperature.score_anomaly(*args, **kwargs)
+
+
+def score_absolute_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _temperature.score_absolute_extreme(*args, **kwargs)
 
 
 def score_record_streak(*args: Any, **kwargs: Any) -> EditorialScore:
@@ -210,6 +216,11 @@ def score_seasonal_snow_record(*args: Any, **kwargs: Any) -> EditorialScore:
     return _precipitation.score_seasonal_snow_record(*args, **kwargs)
 
 
+def score_wet_bulb_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _wetbulb.score_wet_bulb_extreme(*args, **kwargs)
+
+
 __all__ = [
     "EditorialScore",
     "score_record_event",
@@ -218,6 +229,7 @@ __all__ = [
     "score_all_time_record",
     "score_monthly_record",
     "score_anomaly",
+    "score_absolute_extreme",
     "score_record_streak",
     "score_simultaneous_records",
     "score_fire_event",
@@ -248,4 +260,5 @@ __all__ = [
     "score_precipitation_extreme",
     "score_snow_extreme",
     "score_seasonal_snow_record",
+    "score_wet_bulb_extreme",
 ]
