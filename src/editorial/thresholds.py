@@ -23,6 +23,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         74,
         "Lowered from 76 in PR #96 so 11-14C anomalies clear while routine 8C swings do not.",
     ),
+    "absolute_extreme": ThresholdEntry(
+        "absolute_extreme",
+        78,
+        "Latitude-banded absolute temperature extreme; rarer than per-city anomaly, below all-time-record tier.",
+    ),
     "ch4_milestone": ThresholdEntry(
         "ch4_milestone",
         58,

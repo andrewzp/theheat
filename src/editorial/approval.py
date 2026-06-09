@@ -175,6 +175,7 @@ def recommend_approval_policy(
             "precipitation_extreme",
             "snow_extreme",
             "seasonal_snow_record",
+            "absolute_extreme",
         }
         or tweet_type.startswith("cyclone_")
     ):

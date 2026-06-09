@@ -60,6 +60,11 @@ def score_anomaly(*args: Any, **kwargs: Any) -> EditorialScore:
     return _temperature.score_anomaly(*args, **kwargs)
 
 
+def score_absolute_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _temperature.score_absolute_extreme(*args, **kwargs)
+
+
 def score_record_streak(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _temperature.score_record_streak(*args, **kwargs)
@@ -218,6 +223,7 @@ __all__ = [
     "score_all_time_record",
     "score_monthly_record",
     "score_anomaly",
+    "score_absolute_extreme",
     "score_record_streak",
     "score_simultaneous_records",
     "score_fire_event",

@@ -15,7 +15,14 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
     _signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
     print(f"[alerts] Checking extreme climate signals (provider={_signals_provider})...")
     signals_start = time.perf_counter()
-    signal_counts = {"all_time": 0, "monthly": 0, "anomaly": 0, "calendar": 0, "streak": 0}
+    signal_counts = {
+        "all_time": 0,
+        "monthly": 0,
+        "absolute_extreme": 0,
+        "anomaly": 0,
+        "calendar": 0,
+        "streak": 0,
+    }
     # Per-station data for the simultaneous_records signal. Richer than
     # just (city, country) so the roll-call format can surface temps,
     # margins, and elevations. See src/editorial/simultaneous_format.py
@@ -46,10 +53,10 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         source_drafted = 0
         for bundle in bundles:
             # Process signals in descending order of priority:
-            # all-time > monthly > anomaly > calendar-date.
+            # all-time > monthly > absolute-extreme > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
 
-            strongest_signal: AllTimeRecord | MonthlyRecord | AnomalyEvent | RecordEvent | None = None
+            strongest_signal: AllTimeRecord | MonthlyRecord | AbsoluteExtremeEvent | AnomalyEvent | RecordEvent | None = None
             strongest_score: EditorialScore | None = None
             strongest_event_id: str | None = None
             strongest_headline = ""
@@ -161,6 +168,37 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                             _fact("Archive span", f"{ev_ml.years_of_data} years"),
                         ]
                         signal_counts["monthly"] += 1
+
+            if strongest_signal is None and bundle.absolute_extreme:
+                ev_ae: AbsoluteExtremeEvent = bundle.absolute_extreme
+                if not state.is_duplicate(bot_state, ev_ae.event_id):
+                    score = score_absolute_extreme(
+                        ev_ae.today_temp_c,
+                        ev_ae.lat,
+                        ev_ae.band_label,
+                        ev_ae.threshold_c,
+                        kind=ev_ae.kind,
+                    )
+                    if _should_draft(score, ev_ae.event_id):
+                        strongest_signal = ev_ae
+                        strongest_score = score
+                        strongest_event_id = ev_ae.event_id
+                        strongest_type = "absolute_extreme"
+                        strongest_city = ev_ae.city
+                        strongest_headline = (
+                            f"{ev_ae.city}: {ev_ae.today_temp_c:.1f}C "
+                            f"({ev_ae.band_label} absolute extreme)"
+                        )
+                        strongest_facts = [
+                            _fact("City", ev_ae.city),
+                            _fact("Country", ev_ae.country),
+                            _fact("Temperature", _temp_pair_c(ev_ae.today_temp_c)),
+                            _fact("Latitude band", ev_ae.band_label),
+                            _fact("Band threshold", _temp_pair_c(ev_ae.threshold_c)),
+                            _fact("Kind", ev_ae.kind),
+                            _fact("Data source", ev_ae.data_source),
+                        ]
+                        signal_counts["absolute_extreme"] += 1
 
             if strongest_signal is None and bundle.anomaly_hot:
                 ev_ah: AnomalyEvent = bundle.anomaly_hot
@@ -629,6 +667,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         # so the dashboard can render pipeline visibility.
         signal_breakdown = (
             f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} "
+            f"absolute_extreme:{signal_counts['absolute_extreme']} "
             f"anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} "
             f"streak:{signal_counts['streak']} country:{country_count}"
         )
