@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.20.0] - 2026-06-09
+
+Post-Part-B hardening, performance, and a tech-stack review. The @extremetemps
+lane is complete (Part B landed in 0.9.19.0); this rolls up the state-correctness
+fixes, the gist/CI wins from the review, and a dead-code deletion.
+
+### Fixed
+
+- **State-merge correctness — three silent state-loss bugs.** `_merge_state`
+  rebuilds from `_fresh_state()` defaults and sets each key explicitly, so any
+  `DEFAULT_STATE` key without an explicit handler was silently reset to default on
+  every gist+sqlite write. Fixed: **air-quality tier dedup** keys
+  (`air_quality_pm25_tiers`/`_dust_tiers`) — the bigger bug was the missing
+  `_merge_state` handler, not just the sqlite allowlist ([#204](https://github.com/andrewzp/theheat/pull/204)) — and **`data_source_failures`**, the consecutive-failure
+  counter, merged with reset-aware semantics (a success-reset wins; max otherwise)
+  rather than a plain max() that would erase resets and pin the structural-alert
+  streak high ([#206](https://github.com/andrewzp/theheat/pull/206)). Earlier:
+  **SST anomaly dedup keys** added to the sqlite allowlist ([#200](https://github.com/andrewzp/theheat/pull/200)).
+- **Cycle-cap callback ordering ([#204](https://github.com/andrewzp/theheat/pull/204)).**
+  A draft pruned by `MAX_DRAFTS_PER_CYCLE` could still consume dedup/cap state
+  (annual counts, tiers) for a tweet that never queued. `on_draft_success` now
+  defers past the prune and fires only for survivors.
+
+### Added
+
+- **`_merge_state` contract test ([#206](https://github.com/andrewzp/theheat/pull/206)).**
+  Probes every `DEFAULT_STATE` key and fails if any silently resets to default, so
+  the "added a key but forgot the merge handler" bug class can't recur.
+  Self-validating (the custom-helper allowlist is coupled to a preservation
+  fixture).
+- **Part-B activation passthrough ([#205](https://github.com/andrewzp/theheat/pull/205)).**
+  `THEHEAT_REGANOM_ENABLED` in `bot.yml` (default `'0'`, dormant). reganom is
+  landed + `manual_only` but stays OFF until the repo variable is set to `1`.
+
+### Performance / CI
+
+- **Gist state written minified, not `indent=2` ([#208](https://github.com/andrewzp/theheat/pull/208)).**
+  −621 KB / −39% on the live state (1606 → 985 KB). On 2026-05-13 the state hit
+  928 KB and crossed the Gist ~900 KB inline-content truncation cliff, failing 3
+  runs; this buys back the entire whitespace margin. Reads handle either format.
+- **Test suite 26s → 4s ([#209](https://github.com/andrewzp/theheat/pull/209)).**
+  An autouse fixture no-ops `fetch_with_retry`'s backoff (retry behavior is still
+  asserted via call counts). Also: `timeout-minutes` on all 5 workflow jobs so a
+  hung LLM/socket fails fast instead of burning the 6h runner budget.
+
+### Removed
+
+- **Dead `claim_extractor` LLM stage ([#210](https://github.com/andrewzp/theheat/pull/210)).**
+  −240 lines. The module + prompt were fully wired but unreachable (fact-check does
+  extraction inline); the only `src/` reference was a stale kill-stage comment.
+
+### Notes
+
+- A super-detailed tech-stack review ran this session (≈9.8/10 hygiene). The
+  architectural backlog (declarative `MERGE_SPEC`, `common.py` decomposition,
+  record-store caps, SQLite-backend fate, `requests.Session`, the source-runner
+  abstraction) is in the canonical handoff.
+- mypy clean (97 source files); pytest 1617 passed / 25 voice-replay deselected;
+  ruff clean; suite ~4s.
+
 ## [0.9.19.0] - 2026-06-09
 
 @extremetemps lane — Part B (reanalysis regional anomaly). Adds the final lane
