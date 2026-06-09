@@ -430,6 +430,9 @@ function ok(ts) {
 function fail(ts) {
   return { ts, status: "failed", error: "boom" }
 }
+function degraded(ts) {
+  return { ts, status: "degraded", error: "partial data" }
+}
 
 test("success-rate fraction uses active runs (skips excluded), not total runs", () => {
   // ice_mass-style: 1 success, 2 failed, 7 skipped over 10 runs.
@@ -543,6 +546,31 @@ test("old degraded rows do not keep a recovered durable source yellow", () => {
   assert.equal(row.recent_successes, 5)
   assert.equal(row.recent_active, 5)
   assert.equal(row.health, "healthy")
+})
+
+test("a source degraded every cycle is degraded, not unhealthy (sync with sentinel #201)", () => {
+  // air_quality loses a rate-limited tail chunk every run → `degraded` each
+  // cycle, never a hard `failed`. With a 0% clean-success rate it must still
+  // read as `degraded` (it IS producing data), NOT `unhealthy`. The Python
+  // sentinel mirrors this — a consistently-degraded source is `degraded`, never
+  // `failing` — so neither surface false-alarms (#201). Locks the cross-impl invariant.
+  const runs = Array.from({ length: 5 }, (_, i) =>
+    degraded(`2026-06-09T${String(3 + i).padStart(2, "0")}:00:00Z`)
+  )
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      air_quality: {
+        success: 0,
+        failed: 0,
+        degraded: 5,
+        skipped: 0,
+        last_error: "50 air-quality city fetches failed",
+        runs,
+      },
+    },
+  })
+  const row = sources.find((s) => s.source === "air_quality")
+  assert.equal(row.health, "degraded")
 })
 
 test("last run failed with an upstream 503 → external, not unhealthy", () => {
