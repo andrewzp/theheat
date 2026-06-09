@@ -15,6 +15,7 @@ from . import drought as _drought
 from . import hot10 as _hot10
 from . import synthesis as _synthesis
 from . import precipitation as _precipitation
+from . import air_quality as _air_quality
 from . import wetbulb as _wetbulb
 
 _DATE_MODULES = (
@@ -216,6 +217,16 @@ def score_seasonal_snow_record(*args: Any, **kwargs: Any) -> EditorialScore:
     return _precipitation.score_seasonal_snow_record(*args, **kwargs)
 
 
+def score_pm25_hazard(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _air_quality.score_pm25_hazard(*args, **kwargs)
+
+
+def score_dust_event(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _air_quality.score_dust_event(*args, **kwargs)
+
+
 def score_wet_bulb_extreme(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _wetbulb.score_wet_bulb_extreme(*args, **kwargs)
@@ -260,5 +271,7 @@ __all__ = [
     "score_precipitation_extreme",
     "score_snow_extreme",
     "score_seasonal_snow_record",
+    "score_pm25_hazard",
+    "score_dust_event",
     "score_wet_bulb_extreme",
 ]

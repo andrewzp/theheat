@@ -165,6 +165,13 @@ class SourceHealth(TypedDict, total=False):
     runs: list[SourceHealthRun]
 
 
+class AirQualityTier(TypedDict):
+    """Last successfully drafted air-quality tier for one city/date."""
+
+    tier: int
+    date: str
+
+
 class BotState(TypedDict, total=False):
     """Top-level durable state for the @theheat orchestrator.
 
@@ -189,6 +196,8 @@ class BotState(TypedDict, total=False):
     pdo_last_phase: str | None
     ozone_hole_last_peak: dict[str, dict]
     ozone_hole_annual_count: dict[str, int]
+    air_quality_pm25_tiers: dict[str, AirQualityTier]
+    air_quality_dust_tiers: dict[str, AirQualityTier]
     drafts: list[dict]
     run_history: list[dict]
     errors: list[dict]
