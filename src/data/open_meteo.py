@@ -120,6 +120,30 @@ class RecordStreakEvent:
     signal_date: date | None = None
 
 
+WETBULB_TIERS: list[tuple[int, float, str]] = [
+    (3, 35.0, "tier_3"),
+    (2, 33.0, "extreme"),
+]
+
+
+@dataclass
+class WetBulbEvent:
+    """Forecast daily-max wet-bulb temperature crossed an extreme tier."""
+    city: str
+    country: str
+    daily_max_tw_c: float
+    tier: int
+    tier_label: str
+    tier_threshold_c: float
+    event_id: str
+    signal_date: date | None = None
+    lat: float | None = None
+    lon: float | None = None
+    archive_max_tw_c: float | None = None
+    archive_max_year: int | None = None
+    archive_years: int | None = None
+
+
 @dataclass
 class ExtremeSignalBundle:
     """All extreme signals detected from a single city's archive fetch.
@@ -151,6 +175,7 @@ class ExtremeSignalBundle:
     anomaly_hot: AnomalyEvent | None = None
     anomaly_cold: AnomalyEvent | None = None
     absolute_extreme: AbsoluteExtremeEvent | None = None
+    wet_bulb_extreme: WetBulbEvent | None = None
     today_max_c: float | None = None
     today_min_c: float | None = None
     archive_max_c: float | None = None
@@ -479,7 +504,7 @@ def detect_extreme_signals(
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min",
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
                 "timezone": "auto",
                 "forecast_days": 1,
             },
@@ -489,6 +514,7 @@ def detect_extreme_signals(
         today_data = resp_today.json().get("daily", {})
         today_max = (today_data.get("temperature_2m_max") or [None])[0]
         today_min = (today_data.get("temperature_2m_min") or [None])[0]
+        today_tw_max = (today_data.get("wet_bulb_temperature_2m_max") or [None])[0]
         if today_max is None and today_min is None:
             return None
 
@@ -503,7 +529,7 @@ def detect_extreme_signals(
             params={
                 "latitude": lat,
                 "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min",
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
                 "timezone": "auto",
@@ -515,6 +541,7 @@ def detect_extreme_signals(
         dates = hist_data.get("time", [])
         highs = hist_data.get("temperature_2m_max", [])
         lows = hist_data.get("temperature_2m_min", [])
+        hist_tw_values = hist_data.get("wet_bulb_temperature_2m_max", [])
 
         if not dates:
             return None
@@ -590,6 +617,40 @@ def detect_extreme_signals(
 
     today_iso = today.isoformat()
     city_key = city.replace(" ", "_")
+
+    if today_tw_max is not None:
+        for tier_index, threshold_c, tier_label in WETBULB_TIERS:
+            if today_tw_max < threshold_c:
+                continue
+            valid_hist_tw = [
+                (tw, d_str)
+                for tw, d_str in zip(hist_tw_values, dates)
+                if tw is not None
+            ]
+            archive_max_tw_c = None
+            archive_max_year = None
+            if valid_hist_tw:
+                archive_max_tw_c, archive_max_date = max(valid_hist_tw, key=lambda item: item[0])
+                try:
+                    archive_max_year = int(archive_max_date[:4])
+                except (TypeError, ValueError):
+                    archive_max_year = None
+            bundle.wet_bulb_extreme = WetBulbEvent(
+                city=city,
+                country=country,
+                daily_max_tw_c=today_tw_max,
+                tier=tier_index,
+                tier_label=tier_label,
+                tier_threshold_c=threshold_c,
+                event_id=f"wetbulb_{city_key}_{today_iso}_tier{tier_index}",
+                signal_date=today,
+                lat=lat,
+                lon=lon,
+                archive_max_tw_c=archive_max_tw_c,
+                archive_max_year=archive_max_year,
+                archive_years=archive_years,
+            )
+            break
 
     # Calendar-date records (legacy compatibility)
     if today_max is not None and hist_max_calendar is not None and today_max > hist_max_calendar:
@@ -735,6 +796,7 @@ def check_extreme_signals_for_cities(
             bundle.monthly_high, bundle.monthly_low,
             bundle.anomaly_hot, bundle.anomaly_cold,
             bundle.absolute_extreme,
+            bundle.wet_bulb_extreme,
         ]):
             bundles.append(bundle)
 

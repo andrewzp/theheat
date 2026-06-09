@@ -38,6 +38,7 @@ from src.data.open_meteo import (
     AnomalyEvent,
     MonthlyRecord,
     RecordEvent,
+    WetBulbEvent,
 )
 from src.state_schema import BotState
 from src.data.source_status import SourceSkipped
@@ -85,6 +86,7 @@ from src.editorial.scoring import (
     score_snow_extreme,
     score_storm_surge,
     score_synthesis_fire_drought_heat,
+    score_wet_bulb_extreme,
 )
 from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
 from src.voice.safety import run_safety_pipeline
@@ -1501,6 +1503,7 @@ __all__ = [
     "SNOW_ANNUAL_CAP",
     "SourceSkipped",
     "TierCrossingEvent",
+    "WetBulbEvent",
     "_CURRENT_SUPPRESSION_CTX",
     "_activate_suppression_ctx",
     "_bundle_for_cyclone_event",
@@ -1630,6 +1633,7 @@ __all__ = [
     "score_snow_extreme",
     "score_storm_surge",
     "score_synthesis_fire_drought_heat",
+    "score_wet_bulb_extreme",
     "sea_ice",
     "secrets",
     "select_roll_call_subset",

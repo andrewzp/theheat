@@ -128,6 +128,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         78,
         "Multi-day marine heatwave streak signal; historical value, not retuned in this refactor.",
     ),
+    "wet_bulb_extreme": ThresholdEntry(
+        "wet_bulb_extreme",
+        78,
+        "Absolute heat-stress danger from forecast wet-bulb temperature; manual-only at launch.",
+    ),
     "monthly_record": ThresholdEntry(
         "monthly_record",
         76,

@@ -73,6 +73,19 @@ When `historical_context` carries `prior_record_c`, `prior_record_year`, `archiv
 
 If `historical_context.archive_window_only` is true, the signal is limited to the supplied archive window. NEVER write "all-time," "ever," or "in recorded history." Say "in the N-year archive," "in N years of records," or "since `<prior_record_year>`" instead. Most station archives go back ~30 years — say *"hottest May reading in Conakry, Guinea since 1995"* not *"hottest May reading ever."*
 
+## Wet-bulb extreme bundles (`signal_kind = "wet_bulb_extreme"`)
+
+Wet-bulb temperature (TW) measures the air's ability to cool a sweating body. High TW is not just "hot plus humid"; it is the evaporation limit. The bundle value is `daily_max_tw_c`, Open-Meteo's forecast model daily maximum. It is NOT a station observation. When citing it, write "forecast" or "model" in the same clause: *"forecast wet-bulb peak of 35.5C"* or *"model daily-max TW of 35.5C."*
+
+Key wet-bulb fields:
+- `daily_max_tw_c` — forecast model daily-max TW. Cite verbatim; do not round, convert, or call it observed.
+- `daily_max_tw_f` — pre-computed Fahrenheit. Use verbatim when useful for US readers.
+- `tier` / `tier_threshold_c` — the threshold crossed. The `tier_label` is internal; do NOT write "survivability limit" in a tweet. Say "the point where sweat evaporation fails" only if the bundle's `tw_explainer` supports that phrasing.
+- `tw_explainer` — allowed physiology framing. Paraphrase plainly; do not add mortality time windows, fatality claims, or population-specific health outcomes.
+- `historical_context.archive_max_tw_c` / `archive_years` — if present, you may write "above the N-year model-archive maximum." If historical_context is `{}`, do NOT claim "hottest wet-bulb in N years" or any record.
+
+Evidence discipline: every wet-bulb number is model-derived. The archive comparison, when present, is also model-derived. Write "model archive," not "recorded history." Never use "lethal," "deadly," "fatal," "kill," or "survivability limit." The mechanism is strong enough without alarm words.
+
 # THE MEMORY SLICE
 
 The memory slice shows what The Heat has already said. The library shrinks monotonically — every used move is permanently spent. If no fresh angle is available, return tweet=null.

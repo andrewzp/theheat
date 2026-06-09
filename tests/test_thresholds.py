@@ -47,6 +47,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_snow_extreme": {"snow_extreme"},
     "score_storm_surge": {"storm_surge"},
     "score_synthesis_fire_drought_heat": {"synthesis_fire_drought_heat"},
+    "score_wet_bulb_extreme": {"wet_bulb_extreme"},
 }
 
 

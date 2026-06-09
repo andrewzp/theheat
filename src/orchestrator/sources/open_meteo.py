@@ -19,6 +19,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         "all_time": 0,
         "monthly": 0,
         "absolute_extreme": 0,
+        "wet_bulb": 0,
         "anomaly": 0,
         "calendar": 0,
         "streak": 0,
@@ -502,6 +503,59 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     "today_min_c": bundle.today_min_c,
                 })
 
+        if os.environ.get("THEHEAT_WETBULB_ENABLED", "1") == "1":
+            from src.two_bot.intern import build_wet_bulb_bundle
+
+            for bundle in bundles:
+                wb_ev: WetBulbEvent | None = bundle.wet_bulb_extreme
+                if wb_ev is None:
+                    continue
+                if state.is_duplicate(bot_state, wb_ev.event_id):
+                    continue
+                wb_score = score_wet_bulb_extreme(wb_ev.daily_max_tw_c, wb_ev.tier)
+                if not _should_draft(wb_score, wb_ev.event_id):
+                    continue
+                wb_bundle = build_wet_bulb_bundle(wb_ev)
+                wb_headline = (
+                    f"{wb_ev.city}: forecast wet-bulb max {wb_ev.daily_max_tw_c:.1f}C "
+                    f"(tier {wb_ev.tier})"
+                )
+                wb_ctx = _review_context(
+                    source="Open-Meteo daily (wet_bulb_temperature_2m_max)",
+                    source_key="wetbulb_extreme",
+                    headline=wb_headline,
+                    current_run=current_run,
+                    facts=[
+                        _fact("City", wb_ev.city),
+                        _fact("Country", wb_ev.country),
+                        _fact("Daily-max TW (forecast)", f"{wb_ev.daily_max_tw_c:.1f}C"),
+                        _fact("Tier", str(wb_ev.tier)),
+                        _fact("Tier threshold", f">={wb_ev.tier_threshold_c:.0f}C TW"),
+                        _fact(
+                            "Archive max TW",
+                            (
+                                f"{wb_ev.archive_max_tw_c:.1f}C ({wb_ev.archive_max_year})"
+                                if wb_ev.archive_max_tw_c is not None
+                                else "n/a"
+                            ),
+                        ),
+                    ],
+                )
+                if _enqueue_story_candidate(
+                    bot_state,
+                    bundle=wb_bundle,
+                    score=wb_score,
+                    source="open_meteo_extreme_signals",
+                    legacy_type="wet_bulb_extreme",
+                    event_id=wb_ev.event_id,
+                    review_context=wb_ctx,
+                    city=wb_ev.city,
+                    tweet_date=(wb_ev.signal_date or date.today()).isoformat(),
+                    cooldown_exempt=(wb_ev.tier >= 3),
+                ):
+                    signal_counts["wet_bulb"] += 1
+                    source_promoted += 1
+
         # Simultaneous records detection — fire one summary signal if many cities broke records.
         # Two formats available; flat summary is the default. Roll-call (per-station list with
         # elevations) fires only when the cluster shape qualifies — same country with a
@@ -668,6 +722,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         signal_breakdown = (
             f"all_time:{signal_counts['all_time']} monthly:{signal_counts['monthly']} "
             f"absolute_extreme:{signal_counts['absolute_extreme']} "
+            f"wet_bulb:{signal_counts['wet_bulb']} "
             f"anomaly:{signal_counts['anomaly']} calendar:{signal_counts['calendar']} "
             f"streak:{signal_counts['streak']} country:{country_count}"
         )
