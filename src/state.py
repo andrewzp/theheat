@@ -583,6 +583,23 @@ def _merge_recent_mm_rows(a: dict | None, b: dict | None, *, max_items: int = 10
     return merged
 
 
+def _pick_newer_city_tier(a: dict | None, b: dict | None) -> dict | None:
+    """Reconcile two per-city air-quality tier records ``{"tier", "date"}``.
+
+    Keeps the more recent observation (later ``date``); on the same date keeps the
+    higher tier. Matches the _should_emit_tier dedup rule (re-emit only on a newer
+    date or a higher tier), so a concurrent merge never re-opens a covered tier.
+    """
+    if not a:
+        return b
+    if not b:
+        return a
+    a_date, b_date = str(a.get("date", "")), str(b.get("date", ""))
+    if a_date != b_date:
+        return a if a_date > b_date else b
+    return a if int(a.get("tier", 0)) >= int(b.get("tier", 0)) else b
+
+
 def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
     base = _normalize_state(current)
     next_state = _normalize_state(incoming)
@@ -774,6 +791,24 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
             base.get("coral_dhw_annual_count", {}).get(year, 0),
             next_state.get("coral_dhw_annual_count", {}).get(year, 0),
         )
+    # Air-quality per-city tier dedup (PR #194). These keys had NO _merge_state
+    # handler, so every write (gist AND sqlite) reset them to {} — silently
+    # breaking the per-city tier guard on the live path. Reconcile per city,
+    # keeping the newer observation (newer date / higher tier).
+    _aq_base = cast(dict, base)
+    _aq_next = cast(dict, next_state)
+    _aq_merged = cast(dict, merged)
+    for _aq_key in ("air_quality_pm25_tiers", "air_quality_dust_tiers"):
+        _aq_city_map: dict = {}
+        for city in set(
+            list(_aq_base.get(_aq_key, {}).keys())
+            + list(_aq_next.get(_aq_key, {}).keys())
+        ):
+            _aq_city_map[city] = _pick_newer_city_tier(
+                _aq_base.get(_aq_key, {}).get(city),
+                _aq_next.get(_aq_key, {}).get(city),
+            )
+        _aq_merged[_aq_key] = _aq_city_map
     merged["sst_anom_last_tier"] = {}
     for region_key in set(
         list(base.get("sst_anom_last_tier", {}).keys())

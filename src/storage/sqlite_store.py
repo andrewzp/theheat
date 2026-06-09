@@ -136,6 +136,10 @@ _METADATA_JSON_KEYS = (
     "fire_complex_tiers",
     "coral_dhw_last_tier",
     "coral_dhw_annual_count",
+    # Air-quality per-city tier dedup (PR #194) — must persist, else a SQLite
+    # load drops the per-city tier guard and re-fires the same AQ tier.
+    "air_quality_pm25_tiers",
+    "air_quality_dust_tiers",
     # Regional SST anomaly dedup (PR #198) — both must persist, else a
     # SQLite-sourced load drops the per-region tier guard + per-year count,
     # re-firing the same basin tier or resetting the annual counter.

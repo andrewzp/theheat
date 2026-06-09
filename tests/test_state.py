@@ -293,6 +293,31 @@ class TestOceanSSTStreak:
         assert result["ocean_sst_streak"] == {"seeded": True, "last_milestone_fired": None}
 
 
+class TestAirQualityTierMerge:
+    def test_merge_state_preserves_aq_tiers_when_both_sides_have_them(self):
+        from src.state import _merge_state
+        cur = {"air_quality_pm25_tiers": {"delhi": {"tier": 1, "date": "2026-06-01"}}}
+        inc = {"air_quality_pm25_tiers": {"lahore": {"tier": 2, "date": "2026-06-02"}}}
+        merged = _merge_state(cur, inc)
+        assert merged["air_quality_pm25_tiers"]["delhi"] == {"tier": 1, "date": "2026-06-01"}
+        assert merged["air_quality_pm25_tiers"]["lahore"] == {"tier": 2, "date": "2026-06-02"}
+
+    def test_merge_keeps_newer_date_per_city(self):
+        from src.state import _merge_state
+        cur = {"air_quality_dust_tiers": {"khartoum": {"tier": 2, "date": "2026-06-01"}}}
+        inc = {"air_quality_dust_tiers": {"khartoum": {"tier": 1, "date": "2026-06-03"}}}
+        merged = _merge_state(cur, inc)
+        # Newer date wins even though its tier is lower.
+        assert merged["air_quality_dust_tiers"]["khartoum"] == {"tier": 1, "date": "2026-06-03"}
+
+    def test_merge_keeps_higher_tier_on_same_date(self):
+        from src.state import _merge_state
+        cur = {"air_quality_pm25_tiers": {"delhi": {"tier": 1, "date": "2026-06-05"}}}
+        inc = {"air_quality_pm25_tiers": {"delhi": {"tier": 3, "date": "2026-06-05"}}}
+        merged = _merge_state(cur, inc)
+        assert merged["air_quality_pm25_tiers"]["delhi"] == {"tier": 3, "date": "2026-06-05"}
+
+
 class TestReganomState:
     def test_default_state_has_reganom_last_fired(self):
         from src.state import DEFAULT_STATE
@@ -746,6 +771,31 @@ class TestSqliteBackend:
 
             assert loaded["sst_anom_last_tier"] == {"2026/north_atlantic": 3, "2026/mediterranean": 2}
             assert loaded["sst_anom_annual_count"] == {"2026": 5}
+
+    def test_air_quality_tier_keys_survive_sqlite_round_trip(self):
+        # Regression (Codex, PR #194 gap, sibling of the SST one): the AQ tier
+        # dedup keys were in DEFAULT_STATE + schema but missing from
+        # _METADATA_JSON_KEYS, so a SQLite load dropped them — re-firing AQ tiers.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "air_quality_pm25_tiers": {"delhi": 2, "lahore": 1},
+                "air_quality_dust_tiers": {"khartoum": 1},
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["air_quality_pm25_tiers"] == {"delhi": 2, "lahore": 1}
+            assert loaded["air_quality_dust_tiers"] == {"khartoum": 1}
 
     def test_write_state_serializes_date_values_via_sqlite_backend(self):
         with tempfile.TemporaryDirectory() as tmpdir:

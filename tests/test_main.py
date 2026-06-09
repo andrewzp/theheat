@@ -2321,7 +2321,7 @@ class TestTriageIntegration:
         monkeypatch.setattr(
             alerts_mod,
             "_prune_weakest_cycle_drafts",
-            lambda bot_state, drafts_before, current_run, drafted: drafted,
+            lambda bot_state, drafts_before, current_run, drafted, **kwargs: drafted,
         )
 
         alerts_mod.run_alerts(_fresh_state(), current_run={"sources": []})

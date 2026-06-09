@@ -847,3 +847,78 @@ class TestPendingTtlSweep:
 
         assert n == 0  # 25d < 30d override → kept
         assert bot_state["drafts"][0]["status"] == "pending"
+
+
+# ---------------------------------------------------------------------------
+# Cycle-cap callback ordering (Codex #5): on_draft_success must NOT fire for a
+# draft that is later pruned by MAX_DRAFTS_PER_CYCLE.
+# ---------------------------------------------------------------------------
+
+
+class TestCycleCapCallbackOrdering:
+    def test_fire_skips_pruned_callbacks(self):
+        from src.orchestrator.finalize import _fire_surviving_draft_callbacks
+
+        fired: list[str] = []
+        pending = [
+            ("evt_survivor", lambda: fired.append("survivor")),
+            ("evt_pruned", lambda: fired.append("pruned")),
+        ]
+        _fire_surviving_draft_callbacks(pending, {"evt_pruned"})
+        assert fired == ["survivor"]
+
+    def test_fire_all_when_nothing_pruned(self):
+        from src.orchestrator.finalize import _fire_surviving_draft_callbacks
+
+        fired: list[str] = []
+        pending = [("a", lambda: fired.append("a")), ("b", lambda: fired.append("b"))]
+        _fire_surviving_draft_callbacks(pending, set())
+        assert fired == ["a", "b"]
+
+    def test_prune_reports_pruned_event_ids(self):
+        from src.orchestrator.finalize import _prune_weakest_cycle_drafts
+
+        bot_state = _fresh_state()
+        # 4 new drafts this cycle (cap is 3) → the weakest is pruned + reported.
+        bot_state["drafts"] = [
+            {"event_id": f"evt_{i}", "status": "pending", "type": "coral_bleaching",
+             "score": {"total": 90 - i}} for i in range(4)
+        ]
+        pruned_ids: set = set()
+        _prune_weakest_cycle_drafts(bot_state, 0, {"sources": []}, 4, pruned_ids_out=pruned_ids)
+        assert pruned_ids == {"evt_3"}  # lowest score (87) pruned
+
+    def test_drain_defers_callbacks_when_list_provided(self, monkeypatch):
+        from dataclasses import replace
+
+        import src.orchestrator.common as common
+
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")  # passthrough
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *a, **k: True)
+
+        fired: list[str] = []
+        cand = replace(_candidate(event_id="evt_1"), on_draft_success=lambda: fired.append("cb"))
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [cand]
+
+        pending: list = []
+        common._drain_and_write_triage_queue(bot_state, {"sources": []}, defer_callbacks=pending)
+        assert fired == []  # NOT fired inline when deferred
+        assert [eid for eid, _ in pending] == ["evt_1"]  # collected for post-prune firing
+
+    def test_drain_fires_callbacks_inline_by_default(self, monkeypatch):
+        from dataclasses import replace
+
+        import src.orchestrator.common as common
+
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *a, **k: True)
+
+        fired: list[str] = []
+        cand = replace(_candidate(event_id="evt_1"), on_draft_success=lambda: fired.append("cb"))
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [cand]
+
+        # No defer_callbacks => legacy inline firing (hot10 path, existing callers).
+        common._drain_and_write_triage_queue(bot_state, {"sources": []})
+        assert fired == ["cb"]
