@@ -212,6 +212,40 @@ def score_record_streak(consecutive_days: int, peak_temp_c: float) -> EditorialS
         reasons=reasons,
     )
 
+def score_absolute_extreme(
+    temp_c: float,
+    lat: float,
+    band_label: str,
+    threshold_c: float,
+    *,
+    kind: str = "hot",
+) -> EditorialScore:
+    """Score a reading that exceeds the absolute threshold for its latitude band."""
+    margin = abs(temp_c - threshold_c)
+    severity = 80 + margin * 2.0
+    novelty = 88
+    timeliness = 94
+    confidence = 80
+    shareability = 84 + margin * 1.5
+    reasons = [
+        f"{kind} absolute extreme for {band_label} latitude band",
+        f"{temp_c:.1f}C vs {threshold_c:.1f}C band threshold",
+        f"latitude {lat:.1f}",
+    ]
+    if margin >= 5:
+        reasons.append(f"{margin:.1f}C over band threshold")
+    return _build_score(
+        "absolute_extreme",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence,
+        shareability=shareability,
+        sensitivity=10,
+        threshold=get_threshold("absolute_extreme"),
+        reasons=reasons,
+    )
+
 def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> EditorialScore:
     """Multiple cities broke records on the same day — a pattern signal."""
     reasons = [

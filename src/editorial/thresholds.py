@@ -30,6 +30,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         74,
         "Lowered from 76 in PR #96 so 11-14C anomalies clear while routine 8C swings do not.",
     ),
+    "absolute_extreme": ThresholdEntry(
+        "absolute_extreme",
+        78,
+        "Latitude-banded absolute temperature extreme; rarer than per-city anomaly, below all-time-record tier.",
+    ),
     "ch4_milestone": ThresholdEntry(
         "ch4_milestone",
         58,
@@ -136,6 +141,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         "marine_heatwave",
         78,
         "Multi-day marine heatwave streak signal; historical value, not retuned in this refactor.",
+    ),
+    "wet_bulb_extreme": ThresholdEntry(
+        "wet_bulb_extreme",
+        78,
+        "Absolute heat-stress danger from forecast wet-bulb temperature; manual-only at launch.",
     ),
     "monthly_record": ThresholdEntry(
         "monthly_record",

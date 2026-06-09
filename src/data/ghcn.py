@@ -192,6 +192,7 @@ from src.data.open_meteo import (
     MonthlyRecord,
     RecordEvent,
     detect_country_records,
+    detect_absolute_extreme,
 )
 
 log = logging.getLogger(__name__)
@@ -575,6 +576,21 @@ def _detect_signals_for_station(
     if not usable:
         return None
 
+    if station_lat is not None and station_lon is not None:
+        abs_ev = detect_absolute_extreme(
+            station_lat,
+            station_lon,
+            bundle.today_max_c,
+            bundle.today_min_c,
+            city,
+            country,
+            signal_date=obs_date,
+            state=state,
+            data_source="ghcn",
+        )
+        if abs_ev is not None:
+            bundle.absolute_extreme = abs_ev
+
     return bundle
 
 
@@ -584,6 +600,7 @@ def _has_signal(bundle: ExtremeSignalBundle) -> bool:
         bundle.all_time_high, bundle.all_time_low,
         bundle.monthly_high, bundle.monthly_low,
         bundle.anomaly_hot, bundle.anomaly_cold,
+        bundle.absolute_extreme,
     ])
 
 
@@ -609,6 +626,8 @@ def _dedup_by_metro(
             score += 100
         if b.monthly_high or b.monthly_low:
             score += 10
+        if b.absolute_extreme:
+            score += 8
         if b.calendar_date_high or b.calendar_date_low:
             score += 5
         if b.anomaly_hot or b.anomaly_cold:

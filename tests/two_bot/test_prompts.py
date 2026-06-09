@@ -190,6 +190,20 @@ class TestWriterPromptKeepsLoosenedWorldKnowledgeFraming:
         assert "editorial product" in lowered or "editorial value" in lowered
 
 
+class TestWetBulbPromptGuardrails:
+    def test_writer_labels_wet_bulb_as_forecast_model_output(self):
+        assert "wet_bulb_extreme" in WRITER_SYSTEM_PROMPT
+        assert "daily_max_tw_c" in WRITER_SYSTEM_PROMPT
+        assert "forecast model" in WRITER_SYSTEM_PROMPT.lower()
+        assert "survivability limit" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_checker_rejects_unsafe_wet_bulb_claims(self):
+        assert "Wet-bulb physiology" in FACT_CHECK_SYSTEM_PROMPT
+        assert "FORECAST MODEL" in FACT_CHECK_SYSTEM_PROMPT
+        assert "survivability limit" in FACT_CHECK_SYSTEM_PROMPT
+        assert "archive_max_tw_c" in FACT_CHECK_SYSTEM_PROMPT
+
+
 class TestCriticPromptKillConditions:
     """Structural assertions on the critic prompt — the F3 second-pass
     editorial gate. These guard the kill conditions that justify the

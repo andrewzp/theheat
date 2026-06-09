@@ -16,6 +16,8 @@ from src.data.open_meteo import AllTimeRecord
 
 from src.data.open_meteo import AnomalyEvent
 
+from src.data.open_meteo import AbsoluteExtremeEvent
+
 from src.data.open_meteo import CountryRecord
 
 from src.data.open_meteo import MonthlyRecord
@@ -312,6 +314,49 @@ def build_anomaly_bundle(ev: AnomalyEvent, *, source: str = "open_meteo") -> Sto
             "anomaly_c": ev.anomaly_c,
             "archive_years": ev.years_of_data,
             "scope": "monthly_baseline",
+        },
+        raw_signal_dump={**asdict(ev), "city": city},
+    )
+
+def build_absolute_extreme_bundle(ev: AbsoluteExtremeEvent) -> StoryBundle:
+    """Assemble a StoryBundle for a latitude-banded absolute extreme signal."""
+    state = getattr(ev, "state", None)
+    city = normalize_station_name(ev.city) or ev.city
+    where = _format_where(city, ev.country, state)
+    today_temp_f = _c_to_f(ev.today_temp_c)
+    threshold_f = _c_to_f(ev.threshold_c)
+    is_forecast = ev.data_source == "forecast"
+    return StoryBundle(
+        signal_kind=f"absolute_extreme_{ev.kind}",
+        where=where,
+        when=_resolve_when(ev.signal_date),
+        event_id=ev.event_id,
+        headline_metric={
+            "label": f"today_temp_c_{ev.kind}",
+            "value": ev.today_temp_c,
+            "unit": "C",
+            "value_f": today_temp_f,
+            "is_forecast": is_forecast,
+        },
+        current_facts=[
+            {"label": "city", "value": city},
+            {"label": "country", "value": ev.country},
+            {"label": "lat", "value": ev.lat},
+            {"label": "band_label", "value": ev.band_label},
+            {"label": "today_c", "value": ev.today_temp_c},
+            {"label": "today_f", "value": today_temp_f},
+            {"label": "threshold_c", "value": ev.threshold_c},
+            {"label": "threshold_f", "value": threshold_f},
+            {"label": "kind", "value": ev.kind},
+            {"label": "data_source", "value": ev.data_source},
+            *_audience_unit_facts(ev.country),
+            *_climate_context_facts(ev.lat, ev.lon, category=ev.kind),
+        ],
+        historical_context={
+            "band_label": ev.band_label,
+            "threshold_c": ev.threshold_c,
+            "scope": "latitude_band_absolute",
+            "is_forecast": is_forecast,
         },
         raw_signal_dump={**asdict(ev), "city": city},
     )

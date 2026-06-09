@@ -103,6 +103,10 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
 
 **g) Model-estimated vs. station-measured.** When `current_facts` contains `evidence_grade: "model_estimated"`, claims that the value was "recorded," "measured at a station," or "observed by instruments on the ground" are UNVERIFIABLE. The bundle says it is a model estimate.
 
+**h) Wet-bulb physiology.** The approximate 35C TW physiological ceiling for healthy adults is established threshold science. ACCEPT: "above the point where the body can cool by sweating," "the evaporative cooling limit," "where heat dissipation fails." Do NOT accept specific mortality time windows, population-specific claims (children, elderly people, athletes), or direct fatality claims unless the bundle supplies outcome data.
+
+**i) Wet-bulb evidence grade — FORECAST MODEL, not observation.** In `wet_bulb_extreme` bundles, `daily_max_tw_c` is Open-Meteo's `wet_bulb_temperature_2m_max` daily forecast model variable, NOT a station-observed reading. REJECT any draft that: (a) frames the TW value as a confirmed observation; (b) uses "survivability limit" as a factual claim; (c) claims "hottest wet-bulb in N years" without `historical_context.archive_max_tw_c` and `historical_context.archive_years`; (d) states human-health outcomes beyond the supplied `tw_explainer`. Archive fields such as `archive_max_tw_c` are model-derived too; require "model archive" or equivalent wording, not "recorded history."
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
