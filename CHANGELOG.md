@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.18.0] - 2026-06-08
+
+@extremetemps lane — Wave 2 (SST). Adds the regional SST anomaly signal,
+`manual_only`. This completes the build lane (Part B reanalysis is build-LAST,
+not yet built).
+
+### Added
+
+- **Regional SST anomaly** (`regional_sst_anomaly`) — per-basin sea-surface-
+  temperature anomaly across 13 global marquee basins (N Atlantic, NE Pacific
+  "Blob", Mediterranean, Tasman, GBR, Coral Triangle, Niño-3.4…) via NOAA Coral
+  Reef Watch's gridded 5 km published anomaly through NOAA CoastWatch ERDDAP (no
+  auth). cos-latitude area-weighted basin mean; tiered absolute anomaly
+  +2.5/+3.5/+4.5°C (NOT Hobday). Distinct from the existing global-mean
+  marine-heatwave streak signal.
+
+### Notes
+
+- Built in a Conductor worktree (PR #198), branched from post-Wave-1 main → no
+  registry conflict. Pre-merge reviewed (0 blockers): `_merge_state` persistence
+  of both new state keys, lag-aware year keying, per-region degradation,
+  fill/valid-range filtering, dateline fail-fast, and min-valid-cell coverage all
+  verified. mypy clean (98 source files), pytest 1531 passed / 22 voice-replay
+  deselected, CI green.
+- Calibration: 0/13 basins fire in June (highest Med +1.97°C) — correct seasonal
+  behavior (SST is a NH-late-summer signal). Box-tightening (basin-wide boxes
+  dilute localized events) is a documented post-summer fast-follow.
+
 ## [0.9.17.0] - 2026-06-08
 
 @extremetemps coverage lane — Wave 1. Three new editorial signal areas ship, all
