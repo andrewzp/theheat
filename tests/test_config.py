@@ -51,20 +51,16 @@ def test_voice_generator_uses_cheap_model_default(monkeypatch):
 
 
 def test_two_bot_callers_use_central_defaults(monkeypatch):
-    """fact_check, claim_extractor, and writer should all read
-    defaults from src/config.py — historically each hardcoded its
-    own and the inconsistency hid the bug for weeks."""
+    """fact_check and writer should both read defaults from src/config.py —
+    historically each hardcoded its own and the inconsistency hid the bug for
+    weeks."""
     monkeypatch.delenv("THEHEAT_CHEAP_MODEL", raising=False)
     monkeypatch.delenv("THEHEAT_WRITER_MODEL", raising=False)
     monkeypatch.delenv("THEHEAT_FACT_CHECK_MODEL", raising=False)
-    monkeypatch.delenv("THEHEAT_CLAIM_EXTRACT_MODEL", raising=False)
     _reload_config()
     import src.two_bot.fact_check as fc
-    import src.two_bot.claim_extractor as ce
     import src.two_bot.writer as wr
     importlib.reload(fc)
-    importlib.reload(ce)
     importlib.reload(wr)
     assert fc.FACT_CHECKER_MODEL == "gemini-2.5-flash"
-    assert ce.CLAIM_EXTRACT_MODEL == "gemini-2.5-flash"
     assert wr.WRITER_MODEL == "claude-sonnet-4-6"
