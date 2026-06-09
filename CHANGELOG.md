@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.21.0] - 2026-06-09
+
+Source-health correctness: a real false-alarm fix. The daily sentinel filed
+`air_quality` as a failing source ([#201](https://github.com/andrewzp/theheat/issues/201),
+"last success: never", 0% rate) while it was actually working — observing 588/638
+cities and promoting candidates every run. Two layers fixed it; the second
+generalizes to every source.
+
+### Fixed
+
+- **air_quality recovers rate-limited cities + stops the false alarm ([#212](https://github.com/andrewzp/theheat/pull/212)).**
+  Open-Meteo's free tier weights multi-city calls heavily and 429s the tail of the
+  638-city / 13-chunk sweep (~12 chunks/min budget, no `Retry-After`).
+  `fetch_with_retry` doesn't retry 429, so ~50 cities (incl. Furnace Creek / Death
+  Valley) dropped every run. Now failed chunks are retried up to `RECOVERY_PASSES`
+  (2) times, waiting out the per-minute window (derived from the server `Date`
+  header). Wire-verified in prod: 638/638 coverage in ~53s. The runner also reports
+  `success` at ≥`AQ_MIN_COVERAGE` (90%) coverage rather than `degraded` on any
+  single city loss — 92%+ coverage with promoted candidates IS a successful run.
+- **Sentinel: a consistently-degraded source is degraded, not failing ([#213](https://github.com/andrewzp/theheat/pull/213)).**
+  `classify_source` computed `failing` (the issue-filing trigger) from clean-success
+  rate alone, so a source that runs `degraded` every cycle — no hard failures, just
+  partial data — read as 0% success and tripped a false `failing` issue. The
+  dashboard's `classifyHealth` already gated `unhealthy` on hard failures, so the two
+  had DIVERGED. Now `failing` requires a hard failure (`failed > 0`) AND a low recent
+  success rate, mirroring the JS. Strictly a false-alarm reducer: it can only move a
+  source `failing → degraded`, never the reverse. Retires the bug class for every
+  source, not just air_quality.
+
+### Notes
+
+- Both source-health issues closed: #201 (air_quality — our fix) and #202
+  (gpm_imerg — NASA genuinely recovered, 3 consecutive successes). Zero open
+  source-health issues; sentinel reads 0 failing / 4 degraded / 31 healthy-idle.
+- air_quality "promoted but not drafted" is working as designed — its model-estimate
+  PM2.5/dust candidates compete in triage and lose to hard extreme-temp/disaster
+  events under `MAX_DRAFTS_PER_CYCLE = 3` + the critic. Not a bug.
+- mypy clean (97 source files); pytest 1626 passed / 25 voice-replay deselected;
+  dashboard 49 JS tests pass; ruff clean.
+
 ## [0.9.20.0] - 2026-06-09
 
 Post-Part-B hardening, performance, and a tech-stack review. The @extremetemps
