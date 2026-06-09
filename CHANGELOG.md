@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.17.0] - 2026-06-08
+
+@extremetemps coverage lane — Wave 1. Three new editorial signal areas ship, all
+`manual_only` (queued for human review; nothing auto-posts).
+
+### Added
+
+- **Absolute-extreme** (`absolute_extreme`) — latitude-banded absolute temperature
+  extremes (e.g. ~50°C in the tropics, ~30°C above the Arctic Circle), riding the
+  existing extreme-signal fetch (no new data). Works on both the Open-Meteo
+  forecast and the GHCN observed paths.
+- **Wet-bulb extreme** (`wet_bulb_extreme`) — heat-stress lethality via Open-Meteo
+  daily `wet_bulb_temperature_2m_max`, wired into the existing forecast + archive
+  requests (no new HTTP calls). Tiers ≥33°C / ≥35°C; framed as forecast-model
+  values, never as an observed "survivability limit."
+- **Air quality** (`air_quality_hazard` + `dust_event`) — NEW CAMS-backed source
+  (Open-Meteo Air Quality API, no key). Hazardous PM2.5 (24h-mean tiers
+  150/250/350 µg/m³, framed against the WHO 15 µg/m³ guideline) + major dust
+  events (daily-max tiers 500/2000/5000 µg/m³). Batched (~13 calls for 638 cities).
+
+### Notes
+
+- Built in parallel Conductor worktrees (PRs #195, #194), each pre-merge reviewed
+  (0 blockers) against its plan's gates; #194's registry conflict resolved by
+  keeping both lanes' entries (fact-check labels sequenced g→h→i).
+- Part B (`reanalysis_anomaly`) plan hardened to **Revision 3** (#196): a 4-agent
+  hardening pass + a Codex cross-model outside-voice review folded 4 verified P0s;
+  decisions made (curated REGION_WATCHLIST + σ floor). Build-LAST, not yet built.
+- SST regional anomaly (gridded NOAA Coral Reef Watch) is Wave 2, in flight.
+- Verification: mypy clean (97 source files), pytest 1495 passed / 22 voice-replay
+  deselected, dashboard 48/48, CI green on all merges.
+
 ## [0.9.16.1] - 2026-06-08
 
 Review follow-up release. No editorial behavior change; this tightens the
