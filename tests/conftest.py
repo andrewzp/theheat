@@ -63,6 +63,10 @@ def pytest_configure(config):
         "markers",
         "allow_network: opt out of the hermeticity gate and allow real outbound connections",
     )
+    config.addinivalue_line(
+        "markers",
+        "real_backoff: opt out of the no-op backoff fixture and run real retry sleeps",
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -71,4 +75,23 @@ def _hermetic_network(request):
         yield
         return
     with patch.object(socket.socket, "connect", _hermetic_connect):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _fast_retry_backoff(request):
+    """No-op fetch_with_retry's exponential backoff so the suite isn't dominated by
+    real waits — ~85% of runtime was 7 tests doing _http retry backoff (1+2s each).
+    Retry *behavior* is asserted via request/call counts, not sleep duration, so
+    this is zero coverage loss.
+
+    Patches the specific ``_sleep_before_retry`` helper, NOT ``time.sleep`` — the
+    latter is the shared global ``time`` module singleton, so no-oping it would
+    silently break tests that use their own ``time.sleep`` for worker timing (e.g.
+    the gpm fan-out cancellation race). Opt out with @pytest.mark.real_backoff.
+    """
+    if "real_backoff" in request.keywords:
+        yield
+        return
+    with patch("src.data._http._sleep_before_retry"):
         yield
