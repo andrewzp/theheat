@@ -48,6 +48,14 @@ def _response(payload: object) -> MagicMock:
     return resp
 
 
+def _http_error(status: int, *, date: str | None = None) -> requests.HTTPError:
+    """Build an HTTPError like fetch_with_retry raises on a 4xx (e.g. a 429)."""
+    resp = MagicMock()
+    resp.status_code = status
+    resp.headers = {"Date": date} if date else {}
+    return requests.HTTPError(response=resp)
+
+
 def _obs(
     *,
     city: str = "Lahore",
@@ -198,7 +206,7 @@ def test_batch_fetch_single_object_response_parsed_for_chunk_size_one():
 
 
 def test_batch_fetch_partial_chunk_failure():
-    """One chunk transport failure leaves that chunk None while later chunks parse."""
+    """With recovery disabled, one chunk transport failure leaves that chunk None."""
     cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
 
     with patch("src.data.air_quality.fetch_with_retry") as mock_fetch:
@@ -206,11 +214,99 @@ def test_batch_fetch_partial_chunk_failure():
             requests.RequestException("timeout"),
             _response([_payload(pm25=[250.0] * 24)]),
         ]
-        observations = fetch_batch_air_quality(cities, chunk_size=50)
+        observations = fetch_batch_air_quality(cities, chunk_size=50, recovery_passes=0)
 
     assert observations[:50] == [None] * 50
     assert observations[50] is not None
     assert observations[50].pm25_24h_mean == pytest.approx(250.0)
+
+
+def test_batch_fetch_recovers_rate_limited_chunk_after_wait():
+    """A 429'd chunk is retried after waiting out Open-Meteo's per-minute window."""
+    cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
+
+    with (
+        patch("src.data.air_quality.time.sleep") as mock_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
+        mock_fetch.side_effect = [
+            _http_error(429, date="Tue, 09 Jun 2026 17:44:57 GMT"),  # chunk 0, main pass
+            _response([_payload()]),                                 # chunk 1, main pass
+            _response([_payload() for _ in range(50)]),              # chunk 0, recovery
+        ]
+        observations = fetch_batch_air_quality(cities, chunk_size=50)
+
+    assert observations[0] is not None  # recovered after the wait
+    assert observations[49] is not None
+    assert observations[50] is not None
+    assert mock_sleep.call_count == 1
+
+
+def test_batch_fetch_no_failures_does_not_sleep():
+    """A fully successful sweep never waits — no added latency on healthy runs."""
+    cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
+
+    with (
+        patch("src.data.air_quality.time.sleep") as mock_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
+        mock_fetch.side_effect = [
+            _response([_payload() for _ in range(50)]),
+            _response([_payload()]),
+        ]
+        fetch_batch_air_quality(cities, chunk_size=50)
+
+    assert mock_sleep.call_count == 0
+
+
+def test_batch_fetch_recovers_transport_failed_chunk():
+    """A transient transport failure (not a 429) is also retried after a wait."""
+    cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(50)]
+
+    with (
+        patch("src.data.air_quality.time.sleep") as mock_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
+        mock_fetch.side_effect = [
+            requests.RequestException("timeout"),         # main pass fails
+            _response([_payload() for _ in range(50)]),   # recovery succeeds
+        ]
+        observations = fetch_batch_air_quality(cities, chunk_size=50)
+
+    assert all(obs is not None for obs in observations)
+    assert mock_sleep.call_count == 1
+
+
+def test_batch_fetch_gives_up_after_recovery_passes():
+    """A persistently rate-limited chunk is retried a bounded number of times, then left None."""
+    cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(50)]
+    err = _http_error(429, date="Tue, 09 Jun 2026 17:44:30 GMT")
+
+    with (
+        patch("src.data.air_quality.time.sleep") as mock_sleep,
+        patch("src.data.air_quality.fetch_with_retry", side_effect=err) as mock_fetch,
+    ):
+        observations = fetch_batch_air_quality(cities, chunk_size=50, recovery_passes=2)
+
+    assert observations == [None] * 50
+    assert mock_sleep.call_count == 2   # two recovery passes
+    assert mock_fetch.call_count == 3   # main pass + 2 retries
+
+
+def test_rate_limit_wait_seconds_from_date_header():
+    """Wait = seconds to the next clock-minute boundary plus a small buffer."""
+    from src.data.air_quality import _rate_limit_wait_seconds
+
+    # :57 into the minute -> 3s to the boundary + 2s buffer = 5s
+    assert _rate_limit_wait_seconds("Tue, 09 Jun 2026 17:44:57 GMT") == pytest.approx(5.0)
+
+
+def test_rate_limit_wait_seconds_default_without_date():
+    """No server Date -> a safe blind wait that clears a full minute window."""
+    from src.data.air_quality import _RATE_LIMIT_DEFAULT_WAIT_S, _rate_limit_wait_seconds
+
+    assert _rate_limit_wait_seconds(None) == _RATE_LIMIT_DEFAULT_WAIT_S
+    assert _RATE_LIMIT_DEFAULT_WAIT_S >= 60.0
 
 
 def test_batch_fetch_all_null_pm25():

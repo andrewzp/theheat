@@ -11,8 +11,10 @@ Evidence grade: CAMS global model is gridded at 0.4 degrees, updated every
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from datetime import date
+from email.utils import parsedate_to_datetime
 from statistics import mean
 from typing import Any
 
@@ -31,6 +33,18 @@ try:
     CHUNK_SIZE: int = int(os.environ.get("THEHEAT_AQ_CHUNK_SIZE", "50"))
 except ValueError:
     CHUNK_SIZE = 50
+
+# Open-Meteo's free tier enforces a per-minute request budget (empirically ~12 of
+# our 50-city chunks). A 638-city sweep is ~13 chunks, so the tail chunk(s) get
+# HTTP 429 — and the response carries no Retry-After header, so we wait out the
+# clock-minute window and retry the rate-limited (or otherwise failed) chunks.
+# RECOVERY_PASSES bounds the retries; the source runner treats a small residual
+# loss as a successful run rather than a failure.
+RECOVERY_PASSES: int = 2
+_RATE_LIMIT_DEFAULT_WAIT_S: float = 62.0  # blind wait when no server Date header
+_RATE_LIMIT_WAIT_BUFFER_S: float = 2.0
+_RATE_LIMIT_WAIT_MIN_S: float = 3.0
+_RATE_LIMIT_WAIT_MAX_S: float = 63.0
 
 # PROVISIONAL CAMS-calibrated tiers. Step 0 evidence accepted clean-city floors
 # and a real Delhi dust event; keep these constants unless calibration is rerun.
@@ -144,15 +158,94 @@ def _parse_single_location(
     )
 
 
+def _rate_limit_wait_seconds(date_header: str | None) -> float:
+    """Seconds to wait out Open-Meteo's per-minute window before retrying.
+
+    Open-Meteo sends no Retry-After on a 429, so derive the time to the next
+    clock-minute boundary from the server Date header (the limit resets per
+    calendar minute). Falls back to a safe blind wait when the header is missing
+    or unparseable.
+    """
+    if not date_header:
+        return _RATE_LIMIT_DEFAULT_WAIT_S
+    try:
+        parsed = parsedate_to_datetime(date_header)
+    except (TypeError, ValueError):
+        return _RATE_LIMIT_DEFAULT_WAIT_S
+    seconds_into_minute = parsed.second + parsed.microsecond / 1_000_000
+    wait = (60.0 - seconds_into_minute) + _RATE_LIMIT_WAIT_BUFFER_S
+    return max(_RATE_LIMIT_WAIT_MIN_S, min(wait, _RATE_LIMIT_WAIT_MAX_S))
+
+
+def _fetch_chunk(
+    chunk: list[dict],
+    today_str: str,
+) -> tuple[list[CityAirQuality | None], bool, str | None]:
+    """Fetch and parse one batched chunk.
+
+    Returns ``(results, ok, rate_limit_date)``. ``ok`` is False when the HTTP
+    fetch failed entirely (every city in the chunk stays None). ``rate_limit_date``
+    carries the server Date header when the failure was a 429, so the caller can
+    time the wait before retrying.
+    """
+    out: list[CityAirQuality | None] = [None] * len(chunk)
+    lats = ",".join(str(city["lat"]) for city in chunk)
+    lons = ",".join(str(city["lon"]) for city in chunk)
+
+    try:
+        response = fetch_with_retry(
+            AQ_URL,
+            timeout=30,
+            params={
+                "latitude": lats,
+                "longitude": lons,
+                "hourly": "pm2_5,dust,aerosol_optical_depth,us_aqi",
+                "timezone": "auto",
+                "forecast_days": 1,
+                "past_days": 1,
+            },
+        )
+        payload = response.json()
+    except requests.HTTPError as exc:
+        resp = exc.response
+        if resp is not None and resp.status_code == 429:
+            return out, False, resp.headers.get("Date")
+        return out, False, None
+    except (requests.RequestException, ValueError):
+        return out, False, None
+
+    location_list = payload if isinstance(payload, list) else [payload]
+    for offset, loc_data in enumerate(location_list):
+        if offset >= len(chunk) or not isinstance(loc_data, dict):
+            break
+        row = chunk[offset]
+        try:
+            out[offset] = _parse_single_location(
+                loc_data,
+                city=str(row["city"]),
+                country=str(row["country"]),
+                lat=float(row["lat"]),
+                lon=float(row["lon"]),
+                today_str=today_str,
+            )
+        except (KeyError, TypeError, ValueError):
+            out[offset] = None
+    return out, True, None
+
+
 def fetch_batch_air_quality(
     cities: list[dict],
     *,
     chunk_size: int = CHUNK_SIZE,
+    recovery_passes: int = RECOVERY_PASSES,
 ) -> list[CityAirQuality | None]:
     """Fetch air-quality observations for city rows in batched HTTP calls.
 
-    Returns one result per input city. Entries are None when a chunk fails or
-    an individual location response cannot be parsed.
+    Returns one result per input city. Entries are None when a chunk's fetch
+    fails or an individual location response cannot be parsed. Chunks that fail
+    the first pass — typically Open-Meteo rate-limiting the tail of the sweep —
+    are retried up to ``recovery_passes`` times, waiting out the per-minute
+    window between passes.
     """
     if chunk_size < 1:
         raise ValueError("chunk_size must be >= 1")
@@ -160,44 +253,26 @@ def fetch_batch_air_quality(
     today_str = date.today().isoformat()
     results: list[CityAirQuality | None] = [None] * len(cities)
 
-    for chunk_start in range(0, len(cities), chunk_size):
-        chunk = cities[chunk_start : chunk_start + chunk_size]
-        lats = ",".join(str(city["lat"]) for city in chunk)
-        lons = ",".join(str(city["lon"]) for city in chunk)
-
-        try:
-            response = fetch_with_retry(
-                AQ_URL,
-                timeout=30,
-                params={
-                    "latitude": lats,
-                    "longitude": lons,
-                    "hourly": "pm2_5,dust,aerosol_optical_depth,us_aqi",
-                    "timezone": "auto",
-                    "forecast_days": 1,
-                    "past_days": 1,
-                },
-            )
-            payload = response.json()
-        except (requests.RequestException, ValueError):
-            continue
-
-        location_list = payload if isinstance(payload, list) else [payload]
-        for offset, loc_data in enumerate(location_list):
-            if offset >= len(chunk) or not isinstance(loc_data, dict):
-                break
-            row = chunk[offset]
-            try:
-                results[chunk_start + offset] = _parse_single_location(
-                    loc_data,
-                    city=str(row["city"]),
-                    country=str(row["country"]),
-                    lat=float(row["lat"]),
-                    lon=float(row["lon"]),
-                    today_str=today_str,
-                )
-            except (KeyError, TypeError, ValueError):
-                results[chunk_start + offset] = None
+    pending = list(range(0, len(cities), chunk_size))
+    rate_limit_date: str | None = None
+    for attempt in range(recovery_passes + 1):
+        if attempt > 0:
+            time.sleep(_rate_limit_wait_seconds(rate_limit_date))
+        rate_limit_date = None
+        still_failed: list[int] = []
+        for chunk_start in pending:
+            chunk = cities[chunk_start : chunk_start + chunk_size]
+            chunk_results, ok, date_header = _fetch_chunk(chunk, today_str)
+            if ok:
+                for offset, value in enumerate(chunk_results):
+                    results[chunk_start + offset] = value
+            else:
+                still_failed.append(chunk_start)
+                if date_header is not None:
+                    rate_limit_date = date_header
+        pending = still_failed
+        if not pending:
+            break
 
     return results
 

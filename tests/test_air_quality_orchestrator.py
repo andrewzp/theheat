@@ -222,3 +222,46 @@ def test_multi_city_tier_state_each_recorded(bot_state, monkeypatch):
         "lahore": {"tier": 1, "date": "2026-06-08"},
         "delhi": {"tier": 2, "date": "2026-06-08"},
     }
+
+
+def test_run_air_quality_high_coverage_partial_loss_reports_success(bot_state, monkeypatch):
+    """Losing a small fraction of cities (e.g. a rate-limited tail chunk) is still a
+    successful run — not 'degraded' — so a permanently-partial source doesn't read
+    as 0% success to the health sentinel."""
+    from src.orchestrator.sources.air_quality import run_air_quality
+
+    # 20 cities, 1 fetch failure -> 95% coverage.
+    observations = [_obs(city=f"C{i}", pm25=10.0) for i in range(19)] + [None]
+    cities = [_city(city=f"C{i}") for i in range(20)]
+    monkeypatch.setattr(
+        "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
+        lambda rows: observations,
+    )
+
+    current_run = {"sources": []}
+    run_air_quality(bot_state, current_run, cities)
+
+    entry = next(s for s in current_run["sources"] if s["source"] == "air_quality")
+    assert entry["status"] == "success"
+    assert entry["observed"] == 19
+    assert entry["details"]["failed_cities"] == 1
+
+
+def test_run_air_quality_low_coverage_reports_degraded(bot_state, monkeypatch):
+    """A large coverage shortfall is 'degraded' so genuine breakage still surfaces."""
+    from src.orchestrator.sources.air_quality import run_air_quality
+
+    # 20 cities, 16 fetch failures -> 20% coverage.
+    observations = [_obs(city=f"C{i}", pm25=10.0) for i in range(4)] + [None] * 16
+    cities = [_city(city=f"C{i}") for i in range(20)]
+    monkeypatch.setattr(
+        "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
+        lambda rows: observations,
+    )
+
+    current_run = {"sources": []}
+    run_air_quality(bot_state, current_run, cities)
+
+    entry = next(s for s in current_run["sources"] if s["source"] == "air_quality")
+    assert entry["status"] == "degraded"
+    assert entry["observed"] == 4
