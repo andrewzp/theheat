@@ -1,0 +1,472 @@
+[
+  {
+    "base": {
+      "co2_annual_count": {
+        "2025": 4,
+        "2026": 2
+      }
+    },
+    "expected": {
+      "co2_annual_count": {
+        "2025": 4,
+        "2026": 5,
+        "2027": 1
+      }
+    },
+    "incoming": {
+      "co2_annual_count": {
+        "2026": 5,
+        "2027": 1
+      }
+    },
+    "label": "max_by_key.int.co2"
+  },
+  {
+    "base": {
+      "ice_annual_count": {
+        "2026": 3
+      }
+    },
+    "expected": {
+      "ice_annual_count": {
+        "2026": 7
+      }
+    },
+    "incoming": {
+      "ice_annual_count": {
+        "2026": 7
+      }
+    },
+    "label": "max_by_key.int.ice_annual"
+  },
+  {
+    "base": {
+      "fire_complex_tiers": {
+        "A": 2
+      }
+    },
+    "expected": {
+      "fire_complex_tiers": {
+        "A": 2,
+        "C": 0
+      }
+    },
+    "incoming": {
+      "fire_complex_tiers": {
+        "A": 1,
+        "C": 0
+      }
+    },
+    "label": "max_by_key.floor_neg1.fire_tier0"
+  },
+  {
+    "base": {
+      "cyclone_tiers": {}
+    },
+    "expected": {
+      "cyclone_tiers": {
+        "nhc:al01": 0
+      }
+    },
+    "incoming": {
+      "cyclone_tiers": {
+        "nhc:al01": 0
+      }
+    },
+    "label": "max_by_key.floor_neg1.cyclone_tier0"
+  },
+  {
+    "base": {
+      "ice_mass_last_seen": {
+        "greenland": "2026-01"
+      }
+    },
+    "expected": {
+      "ice_mass_last_seen": {
+        "antarctica": "2025-12",
+        "greenland": "2026-03"
+      }
+    },
+    "incoming": {
+      "ice_mass_last_seen": {
+        "antarctica": "2025-12",
+        "greenland": "2026-03"
+      }
+    },
+    "label": "max_by_key.str.ice_last_seen"
+  },
+  {
+    "base": {
+      "reganom_last_fired": {
+        "sahel": "2026-05-01"
+      }
+    },
+    "expected": {
+      "reganom_last_fired": {
+        "sahel": "2026-06-01"
+      }
+    },
+    "incoming": {
+      "reganom_last_fired": {
+        "sahel": "2026-06-01"
+      }
+    },
+    "label": "max_by_key.str.reganom"
+  },
+  {
+    "base": {
+      "ice_mass_max_loss": {
+        "r": {
+          "gt": -3.0,
+          "month": "2026-01"
+        }
+      }
+    },
+    "expected": {
+      "ice_mass_max_loss": {
+        "r": {
+          "gt": -7.0,
+          "month": "2026-02"
+        }
+      }
+    },
+    "incoming": {
+      "ice_mass_max_loss": {
+        "r": {
+          "gt": -7.0,
+          "month": "2026-02"
+        }
+      }
+    },
+    "label": "reduce.ice_max_loss"
+  },
+  {
+    "base": {
+      "ice_mass_last_milestone": {
+        "r": -5.0
+      }
+    },
+    "expected": {
+      "ice_mass_last_milestone": {
+        "r": -5.0
+      }
+    },
+    "incoming": {
+      "ice_mass_last_milestone": {}
+    },
+    "label": "reduce.ice_milestone_onesided"
+  },
+  {
+    "base": {
+      "air_quality_pm25_tiers": {
+        "delhi": {
+          "date": "2026-06-01",
+          "tier": 2
+        }
+      }
+    },
+    "expected": {
+      "air_quality_pm25_tiers": {
+        "delhi": {
+          "date": "2026-06-05",
+          "tier": 1
+        }
+      }
+    },
+    "incoming": {
+      "air_quality_pm25_tiers": {
+        "delhi": {
+          "date": "2026-06-05",
+          "tier": 1
+        }
+      }
+    },
+    "label": "reduce.aq_newer_date"
+  },
+  {
+    "base": {
+      "air_quality_dust_tiers": {
+        "lahore": {
+          "date": "2026-06-01",
+          "tier": 1
+        }
+      }
+    },
+    "expected": {
+      "air_quality_dust_tiers": {
+        "lahore": {
+          "date": "2026-06-01",
+          "tier": 3
+        }
+      }
+    },
+    "incoming": {
+      "air_quality_dust_tiers": {
+        "lahore": {
+          "date": "2026-06-01",
+          "tier": 3
+        }
+      }
+    },
+    "label": "reduce.aq_higher_tier_same_date"
+  },
+  {
+    "base": {
+      "flood_activation_tiers": {
+        "EMSR1": "Minor"
+      }
+    },
+    "expected": {
+      "flood_activation_tiers": {
+        "EMSR1": "Major"
+      }
+    },
+    "incoming": {
+      "flood_activation_tiers": {
+        "EMSR1": "Major"
+      }
+    },
+    "label": "reduce.flood_severity"
+  },
+  {
+    "base": {
+      "daily_tweet_count": {
+        "2026-06-01": 3
+      }
+    },
+    "expected": {
+      "daily_tweet_count": {
+        "2026-06-01": 3,
+        "2026-06-09": 1
+      }
+    },
+    "incoming": {
+      "daily_tweet_count": {
+        "2026-06-09": 1
+      }
+    },
+    "label": "dict_overlay.daily"
+  },
+  {
+    "base": {
+      "posted_events": [
+        "a",
+        "b"
+      ]
+    },
+    "expected": {
+      "posted_events": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    "incoming": {
+      "posted_events": [
+        "b",
+        "c"
+      ]
+    },
+    "label": "ordered_unique.posted"
+  },
+  {
+    "base": {
+      "nao_last_phase": "positive"
+    },
+    "expected": {
+      "nao_last_phase": "negative"
+    },
+    "incoming": {
+      "nao_last_phase": "negative"
+    },
+    "label": "take_incoming.last_phase"
+  },
+  {
+    "base": {
+      "record_streaks": {
+        "Cairo": {
+          "days": 2
+        }
+      }
+    },
+    "expected": {
+      "record_streaks": {
+        "Cairo": {
+          "days": 3
+        }
+      }
+    },
+    "incoming": {
+      "record_streaks": {
+        "Cairo": {
+          "days": 3
+        }
+      }
+    },
+    "label": "take_incoming.record_streaks"
+  },
+  {
+    "base": {},
+    "expected": {
+      "ch4_last_milestone": 1940
+    },
+    "incoming": {
+      "ch4_last_milestone": 1940
+    },
+    "label": "custom.ch4_onesided"
+  },
+  {
+    "base": {
+      "ch4_last_milestone": 1900
+    },
+    "expected": {
+      "ch4_last_milestone": 1950
+    },
+    "incoming": {
+      "ch4_last_milestone": 1950
+    },
+    "label": "custom.ch4_both"
+  },
+  {
+    "base": {
+      "fire_footprint_last_run": "2026-06-01"
+    },
+    "expected": {
+      "fire_footprint_last_run": "2026-06-02"
+    },
+    "incoming": {
+      "fire_footprint_last_run": "2026-06-02"
+    },
+    "label": "custom.fire_footprint"
+  },
+  {
+    "base": {
+      "data_source_failures": {
+        "open_meteo": 4
+      }
+    },
+    "expected": {
+      "data_source_failures": {
+        "open_meteo": 0
+      }
+    },
+    "incoming": {
+      "data_source_failures": {
+        "open_meteo": 0
+      }
+    },
+    "label": "custom.dsf_reset"
+  },
+  {
+    "base": {
+      "data_source_failures": {
+        "open_meteo": 4
+      }
+    },
+    "expected": {
+      "data_source_failures": {
+        "open_meteo": 4
+      }
+    },
+    "incoming": {
+      "data_source_failures": {}
+    },
+    "label": "custom.dsf_absent_keeps_base"
+  },
+  {
+    "base": {
+      "ozone_hole_last_peak": {
+        "2026": {
+          "area_million_km2": 22.0
+        }
+      }
+    },
+    "expected": {
+      "ozone_hole_last_peak": {
+        "2026": {
+          "area_million_km2": 25.0
+        }
+      }
+    },
+    "incoming": {
+      "ozone_hole_last_peak": {
+        "2026": {
+          "area_million_km2": 25.0
+        }
+      }
+    },
+    "label": "custom.ozone_peak"
+  },
+  {
+    "base": {
+      "co2_annual_count": {
+        "2026": 3
+      },
+      "daily_tweet_count": {
+        "2026-06-08": 2
+      },
+      "data_source_failures": {
+        "gpm_imerg": 2
+      },
+      "fire_complex_tiers": {
+        "A": 1
+      },
+      "posted_events": [
+        "e1"
+      ],
+      "reganom_last_fired": {
+        "sahel": "2026-05-01"
+      }
+    },
+    "expected": {
+      "co2_annual_count": {
+        "2026": 5,
+        "2027": 1
+      },
+      "daily_tweet_count": {
+        "2026-06-08": 2,
+        "2026-06-09": 1
+      },
+      "data_source_failures": {
+        "air_quality": 1,
+        "gpm_imerg": 0
+      },
+      "fire_complex_tiers": {
+        "A": 1,
+        "B": 2
+      },
+      "posted_events": [
+        "e1",
+        "e2"
+      ],
+      "reganom_last_fired": {
+        "sahel": "2026-06-01"
+      }
+    },
+    "incoming": {
+      "co2_annual_count": {
+        "2026": 5,
+        "2027": 1
+      },
+      "daily_tweet_count": {
+        "2026-06-09": 1
+      },
+      "data_source_failures": {
+        "air_quality": 1,
+        "gpm_imerg": 0
+      },
+      "fire_complex_tiers": {
+        "A": 0,
+        "B": 2
+      },
+      "posted_events": [
+        "e1",
+        "e2"
+      ],
+      "reganom_last_fired": {
+        "sahel": "2026-06-01"
+      }
+    },
+    "label": "multikey.realistic"
+  }
+]
