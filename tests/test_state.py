@@ -318,6 +318,125 @@ class TestAirQualityTierMerge:
         assert merged["air_quality_pm25_tiers"]["delhi"] == {"tier": 3, "date": "2026-06-05"}
 
 
+class TestDataSourceFailuresMerge:
+    def test_incoming_reset_clears_the_streak(self):
+        # THE bug guard: incoming (in-process) is authoritative; a success-reset
+        # (0) must win over the persisted streak, NOT be erased by max().
+        from src.state import _merge_state
+        merged = _merge_state(
+            {"data_source_failures": {"open_meteo_extreme_signals": 3}},
+            {"data_source_failures": {"open_meteo_extreme_signals": 0}},
+        )
+        assert merged["data_source_failures"]["open_meteo_extreme_signals"] == 0
+
+    def test_nonzero_streak_takes_max_with_persisted(self):
+        # A stale concurrent run can't silently shorten a real outage streak.
+        from src.state import _merge_state
+        merged = _merge_state(
+            {"data_source_failures": {"open_meteo_extreme_signals": 5}},
+            {"data_source_failures": {"open_meteo_extreme_signals": 2}},
+        )
+        assert merged["data_source_failures"]["open_meteo_extreme_signals"] == 5
+
+    def test_source_untouched_this_cycle_keeps_persisted_streak(self):
+        from src.state import _merge_state
+        merged = _merge_state(
+            {"data_source_failures": {"gpm_imerg": 4}},
+            {"data_source_failures": {"firms": 2}},  # gpm not touched this cycle
+        )
+        assert merged["data_source_failures"]["gpm_imerg"] == 4
+        assert merged["data_source_failures"]["firms"] == 2
+
+    def test_merge_preserves_streak_when_both_sides_have_it(self):
+        from src.state import _merge_state
+        v = {"open_meteo_extreme_signals": 3}
+        merged = _merge_state({"data_source_failures": v}, {"data_source_failures": v})
+        assert merged["data_source_failures"] == v
+
+
+class TestMergeStateContract:
+    """Contract: every DEFAULT_STATE key must be HANDLED by _merge_state, so the
+    "added a key but forgot the merge handler" class of bug (which silently reset
+    air_quality / data_source_failures on every write) can't silently recur.
+
+    Scope/limits: this proves a handler EXISTS — a key with NO handler returns the
+    bare _fresh_state() default for any input and never raises, so it is flagged.
+    It does NOT prove a handler PRESERVES data (a buggy handler that raises on the
+    generic probe is treated as "handled"). Preservation IS proven, for the
+    allowlisted custom-helper keys, by the companion test below — which is coupled
+    to the allowlist so a future allowlist entry can't ship without that proof.
+    """
+
+    # Keys handled via a custom merge helper whose output is default-shaped for the
+    # GENERIC probe below — NOT gaps.
+    HANDLED_VIA_CUSTOM_HELPER = {"memory", "synthesis_components"}
+
+    # Correctly-shaped fixtures proving each allowlisted key genuinely preserves
+    # data (keyed by allowlist membership — see the coverage assertion below).
+    _PRESERVE_FIXTURES = {
+        "memory": (
+            {"used_era_anchors": ["a1"], "used_framings": ["f1"]},
+            lambda m: "a1" in m.get("used_era_anchors", []),
+        ),
+        "synthesis_components": (
+            {
+                "fires": {"CA": [{"event_id": "e1", "frp": 100, "region": "r", "at": "2026-06-09"}]},
+                "heats": {},
+                "drought_snapshot": None,
+            },
+            lambda m: m.get("fires", {}).get("CA", [{}])[0].get("event_id") == "e1",
+        ),
+    }
+
+    @staticmethod
+    def _probe(default):
+        if isinstance(default, dict):
+            return {"__probe__": {"__p__": 7}}
+        if isinstance(default, list):
+            return [{"id": "__probe__"}]
+        if isinstance(default, bool):
+            return not default
+        if isinstance(default, str):
+            return "2099-12-31T00:00:00Z"
+        if isinstance(default, (int, float)):
+            return (default or 0) + 7
+        return "__probe__"
+
+    def test_every_default_state_key_is_merge_handled(self):
+        from src.state import DEFAULT_STATE, _merge_state
+
+        gaps = []
+        for key, default in DEFAULT_STATE.items():
+            probe = self._probe(default)
+            # A probe that collides with the default would make a real gap invisible
+            # (probe == default => can't tell "preserved" from "reset"). Fail loudly.
+            assert probe != default, f"probe for {key!r} collides with its default; fix _probe"
+            try:
+                merged = _merge_state({key: probe}, {key: probe})
+            except Exception:
+                # A type-strict handler raised on the malformed probe => it handles
+                # the key. A key with NO handler never errors (returns the default).
+                continue
+            if merged.get(key) == default and key not in self.HANDLED_VIA_CUSTOM_HELPER:
+                gaps.append(key)
+        assert gaps == [], (
+            "_merge_state silently resets these DEFAULT_STATE keys to default — add "
+            f"an explicit merge handler (or, if intentional, allowlist): {gaps}"
+        )
+
+    def test_allowlisted_keys_actually_preserve_correct_shaped_values(self):
+        from src.state import _merge_state
+
+        # Coupled to the allowlist: every allowlisted key must have a preservation
+        # fixture here, so a future allowlist entry can't ship without proving its
+        # custom helper actually keeps data.
+        assert set(self._PRESERVE_FIXTURES) == self.HANDLED_VIA_CUSTOM_HELPER
+
+        for key, (value, check) in self._PRESERVE_FIXTURES.items():
+            merged = _merge_state({key: value}, {key: value})[key]
+            assert check(merged), f"_merge_state dropped data for allowlisted key {key!r}"
+
+
 class TestReganomState:
     def test_default_state_has_reganom_last_fired(self):
         from src.state import DEFAULT_STATE
