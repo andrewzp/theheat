@@ -1096,7 +1096,12 @@ def _write_gist_state(state: BotState) -> bool:
             json={
                 "files": {
                     STATE_FILENAME: {
-                        "content": json.dumps(normalized, indent=2, default=json_default)
+                        # Minified, not indent=2: pretty-printing added ~35% size
+                        # and pushed prod past the ~928 KB inline-content
+                        # truncation cliff on 2026-05-13. Reads handle either form.
+                        "content": json.dumps(
+                            normalized, separators=(",", ":"), default=json_default
+                        )
                     }
                 }
             },

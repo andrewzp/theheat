@@ -318,6 +318,33 @@ class TestAirQualityTierMerge:
         assert merged["air_quality_pm25_tiers"]["delhi"] == {"tier": 3, "date": "2026-06-05"}
 
 
+class TestGistWriteCompact:
+    def test_gist_state_is_written_minified(self):
+        # Regression: gist content must be compact (separators), not indent=2.
+        # indent=2 added ~35% size (1606 KB -> 985 KB) and pushed prod past the
+        # ~928 KB inline-content truncation cliff on 2026-05-13 (3 runs failed).
+        # Reads (json.loads / JSON.parse) handle either format, so compact is free.
+        from src import state as _state
+
+        captured = {}
+
+        class _Resp:
+            def raise_for_status(self):
+                return None
+
+        def _fake_patch(url, headers=None, json=None, timeout=None):
+            captured["json"] = json
+            return _Resp()
+
+        with patch.multiple("src.state", GIST_ID="g", GITHUB_TOKEN="t"), patch.object(
+            _state.requests, "patch", _fake_patch
+        ):
+            assert _state._write_gist_state({**DEFAULT_STATE}) is True
+
+        content = next(iter(captured["json"]["files"].values()))["content"]
+        assert "\n  " not in content, "gist content must be minified (separators), not indent=2"
+
+
 class TestDataSourceFailuresMerge:
     def test_incoming_reset_clears_the_streak(self):
         # THE bug guard: incoming (in-process) is authoritative; a success-reset
