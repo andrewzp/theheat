@@ -4,7 +4,7 @@ from copy import deepcopy
 import json
 import os
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Callable, cast
 
 import requests
 
@@ -600,320 +600,138 @@ def _pick_newer_city_tier(a: dict | None, b: dict | None) -> dict | None:
     return a if int(a.get("tier", 0)) >= int(b.get("tier", 0)) else b
 
 
+# ---------------------------------------------------------------------------
+# Declarative merge strategies. Each strategy is a callable (base, next) -> merged
+# wired to a state key in MERGE_SPEC (defined after the merge helpers, below).
+# Replaces the former 314-line imperative _merge_state. See
+# docs/superpowers/specs/2026-06-09-merge-spec-design.md for the full key->strategy
+# mapping and the equivalence contract (byte-identical on schema-valid state).
+# ---------------------------------------------------------------------------
+
+
+def _strat_take_incoming(base: Any, nxt: Any) -> Any:
+    """Replace with the incoming value (detection fns only write on change)."""
+    return deepcopy(nxt)
+
+
+def _strat_dict_overlay(base: Any, nxt: Any) -> dict:
+    """Per-key last-writer-wins overlay, deepcopied to avoid aliasing the inputs."""
+    return {**deepcopy(base or {}), **deepcopy(nxt or {})}
+
+
+def _strat_ordered_unique(max_items: int) -> Callable[..., Any]:
+    """Order-preserving union with a tail cap (e.g. posted_events)."""
+
+    def merge(base: Any, nxt: Any) -> list:
+        return _merge_ordered_unique(base or [], nxt or [], max_items=max_items)
+
+    return merge
+
+
+def _strat_max_by_key(floor: Any) -> Callable[..., Any]:
+    """Per-key raw max over the key union; an absent key defaults to ``floor``.
+
+    Raw comparison (no int()/str() coercion) keeps the stored value's type and
+    reproduces the current per-key loops exactly on schema-valid state. ``floor``
+    is the per-side default for an absent key, applied by membership — never
+    ``value or floor`` (which would collapse a legitimate 0 tier to a -1 floor).
+    """
+
+    def merge(base: Any, nxt: Any) -> dict:
+        base = base or {}
+        nxt = nxt or {}
+        out: dict = {}
+        for key in set(base) | set(nxt):
+            a = base[key] if key in base else floor
+            b = nxt[key] if key in nxt else floor
+            out[key] = a if a >= b else b
+        return out
+
+    return merge
+
+
+def _strat_reduce_by_key(reducer: Callable[[Any, Any], Any]) -> Callable[..., Any]:
+    """Per-key reduce over the key union via ``reducer(base_v, next_v)``.
+
+    The reducer receives ``None`` for an absent side and may be asymmetric. The
+    chosen value is deepcopied so a returned dict never aliases an input snapshot.
+    """
+
+    def merge(base: Any, nxt: Any) -> dict:
+        base = base or {}
+        nxt = nxt or {}
+        out: dict = {}
+        for key in set(base) | set(nxt):
+            out[key] = deepcopy(reducer(base.get(key), nxt.get(key)))
+        return out
+
+    return merge
+
+
+def _keep_min_gt(a: dict | None, b: dict | None) -> dict | None:
+    """ice_mass_max_loss reducer: keep the more-negative gt (worst loss); ties keep a."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return a if a.get("gt", 0.0) <= b.get("gt", 0.0) else b
+
+
+def _present_min(a: Any, b: Any) -> Any:
+    """ice_mass_last_milestone reducer: take the present side, else the minimum."""
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return min(a, b)
+
+
+def _merge_ch4_last_milestone(base: Any, nxt: Any) -> Any:
+    """One-sided: take the present value unchanged. Both present: max of the ints."""
+    if base is None:
+        return nxt
+    if nxt is None:
+        return base
+    return max(int(base), int(nxt))
+
+
+def _merge_fire_footprint_last_run(base: Any, nxt: Any) -> str | None:
+    """Daily-gate ISO date: keep the later string; an empty result collapses to None."""
+    return max(base or "", nxt or "") or None
+
+
+def _merge_data_source_failures(base: Any, nxt: Any) -> dict:
+    """Per-provider consecutive-failure streak. Incoming (this cycle) is authoritative:
+    a 0 clears the streak; a non-zero takes the max with the persisted value so a stale
+    concurrent run can't shorten a real outage; a source untouched this cycle keeps its
+    persisted streak.
+    """
+    base = base or {}
+    nxt = nxt or {}
+    out: dict = {}
+    for src in set(base) | set(nxt):
+        if src in nxt:
+            n = int(nxt.get(src, 0))
+            out[src] = 0 if n == 0 else max(n, int(base.get(src, 0)))
+        else:
+            out[src] = int(base.get(src, 0))
+    return out
+
+
 def _merge_state(current: BotState | dict | None, incoming: BotState | dict | None) -> BotState:
+    """Reconcile two state snapshots key-by-key via MERGE_SPEC.
+
+    Every DEFAULT_STATE key has exactly one strategy (enforced by
+    test_merge_spec_covers_exactly_default_state), so a newly added key can never
+    silently reset on write. Strategies are independent (no cross-key reads), so
+    MERGE_SPEC iteration order does not affect the result.
+    """
     base = _normalize_state(current)
-    next_state = _normalize_state(incoming)
-    merged: BotState = _fresh_state()
-    merged["last_hot10"] = deepcopy(next_state.get("last_hot10", base["last_hot10"]))
-    merged["streaks"] = deepcopy(next_state.get("streaks", base["streaks"]))
-    merged["posted_events"] = _merge_ordered_unique(
-        base.get("posted_events", []),
-        next_state.get("posted_events", []),
-        max_items=500,
-    )
-    merged["daily_tweet_count"] = {
-        **deepcopy(base.get("daily_tweet_count", {})),
-        **deepcopy(next_state.get("daily_tweet_count", {})),
-    }
-    # For co2_annual_count, prefer max per year so concurrent runs don't
-    # lose increments (last-writer-wins would drop a concurrent draft).
-    merged["co2_annual_count"] = {}
-    for year in set(
-        list(base.get("co2_annual_count", {}).keys())
-        + list(next_state.get("co2_annual_count", {}).keys())
-    ):
-        merged["co2_annual_count"][year] = max(
-            base.get("co2_annual_count", {}).get(year, 0),
-            next_state.get("co2_annual_count", {}).get(year, 0),
-        )
-    merged["ch4_annual_count"] = {}
-    for year in set(
-        list(base.get("ch4_annual_count", {}).keys())
-        + list(next_state.get("ch4_annual_count", {}).keys())
-    ):
-        merged["ch4_annual_count"][year] = max(
-            base.get("ch4_annual_count", {}).get(year, 0),
-            next_state.get("ch4_annual_count", {}).get(year, 0),
-        )
-    base_ch4 = base.get("ch4_last_milestone")
-    next_ch4 = next_state.get("ch4_last_milestone")
-    if base_ch4 is None:
-        merged["ch4_last_milestone"] = next_ch4
-    elif next_ch4 is None:
-        merged["ch4_last_milestone"] = base_ch4
-    else:
-        merged["ch4_last_milestone"] = max(int(base_ch4), int(next_ch4))
-    merged_writeable: dict = cast(dict, merged)
-    for key in ("nao_annual_count", "ao_annual_count", "pdo_annual_count", "ozone_hole_annual_count"):
-        base_counts = cast(dict, base.get(key, {}))
-        next_counts = cast(dict, next_state.get(key, {}))
-        merged_counts: dict[str, int] = {}
-        for year in set(
-            list(base_counts.keys())
-            + list(next_counts.keys())
-        ):
-            merged_counts[year] = max(
-                int(base_counts.get(year, 0) or 0),
-                int(next_counts.get(year, 0) or 0),
-            )
-        merged_writeable[key] = merged_counts
-    for key in ("nao_last_phase", "ao_last_phase", "pdo_last_phase"):
-        merged_writeable[key] = next_state.get(key, base.get(key))
-    merged["ozone_hole_last_peak"] = _merge_ozone_hole_last_peak(
-        base.get("ozone_hole_last_peak"),
-        next_state.get("ozone_hole_last_peak"),
-    )
-    merged["drafts"] = _merge_drafts(base.get("drafts", []), next_state.get("drafts", []))
-    merged["run_history"] = _merge_run_history(base.get("run_history", []), next_state.get("run_history", []))
-    merged["errors"] = _merge_errors(base.get("errors", []), next_state.get("errors", []))
-    merged["suppressions"] = _merge_suppressions(
-        base.get("suppressions", []), next_state.get("suppressions", [])
-    )
-    merged["memory"] = _merge_memory(base.get("memory"), next_state.get("memory"))
-    # Extreme record tracking — always take the incoming (most recent) dict
-    # since detection functions only write when a new record is set.
-    merged["city_all_time_max"] = deepcopy(next_state.get("city_all_time_max", base.get("city_all_time_max", {})))
-    merged["city_all_time_min"] = deepcopy(next_state.get("city_all_time_min", base.get("city_all_time_min", {})))
-    merged["city_monthly_max"] = deepcopy(next_state.get("city_monthly_max", base.get("city_monthly_max", {})))
-    merged["city_monthly_min"] = deepcopy(next_state.get("city_monthly_min", base.get("city_monthly_min", {})))
-    merged["record_streaks"] = deepcopy(next_state.get("record_streaks", base.get("record_streaks", {})))
-    merged["source_health"] = _merge_source_health(
-        base.get("source_health"),
-        next_state.get("source_health"),
-    )
-    # ocean_sst_streak — always-take-incoming, same semantics as record_streaks above.
-    merged["ocean_sst_streak"] = deepcopy(
-        next_state.get("ocean_sst_streak", base.get("ocean_sst_streak", {}))
-    )
-    # ice_mass: per-region keep the extreme to survive concurrent writers.
-    merged["ice_mass_max_loss"] = {}
-    for region in set(
-        list(base.get("ice_mass_max_loss", {}).keys())
-        + list(next_state.get("ice_mass_max_loss", {}).keys())
-    ):
-        a_loss = base.get("ice_mass_max_loss", {}).get(region)
-        b_loss = next_state.get("ice_mass_max_loss", {}).get(region)
-        if a_loss is None:
-            assert b_loss is not None  # loop invariant: region in at least one
-            merged["ice_mass_max_loss"][region] = deepcopy(b_loss)
-        elif b_loss is None:
-            merged["ice_mass_max_loss"][region] = deepcopy(a_loss)
-        else:
-            merged["ice_mass_max_loss"][region] = deepcopy(
-                a_loss if a_loss.get("gt", 0.0) <= b_loss.get("gt", 0.0) else b_loss
-            )
-    merged["ice_mass_last_milestone"] = {}
-    for region in set(
-        list(base.get("ice_mass_last_milestone", {}).keys())
-        + list(next_state.get("ice_mass_last_milestone", {}).keys())
-    ):
-        a_mil = base.get("ice_mass_last_milestone", {}).get(region)
-        b_mil = next_state.get("ice_mass_last_milestone", {}).get(region)
-        if a_mil is None:
-            assert b_mil is not None  # loop invariant: region in at least one
-            merged["ice_mass_last_milestone"][region] = b_mil
-        elif b_mil is None:
-            merged["ice_mass_last_milestone"][region] = a_mil
-        else:
-            merged["ice_mass_last_milestone"][region] = min(a_mil, b_mil)
-    merged["ice_mass_last_seen"] = {}
-    for region in set(
-        list(base.get("ice_mass_last_seen", {}).keys())
-        + list(next_state.get("ice_mass_last_seen", {}).keys())
-    ):
-        a_seen = base.get("ice_mass_last_seen", {}).get(region, "")
-        b_seen = next_state.get("ice_mass_last_seen", {}).get(region, "")
-        merged["ice_mass_last_seen"][region] = a_seen if a_seen >= b_seen else b_seen
-    merged["ice_annual_count"] = {}
-    for year in set(
-        list(base.get("ice_annual_count", {}).keys())
-        + list(next_state.get("ice_annual_count", {}).keys())
-    ):
-        merged["ice_annual_count"][year] = max(
-            base.get("ice_annual_count", {}).get(year, 0),
-            next_state.get("ice_annual_count", {}).get(year, 0),
-        )
-    merged["precip_daily_records"] = _merge_max_mm_records(
-        base.get("precip_daily_records"),
-        next_state.get("precip_daily_records"),
-    )
-    merged["precip_recent_by_city"] = _merge_recent_mm_rows(
-        base.get("precip_recent_by_city"),
-        next_state.get("precip_recent_by_city"),
-    )
-    merged["snow_daily_swe_gain_records"] = _merge_max_mm_records(
-        base.get("snow_daily_swe_gain_records"),
-        next_state.get("snow_daily_swe_gain_records"),
-    )
-    merged["snow_recent_by_station"] = _merge_recent_mm_rows(
-        base.get("snow_recent_by_station"),
-        next_state.get("snow_recent_by_station"),
-    )
-    merged["snow_annual_count"] = {}
-    for year in set(
-        list(base.get("snow_annual_count", {}).keys())
-        + list(next_state.get("snow_annual_count", {}).keys())
-    ):
-        merged["snow_annual_count"][year] = max(
-            base.get("snow_annual_count", {}).get(year, 0),
-            next_state.get("snow_annual_count", {}).get(year, 0),
-        )
-    merged["seasonal_snow_records"] = _merge_max_mm_records(
-        base.get("seasonal_snow_records"),
-        next_state.get("seasonal_snow_records"),
-    )
-    # Take max tier per complex across concurrent writes so a tier bump
-    # on one cron run isn't lost to a stale concurrent run.
-    merged["fire_complex_tiers"] = {}
-    for cid in set(
-        list(base.get("fire_complex_tiers", {}).keys())
-        + list(next_state.get("fire_complex_tiers", {}).keys())
-    ):
-        merged["fire_complex_tiers"][cid] = max(
-            int(base.get("fire_complex_tiers", {}).get(cid, -1)),
-            int(next_state.get("fire_complex_tiers", {}).get(cid, -1)),
-        )
-    merged["coral_dhw_last_tier"] = {}
-    for region_id in set(
-        list(base.get("coral_dhw_last_tier", {}).keys())
-        + list(next_state.get("coral_dhw_last_tier", {}).keys())
-    ):
-        merged["coral_dhw_last_tier"][region_id] = max(
-            int(base.get("coral_dhw_last_tier", {}).get(region_id, 0)),
-            int(next_state.get("coral_dhw_last_tier", {}).get(region_id, 0)),
-        )
-    merged["coral_dhw_annual_count"] = {}
-    for year in set(
-        list(base.get("coral_dhw_annual_count", {}).keys())
-        + list(next_state.get("coral_dhw_annual_count", {}).keys())
-    ):
-        merged["coral_dhw_annual_count"][year] = max(
-            base.get("coral_dhw_annual_count", {}).get(year, 0),
-            next_state.get("coral_dhw_annual_count", {}).get(year, 0),
-        )
-    # Air-quality per-city tier dedup (PR #194). These keys had NO _merge_state
-    # handler, so every write (gist AND sqlite) reset them to {} — silently
-    # breaking the per-city tier guard on the live path. Reconcile per city,
-    # keeping the newer observation (newer date / higher tier).
-    _aq_base = cast(dict, base)
-    _aq_next = cast(dict, next_state)
-    _aq_merged = cast(dict, merged)
-    for _aq_key in ("air_quality_pm25_tiers", "air_quality_dust_tiers"):
-        _aq_city_map: dict = {}
-        for city in set(
-            list(_aq_base.get(_aq_key, {}).keys())
-            + list(_aq_next.get(_aq_key, {}).keys())
-        ):
-            _aq_city_map[city] = _pick_newer_city_tier(
-                _aq_base.get(_aq_key, {}).get(city),
-                _aq_next.get(_aq_key, {}).get(city),
-            )
-        _aq_merged[_aq_key] = _aq_city_map
-    # Per-provider CONSECUTIVE-failure counter (open_meteo structural alert). Had
-    # NO _merge_state handler, so it reset to {} every write. It is NOT a monotonic
-    # counter like the *_annual_count keys — reset_data_source_failure sets it to 0
-    # on success, and write_state ALWAYS re-merges against the persisted value, so a
-    # plain max() would erase every reset (pinning the streak high -> false alerts).
-    # next_state (the in-process state) reflects THIS cycle's increment/reset and is
-    # authoritative: a reset (0) clears the streak; a non-zero streak takes the max
-    # with the persisted value so a stale concurrent run can't shorten a real
-    # outage; a source untouched this cycle keeps its persisted streak.
-    _dsf_base = base.get("data_source_failures", {})
-    _dsf_inc = next_state.get("data_source_failures", {})
-    merged["data_source_failures"] = {}
-    for _src in set(_dsf_base) | set(_dsf_inc):
-        if _src in _dsf_inc:
-            _n = int(_dsf_inc.get(_src, 0))
-            merged["data_source_failures"][_src] = (
-                0 if _n == 0 else max(_n, int(_dsf_base.get(_src, 0)))
-            )
-        else:
-            merged["data_source_failures"][_src] = int(_dsf_base.get(_src, 0))
-    merged["sst_anom_last_tier"] = {}
-    for region_key in set(
-        list(base.get("sst_anom_last_tier", {}).keys())
-        + list(next_state.get("sst_anom_last_tier", {}).keys())
-    ):
-        merged["sst_anom_last_tier"][region_key] = max(
-            int(base.get("sst_anom_last_tier", {}).get(region_key, 0)),
-            int(next_state.get("sst_anom_last_tier", {}).get(region_key, 0)),
-        )
-    merged["sst_anom_annual_count"] = {}
-    for year in set(
-        list(base.get("sst_anom_annual_count", {}).keys())
-        + list(next_state.get("sst_anom_annual_count", {}).keys())
-    ):
-        merged["sst_anom_annual_count"][year] = max(
-            int(base.get("sst_anom_annual_count", {}).get(year, 0)),
-            int(next_state.get("sst_anom_annual_count", {}).get(year, 0)),
-        )
-    # Reanalysis regional-anomaly onset guard: keep the latest window_start per
-    # region (lexical max == chronological for bare YYYY-MM-DD dates), so a
-    # concurrent gist/sqlite merge never re-opens a suppressed ongoing event.
-    merged["reganom_last_fired"] = {}
-    for region in set(
-        list(base.get("reganom_last_fired", {}).keys())
-        + list(next_state.get("reganom_last_fired", {}).keys())
-    ):
-        a_fired = base.get("reganom_last_fired", {}).get(region, "")
-        b_fired = next_state.get("reganom_last_fired", {}).get(region, "")
-        merged["reganom_last_fired"][region] = a_fired if a_fired >= b_fired else b_fired
-    # Cyclone tier dedup follows the same monotonic semantics: never lose a
-    # higher category already observed by a concurrent run.
-    merged["cyclone_tiers"] = {}
-    for storm_id in set(
-        list(base.get("cyclone_tiers", {}).keys())
-        + list(next_state.get("cyclone_tiers", {}).keys())
-    ):
-        merged["cyclone_tiers"][storm_id] = max(
-            int(base.get("cyclone_tiers", {}).get(storm_id, -1)),
-            int(next_state.get("cyclone_tiers", {}).get(storm_id, -1)),
-        )
-    merged["cyclone_wind_history"] = _merge_cyclone_wind_history(
-        base.get("cyclone_wind_history"),
-        next_state.get("cyclone_wind_history"),
-    )
-    merged["cyclone_annual_count"] = {}
-    for year in set(
-        list(base.get("cyclone_annual_count", {}).keys())
-        + list(next_state.get("cyclone_annual_count", {}).keys())
-    ):
-        merged["cyclone_annual_count"][year] = max(
-            base.get("cyclone_annual_count", {}).get(year, 0),
-            next_state.get("cyclone_annual_count", {}).get(year, 0),
-        )
-    merged["flood_activation_tiers"] = {}
-    for activation_id in set(
-        list(base.get("flood_activation_tiers", {}).keys())
-        + list(next_state.get("flood_activation_tiers", {}).keys())
-    ):
-        merged["flood_activation_tiers"][activation_id] = _max_flood_severity(
-            base.get("flood_activation_tiers", {}).get(activation_id),
-            next_state.get("flood_activation_tiers", {}).get(activation_id),
-        )
-    merged["flood_annual_count"] = {}
-    for year in set(
-        list(base.get("flood_annual_count", {}).keys())
-        + list(next_state.get("flood_annual_count", {}).keys())
-    ):
-        merged["flood_annual_count"][year] = max(
-            base.get("flood_annual_count", {}).get(year, 0),
-            next_state.get("flood_annual_count", {}).get(year, 0),
-        )
-    # Max-merge the daily gate so concurrent cron runs keep the later date.
-    merged["fire_footprint_last_run"] = max(
-        base.get("fire_footprint_last_run") or "",
-        next_state.get("fire_footprint_last_run") or "",
-    ) or None
-    merged["synthesis_components"] = _merge_synthesis_components(
-        base.get("synthesis_components"),
-        next_state.get("synthesis_components"),
-    )
-    merged["synthesis_cooldown"] = _merge_synthesis_cooldown(
-        base.get("synthesis_cooldown"),
-        next_state.get("synthesis_cooldown"),
-    )
-    return merged
+    nxt = _normalize_state(incoming)
+    merged: dict = cast(dict, _fresh_state())
+    for key, strategy in MERGE_SPEC.items():
+        merged[key] = strategy(base.get(key), nxt.get(key))
+    return cast(BotState, merged)
 
 
 def _merge_synthesis_event_list(
@@ -1554,6 +1372,72 @@ def _merge_source_health(
                     runs.append(run)
         merged[source] = _rebuild_source_health(runs)
     return merged
+
+
+# ---------------------------------------------------------------------------
+# MERGE_SPEC: the single source of truth for how each state key is reconciled on
+# write. Defined here, after every merge helper it references. The contract test
+# test_merge_spec_covers_exactly_default_state asserts set(MERGE_SPEC) ==
+# set(DEFAULT_STATE), so coverage is total by construction — a new DEFAULT_STATE
+# key with no strategy fails at collection instead of silently resetting on write.
+# ---------------------------------------------------------------------------
+
+MERGE_SPEC: dict[str, Callable[..., Any]] = {
+    "last_hot10": _strat_take_incoming,
+    "streaks": _strat_take_incoming,
+    "posted_events": _strat_ordered_unique(500),
+    "daily_tweet_count": _strat_dict_overlay,
+    "co2_annual_count": _strat_max_by_key(0),
+    "ch4_annual_count": _strat_max_by_key(0),
+    "ch4_last_milestone": _merge_ch4_last_milestone,
+    "nao_annual_count": _strat_max_by_key(0),
+    "ao_annual_count": _strat_max_by_key(0),
+    "pdo_annual_count": _strat_max_by_key(0),
+    "ozone_hole_annual_count": _strat_max_by_key(0),
+    "nao_last_phase": _strat_take_incoming,
+    "ao_last_phase": _strat_take_incoming,
+    "pdo_last_phase": _strat_take_incoming,
+    "ozone_hole_last_peak": _merge_ozone_hole_last_peak,
+    "drafts": _merge_drafts,
+    "run_history": _merge_run_history,
+    "errors": _merge_errors,
+    "suppressions": _merge_suppressions,
+    "memory": _merge_memory,
+    "city_all_time_max": _strat_take_incoming,
+    "city_all_time_min": _strat_take_incoming,
+    "city_monthly_max": _strat_take_incoming,
+    "city_monthly_min": _strat_take_incoming,
+    "record_streaks": _strat_take_incoming,
+    "source_health": _merge_source_health,
+    "ocean_sst_streak": _strat_take_incoming,
+    "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),
+    "ice_mass_last_milestone": _strat_reduce_by_key(_present_min),
+    "ice_mass_last_seen": _strat_max_by_key(""),
+    "ice_annual_count": _strat_max_by_key(0),
+    "precip_daily_records": _merge_max_mm_records,
+    "precip_recent_by_city": _merge_recent_mm_rows,
+    "snow_daily_swe_gain_records": _merge_max_mm_records,
+    "snow_recent_by_station": _merge_recent_mm_rows,
+    "snow_annual_count": _strat_max_by_key(0),
+    "seasonal_snow_records": _merge_max_mm_records,
+    "fire_complex_tiers": _strat_max_by_key(-1),
+    "coral_dhw_last_tier": _strat_max_by_key(0),
+    "coral_dhw_annual_count": _strat_max_by_key(0),
+    "air_quality_pm25_tiers": _strat_reduce_by_key(_pick_newer_city_tier),
+    "air_quality_dust_tiers": _strat_reduce_by_key(_pick_newer_city_tier),
+    "data_source_failures": _merge_data_source_failures,
+    "sst_anom_last_tier": _strat_max_by_key(0),
+    "sst_anom_annual_count": _strat_max_by_key(0),
+    "reganom_last_fired": _strat_max_by_key(""),
+    "cyclone_tiers": _strat_max_by_key(-1),
+    "cyclone_wind_history": _merge_cyclone_wind_history,
+    "cyclone_annual_count": _strat_max_by_key(0),
+    "flood_activation_tiers": _strat_reduce_by_key(_max_flood_severity),
+    "flood_annual_count": _strat_max_by_key(0),
+    "fire_footprint_last_run": _merge_fire_footprint_last_run,
+    "synthesis_components": _merge_synthesis_components,
+    "synthesis_cooldown": _merge_synthesis_cooldown,
+}
 
 
 def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:

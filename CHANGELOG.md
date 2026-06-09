@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.22.0] - 2026-06-09
+
+State-merge architecture: replace the 314-line imperative `_merge_state` with a
+declarative `MERGE_SPEC` table plus a 6-line driver. Retires the "added a state key but
+forgot the merge handler" bug class that silently reset `air_quality_*_tiers`
+([#194](https://github.com/andrewzp/theheat/pull/194)) and `data_source_failures` to
+`{}` on every write. Behavior-preserving — byte-identical to the old merge across the
+live 1.06 MB production state and the full edge-case suite.
+
+### Changed
+
+- **Declarative `MERGE_SPEC` replaces hand-rolled `_merge_state` ([#215](https://github.com/andrewzp/theheat/pull/215)).**
+  Each of the 54 `DEFAULT_STATE` keys maps to one of 6 reusable strategies
+  (`take_incoming`, `max_by_key`, `reduce_by_key`, `dict_overlay`, `ordered_unique`,
+  `custom`) or a named helper; a 6-line driver merges by iterating the table. Net −116
+  lines in `state.py`; the 15 existing custom mergers are reused unchanged.
+- **The merge contract is now structural.** The probe-based "is every key handled?" test
+  is replaced by `assert set(MERGE_SPEC) == set(DEFAULT_STATE)` — total coverage by
+  construction, so a newly added `DEFAULT_STATE` key with no strategy fails at test
+  collection instead of silently resetting in production.
+
+### Verified
+
+- **Cross-model adversarial review (Codex) before implementation** caught a valid-data
+  bug in the first design (a legitimate tier `0` collapsing to the `-1` floor) and
+  tightened the equivalence contract; both resolved before any code landed. Five
+  regression tests now lock the findings.
+- **Golden-master equivalence:** new vs. pre-refactor `_merge_state` produce
+  byte-identical output across the real production state ⊗ itself/default/empty and 21
+  synthetic edge pairs.
+- mypy clean (97 files); **1630 tests pass** (incl. the new structural contract).
+
 ## [0.9.21.0] - 2026-06-09
 
 Source-health correctness: a real false-alarm fix. The daily sentinel filed

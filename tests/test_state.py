@@ -394,74 +394,74 @@ class TestMergeStateContract:
     to the allowlist so a future allowlist entry can't ship without that proof.
     """
 
-    # Keys handled via a custom merge helper whose output is default-shaped for the
-    # GENERIC probe below — NOT gaps.
-    HANDLED_VIA_CUSTOM_HELPER = {"memory", "synthesis_components"}
+    def test_merge_spec_covers_exactly_default_state(self):
+        """MERGE_SPEC must hold a strategy for every DEFAULT_STATE key and no orphans.
 
-    # Correctly-shaped fixtures proving each allowlisted key genuinely preserves
-    # data (keyed by allowlist membership — see the coverage assertion below).
-    _PRESERVE_FIXTURES = {
-        "memory": (
-            {"used_era_anchors": ["a1"], "used_framings": ["f1"]},
-            lambda m: "a1" in m.get("used_era_anchors", []),
-        ),
-        "synthesis_components": (
-            {
-                "fires": {"CA": [{"event_id": "e1", "frp": 100, "region": "r", "at": "2026-06-09"}]},
-                "heats": {},
-                "drought_snapshot": None,
-            },
-            lambda m: m.get("fires", {}).get("CA", [{}])[0].get("event_id") == "e1",
-        ),
-    }
+        Structural successor to the probe test below: total coverage by construction,
+        so the "added a key but forgot the merge handler" bug class (air_quality #194,
+        data_source_failures) cannot silently recur — a missing key fails at collection.
+        """
+        from src.state import DEFAULT_STATE, MERGE_SPEC
 
-    @staticmethod
-    def _probe(default):
-        if isinstance(default, dict):
-            return {"__probe__": {"__p__": 7}}
-        if isinstance(default, list):
-            return [{"id": "__probe__"}]
-        if isinstance(default, bool):
-            return not default
-        if isinstance(default, str):
-            return "2099-12-31T00:00:00Z"
-        if isinstance(default, (int, float)):
-            return (default or 0) + 7
-        return "__probe__"
+        missing = set(DEFAULT_STATE) - set(MERGE_SPEC)
+        orphan = set(MERGE_SPEC) - set(DEFAULT_STATE)
+        assert not missing, f"DEFAULT_STATE keys with no MERGE_SPEC strategy: {sorted(missing)}"
+        assert not orphan, f"MERGE_SPEC keys absent from DEFAULT_STATE: {sorted(orphan)}"
 
-    def test_every_default_state_key_is_merge_handled(self):
-        from src.state import DEFAULT_STATE, _merge_state
+    # --- Strategy regressions locking the Codex adversarial findings (rev 2 spec).
+    # These replace the former behavioral-probe test: the structural assertion above
+    # proves every key is HANDLED; these prove the specific edge semantics Codex
+    # attacked are PRESERVED. Per-helper preservation (memory, synthesis_components,
+    # drafts, …) is covered by their dedicated tests elsewhere in this file.
 
-        gaps = []
-        for key, default in DEFAULT_STATE.items():
-            probe = self._probe(default)
-            # A probe that collides with the default would make a real gap invisible
-            # (probe == default => can't tell "preserved" from "reset"). Fail loudly.
-            assert probe != default, f"probe for {key!r} collides with its default; fix _probe"
-            try:
-                merged = _merge_state({key: probe}, {key: probe})
-            except Exception:
-                # A type-strict handler raised on the malformed probe => it handles
-                # the key. A key with NO handler never errors (returns the default).
-                continue
-            if merged.get(key) == default and key not in self.HANDLED_VIA_CUSTOM_HELPER:
-                gaps.append(key)
-        assert gaps == [], (
-            "_merge_state silently resets these DEFAULT_STATE keys to default — add "
-            f"an explicit merge handler (or, if intentional, allowlist): {gaps}"
-        )
-
-    def test_allowlisted_keys_actually_preserve_correct_shaped_values(self):
+    def test_max_by_key_floor_neg1_keeps_incoming_zero_tier(self):
+        """Codex #1: a legitimate tier 0 must survive against the -1 absent-floor."""
         from src.state import _merge_state
 
-        # Coupled to the allowlist: every allowlisted key must have a preservation
-        # fixture here, so a future allowlist entry can't ship without proving its
-        # custom helper actually keeps data.
-        assert set(self._PRESERVE_FIXTURES) == self.HANDLED_VIA_CUSTOM_HELPER
+        for key in ("fire_complex_tiers", "cyclone_tiers"):
+            merged = _merge_state({key: {"A": 2}}, {key: {"A": 1, "C": 0}})
+            assert merged[key] == {"A": 2, "C": 0}, key
 
-        for key, (value, check) in self._PRESERVE_FIXTURES.items():
-            merged = _merge_state({key: value}, {key: value})[key]
-            assert check(merged), f"_merge_state dropped data for allowlisted key {key!r}"
+    def test_ch4_last_milestone_one_sided_keeps_present_value(self):
+        """Codex #4: a one-sided merge takes the present value unchanged; both → max."""
+        from src.state import _merge_state
+
+        assert _merge_state({}, {"ch4_last_milestone": 1940})["ch4_last_milestone"] == 1940
+        assert _merge_state({"ch4_last_milestone": 1950}, {})["ch4_last_milestone"] == 1950
+        assert (
+            _merge_state({"ch4_last_milestone": 1900}, {"ch4_last_milestone": 1950})["ch4_last_milestone"]
+            == 1950
+        )
+
+    def test_data_source_failures_incoming_is_authoritative(self):
+        """Codex #7: incoming 0 clears the streak; a source absent this cycle keeps its base."""
+        from src.state import _merge_state
+
+        reset = _merge_state({"data_source_failures": {"s": 4}}, {"data_source_failures": {"s": 0}})
+        assert reset["data_source_failures"] == {"s": 0}
+        kept = _merge_state({"data_source_failures": {"s": 4}}, {"data_source_failures": {}})
+        assert kept["data_source_failures"] == {"s": 4}
+
+    def test_dict_overlay_does_not_alias_input(self):
+        """Codex #2: dict_overlay deepcopies, so a merged value never aliases a source snapshot."""
+        from src.state import _merge_state
+
+        cur = {"daily_tweet_count": {"2026-06-01": 3}}
+        merged = _merge_state(cur, {"daily_tweet_count": {}})
+        assert merged["daily_tweet_count"] == {"2026-06-01": 3}
+        merged["daily_tweet_count"]["2026-06-01"] = 99
+        assert cur["daily_tweet_count"]["2026-06-01"] == 3  # source snapshot untouched
+
+    def test_reduce_by_key_keeps_most_negative_ice_loss_without_aliasing(self):
+        """ice_mass_max_loss keeps the worse (more-negative) gt, deepcopied off the input."""
+        from src.state import _merge_state
+
+        cur = {"ice_mass_max_loss": {"r": {"gt": -3.0, "month": "2026-01"}}}
+        inc = {"ice_mass_max_loss": {"r": {"gt": -7.0, "month": "2026-02"}}}
+        merged = _merge_state(cur, inc)
+        assert merged["ice_mass_max_loss"]["r"] == {"gt": -7.0, "month": "2026-02"}
+        merged["ice_mass_max_loss"]["r"]["gt"] = 0.0
+        assert inc["ice_mass_max_loss"]["r"]["gt"] == -7.0  # source snapshot untouched
 
 
 class TestReganomState:
