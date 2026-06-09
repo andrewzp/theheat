@@ -209,6 +209,11 @@ jobs:
           # Kill-switch default in code stays "0"; production overrides here.
           # Rollback: gh variable set THEHEAT_TRIAGE_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
+          # Reanalysis regional-anomaly signal (Part B, PR #203). manual_only +
+          # env-gated; code default stays "0" (dormant). Production controls it via
+          # the repo variable. Activate: gh variable set THEHEAT_REGANOM_ENABLED --body 1 --repo andrewzp/theheat
+          # Rollback: gh variable set THEHEAT_REGANOM_ENABLED --body 0 --repo andrewzp/theheat
+          THEHEAT_REGANOM_ENABLED: ${{ vars.THEHEAT_REGANOM_ENABLED || '0' }}
           # Optional repo-variable knobs for pending-queue diversity and TTL.
           THEHEAT_PENDING_TYPE_CAP: ${{ vars.THEHEAT_PENDING_TYPE_CAP }}
           # Default TTL = fast point-in-time signals (7d). Slow continuous
