@@ -2,6 +2,7 @@ from src.editorial.scoring import (
     score_all_time_record,
     score_anomaly,
     score_co2_milestone,
+    score_dust_event,
     score_cyclone_basin_record,
     score_cyclone_landfall,
     score_cyclone_rapid_intensification,
@@ -14,6 +15,7 @@ from src.editorial.scoring import (
     score_oscillation_extreme,
     score_oscillation_transition,
     score_ozone_hole_peak,
+    score_pm25_hazard,
     score_precipitation_extreme,
     score_record_event,
     score_record_streak,
@@ -167,6 +169,32 @@ class TestEditorialScoring:
         assert score.category == "precipitation_extreme"
         assert score.passes
         assert any("147" in reason for reason in score.reasons)
+
+    def test_score_pm25_hazard_tier1_passes_threshold(self):
+        score = score_pm25_hazard(pm25_24h_mean=150.0, tier=1, who_multiple=10.0)
+
+        assert score.category == "air_quality_hazard"
+        assert score.threshold == 68
+        assert score.passes
+
+    def test_score_pm25_hazard_tier3_is_elite(self):
+        score = score_pm25_hazard(pm25_24h_mean=350.0, tier=3, who_multiple=23.3)
+
+        assert score.total >= 85
+        assert score.label == "elite"
+
+    def test_score_dust_event_tier1_passes_threshold(self):
+        score = score_dust_event(dust_daily_max=500.0, tier=1)
+
+        assert score.category == "dust_event"
+        assert score.threshold == 66
+        assert score.passes
+
+    def test_score_dust_event_tier2_higher_than_tier1(self):
+        tier1 = score_dust_event(dust_daily_max=500.0, tier=1)
+        tier2 = score_dust_event(dust_daily_max=2000.0, tier=2)
+
+        assert tier2.total > tier1.total
 
     def test_snow_extreme_scores_heavy_swe(self):
         score = score_snow_extreme(

@@ -11,6 +11,7 @@ from .marine import build_coral_bleaching_bundle, build_sea_ice_bundle, build_ic
 from .drought import build_drought_bundle
 from .synthesis import build_synthesis_bundle
 from .precipitation import build_precipitation_bundle, build_snow_extreme_bundle, build_seasonal_snow_bundle
+from .air_quality import build_pm25_hazard_bundle, build_dust_event_bundle
 
 __all__ = [
     "_c_to_f",
@@ -49,4 +50,6 @@ __all__ = [
     "build_precipitation_bundle",
     "build_snow_extreme_bundle",
     "build_seasonal_snow_bundle",
+    "build_pm25_hazard_bundle",
+    "build_dust_event_bundle",
 ]

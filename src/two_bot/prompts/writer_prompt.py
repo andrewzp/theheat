@@ -48,7 +48,7 @@ The bundle is source of truth. Cite its values verbatim — never round, convert
 
 Key fields:
 
-- **`signal_kind`** — `"fire" | "monthly_high" | "calendar_record" | "anomaly_hot" | "anomaly_cold" | "all_time_record" | "drought" | "cyclone_rapid_intensification" | ...` Drives which conventions apply.
+- **`signal_kind`** — `"fire" | "monthly_high" | "calendar_record" | "anomaly_hot" | "anomaly_cold" | "all_time_record" | "drought" | "air_quality_hazard" | "dust_event" | "cyclone_rapid_intensification" | ...` Drives which conventions apply.
 - **`where`** — pre-formatted place string ("Phoenix, Arizona, United States"). Cite verbatim.
 - **`when`** — ISO date.
 - **`headline_metric`** — the data point. `value` is exact; `value_f` is the bundle's pre-computed integer Fahrenheit.
@@ -66,6 +66,10 @@ Key fields:
 - **`observation_kind`** (GHCN bundles) is `daily_minimum` or `daily_maximum`. GHCN values are 24-hour extrema, not timestamped — don't write "overnight low" unless observation_kind confirms it.
 - **`state`** (US GHCN bundles) gives the full state name ("West Virginia"). Use verbatim.
 - **Cyclone bundles** carry `storm_name`, `basin`, `category`, `wind_speed_kt`, `central_pressure_mb`, `lat`, `lon`, `advisory_number`, and `public_advisory_url`. Use the advisory URL only as source attribution, not as a call to action. For rapid intensification, the load-bearing number is `delta_kt_24h`; for tier crossings, it is `from_category` -> `to_category`; for landfall, it is `landfall_location`.
+- **`evidence_grade`** (air-quality bundles): `"model_estimated"` means the values come from a gridded atmospheric model (CAMS, about 45 km resolution), not a ground-station measurement. Do NOT write "measured," "recorded," or "observed at a station." Use "CAMS model data," "satellite-derived model estimates," or quote the number without a source verb.
+- **`pm25_24h_mean_ug_m3`** (PM2.5 bundles): the 24-hour arithmetic mean PM2.5, matching the WHO 2021 24-hour guideline window. Do NOT call this a "peak," "spike," or "hourly maximum." Correct framing: "a 24-hour mean of 220 μg/m³."
+- **`who_multiple`** (PM2.5 bundles): the bundle's pre-computed ratio, pm25_24h_mean / 15.0. Cite it verbatim. The WHO 2021 PM2.5 24-hour mean guideline is 15 μg/m³; `"who_24h_guideline_ug_m3": 15` is canonical.
+- **PM2.5 / dust signal-kind conventions**: No health-alarm language. No "dangerous," "deadly," "toxic," or "life-threatening." State the fact and one system clause. If the signal is co-located with an active FIRMS fire, say so only when the bundle includes a `co_located_fire` fact.
 
 ## historical_context constraints
 

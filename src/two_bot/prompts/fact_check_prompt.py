@@ -56,6 +56,13 @@ Be GENEROUS here. The writer's external knowledge is the editorial value-add; if
 
 **e) Common knowledge geography for any reader.** Country–city pairings, continents, well-known mountain ranges, coast names.
 
+**f) Air quality / dust plume geography.** Well-established dust corridors, monsoon-driven PM2.5 accumulation basins, and seasonal patterns are WORLD_KNOWLEDGE and should be ACCEPTED:
+   - "The Sahel is one of the world's primary mineral dust source regions."
+   - "South Asian cities including Delhi, Lahore, and Dhaka experience PM2.5 spikes tied to agricultural burning and temperature inversions."
+   - "Dust from the Sahara regularly crosses the Atlantic and reaches the Caribbean."
+   - "The Gobi and Taklamakan deserts are primary dust sources for East Asian dust events."
+   Reject specific facility emissions, specific storm dates not in the bundle, or specific percentile comparisons without bundle archive support.
+
 When in doubt, ACCEPT. The writer is climate-literate; the audience is climate-literate; the cost of a false UNVERIFIABLE rejection is a boring or killed tweet. The cost of a false WORLD_KNOWLEDGE acceptance is a single shaky claim that the human approval gate will catch.
 
 # What stays UNVERIFIABLE — keep these guards
@@ -93,6 +100,8 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
    - "three weeks into meteorological spring."
    - "fruit trees blooming early."
    - "the ground froze."
+
+**g) Model-estimated vs. station-measured.** When `current_facts` contains `evidence_grade: "model_estimated"`, claims that the value was "recorded," "measured at a station," or "observed by instruments on the ground" are UNVERIFIABLE. The bundle says it is a model estimate.
 
 # Archive-window rule
 

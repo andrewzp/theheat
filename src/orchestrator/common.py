@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow, air_quality
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -51,11 +51,13 @@ from src.editorial.scoring import (
     score_cyclone_landfall,
     score_cyclone_rapid_intensification,
     score_cyclone_tier_crossing,
+    score_dust_event,
     score_drought,
     score_enso_transition,
     score_oscillation_transition,
     score_oscillation_extreme,
     score_ozone_hole_peak,
+    score_pm25_hazard,
     score_extreme_wave,
     score_marine_heatwave,
     score_precipitation_extreme,
@@ -1546,6 +1548,7 @@ __all__ = [
     "_utc_after_minutes_iso",
     "_utc_now",
     "_utc_now_iso",
+    "air_quality",
     "argparse",
     "cast",
     "cities_to_state_map",
@@ -1593,6 +1596,7 @@ __all__ = [
     "score_cyclone_landfall",
     "score_cyclone_rapid_intensification",
     "score_cyclone_tier_crossing",
+    "score_dust_event",
     "score_drought",
     "score_enso_transition",
     "score_oscillation_transition",
@@ -1607,6 +1611,7 @@ __all__ = [
     "score_ice_mass_event",
     "score_marine_heatwave",
     "score_monthly_record",
+    "score_pm25_hazard",
     "score_precipitation_extreme",
     "score_record_event",
     "score_record_low_event",

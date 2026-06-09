@@ -56,6 +56,9 @@ DEFAULT_STATE: BotState = {
     # Antarctic ozone hole annual peak state. Keyed by year string.
     "ozone_hole_last_peak": {},
     "ozone_hole_annual_count": {},
+    # Air quality tier dedup. Updated only after a draft succeeds.
+    "air_quality_pm25_tiers": {},
+    "air_quality_dust_tiers": {},
     "drafts": [],
     "run_history": [],
     "errors": [],

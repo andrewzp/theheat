@@ -22,6 +22,7 @@ from src.orchestrator.sources.nifc import run_fire_footprint
 from src.orchestrator.sources.nws_alerts import run_nws_alerts
 from src.orchestrator.sources.nsidc_snow import run_nsidc_snow
 from src.orchestrator.sources.ocean_sst import run_ocean_sst
+from src.orchestrator.sources.air_quality import run_air_quality
 from src.orchestrator.sources.ozone_hole import run_ozone_hole
 from src.orchestrator.sources.open_meteo import run_extreme_signals
 from src.orchestrator.sources.river_gauges import run_river_gauges
@@ -114,6 +115,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     drafted += run_climate_indices(bot_state, current_run)
     drafted += run_ocean(bot_state, current_run)
     drafted += run_ocean_sst(bot_state, current_run)
+    drafted += run_air_quality(bot_state, current_run, cities)
     drafted += run_coral_dhw(bot_state, current_run)
     drafted += run_water_levels(bot_state, current_run)
     drafted += run_river_gauges(bot_state, current_run)

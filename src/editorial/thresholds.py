@@ -18,6 +18,13 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         80,
         "Elite archive-wide temperature records; historical value, not retuned in this refactor.",
     ),
+    "air_quality_hazard": ThresholdEntry(
+        "air_quality_hazard",
+        68,
+        "CAMS model PM2.5 hazard signal; tier 1 at >=150 μg/m³ 24h-mean "
+        "(10x WHO 2021 24h guideline of 15 μg/m³). Moderate confidence "
+        "because of 45 km grid resolution and model-estimate evidence grade.",
+    ),
     "anomaly": ThresholdEntry(
         "anomaly",
         74,
@@ -77,6 +84,13 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         "drought",
         60,
         "No-input drought sentinel preserves the prior empty-state gate without changing the output category.",
+    ),
+    "dust_event": ThresholdEntry(
+        "dust_event",
+        66,
+        "CAMS model mineral dust event; tier 1 at >=500 μg/m³. Slightly below "
+        "air_quality_hazard because dust is a natural geophysical signal with "
+        "lower human-harm framing sensitivity.",
     ),
     "enso": ThresholdEntry(
         "enso",
