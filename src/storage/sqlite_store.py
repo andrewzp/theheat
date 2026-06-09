@@ -136,6 +136,11 @@ _METADATA_JSON_KEYS = (
     "fire_complex_tiers",
     "coral_dhw_last_tier",
     "coral_dhw_annual_count",
+    # Regional SST anomaly dedup (PR #198) — both must persist, else a
+    # SQLite-sourced load drops the per-region tier guard + per-year count,
+    # re-firing the same basin tier or resetting the annual counter.
+    "sst_anom_last_tier",
+    "sst_anom_annual_count",
     "cyclone_tiers",
     "cyclone_wind_history",
     "cyclone_annual_count",

@@ -675,6 +675,32 @@ class TestSqliteBackend:
             assert loaded["drafts"][0]["id"] == "draft_1"
             assert loaded["run_history"][0]["id"] == "run_1"
 
+    def test_sst_anom_dedup_keys_survive_sqlite_round_trip(self):
+        # Regression (PR #198 gap): sst_anom_last_tier + sst_anom_annual_count are
+        # in DEFAULT_STATE + _merge_state but were missing from _METADATA_JSON_KEYS,
+        # so a SQLite-sourced load silently dropped the per-region tier dedup and
+        # per-year count — risking a duplicate basin post or a reset annual counter.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "sst_anom_last_tier": {"2026/north_atlantic": 3, "2026/mediterranean": 2},
+                "sst_anom_annual_count": {"2026": 5},
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["sst_anom_last_tier"] == {"2026/north_atlantic": 3, "2026/mediterranean": 2}
+            assert loaded["sst_anom_annual_count"] == {"2026": 5}
+
     def test_write_state_serializes_date_values_via_sqlite_backend(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/theheat.sqlite"
