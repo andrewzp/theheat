@@ -197,8 +197,8 @@ def mock_alerts_pipeline_sources(monkeypatch):
     """Clamp the run_alerts data sources that test classes typically leave unmocked.
 
     Covers methane, coral_dhw, nws_alerts, gdacs, copernicus_ems, nhc, jtwc, sea_ice, drought,
-    enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, synthesis, ghcn, and
-    fire_footprint. Callers must still mock `src.main.open_meteo`,
+    enso, ocean, ocean_sst, ocean_sst_anomaly, water_levels, river_gauges,
+    ice_mass, synthesis, ghcn, and fire_footprint. Callers must still mock `src.main.open_meteo`,
     `src.main.firms`, and `src.main.co2` per-test (those vary by scenario).
 
     run_alerts has 20 _try_two_bot_draft call sites, one per signal-type
@@ -277,6 +277,8 @@ def mock_alerts_pipeline_sources(monkeypatch):
     monkeypatch.setattr("src.main.ocean_sst", ocean_sst)
     ocean_sst.fetch_global_sst.return_value = None
     ocean_sst.detect_streak_milestone.return_value = (None, None)
+
+    monkeypatch.setattr("src.main.ocean_sst_anomaly.fetch_all_regions", lambda strict=False: [])
 
     water = MagicMock()
     monkeypatch.setattr("src.main.water_levels", water)
@@ -1259,6 +1261,7 @@ class TestRunAlerts:
         monkeypatch.setattr(main.ocean, "fetch_ocean_conditions", lambda: [])
         monkeypatch.setattr(main.ocean, "detect_extreme_waves", lambda r: [])
         monkeypatch.setattr(main.ocean_sst, "fetch_global_sst", lambda: obs)
+        monkeypatch.setattr(main.ocean_sst_anomaly, "fetch_all_regions", lambda strict=False: [])
         monkeypatch.setattr(main.water_levels, "fetch_water_levels", lambda: [])
         monkeypatch.setattr(main.water_levels, "detect_storm_surge", lambda r: [])
         monkeypatch.setattr(main.river_gauges, "fetch_river_levels", lambda: [])
@@ -2303,6 +2306,7 @@ class TestTriageIntegration:
             "run_climate_indices",
             "run_ocean",
             "run_ocean_sst",
+            "run_ocean_sst_anomaly",
             "run_coral_dhw",
             "run_water_levels",
             "run_river_gauges",

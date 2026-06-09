@@ -32,6 +32,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_hot10": {"hot10"},
     "score_ice_mass_event": {"ice_mass_record"},
     "score_marine_heatwave": {"marine_heatwave"},
+    "score_regional_sst_anomaly": {"regional_sst_anomaly"},
     "score_monthly_record": {"monthly_record"},
     "score_oscillation_extreme": {"oscillation_extreme"},
     "score_oscillation_transition": {"oscillation_transition"},

@@ -21,11 +21,13 @@ from src.state import (
     update_record_streak,
     update_ch4_last_milestone,
     update_coral_dhw_tier,
+    update_sst_anom_tier,
     update_cyclone_tier,
     update_flood_activation_tier,
     record_cyclone_wind_observation,
     increment_ch4_annual_count,
     increment_coral_dhw_annual_count,
+    increment_sst_anom_annual_count,
     increment_oscillation_annual_count,
     increment_ozone_hole_annual_count,
     increment_cyclone_annual_count,
@@ -404,6 +406,8 @@ class TestLane08State:
         assert DEFAULT_STATE["ch4_last_milestone"] is None
         assert DEFAULT_STATE["coral_dhw_last_tier"] == {}
         assert DEFAULT_STATE["coral_dhw_annual_count"] == {}
+        assert DEFAULT_STATE["sst_anom_last_tier"] == {}
+        assert DEFAULT_STATE["sst_anom_annual_count"] == {}
 
     def test_update_ch4_last_milestone_takes_max(self, fresh_state):
         update_ch4_last_milestone(fresh_state, 1940)
@@ -415,6 +419,16 @@ class TestLane08State:
         update_coral_dhw_tier(fresh_state, "gbr_northern", 4)
         assert fresh_state["coral_dhw_last_tier"]["gbr_northern"] == 8
 
+    def test_update_sst_anom_tier_uses_reading_year_and_takes_max(self, fresh_state):
+        update_sst_anom_tier(fresh_state, "north_atlantic", 2, "2025-12-31")
+        update_sst_anom_tier(fresh_state, "north_atlantic", 1, "2025-12-31")
+        update_sst_anom_tier(fresh_state, "north_atlantic", 1, "2026-01-02")
+
+        assert fresh_state["sst_anom_last_tier"] == {
+            "2025/north_atlantic": 2,
+            "2026/north_atlantic": 1,
+        }
+
     @patch("src.state.date")
     def test_increment_lane08_annual_counts(self, mock_date, fresh_state):
         mock_date.today.return_value = date(2026, 5, 14)
@@ -422,9 +436,11 @@ class TestLane08State:
 
         increment_ch4_annual_count(fresh_state)
         increment_coral_dhw_annual_count(fresh_state)
+        increment_sst_anom_annual_count(fresh_state, "2025-12-31")
 
         assert fresh_state["ch4_annual_count"]["2026"] == 1
         assert fresh_state["coral_dhw_annual_count"]["2026"] == 1
+        assert fresh_state["sst_anom_annual_count"]["2025"] == 1
 
     def test_merge_state_max_merges_lane08_trackers(self):
         from src.state import _merge_state
@@ -434,12 +450,19 @@ class TestLane08State:
             "ch4_last_milestone": 1930,
             "coral_dhw_last_tier": {"gbr_northern": 4},
             "coral_dhw_annual_count": {"2026": 3},
+            "sst_anom_last_tier": {"2026/north_atlantic": 1},
+            "sst_anom_annual_count": {"2026": 1},
         }
         incoming = {
             "ch4_annual_count": {"2026": 1},
             "ch4_last_milestone": 1940,
             "coral_dhw_last_tier": {"gbr_northern": 8, "florida_keys": 4},
             "coral_dhw_annual_count": {"2026": 4},
+            "sst_anom_last_tier": {
+                "2026/north_atlantic": 3,
+                "2025/mediterranean": 2,
+            },
+            "sst_anom_annual_count": {"2026": 0, "2025": 2},
         }
 
         merged = _merge_state(current, incoming)
@@ -448,6 +471,11 @@ class TestLane08State:
         assert merged["ch4_last_milestone"] == 1940
         assert merged["coral_dhw_last_tier"] == {"gbr_northern": 8, "florida_keys": 4}
         assert merged["coral_dhw_annual_count"]["2026"] == 4
+        assert merged["sst_anom_last_tier"] == {
+            "2026/north_atlantic": 3,
+            "2025/mediterranean": 2,
+        }
+        assert merged["sst_anom_annual_count"] == {"2026": 1, "2025": 2}
 
 
 class TestLane14State:

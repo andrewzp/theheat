@@ -17,6 +17,7 @@ from src.data.methane import MethaneMilestone
 from src.data.ozone_hole import OzoneHoleSeasonalEvent
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
+from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
 from src.data.open_meteo import (
     AllTimeRecord,
@@ -54,6 +55,7 @@ from src.two_bot.intern import (
     build_marine_heatwave_bundle,
     build_monthly_high_bundle,
     build_record_bundle,
+    build_regional_sst_anomaly_bundle,
     build_record_streak_bundle,
     build_river_flood_bundle,
     build_sea_ice_bundle,
@@ -77,6 +79,33 @@ def test_build_fire_bundle_uses_fire_signal_fields():
     assert bundle.headline_metric == {"label": "FRP", "value": 361.0, "unit": "MW"}
     assert bundle.historical_context == {}
     assert bundle.raw_signal_dump["event_id"] == "fire_1"
+
+
+def test_build_regional_sst_anomaly_bundle_uses_regional_signal_kind():
+    event = RegionalSSTAnomalyEvent(
+        region_slug="north_atlantic",
+        region_display_name="North Atlantic",
+        date="2026-08-20",
+        anomaly_c=3.62,
+        tier=2,
+        cells_used=120,
+        event_id="sst_anom_north_atlantic_tier2_2026-08-20",
+    )
+
+    bundle = build_regional_sst_anomaly_bundle(event)
+    facts = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert bundle.signal_kind == "regional_sst_anomaly"
+    assert bundle.where == "North Atlantic"
+    assert bundle.event_id == event.event_id
+    assert bundle.headline_metric == {
+        "label": "sst_anomaly_c",
+        "value": 3.62,
+        "unit": "°C",
+    }
+    assert facts["spatial_aggregation"] == "cos-latitude area-weighted basin mean"
+    assert "NOT a Hobday" in facts["signal_note"]
+    assert bundle.historical_context["tier_thresholds"] == [2.5, 3.5, 4.5]
 
 
 def test_build_fire_bundle_rounds_frp_to_one_decimal():

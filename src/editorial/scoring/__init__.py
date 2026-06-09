@@ -142,6 +142,11 @@ def score_marine_heatwave(*args: Any, **kwargs: Any) -> EditorialScore:
     return _marine.score_marine_heatwave(*args, **kwargs)
 
 
+def score_regional_sst_anomaly(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _marine.score_regional_sst_anomaly(*args, **kwargs)
+
+
 def score_severe_weather(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _disasters.score_severe_weather(*args, **kwargs)
@@ -256,6 +261,7 @@ __all__ = [
     "score_ice_mass_event",
     "score_extreme_wave",
     "score_marine_heatwave",
+    "score_regional_sst_anomaly",
     "score_severe_weather",
     "score_global_disaster",
     "score_global_flood",
