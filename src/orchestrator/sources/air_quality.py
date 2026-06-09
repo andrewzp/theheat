@@ -9,6 +9,14 @@ from src.orchestrator.common import *
 from src.data import air_quality
 from src.two_bot.intern import build_dust_event_bundle, build_pm25_hazard_bundle
 
+# A 638-city sweep routinely loses its rate-limited tail chunk to Open-Meteo's
+# per-minute budget even after recovery retries (see src/data/air_quality.py).
+# Losing a small fraction of cities is still a successful run — the source
+# delivered the bulk of the data — so only a meaningful coverage shortfall is
+# "degraded" and only zero observed is "failed". Without this, a permanently
+# partial source reads as 0% success to the health sentinel and false-alarms.
+AQ_MIN_COVERAGE: float = 0.90
+
 
 def _enabled(env_name: str) -> bool:
     return os.environ.get(env_name, "1").strip().lower() not in {"0", "false", "no", "off"}
@@ -188,13 +196,19 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
         status = "success"
         error = None
         note = None
-        if cities and observed == 0:
+        total = len(cities)
+        if total and observed == 0:
             status = "failed"
-            error = f"all {len(cities)} air-quality city fetches failed"
+            error = f"all {total} air-quality city fetches failed"
             state.log_error(bot_state, "air_quality", error)
         elif failures:
-            status = "degraded"
-            note = f"{failures} air-quality city fetches failed"
+            coverage = observed / total if total else 1.0
+            note = (
+                f"{failures} air-quality city fetches failed "
+                f"({coverage:.0%} coverage)"
+            )
+            if coverage < AQ_MIN_COVERAGE:
+                status = "degraded"
 
         _record_source_run(
             current_run,
