@@ -460,6 +460,7 @@ theheat/
 │   │   ├── sea_ice.py                Arctic/Antarctic sea ice (Mondays only)
 │   │   ├── ice_mass.py               GRACE-FO Greenland + Antarctica (Mondays, Earthdata)
 │   │   ├── ocean_sst.py              NOAA OISST v2.1 global-mean streaks
+│   │   ├── ocean_sst_anomaly.py      NOAA CRW gridded regional SST anomaly tiers
 │   │   ├── drought.py                US Drought Monitor (Fridays only)
 │   │   ├── enso.py                   ENSO transitions (1st of month)
 │   │   ├── ocean.py                  Extreme waves (location-aware thresholds)
@@ -618,6 +619,7 @@ Signal types and thresholds:
 - **all_time_record** — 80 (elite by default)
 - **simultaneous_records** — 78
 - **marine_heatwave** (global-mean SST streak ≥5 days above archive) — 78
+- **regional_sst_anomaly** (NOAA CRW basin-mean SST anomaly tiers) — 76, manual_only
 - **monthly_record** — 76
 - **anomaly** — 76
 - **record_streak** — 74 (fires at 3+ days)
@@ -757,6 +759,8 @@ Single JSON file in GitHub Gist, read/written via GitHub API each run.
   "city_monthly_min":  { ... },
   "record_streaks":    { "Phoenix": { "days": 11, "start_date": "...", "last_date": "...", "peak_temp_c": 45.0 } },
   "ocean_sst_streak":  { ... },
+  "sst_anom_last_tier": { "2026/north_atlantic": 2 },
+  "sst_anom_annual_count": { "2026": 1 },
   "ice_mass_max_loss": { ... },
   "fire_complex_tiers": { ... },
   "synthesis_components": { ... },

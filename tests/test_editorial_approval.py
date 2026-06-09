@@ -41,6 +41,17 @@ class TestApprovalPolicy:
         assert policy.can_auto_approve is True
         assert policy.key == "marine_heatwave_review"
 
+    def test_regional_sst_anomaly_requires_manual_review(self):
+        policy = recommend_approval_policy(
+            "regional_sst_anomaly",
+            signal_total=82,
+            candidate_score={"total": 80},
+        )
+
+        assert policy.mode == "manual_only"
+        assert policy.can_auto_approve is False
+        assert policy.key == "regional_sst_anomaly_manual"
+
     def test_ch4_milestone_can_arm_automatically(self):
         policy = recommend_approval_policy(
             "ch4_milestone",

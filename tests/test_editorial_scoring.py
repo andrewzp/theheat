@@ -19,6 +19,7 @@ from src.editorial.scoring import (
     score_precipitation_extreme,
     score_record_event,
     score_record_streak,
+    score_regional_sst_anomaly,
     score_seasonal_snow_record,
     score_simultaneous_records,
     score_snow_extreme,
@@ -157,6 +158,39 @@ class TestEditorialScoring:
         from src.editorial.scoring import score_marine_heatwave
         score = score_marine_heatwave(days=100, peak_anomaly_c=0.4, years_of_data=44)
         assert score.total >= 85, f"day-100 should be elite, got {score.total}"
+
+    def test_score_regional_sst_anomaly_tier1_marquee_basin_passes(self):
+        score = score_regional_sst_anomaly("north_atlantic", 2.6, 1)
+
+        assert score.category == "regional_sst_anomaly"
+        assert score.passes
+        assert score.total >= 76
+        assert any("NOAA Coral Reef Watch" in reason for reason in score.reasons)
+
+    def test_score_regional_sst_anomaly_tier1_non_marquee_basin_also_passes(self):
+        score = score_regional_sst_anomaly("bay_of_bengal", 2.5, 1)
+        marquee = score_regional_sst_anomaly("north_atlantic", 2.5, 1)
+
+        assert score.passes
+        assert marquee.total > score.total
+
+    def test_score_regional_sst_anomaly_tier2_any_basin_passes(self):
+        score = score_regional_sst_anomaly("bay_of_bengal", 3.6, 2)
+
+        assert score.passes
+        assert score.total >= 79
+
+    def test_score_regional_sst_anomaly_tier3_elite(self):
+        score = score_regional_sst_anomaly("gulf_of_mexico", 4.8, 3)
+
+        assert score.total >= 82
+
+    def test_score_regional_sst_anomaly_blob_named_bump(self):
+        blob = score_regional_sst_anomaly("ne_pacific_blob", 2.6, 1)
+        other = score_regional_sst_anomaly("western_indian_ocean", 2.6, 1)
+
+        assert blob.passes
+        assert blob.total > other.total
 
     def test_precipitation_record_scores_manual_grade(self):
         score = score_precipitation_extreme(

@@ -7,7 +7,7 @@ from .temperature import build_monthly_high_bundle, build_country_record_bundle,
 from .fire import build_fire_bundle, build_fire_footprint_bundle
 from .atmospheric import build_co2_milestone_bundle, build_ch4_milestone_bundle, build_enso_bundle, build_oscillation_bundle, build_ozone_hole_bundle
 from .disasters import build_severe_weather_bundle, build_global_disaster_bundle, build_cyclone_rapid_intensification_bundle, build_cyclone_tier_crossing_bundle, build_cyclone_landfall_bundle, build_cyclone_basin_record_bundle, build_river_flood_bundle, build_global_flood_bundle, build_storm_surge_bundle
-from .marine import build_coral_bleaching_bundle, build_sea_ice_bundle, build_ice_mass_bundle, build_marine_heatwave_bundle, build_extreme_wave_bundle
+from .marine import build_coral_bleaching_bundle, build_sea_ice_bundle, build_ice_mass_bundle, build_marine_heatwave_bundle, build_regional_sst_anomaly_bundle, build_extreme_wave_bundle
 from .drought import build_drought_bundle
 from .synthesis import build_synthesis_bundle
 from .precipitation import build_precipitation_bundle, build_snow_extreme_bundle, build_seasonal_snow_bundle
@@ -46,6 +46,7 @@ __all__ = [
     "build_sea_ice_bundle",
     "build_ice_mass_bundle",
     "build_marine_heatwave_bundle",
+    "build_regional_sst_anomaly_bundle",
     "build_extreme_wave_bundle",
     "build_drought_bundle",
     "build_synthesis_bundle",

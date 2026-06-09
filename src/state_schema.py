@@ -224,6 +224,8 @@ class BotState(TypedDict, total=False):
     fire_complex_tiers: dict[str, int]
     coral_dhw_last_tier: dict[str, int]
     coral_dhw_annual_count: dict[str, int]
+    sst_anom_last_tier: dict[str, int]
+    sst_anom_annual_count: dict[str, int]
     cyclone_tiers: dict[str, int]
     cyclone_wind_history: dict[str, list[CycloneWindObservation]]
     cyclone_annual_count: dict[str, int]

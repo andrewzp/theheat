@@ -131,6 +131,11 @@ DEFAULT_STATE: BotState = {
     # Running count of coral-bleaching DHW tweets per calendar year
     # (cap: 16/year).
     "coral_dhw_annual_count": {},
+    # Regional SST anomaly tier dedup. Keyed as "{YYYY}/{slug}" so lagged
+    # CRW readings rotate annually by the reading date, not the cron date.
+    "sst_anom_last_tier": {},
+    # Running count of regional SST anomaly tweets per reading calendar year.
+    "sst_anom_annual_count": {},
     # Per-storm NHC/JTWC Saffir-Simpson tier dedup. Keys include source
     # (e.g. "nhc:al012026") so basin identifiers cannot collide.
     "cyclone_tiers": {},
@@ -764,6 +769,24 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
         merged["coral_dhw_annual_count"][year] = max(
             base.get("coral_dhw_annual_count", {}).get(year, 0),
             next_state.get("coral_dhw_annual_count", {}).get(year, 0),
+        )
+    merged["sst_anom_last_tier"] = {}
+    for region_key in set(
+        list(base.get("sst_anom_last_tier", {}).keys())
+        + list(next_state.get("sst_anom_last_tier", {}).keys())
+    ):
+        merged["sst_anom_last_tier"][region_key] = max(
+            int(base.get("sst_anom_last_tier", {}).get(region_key, 0)),
+            int(next_state.get("sst_anom_last_tier", {}).get(region_key, 0)),
+        )
+    merged["sst_anom_annual_count"] = {}
+    for year in set(
+        list(base.get("sst_anom_annual_count", {}).keys())
+        + list(next_state.get("sst_anom_annual_count", {}).keys())
+    ):
+        merged["sst_anom_annual_count"][year] = max(
+            int(base.get("sst_anom_annual_count", {}).get(year, 0)),
+            int(next_state.get("sst_anom_annual_count", {}).get(year, 0)),
         )
     # Cyclone tier dedup follows the same monotonic semantics: never lose a
     # higher category already observed by a concurrent run.
@@ -1485,6 +1508,32 @@ def increment_coral_dhw_annual_count(state: BotState) -> BotState:
 
     year = str(date.today().year)
     counts = state.setdefault("coral_dhw_annual_count", {})
+    counts[year] = int(counts.get(year, 0)) + 1
+    return state
+
+
+def update_sst_anom_tier(
+    state: BotState,
+    region_slug: str,
+    tier: int,
+    reading_date: str,
+) -> BotState:
+    """Record the highest regional SST anomaly tier fired in a reading year."""
+
+    year = reading_date[:4]
+    key = f"{year}/{region_slug}"
+    tiers = state.setdefault("sst_anom_last_tier", {})
+    current = int(tiers.get(key, 0))
+    if tier > current:
+        tiers[key] = int(tier)
+    return state
+
+
+def increment_sst_anom_annual_count(state: BotState, reading_date: str) -> BotState:
+    """Track regional SST anomaly draft volume by the CRW reading year."""
+
+    year = reading_date[:4]
+    counts = state.setdefault("sst_anom_annual_count", {})
     counts[year] = int(counts.get(year, 0)) + 1
     return state
 

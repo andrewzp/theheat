@@ -167,3 +167,53 @@ def score_marine_heatwave(
         threshold=get_threshold("marine_heatwave"),
         reasons=reasons,
     )
+
+
+_NAMED_BASIN_SLUGS = {
+    "north_atlantic",
+    "subpolar_n_atlantic",
+    "ne_pacific_blob",
+    "mediterranean",
+    "great_barrier_reef",
+}
+
+_REGIONAL_SST_TIER_THRESHOLDS = {
+    1: 2.5,
+    2: 3.5,
+    3: 4.5,
+}
+
+
+def score_regional_sst_anomaly(
+    region_slug: str,
+    anomaly_c: float,
+    tier: int,
+) -> EditorialScore:
+    """Score a per-region SST anomaly event.
+
+    This is not a Hobday MHW score. Tiers are provisional absolute
+    area-weighted basin-mean anomaly thresholds from NOAA CRW's published
+    gridded anomaly.
+    """
+
+    tier_threshold = _REGIONAL_SST_TIER_THRESHOLDS.get(tier, 2.5)
+    reasons = [
+        f"{anomaly_c:+.2f}°C area-weighted basin-mean SST anomaly (NOAA CRW)",
+        f"tier {tier} regional SST anomaly (threshold: {tier_threshold:+.1f}°C)",
+        "NOAA Coral Reef Watch 5km published anomaly (gridded)",
+    ]
+    if tier == 3:
+        reasons.append("extreme: +4.5°C basin-mean threshold crossed")
+
+    named_basin_bump = 6 if region_slug in _NAMED_BASIN_SLUGS else 0
+    return _build_score(
+        "regional_sst_anomaly",
+        severity=68 + tier * 4 + min((anomaly_c - 2.5) * 3, 10),
+        novelty=76 + tier * 3,
+        timeliness=86,
+        confidence=86,
+        shareability=72 + tier * 3 + named_basin_bump,
+        sensitivity=6,
+        threshold=get_threshold("regional_sst_anomaly"),
+        reasons=reasons,
+    )

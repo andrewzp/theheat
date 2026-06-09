@@ -16,6 +16,8 @@ from src.data.ice_mass import IceMassRecord
 
 from src.data.ocean import ExtremeWaveEvent
 
+from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
+
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
 
 from src.data.sea_ice import SeaIceRecord
@@ -148,6 +150,51 @@ def build_marine_heatwave_bundle(mhw: MarineHeatwaveStreakEvent) -> StoryBundle:
             "scope": "noaa_oisst_global_archive",
         },
         raw_signal_dump=asdict(mhw),
+    )
+
+def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBundle:
+    """A per-region SST anomaly event bundle."""
+
+    return StoryBundle(
+        signal_kind="regional_sst_anomaly",
+        where=event.region_display_name,
+        when=event.date,
+        event_id=event.event_id,
+        headline_metric={
+            "label": "sst_anomaly_c",
+            "value": round(event.anomaly_c, 2),
+            "unit": "°C",
+        },
+        current_facts=[
+            {"label": "region_slug", "value": event.region_slug},
+            {"label": "region_display_name", "value": event.region_display_name},
+            {"label": "anomaly_c", "value": round(event.anomaly_c, 2), "unit": "°C"},
+            {"label": "tier", "value": event.tier},
+            {"label": "tier_threshold_c", "value": [2.5, 3.5, 4.5][event.tier - 1]},
+            {
+                "label": "spatial_aggregation",
+                "value": "cos-latitude area-weighted basin mean",
+            },
+            {"label": "grid_cells_used", "value": event.cells_used},
+            {"label": "anomaly_basis", "value": "NOAA CRW published 5km SST anomaly"},
+            {
+                "label": "signal_note",
+                "value": (
+                    "Absolute area-weighted-mean anomaly vs CRW climatology. "
+                    "NOT a Hobday duration/percentile MHW classification."
+                ),
+            },
+        ],
+        historical_context={
+            "scope": "noaa_crw_regional_sst_anomaly",
+            "source": (
+                "NOAA Coral Reef Watch Daily Global 5km SST Anomaly "
+                "(ERDDAP noaacrwsstanomalyDaily)"
+            ),
+            "spatial_aggregation": "cos-latitude area-weighted basin mean",
+            "tier_thresholds": [2.5, 3.5, 4.5],
+        },
+        raw_signal_dump=asdict(event),
     )
 
 def build_extreme_wave_bundle(wave: ExtremeWaveEvent) -> StoryBundle:

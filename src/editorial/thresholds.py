@@ -142,6 +142,13 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         78,
         "Multi-day marine heatwave streak signal; historical value, not retuned in this refactor.",
     ),
+    "regional_sst_anomaly": ThresholdEntry(
+        "regional_sst_anomaly",
+        76,
+        "Per-region NOAA Coral Reef Watch published SST anomaly, gridded and "
+        "cos-lat area-weighted by basin. Absolute provisional tiers, not Hobday "
+        "MHW categories; manual-only at launch.",
+    ),
     "wet_bulb_extreme": ThresholdEntry(
         "wet_bulb_extreme",
         78,

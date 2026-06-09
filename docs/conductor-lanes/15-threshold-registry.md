@@ -82,6 +82,7 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
     "enso": ThresholdEntry("enso", 56, "..."),
     "extreme_wave": ThresholdEntry("extreme_wave", 62, "..."),
     "marine_heatwave": ThresholdEntry("marine_heatwave", 78, "..."),
+    "regional_sst_anomaly": ThresholdEntry("regional_sst_anomaly", 76, "..."),
     "storm_surge": ThresholdEntry("storm_surge", 60, "..."),
     "river_flood": ThresholdEntry("river_flood", 62, "..."),
     "all_time_record": ThresholdEntry("all_time_record", 80, "..."),

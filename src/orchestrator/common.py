@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow, air_quality
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, ocean_sst_anomaly, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow, air_quality
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -68,6 +68,7 @@ from src.editorial.scoring import (
     score_pm25_hazard,
     score_extreme_wave,
     score_marine_heatwave,
+    score_regional_sst_anomaly,
     score_precipitation_extreme,
     score_fire_event,
     score_fire_footprint,
@@ -114,6 +115,8 @@ CORAL_DHW_ANNUAL_CAP = 16
 ICE_ANNUAL_CAP = 8
 
 SNOW_ANNUAL_CAP = 8
+
+SST_ANOM_ANNUAL_CAP = 10
 
 
 
@@ -625,6 +628,21 @@ def _increment_snow_annual_count(bot_state: BotState) -> None:
     year_key = str(date.today().year)
     counts = bot_state.setdefault("snow_annual_count", {})
     counts[year_key] = counts.get(year_key, 0) + 1
+
+
+def _sst_anom_annual_cap_reached(
+    bot_state: BotState,
+    reading_date: str,
+    cap: int = SST_ANOM_ANNUAL_CAP,
+) -> bool:
+    """True if regional SST anomaly drafts hit the cap for the reading year."""
+
+    year_key = reading_date[:4]
+    count = bot_state.get("sst_anom_annual_count", {}).get(year_key, 0)
+    if count >= cap:
+        print(f"[sst_anom] Annual cap reached ({count}/{cap} for {year_key}), skipping")
+        return True
+    return False
 
 def _cyclone_history_advisories(
     bot_state: BotState,
@@ -1503,6 +1521,7 @@ __all__ = [
     "RapidIntensificationEvent",
     "RecordEvent",
     "SNOW_ANNUAL_CAP",
+    "SST_ANOM_ANNUAL_CAP",
     "SourceSkipped",
     "TierCrossingEvent",
     "WetBulbEvent",
@@ -1546,6 +1565,7 @@ __all__ = [
     "_score_reasons",
     "_should_draft",
     "_snow_annual_cap_reached",
+    "_sst_anom_annual_cap_reached",
     "_suppression_context",
     "_temp_pair_c",
     "_touch_draft",
@@ -1590,6 +1610,7 @@ __all__ = [
     "nws_alerts",
     "ocean",
     "ocean_sst",
+    "ocean_sst_anomaly",
     "open_meteo",
     "ozone_hole",
     "os",
@@ -1624,6 +1645,7 @@ __all__ = [
     "score_hot10",
     "score_ice_mass_event",
     "score_marine_heatwave",
+    "score_regional_sst_anomaly",
     "score_monthly_record",
     "score_pm25_hazard",
     "score_precipitation_extreme",

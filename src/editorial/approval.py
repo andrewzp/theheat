@@ -148,6 +148,19 @@ def recommend_approval_policy(
             reason="Low-sensitivity climate/weather signal that benefits from a slower editorial timer.",
         )
 
+    if tweet_type == "regional_sst_anomaly":
+        return ApprovalPolicy(
+            key="regional_sst_anomaly_manual",
+            mode="manual_only",
+            recommended_delay_minutes=None,
+            can_auto_approve=False,
+            reason=(
+                "New per-region SST anomaly signal from NOAA CRW gridded data. "
+                "Verify basin, area-weighted anomaly magnitude, and grid freshness "
+                "before posting."
+            ),
+        )
+
     if tweet_type == "marine_heatwave":
         return ApprovalPolicy(
             key="marine_heatwave_review",
