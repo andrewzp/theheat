@@ -2,7 +2,7 @@
 
 Handoff doc for picking up @theheat work. Read after `BRIEFING.md`. Newest section at top.
 
-> **Active handoff (2026-05-22):** This file is the historical log of session-to-session transitions. The current resume prompt + verification block + parked work lives in [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-05-22.md). Start there for a fresh session pickup.
+> **This file is a historical log** of session-to-session transitions (last entry 2026-05-14; superseded by the `docs/handoffs/` convention). The current resume prompt + verification block always lives in whichever handoff sits at the top of [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/README.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/README.md). Start there for a fresh session pickup.
 
 ---
 
