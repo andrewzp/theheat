@@ -809,6 +809,26 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
                 _aq_next.get(_aq_key, {}).get(city),
             )
         _aq_merged[_aq_key] = _aq_city_map
+    # Per-provider CONSECUTIVE-failure counter (open_meteo structural alert). Had
+    # NO _merge_state handler, so it reset to {} every write. It is NOT a monotonic
+    # counter like the *_annual_count keys — reset_data_source_failure sets it to 0
+    # on success, and write_state ALWAYS re-merges against the persisted value, so a
+    # plain max() would erase every reset (pinning the streak high -> false alerts).
+    # next_state (the in-process state) reflects THIS cycle's increment/reset and is
+    # authoritative: a reset (0) clears the streak; a non-zero streak takes the max
+    # with the persisted value so a stale concurrent run can't shorten a real
+    # outage; a source untouched this cycle keeps its persisted streak.
+    _dsf_base = base.get("data_source_failures", {})
+    _dsf_inc = next_state.get("data_source_failures", {})
+    merged["data_source_failures"] = {}
+    for _src in set(_dsf_base) | set(_dsf_inc):
+        if _src in _dsf_inc:
+            _n = int(_dsf_inc.get(_src, 0))
+            merged["data_source_failures"][_src] = (
+                0 if _n == 0 else max(_n, int(_dsf_base.get(_src, 0)))
+            )
+        else:
+            merged["data_source_failures"][_src] = int(_dsf_base.get(_src, 0))
     merged["sst_anom_last_tier"] = {}
     for region_key in set(
         list(base.get("sst_anom_last_tier", {}).keys())
