@@ -382,16 +382,16 @@ class TestDataSourceFailuresMerge:
 
 
 class TestMergeStateContract:
-    """Contract: every DEFAULT_STATE key must be HANDLED by _merge_state, so the
-    "added a key but forgot the merge handler" class of bug (which silently reset
-    air_quality / data_source_failures on every write) can't silently recur.
+    """Contract: every DEFAULT_STATE key must have a MERGE_SPEC strategy, so the
+    "added a key but forgot the merge handler" bug class (which silently reset
+    air_quality / data_source_failures to {} on every write) cannot recur.
 
-    Scope/limits: this proves a handler EXISTS — a key with NO handler returns the
-    bare _fresh_state() default for any input and never raises, so it is flagged.
-    It does NOT prove a handler PRESERVES data (a buggy handler that raises on the
-    generic probe is treated as "handled"). Preservation IS proven, for the
-    allowlisted custom-helper keys, by the companion test below — which is coupled
-    to the allowlist so a future allowlist entry can't ship without that proof.
+    test_merge_spec_covers_exactly_default_state is the structural guarantee
+    (coverage by construction). The strategy-regression tests below lock the
+    specific edge semantics Codex flagged in adversarial review (rev 2 spec).
+    Full value equivalence across all 54 keys is held by the dedicated per-key
+    tests elsewhere in this file plus the committed golden fixture
+    (TestMergeStateGolden).
     """
 
     def test_merge_spec_covers_exactly_default_state(self):
@@ -462,6 +462,35 @@ class TestMergeStateContract:
         assert merged["ice_mass_max_loss"]["r"] == {"gt": -7.0, "month": "2026-02"}
         merged["ice_mass_max_loss"]["r"]["gt"] = 0.0
         assert inc["ice_mass_max_loss"]["r"]["gt"] == -7.0  # source snapshot untouched
+
+
+class TestMergeStateGolden:
+    """Golden-master wiring regression: frozen (base, incoming) -> expected cases,
+    one per strategy type plus the Codex edges, generated from the proven-equivalent
+    _merge_state. Catches wrong-strategy / wrong-floor wiring that the structural
+    coverage test cannot. Value (==) comparison, so it is robust to dict key order.
+
+    Regenerate after an intentional merge-semantics change:
+        python scripts/gen_merge_golden.py
+    """
+
+    def test_merge_matches_golden_fixture(self):
+        import json
+        import pathlib
+
+        from src.state import _merge_state
+
+        fixture = pathlib.Path(__file__).parent / "fixtures" / "merge_state_golden.json"
+        cases = json.loads(fixture.read_text())
+        assert cases, "golden fixture is empty"
+
+        failures = []
+        for case in cases:
+            merged = _merge_state(case["base"], case["incoming"])
+            for key, expected in case["expected"].items():
+                if merged.get(key) != expected:
+                    failures.append(f"{case['label']}::{key}: {merged.get(key)!r} != {expected!r}")
+        assert not failures, "golden mismatches (wiring regression?):\n" + "\n".join(failures)
 
 
 class TestReganomState:

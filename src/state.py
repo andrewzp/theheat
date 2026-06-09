@@ -641,7 +641,7 @@ def _strat_max_by_key(floor: Any) -> Callable[..., Any]:
         base = base or {}
         nxt = nxt or {}
         out: dict = {}
-        for key in set(base) | set(nxt):
+        for key in sorted(set(base) | set(nxt)):  # sorted: deterministic merged-dict bytes
             a = base[key] if key in base else floor
             b = nxt[key] if key in nxt else floor
             out[key] = a if a >= b else b
@@ -661,7 +661,7 @@ def _strat_reduce_by_key(reducer: Callable[[Any, Any], Any]) -> Callable[..., An
         base = base or {}
         nxt = nxt or {}
         out: dict = {}
-        for key in set(base) | set(nxt):
+        for key in sorted(set(base) | set(nxt)):  # sorted: deterministic merged-dict bytes
             out[key] = deepcopy(reducer(base.get(key), nxt.get(key)))
         return out
 
@@ -709,7 +709,7 @@ def _merge_data_source_failures(base: Any, nxt: Any) -> dict:
     base = base or {}
     nxt = nxt or {}
     out: dict = {}
-    for src in set(base) | set(nxt):
+    for src in sorted(set(base) | set(nxt)):  # sorted: deterministic merged-dict bytes
         if src in nxt:
             n = int(nxt.get(src, 0))
             out[src] = 0 if n == 0 else max(n, int(base.get(src, 0)))
