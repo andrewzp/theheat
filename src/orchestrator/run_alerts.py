@@ -4,7 +4,7 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
-from src.orchestrator.finalize import _prune_weakest_cycle_drafts
+from src.orchestrator.finalize import _fire_surviving_draft_callbacks, _prune_weakest_cycle_drafts
 from src.orchestrator.sources.co2 import run_co2
 from src.orchestrator.sources.co_ops import run_water_levels
 from src.orchestrator.sources.climate_indices import run_climate_indices
@@ -132,10 +132,18 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # Drain the triage queue: rank + cap survivors, then call writer for each.
     # Source runners enqueue StoryBundle candidates; this is the only writer
     # gateway for ordinary alert sources.
-    drafted += _drain_and_write_triage_queue(bot_state, current_run)
+    # Defer on_draft_success callbacks past the cycle-cap prune (Codex #5): a draft
+    # that gets pruned must NOT consume dedup/cap state (annual counts, tiers).
+    pending_callbacks: list = []
+    drafted += _drain_and_write_triage_queue(
+        bot_state, current_run, defer_callbacks=pending_callbacks
+    )
 
+    pruned_event_ids: set = set()
     drafted = _prune_weakest_cycle_drafts(
         bot_state, drafts_before, current_run, drafted,
+        pruned_ids_out=pruned_event_ids,
     )
+    _fire_surviving_draft_callbacks(pending_callbacks, pruned_event_ids)
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state

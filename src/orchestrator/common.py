@@ -1385,7 +1385,12 @@ def _enqueue_story_candidate(
     return True
 
 
-def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None) -> int:
+def _drain_and_write_triage_queue(
+    bot_state: BotState,
+    current_run: dict | None,
+    *,
+    defer_callbacks: list | None = None,
+) -> int:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
     Called at the END of run_alerts(), after all source runners have completed.
@@ -1490,11 +1495,18 @@ def _drain_and_write_triage_queue(bot_state: BotState, current_run: dict | None)
             _bump_source_drafted_in_run(current_run, candidate.source)
             # Fire source-specific post-success callback if provided (e.g.
             # incrementing an annual counter that should only tick on actual drafts).
+            # When ``defer_callbacks`` is supplied, DON'T fire inline — collect for
+            # the caller to fire AFTER the cycle-cap prune, so a draft that gets
+            # pruned does not consume dedup/cap state (Codex #5). The hot10 path
+            # (no prune) passes None and keeps firing inline.
             if candidate.on_draft_success is not None:
-                try:
-                    candidate.on_draft_success()
-                except Exception as cb_exc:
-                    print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+                if defer_callbacks is not None:
+                    defer_callbacks.append((candidate.event_id, candidate.on_draft_success))
+                else:
+                    try:
+                        candidate.on_draft_success()
+                    except Exception as cb_exc:
+                        print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
 
     return drafted_count
 

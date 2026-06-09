@@ -69,6 +69,8 @@ def _prune_weakest_cycle_drafts(
     drafts_before: int,
     current_run: dict | None,
     drafted: int,
+    *,
+    pruned_ids_out: set | None = None,
 ) -> int:
     """Enforce MAX_DRAFTS_PER_CYCLE by dropping the weakest drafts added
     this cycle.
@@ -94,6 +96,8 @@ def _prune_weakest_cycle_drafts(
     bot_state["drafts"] = drafts[:drafts_before] + [d for d in new_drafts if id(d) in keep]
 
     pruned_event_ids = {d.get("event_id") for d in pruned if d.get("event_id")}
+    if pruned_ids_out is not None:
+        pruned_ids_out.update(pruned_event_ids)
     if pruned_event_ids:
         bot_state["posted_events"] = [
             e for e in bot_state.get("posted_events", [])
@@ -130,3 +134,23 @@ def _prune_weakest_cycle_drafts(
                 summary=d.get("text", "")[:120] or d.get("event_id"),
             )
     return MAX_DRAFTS_PER_CYCLE
+
+
+def _fire_surviving_draft_callbacks(pending: list, pruned_event_ids: set) -> None:
+    """Fire deferred ``on_draft_success`` callbacks EXCEPT for drafts that were
+    pruned by the cycle cap (Codex #5).
+
+    ``pending`` is a list of ``(event_id, callback)`` collected by
+    ``_drain_and_write_triage_queue(..., defer_callbacks=pending)``. A draft pruned
+    by ``_prune_weakest_cycle_drafts`` must not consume dedup/cap state (annual
+    counters, per-region/-city tiers) for a tweet that was never queued — so its
+    callback is skipped. When nothing was pruned (the common case), every callback
+    fires, exactly as before the deferral.
+    """
+    for event_id, callback in pending:
+        if event_id in pruned_event_ids:
+            continue
+        try:
+            callback()
+        except Exception as cb_exc:  # noqa: BLE001
+            print(f"[alerts] deferred on_draft_success callback error: {cb_exc!r}")
