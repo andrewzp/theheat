@@ -142,12 +142,22 @@ def classify_source(
     else:
         rate = recent.count("success") / len(recent)
         recent_rate = rate
+        # `failing` (the issue-filing trigger) requires HARD failures — runs that
+        # produced no data. A source that runs `degraded` every cycle is still
+        # producing data (just partial), so it stays `degraded`, never `failing`,
+        # regardless of its clean-success rate. Mirrors the dashboard's
+        # classifyHealth, which gates `unhealthy` on hard failures the same way.
+        # (`partial_failure` folds into `degraded` in record_source_health, so the
+        # `failed` counter is the complete hard-failure count.) Without this, a
+        # permanently-partial source reads as 0% success → false `failing` issue
+        # (air_quality #201, which loses a rate-limited tail chunk every run).
+        has_hard_failure = int(health.get("failed") or 0) > 0
         if rate >= 1.0:
             category = "healthy"
-        elif rate >= FAILING_RATE:
-            category = "degraded"
-        else:
+        elif has_hard_failure and rate < FAILING_RATE:
             category = "failing"
+        else:
+            category = "degraded"
 
     cause, action = _CAUSE.get(error_class, _CAUSE["unknown"])
     return {

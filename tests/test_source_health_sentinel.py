@@ -170,6 +170,26 @@ class TestClassifySource:
         )
         assert v["category"] == "degraded"
 
+    def test_consistently_degraded_source_is_not_failing(self):
+        # A source that runs `degraded` EVERY cycle — no hard failures, just
+        # partial data each time (e.g. air_quality losing a rate-limited tail
+        # chunk) — is still producing data. It must be `degraded`, not `failing`,
+        # even though its clean-success rate is 0%. `failing` requires a hard
+        # failure (a run that produced nothing). This mirrors the dashboard's
+        # classifyHealth, which already gates `unhealthy` on hard failures.
+        # Regression: the sentinel filed a false `failing` issue for air_quality
+        # (#201) while the dashboard correctly showed it `degraded`.
+        v = classify_source(
+            "air_quality",
+            _src(
+                statuses=["degraded"] * 5,
+                last_error="50 air-quality city fetches failed",
+                last_success_ts=None,
+            ),
+            now=NOW,
+        )
+        assert v["category"] == "degraded"
+
 
 class TestRunSentinel:
     def test_every_failing_source_is_surfaced(self):
