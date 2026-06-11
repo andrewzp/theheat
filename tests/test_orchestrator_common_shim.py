@@ -205,11 +205,10 @@ def test_common_shim_points_moved_symbols_at_split_modules():
 def test_main_sync_compat_globals_updates_split_modules(monkeypatch):
     import src.main as main
     from src.orchestrator import common as common_module
-    from src.orchestrator import draft_save, two_bot_dispatch
+    from src.orchestrator import draft_save
 
     original_common_save = common_module.save_draft
     original_draft_save = draft_save.save_draft
-    original_dispatch_save = two_bot_dispatch.save_draft
 
     def fake_save_draft(*args, **kwargs):
         return True
@@ -219,8 +218,39 @@ def test_main_sync_compat_globals_updates_split_modules(monkeypatch):
         main._sync_compat_globals()
 
         assert draft_save.save_draft is fake_save_draft
-        assert two_bot_dispatch.save_draft is fake_save_draft
     finally:
         common_module.save_draft = original_common_save
         draft_save.save_draft = original_draft_save
-        two_bot_dispatch.save_draft = original_dispatch_save
+
+
+def test_common_save_patch_reaches_moved_save_callers(monkeypatch):
+    calls = []
+
+    def fake_save_draft(*args, **kwargs):
+        calls.append((args, kwargs))
+        return True
+
+    monkeypatch.setattr(common, "save_draft", fake_save_draft)
+
+    assert common._save_generated_draft("generated text", {"drafts": []}, "record", "evt_1", object()) is True
+    assert calls[-1][0][:4] == ("generated text", {"drafts": []}, "record", "evt_1")
+
+    class Bundle:
+        where = "Somewhere"
+
+    def fake_generate_draft(bundle, bot_state, result_out=None):
+        return {"text": "two-bot text", "two_bot_metadata": {"model": "test"}}
+
+    monkeypatch.setattr("src.two_bot.pipeline.generate_draft", fake_generate_draft)
+
+    review_context = {}
+    assert common._try_two_bot_draft(
+        Bundle(),
+        {"drafts": []},
+        object(),
+        legacy_type="record",
+        event_id="evt_2",
+        review_context=review_context,
+    ) is True
+    assert calls[-1][0][:4] == ("two-bot text", {"drafts": []}, "record", "evt_2")
+    assert review_context["two_bot"] == {"model": "test"}

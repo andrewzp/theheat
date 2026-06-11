@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-from src.orchestrator.draft_save import save_draft
 from src.orchestrator.suppression import (
     _current_suppression_ctx,
     _record_downstream_suppression,
@@ -100,7 +99,9 @@ def _try_two_bot_draft(
             )
         return False
     review_context["two_bot"] = draft["two_bot_metadata"]
-    return save_draft(
+    from src.orchestrator import common as _common
+
+    return _common.save_draft(
         draft["text"],
         bot_state,
         legacy_type,

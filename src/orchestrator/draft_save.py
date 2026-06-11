@@ -218,7 +218,9 @@ def _save_generated_draft(
     tweet_text, candidates, candidate_score, evaluator_metadata = _unwrap_generated_result(generated)
     if not tweet_text:
         return False
-    return save_draft(
+    from src.orchestrator import common as _common
+
+    return _common.save_draft(
         tweet_text,
         bot_state,
         tweet_type,
