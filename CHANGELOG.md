@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.25.0] - 2026-06-11
+
+Session sweep: the 2026-06-10 audit is committed, THIRTY-LOOP execution is delegated to
+Codex CLI (Anthropic-token-free), and the canonical handoff moves to 2026-06-11.
+
+### Added
+
+- **docs/audits/2026-06-10-thirty-improvements-and-outage-plan.md.** The full audit: 30
+  ranked improvements, the 5-phase source-outage resilience plan (Codex-hardened, 11
+  findings incorporated), the item-to-phase crosswalk, and the production evidence
+  (outage shapes, editorial funnel).
+- **docs/superpowers/plans/2026-06-11-thirty-loop-CODEX-KICKOFF.md.** Launch
+  instructions plus the verbatim executor prompt adapting THIRTY-LOOP for OpenAI Codex:
+  skill-reference translations, self-review substitution for the [CODEX] gates,
+  environment facts, absolute prohibitions, per-iteration discipline.
+- **docs/handoffs/2026-06-11.md.** Canonical handoff superseding 2026-06-09-v4; next
+  Claude sessions triage the loop's BLOCKED/AWAITING-ANDREW rows instead of re-planning.
+- **handoff/ (brand handoff package).** Brand Book, Operator Dashboard, Usage Guide
+  HTML + png/svg assets, now versioned; the redundant .zip archive and iCloud
+  '" 2.css"' duplicates are gitignored.
+
 ## [0.9.24.0] - 2026-06-11
 
 THIRTY-LOOP: an autonomous execution plan covering all 30 improvements from the

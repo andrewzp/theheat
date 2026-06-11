@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>The Heat — Operator Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16181B; --ink2:#3A3D43; --ash:#6B6E75; --ash-soft:#9A9CA1;
+    --paper:#FAFAF7; --paper2:#F2F1EC; --rule:#E5E3DC; --rule-hard:#16181B;
+    --accent:#C2410C;
+    --sans:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper2);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 1,'lnum' 1}
+  .frame{width:1440px;margin:24px auto;padding:0 32px 64px}
+  .num{font-feature-settings:'tnum' 1,'lnum' 1}
+
+  /* Page header — same masthead vocabulary as the brand book */
+  .page-head{padding:24px 0 12px}
+  .page-head .eyebrow{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink);font-weight:600}
+  .page-head .eyebrow .r{color:var(--ash);font-weight:500}
+  .page-head h1{font-size:42px;letter-spacing:-.022em;font-weight:600;margin:14px 0 6px}
+  .page-head p{margin:0;color:var(--ash);font-size:14px;max-width:72ch;line-height:1.55}
+
+  /* App container */
+  .app{border:1px solid var(--rule-hard);background:var(--paper);margin-top:18px}
+
+  /* Masthead inside app */
+  .mast{padding:18px 24px 14px;border-bottom:1px solid var(--rule-hard);background:var(--paper2)}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--mono);font-size:12px;color:var(--ink);font-weight:600;letter-spacing:.06em}
+  .mast-row .r{color:var(--ash);font-weight:500}
+  .mast-rule{border-top:1px solid var(--ink);margin:8px 0 6px}
+  .mast-sub{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--ash);letter-spacing:.05em}
+
+  /* Toolbar */
+  .toolbar{padding:14px 24px;border-bottom:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:var(--paper)}
+  .toolbar .l{display:flex;align-items:baseline;gap:18px}
+  .toolbar .title{font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-.012em}
+  .toolbar .meta{font-family:var(--mono);font-size:11px;color:var(--ash);letter-spacing:.04em}
+  .toolbar .filters{display:flex;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+  .toolbar .filters span{padding:5px 10px;border:1px solid var(--rule);color:var(--ash)}
+  .toolbar .filters .active{border-color:var(--ink);color:var(--ink)}
+
+  /* Column header */
+  .colhead{display:grid;grid-template-columns:90px 80px 110px 1fr 90px 110px;gap:16px;padding:10px 24px;border-bottom:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ash-soft);background:var(--paper)}
+  .colhead .right{text-align:right}
+
+  /* Row */
+  .row{display:grid;grid-template-columns:90px 80px 110px 1fr 90px 110px;gap:16px;padding:18px 24px;align-items:flex-start;border-bottom:1px solid var(--rule);background:var(--paper)}
+  .row:last-child{border-bottom:none}
+  .row.posted{background:var(--paper2);opacity:.72}
+  .row .id, .row .time{font-family:var(--mono);font-size:11px;color:var(--ash)}
+  .row .tier{font-family:var(--mono);font-size:11px;color:var(--ink2);letter-spacing:.05em;text-transform:uppercase}
+  .row .body{font-size:14.5px;line-height:1.55;color:var(--ink)}
+  .row .body .acc{color:var(--accent);font-weight:600}
+  .row .meta{display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ash-soft)}
+  .row .meta .ok{color:var(--ink2)}
+  .row .meta .warn{color:var(--accent)}
+  .row .score{font-size:18px;font-weight:600;color:var(--ink);text-align:right;line-height:1}
+  .row .score sub{font-size:10px;color:var(--ash-soft);font-weight:400;vertical-align:baseline}
+  .row .actions{display:flex;flex-direction:column;gap:4px}
+  .btn{padding:6px 10px;font-family:var(--sans);font-size:11.5px;border:1px solid var(--rule);background:transparent;color:var(--ink);cursor:pointer;text-align:center}
+  .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:500}
+  .badge{padding:6px 10px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);border:1px solid var(--rule);text-align:center}
+  .badge.muted{color:var(--ash);border:none}
+
+  /* Footer */
+  .foot{padding:10px 24px;border-top:1px solid var(--rule-hard);background:var(--paper2);display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--ash);letter-spacing:.05em}
+
+  /* Notes block */
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:32px;padding-top:24px;border-top:1px solid var(--rule)}
+  .notes h3{font-size:12px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px;font-weight:600}
+  .notes p{font-size:12.5px;line-height:1.55;color:var(--ink2);margin:0}
+</style>
+</head>
+<body>
+  <main class="frame">
+    <div class="page-head">
+      <div class="eyebrow">
+        <div>THE HEAT &nbsp;·&nbsp; OPERATOR DASHBOARD</div>
+        <div class="r">OPERATOR DASHBOARD · 1440 × n · STANDALONE REFERENCE</div>
+      </div>
+      <h1>The operator dashboard.</h1>
+      <p>Andrew uses this every day. Pending drafts, suppressions, source health, daily quality grading. Internal editorial console &mdash; the public brand&rsquo;s typography and accent system carry through; the masthead conventions do not. Tooling, not pastiche.</p>
+    </div>
+
+    <div class="app">
+      <!-- Masthead -->
+      <div class="mast">
+        <div class="mast-row">
+          <div>THE HEAT &nbsp;·&nbsp; OPERATOR DASHBOARD</div>
+          <div class="r num">SESSION &middot; [USER] &middot; [UTC]</div>
+        </div>
+        <div class="mast-rule"></div>
+        <div class="mast-sub">
+          <div>SOURCES · NOAA · NASA · ECMWF · USGS · GDACS · OPENMETEO · NWS · GDACS · OGIMET · MALI-MÉTÉO · SMN · NASA FIRMS</div>
+          <div class="num">[STATION COUNT] STATIONS · [COUNTRY COUNT] COUNTRIES · REFRESHED HOURLY</div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="l">
+          <div class="title">Drafts queue</div>
+          <div class="meta">5 in queue &middot; 2 pending &middot; 1 in review &middot; 1 posted</div>
+        </div>
+        <div class="filters">
+          <span class="active">All</span>
+          <span>Records</span>
+          <span>Fires</span>
+          <span>CO&#8322;</span>
+          <span>Severe</span>
+          <span>Outlook</span>
+        </div>
+      </div>
+
+      <!-- Column header -->
+      <div class="colhead">
+        <span>id</span>
+        <span>time</span>
+        <span>tier</span>
+        <span>draft &middot; data + impact</span>
+        <span class="right">score</span>
+        <span>action</span>
+      </div>
+
+      <!-- DRAFT-0142 -->
+      <div class="row">
+        <span class="id num">DRAFT-0142</span>
+        <span class="time num">06:42 UTC</span>
+        <span class="tier">extreme</span>
+        <div>
+          <div class="body">EXTRAORDINARY heat in the Sahel. <span class="acc num">47.2&deg;C</span> in Kayes, Mali &mdash; hottest reading in 28 years of records there. At 47&deg;C the human body can&rsquo;t dissipate heat fast enough to hold core temperature; survival outdoors is measured in hours, not days.</div>
+          <div class="meta">
+            <span>STN &middot; [STATION ID] &middot; MALI&#8209;M&Eacute;T&Eacute;O</span>
+            <span class="ok">&#10003; IMPACT BEAT PRESENT</span>
+          </div>
+        </div>
+        <div class="score num">97<sub>/100</sub></div>
+        <div class="actions">
+          <button class="btn primary">Post</button>
+          <button class="btn">Edit</button>
+        </div>
+      </div>
+
+      <!-- DRAFT-0141 -->
+      <div class="row">
+        <span class="id num">DRAFT-0141</span>
+        <span class="time num">06:38 UTC</span>
+        <span class="tier">all-time-high</span>
+        <div>
+          <div class="body">Buenos Aires hit <span class="acc num">42.1&deg;C</span> today. Old record: 41.3&deg;C, 1929. Sustained 42&deg;C is hospitalization territory for older residents without AC; the 2022 spell at this level drove ~1,300 heat-related ER visits city-wide.</div>
+          <div class="meta">
+            <span>STN &middot; OGIMET 87576 &middot; SMN</span>
+            <span class="ok">&#10003; IMPACT BEAT PRESENT</span>
+          </div>
+        </div>
+        <div class="score num">84<sub>/100</sub></div>
+        <div class="actions">
+          <button class="btn primary">Post</button>
+          <button class="btn">Edit</button>
+        </div>
+      </div>
+
+      <!-- DRAFT-0140 -->
+      <div class="row">
+        <span class="id num">DRAFT-0140</span>
+        <span class="time num">04:00 UTC</span>
+        <span class="tier">co2</span>
+        <div>
+          <div class="body">CO&#8322; at Mauna Loa: <span class="acc num">435.11 ppm</span>. Pre-industrial: 280. Last time the atmosphere held this much &mdash; about 4.5 million years ago &mdash; Greenland was largely ice-free and seas sat ~25 m higher than today.</div>
+          <div class="meta">
+            <span>STN &middot; NOAA MLO &middot; NOAA GML</span>
+            <span class="ok">&#10003; IMPACT BEAT PRESENT</span>
+          </div>
+        </div>
+        <div class="score num">78<sub>/100</sub></div>
+        <div class="actions">
+          <span class="badge">In review</span>
+        </div>
+      </div>
+
+      <!-- DRAFT-0139 -->
+      <div class="row">
+        <span class="id num">DRAFT-0139</span>
+        <span class="time num">05:42 UTC</span>
+        <span class="tier">wildfire</span>
+        <div>
+          <div class="body">FRP <span class="acc num">4,200 MW</span> detected over the Yukon Flats. Confidence: HIGH. At this intensity fires create their own weather; pyrocumulus clouds spawn lightning that ignites new fronts dozens of miles ahead of the main fire.</div>
+          <div class="meta">
+            <span>STN &middot; VIIRS &middot; 65.3N 146.2W &middot; NASA FIRMS</span>
+            <span class="ok">&#10003; IMPACT BEAT PRESENT</span>
+          </div>
+        </div>
+        <div class="score num">71<sub>/100</sub></div>
+        <div class="actions">
+          <button class="btn primary">Post</button>
+          <button class="btn">Edit</button>
+        </div>
+      </div>
+
+      <!-- DRAFT-0138 -->
+      <div class="row posted">
+        <span class="id num">DRAFT-0138</span>
+        <span class="time num">22:08 UTC</span>
+        <span class="tier">severe-weather</span>
+        <div>
+          <div class="body">Tornado warning, central Oklahoma. Radar-confirmed, 2 mi WSW of El Reno, moving NE at 35 mph. Median lead time on a confirmed warning is 13 minutes; underground or interior shelter is what survival data on EF&#8209;3+ tracks comes down to.</div>
+          <div class="meta">
+            <span>STN &middot; NWS NORMAN &middot; NWS</span>
+            <span class="ok">&#10003; IMPACT BEAT PRESENT</span>
+          </div>
+        </div>
+        <div class="score num">66<sub>/100</sub></div>
+        <div class="actions">
+          <span class="badge muted">&#10003; Posted</span>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="foot">
+        <span>Daily quota &middot; <span class="num">14 / 24</span> posts</span>
+        <span>Connection &middot; <span class="num">[STATION COUNT]</span> stations &middot; 100% nominal</span>
+        <span>Last refresh &middot; <span class="num">[UTC]</span> &middot; in [N]m</span>
+      </div>
+    </div>
+
+    <!-- Implementation notes -->
+    <div class="notes">
+      <div>
+        <h3>Brand fidelity</h3>
+        <p>Masthead, dateline, source-line, monospace meta, single-accent contract: identical to the public surfaces. The dashboard is a private edition of the same publication, not a different product.</p>
+      </div>
+      <div>
+        <h3>Accent rule</h3>
+        <p>Accent (<span class="num">#C2410C</span>) renders only on the <em>headline reading</em> inside each draft body &mdash; the integer + unit. Never on chrome, badges, scores, or status. If a draft has no number, no accent.</p>
+      </div>
+      <div>
+        <h3>Impact-beat gate</h3>
+        <p>Each row carries an <span class="num">&#10003;</span>/<span class="num">&#9888;</span> footer line: drafts are blocked if they're date-anchored ("hottest since 1998") without a human-impact beat. The post button greys out until the warning clears.</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
