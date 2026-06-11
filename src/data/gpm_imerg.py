@@ -15,12 +15,12 @@ import csv
 import io
 import os
 import re
-import time
 from pathlib import Path
 from typing import Any
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data._s3credentials import get_s3_credentials
 from src.data.source_status import SourceFetchError, SourceSkipped
 
@@ -521,21 +521,6 @@ def _resolve_available_date(
     return oldest_candidate
 
 
-def _is_transient_request_error(exc: BaseException) -> bool:
-    """Return True for errors worth retrying once.
-
-    Transient: connection errors, read/connect timeouts, and 5xx HTTP responses.
-    Persistent (NOT retried): 4xx responses — auth (401/403), not found (404),
-    validation (400). Re-trying those just wastes the source's runtime budget
-    on guaranteed-to-fail repeats.
-    """
-    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
-        return True
-    if isinstance(exc, requests.HTTPError) and exc.response is not None:
-        return 500 <= exc.response.status_code < 600
-    return False
-
-
 def _fetch_city_precip(
     *,
     lat: float,
@@ -561,19 +546,13 @@ def _fetch_city_precip(
     )
     timeout_s = _request_timeout_s()
     request_headers = dict(headers)
-    try:
-        # bare-get: migrated in S-09 with GPM per-city retry semantics.
-        resp = requests.get(url, headers=request_headers, timeout=timeout_s)
-        resp.raise_for_status()
-    except requests.RequestException as exc:
-        if not _is_transient_request_error(exc):
-            raise
-        backoff_s = _retry_backoff_s()
-        if backoff_s > 0:
-            time.sleep(backoff_s)
-        # bare-get: migrated in S-09 with GPM per-city retry semantics.
-        resp = requests.get(url, headers=request_headers, timeout=timeout_s)
-        resp.raise_for_status()
+    resp = fetch_with_retry(
+        url,
+        headers=request_headers,
+        timeout=timeout_s,
+        attempts=2,
+        backoff_base=_retry_backoff_s(),
+    )
     value = _parse_ascii_value(resp.text, variable)
     if value is None or value <= FILL_VALUE:
         return None

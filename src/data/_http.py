@@ -12,6 +12,13 @@ import requests
 
 _DEFAULT_USER_AGENT = "(theheat-bot, contact@theheat.app)"
 _session: requests.Session | None = None
+_WAF_RETRY_HOSTS = frozenset({
+    "www.metoc.navy.mil",
+    "coralreefwatch.noaa.gov",
+    "waterservices.usgs.gov",
+    "rapidmapping.emergency.copernicus.eu",
+})
+_waf_budget = {"remaining": 4}
 
 
 def force_ipv4() -> None:
@@ -40,6 +47,16 @@ def _get_session() -> requests.Session:
     return _session
 
 
+def _waf_retry_eligible(url: str, status_code: int) -> bool:
+    from urllib.parse import urlparse
+
+    return status_code in (403, 429) and urlparse(url).hostname in _WAF_RETRY_HOSTS
+
+
+def _waf_sleep() -> None:
+    time.sleep(random.uniform(15, 45))
+
+
 def fetch_with_retry(
     url: str,
     *,
@@ -58,6 +75,7 @@ def fetch_with_retry(
         request_headers["User-Agent"] = _DEFAULT_USER_AGENT
 
     last_transport_error: requests.RequestException | None = None
+    waf_retried = False
     for attempt_index in range(attempts):
         try:
             response = _get_session().get(
@@ -66,6 +84,16 @@ def fetch_with_retry(
                 timeout=timeout,
                 **kwargs,
             )
+            if (
+                _waf_retry_eligible(url, response.status_code)
+                and not waf_retried
+                and attempt_index < attempts - 1
+                and _waf_budget.get("remaining", 0) > 0
+            ):
+                _waf_budget["remaining"] = max(int(_waf_budget.get("remaining", 0)) - 1, 0)
+                waf_retried = True
+                _waf_sleep()
+                continue
             if 500 <= response.status_code < 600 and attempt_index < attempts - 1:
                 _sleep_before_retry(attempt_index, backoff_base)
                 continue

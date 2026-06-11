@@ -343,9 +343,8 @@ class TestGpmFetch:
             )
 
     @responses.activate
-    @patch("src.data.gpm_imerg.time.sleep")
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
-    def test_fetch_city_precip_retries_once_on_read_timeout(self, _env, sleep_mock):
+    def test_fetch_city_precip_retries_once_on_read_timeout(self, _env):
         """Transient ReadTimeout retries once. Second attempt's 200 yields a reading.
 
         NASA GES DISC OPeNDAP is intermittently slow under load — the 0.9.5.0
@@ -372,12 +371,10 @@ class TestGpmFetch:
         assert len(responses.calls) == 2  # original + 1 retry
         assert len(readings) == 1
         assert readings[0].mm_total == 7.5
-        sleep_mock.assert_called_once()  # backoff invoked between attempts
 
     @responses.activate
-    @patch("src.data.gpm_imerg.time.sleep")
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
-    def test_fetch_city_precip_retries_once_on_5xx(self, _env, sleep_mock):
+    def test_fetch_city_precip_retries_once_on_5xx(self, _env):
         """503 Server Error retries once. Same NASA-overload pattern as ReadTimeout."""
         url_pattern = re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*")
         responses.add(responses.GET, url_pattern, status=503, body="server overloaded")
@@ -397,12 +394,10 @@ class TestGpmFetch:
         assert len(responses.calls) == 2
         assert len(readings) == 1
         assert readings[0].mm_total == 12.0
-        sleep_mock.assert_called_once()
 
     @responses.activate
-    @patch("src.data.gpm_imerg.time.sleep")
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
-    def test_fetch_city_precip_does_not_retry_on_4xx(self, _env, sleep_mock):
+    def test_fetch_city_precip_does_not_retry_on_4xx(self, _env):
         """Persistent 4xx (auth, 404) must not retry — wastes runtime budget on
         guaranteed-to-fail repeats. Single call, immediate fail-fast.
         """
@@ -420,7 +415,38 @@ class TestGpmFetch:
             )
 
         assert len(responses.calls) == 1  # no retry
-        sleep_mock.assert_not_called()
+
+    @responses.activate
+    @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
+    def test_gpm_city_fetch_uses_shared_retry(self, _env, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        calls = []
+        real_fetch_with_retry = gpm.fetch_with_retry
+
+        def spy_fetch_with_retry(url, **kwargs):
+            calls.append((url, kwargs))
+            return real_fetch_with_retry(url, **kwargs)
+
+        monkeypatch.setattr(gpm, "fetch_with_retry", spy_fetch_with_retry)
+        responses.add(
+            responses.GET,
+            re.compile(r".*3B-DAY-L\.MS\.MRG\.3IMERG.*\.ascii.*"),
+            body="Dataset\nprecipitation[0][1823][1388], 9.5\n",
+            status=200,
+        )
+
+        readings = fetch_daily_precip(
+            [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+            target_date=date(2026, 5, 14),
+            strict=True,
+        )
+
+        assert readings[0].mm_total == 9.5
+        assert calls[0][1]["attempts"] == 2
+        assert calls[0][1]["backoff_base"] == gpm._retry_backoff_s()
+        assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
+        assert "theheat" in responses.calls[0].request.headers["User-Agent"].lower()
 
     def test_request_timeout_env_override(self, monkeypatch):
         """GPM_IMERG_TIMEOUT_S overrides default; junk values fall back safely."""
