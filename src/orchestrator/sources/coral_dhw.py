@@ -7,8 +7,7 @@ from src.orchestrator.common import *
 from src.two_bot.intern import build_coral_bleaching_bundle
 
 
-def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
     # 9c. Coral Reef Watch DHW threshold crossings (every run)
     print("[alerts] Checking coral bleaching DHW...")
     coral_start = time.perf_counter()
@@ -110,4 +109,4 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "coral_dhw", coral_start,
             status="failed", error=str(e),
         )
-    return drafted
+    return

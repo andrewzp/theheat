@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_enso(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_enso(bot_state: BotState, current_run: dict | None) -> None:
     # 8. ENSO transitions (monthly, check on 1st of month)
     if date.today().day == 1:
         print("[alerts] Checking ENSO status...")
@@ -22,7 +21,6 @@ def run_enso(bot_state: BotState, current_run: dict | None) -> int:
                     transition["previous_duration_months"],
                 )
             source_promoted = 1 if enso_score and transition and _should_draft(enso_score, transition["event_id"]) else 0
-            source_drafted = 0
             if transition and source_promoted:
                 review_context = _review_context(
                     source="NOAA CPC",
@@ -49,7 +47,7 @@ def run_enso(bot_state: BotState, current_run: dict | None) -> int:
             observed = len(enso_readings) if hasattr(enso_readings, "__len__") else 0
             _record_source_run(
                 current_run, bot_state, "enso", enso_start,
-                status="success", observed=observed, promoted=source_promoted, drafted=source_drafted
+                status="success", observed=observed, promoted=source_promoted, drafted=0
             )
         except Exception as e:
             print(f"[alerts] ENSO error: {e}")
@@ -64,4 +62,4 @@ def run_enso(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "enso", skipped_start,
             status="skipped", note="Runs on the 1st of the month"
         )
-    return drafted
+    return

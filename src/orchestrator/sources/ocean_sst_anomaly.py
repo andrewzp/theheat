@@ -7,8 +7,7 @@ from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_sst_anomaly_bundle
 
 
-def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None:
     print("[alerts] Checking per-region SST anomaly...")
     start = time.perf_counter()
     try:
@@ -110,4 +109,4 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> int:
             status="failed",
             error=str(exc),
         )
-    return drafted
+    return

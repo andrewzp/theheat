@@ -6,15 +6,13 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_firms(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_firms(bot_state: BotState, current_run: dict | None) -> None:
     # 2. Wildfire alerts via NASA FIRMS
     print("[alerts] Checking wildfires...")
     firms_start = time.perf_counter()
     try:
         fires = _fetch_strict(firms.fetch_fires)
         source_promoted = 0
-        source_drafted = 0
         for fire in fires:
             if state.is_duplicate(bot_state, fire.event_id):
                 continue
@@ -61,7 +59,7 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
-            status="success", observed=len(fires), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(fires), promoted=source_promoted, drafted=0
         )
     except SourceSkipped as e:
         print(f"[alerts] FIRMS skipped: {e}")
@@ -76,4 +74,4 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "firms", firms_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

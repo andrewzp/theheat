@@ -58,9 +58,8 @@ def _should_emit_tier(
     )
 
 
-def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[dict]) -> int:
+def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[dict]) -> None:
     """Check batched CAMS air-quality data and enqueue qualifying candidates."""
-    drafted = 0
     print("[alerts] Checking air quality (PM2.5 24h-mean / dust peak)...")
     aq_start = time.perf_counter()
     source_promoted = 0
@@ -238,4 +237,4 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
             status="failed",
             error=str(exc),
         )
-    return drafted
+    return

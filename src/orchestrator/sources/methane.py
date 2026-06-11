@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_methane(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_methane(bot_state: BotState, current_run: dict | None) -> None:
     # 3b. CH4 methane milestones.
     print("[alerts] Checking CH4 methane...")
     ch4_drafted_today = any(
@@ -22,7 +21,6 @@ def run_methane(bot_state: BotState, current_run: dict | None) -> int:
         last_milestone = int(last_milestone_raw) if last_milestone_raw is not None else None
         ch4_milestone = methane.detect_milestone(readings, last_milestone=last_milestone)
         source_promoted = 0
-        source_drafted = 0
         if ch4_milestone and state.is_duplicate(bot_state, ch4_milestone.event_id):
             state.update_ch4_last_milestone(bot_state, ch4_milestone.ppb_crossed)
         elif (
@@ -67,7 +65,7 @@ def run_methane(bot_state: BotState, current_run: dict | None) -> int:
                 )
         _record_source_run(
             current_run, bot_state, "ch4_milestone", ch4_start,
-            status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(readings), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] CH4 error: {e}")
@@ -76,4 +74,4 @@ def run_methane(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "ch4_milestone", ch4_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

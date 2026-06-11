@@ -6,10 +6,9 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> int:
+def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> None:
     print("[alerts] Checking NSIDC Snow Today...")
     started = time.perf_counter()
-    source_drafted = 0
     source_promoted = 0
     try:
         readings = _fetch_strict(nsidc_snow.fetch_snow_today)
@@ -99,7 +98,7 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> int:
             status="success",
             observed=len(readings),
             promoted=source_promoted,
-            drafted=source_drafted,
+            drafted=0,
         )
     except Exception as exc:
         print(f"[alerts] NSIDC Snow Today error: {exc}")
@@ -112,4 +111,4 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> int:
             status="failed",
             error=str(exc),
         )
-    return source_drafted
+    return

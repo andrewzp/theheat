@@ -44,7 +44,6 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # (Two-guard pattern: this clears on entry; sqlite_store skips on persist.)
     # Cast to plain dict: _triage_queue is a transient key not declared in BotState.
     cast(dict, bot_state).pop("_triage_queue", None)
-    drafted = 0
     drafts_before = len(bot_state.get("drafts", []))
     us_city_state_map: dict[str, str] = {}
     cities_start = time.perf_counter()
@@ -81,21 +80,21 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         except (ValueError, TypeError):
             continue
 
-    drafted += run_extreme_signals(
+    run_extreme_signals(
         bot_state,
         current_run,
         cities,
         us_city_state_map,
         city_elevations,
     )
-    drafted += run_firms(bot_state, current_run)
-    drafted += run_fire_footprint(bot_state, current_run)
-    drafted += run_co2(bot_state, current_run)
-    drafted += run_methane(bot_state, current_run)
-    drafted += run_nws_alerts(bot_state, current_run)
-    drafted += run_gdacs(bot_state, current_run)
-    drafted += run_copernicus_ems(bot_state, current_run)
-    drafted += _process_cyclone_source(
+    run_firms(bot_state, current_run)
+    run_fire_footprint(bot_state, current_run)
+    run_co2(bot_state, current_run)
+    run_methane(bot_state, current_run)
+    run_nws_alerts(bot_state, current_run)
+    run_gdacs(bot_state, current_run)
+    run_copernicus_ems(bot_state, current_run)
+    _process_cyclone_source(
         bot_state,
         current_run,
         source_key="nhc",
@@ -103,7 +102,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         fetch_fn=nhc.fetch_active_cyclones,
         detect_module=nhc,
     )
-    drafted += _process_cyclone_source(
+    _process_cyclone_source(
         bot_state,
         current_run,
         source_key="jtwc",
@@ -111,23 +110,23 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         fetch_fn=jtwc.fetch_active_cyclones,
         detect_module=jtwc,
     )
-    drafted += run_sea_ice(bot_state, current_run)
-    drafted += run_drought(bot_state, current_run)
-    drafted += run_enso(bot_state, current_run)
-    drafted += run_climate_indices(bot_state, current_run)
-    drafted += run_ocean(bot_state, current_run)
-    drafted += run_ocean_sst(bot_state, current_run)
-    drafted += run_ocean_sst_anomaly(bot_state, current_run)
-    drafted += run_air_quality(bot_state, current_run, cities)
-    drafted += run_coral_dhw(bot_state, current_run)
-    drafted += run_water_levels(bot_state, current_run)
-    drafted += run_river_gauges(bot_state, current_run)
-    drafted += run_ice_mass(bot_state, current_run)
-    drafted += run_gpm_imerg(bot_state, current_run, cities)
-    drafted += run_nsidc_snow(bot_state, current_run)
-    drafted += run_ozone_hole(bot_state, current_run)
-    drafted += run_reanalysis_anomaly(bot_state, current_run)
-    drafted += run_synthesis(bot_state, current_run)
+    run_sea_ice(bot_state, current_run)
+    run_drought(bot_state, current_run)
+    run_enso(bot_state, current_run)
+    run_climate_indices(bot_state, current_run)
+    run_ocean(bot_state, current_run)
+    run_ocean_sst(bot_state, current_run)
+    run_ocean_sst_anomaly(bot_state, current_run)
+    run_air_quality(bot_state, current_run, cities)
+    run_coral_dhw(bot_state, current_run)
+    run_water_levels(bot_state, current_run)
+    run_river_gauges(bot_state, current_run)
+    run_ice_mass(bot_state, current_run)
+    run_gpm_imerg(bot_state, current_run, cities)
+    run_nsidc_snow(bot_state, current_run)
+    run_ozone_hole(bot_state, current_run)
+    run_reanalysis_anomaly(bot_state, current_run)
+    run_synthesis(bot_state, current_run)
 
     # Drain the triage queue: rank + cap survivors, then call writer for each.
     # Source runners enqueue StoryBundle candidates; this is the only writer
@@ -135,7 +134,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # Defer on_draft_success callbacks past the cycle-cap prune (Codex #5): a draft
     # that gets pruned must NOT consume dedup/cap state (annual counts, tiers).
     pending_callbacks: list = []
-    drafted += _drain_and_write_triage_queue(
+    drafted = _drain_and_write_triage_queue(
         bot_state, current_run, defer_callbacks=pending_callbacks
     )
 

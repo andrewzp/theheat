@@ -48,7 +48,7 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
     drafted = runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
     source_run = current_run["sources"][0]
-    assert drafted == 0
+    assert drafted is None
     assert len(bot_state["_triage_queue"]) == 2
     assert source_run["source"] == "open_meteo_extreme_signals"
     assert source_run["drafted"] == 0

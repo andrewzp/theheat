@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_river_gauges(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_river_gauges(bot_state: BotState, current_run: dict | None) -> None:
     # 11. River flood stages (every run)
     print("[alerts] Checking river flood stages...")
     river_start = time.perf_counter()
@@ -15,7 +14,6 @@ def run_river_gauges(bot_state: BotState, current_run: dict | None) -> int:
         river_readings = _fetch_strict(river_gauges.fetch_river_levels)
         floods = river_gauges.detect_floods(river_readings)
         source_promoted = 0
-        source_drafted = 0
         for flood in floods:
             if state.is_duplicate(bot_state, flood.event_id):
                 continue
@@ -48,7 +46,7 @@ def run_river_gauges(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "river_gauges", river_start,
-            status="success", observed=len(river_readings), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(river_readings), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] River gauges error: {e}")
@@ -57,4 +55,4 @@ def run_river_gauges(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "river_gauges", river_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
     # 12. GRACE-FO ice mass (Greenland + Antarctica).
     # Monthly-cadence source with 1-2 month lag. Run once per week on
     # Mondays. Per-region short-circuit via ice_mass_last_seen prevents
@@ -46,7 +45,6 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
                     ice_record = ice_mass.detect_cumulative_milestone(readings, cast(dict, bot_state))
 
                 source_promoted = 0
-                source_drafted = 0
                 if ice_record and not state.is_duplicate(bot_state, ice_record.event_id):
                     score = score_ice_mass_event(
                         region=ice_record.region,
@@ -147,7 +145,7 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
                 _record_source_run(
                     current_run, bot_state, region_key, im_start,
                     status="success", observed=len(readings),
-                    promoted=source_promoted, drafted=source_drafted,
+                    promoted=source_promoted, drafted=0,
                 )
             except SourceSkipped as e:
                 print(f"[alerts] ice_mass {region} skipped: {e}")
@@ -169,4 +167,4 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> int:
                 current_run, bot_state, f"ice_mass_{region}", skipped_start,
                 status="skipped", note="Runs Mondays only",
             )
-    return drafted
+    return

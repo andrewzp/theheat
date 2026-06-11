@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_ocean(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_ocean(bot_state: BotState, current_run: dict | None) -> None:
     # 9. Extreme ocean waves (every run)
     print("[alerts] Checking ocean conditions...")
     ocean_start = time.perf_counter()
@@ -15,7 +14,6 @@ def run_ocean(bot_state: BotState, current_run: dict | None) -> int:
         ocean_readings = _fetch_strict(ocean.fetch_ocean_conditions)
         extreme_waves = ocean.detect_extreme_waves(ocean_readings)
         source_promoted = 0
-        source_drafted = 0
         for wave in extreme_waves:
             if state.is_duplicate(bot_state, wave.event_id):
                 continue
@@ -47,7 +45,7 @@ def run_ocean(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "ocean", ocean_start,
-            status="success", observed=len(ocean_readings), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(ocean_readings), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] Ocean error: {e}")
@@ -56,4 +54,4 @@ def run_ocean(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "ocean", ocean_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

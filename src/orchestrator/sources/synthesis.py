@@ -6,14 +6,12 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_synthesis(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_synthesis(bot_state: BotState, current_run: dict | None) -> None:
     # --- Cross-source synthesis (runs after every per-source section) ---
     print("[alerts] Running cross-source synthesis...")
     synthesis_start = time.perf_counter()
     synthesis_observed = 0
     synthesis_promoted = 0
-    synthesis_drafted = 0
     try:
         signals = synthesis.detect_fire_drought_heat(bot_state)
         synthesis_observed = len(signals)
@@ -96,7 +94,7 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> int:
             status="success",
             observed=synthesis_observed,
             promoted=synthesis_promoted,
-            drafted=synthesis_drafted,
+            drafted=0,
         )
     except Exception as e:
         print(f"[alerts] Synthesis error: {e}")
@@ -105,4 +103,4 @@ def run_synthesis(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "synthesis_fire_drought_heat", synthesis_start,
             status="failed", error=str(e),
         )
-    return drafted
+    return

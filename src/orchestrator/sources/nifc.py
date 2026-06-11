@@ -6,15 +6,13 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
     # 2b. Fire footprint / acreage (NIFC, once per day)
     today_iso = date.today().isoformat()
     if bot_state.get("fire_footprint_last_run") != today_iso:
         print("[alerts] Checking fire footprints (NIFC)...")
         ff_start = time.perf_counter()
         source_promoted = 0
-        source_drafted = 0
         try:
             complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters)
             crossings = fire_footprint.detect_tier_crossings(complexes, cast(dict, bot_state))
@@ -77,7 +75,7 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> int:
             _record_source_run(
                 current_run, bot_state, "fire_footprint", ff_start,
                 status="success", observed=len(complexes),
-                promoted=source_promoted, drafted=source_drafted,
+                promoted=source_promoted, drafted=0,
             )
         except Exception as e:
             print(f"[alerts] Fire footprint error: {e}")
@@ -92,4 +90,4 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "fire_footprint", ff_skipped_start,
             status="skipped", note="Already ran today",
         )
-    return drafted
+    return

@@ -6,15 +6,13 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> None:
     # 4. NWS severe weather alerts (US)
     print("[alerts] Checking NWS severe weather...")
     nws_start = time.perf_counter()
     try:
         alerts = _fetch_strict(nws_alerts.fetch_alerts)
         source_promoted = 0
-        source_drafted = 0
         for alert in alerts:
             if state.is_duplicate(bot_state, alert.event_id):
                 continue
@@ -52,7 +50,7 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "nws_alerts", nws_start,
-            status="success", observed=len(alerts), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(alerts), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] NWS error: {e}")
@@ -61,4 +59,4 @@ def run_nws_alerts(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "nws_alerts", nws_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return
