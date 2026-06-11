@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.26.0] - 2026-06-11
+
+### Fixed
+
+- **.gitignore quoted patterns never matched** (landed in #220; this entry reconciles
+  VERSION/CHANGELOG, which #220's broken command chain skipped). gitignore treats quotes
+  as literal characters, so the iCloud-duplicate patterns (`*" 2.js"` etc.) and the
+  brand-zip entry silently matched nothing. All rewritten unquoted; verified with
+  `git check-ignore` for both pattern classes.
+
 ## [0.9.25.0] - 2026-06-11
 
 Session sweep: the 2026-06-10 audit is committed, THIRTY-LOOP execution is delegated to
