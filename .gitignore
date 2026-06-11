@@ -24,3 +24,7 @@ data/stations.csv
 *" 2.yml"
 *" 2.yaml"
 *" 2.json"
+*" 2.css"
+
+# Brand handoff archive — contents are versioned at handoff/; the zip is redundant
+"The Heat - Brand Design & Design System.zip"

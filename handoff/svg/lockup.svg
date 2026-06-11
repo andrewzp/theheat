@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 100" width="480" height="100" role="img" aria-label="The Heat — lockup (mark + wordmark)">
+  
+  <g transform="translate(8 8)">
+    <rect x="42" y="19" width="16" height="48" rx="8" fill="#16181B"></rect>
+    <circle cx="50" cy="68" r="16" fill="#16181B"></circle>
+    <rect x="46" y="33" width="8" height="35" rx="4" fill="#D4521E"></rect>
+    <circle cx="50" cy="68" r="9.5" fill="#D4521E"></circle>
+  </g>
+  <text x="124" y="68" class="wm">The Heat</text>
+</svg>
