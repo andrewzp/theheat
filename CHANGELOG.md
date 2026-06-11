@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.28.0] - 2026-06-11
+
+THIRTY-LOOP S-02 aligns local test defaults, cold-start docs, pipeline glossary,
+critic workflow configuration, and refresh-thresholds action versions with the
+current two-bot production path.
+
+### Changed
+
+- **Sync local pytest, docs, and workflow plumbing.** `pyproject.toml` now excludes
+  `voice_replay` tests by default while keeping the voice-regression collection path
+  available. `README.md` documents quickstart, workflows, state backend, and standing
+  rails; `PIPELINE.md` now describes the Sonnet writer, safety, Gemini fact-check, and
+  Gemini Pro critic chain with the live 24-source count. `.github/workflows/bot.yml`
+  passes `THEHEAT_CRITIC_ENABLED`, and `.github/workflows/refresh-thresholds.yml`
+  uses checkout/setup-python v6.
+
 ## [0.9.27.0] - 2026-06-11
 
 THIRTY-LOOP S-01 moves draft accounting to the triage drain so saved-count telemetry

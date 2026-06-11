@@ -75,7 +75,7 @@ flowchart TD
     classDef out fill:#3a1a5c,stroke:#6a2fa8,color:#fff
     classDef state fill:#2a2a2a,stroke:#888,color:#fff
 
-    subgraph RAW["RAW MATERIALS — 14 free public data sources"]
+    subgraph RAW["RAW MATERIALS — 24 free public data sources"]
         direction TB
         OM["Open-Meteo<br/>temperature records<br/>638 cities, 180 countries"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
@@ -179,7 +179,7 @@ Sources run on a schedule; most run with every alert cycle, but some are gated b
 
 ## Stage Glossary
 
-### Raw Materials (14 Sources)
+### Raw Materials (24 Sources)
 Each source is fetched on a schedule (alerts every 4 hours, Hot 10 daily at 12:00 UTC). Each is wrapped in try/catch so one failure doesn't block the others.
 
 ### Deduplicate
@@ -191,37 +191,22 @@ Fire complexes evolve. The same fire burns bigger day after day, so the dedup ev
 ### Editorial Signal Scoring
 Six weighted factors produce a 0–100 score. Each event type has a threshold (records: 72, fires: 64, disasters: 62, etc). Below threshold = suppressed before generation. This is the first quality gate.
 
-### Build Data Description + Previous Drafts
-Constructs the structured text the generator sees. For evolving events (cyclones, hurricanes), previous draft texts are included with explicit instructions NOT to repeat the same framing — prevents "Category 5 starts at 157" × 5 drafts.
+### StoryBundle Assembly
+Each promoted signal is converted into a `StoryBundle` by the intern builders in `src/two_bot/intern/`. The bundle contains only structured facts: where, when, headline metric, current facts, historical context, and a raw signal dump for auditability.
 
-### Gemini 2.5 Flash (Generator)
-Fast, cheap, free tier. Produces 4 distinct tweet candidates from the data description. System prompt enforces voice rules, press-release bans, and the virality principles.
+### Claude Sonnet 4.6 Writer
+`src/two_bot/writer.py` calls `claude-sonnet-4-6` and returns strict JSON containing either tweet text or a writer kill reason. The writer sees the StoryBundle plus a memory slice of recent shipped/pending language so it can avoid repeated framing.
 
 ### Safety Pipeline
 Two layers:
 - **Regex:** 48+ banned patterns (emojis, hashtags, press-release openers, weather-service boilerplate, tell-don't-show meta-commentary, truncated temperatures, date repetition).
 - **LLM:** Gemini Flash checks for mocking human suffering / crossing from dark humor into cruelty.
 
-### Heuristic Ranking
-Scores each surviving candidate on clarity/context/voice/punch. Orders them best-first.
+### Gemini 2.5 Flash Fact-Check
+`src/two_bot/fact_check.py` asks `gemini-2.5-flash` to verify the tweet against the StoryBundle. Entity mismatches, unsupported numbers, or invented context fail closed and record a fact-check suppression.
 
-### Claude Sonnet 4.6 (Virality Evaluator)
-Second inference pass. Scores the top candidate 0–10 on five virality dimensions from the research:
-- **Awe** — physical activation
-- **Comparison** — concrete anchoring
-- **Social currency** — makes the sharer look smart
-- **Opener** — scroll-stopping first line
-- **Show-not-tell** — no meta-commentary
-
-Passes if 7+ on 4 of 5 dimensions. Fails otherwise. When failing, provides a rewrite.
-
-### Rewrite Validation (3 gates)
-The evaluator's rewrite must survive three checks to be accepted:
-1. Pass the safety pipeline
-2. Score higher than the original on the heuristic
-3. No rewrite? Draft dies entirely.
-
-**An evaluator FAIL with no usable rewrite kills the draft.** No more "evaluator said this isn't viral but we'll draft it anyway."
+### Gemini 2.5 Pro Critic
+`src/two_bot/critic.py` asks `gemini-2.5-pro` for the final PASS/KILL decision. The critic compares the draft against today's pending queue, shipped-language memory, and the project's taste rules; `THEHEAT_CRITIC_ENABLED=0` bypasses this stage if operations need a temporary kill-switch.
 
 ### Per-Cycle Cap
 Max 3 drafts per alert cycle, ranked by signal score. Even on a hot day, only the top 3 survive. Forces quality over volume.
@@ -241,8 +226,8 @@ Runs once per alerts cycle after all per-source sections. Each rule
 reads from the 14-day rolling buffer in `bot_state["synthesis_components"]`
 and the cached USDM snapshot. When a rule's convergence conditions are
 met and the per-(rule, state) cooldown is not active, a compound-framing
-draft is generated through the full pipeline (candidates → safety →
-ranking → evaluator → rewrite validation) and stored with
+draft is generated through the full pipeline (deterministic gates → writer →
+safety → fact-check → critic) and stored with
 `suggested_auto` approval and a 120-minute delay.
 
 ### Dashboard
@@ -269,14 +254,14 @@ A tweet can die at any of these stages:
 |---|---|
 | Deduplicate | Already drafted this event |
 | Signal scoring | Below threshold — not extraordinary enough |
+| Writer | Self-kill: the facts do not support a memorable draft |
 | Safety (regex) | Banned pattern (press-release opener, weather-service boilerplate, truncated temp, etc) |
 | Safety (LLM) | Mocks suffering, crosses into cruelty |
-| Evaluator | Not viral enough, no usable rewrite |
-| Rewrite safety | Evaluator's rewrite has a banned pattern |
-| Rewrite regression | Rewrite scores worse than original on heuristic |
+| Fact-check | Unsupported claim, entity mismatch, or invented context |
+| Critic | Template convergence, weak scale, recycled phrasing, or not stop-mid-scroll |
 | Per-cycle cap | Not in top 3 for this run |
 | Double-gate | Failed safety again right before auto-post |
 
-Only drafts that survive every stage become tweets. On a typical alert cycle, hundreds of events get observed, dozens get scored, a handful make it to the generator, and 3 or fewer become drafts.
+Only drafts that survive every stage become tweets. On a typical alert cycle, hundreds of events get observed, dozens get scored, a handful reach the writer, and 3 or fewer become drafts.
 
 *A great tweet plus strong distribution beats a great tweet alone. A mediocre tweet plus amplification is just amplified mediocrity.*
