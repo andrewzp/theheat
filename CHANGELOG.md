@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.29.0] - 2026-06-11
+
+THIRTY-LOOP S-03 makes the dashboard’s operational truth match the underlying bot state
+so stale or failed state reads no longer look healthy.
+
+### Changed
+
+- **Show truthful dashboard state age and counts.** `dashboard/app/page.js` now reads
+  today’s tweet count by UTC date key, surfaces `stateError` as an alert banner, shows
+  bot data age alongside fetch age, flags Hot 10 snapshots older than 24 hours, removes
+  the dead raw `bundles` funnel row, and marks draft action feedback as an alert.
+  `dashboard/lib/format.js` adds tested helpers for UTC daily counts and Hot 10 staleness.
+
 ## [0.9.28.0] - 2026-06-11
 
 THIRTY-LOOP S-02 aligns local test defaults, cold-start docs, pipeline glossary,
