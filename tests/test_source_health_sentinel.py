@@ -13,11 +13,15 @@ from datetime import datetime, timedelta, timezone
 
 from scripts.source_health_sentinel import (
     LABEL,
+    YIELD_WATCH_MARKER,
     build_issue_body,
+    build_yield_watch_body,
     classify_error,
     classify_source,
     plan_issue_actions,
+    plan_yield_watch_action,
     run_sentinel,
+    yield_watch_sources,
 )
 
 NOW = datetime(2026, 6, 4, 18, 0, 0, tzinfo=timezone.utc)
@@ -41,6 +45,18 @@ def _src(*, statuses, last_error="", last_success_ts="2026-06-04T17:00:00Z"):
         "runs": runs,
         "last_error": last_error,
         "last_success_ts": last_success_ts,
+    }
+
+
+def _yield_src(statuses, *, observed=0):
+    return {
+        "success": statuses.count("success"),
+        "failed": statuses.count("failed"),
+        "degraded": statuses.count("degraded"),
+        "skipped": statuses.count("skipped"),
+        "total_observed": observed,
+        "last_success_ts": "2026-06-04T17:00:00Z",
+        "runs": [{"status": status} for status in statuses],
     }
 
 
@@ -267,6 +283,47 @@ class TestRunSentinel:
 
         assert "_pipeline_liveness" not in {v["source"] for v in report["failing"]}
         assert report["has_failures"] is False
+
+
+class TestYieldWatch:
+    def test_yield_watch_flags_zero_observed_success_source(self):
+        watched = yield_watch_sources({
+            "gdacs": _yield_src(["success"] * 10, observed=0),
+            "co2": _yield_src(["success"] * 10, observed=42),
+        })
+
+        assert [row["source"] for row in watched] == ["gdacs"]
+
+    def test_yield_watch_ignores_allowlisted(self):
+        watched = yield_watch_sources({
+            "synthesis_fire_drought_heat": _yield_src(["success"] * 10, observed=0),
+        })
+
+        assert watched == []
+
+    def test_yield_watch_requires_full_window(self):
+        watched = yield_watch_sources({
+            "gdacs": _yield_src(["success"] * 9, observed=0),
+        })
+
+        assert watched == []
+
+    def test_yield_watch_digest_action_lifecycle(self):
+        watched = yield_watch_sources({
+            "gdacs": _yield_src(["success"] * 10, observed=0),
+        })
+        body = build_yield_watch_body(watched)
+
+        assert YIELD_WATCH_MARKER in body
+        assert plan_yield_watch_action(watched, None)["action"] == "create_yield_watch"
+        assert plan_yield_watch_action(watched, {"number": 9, "body": body, "labels": [LABEL, "unknown"]}) is None
+        stale = plan_yield_watch_action(watched, {"number": 9, "body": body, "labels": [LABEL, "external"]})
+        assert stale["action"] == "update_yield_watch"
+        assert stale["remove_labels"] == ["external"]
+        assert plan_yield_watch_action([], {"number": 9, "body": body, "labels": [LABEL, "unknown"]}) == {
+            "action": "close_yield_watch",
+            "number": 9,
+        }
 
 
 class TestPlanIssueActions:

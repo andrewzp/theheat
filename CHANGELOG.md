@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.32.0] - 2026-06-11
+
+THIRTY-LOOP S-06 adds an advisory yield watch so sources that stay green while
+returning zero observations no longer disappear into a healthy-looking dashboard.
+
+### Changed
+
+- **Add zero-yield sentinel digest.** `scripts/source_health_sentinel.py` now
+  detects non-allowlisted sources with at least 10 retained success runs and zero
+  observed records, then maintains a single marked `Yield watch: sources succeeding
+  with zero observations` issue labeled `unknown`. The advisory creates, updates,
+  removes stale cause labels, and closes through the same sentinel lifecycle without
+  changing dashboard classifier output.
+
 ## [0.9.31.0] - 2026-06-11
 
 THIRTY-LOOP S-05 adds durable failure-shape telemetry and liveness alarms so

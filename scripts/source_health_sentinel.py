@@ -41,6 +41,22 @@ FAILING_RATE = 0.5
 LIVENESS_MAX_AGE_H = 6
 LIVENESS_SOURCE = "_pipeline_liveness"
 BOT_ACTIONS_URL = "https://github.com/andrewzp/theheat/actions/workflows/bot.yml"
+YIELD_WATCH_MIN_RUNS = 10
+YIELD_WATCH_TITLE = "Yield watch: sources succeeding with zero observations"
+YIELD_WATCH_MARKER = "<!-- source-health-yield-watch -->"
+YIELD_QUIET_OK = frozenset({
+    "synthesis_fire_drought_heat",
+    "manual_publish",
+    "auto_publish_due",
+    "leaderboard",
+    "load_cities",
+    "ozone_hole",
+    "nao",
+    "ao",
+    "pdo",
+    "enso",
+    "nao_ao_alignment",
+})
 
 LABEL = "source-health-sentinel"
 TITLE_PREFIX = "Source down: "
@@ -239,6 +255,35 @@ def classify_source(
     }
 
 
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def yield_watch_sources(source_health: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Advisory sources that report green while yielding zero observations."""
+    watched: list[dict[str, Any]] = []
+    for source, health in sorted((source_health or {}).items()):
+        if source in YIELD_QUIET_OK or not isinstance(health, Mapping):
+            continue
+        runs = [run for run in health.get("runs") or [] if isinstance(run, Mapping)]
+        if len(runs) < YIELD_WATCH_MIN_RUNS:
+            continue
+        if any(str(run.get("status") or "") != "success" for run in runs):
+            continue
+        if _int_or_zero(health.get("total_observed")) != 0:
+            continue
+        watched.append({
+            "source": source,
+            "runs": len(runs),
+            "total_observed": 0,
+            "last_success_ts": health.get("last_success_ts"),
+        })
+    return watched
+
+
 def run_sentinel(
     source_health: dict[str, Any] | None,
     *,
@@ -389,6 +434,26 @@ def build_issue_body(v: dict[str, Any]) -> str:
     ])
 
 
+def build_yield_watch_body(watched: list[dict[str, Any]]) -> str:
+    lines = [
+        YIELD_WATCH_MARKER,
+        "**Sources succeeding with zero observations**",
+        "",
+        "These sources are green but have produced zero observations across their retained source-health window.",
+        "This is advisory and labeled `unknown`; investigate whether the source is seasonal/quiet or silently empty.",
+        "",
+        "## Yield watch",
+    ]
+    for row in watched:
+        last_success = row.get("last_success_ts") or "unknown"
+        lines.append(f"- `{row['source']}`: {row['runs']} success runs, 0 observed, last success {last_success}")
+    lines.extend([
+        "",
+        "_Auto-maintained by the source-health sentinel. The issue closes when the watch list is empty._",
+    ])
+    return "\n".join(lines)
+
+
 def _print_report(report: dict[str, Any]) -> None:
     s = report["summary"]
     print(
@@ -430,6 +495,51 @@ def _list_open_sentinel_issues() -> dict[str, dict[str, Any]]:
     return result
 
 
+def _open_yield_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list yield-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == YIELD_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_yield_watch_action(
+    watched: list[dict[str, Any]],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if watched:
+        body = build_yield_watch_body(watched)
+        labels = [LABEL, "unknown"]
+        if open_issue is None:
+            return {"action": "create_yield_watch", "body": body, "labels": labels}
+        existing_labels = _open_issue_labels(open_issue)
+        stale_cause_labels = sorted((existing_labels & CAUSE_LABELS) - set(labels))
+        labels_current = set(labels).issubset(existing_labels) and not stale_cause_labels
+        body_current = _open_issue_body(open_issue) == body
+        if labels_current and body_current:
+            return None
+        action = {
+            "action": "update_yield_watch",
+            "number": _open_issue_number(open_issue),
+            "body": body,
+            "labels": labels,
+        }
+        if stale_cause_labels:
+            action["remove_labels"] = stale_cause_labels
+        return action
+    if open_issue is not None:
+        return {"action": "close_yield_watch", "number": _open_issue_number(open_issue)}
+    return None
+
+
 def _create_issue(v: dict[str, Any]) -> None:
     title = f"{TITLE_PREFIX}{v['source']}"
     body = build_issue_body(v)
@@ -442,6 +552,14 @@ def _create_issue(v: dict[str, Any]) -> None:
     print(f"[sentinel] opened issue: {title}")
 
 
+def _create_yield_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", YIELD_WATCH_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened yield-watch issue: {YIELD_WATCH_TITLE}")
+
+
 def _update_issue(action: Mapping[str, Any]) -> None:
     args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
     for label in action.get("labels") or []:
@@ -452,6 +570,16 @@ def _update_issue(action: Mapping[str, Any]) -> None:
     print(f"[sentinel] updated issue #{action['number']} ({action['source']} still failing)")
 
 
+def _update_yield_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    for label in action.get("remove_labels") or []:
+        args.extend(["--remove-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated yield-watch issue #{action['number']}")
+
+
 def _close_issue(number: int, source: str) -> None:
     _run_gh(
         ["issue", "close", str(number), "--comment",
@@ -459,6 +587,15 @@ def _close_issue(number: int, source: str) -> None:
         check=False,
     )
     print(f"[sentinel] closed issue #{number} ({source} recovered)")
+
+
+def _close_yield_watch_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "Yield watch is empty. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed yield-watch issue #{number}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -479,11 +616,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[sentinel] could not read {state_path}: {exc!r}", file=sys.stderr)
         return 0
 
+    source_health = state.get("source_health") or {}
     report = run_sentinel(
-        state.get("source_health") or {},
+        source_health,
         run_history=state.get("run_history") or [],
     )
+    watched = yield_watch_sources(source_health)
     _print_report(report)
+    if watched:
+        print(f"[sentinel] yield-watch advisory: {len(watched)} zero-observed green source(s)")
 
     if not apply:
         print("[sentinel] dry-run — pass --apply or run in CI to open/close issues.")
@@ -506,6 +647,14 @@ def main(argv: list[str] | None = None) -> int:
             _update_issue(action)
         else:
             _close_issue(action["number"], action["source"])
+    yield_action = plan_yield_watch_action(watched, _open_yield_watch_issue())
+    if yield_action:
+        if yield_action["action"] == "create_yield_watch":
+            _create_yield_watch_issue(yield_action)
+        elif yield_action["action"] == "update_yield_watch":
+            _update_yield_watch_issue(yield_action)
+        else:
+            _close_yield_watch_issue(yield_action["number"])
     return 0
 
 
