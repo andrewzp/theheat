@@ -27,6 +27,14 @@ ignore = [
 # import * style assertions.
 "tests/**/*.py" = ["F401", "F403", "F405"]
 
+[tool.pytest.ini_options]
+addopts = "-m 'not voice_replay'"
+markers = [
+    "voice_replay: live writer-replay test (calls real Anthropic API; skipped by default, run via the voice-regression workflow)",
+    "allow_network: opt out of the hermeticity gate and allow real outbound connections",
+    "real_backoff: opt out of the no-op retry backoff fixture and run real retry sleeps",
+]
+
 [tool.mypy]
 # Permissive baseline. Goal: catch boundary-layer bugs (the "verify the wire"
 # class) and obvious type errors WITHOUT requiring full type annotation of
