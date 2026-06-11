@@ -10,7 +10,7 @@
 | S-02 | #30b | pytest config, README, PIPELINE glossary, critic passthrough, action versions | — | DONE | #223 | Local pytest defaults, README, current glossary, critic env, and action versions synced. |
 | S-03 | #27 | Dashboard truth fixes | — | DONE | #224 | Dashboard counts, state-read errors, data age, Hot 10 staleness, and funnel label truth fixed. |
 | S-04 | #29 | Sentinel 403 classification (PY+JS) | — | DONE | #225 | Earthdata credential 403s classify ours in Python and dashboard; generic gov 403 stays external. |
-| S-05 | #13 | error_class telemetry + liveness + failure alarm | S-04 | TODO | | |
+| S-05 | #13 | error_class telemetry + liveness + failure alarm | S-04 | DONE | #226 | Source error_class telemetry, stale alerts-lane sentinel, hourly cadence, and scheduled-run failure issue alarm added. |
 | S-06 | #14 | Sentinel stale-success / zero-yield watch | S-05 | TODO | | |
 | S-07 | #1a | _http.py jitter + shared Session | — | TODO | | |
 | S-08 | #1b | Migrate bare requests.get callers | S-07 | TODO | | |
