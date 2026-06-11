@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { hot10IsStale, hot10StaleDays, todayTweetCount } from "../lib/format.js"
 import "./dashboard.css"
 
 function timeAgo(dateStr) {
@@ -600,7 +601,9 @@ function WorkbenchView({
                   )}
                 </div>
                 {draftFeedback && (
-                  <div className={`draft-feedback ${draftFeedback.type}`}>{draftFeedback.text}</div>
+                  <div className={`draft-feedback ${draftFeedback.type}`} role="alert">
+                    {draftFeedback.text}
+                  </div>
                 )}
               </>
             )}
@@ -675,7 +678,6 @@ function SourceFunnelInline({ metrics, provider }) {
     { key: "stations_with_obs", label: "Stations with fresh obs" },
     { key: "stations_checked", label: "Stations checked" },
     { key: "raw_signals", label: "Raw signals fired" },
-    { key: "bundles", label: "Bundles (post-dedup)" },
     { key: "bundles_after_dedup", label: "Bundles (post-dedup)" },
     { key: "country_records", label: "Country records" },
     { key: "drafted", label: "Drafted" },
@@ -1402,13 +1404,15 @@ export default function Dashboard() {
   }
 
   const state = data?.state
+  const stateError = data?.stateError
   const runs = data?.runs || []
   const hot10 = state?.last_hot10 || {}
   const streaks = state?.streaks || {}
   const errors = state?.errors || []
-  const todayCount = state?.daily_tweet_count
-    ? Object.values(state.daily_tweet_count)[0] || 0
-    : 0
+  const nowIso = new Date().toISOString()
+  const todayCount = todayTweetCount(state?.daily_tweet_count, nowIso)
+  const hot10Stale = hot10IsStale(hot10.date, nowIso)
+  const hot10StaleAgeDays = hot10StaleDays(hot10.date, nowIso)
 
   const sortedStreaks = Object.entries(streaks)
     .sort((a, b) => b[1].consecutive_days - a[1].consecutive_days)
@@ -1426,6 +1430,12 @@ export default function Dashboard() {
     runHistory.find((r) => (r.sources || []).length > 0) ||
     runHistory[0] ||
     null
+  const newestRunStartedAt = runHistory.reduce((newest, run) => {
+    const startedAt = run?.started_at
+    if (!startedAt) return newest
+    if (!newest) return startedAt
+    return new Date(startedAt).getTime() > new Date(newest).getTime() ? startedAt : newest
+  }, null)
 
   return (
     <>
@@ -1460,7 +1470,10 @@ export default function Dashboard() {
               </span>
             )}
             {lastUpdated && !refreshError && (
-              <span className="refresh-meta">updated {timeAgo(lastUpdated)}</span>
+              <span className="refresh-meta">
+                updated {timeAgo(lastUpdated)}
+                {newestRunStartedAt ? ` / data: ${timeAgo(newestRunStartedAt)}` : ""}
+              </span>
             )}
             <button
               className={`refresh-btn${refreshing ? " is-refreshing" : ""}`}
@@ -1524,6 +1537,12 @@ export default function Dashboard() {
             ) : null}
           </a>
         </div>
+
+        {stateError && (
+          <div className="state-error-banner" role="alert">
+            state read failed: {stateError}
+          </div>
+        )}
 
         {loading ? (
           <div className="loading">loading...</div>
@@ -1715,7 +1734,12 @@ export default function Dashboard() {
               </div>
               <div className="card">
                 <h2>Last Hot 10</h2>
-                <div className="stat">{hot10.date || "—"}</div>
+                <div className="stat stat-with-chip">
+                  <span>{hot10.date || "—"}</span>
+                  {hot10Stale && (
+                    <span className="badge running hot10-stale-chip">(stale {hot10StaleAgeDays}d)</span>
+                  )}
+                </div>
                 <div className="stat-label">
                   {hot10.date ? timeAgo(hot10.date + "T12:00:00Z") : "no data yet"}
                 </div>
