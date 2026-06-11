@@ -6,7 +6,7 @@ from __future__ import annotations
 
 
 
-# ruff: noqa: F401
+# ruff: noqa: F401,F405
 
 import argparse
 import contextlib
@@ -97,28 +97,11 @@ from src.voice import generator  # noqa: F401 — referenced via @patch("src.mai
 from src.voice.safety import run_safety_pipeline
 from src.posting.bluesky import post_to_bluesky
 from src.posting.twitter import post_tweet
+from src.orchestrator.caps import *  # noqa: F403
 
 
-
-MAX_DRAFTS = 200
 
 _CURRENT_SUPPRESSION_CTX: dict | None = None
-
-CITY_COOLDOWN_DAYS = 3
-
-ELITE_COPY_SCORE = 95
-
-CO2_ANNUAL_CAP = 12
-
-CH4_ANNUAL_CAP = 12
-
-CORAL_DHW_ANNUAL_CAP = 16
-
-ICE_ANNUAL_CAP = 8
-
-SNOW_ANNUAL_CAP = 8
-
-SST_ANOM_ANNUAL_CAP = 10
 
 
 
@@ -569,83 +552,6 @@ def _review_context(
 
 def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
-
-def _co2_annual_cap_reached(bot_state: BotState, cap: int = CO2_ANNUAL_CAP) -> bool:
-    """True if we've already drafted CO2_ANNUAL_CAP CO2 tweets this calendar year."""
-    year_key = str(date.today().year)
-    count = bot_state.get("co2_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[co2] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
-
-def _increment_co2_annual_count(bot_state: BotState) -> None:
-    year_key = str(date.today().year)
-    counts = bot_state.setdefault("co2_annual_count", {})
-    counts[year_key] = counts.get(year_key, 0) + 1
-
-def _ch4_annual_cap_reached(bot_state: BotState, cap: int = CH4_ANNUAL_CAP) -> bool:
-    year_key = str(date.today().year)
-    count = bot_state.get("ch4_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[ch4] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
-
-def _coral_dhw_annual_cap_reached(
-    bot_state: BotState,
-    cap: int = CORAL_DHW_ANNUAL_CAP,
-) -> bool:
-    year_key = str(date.today().year)
-    count = bot_state.get("coral_dhw_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[coral_dhw] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
-
-def _ice_annual_cap_reached(bot_state: BotState, cap: int = ICE_ANNUAL_CAP) -> bool:
-    """True if we've already drafted ICE_ANNUAL_CAP ice-mass tweets this year."""
-    year_key = str(date.today().year)
-    count = bot_state.get("ice_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[ice_mass] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
-
-def _increment_ice_annual_count(bot_state: BotState) -> None:
-    year_key = str(date.today().year)
-    counts = bot_state.setdefault("ice_annual_count", {})
-    counts[year_key] = counts.get(year_key, 0) + 1
-
-
-def _snow_annual_cap_reached(bot_state: BotState, cap: int = SNOW_ANNUAL_CAP) -> bool:
-    year_key = str(date.today().year)
-    count = bot_state.get("snow_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[snow] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
-
-
-def _increment_snow_annual_count(bot_state: BotState) -> None:
-    year_key = str(date.today().year)
-    counts = bot_state.setdefault("snow_annual_count", {})
-    counts[year_key] = counts.get(year_key, 0) + 1
-
-
-def _sst_anom_annual_cap_reached(
-    bot_state: BotState,
-    reading_date: str,
-    cap: int = SST_ANOM_ANNUAL_CAP,
-) -> bool:
-    """True if regional SST anomaly drafts hit the cap for the reading year."""
-
-    year_key = reading_date[:4]
-    count = bot_state.get("sst_anom_annual_count", {}).get(year_key, 0)
-    if count >= cap:
-        print(f"[sst_anom] Annual cap reached ({count}/{cap} for {year_key}), skipping")
-        return True
-    return False
 
 def _cyclone_history_advisories(
     bot_state: BotState,
