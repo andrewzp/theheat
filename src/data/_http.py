@@ -110,6 +110,44 @@ def fetch_with_retry(
     raise RuntimeError("fetch_with_retry exhausted attempts without a response")
 
 
+def fetch_with_cache_revalidation(
+    url: str,
+    *,
+    cache: dict[str, tuple[str, str]],
+    **kwargs: Any,
+) -> requests.Response:
+    """GET a URL, using ETag/Last-Modified validators from a process cache."""
+    cached = cache.get(url)
+    headers = dict(kwargs.pop("headers", None) or {})
+    if cached is not None:
+        validator, _body = cached
+        headers[_validator_request_header(validator)] = validator
+
+    response = fetch_with_retry(url, headers=headers, **kwargs)
+    if response.status_code == 304 and cached is not None:
+        validator, body = cached
+        cached_response = requests.Response()
+        cached_response.status_code = 200
+        cached_response.url = response.url or url
+        cached_response.headers.update(response.headers)
+        cached_response.headers["X-TheHeat-Cache"] = "revalidated"
+        cached_response._content = body.encode(response.encoding or "utf-8")
+        cached_response.encoding = response.encoding or "utf-8"
+        cache[url] = (validator, body)
+        return cached_response
+
+    validator = response.headers.get("ETag") or response.headers.get("Last-Modified")
+    if validator:
+        cache[url] = (validator, response.text)
+    return response
+
+
+def _validator_request_header(validator: str) -> str:
+    if validator.startswith('"') or validator.startswith("W/"):
+        return "If-None-Match"
+    return "If-Modified-Since"
+
+
 def _sleep_before_retry(attempt_index: int, backoff_base: float) -> None:
     if backoff_base <= 0:
         return

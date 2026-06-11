@@ -52,7 +52,7 @@ def test_co2_strict_request_error_is_failed():
     from src.data import co2
 
     with patch(
-        "src.data.co2.fetch_with_retry",
+        "src.data.co2.fetch_with_cache_revalidation",
         side_effect=requests.RequestException("network down"),
     ):
         with pytest.raises(SourceFetchError):

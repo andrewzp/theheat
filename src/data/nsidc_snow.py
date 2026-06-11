@@ -11,10 +11,11 @@ from typing import Any
 import requests
 
 from src.data._freshness import assert_freshness
-from src.data._http import fetch_with_retry
+from src.data._http import fetch_with_cache_revalidation
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 SNOW_TODAY_SWE_URL = "https://nsidc.org/api/snow-today/snow-water-equivalent/points/swe.json"
+_SNOW_TODAY_REVALIDATION_CACHE: dict[str, tuple[str, str]] = {}
 INCH_TO_MM = 25.4
 DAILY_GAIN_MARGIN_MM = 25.4
 BLIZZARD_DAY_MIN_MM = 12.7
@@ -57,7 +58,13 @@ class SnowExtremeEvent:
 
 def fetch_snow_today(*, strict: bool = False) -> list[SnowReading]:
     try:
-        resp = fetch_with_retry(SNOW_TODAY_SWE_URL, timeout=30, attempts=3, backoff_base=1.0)
+        resp = fetch_with_cache_revalidation(
+            SNOW_TODAY_SWE_URL,
+            cache=_SNOW_TODAY_REVALIDATION_CACHE,
+            timeout=30,
+            attempts=3,
+            backoff_base=1.0,
+        )
         payload = resp.json()
         assert_response_schema(payload, ("metadata", "data"), "NSIDC Snow Today")
         metadata = payload["metadata"]
