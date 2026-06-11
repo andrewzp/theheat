@@ -48,8 +48,8 @@ CAUSE_LABELS = frozenset({"ours", "external", "unknown"})
 _ACTIVE_STATUSES = {"success", "failed", "degraded", "partial_failure"}
 
 # OUR_BUG: actionable in our code. Checked FIRST so auth/code/parse wins over a
-# coincidental network token. EARTHDATA_TOKEN (the env-var name) NOT bare
-# "EARTHDATA" — the NASA hostname earthdata.nasa.gov appears in upstream URLs.
+# coincidental network token. Bare Earthdata host text is handled only when paired
+# with 403 by the credential-class override below.
 _OUR_BUG_RE = re.compile(
     r"\b(401|404|410)\b"
     r"|Unauthorized|EARTHDATA_TOKEN|invalid token|token expired|expired token|credential"
@@ -60,8 +60,9 @@ _OUR_BUG_RE = re.compile(
     r"|could not parse|invalid literal|Not Found",
     re.IGNORECASE,
 )
-# UPSTREAM: external. NASA 5xx, read/connect timeouts, connection failures, gov
-# rate-limits (403/429 — empirically rate-limits, not UA/auth blocks here).
+# UPSTREAM: external. NASA 5xx, read/connect timeouts, connection failures, and
+# generic gov rate-limits (403/429). Earthdata 403 credential failures are checked
+# before this regex.
 _UPSTREAM_RE = re.compile(
     r"\b(403|429|50\d)\b"
     r"|Server Error|Bad Gateway|Service Unavailable|Gateway Time"
@@ -72,6 +73,8 @@ _UPSTREAM_RE = re.compile(
     r"|Forbidden|Too Many Requests",
     re.IGNORECASE,
 )
+_EARTHDATA_CREDENTIAL_HOST_RE = re.compile(r"earthdata|urs\.earthdata|EDL|podaac", re.IGNORECASE)
+_HTTP_403_RE = re.compile(r"\b403\b")
 
 # error_class -> (cause label, what-to-do hint shown in the issue)
 _CAUSE = {
@@ -91,6 +94,8 @@ def classify_error(last_error: str | None) -> str:
     if not text or text == "-":
         return "none"
     if _OUR_BUG_RE.search(text):
+        return "our_bug"
+    if _HTTP_403_RE.search(text) and _EARTHDATA_CREDENTIAL_HOST_RE.search(text):
         return "our_bug"
     if _UPSTREAM_RE.search(text):
         return "upstream"

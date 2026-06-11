@@ -20,15 +20,19 @@ const RECENT_WINDOW = 5
 // Mirror of scripts/source_health_sentinel.py classify_error. An upstream error
 // (NASA/gov 5xx, timeouts, connection failures, 403/429 rate-limits) means the
 // failure is external — not our bug — and renders as "external" (amber), not the
-// red/yellow of a real defect. our_bug = code/auth/moved-endpoint we must fix.
+// red/yellow of a real defect. Earthdata 403 credential failures are checked
+// before the upstream regex. our_bug = code/auth/moved-endpoint we must fix.
 const OUR_BUG_RE = /\b(401|404|410)\b|Unauthorized|EARTHDATA_TOKEN|invalid token|token expired|expired token|credential|AttributeError|KeyError|TypeError|ValueError|IndexError|NameError|UnboundLocalError|ZeroDivisionError|RecursionError|JSONDecodeError|Expecting value|schema drift|missing required field|expected JSON object|could not parse|invalid literal|Not Found/i
 const UPSTREAM_RE = /\b(403|429|50\d)\b|Server Error|Bad Gateway|Service Unavailable|Gateway Time|ReadTimeout|ConnectTimeout|Timeout|timed out|ConnectionError|Connection refused|Connection reset|Max retries|Network is unreachable|Name or service not known|Temporary failure in name resolution|HTTPSConnectionPool|HTTPConnectionPool|Forbidden|Too Many Requests/i
+const EARTHDATA_CREDENTIAL_HOST_RE = /earthdata|urs\.earthdata|EDL|podaac/i
+const HTTP_403_RE = /\b403\b/
 
 function classifyError(lastError) {
   if (!lastError) return "none"
   const t = String(lastError).trim()
   if (!t || t === "-") return "none"
   if (OUR_BUG_RE.test(t)) return "our_bug"
+  if (HTTP_403_RE.test(t) && EARTHDATA_CREDENTIAL_HOST_RE.test(t)) return "our_bug"
   if (UPSTREAM_RE.test(t)) return "upstream"
   return "unknown"
 }

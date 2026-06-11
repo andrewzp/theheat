@@ -21,6 +21,13 @@ from scripts.source_health_sentinel import (
 )
 
 NOW = datetime(2026, 6, 4, 18, 0, 0, tzinfo=timezone.utc)
+EARTHDATA_403_ERROR = (
+    "Ice mass fetch failed: 403 Client Error: Forbidden for url: "
+    "https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/..."
+)
+GENERIC_GOV_403_ERROR = (
+    "403 Client Error: Forbidden for url: https://www.metoc.navy.mil/jtwc/products/..."
+)
 
 
 def _src(*, statuses, last_error="", last_success_ts="2026-06-04T17:00:00Z"):
@@ -81,6 +88,12 @@ class TestClassifyError:
         assert classify_error("") == "none"
         assert classify_error(None) == "none"
         assert classify_error("something never seen before") == "unknown"
+
+    def test_classifies_earthdata_403_as_our_bug(self):
+        assert classify_error(EARTHDATA_403_ERROR) == "our_bug"
+
+    def test_classifies_generic_gov_403_as_upstream(self):
+        assert classify_error(GENERIC_GOV_403_ERROR) == "upstream"
 
 
 class TestClassifySource:
