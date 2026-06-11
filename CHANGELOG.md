@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.23.0] - 2026-06-10
+
+Dashboard CSS extraction (backlog bet #6, step 1): the ~640-line `<style jsx global>`
+block and the SourcesView scoped `<style jsx>` block move out of
+`dashboard/app/page.js` into a dedicated stylesheet. No logic or markup changes —
+`page.js` drops from 2,499 to 1,803 lines and the CSS now ships as a cacheable static
+asset instead of riding inside the JS bundle.
+
+### Changed
+
+- **Extract inline styled-jsx into `dashboard/app/dashboard.css`.** The former scoped
+  SourcesView rules are re-scoped as `.source-health-table` descendant selectors
+  (replacing the styled-jsx hash class) and kept above the global section so the
+  original cascade — including the global `.source-row:last-child` / `:first-child`
+  overrides — is preserved. `dashboard.css` is imported by `app/page.js` only, so no
+  styles leak into `/health` (routes link via full-reload `<a>` navigation).
+
 ## [0.9.22.0] - 2026-06-09
 
 State-merge architecture: replace the 314-line imperative `_merge_state` with a
