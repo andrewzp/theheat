@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.31.0] - 2026-06-11
+
+THIRTY-LOOP S-05 adds durable failure-shape telemetry and liveness alarms so
+transport failures and a stalled alerts lane are visible instead of being hidden
+by unrelated successful hourly runs.
+
+### Changed
+
+- **Record error classes and alert on stale lanes.** `src/data/error_class.py`
+  introduces the source-health taxonomy, `_record_source_run` now records it into
+  rolling source-health run rows, and `_rebuild_source_health` preserves the field
+  without adding state keys or changing merge semantics. `scripts/source_health_sentinel.py`
+  now adds a synthetic `_pipeline_liveness` failure when no alerts/both run is fresh
+  within six hours, the sentinel workflow runs hourly, and the bot workflow opens a
+  sentinel issue if a scheduled run itself fails.
+
 ## [0.9.30.0] - 2026-06-11
 
 THIRTY-LOOP S-04 keeps the source-health sentinel and dashboard in sync when

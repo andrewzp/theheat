@@ -41,6 +41,7 @@ from src.data.open_meteo import (
     WetBulbEvent,
 )
 from src.state_schema import BotState
+from src.data.error_class import classify_error_class
 from src.data.source_status import SourceSkipped
 from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
@@ -183,6 +184,7 @@ def _record_source_run(
             source,
             status,
             health_error,
+            error_class=classify_error_class(error),
             metrics={
                 "duration_ms": duration_ms,
                 "observed": observed,

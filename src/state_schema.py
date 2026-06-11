@@ -134,6 +134,7 @@ class SourceHealthRun(TypedDict, total=False):
     ts: str
     status: str
     error: str | None
+    error_class: str
     duration_ms: int
     observed: int
     promoted: int

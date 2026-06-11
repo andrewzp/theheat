@@ -91,6 +91,9 @@ jobs:
 
   run:
     needs: test
+    permissions:
+      contents: read
+      issues: write
     # Run job posts tweets, writes gist, consumes API quota — skip on PRs
     # so the test job alone gates the merge. PRs from forks also lack secrets.
     if: |
@@ -231,3 +234,14 @@ jobs:
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}
         run: python -m src.main ${{ steps.mode.outputs.mode }}
+
+      - name: Open issue on scheduled-run failure
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Bot cycle failed: ${{ github.run_id }}"
+          gh issue create --title "$title" \
+            --label "source-health-sentinel,ours" \
+            --body "Scheduled run failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} — mode schedule ${{ github.event.schedule }}. Investigate; close when resolved." \
+            || true

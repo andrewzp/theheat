@@ -9,11 +9,11 @@ name: source-health-sentinel
 
 on:
   schedule:
-    # Every 4h at :30 — shortly after each bot alert cycle (00/04/08/12/16/20
-    # UTC) writes fresh state, so a failure is surfaced within ~4h and a recovery
-    # closes its issue within ~4h. The reconciler is idempotent, so frequent runs
-    # never spam: it only creates an issue a source doesn't already have.
-    - cron: '30 */4 * * *'
+    # Hourly at :30. The reconciler is idempotent, so frequent runs never spam:
+    # it only creates an issue a source doesn't already have, and it can now
+    # detect a stale alerts lane within a few hours even if auto_publish_due runs
+    # keep writing fresh state.
+    - cron: '30 * * * *'
   workflow_dispatch: {}
 
 permissions:

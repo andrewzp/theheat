@@ -198,6 +198,25 @@ def test_record_source_run_writes_health_and_run_row():
     assert health["last_error"] == "provider:ghcn diff_dates_missing:1"
 
 
+def test_source_health_run_preserves_error_class():
+    from src.main import _record_source_run
+
+    bot_state = {"source_health": {}}
+    run = {"sources": []}
+
+    _record_source_run(
+        run,
+        bot_state,
+        "gpm_imerg",
+        0,
+        status="failed",
+        error="GPM IMERG fetch hit 3 repeated ConnectTimeout failures for 2026-06-08",
+    )
+
+    health = bot_state["source_health"]["gpm_imerg"]
+    assert health["runs"][0]["error_class"] == "timeout"
+
+
 def test_assert_response_schema_valid_payload_passes():
     assert_response_schema({"temps_jra55": [], "extra": True}, ["temps_jra55"], "ocean_sst")
 
