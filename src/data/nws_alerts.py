@@ -14,6 +14,7 @@ from datetime import date
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 NWS_URL = "https://api.weather.gov/alerts/active"
@@ -54,7 +55,7 @@ class SevereWeatherAlert:
 def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
     """Fetch active severe weather alerts from NWS."""
     try:
-        resp = requests.get(
+        resp = fetch_with_retry(
             NWS_URL,
             params={"status": "actual", "message_type": "alert"},
             headers={
@@ -62,8 +63,9 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
                 "Accept": "application/geo+json",
             },
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp.raise_for_status()
         data = resp.json()
 
         alerts = []

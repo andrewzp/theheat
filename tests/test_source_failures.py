@@ -32,7 +32,7 @@ def test_firms_strict_request_error_is_failed(monkeypatch):
 def test_fire_footprint_strict_request_error_is_failed():
     from src.data import fire_footprint
 
-    with patch("src.data.fire_footprint.requests.get", side_effect=Exception("network down")):
+    with patch("src.data.fire_footprint.fetch_with_retry", side_effect=Exception("network down")):
         with pytest.raises(SourceFetchError):
             fire_footprint.fetch_active_fire_perimeters(strict=True)
 
@@ -41,7 +41,7 @@ def test_nws_strict_request_error_is_failed():
     from src.data import nws_alerts
 
     with patch(
-        "src.data.nws_alerts.requests.get",
+        "src.data.nws_alerts.fetch_with_retry",
         side_effect=requests.RequestException("network down"),
     ):
         with pytest.raises(SourceFetchError):
@@ -52,7 +52,7 @@ def test_co2_strict_request_error_is_failed():
     from src.data import co2
 
     with patch(
-        "src.data.co2.requests.get",
+        "src.data.co2.fetch_with_retry",
         side_effect=requests.RequestException("network down"),
     ):
         with pytest.raises(SourceFetchError):
@@ -86,7 +86,7 @@ def test_ocean_strict_all_points_failed_is_failed(monkeypatch):
 
     monkeypatch.setattr(ocean, "OCEAN_POINTS", [(1.0, 2.0, "Test Point", "Test")])
     with patch(
-        "src.data.ocean.requests.get",
+        "src.data.ocean.fetch_with_retry",
         side_effect=requests.RequestException("network down"),
     ):
         with pytest.raises(SourceFetchError):

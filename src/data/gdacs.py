@@ -10,6 +10,7 @@ from datetime import date
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
@@ -93,8 +94,7 @@ def fetch_disasters(
     min_level = severity_order.get(min_severity, 1)
 
     try:
-        resp = requests.get(GDACS_URL, timeout=30)
-        resp.raise_for_status()
+        resp = fetch_with_retry(GDACS_URL, timeout=30, attempts=3, backoff_base=1.0)
         data = resp.json()
 
         events = []

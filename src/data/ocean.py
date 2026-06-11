@@ -12,6 +12,7 @@ from datetime import date
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
@@ -80,7 +81,7 @@ def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
     failures: list[str] = []
     for lat, lon, name, ocean in OCEAN_POINTS:
         try:
-            resp = requests.get(
+            resp = fetch_with_retry(
                 MARINE_URL,
                 params={
                     "latitude": lat,
@@ -90,8 +91,9 @@ def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
                     "forecast_days": 1,
                 },
                 timeout=10,
+                attempts=3,
+                backoff_base=1.0,
             )
-            resp.raise_for_status()
             data = resp.json()
             daily = data.get("daily", {})
 

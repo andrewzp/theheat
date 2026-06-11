@@ -205,7 +205,7 @@ class TestFetchActiveFirePerimeters:
         assert "CHILD-001" not in ids
 
     def test_network_exception_returns_empty(self):
-        with patch("src.data.fire_footprint.requests.get", side_effect=Exception("boom")):
+        with patch("src.data.fire_footprint.fetch_with_retry", side_effect=Exception("boom")):
             assert fetch_active_fire_perimeters() == []
 
 

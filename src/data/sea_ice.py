@@ -14,6 +14,7 @@ import io
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 # NSIDC bumped these CSVs from v3.0 to v4.0 sometime in early 2026; the v3.0
@@ -51,8 +52,7 @@ def fetch_sea_ice(
     url = ARCTIC_URL if hemisphere == "Arctic" else ANTARCTIC_URL
 
     try:
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
+        resp = fetch_with_retry(url, timeout=30, attempts=3, backoff_base=1.0)
 
         readings = []
         reader = csv.reader(io.StringIO(resp.text))

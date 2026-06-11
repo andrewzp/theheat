@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.34.0] - 2026-06-11
+
+THIRTY-LOOP S-08 routes the remaining safe public data fetchers through the
+shared retry helper so transient transport failures get the same pooled,
+jittered retry behavior.
+
+### Changed
+
+- **Migrate bare `requests.get` callers.** `co2`, `gdacs`, `nws_alerts`, `enso`,
+  `sea_ice`, `water_levels`, `ocean`, `fire_footprint`, `nsidc_snow`, `drought`,
+  `open_meteo`, and the `ice_mass` CMR probe now call `fetch_with_retry` with
+  their existing timeouts. The only remaining bare gets are explicitly marked
+  GHCN 404-probe and GPM retry/status-handling exemptions reserved for later
+  THIRTY-LOOP steps.
+
 ## [0.9.33.0] - 2026-06-11
 
 THIRTY-LOOP S-07 makes the shared HTTP retry helper less bursty and cheaper to
