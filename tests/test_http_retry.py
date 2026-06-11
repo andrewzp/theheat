@@ -5,7 +5,7 @@ import requests
 import responses
 
 from src.data import _http
-from src.data._http import fetch_with_retry
+from src.data._http import fetch_with_cache_revalidation, fetch_with_retry
 
 
 @responses.activate
@@ -140,6 +140,50 @@ def test_fetch_uses_shared_session(monkeypatch):
     fetch_with_retry("https://example.test/b", backoff_base=0)
 
     assert session.urls == ["https://example.test/a", "https://example.test/b"]
+
+
+@responses.activate
+def test_revalidation_sends_if_none_match():
+    url = "https://example.test/static.csv"
+    cache = {url: ('"abc"', "old")}
+    responses.add(responses.GET, url, body="new", status=200, headers={"ETag": '"def"'})
+
+    response = fetch_with_cache_revalidation(url, cache=cache, backoff_base=0)
+
+    assert responses.calls[0].request.headers["If-None-Match"] == '"abc"'
+    assert response.text == "new"
+
+
+@responses.activate
+def test_304_serves_cached_body():
+    url = "https://example.test/static.csv"
+    cache = {url: ('"abc"', "old body")}
+    responses.add(responses.GET, url, status=304, headers={"ETag": '"abc"'})
+
+    response = fetch_with_cache_revalidation(url, cache=cache, backoff_base=0)
+
+    assert response.status_code == 200
+    assert response.text == "old body"
+    assert cache[url] == ('"abc"', "old body")
+
+
+@responses.activate
+def test_200_replaces_cache():
+    url = "https://example.test/static.csv"
+    cache = {url: ("Thu, 01 Jan 2026 00:00:00 GMT", "old")}
+    responses.add(
+        responses.GET,
+        url,
+        body="new",
+        status=200,
+        headers={"Last-Modified": "Fri, 02 Jan 2026 00:00:00 GMT"},
+    )
+
+    response = fetch_with_cache_revalidation(url, cache=cache, backoff_base=0)
+
+    assert responses.calls[0].request.headers["If-Modified-Since"] == "Thu, 01 Jan 2026 00:00:00 GMT"
+    assert response.text == "new"
+    assert cache[url] == ("Fri, 02 Jan 2026 00:00:00 GMT", "new")
 
 
 def _response(status_code: int, url: str = "https://www.metoc.navy.mil/jtwc/test") -> requests.Response:

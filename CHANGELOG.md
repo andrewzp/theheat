@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.36.0] - 2026-06-11
+
+THIRTY-LOOP S-10 adds process-lifetime conditional request support for static
+feeds that advertise ETag or Last-Modified validators.
+
+### Changed
+
+- **Revalidate static data fetches.** `src/data/_http.py` now exposes
+  `fetch_with_cache_revalidation`, serving cached response bodies on upstream
+  `304 Not Modified` responses and refreshing cache entries on validator-backed
+  `200` responses. `co2`, `enso`, `sea_ice`, and `nsidc_snow` now use the helper
+  with per-module process caches, avoiding persistent state or gist payload
+  growth while preserving their existing parsing contracts.
+
 ## [0.9.35.0] - 2026-06-11
 
 THIRTY-LOOP S-09 hardens transient government-host blocks and brings GPM city

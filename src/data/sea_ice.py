@@ -14,7 +14,7 @@ import io
 
 import requests
 
-from src.data._http import fetch_with_retry
+from src.data._http import fetch_with_cache_revalidation
 from src.data.source_status import SourceFetchError
 
 # NSIDC bumped these CSVs from v3.0 to v4.0 sometime in early 2026; the v3.0
@@ -22,6 +22,7 @@ from src.data.source_status import SourceFetchError
 # with two header rows — confirmed via curl before this change.
 ARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/north/daily/data/N_seaice_extent_daily_v4.0.csv"
 ANTARCTIC_URL = "https://noaadata.apps.nsidc.org/NOAA/G02135/south/daily/data/S_seaice_extent_daily_v4.0.csv"
+_SEA_ICE_REVALIDATION_CACHE: dict[str, tuple[str, str]] = {}
 
 
 @dataclass
@@ -52,7 +53,13 @@ def fetch_sea_ice(
     url = ARCTIC_URL if hemisphere == "Arctic" else ANTARCTIC_URL
 
     try:
-        resp = fetch_with_retry(url, timeout=30, attempts=3, backoff_base=1.0)
+        resp = fetch_with_cache_revalidation(
+            url,
+            cache=_SEA_ICE_REVALIDATION_CACHE,
+            timeout=30,
+            attempts=3,
+            backoff_base=1.0,
+        )
 
         readings = []
         reader = csv.reader(io.StringIO(resp.text))
