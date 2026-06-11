@@ -97,7 +97,9 @@ from src.voice import generator  # noqa: F401 — referenced via @patch("src.mai
 from src.voice.safety import run_safety_pipeline
 from src.posting.bluesky import post_to_bluesky
 from src.posting.twitter import post_tweet
+import src.orchestrator.caps as _caps
 from src.orchestrator.caps import *  # noqa: F403
+import src.orchestrator.telemetry as _telemetry
 from src.orchestrator.telemetry import *  # noqa: F403
 
 
@@ -125,6 +127,7 @@ def _parse_iso_utc(value: str | None) -> datetime | None:
 
 
 from src.orchestrator.suppression import *  # noqa: E402,F403
+import src.orchestrator.suppression as _suppression  # noqa: E402
 
 def _find_draft(bot_state: BotState, draft_id: str = "", tweet_text: str = "") -> dict | None:
     """Find a draft by explicit id first, then by approved tweet text fallback."""
@@ -175,6 +178,7 @@ def _unwrap_generated_result(
 
 
 from src.orchestrator.draft_save import *  # noqa: E402,F403
+import src.orchestrator.draft_save as _draft_save  # noqa: E402
 
 def _evaluator_metadata_from_bundle(generated: object) -> dict | None:
     verdict = getattr(generated, "evaluator_verdict", None)
@@ -278,10 +282,14 @@ def _review_context(
 
 
 from src.orchestrator.cyclones import *  # noqa: E402,F403
+import src.orchestrator.cyclones as _cyclones  # noqa: E402
 
 from src.orchestrator.dedup import *  # noqa: E402,F403
+import src.orchestrator.dedup as _dedup  # noqa: E402
 from src.orchestrator.two_bot_dispatch import *  # noqa: E402,F403
+import src.orchestrator.two_bot_dispatch as _two_bot_dispatch  # noqa: E402
 from src.orchestrator.triage_queue import *  # noqa: E402,F403
+import src.orchestrator.triage_queue as _triage_queue  # noqa: E402
 
 __all__ = [
     "Any",
@@ -339,6 +347,7 @@ __all__ = [
     "_record_save_rejection",
     "_record_source_run",
     "_record_suppression",
+    "_record_triage_error_suppression",
     "_review_context",
     "_same_day_already_posted",
     "_same_day_pending_collision",
@@ -455,4 +464,6 @@ __all__ = [
     "time",
     "timedelta",
     "water_levels",
+    "annual_cap_reached",
+    "increment_annual_count",
 ]

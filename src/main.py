@@ -20,10 +20,15 @@ _SOURCE_MODULES = (
     "climate_indices", "ocean_sst", "ocean_sst_anomaly", "coral_dhw", "co_ops", "river_gauges",
     "ice_mass", "gpm_imerg", "nsidc_snow", "ozone_hole", "reanalysis_anomaly", "synthesis",
 )
+_COMMON_SPLIT_MODULES = (
+    "caps", "suppression", "telemetry", "cyclones", "dedup", "draft_save", "two_bot_dispatch",
+    "triage_queue",
+)
 
 
 _SYNC_MODULES = (
     _common,
+    *(importlib.import_module(f"src.orchestrator.{name}") for name in _COMMON_SPLIT_MODULES),
     _finalize,
     _hot10,
     _posting,

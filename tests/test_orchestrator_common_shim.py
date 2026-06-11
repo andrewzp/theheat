@@ -178,3 +178,49 @@ LEGACY_COMMON_ALL = [
 
 def test_common_shim_exports_legacy_all():
     assert set(LEGACY_COMMON_ALL) <= set(common.__all__)
+
+
+def test_common_shim_points_moved_symbols_at_split_modules():
+    from src.orchestrator import (
+        caps,
+        cyclones,
+        dedup,
+        draft_save,
+        suppression,
+        telemetry,
+        triage_queue,
+        two_bot_dispatch,
+    )
+
+    assert common._co2_annual_cap_reached is caps._co2_annual_cap_reached
+    assert common._should_draft is suppression._should_draft
+    assert common._record_source_run is telemetry._record_source_run
+    assert common._process_cyclone_source is cyclones._process_cyclone_source
+    assert common._same_day_pending_collision is dedup._same_day_pending_collision
+    assert common.save_draft is draft_save.save_draft
+    assert common._try_two_bot_draft is two_bot_dispatch._try_two_bot_draft
+    assert common._drain_and_write_triage_queue is triage_queue._drain_and_write_triage_queue
+
+
+def test_main_sync_compat_globals_updates_split_modules(monkeypatch):
+    import src.main as main
+    from src.orchestrator import common as common_module
+    from src.orchestrator import draft_save, two_bot_dispatch
+
+    original_common_save = common_module.save_draft
+    original_draft_save = draft_save.save_draft
+    original_dispatch_save = two_bot_dispatch.save_draft
+
+    def fake_save_draft(*args, **kwargs):
+        return True
+
+    try:
+        monkeypatch.setattr(main, "save_draft", fake_save_draft)
+        main._sync_compat_globals()
+
+        assert draft_save.save_draft is fake_save_draft
+        assert two_bot_dispatch.save_draft is fake_save_draft
+    finally:
+        common_module.save_draft = original_common_save
+        draft_save.save_draft = original_draft_save
+        two_bot_dispatch.save_draft = original_dispatch_save
