@@ -1,0 +1,266 @@
+"""Editorial suppression ledger helpers for orchestrator flows."""
+
+from __future__ import annotations
+
+import contextlib
+import os
+import secrets
+
+from src.editorial.scoring import EditorialScore
+from src.orchestrator.common import _utc_now_iso
+from src.state_schema import BotState
+
+
+_CURRENT_SUPPRESSION_CTX: dict | None = None
+
+
+def _previous_drafts_for_event(bot_state: BotState, event_base: str) -> list[str]:
+    """Find text of previous drafts for the same base event.
+
+    For evolving events (e.g. cyclones), the event_id changes with each
+    intensity tier but shares a common base like "gdacs_TC_1001270".
+    Returns up to 5 most recent draft texts to avoid repeating comparisons.
+    """
+    drafts = bot_state.get("drafts", [])
+    matches = []
+    for d in drafts:
+        eid = d.get("event_id", "")
+        if event_base and event_base in eid:
+            text = d.get("text", "")
+            if text:
+                matches.append(text)
+    return matches[-5:]
+
+
+def _near_miss_gap() -> int:
+    """Max (threshold - total) gap to record. Smaller = stricter."""
+    try:
+        return int(os.environ.get("SUPPRESSION_NEAR_MISS_GAP", "15"))
+    except (TypeError, ValueError):
+        return 15
+
+
+@contextlib.contextmanager
+def _suppression_context(bot_state: BotState, *, source: str, run_id: str | None = None):
+    """Activate suppression capture for `_should_draft()` calls inside the block."""
+    global _CURRENT_SUPPRESSION_CTX
+    prev = _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    try:
+        yield
+    finally:
+        _CURRENT_SUPPRESSION_CTX = prev
+
+
+def _activate_suppression_ctx(bot_state: BotState, *, source: str, run_id: str | None = None) -> None:
+    """Set the suppression context for the rest of the process.
+
+    Used at the top of each top-level run function (run_alerts, run_leaderboard,
+    etc.) so all `_should_draft()` calls during the run capture suppressions.
+    No auto-cleanup — relies on the bot exiting after each invocation. Tests
+    should call `_clear_suppression_ctx()` between cases.
+    """
+    global _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+
+
+def _clear_suppression_ctx() -> None:
+    """Clear the current suppression context. Mainly for tests."""
+    global _CURRENT_SUPPRESSION_CTX
+    _CURRENT_SUPPRESSION_CTX = None
+
+
+def _score_field(score, key: str, default=None):
+    if isinstance(score, dict):
+        return score.get(key, default)
+    return getattr(score, key, default)
+
+
+def _score_int(score, key: str) -> int:
+    try:
+        return int(_score_field(score, key, 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _score_reasons(score) -> list[str]:
+    raw = _score_field(score, "reasons", []) or []
+    if not isinstance(raw, list):
+        return [str(raw)]
+    return [str(item) for item in raw]
+
+
+def _record_suppression(
+    *,
+    bot_state: BotState,
+    source: str | None,
+    run_id: str | None,
+    event_id: str,
+    score: EditorialScore,
+    summary: str | None,
+) -> None:
+    """Append an editorial-gate near-miss suppression record (stage=score_gate),
+    capped to last 200.
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": run_id,
+        "source": source,
+        "stage": "score_gate",
+        "event_id": event_id or None,
+        "category": _score_field(score, "category"),
+        "score_total": _score_int(score, "total"),
+        "threshold": _score_int(score, "threshold"),
+        "reasons": _score_reasons(score),
+        "summary": summary,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
+
+def _record_downstream_suppression(
+    *,
+    bot_state: BotState,
+    source: str | None,
+    run_id: str | None,
+    event_id: str,
+    score,
+    kill_stage: str,
+    kill_reason: str,
+    summary: str | None,
+) -> None:
+    """Append a downstream-kill suppression — a bundle that passed the
+    editorial score gate but died in the two-bot pipeline (writer kill,
+    fact-check rejection, or pipeline exception). Stage discriminates
+    from score-gate near-misses; ``score_total`` is preserved so the
+    dashboard can show "passing score 80, killed in writer".
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": run_id,
+        "source": source,
+        "stage": kill_stage,  # "writer" | "safety" | "honesty_gate" | "evidence_contract" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "triage_cap" | "triage_error" | "unknown"
+        "event_id": event_id or None,
+        "category": _score_field(score, "category"),
+        "score_total": _score_int(score, "total"),
+        "threshold": _score_int(score, "threshold"),
+        "reasons": [kill_reason] if kill_reason else [],
+        "summary": summary,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
+
+def _record_save_rejection(
+    *,
+    bot_state: BotState,
+    event_id: str,
+    score,
+    kill_stage: str,
+    kill_reason: str,
+    summary: str | None,
+) -> None:
+    """Record a post-score draft-save gate as a suppression row."""
+    if score is None:
+        return
+    ctx = _CURRENT_SUPPRESSION_CTX
+    if ctx is None:
+        return
+    _record_downstream_suppression(
+        bot_state=bot_state,
+        source=ctx.get("source"),
+        run_id=ctx.get("run_id"),
+        event_id=event_id,
+        score=score,
+        kill_stage=kill_stage,
+        kill_reason=kill_reason,
+        summary=summary,
+    )
+
+
+def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None:
+    """Append a `stage='triage_error'` row when the triage drain raises.
+
+    Stage-level failure (not candidate-level), so there's no event_id /
+    score / category. Pairs with a `source_health['triage']` update so both
+    the suppression ledger and the source-health dashboard surface the
+    failure.
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": None,
+        "source": "triage",
+        "stage": "triage_error",
+        "event_id": None,
+        "category": None,
+        "score_total": 0,
+        "threshold": 0,
+        "reasons": [err_text] if err_text else [],
+        "summary": None,
+    })
+    if len(suppressions) > 200:
+        bot_state["suppressions"] = suppressions[-200:]
+
+
+def _should_draft(
+    score: EditorialScore,
+    event_id: str = "",
+    *,
+    summary: str | None = None,
+) -> bool:
+    """Decide whether an event is strong enough to enter the draft queue."""
+    if score.passes:
+        return True
+    event_desc = f" {event_id}" if event_id else ""
+    print(
+        f"[score] Suppressed{event_desc}: {score.category} "
+        f"{score.total} < {score.threshold} ({', '.join(score.reasons)})"
+    )
+    ctx = _CURRENT_SUPPRESSION_CTX
+    if ctx is not None:
+        gap = int(getattr(score, "threshold", 0) or 0) - int(getattr(score, "total", 0) or 0)
+        if gap <= _near_miss_gap():
+            _record_suppression(
+                bot_state=ctx["bot_state"],
+                source=ctx.get("source"),
+                run_id=ctx.get("run_id"),
+                event_id=event_id,
+                score=score,
+                summary=summary,
+            )
+    return False
+
+
+def _current_suppression_ctx() -> dict | None:
+    return _CURRENT_SUPPRESSION_CTX
+
+
+__all__ = [
+    "_CURRENT_SUPPRESSION_CTX",
+    "_activate_suppression_ctx",
+    "_clear_suppression_ctx",
+    "_current_suppression_ctx",
+    "_near_miss_gap",
+    "_previous_drafts_for_event",
+    "_record_downstream_suppression",
+    "_record_save_rejection",
+    "_record_suppression",
+    "_record_triage_error_suppression",
+    "_score_field",
+    "_score_int",
+    "_score_reasons",
+    "_should_draft",
+    "_suppression_context",
+]
