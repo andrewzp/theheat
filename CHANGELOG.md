@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.30.0] - 2026-06-11
+
+THIRTY-LOOP S-04 keeps the source-health sentinel and dashboard in sync when
+Earthdata returns credential-shaped 403 failures.
+
+### Changed
+
+- **Classify Earthdata 403s as ours.** `scripts/source_health_sentinel.py` and
+  `dashboard/lib/source-health.js` now apply the same pre-upstream override for
+  403 errors mentioning Earthdata, URS, EDL, or PO.DAAC, so expired credential
+  failures open/red-render as our bug while generic government 403s remain external.
+  Both Python and dashboard tests pin the mirrored fixture strings.
+
 ## [0.9.29.0] - 2026-06-11
 
 THIRTY-LOOP S-03 makes the dashboard’s operational truth match the underlying bot state

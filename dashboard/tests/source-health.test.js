@@ -30,6 +30,8 @@ function gistResponse(state) {
 const NOW = "2026-05-09T05:00:00Z"
 const HOUR_AGO = "2026-05-09T04:00:00Z"
 const TWO_HOURS_AGO = "2026-05-09T03:00:00Z"
+const EARTHDATA_403_ERROR = "Ice mass fetch failed: 403 Client Error: Forbidden for url: https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/..."
+const GENERIC_GOV_403_ERROR = "403 Client Error: Forbidden for url: https://www.metoc.navy.mil/jtwc/products/..."
 
 const RUN_HISTORY_STATE = {
   drafts: [],
@@ -434,6 +436,25 @@ function degraded(ts) {
   return { ts, status: "degraded", error: "partial data" }
 }
 
+function failedSourceWithError(lastError) {
+  return buildSourceHealthPayload({
+    source_health: {
+      ice_mass_greenland: {
+        success: 0,
+        failed: 3,
+        degraded: 0,
+        skipped: 0,
+        last_error: lastError,
+        runs: [
+          fail("2026-05-27T00:00:00Z"),
+          fail("2026-05-28T00:00:00Z"),
+          fail("2026-05-29T00:00:00Z"),
+        ],
+      },
+    },
+  }).sources[0]
+}
+
 test("success-rate fraction uses active runs (skips excluded), not total runs", () => {
   // ice_mass-style: 1 success, 2 failed, 7 skipped over 10 runs.
   // The displayed fraction denominator must be `active` (3) — matching the
@@ -465,6 +486,14 @@ test("success-rate fraction uses active runs (skips excluded), not total runs", 
     row.success_rate,
     "fraction numerator/denominator must equal the displayed percent"
   )
+})
+
+test("classifies earthdata 403 as our_bug", () => {
+  assert.equal(failedSourceWithError(EARTHDATA_403_ERROR).health, "unhealthy")
+})
+
+test("classifies generic gov 403 as upstream", () => {
+  assert.equal(failedSourceWithError(GENERIC_GOV_403_ERROR).health, "external")
 })
 
 test("a cadence source whose recent runs are all skips is idle, not red on stale history", () => {
