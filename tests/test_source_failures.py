@@ -6,6 +6,11 @@ import requests
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 
+class _FailingSession:
+    def get(self, url, **kwargs):
+        raise requests.RequestException("network down")
+
+
 def test_firms_strict_missing_key_is_skipped(monkeypatch):
     from src.data import firms
 
@@ -58,8 +63,8 @@ def test_ch4_strict_request_error_is_failed():
     from src.data import methane
 
     with patch(
-        "src.data._http.requests.get",
-        side_effect=requests.RequestException("network down"),
+        "src.data._http._get_session",
+        return_value=_FailingSession(),
     ):
         with pytest.raises(SourceFetchError):
             methane.fetch_ch4_milestones(strict=True)
@@ -69,8 +74,8 @@ def test_coral_dhw_strict_request_error_is_failed():
     from src.data import coral_dhw
 
     with patch(
-        "src.data._http.requests.get",
-        side_effect=requests.RequestException("network down"),
+        "src.data._http._get_session",
+        return_value=_FailingSession(),
     ):
         with pytest.raises(SourceFetchError):
             coral_dhw.fetch_coral_dhw(strict=True)

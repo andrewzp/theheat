@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.33.0] - 2026-06-11
+
+THIRTY-LOOP S-07 makes the shared HTTP retry helper less bursty and cheaper to
+reuse across the data fetchers that depend on it.
+
+### Changed
+
+- **Add retry jitter and pooled sessions.** `src/data/_http.py` now lazily creates
+  one shared `requests.Session` with an 8-connection pool for both HTTP and HTTPS,
+  and `fetch_with_retry` uses that session while preserving its public signature.
+  Retry backoff now adds bounded jitter on top of the exponential base, with
+  `tests/test_http_retry.py` pinning both the jitter range and session reuse.
+
 ## [0.9.32.0] - 2026-06-11
 
 THIRTY-LOOP S-06 adds an advisory yield watch so sources that stay green while

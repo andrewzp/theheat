@@ -12,7 +12,7 @@
 | S-04 | #29 | Sentinel 403 classification (PY+JS) | — | DONE | #225 | Earthdata credential 403s classify ours in Python and dashboard; generic gov 403 stays external. |
 | S-05 | #13 | error_class telemetry + liveness + failure alarm | S-04 | DONE | #226 | Source error_class telemetry, stale alerts-lane sentinel, hourly cadence, and scheduled-run failure issue alarm added. |
 | S-06 | #14 | Sentinel stale-success / zero-yield watch | S-05 | DONE | #228 | Unknown-labeled yield-watch advisory issue now tracks green zero-observed sources. |
-| S-07 | #1a | _http.py jitter + shared Session | — | TODO | | |
+| S-07 | #1a | _http.py jitter + shared Session | — | DONE | #229 | Shared pooled Session and jittered retry sleeps added with retry-seam tests updated. |
 | S-08 | #1b | Migrate bare requests.get callers | S-07 | TODO | | |
 | S-09 | #1c | WAF-aware 403/429 retry + gpm unify | S-07 | TODO | | |
 | S-10 | #20 | Conditional requests (ETag) for CSVs | S-08 | TODO | | |
