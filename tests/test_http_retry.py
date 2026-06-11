@@ -140,3 +140,90 @@ def test_fetch_uses_shared_session(monkeypatch):
     fetch_with_retry("https://example.test/b", backoff_base=0)
 
     assert session.urls == ["https://example.test/a", "https://example.test/b"]
+
+
+def _response(status_code: int, url: str = "https://www.metoc.navy.mil/jtwc/test") -> requests.Response:
+    response = requests.Response()
+    response.status_code = status_code
+    response.url = url
+    response._content = b"ok"
+    return response
+
+
+class _QueueSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.urls = []
+
+    def get(self, url, **kwargs):
+        self.urls.append(url)
+        return self.responses.pop(0)
+
+
+def test_waf_403_retried_once_then_raises(monkeypatch):
+    url = "https://www.metoc.navy.mil/jtwc/products/test.txt"
+    session = _QueueSession([_response(403, url), _response(403, url)])
+    sleeps = []
+    monkeypatch.setattr(_http, "_get_session", lambda: session)
+    monkeypatch.setattr(_http, "_waf_sleep", lambda: sleeps.append("slept"))
+    monkeypatch.setitem(_http._waf_budget, "remaining", 4)
+
+    with pytest.raises(requests.HTTPError):
+        fetch_with_retry(url, attempts=3, backoff_base=0)
+
+    assert session.urls == [url, url]
+    assert sleeps == ["slept"]
+    assert _http._waf_budget["remaining"] == 3
+
+
+def test_waf_403_not_retried_for_unlisted_host(monkeypatch):
+    url = "https://example.test/blocked"
+    session = _QueueSession([_response(403, url)])
+    sleeps = []
+    monkeypatch.setattr(_http, "_get_session", lambda: session)
+    monkeypatch.setattr(_http, "_waf_sleep", lambda: sleeps.append("slept"))
+    monkeypatch.setitem(_http._waf_budget, "remaining", 4)
+
+    with pytest.raises(requests.HTTPError):
+        fetch_with_retry(url, attempts=3, backoff_base=0)
+
+    assert session.urls == [url]
+    assert sleeps == []
+    assert _http._waf_budget["remaining"] == 4
+
+
+def test_429_retried_for_waf_host(monkeypatch):
+    url = "https://waterservices.usgs.gov/nwis/iv/"
+    session = _QueueSession([_response(429, url), _response(200, url)])
+    sleeps = []
+    monkeypatch.setattr(_http, "_get_session", lambda: session)
+    monkeypatch.setattr(_http, "_waf_sleep", lambda: sleeps.append("slept"))
+    monkeypatch.setitem(_http._waf_budget, "remaining", 4)
+
+    response = fetch_with_retry(url, attempts=3, backoff_base=0)
+
+    assert response.status_code == 200
+    assert session.urls == [url, url]
+    assert sleeps == ["slept"]
+
+
+def test_waf_budget_caps_process_wide_retries(monkeypatch):
+    url = "https://coralreefwatch.noaa.gov/product/test.json"
+    session = _QueueSession([
+        _response(403, url),
+        _response(403, url),
+        _response(403, url),
+    ])
+    sleeps = []
+    monkeypatch.setattr(_http, "_get_session", lambda: session)
+    monkeypatch.setattr(_http, "_waf_sleep", lambda: sleeps.append("slept"))
+    monkeypatch.setitem(_http._waf_budget, "remaining", 1)
+
+    with pytest.raises(requests.HTTPError):
+        fetch_with_retry(url, attempts=3, backoff_base=0)
+    with pytest.raises(requests.HTTPError):
+        fetch_with_retry(url, attempts=3, backoff_base=0)
+
+    assert session.urls == [url, url, url]
+    assert sleeps == ["slept"]
+    assert _http._waf_budget["remaining"] == 0

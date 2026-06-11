@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.35.0] - 2026-06-11
+
+THIRTY-LOOP S-09 hardens transient government-host blocks and brings GPM city
+precipitation fetches onto the shared retry path.
+
+### Changed
+
+- **Retry known WAF 403/429 responses and unify GPM retrying.** `src/data/_http.py`
+  now retries one 403/429 response for the known WAF-prone hosts with a capped
+  process-wide retry budget, while ordinary 4xx failures still fail fast.
+  `src/data/gpm_imerg.py` now uses `fetch_with_retry` for per-city OPeNDAP
+  requests, preserving auth headers and timeout/backoff settings while gaining
+  the shared user-agent and jitter behavior.
+
 ## [0.9.34.0] - 2026-06-11
 
 THIRTY-LOOP S-08 routes the remaining safe public data fetchers through the
