@@ -10,10 +10,9 @@ def run_gpm_imerg(
     bot_state: BotState,
     current_run: dict | None,
     cities: list[dict],
-) -> int:
+) -> None:
     print("[alerts] Checking GPM IMERG precipitation...")
     started = time.perf_counter()
-    source_drafted = 0
     source_promoted = 0
     try:
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
@@ -94,7 +93,7 @@ def run_gpm_imerg(
             status="success",
             observed=len(readings),
             promoted=source_promoted,
-            drafted=source_drafted,
+            drafted=0,
         )
     except SourceSkipped as exc:
         print(f"[alerts] GPM IMERG skipped: {exc}")
@@ -117,4 +116,4 @@ def run_gpm_imerg(
             status="failed",
             error=str(exc),
         )
-    return source_drafted
+    return

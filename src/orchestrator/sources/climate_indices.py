@@ -15,8 +15,7 @@ _INDEX_FETCHERS = (
 _INDEX_CAPS = {"NAO": 6, "AO": 6, "PDO": 3}
 
 
-def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_climate_indices(bot_state: BotState, current_run: dict | None) -> None:
     if date.today().day != 1:
         for index_name, _fetcher_name in _INDEX_FETCHERS:
             skipped_start = time.perf_counter()
@@ -29,14 +28,13 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "nao_ao_alignment", skipped_start,
             status="skipped", note="Runs on the 1st of the month",
         )
-        return drafted
+        return
 
     print("[alerts] Checking climate-mode indices...")
     readings_by_index = {}
     for index_name, fetcher_name in _INDEX_FETCHERS:
         source_start = time.perf_counter()
         source_promoted = 0
-        source_drafted = 0
         try:
             readings = _fetch_strict(getattr(climate_indices, fetcher_name))
             readings_by_index[index_name] = readings
@@ -113,7 +111,7 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
             _record_source_run(
                 current_run, bot_state, index_name.lower(), source_start,
                 status="success", observed=len(readings),
-                promoted=source_promoted, drafted=source_drafted,
+                promoted=source_promoted, drafted=0,
             )
         except Exception as e:
             print(f"[alerts] {index_name} climate index error: {e}")
@@ -123,15 +121,15 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> int:
                 status="failed", error=str(e),
             )
 
-    drafted += _run_nao_ao_alignment(bot_state, current_run, readings_by_index)
-    return drafted
+    _run_nao_ao_alignment(bot_state, current_run, readings_by_index)
+    return
 
 
 def _run_nao_ao_alignment(
     bot_state: BotState,
     current_run: dict | None,
     readings_by_index: dict,
-) -> int:
+) -> None:
     source_start = time.perf_counter()
     try:
         event = climate_indices.detect_nao_ao_alignment(
@@ -143,13 +141,13 @@ def _run_nao_ao_alignment(
                 current_run, bot_state, "nao_ao_alignment", source_start,
                 status="success", observed=0, promoted=0, drafted=0,
             )
-            return 0
+            return
         if state.is_duplicate(bot_state, event.event_id):
             _record_source_run(
                 current_run, bot_state, "nao_ao_alignment", source_start,
                 status="success", observed=1, promoted=0, drafted=0,
             )
-            return 0
+            return
         if (
             _oscillation_annual_cap_reached(bot_state, "NAO")
             or _oscillation_annual_cap_reached(bot_state, "AO")
@@ -158,7 +156,7 @@ def _run_nao_ao_alignment(
                 current_run, bot_state, "nao_ao_alignment", source_start,
                 status="success", observed=1, promoted=0, drafted=0,
             )
-            return 0
+            return
 
         score = score_oscillation_extreme(
             "NAO/AO blocking alignment",
@@ -169,7 +167,7 @@ def _run_nao_ao_alignment(
                 current_run, bot_state, "nao_ao_alignment", source_start,
                 status="success", observed=1, promoted=0, drafted=0,
             )
-            return 0
+            return
         review_context = _review_context(
             source="NOAA",
             source_key="nao_ao_alignment",
@@ -203,7 +201,7 @@ def _run_nao_ao_alignment(
             current_run, bot_state, "nao_ao_alignment", source_start,
             status="success", observed=1, promoted=1, drafted=0,
         )
-        return 0
+        return
     except Exception as e:
         print(f"[alerts] NAO/AO alignment error: {e}")
         state.log_error(bot_state, "nao_ao_alignment", str(e))
@@ -211,7 +209,7 @@ def _run_nao_ao_alignment(
             current_run, bot_state, "nao_ao_alignment", source_start,
             status="failed", error=str(e),
         )
-        return 0
+        return
 
 
 def _oscillation_annual_cap_reached(bot_state: BotState, index_name: str) -> bool:

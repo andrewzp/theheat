@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_co2(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_co2(bot_state: BotState, current_run: dict | None) -> None:
     # 3. CO2 milestones.
     # Annual cap: at most CO2_ANNUAL_CAP tweets/year. Milestone crossings are
     # the only CO2 signal type we tweet — weekly telemetry was deemed too
@@ -25,7 +24,6 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> int:
         readings = _fetch_strict(co2.fetch_co2_data)
         milestone = co2.detect_milestone(readings)
         source_promoted = 0
-        source_drafted = 0
         if (
             milestone
             and not co2_drafted_today
@@ -60,7 +58,7 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> int:
                 )
         _record_source_run(
             current_run, bot_state, "co2", co2_start,
-            status="success", observed=len(readings), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(readings), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] CO2 error: {e}")
@@ -69,4 +67,4 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "co2", co2_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

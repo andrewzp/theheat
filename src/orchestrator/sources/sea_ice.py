@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_sea_ice(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_sea_ice(bot_state: BotState, current_run: dict | None) -> None:
     # 6. Sea ice records (check weekly on Mondays to avoid hammering NSIDC)
     if date.today().weekday() == 0:
         print("[alerts] Checking sea ice records...")
@@ -24,7 +23,6 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> int:
                         record.previous_year,
                     )
                 source_promoted = 1 if sea_ice_score and record and _should_draft(sea_ice_score, record.event_id) else 0
-                source_drafted = 0
                 if record and source_promoted:
                     review_context = _review_context(
                         source="NSIDC",
@@ -51,7 +49,7 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> int:
                 observed = len(readings) if hasattr(readings, "__len__") else 0
                 _record_source_run(
                     current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
-                    status="success", observed=observed, promoted=source_promoted, drafted=source_drafted
+                    status="success", observed=observed, promoted=source_promoted, drafted=0
                 )
             except Exception as e:
                 print(f"[alerts] Sea ice ({hemisphere}) error: {e}")
@@ -67,4 +65,4 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> int:
                 current_run, bot_state, f"sea_ice_{hemisphere.lower()}", skipped_start,
                 status="skipped", note="Runs Mondays only"
             )
-    return drafted
+    return

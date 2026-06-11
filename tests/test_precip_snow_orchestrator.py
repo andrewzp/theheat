@@ -30,7 +30,7 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
         [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
     )
 
-    assert drafted == 0
+    assert drafted is None
     assert len(bot_state["_triage_queue"]) == 1
     assert bot_state["_triage_queue"][0].source == "gpm_imerg"
     assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
@@ -62,7 +62,7 @@ def test_run_gpm_imerg_uses_default_city_cap_when_env_absent(monkeypatch):
         [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
     )
 
-    assert drafted == 0
+    assert drafted is None
     assert captured["max_cities"] == runner.gpm_imerg.DEFAULT_CITY_LIMIT
     assert captured["max_workers"] == runner.gpm_imerg.DEFAULT_MAX_WORKERS
 
@@ -87,7 +87,7 @@ def test_run_gpm_imerg_passes_worker_env(monkeypatch):
         [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
     )
 
-    assert drafted == 0
+    assert drafted is None
     assert captured["max_cities"] == 12
     assert captured["max_workers"] == 3
 
@@ -116,7 +116,7 @@ def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch):
 
     drafted = runner.run_nsidc_snow(bot_state, current_run)
 
-    assert drafted == 0
+    assert drafted is None
     assert len(bot_state["_triage_queue"]) == 1
     assert bot_state["_triage_queue"][0].source == "nsidc_snow"
     assert "nsidc_snow_seasonal_snow_record_albro_lake_2026-05-14" not in bot_state["posted_events"]

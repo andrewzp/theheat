@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.27.0] - 2026-06-11
+
+THIRTY-LOOP S-01 moves draft accounting to the triage drain so saved-count telemetry
+matches drafts that actually reached the review queue.
+
+### Changed
+
+- **Use drain-only drafted accounting.** `src/orchestrator/run_alerts.py` now treats
+  source runners as side-effect-only and sets the final saved count from
+  `_drain_and_write_triage_queue`. The source runners in `src/orchestrator/sources/`
+  and the cyclone helper in `src/orchestrator/common.py` return `None` and write
+  `drafted=0` pre-drain telemetry, while the drain increments the originating source
+  after a saved draft.
+
 ## [0.9.26.0] - 2026-06-11
 
 ### Fixed

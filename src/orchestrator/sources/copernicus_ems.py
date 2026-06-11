@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> None:
     # 5a. Copernicus EMS global floods (active Rapid Mapping activations)
     print("[alerts] Checking Copernicus EMS global floods...")
     copernicus_start = time.perf_counter()
@@ -18,7 +17,6 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> int:
             cast(dict, bot_state.get("flood_activation_tiers", {})),
         )
         source_promoted = 0
-        source_drafted = 0
         for activation in flood_events:
             if state.is_duplicate(bot_state, activation.event_id):
                 continue
@@ -74,7 +72,7 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "copernicus_ems", copernicus_start,
-            status="success", observed=len(activations), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(activations), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] Copernicus EMS flood error: {e}")
@@ -83,4 +81,4 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "copernicus_ems", copernicus_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

@@ -6,15 +6,13 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_ocean_sst(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_ocean_sst(bot_state: BotState, current_run: dict | None) -> None:
     # 9b. Global ocean SST marine-heatwave streak (every run)
     print("[alerts] Checking global ocean SST...")
     sst_start = time.perf_counter()
     try:
         obs = _fetch_strict(ocean_sst.fetch_global_sst)
         source_promoted = 0
-        source_drafted = 0
         event = None
         if obs is not None:
             prior_streak = bot_state.get(
@@ -59,7 +57,7 @@ def run_ocean_sst(bot_state: BotState, current_run: dict | None) -> int:
             status="success",
             observed=1 if obs is not None else 0,
             promoted=source_promoted,
-            drafted=source_drafted,
+            drafted=0,
         )
     except Exception as e:
         print(f"[alerts] Ocean SST error: {e}")
@@ -68,4 +66,4 @@ def run_ocean_sst(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "ocean_sst", sst_start,
             status="failed", error=str(e),
         )
-    return drafted
+    return

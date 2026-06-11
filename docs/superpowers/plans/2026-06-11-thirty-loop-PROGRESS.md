@@ -6,7 +6,7 @@
 
 | Step | Item | Title | Deps | Status | PR | Note |
 |---|---|---|---|---|---|---|
-| S-01 | #30a | Dead `drafted` plumbing + per-source credit | — | TODO | | |
+| S-01 | #30a | Dead `drafted` plumbing + per-source credit | — | DONE | TBD | Runner returns ignored; drain credits saved drafts per source. |
 | S-02 | #30b | pytest config, README, PIPELINE glossary, critic passthrough, action versions | — | TODO | | |
 | S-03 | #27 | Dashboard truth fixes | — | TODO | | |
 | S-04 | #29 | Sentinel 403 classification (PY+JS) | — | TODO | | |

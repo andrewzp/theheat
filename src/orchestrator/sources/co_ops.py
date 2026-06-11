@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_water_levels(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_water_levels(bot_state: BotState, current_run: dict | None) -> None:
     # 10. Storm surge / abnormal water levels (every run)
     print("[alerts] Checking coastal water levels...")
     water_levels_start = time.perf_counter()
@@ -15,7 +14,6 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> int:
         wl_readings = _fetch_strict(water_levels.fetch_water_levels)
         surges = water_levels.detect_storm_surge(wl_readings)
         source_promoted = 0
-        source_drafted = 0
         for surge in surges:
             if state.is_duplicate(bot_state, surge.event_id):
                 continue
@@ -48,7 +46,7 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> int:
             )
         _record_source_run(
             current_run, bot_state, "water_levels", water_levels_start,
-            status="success", observed=len(wl_readings), promoted=source_promoted, drafted=source_drafted
+            status="success", observed=len(wl_readings), promoted=source_promoted, drafted=0
         )
     except Exception as e:
         print(f"[alerts] Water levels error: {e}")
@@ -57,4 +55,4 @@ def run_water_levels(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "water_levels", water_levels_start,
             status="failed", error=str(e)
         )
-    return drafted
+    return

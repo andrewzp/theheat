@@ -785,13 +785,12 @@ def _process_cyclone_source(
     source_label: str,
     fetch_fn,
     detect_module,
-) -> int:
+) -> None:
     """Fetch, detect, and draft NHC/JTWC cyclone events."""
 
     print(f"[alerts] Checking {source_label} tropical cyclones...")
     source_start = time.perf_counter()
     source_promoted = 0
-    source_drafted = 0
     try:
         advisories = _fetch_strict(fetch_fn)
         advisory_history = _cyclone_history_advisories(bot_state, advisories)
@@ -858,7 +857,7 @@ def _process_cyclone_source(
             status="success",
             observed=len(advisories),
             promoted=source_promoted,
-            drafted=source_drafted,
+            drafted=0,
             details={
                 "events": [
                     {
@@ -879,7 +878,6 @@ def _process_cyclone_source(
             current_run, bot_state, source_key, source_start,
             status="failed", error=str(e),
         )
-    return source_drafted
 
 def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
     """True if a posted draft exists for this (city, tweet_date) tuple."""
@@ -1322,7 +1320,7 @@ def _bump_source_field_in_run(
             return
 
 
-def _bump_source_drafted_in_run(current_run: dict | None, source: str, amount: int = 1) -> None:
+def _bump_run_drafted(current_run: dict | None, source: str, amount: int = 1) -> None:
     """Increment the ``drafted`` counter on an existing source run entry."""
     _bump_source_field_in_run(current_run, source, "drafted", amount)
 
@@ -1413,7 +1411,7 @@ def _drain_and_write_triage_queue(
 
     Per-source telemetry (spec § 9):
         - On successful draft: increments ``drafted`` on the source's run
-          entry via ``_bump_source_drafted_in_run``.
+          entry via ``_bump_run_drafted``.
         - Source runners record ``drafted=0`` at their own call site; the
           drain step credits the actual count once survivors are written.
     """
@@ -1492,7 +1490,7 @@ def _drain_and_write_triage_queue(
             # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).
             # Source runners write drafted=0 at their call site because candidates
             # are still queued then; the drain step is where drafts actually happen.
-            _bump_source_drafted_in_run(current_run, candidate.source)
+            _bump_run_drafted(current_run, candidate.source)
             # Fire source-specific post-success callback if provided (e.g.
             # incrementing an annual counter that should only tick on actual drafts).
             # When ``defer_callbacks`` is supplied, DON'T fire inline — collect for
@@ -1586,7 +1584,7 @@ __all__ = [
     "_enqueue_candidate",
     "_enqueue_story_candidate",
     "_bump_source_field_in_run",
-    "_bump_source_drafted_in_run",
+    "_bump_run_drafted",
     "_drain_and_write_triage_queue",
     "_try_two_bot_draft",
     "_two_bot_bundle_for_extreme_signal",

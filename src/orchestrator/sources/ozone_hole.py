@@ -9,15 +9,14 @@ from src.orchestrator.common import *
 OZONE_HOLE_ANNUAL_CAP = 2
 
 
-def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> None:
     if date.today().month not in {8, 9, 10, 11}:
         skipped_start = time.perf_counter()
         _record_source_run(
             current_run, bot_state, "ozone_hole", skipped_start,
             status="skipped", note="Runs daily during Aug-Nov",
         )
-        return drafted
+        return
 
     print("[alerts] Checking Antarctic ozone hole...")
     source_start = time.perf_counter()
@@ -30,7 +29,6 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> int:
             last_peaks=cast(dict, bot_state.get("ozone_hole_last_peak", {})),
         )
         source_promoted = 0
-        source_drafted = 0
         if event and state.is_duplicate(bot_state, event.event_id):
             state.record_ozone_hole_peak(bot_state, event)
         elif event and not _ozone_hole_annual_cap_reached(bot_state):
@@ -76,7 +74,7 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> int:
             status="success",
             observed=len(readings),
             promoted=source_promoted,
-            drafted=source_drafted,
+            drafted=0,
         )
     except Exception as e:
         print(f"[alerts] Ozone hole error: {e}")
@@ -85,7 +83,7 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "ozone_hole", source_start,
             status="failed", error=str(e),
         )
-    return drafted
+    return
 
 
 def _ozone_hole_annual_cap_reached(bot_state: BotState) -> bool:

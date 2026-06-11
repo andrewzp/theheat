@@ -37,14 +37,14 @@ def _detect_for(slug, ev):
 
 
 class TestRunReanalysisAnomaly:
-    def test_env_gate_off_returns_zero_and_does_no_work(self, monkeypatch) -> None:
+    def test_env_gate_off_returns_none_and_does_no_work(self, monkeypatch) -> None:
         monkeypatch.delenv("THEHEAT_REGANOM_ENABLED", raising=False)
         called = {"clim": False}
         monkeypatch.setattr(
             ra, "load_daily_climatology",
             lambda *a, **k: called.__setitem__("clim", True) or {},
         )
-        assert runner.run_reanalysis_anomaly(_fresh_state(), None) == 0
+        assert runner.run_reanalysis_anomaly(_fresh_state(), None) is None
         assert called["clim"] is False  # gated off before any work
 
     def test_source_skipped_when_cache_absent(self, monkeypatch) -> None:
@@ -66,7 +66,7 @@ class TestRunReanalysisAnomaly:
         monkeypatch.setattr(ra, "fetch_all_reganom_t2m", lambda *a, **k: {})
         rec = {}
         monkeypatch.setattr(runner, "_record_source_run", lambda *a, **k: rec.update(k))
-        assert runner.run_reanalysis_anomaly(_fresh_state(), None) == 0
+        assert runner.run_reanalysis_anomaly(_fresh_state(), None) is None
         assert rec.get("status") == "degraded"
 
     def test_live_cache_hit_skips_fetch(self, monkeypatch) -> None:

@@ -7,7 +7,7 @@ manual_only, so landing is a zero-change-on-land until an operator backfills +
 commits the climatology cache and flips the env var.
 
 Data flow per cycle:
-  THEHEAT_REGANOM_ENABLED != 1            -> return 0
+  THEHEAT_REGANOM_ENABLED != 1            -> return
   load_daily_climatology()  cache absent  -> SourceSkipped -> status=skipped
   _reganom_live_cache same-day hit        -> reuse (no API)
                           miss            -> fetch_all_reganom_t2m(all coords)
@@ -28,10 +28,9 @@ from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_anomaly_bundle
 
 
-def run_reanalysis_anomaly(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_reanalysis_anomaly(bot_state: BotState, current_run: dict | None) -> None:
     if os.environ.get("THEHEAT_REGANOM_ENABLED", "0") != "1":
-        return 0  # env-gated OFF by default — zero-change-on-land
+        return  # env-gated OFF by default — zero-change-on-land
 
     print("[alerts] Checking reanalysis regional anomaly...")
     start = time.perf_counter()
@@ -56,7 +55,7 @@ def run_reanalysis_anomaly(bot_state: BotState, current_run: dict | None) -> int
                 _record_source_run(
                     current_run, bot_state, "reanalysis_anomaly", start, status="degraded"
                 )
-                return 0
+                return
             state_dict["_reganom_live_cache"] = {
                 "date": today,
                 "results": {f"{la},{lo}": v for (la, lo), v in batch.items() if v is not None},
@@ -147,4 +146,4 @@ def run_reanalysis_anomaly(bot_state: BotState, current_run: dict | None) -> int
         _record_source_run(
             current_run, bot_state, "reanalysis_anomaly", start, status="failed", error=str(exc)
         )
-    return drafted
+    return

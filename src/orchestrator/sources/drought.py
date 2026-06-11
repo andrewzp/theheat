@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_drought(bot_state: BotState, current_run: dict | None) -> int:
-    drafted = 0
+def run_drought(bot_state: BotState, current_run: dict | None) -> None:
     # 7. US Drought Monitor (weekly, check on Fridays after Thursday update)
     if date.today().weekday() == 4:
         print("[alerts] Checking US drought conditions...")
@@ -15,7 +14,6 @@ def run_drought(bot_state: BotState, current_run: dict | None) -> int:
         try:
             drought_updates = _fetch_strict(drought.fetch_drought_data)
             source_promoted = 0
-            source_drafted = 0
             if drought_updates:
                 event_id = f"drought_{date.today().isoformat()}"
                 if not state.is_duplicate(bot_state, event_id):
@@ -68,7 +66,7 @@ def run_drought(bot_state: BotState, current_run: dict | None) -> int:
                 state.record_synthesis_drought_snapshot(bot_state, drought_updates)
             _record_source_run(
                 current_run, bot_state, "drought", drought_start,
-                status="success", observed=len(drought_updates), promoted=source_promoted, drafted=source_drafted
+                status="success", observed=len(drought_updates), promoted=source_promoted, drafted=0
             )
         except Exception as e:
             print(f"[alerts] Drought error: {e}")
@@ -83,4 +81,4 @@ def run_drought(bot_state: BotState, current_run: dict | None) -> int:
             current_run, bot_state, "drought", skipped_start,
             status="skipped", note="Runs Fridays only"
         )
-    return drafted
+    return

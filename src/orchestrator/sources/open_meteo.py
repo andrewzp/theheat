@@ -6,8 +6,7 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> int:
-    drafted = 0
+def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
     # 1. Extreme climate signals — dispatched by THEHEAT_SIGNALS_PROVIDER.
     # "open_meteo" (default): 638 curated cities via Open-Meteo archive API.
     # "ghcn": ~9,449 active NOAA GHCN-Daily stations via superghcnd_diff + SQLite threshold cache.
@@ -51,7 +50,6 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 open_meteo_pipeline_metrics,
             )
         source_promoted = 0
-        source_drafted = 0
         for bundle in bundles:
             # Process signals in descending order of priority:
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
@@ -780,7 +778,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         _record_source_run(
             current_run, bot_state, "open_meteo_extreme_signals", signals_start,
             status=source_status, observed=total_observed,
-            promoted=source_promoted, drafted=source_drafted,
+            promoted=source_promoted, drafted=0,
             note=note, details=details,
         )
     except Exception as e:
@@ -796,4 +794,4 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             current_run, bot_state, "open_meteo_extreme_signals", signals_start,
             status="failed", error=str(e),
         )
-    return drafted
+    return
