@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.24.0] - 2026-06-11
+
+THIRTY-LOOP: an autonomous execution plan covering all 30 improvements from the
+2026-06-10 full-codebase audit, written for a budget-constrained executor model to run
+as a serial PR loop with no human input except explicitly marked STOPs.
+
+### Added
+
+- **docs/superpowers/plans/2026-06-11-thirty-loop.md.** 35 dependency-ordered steps
+  (S-01..S-35) with per-step specs, named tests, verification gates, traps, and verified
+  code anchors as of 0.9.23.0; production rails, shipping mechanics, Codex outside-voice
+  protocol, failure/escalation rules, a pre-made-decisions register (follower-visible
+  behavior ships dark behind default-off flags; reganom flip and all flag flips remain
+  Andrew's), and a facts file transferring this session's verified codebase map.
+  Hardened by a Codex cross-model review (8 findings, 6 P0s — queue-order deadlock,
+  forbidden-file trap, false fetch inventory, nonexistent module path, two missing-file
+  specs — all fixed).
+- **docs/superpowers/plans/2026-06-11-thirty-loop-PROGRESS.md.** The loop's only state:
+  per-step status table each PR updates in-place, plus a session log.
+
 ## [0.9.23.0] - 2026-06-10
 
 Dashboard CSS extraction (backlog bet #6, step 1): the ~640-line `<style jsx global>`
