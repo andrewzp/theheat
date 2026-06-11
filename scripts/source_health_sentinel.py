@@ -24,7 +24,7 @@ Classification + the create/close PLAN are pure and unit-tested (see
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import re
@@ -38,6 +38,9 @@ RECENT_WINDOW = 5
 # At or above it the source is degraded (occasional blips) or healthy — still
 # producing data, so no issue. A single transient blip never opens an issue.
 FAILING_RATE = 0.5
+LIVENESS_MAX_AGE_H = 6
+LIVENESS_SOURCE = "_pipeline_liveness"
+BOT_ACTIONS_URL = "https://github.com/andrewzp/theheat/actions/workflows/bot.yml"
 
 LABEL = "source-health-sentinel"
 TITLE_PREFIX = "Source down: "
@@ -102,7 +105,7 @@ def classify_error(last_error: str | None) -> str:
     return "unknown"
 
 
-def _days_since(ts: str | None, now: datetime) -> float | None:
+def _parse_ts(ts: str | None) -> datetime | None:
     if not ts:
         return None
     try:
@@ -111,7 +114,65 @@ def _days_since(ts: str | None, now: datetime) -> float | None:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _days_since(ts: str | None, now: datetime) -> float | None:
+    parsed = _parse_ts(ts)
+    if parsed is None:
+        return None
     return (now - parsed).total_seconds() / 86400.0
+
+
+def _alerts_liveness_verdict(
+    run_history: list[dict[str, Any]] | None,
+    *,
+    now: datetime,
+) -> dict[str, Any] | None:
+    if run_history is None:
+        return None
+
+    newest_alerts: datetime | None = None
+    for run in run_history:
+        if not isinstance(run, Mapping):
+            continue
+        if run.get("mode") not in ("alerts", "both"):
+            continue
+        parsed = _parse_ts(run.get("started_at"))
+        if parsed is None:
+            continue
+        if newest_alerts is None or parsed > newest_alerts:
+            newest_alerts = parsed
+
+    max_age = timedelta(hours=LIVENESS_MAX_AGE_H)
+    if newest_alerts is not None and now - newest_alerts <= max_age:
+        return None
+
+    last_success = (
+        newest_alerts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        if newest_alerts is not None else None
+    )
+    age_note = (
+        f"{(now - newest_alerts).total_seconds() / 3600:.1f}h old"
+        if newest_alerts is not None else "missing"
+    )
+    return {
+        "source": LIVENESS_SOURCE,
+        "category": "failing",
+        "cause": "ours",
+        "suggested_action": (
+            f"Alerts lane is stale ({age_note}). Inspect the bot workflow Actions page: {BOT_ACTIONS_URL}."
+        ),
+        "error_class": "other",
+        "last_error": (
+            "alerts/both lane stale; hourly auto_publish_due can keep run_history fresh "
+            f"without proving alert ingestion. Actions: {BOT_ACTIONS_URL}"
+        ),
+        "last_success_ts": last_success,
+        "days_since_success": round((now - newest_alerts).total_seconds() / 86400.0, 1)
+        if newest_alerts is not None else None,
+        "recent_success_rate": 0.0,
+    }
 
 
 def classify_source(
@@ -183,6 +244,7 @@ def run_sentinel(
     *,
     now: datetime | None = None,
     recent_window: int = RECENT_WINDOW,
+    run_history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Classify all sources and bucket them. ``has_failures`` gates the issues."""
     now = now or datetime.now(timezone.utc)
@@ -191,6 +253,9 @@ def run_sentinel(
         for name, health in sorted((source_health or {}).items())
         if isinstance(health, dict)
     ]
+    liveness = _alerts_liveness_verdict(run_history, now=now)
+    if liveness is not None:
+        verdicts.append(liveness)
     failing = [v for v in verdicts if v["category"] == "failing"]
     degraded = [v for v in verdicts if v["category"] == "degraded"]
     healthy = [v for v in verdicts if v["category"] in ("healthy", "idle")]
@@ -414,7 +479,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[sentinel] could not read {state_path}: {exc!r}", file=sys.stderr)
         return 0
 
-    report = run_sentinel(state.get("source_health") or {})
+    report = run_sentinel(
+        state.get("source_health") or {},
+        run_history=state.get("run_history") or [],
+    )
     _print_report(report)
 
     if not apply:

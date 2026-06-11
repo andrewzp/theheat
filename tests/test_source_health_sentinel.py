@@ -9,7 +9,7 @@ auto-close when the source recovers, so the open-issues list is a self-maintaini
 view of what is currently broken.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from scripts.source_health_sentinel import (
     LABEL,
@@ -233,6 +233,40 @@ class TestRunSentinel:
         report = run_sentinel({"co2": _src(statuses=["success"] * 5)}, now=NOW)
         assert report["has_failures"] is False
         assert report["failing"] == []
+
+    def test_sentinel_liveness_flags_stale_alerts_lane(self):
+        stale_alerts = (NOW - timedelta(hours=7)).isoformat().replace("+00:00", "Z")
+        fresh_auto_publish = (NOW - timedelta(minutes=30)).isoformat().replace("+00:00", "Z")
+
+        report = run_sentinel(
+            {},
+            now=NOW,
+            run_history=[
+                {"mode": "auto_publish_due", "started_at": fresh_auto_publish},
+                {"mode": "alerts", "started_at": stale_alerts},
+            ],
+        )
+
+        liveness = [v for v in report["failing"] if v["source"] == "_pipeline_liveness"]
+        assert len(liveness) == 1
+        assert liveness[0]["cause"] == "ours"
+        assert "Actions" in build_issue_body(liveness[0])
+
+    def test_sentinel_liveness_quiet_when_fresh(self):
+        fresh_alerts = (NOW - timedelta(hours=5, minutes=59)).isoformat().replace("+00:00", "Z")
+        fresh_auto_publish = (NOW - timedelta(minutes=30)).isoformat().replace("+00:00", "Z")
+
+        report = run_sentinel(
+            {},
+            now=NOW,
+            run_history=[
+                {"mode": "auto_publish_due", "started_at": fresh_auto_publish},
+                {"mode": "alerts", "started_at": fresh_alerts},
+            ],
+        )
+
+        assert "_pipeline_liveness" not in {v["source"] for v in report["failing"]}
+        assert report["has_failures"] is False
 
 
 class TestPlanIssueActions:

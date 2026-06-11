@@ -1283,13 +1283,17 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
         status = _source_health_status(str(run.get("status") or "failed"))
         error = run.get("error")
         error_text = str(error) if error else None
-        key = (ts, status, error_text)
+        error_class = run.get("error_class")
+        error_class_text = str(error_class) if error_class else None
+        key = (ts, status, error_text, error_class_text)
         if key in seen:
             continue
         seen.add(key)
         entry: SourceHealthRun = {"ts": ts, "status": status}
         if error_text:
             entry["error"] = error_text
+        if error_class_text:
+            entry["error_class"] = error_class_text
         entry_writeable = cast(dict, entry)
         for metric in _SOURCE_HEALTH_METRICS:
             raw_value = run.get(metric)
@@ -1330,6 +1334,7 @@ def record_source_health(
     *,
     timestamp: datetime | str | None = None,
     metrics: dict | None = None,
+    error_class: str | None = None,
 ) -> None:
     """Append a source-health observation and keep a rolling 7-day summary."""
     if not source:
@@ -1344,6 +1349,8 @@ def record_source_health(
     }
     if error:
         run["error"] = str(error)
+    if error_class is not None:
+        run["error_class"] = str(error_class)
     run_writeable = cast(dict, run)
     for metric in _SOURCE_HEALTH_METRICS:
         if metrics is None or metric not in metrics:
