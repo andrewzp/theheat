@@ -52,13 +52,21 @@ class _FakeResponse:
         return None
 
 
+class _FakeSession:
+    def __init__(self, response):
+        self.response = response
+
+    def get(self, url, **kwargs):
+        return self.response
+
+
 def test_fetch_ch4_milestones_parses_noaa_text():
     payload = """
 # year   month       decimal       average   average_unc         trend     trend_unc
   2026       3      2026.208       1938.00          1.00       1938.50          1.00
   2026       4      2026.292       1942.30          1.00       1941.90          1.00
 """
-    with patch("src.data._http.requests.get", return_value=_FakeResponse(payload)):
+    with patch("src.data._http._get_session", return_value=_FakeSession(_FakeResponse(payload))):
         readings = fetch_ch4_milestones(strict=True)
 
     assert [reading.date for reading in readings] == ["2026-03-01", "2026-04-01"]

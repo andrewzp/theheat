@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import random
 import time
 from typing import Any
 
@@ -10,6 +11,7 @@ import requests
 
 
 _DEFAULT_USER_AGENT = "(theheat-bot, contact@theheat.app)"
+_session: requests.Session | None = None
 
 
 def force_ipv4() -> None:
@@ -25,6 +27,17 @@ def force_ipv4() -> None:
     import urllib3.util.connection as urllib3_conn
 
     urllib3_conn.HAS_IPV6 = False
+
+
+def _get_session() -> requests.Session:
+    global _session
+    if _session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=8)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _session = session
+    return _session
 
 
 def fetch_with_retry(
@@ -47,7 +60,7 @@ def fetch_with_retry(
     last_transport_error: requests.RequestException | None = None
     for attempt_index in range(attempts):
         try:
-            response = requests.get(
+            response = _get_session().get(
                 url,
                 headers=request_headers,
                 timeout=timeout,
@@ -72,7 +85,8 @@ def fetch_with_retry(
 def _sleep_before_retry(attempt_index: int, backoff_base: float) -> None:
     if backoff_base <= 0:
         return
-    time.sleep(backoff_base * (2 ** attempt_index))
+    base = backoff_base * (2 ** attempt_index)
+    time.sleep(base + random.uniform(0, backoff_base))
 
 
 # Apply IPv4-only at import. The bot imports every source module at startup

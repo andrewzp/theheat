@@ -4,6 +4,7 @@ import pytest
 import requests
 import responses
 
+from src.data import _http
 from src.data._http import fetch_with_retry
 
 
@@ -82,3 +83,60 @@ def test_fetch_with_retry_preserves_caller_user_agent():
     fetch_with_retry(url, headers={"User-Agent": "custom-agent/9.9"}, backoff_base=0)
 
     assert responses.calls[0].request.headers["User-Agent"] == "custom-agent/9.9"
+
+
+def test_get_session_is_pooled_singleton(monkeypatch):
+    monkeypatch.setattr(_http, "_session", None)
+
+    session = _http._get_session()
+
+    assert _http._get_session() is session
+    assert session.adapters["https://"]._pool_connections == 8
+    assert session.adapters["https://"]._pool_maxsize == 8
+    assert session.adapters["http://"]._pool_connections == 8
+    assert session.adapters["http://"]._pool_maxsize == 8
+
+
+@pytest.mark.real_backoff
+def test_sleep_before_retry_jitter_bounds(monkeypatch):
+    calls = []
+    sleeps = []
+    jitter_values = [0.0, 1.5]
+
+    def fake_uniform(low, high):
+        calls.append((low, high))
+        return jitter_values.pop(0)
+
+    monkeypatch.setattr(_http.random, "uniform", fake_uniform)
+    monkeypatch.setattr(_http.time, "sleep", sleeps.append)
+
+    _http._sleep_before_retry(attempt_index=1, backoff_base=1.5)
+    _http._sleep_before_retry(attempt_index=1, backoff_base=1.5)
+
+    assert calls == [(0, 1.5), (0, 1.5)]
+    assert sleeps == [3.0, 4.5]
+
+
+def test_fetch_uses_shared_session(monkeypatch):
+    class RecordingResponse:
+        status_code = 200
+        text = "ok"
+
+        def raise_for_status(self):
+            return None
+
+    class RecordingSession:
+        def __init__(self):
+            self.urls = []
+
+        def get(self, url, **kwargs):
+            self.urls.append(url)
+            return RecordingResponse()
+
+    session = RecordingSession()
+    monkeypatch.setattr(_http, "_get_session", lambda: session)
+
+    fetch_with_retry("https://example.test/a", backoff_base=0)
+    fetch_with_retry("https://example.test/b", backoff_base=0)
+
+    assert session.urls == ["https://example.test/a", "https://example.test/b"]
