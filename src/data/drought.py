@@ -10,6 +10,7 @@ from datetime import date, timedelta
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 DROUGHT_URL = "https://usdmdataservices.unl.edu/api/StateStatistics/GetDroughtSeverityStatisticsByAreaPercent"
@@ -32,7 +33,7 @@ def fetch_drought_data(*, strict: bool = False) -> list[DroughtUpdate]:
     last_thursday = today - timedelta(days=days_since_thursday)
 
     try:
-        resp = requests.get(
+        resp = fetch_with_retry(
             DROUGHT_URL,
             params={
                 "aoi": "state",
@@ -42,8 +43,9 @@ def fetch_drought_data(*, strict: bool = False) -> list[DroughtUpdate]:
             },
             headers={"Accept": "application/json"},
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp.raise_for_status()
         data = resp.json()
 
         updates = []

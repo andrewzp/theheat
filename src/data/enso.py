@@ -11,6 +11,7 @@ from datetime import date
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 ONI_URL = "https://www.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt"
@@ -32,8 +33,7 @@ class ENSOReading:
 def fetch_enso_data(*, strict: bool = False) -> list[ENSOReading]:
     """Fetch ONI time series data."""
     try:
-        resp = requests.get(ONI_URL, timeout=30)
-        resp.raise_for_status()
+        resp = fetch_with_retry(ONI_URL, timeout=30, attempts=3, backoff_base=1.0)
 
         readings = []
         for line in resp.text.strip().split("\n"):

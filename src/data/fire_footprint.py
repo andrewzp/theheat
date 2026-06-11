@@ -19,6 +19,7 @@ import requests
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 # Hectare thresholds for per-fire-complex tweet dedup. A complex is
@@ -105,8 +106,7 @@ def fetch_active_fire_perimeters(*, strict: bool = False) -> list["FireComplex"]
     must never take the alert cycle down.
     """
     try:
-        resp = requests.get(GWIS_URL, timeout=30)
-        resp.raise_for_status()
+        resp = fetch_with_retry(GWIS_URL, timeout=30, attempts=3, backoff_base=1.0)
         data = resp.json()
     except Exception as exc:
         if strict:

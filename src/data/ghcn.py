@@ -261,6 +261,7 @@ def _fetch_diff(d: date, timeout: int = 60) -> bytes | None:
     last_error: Exception | None = None
     for url in _diff_urls_for_end_date(d):
         try:
+            # bare-get: preserves 404-as-not-yet-published probe before raising.
             resp = requests.get(url, timeout=timeout)
             if resp.status_code == 404:
                 continue

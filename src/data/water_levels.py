@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import requests
 
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
 COOPS_URL = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
@@ -72,7 +73,7 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
 
     for station_id, name, state in STATIONS:
         try:
-            resp = requests.get(
+            resp = fetch_with_retry(
                 COOPS_URL,
                 params={
                     "begin_date": begin,
@@ -86,8 +87,9 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
                     "format": "json",
                 },
                 timeout=15,
+                attempts=3,
+                backoff_base=1.0,
             )
-            resp.raise_for_status()
             data = resp.json()
 
             obs_data = data.get("data", [])
@@ -100,7 +102,7 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
             observed = float(latest_obs.get("v", 0))
 
             # Fetch predicted tide for comparison
-            resp_pred = requests.get(
+            resp_pred = fetch_with_retry(
                 COOPS_URL,
                 params={
                     "begin_date": begin,
@@ -114,8 +116,9 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
                     "format": "json",
                 },
                 timeout=15,
+                attempts=3,
+                backoff_base=1.0,
             )
-            resp_pred.raise_for_status()
             pred_data = resp_pred.json().get("predictions", [])
             if not pred_data:
                 continue

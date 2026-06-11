@@ -507,6 +507,7 @@ def _resolve_available_date(
             variable="precipitation",
         )
         try:
+            # bare-get: migrated in S-09 with GPM source-chain retry semantics.
             resp = requests.get(url, headers=request_headers, timeout=timeout_s)
             resp.raise_for_status()
             return candidate
@@ -561,6 +562,7 @@ def _fetch_city_precip(
     timeout_s = _request_timeout_s()
     request_headers = dict(headers)
     try:
+        # bare-get: migrated in S-09 with GPM per-city retry semantics.
         resp = requests.get(url, headers=request_headers, timeout=timeout_s)
         resp.raise_for_status()
     except requests.RequestException as exc:
@@ -569,6 +571,7 @@ def _fetch_city_precip(
         backoff_s = _retry_backoff_s()
         if backoff_s > 0:
             time.sleep(backoff_s)
+        # bare-get: migrated in S-09 with GPM per-city retry semantics.
         resp = requests.get(url, headers=request_headers, timeout=timeout_s)
         resp.raise_for_status()
     value = _parse_ascii_value(resp.text, variable)
@@ -760,6 +763,7 @@ def _fetch_grid_bytes_datapool(*, target_date: date, product: str, token: str) -
     url = f"{DATAPOOL_BASE}/{_imerg_relpath(product, target_date)}"
     timeout_s = _request_timeout_s()
     try:
+        # bare-get: migrated in S-09 with GPM datapool status handling.
         resp = requests.get(
             url, headers={"Authorization": f"Bearer {token}"}, timeout=timeout_s
         )

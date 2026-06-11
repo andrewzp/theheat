@@ -11,6 +11,7 @@ from typing import Any
 import requests
 
 from src.data._freshness import assert_freshness
+from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 SNOW_TODAY_SWE_URL = "https://nsidc.org/api/snow-today/snow-water-equivalent/points/swe.json"
@@ -56,8 +57,7 @@ class SnowExtremeEvent:
 
 def fetch_snow_today(*, strict: bool = False) -> list[SnowReading]:
     try:
-        resp = requests.get(SNOW_TODAY_SWE_URL, timeout=30)
-        resp.raise_for_status()
+        resp = fetch_with_retry(SNOW_TODAY_SWE_URL, timeout=30, attempts=3, backoff_base=1.0)
         payload = resp.json()
         assert_response_schema(payload, ("metadata", "data"), "NSIDC Snow Today")
         metadata = payload["metadata"]

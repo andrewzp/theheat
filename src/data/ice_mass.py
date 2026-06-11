@@ -86,7 +86,7 @@ def _resolve_latest_url(short_name: str) -> str | None:
     None on any failure so the caller can treat the lane as skipped.
     """
     try:
-        resp = requests.get(
+        resp = fetch_with_retry(
             CMR_GRANULES_URL,
             params={
                 "short_name": short_name,
@@ -94,8 +94,9 @@ def _resolve_latest_url(short_name: str) -> str | None:
                 "sort_key": "-start_date",
             },
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp.raise_for_status()
     except requests.RequestException as exc:
         print(f"[ice_mass] CMR query failed for {short_name}: {exc}")
         return None

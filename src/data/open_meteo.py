@@ -10,6 +10,8 @@ from datetime import date, timedelta
 
 import requests
 
+from src.data._http import fetch_with_retry
+
 BASE_URL = "https://api.open-meteo.com/v1"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
 
@@ -230,7 +232,7 @@ def load_normals(normals_path: str = "data/normals.csv") -> dict[str, dict[int, 
 def fetch_city_temp(lat: float, lon: float) -> float | None:
     """Fetch today's high temperature for a single location."""
     try:
-        resp = requests.get(
+        resp = fetch_with_retry(
             f"{BASE_URL}/forecast",
             params={
                 "latitude": lat,
@@ -240,8 +242,9 @@ def fetch_city_temp(lat: float, lon: float) -> float | None:
                 "forecast_days": 1,
             },
             timeout=10,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp.raise_for_status()
         data = resp.json()
         temps = data.get("daily", {}).get("temperature_2m_max", [])
         return temps[0] if temps and temps[0] is not None else None
@@ -301,7 +304,7 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
     today = date.today()
     try:
         # Use the forecast high as an early warning signal; NOAA confirmations land later.
-        resp_today = requests.get(
+        resp_today = fetch_with_retry(
             f"{BASE_URL}/forecast",
             params={
                 "latitude": lat,
@@ -311,8 +314,9 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
                 "forecast_days": 1,
             },
             timeout=10,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_today.raise_for_status()
         today_temp = resp_today.json()["daily"]["temperature_2m_max"][0]
         if today_temp is None:
             return None
@@ -330,7 +334,7 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
             # Feb 29 on a non-leap year 30 years ago
             start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
-        resp_hist = requests.get(
+        resp_hist = fetch_with_retry(
             f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
@@ -341,8 +345,9 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
                 "timezone": "auto",
             },
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_hist.raise_for_status()
         hist_data = resp_hist.json()
         dates = hist_data.get("daily", {}).get("time", [])
         temps = hist_data.get("daily", {}).get("temperature_2m_max", [])
@@ -499,7 +504,7 @@ def detect_extreme_signals(
     """
     today = date.today()
     try:
-        resp_today = requests.get(
+        resp_today = fetch_with_retry(
             f"{BASE_URL}/forecast",
             params={
                 "latitude": lat,
@@ -509,8 +514,9 @@ def detect_extreme_signals(
                 "forecast_days": 1,
             },
             timeout=10,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_today.raise_for_status()
         today_data = resp_today.json().get("daily", {})
         today_max = (today_data.get("temperature_2m_max") or [None])[0]
         today_min = (today_data.get("temperature_2m_min") or [None])[0]
@@ -524,7 +530,7 @@ def detect_extreme_signals(
             start = today.replace(year=today.year - archive_years, day=28)
         end = today - timedelta(days=1)
 
-        resp_hist = requests.get(
+        resp_hist = fetch_with_retry(
             f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
@@ -535,8 +541,9 @@ def detect_extreme_signals(
                 "timezone": "auto",
             },
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_hist.raise_for_status()
         hist_data = resp_hist.json().get("daily", {})
         dates = hist_data.get("time", [])
         highs = hist_data.get("temperature_2m_max", [])
@@ -922,7 +929,7 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
     """Check whether today's forecast low would break the record low for this date."""
     today = date.today()
     try:
-        resp_today = requests.get(
+        resp_today = fetch_with_retry(
             f"{BASE_URL}/forecast",
             params={
                 "latitude": lat,
@@ -932,8 +939,9 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
                 "forecast_days": 1,
             },
             timeout=10,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_today.raise_for_status()
         today_low = resp_today.json()["daily"]["temperature_2m_min"][0]
         if today_low is None:
             return None
@@ -943,7 +951,7 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
         except ValueError:
             start = today.replace(year=today.year - 30, day=28)
         end = today - timedelta(days=1)
-        resp_hist = requests.get(
+        resp_hist = fetch_with_retry(
             f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
@@ -954,8 +962,9 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
                 "timezone": "auto",
             },
             timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
-        resp_hist.raise_for_status()
         hist_data = resp_hist.json()
         dates = hist_data.get("daily", {}).get("time", [])
         temps = hist_data.get("daily", {}).get("temperature_2m_min", [])

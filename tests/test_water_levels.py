@@ -1,9 +1,16 @@
 """Tests for NOAA CO-OPS water level data."""
 
+from unittest.mock import patch
+
+import pytest
+import requests
+
+from src.data.source_status import SourceFetchError
 from src.data.water_levels import (
     WaterLevelReading,
     StormSurgeEvent,
     detect_storm_surge,
+    fetch_water_levels,
     SURGE_THRESHOLD_M,
     MAJOR_SURGE_THRESHOLD_M,
 )
@@ -51,3 +58,13 @@ class TestDetectStormSurge:
 
     def test_empty_readings(self):
         assert detect_storm_surge([]) == []
+
+
+def test_water_levels_fetch_failure_raises_clean():
+    with patch(
+        "src.data.water_levels.fetch_with_retry",
+        side_effect=requests.RequestException("network down"),
+    ):
+        assert fetch_water_levels(strict=False) == []
+        with pytest.raises(SourceFetchError, match="Water levels fetch failed"):
+            fetch_water_levels(strict=True)
