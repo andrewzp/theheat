@@ -9,7 +9,7 @@
 | S-01 | #30a | Dead `drafted` plumbing + per-source credit | — | DONE | #222 | Runner returns ignored; drain credits saved drafts per source. |
 | S-02 | #30b | pytest config, README, PIPELINE glossary, critic passthrough, action versions | — | DONE | #223 | Local pytest defaults, README, current glossary, critic env, and action versions synced. |
 | S-03 | #27 | Dashboard truth fixes | — | DONE | #224 | Dashboard counts, state-read errors, data age, Hot 10 staleness, and funnel label truth fixed. |
-| S-04 | #29 | Sentinel 403 classification (PY+JS) | — | TODO | | |
+| S-04 | #29 | Sentinel 403 classification (PY+JS) | — | DONE | #225 | Earthdata credential 403s classify ours in Python and dashboard; generic gov 403 stays external. |
 | S-05 | #13 | error_class telemetry + liveness + failure alarm | S-04 | TODO | | |
 | S-06 | #14 | Sentinel stale-success / zero-yield watch | S-05 | TODO | | |
 | S-07 | #1a | _http.py jitter + shared Session | — | TODO | | |
