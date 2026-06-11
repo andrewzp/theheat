@@ -17,14 +17,14 @@ data/_ghcnd_all.tar.gz
 data/stations.csv
 
 # Finder/iCloud "keep both files" duplicates
-*" 2.js"
-*" 2.ts"
-*" 2.py"
-*" 2.md"
-*" 2.yml"
-*" 2.yaml"
-*" 2.json"
-*" 2.css"
+* 2.js
+* 2.ts
+* 2.py
+* 2.md
+* 2.yml
+* 2.yaml
+* 2.json
+* 2.css
 
 # Brand handoff archive — contents are versioned at handoff/; the zip is redundant
-"The Heat - Brand Design & Design System.zip"
+The Heat - Brand Design & Design System.zip
