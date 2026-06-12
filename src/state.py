@@ -28,9 +28,19 @@ STATE_FILENAME = "state.json"
 STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
 DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
 MAX_DRAFTS = 200
+MAX_SHIPPED_TWEETS = 200
+STATE_SIZE_WARNING_BYTES = 800_000
+RECENT_RECORD_TTL_DAYS = 90
+RECORD_STORE_RETENTION_YEARS = 10
 REJECTED_DRAFT_RETENTION_DAYS = 30
 REJECTED_DRAFT_GUARDRAIL_COUNT = 10
 _DRAFT_CAP_PROTECTED_STATUSES = {"pending", "posted"}
+_TIER_TOUCH_SEPARATOR = "::"
+_TIER_TTLS_DAYS = {
+    "fire_complex_tiers": 90,
+    "cyclone_tiers": 30,
+    "flood_activation_tiers": 60,
+}
 
 DEFAULT_STATE: BotState = {
     "last_hot10": {"date": None, "cities": []},
@@ -150,6 +160,9 @@ DEFAULT_STATE: BotState = {
     "cyclone_annual_count": {},
     # Per-Copernicus EMS activation severity dedup for global flood events.
     "flood_activation_tiers": {},
+    # Flat sidecar timestamps for tier TTL pruning. Tier dict values stay bare
+    # ints/strings for backwards compatibility; keys are "{tier_dict}::{id}".
+    "tier_touch_ts": {},
     # Visibility counter only; no cap yet.
     "flood_annual_count": {},
     # ISO date of last fire-footprint (NIFC) poll. Used as a once-per-day gate.
@@ -231,6 +244,23 @@ def _parse_state_timestamp(value: str | None) -> datetime:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC)
+
+
+def _utc_iso(moment: datetime | None = None) -> str:
+    when = moment or datetime.now(UTC)
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return when.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _coerce_utc_datetime(value: datetime | date | str) -> datetime:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=UTC)
+    return _parse_state_timestamp(str(value))
 
 
 def _merge_ordered_unique(current: list, incoming: list, max_items: int | None = None) -> list:
@@ -459,7 +489,7 @@ def _merge_memory(current: MemoryState | None, incoming: MemoryState | None) -> 
         seen_tweets.add(key)
         tweets.append(deepcopy(row))
     tweets.sort(key=lambda row: _parse_state_timestamp(row.get("shipped_at")))
-    merged["shipped_tweets"] = tweets
+    merged["shipped_tweets"] = tweets[-MAX_SHIPPED_TWEETS:]
 
     events: dict[str, dict] = {}
     anonymous: list[dict] = []
@@ -734,6 +764,176 @@ def _merge_state(current: BotState | dict | None, incoming: BotState | dict | No
     return cast(BotState, merged)
 
 
+def _row_date(row: dict) -> date | None:
+    value = row.get("date") if isinstance(row, dict) else None
+    if not value:
+        return None
+    return _parse_state_timestamp(str(value)).date()
+
+
+def _newest_row_date(rows: Any) -> date | None:
+    if not isinstance(rows, list):
+        return None
+    dates: list[date] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        row_dt = _row_date(row)
+        if row_dt is not None:
+            dates.append(row_dt)
+    return max(dates) if dates else None
+
+
+def _record_year_from_payload(record: Any) -> int | None:
+    if not isinstance(record, dict):
+        return None
+    raw_year: Any = record.get("year")
+    try:
+        return int(raw_year)
+    except (TypeError, ValueError):
+        record_date = _row_date(record)
+        return record_date.year if record_date is not None else None
+
+
+def _prune_recent_mm_rows(state: BotState, key: str, cutoff: date) -> set[str]:
+    state_dict = cast(dict, state)
+    recent = cast(dict, state_dict.setdefault(key, {}))
+    active: set[str] = set()
+    for location_key in sorted(list(recent.keys())):
+        newest = _newest_row_date(recent.get(location_key))
+        if newest is None or newest < cutoff:
+            del recent[location_key]
+            continue
+        active.add(str(location_key))
+    return active
+
+
+def _prune_daily_mm_records(
+    state: BotState,
+    *,
+    records_key: str,
+    recent_key: str,
+    now_dt: datetime,
+) -> None:
+    active_locations = _prune_recent_mm_rows(
+        state,
+        recent_key,
+        (now_dt - timedelta(days=RECENT_RECORD_TTL_DAYS)).date(),
+    )
+    state_dict = cast(dict, state)
+    records = cast(dict, state_dict.setdefault(records_key, {}))
+    min_year = now_dt.year - RECORD_STORE_RETENTION_YEARS
+    for record_key in sorted(list(records.keys())):
+        record = records.get(record_key)
+        if not isinstance(record, dict):
+            del records[record_key]
+            continue
+        year = _record_year_from_payload(record)
+        if year is not None and year < min_year:
+            del records[record_key]
+            continue
+        location_key = str(record_key).rsplit(":", 1)[0]
+        if location_key not in active_locations:
+            del records[record_key]
+
+
+def _cap_shipped_tweets(rows: Any) -> list[dict]:
+    tweets = [deepcopy(row) for row in (rows or []) if isinstance(row, dict)]
+    tweets.sort(key=lambda row: _parse_state_timestamp(row.get("shipped_at")))
+    return tweets[-MAX_SHIPPED_TWEETS:]
+
+
+def _tier_touch_key(store_key: str, item_key: str) -> str:
+    return f"{store_key}{_TIER_TOUCH_SEPARATOR}{item_key}"
+
+
+def _split_tier_touch_key(touch_key: str) -> tuple[str, str] | None:
+    if _TIER_TOUCH_SEPARATOR not in touch_key:
+        return None
+    store_key, item_key = touch_key.split(_TIER_TOUCH_SEPARATOR, 1)
+    return store_key, item_key
+
+
+def _touch_tier(state: BotState, store_key: str, item_key: str, *, now: datetime | None = None) -> None:
+    touches = cast(dict, state.setdefault("tier_touch_ts", {}))
+    touches[_tier_touch_key(store_key, item_key)] = _utc_iso(now)
+
+
+def _prune_tier_store(state: BotState, store_key: str, ttl_days: int, now_dt: datetime) -> None:
+    state_dict = cast(dict, state)
+    tiers = cast(dict, state_dict.setdefault(store_key, {}))
+    touches = cast(dict, state.setdefault("tier_touch_ts", {}))
+    cutoff = now_dt - timedelta(days=ttl_days)
+    now_iso = _utc_iso(now_dt)
+
+    for item_key in sorted(list(tiers.keys())):
+        touch_key = _tier_touch_key(store_key, str(item_key))
+        touched_at = touches.get(touch_key)
+        if not touched_at:
+            touches[touch_key] = now_iso
+            continue
+        if _parse_state_timestamp(str(touched_at)) < cutoff:
+            del tiers[item_key]
+            touches.pop(touch_key, None)
+
+    for touch_key in sorted(list(touches.keys())):
+        split = _split_tier_touch_key(str(touch_key))
+        if split is None:
+            continue
+        touch_store, item_key = split
+        if touch_store == store_key and item_key not in tiers:
+            del touches[touch_key]
+
+
+def _prune_year_keyed_dict(values: Any, min_year: int) -> dict:
+    if not isinstance(values, dict):
+        return {}
+    pruned = {}
+    for key, value in sorted(values.items()):
+        try:
+            year = int(str(key))
+        except ValueError:
+            pruned[key] = value
+            continue
+        if year >= min_year:
+            pruned[key] = value
+    return pruned
+
+
+def prune_state(bot_state: BotState, now: datetime | date | str) -> BotState:
+    """Prune unbounded durable state in place at the end of a run."""
+
+    now_dt = _coerce_utc_datetime(now)
+    _prune_daily_mm_records(
+        bot_state,
+        records_key="snow_daily_swe_gain_records",
+        recent_key="snow_recent_by_station",
+        now_dt=now_dt,
+    )
+    _prune_daily_mm_records(
+        bot_state,
+        records_key="precip_daily_records",
+        recent_key="precip_recent_by_city",
+        now_dt=now_dt,
+    )
+
+    memory = get_memory(bot_state)
+    memory["shipped_tweets"] = _cap_shipped_tweets(memory.get("shipped_tweets"))
+
+    for store_key, ttl_days in _TIER_TTLS_DAYS.items():
+        _prune_tier_store(bot_state, store_key, ttl_days, now_dt)
+
+    min_year = now_dt.year - 1
+    for key in sorted(DEFAULT_STATE):
+        if key.endswith("_annual_count"):
+            cast(dict, bot_state)[key] = _prune_year_keyed_dict(bot_state.get(key), min_year)
+    bot_state["ozone_hole_last_peak"] = _prune_year_keyed_dict(
+        bot_state.get("ozone_hole_last_peak"),
+        min_year,
+    )
+    return bot_state
+
+
 def _merge_synthesis_event_list(
     a: list[dict] | None, b: list[dict] | None
 ) -> list[dict]:
@@ -908,6 +1108,14 @@ def _write_gist_state(state: BotState) -> bool:
 
     try:
         normalized = _normalize_state(state)
+        payload = json.dumps(normalized, separators=(",", ":"), default=json_default)
+        if len(payload) > STATE_SIZE_WARNING_BYTES:
+            warning = (
+                f"[state] WARNING size {len(payload)}B approaching gist inline cliff"
+            )
+            print(warning)
+            log_error(normalized, "state_size", warning)
+            payload = json.dumps(normalized, separators=(",", ":"), default=json_default)
         resp = requests.patch(
             f"https://api.github.com/gists/{GIST_ID}",
             headers=_headers(),
@@ -917,9 +1125,7 @@ def _write_gist_state(state: BotState) -> bool:
                         # Minified, not indent=2: pretty-printing added ~35% size
                         # and pushed prod past the ~928 KB inline-content
                         # truncation cliff on 2026-05-13. Reads handle either form.
-                        "content": json.dumps(
-                            normalized, separators=(",", ":"), default=json_default
-                        )
+                        "content": payload
                     }
                 }
             },
@@ -1440,6 +1646,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "cyclone_wind_history": _merge_cyclone_wind_history,
     "cyclone_annual_count": _strat_max_by_key(0),
     "flood_activation_tiers": _strat_reduce_by_key(_max_flood_severity),
+    "tier_touch_ts": _strat_max_by_key(""),
     "flood_annual_count": _strat_max_by_key(0),
     "fire_footprint_last_run": _merge_fire_footprint_last_run,
     "synthesis_components": _merge_synthesis_components,
@@ -1456,6 +1663,7 @@ def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> Bot
     current = int(tiers.get(complex_id, -1))
     if tier > current:
         tiers[complex_id] = int(tier)
+        _touch_tier(state, "fire_complex_tiers", complex_id)
     return state
 
 
@@ -1587,6 +1795,7 @@ def update_cyclone_tier(state: BotState, storm_id: str, tier: int) -> BotState:
     current = int(tiers.get(storm_id, -1))
     if tier > current:
         tiers[storm_id] = int(tier)
+        _touch_tier(state, "cyclone_tiers", storm_id)
     return state
 
 
@@ -1629,6 +1838,7 @@ def update_flood_activation_tier(state: BotState, activation_id: str, severity: 
     current = str(tiers.get(activation_id, ""))
     if _max_flood_severity(current, severity) == severity:
         tiers[activation_id] = severity
+        _touch_tier(state, "flood_activation_tiers", activation_id)
     return state
 
 
@@ -1659,6 +1869,7 @@ def finalize_run(state: BotState, run: dict, status: str = "success", max_runs: 
     history.insert(0, completed)
     if len(history) > max_runs:
         state["run_history"] = history[:max_runs]
+    prune_state(state, datetime.now(UTC))
     return state
 
 

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.42.0] - 2026-06-12
+
+THIRTY-LOOP S-16 adds deterministic state pruning and size warnings so record
+stores, tier suppressions, and shipped-tweet memory stop drifting toward the
+gist inline-content cliff.
+
+### Changed
+
+- **Prune durable state growth.** `src/state.py` now caps merged
+  `memory.shipped_tweets`, prunes dormant snow/precip record stores from
+  `finalize_run`, expires old annual-count and ozone peak years, and records a
+  dashboard-visible warning when serialized gist state exceeds 800 KB. Bare
+  fire/cyclone/flood tier values keep their existing merge semantics while
+  `tier_touch_ts` sidecar timestamps provide TTL pruning with first-prune
+  migration coverage.
+
 ## [0.9.41.0] - 2026-06-12
 
 THIRTY-LOOP S-14 rolls freshness guardrails across the remaining unguarded

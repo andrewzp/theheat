@@ -77,6 +77,26 @@
   },
   {
     "base": {
+      "tier_touch_ts": {
+        "fire_complex_tiers::A": "2026-06-01T00:00:00Z"
+      }
+    },
+    "expected": {
+      "tier_touch_ts": {
+        "cyclone_tiers::B": "2026-06-01T00:00:00Z",
+        "fire_complex_tiers::A": "2026-06-02T00:00:00Z"
+      }
+    },
+    "incoming": {
+      "tier_touch_ts": {
+        "cyclone_tiers::B": "2026-06-01T00:00:00Z",
+        "fire_complex_tiers::A": "2026-06-02T00:00:00Z"
+      }
+    },
+    "label": "max_by_key.str.tier_touch_ts"
+  },
+  {
+    "base": {
       "ice_mass_last_seen": {
         "greenland": "2026-01"
       }
