@@ -48,6 +48,7 @@ YIELD_QUIET_OK = frozenset({
     "synthesis_fire_drought_heat",
     "manual_publish",
     "auto_publish_due",
+    "copernicus_ems",
     "leaderboard",
     "load_cities",
     "ozone_hole",

@@ -301,6 +301,13 @@ class TestYieldWatch:
 
         assert watched == []
 
+    def test_yield_watch_ignores_copernicus_ems_quiet_window(self):
+        watched = yield_watch_sources({
+            "copernicus_ems": _yield_src(["success"] * 10, observed=0),
+        })
+
+        assert watched == []
+
     def test_yield_watch_requires_full_window(self):
         watched = yield_watch_sources({
             "gdacs": _yield_src(["success"] * 9, observed=0),

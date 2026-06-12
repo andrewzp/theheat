@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.43.0] - 2026-06-12
+
+This sentinel fix treats Copernicus EMS as a known-quiet conditional source so
+green no-activation windows do not block the loop as silent zero-yield outages.
+
+### Changed
+
+- **Allow quiet Copernicus EMS windows.** `scripts/source_health_sentinel.py`
+  now excludes `copernicus_ems` from yield-watch advisories, matching its
+  active-flood activation semantics: a successful poll with no current floods
+  legitimately observes zero reportable activations. `tests/test_source_health_sentinel.py`
+  covers the quiet-window case alongside the existing yield-watch allowlist
+  tests.
+
 ## [0.9.42.0] - 2026-06-12
 
 THIRTY-LOOP S-16 adds deterministic state pruning and size warnings so record
