@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import os
 import secrets
 
@@ -12,6 +13,10 @@ from src.state_schema import BotState
 
 
 _CURRENT_SUPPRESSION_CTX: dict | None = None
+_SUPPRESSION_CTX_VAR: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "theheat_suppression_ctx",
+    default=None,
+)
 
 
 def _previous_drafts_for_event(bot_state: BotState, event_base: str) -> list[str]:
@@ -45,10 +50,13 @@ def _suppression_context(bot_state: BotState, *, source: str, run_id: str | None
     """Activate suppression capture for `_should_draft()` calls inside the block."""
     global _CURRENT_SUPPRESSION_CTX
     prev = _CURRENT_SUPPRESSION_CTX
-    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    ctx = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    _CURRENT_SUPPRESSION_CTX = ctx
+    token = _SUPPRESSION_CTX_VAR.set(ctx)
     try:
         yield
     finally:
+        _SUPPRESSION_CTX_VAR.reset(token)
         _CURRENT_SUPPRESSION_CTX = prev
 
 
@@ -61,13 +69,16 @@ def _activate_suppression_ctx(bot_state: BotState, *, source: str, run_id: str |
     should call `_clear_suppression_ctx()` between cases.
     """
     global _CURRENT_SUPPRESSION_CTX
-    _CURRENT_SUPPRESSION_CTX = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    ctx = {"bot_state": bot_state, "source": source, "run_id": run_id}
+    _CURRENT_SUPPRESSION_CTX = ctx
+    _SUPPRESSION_CTX_VAR.set(ctx)
 
 
 def _clear_suppression_ctx() -> None:
     """Clear the current suppression context. Mainly for tests."""
     global _CURRENT_SUPPRESSION_CTX
     _CURRENT_SUPPRESSION_CTX = None
+    _SUPPRESSION_CTX_VAR.set(None)
 
 
 def _score_field(score, key: str, default=None):
@@ -171,7 +182,7 @@ def _record_save_rejection(
     """Record a post-score draft-save gate as a suppression row."""
     if score is None:
         return
-    ctx = _CURRENT_SUPPRESSION_CTX
+    ctx = _current_suppression_ctx()
     if ctx is None:
         return
     _record_downstream_suppression(
@@ -228,7 +239,7 @@ def _should_draft(
         f"[score] Suppressed{event_desc}: {score.category} "
         f"{score.total} < {score.threshold} ({', '.join(score.reasons)})"
     )
-    ctx = _CURRENT_SUPPRESSION_CTX
+    ctx = _current_suppression_ctx()
     if ctx is not None:
         gap = int(getattr(score, "threshold", 0) or 0) - int(getattr(score, "total", 0) or 0)
         if gap <= _near_miss_gap():
@@ -244,7 +255,7 @@ def _should_draft(
 
 
 def _current_suppression_ctx() -> dict | None:
-    return _CURRENT_SUPPRESSION_CTX
+    return _SUPPRESSION_CTX_VAR.get()
 
 
 __all__ = [

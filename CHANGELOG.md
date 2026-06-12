@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.48.0] - 2026-06-12
+
+THIRTY-LOOP S-20 adds a dark-shipped concurrent source scheduler so alerts-mode
+source fetching can be budgeted, breaker-protected, and eventually run as a DAG
+without changing production behavior until Andrew flips the flag.
+
+### Changed
+
+- **Add flagged DAG source scheduling.** `src/orchestrator/scheduler.py` now runs
+  synthesis-component writers serially, dispatches the remaining Stage-1 source
+  runners through a six-worker pool, records 120-second budget timeouts with
+  `error_class="timeout"`, and skips sources whose last three source-health rows
+  timed out with a breaker-marked `skipped` row. `src/orchestrator/run_alerts.py`
+  preserves the legacy sequential path by default and only enters the scheduler
+  when `THEHEAT_CONCURRENT_SOURCES=1`; suppression context is now thread-local
+  and triage enqueue is locked for concurrent runner safety.
+
 ## [0.9.47.0] - 2026-06-12
 
 THIRTY-LOOP S-19 trims the dashboard state payload and stops hidden browser

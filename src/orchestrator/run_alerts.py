@@ -5,6 +5,7 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.orchestrator.finalize import _fire_surviving_draft_callbacks, _prune_weakest_cycle_drafts
+from src.orchestrator.scheduler import SourceRunner, concurrent_sources_enabled, run_stage1_then_synthesis
 from src.orchestrator.sources.co2 import run_co2
 from src.orchestrator.sources.co_ops import run_water_levels
 from src.orchestrator.sources.climate_indices import run_climate_indices
@@ -80,53 +81,134 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         except (ValueError, TypeError):
             continue
 
-    run_extreme_signals(
-        bot_state,
-        current_run,
-        cities,
-        us_city_state_map,
-        city_elevations,
-    )
-    run_firms(bot_state, current_run)
-    run_fire_footprint(bot_state, current_run)
-    run_co2(bot_state, current_run)
-    run_methane(bot_state, current_run)
-    run_nws_alerts(bot_state, current_run)
-    run_gdacs(bot_state, current_run)
-    run_copernicus_ems(bot_state, current_run)
-    _process_cyclone_source(
-        bot_state,
-        current_run,
-        source_key="nhc",
-        source_label="NHC",
-        fetch_fn=nhc.fetch_active_cyclones,
-        detect_module=nhc,
-    )
-    _process_cyclone_source(
-        bot_state,
-        current_run,
-        source_key="jtwc",
-        source_label="JTWC",
-        fetch_fn=jtwc.fetch_active_cyclones,
-        detect_module=jtwc,
-    )
-    run_sea_ice(bot_state, current_run)
-    run_drought(bot_state, current_run)
-    run_enso(bot_state, current_run)
-    run_climate_indices(bot_state, current_run)
-    run_ocean(bot_state, current_run)
-    run_ocean_sst(bot_state, current_run)
-    run_ocean_sst_anomaly(bot_state, current_run)
-    run_air_quality(bot_state, current_run, cities)
-    run_coral_dhw(bot_state, current_run)
-    run_water_levels(bot_state, current_run)
-    run_river_gauges(bot_state, current_run)
-    run_ice_mass(bot_state, current_run)
-    run_gpm_imerg(bot_state, current_run, cities)
-    run_nsidc_snow(bot_state, current_run)
-    run_ozone_hole(bot_state, current_run)
-    run_reanalysis_anomaly(bot_state, current_run)
-    run_synthesis(bot_state, current_run)
+    if concurrent_sources_enabled():
+        run_stage1_then_synthesis(
+            bot_state,
+            current_run,
+            serial_runners=[
+                SourceRunner(
+                    "open_meteo_extreme_signals",
+                    lambda: run_extreme_signals(
+                        bot_state,
+                        current_run,
+                        cities,
+                        us_city_state_map,
+                        city_elevations,
+                    ),
+                ),
+                SourceRunner("firms", lambda: run_firms(bot_state, current_run)),
+                SourceRunner("drought", lambda: run_drought(bot_state, current_run)),
+            ],
+            concurrent_runners=[
+                SourceRunner("fire_footprint", lambda: run_fire_footprint(bot_state, current_run)),
+                SourceRunner("co2", lambda: run_co2(bot_state, current_run)),
+                SourceRunner("ch4_milestone", lambda: run_methane(bot_state, current_run)),
+                SourceRunner("nws_alerts", lambda: run_nws_alerts(bot_state, current_run)),
+                SourceRunner("gdacs", lambda: run_gdacs(bot_state, current_run)),
+                SourceRunner("copernicus_ems", lambda: run_copernicus_ems(bot_state, current_run)),
+                SourceRunner(
+                    "nhc",
+                    lambda: _process_cyclone_source(
+                        bot_state,
+                        current_run,
+                        source_key="nhc",
+                        source_label="NHC",
+                        fetch_fn=nhc.fetch_active_cyclones,
+                        detect_module=nhc,
+                    ),
+                ),
+                SourceRunner(
+                    "jtwc",
+                    lambda: _process_cyclone_source(
+                        bot_state,
+                        current_run,
+                        source_key="jtwc",
+                        source_label="JTWC",
+                        fetch_fn=jtwc.fetch_active_cyclones,
+                        detect_module=jtwc,
+                    ),
+                ),
+                SourceRunner(
+                    "sea_ice",
+                    lambda: run_sea_ice(bot_state, current_run),
+                    health_sources=("sea_ice_arctic", "sea_ice_antarctic"),
+                ),
+                SourceRunner("enso", lambda: run_enso(bot_state, current_run)),
+                SourceRunner(
+                    "climate_indices",
+                    lambda: run_climate_indices(bot_state, current_run),
+                    health_sources=("nao", "ao", "pdo", "nao_ao_alignment"),
+                ),
+                SourceRunner("ocean", lambda: run_ocean(bot_state, current_run)),
+                SourceRunner("ocean_sst", lambda: run_ocean_sst(bot_state, current_run)),
+                SourceRunner("ocean_sst_anomaly", lambda: run_ocean_sst_anomaly(bot_state, current_run)),
+                SourceRunner("air_quality", lambda: run_air_quality(bot_state, current_run, cities)),
+                SourceRunner("coral_dhw", lambda: run_coral_dhw(bot_state, current_run)),
+                SourceRunner("water_levels", lambda: run_water_levels(bot_state, current_run)),
+                SourceRunner("river_gauges", lambda: run_river_gauges(bot_state, current_run)),
+                SourceRunner(
+                    "ice_mass",
+                    lambda: run_ice_mass(bot_state, current_run),
+                    health_sources=("ice_mass_greenland", "ice_mass_antarctica"),
+                ),
+                SourceRunner("gpm_imerg", lambda: run_gpm_imerg(bot_state, current_run, cities)),
+                SourceRunner("nsidc_snow", lambda: run_nsidc_snow(bot_state, current_run)),
+                SourceRunner("ozone_hole", lambda: run_ozone_hole(bot_state, current_run)),
+                SourceRunner("reanalysis_anomaly", lambda: run_reanalysis_anomaly(bot_state, current_run)),
+            ],
+            synthesis_runner=SourceRunner(
+                "synthesis_fire_drought_heat",
+                lambda: run_synthesis(bot_state, current_run),
+            ),
+        )
+    else:
+        run_extreme_signals(
+            bot_state,
+            current_run,
+            cities,
+            us_city_state_map,
+            city_elevations,
+        )
+        run_firms(bot_state, current_run)
+        run_fire_footprint(bot_state, current_run)
+        run_co2(bot_state, current_run)
+        run_methane(bot_state, current_run)
+        run_nws_alerts(bot_state, current_run)
+        run_gdacs(bot_state, current_run)
+        run_copernicus_ems(bot_state, current_run)
+        _process_cyclone_source(
+            bot_state,
+            current_run,
+            source_key="nhc",
+            source_label="NHC",
+            fetch_fn=nhc.fetch_active_cyclones,
+            detect_module=nhc,
+        )
+        _process_cyclone_source(
+            bot_state,
+            current_run,
+            source_key="jtwc",
+            source_label="JTWC",
+            fetch_fn=jtwc.fetch_active_cyclones,
+            detect_module=jtwc,
+        )
+        run_sea_ice(bot_state, current_run)
+        run_drought(bot_state, current_run)
+        run_enso(bot_state, current_run)
+        run_climate_indices(bot_state, current_run)
+        run_ocean(bot_state, current_run)
+        run_ocean_sst(bot_state, current_run)
+        run_ocean_sst_anomaly(bot_state, current_run)
+        run_air_quality(bot_state, current_run, cities)
+        run_coral_dhw(bot_state, current_run)
+        run_water_levels(bot_state, current_run)
+        run_river_gauges(bot_state, current_run)
+        run_ice_mass(bot_state, current_run)
+        run_gpm_imerg(bot_state, current_run, cities)
+        run_nsidc_snow(bot_state, current_run)
+        run_ozone_hole(bot_state, current_run)
+        run_reanalysis_anomaly(bot_state, current_run)
+        run_synthesis(bot_state, current_run)
 
     # Drain the triage queue: rank + cap survivors, then call writer for each.
     # Source runners enqueue StoryBundle candidates; this is the only writer

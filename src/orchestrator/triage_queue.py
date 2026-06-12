@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
@@ -18,6 +19,8 @@ from src.state_schema import BotState
 
 if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
+
+_TRIAGE_QUEUE_LOCK = threading.Lock()
 
 
 def _triage_enabled() -> bool:
@@ -42,9 +45,10 @@ def _enqueue_candidate(bot_state: BotState, candidate: "TriageCandidateBundle") 
     """
     # Cast to plain dict: _triage_queue is a transient key not declared in
     # BotState TypedDict (it's excluded from sqlite persistence intentionally).
-    state_dict: dict = cast(dict, bot_state)
-    queue = state_dict.setdefault("_triage_queue", [])
-    queue.append(candidate)
+    with _TRIAGE_QUEUE_LOCK:
+        state_dict: dict = cast(dict, bot_state)
+        queue = state_dict.setdefault("_triage_queue", [])
+        queue.append(candidate)
 
 
 def _enqueue_story_candidate(

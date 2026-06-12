@@ -219,6 +219,9 @@ jobs:
           # Kill-switch default in code stays "0"; production overrides here.
           # Rollback: gh variable set THEHEAT_TRIAGE_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_TRIAGE_ENABLED: ${{ vars.THEHEAT_TRIAGE_ENABLED || '1' }}
+          # Optional concurrent source scheduler. Default is legacy sequential
+          # execution; flipping is an explicit operator action.
+          THEHEAT_CONCURRENT_SOURCES: ${{ vars.THEHEAT_CONCURRENT_SOURCES || '0' }}
           THEHEAT_CRITIC_ENABLED: ${{ vars.THEHEAT_CRITIC_ENABLED || '1' }}
           # Reanalysis regional-anomaly signal (Part B, PR #203). manual_only +
           # env-gated; code default stays "0" (dormant). Production controls it via
