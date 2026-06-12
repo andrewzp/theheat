@@ -40,6 +40,7 @@ from src.state import (
     DEFAULT_STATE,
     write_state,
     _fresh_state,
+    _configured_backend,
 )
 
 
@@ -1151,6 +1152,22 @@ class TestDraftTrimming:
 
 
 class TestSqliteBackend:
+    def test_backend_selection_via_env(self, monkeypatch):
+        import src.state as state_module
+
+        monkeypatch.delenv("THEHEAT_STATE_BACKEND", raising=False)
+        monkeypatch.delenv("THEHEAT_DB_PATH", raising=False)
+        monkeypatch.setattr(state_module, "STATE_BACKEND", "")
+        monkeypatch.setattr(state_module, "DB_PATH", "")
+
+        assert _configured_backend() == "gist"
+
+        monkeypatch.setenv("THEHEAT_DB_PATH", "/tmp/theheat-smoke.sqlite")
+        assert _configured_backend() == "sqlite"
+
+        monkeypatch.setenv("THEHEAT_STATE_BACKEND", "gist")
+        assert _configured_backend() == "gist"
+
     def test_round_trips_state_via_sqlite_backend(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/theheat.sqlite"

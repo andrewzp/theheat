@@ -236,9 +236,11 @@ def _headers():
 
 
 def _configured_backend() -> str:
-    if STATE_BACKEND in {"gist", "sqlite"}:
-        return STATE_BACKEND
-    return "sqlite" if DB_PATH else "gist"
+    state_backend = os.environ.get("THEHEAT_STATE_BACKEND", STATE_BACKEND).lower()
+    db_path = os.environ.get("THEHEAT_DB_PATH", DB_PATH)
+    if state_backend in {"gist", "sqlite"}:
+        return state_backend
+    return "sqlite" if db_path else "gist"
 
 
 def _parse_state_timestamp(value: str | None) -> datetime:
