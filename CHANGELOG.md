@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.37.0] - 2026-06-11
+
+THIRTY-LOOP S-11 decomposes the orchestration common module into focused helper
+modules while preserving the legacy star-import compatibility surface.
+
+### Changed
+
+- **Split common helpers behind a compatibility shim.** `src/orchestrator/common.py`
+  now re-exports focused modules for caps, suppression, telemetry, cyclone
+  handling, draft deduplication, draft saving, two-bot dispatch, and triage
+  queue draining. `src/main.py` now syncs compatibility monkeypatches into the
+  split modules, and shim tests lock the legacy `__all__` export set plus moved
+  symbol identities.
+
 ## [0.9.36.0] - 2026-06-11
 
 THIRTY-LOOP S-10 adds process-lifetime conditional request support for static
