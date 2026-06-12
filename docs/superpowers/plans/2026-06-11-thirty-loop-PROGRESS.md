@@ -29,7 +29,7 @@
 | S-21 | #23 | Orchestrator test gaps + voice fixtures | — | DONE | #251 | CO-OPS, NIFC, and marine runners covered; six new voice replay bundle fixtures collect. |
 | S-22 | #2 | Multi-draft best-of + critic REVISE (flags) | S-21 | DONE | #252 | Dark writer sampling, slate critic selection, one-pass REVISE, and draft-cap passthrough added. |
 | S-23 | #16 | Coral reef-system angle library | S-21 | DONE | #253 | Live coral DHW region keys now carry capped reef-system context facts. |
-| S-24 | #17 | Record margin-percentile fact | S-21 | TODO | | |
+| S-24 | #17 | Record margin-percentile fact | S-21 | BLOCKED(schema-no-history) | | Threshold DB stores only current record value/year, not margin-history distributions. |
 | S-25 | #15 | AQ ground-station corroboration (OpenAQ) | S-08 | TODO | | |
 | S-26 | #19 | air_quality chunk pacing | S-09 | TODO | | |
 | S-27 | #6 | Synthesis: SST×coral + global FDH | S-21 | TODO | | |
