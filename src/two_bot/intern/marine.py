@@ -19,6 +19,7 @@ from src.data.ocean import ExtremeWaveEvent
 from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
 
 from src.data.ocean_sst import MarineHeatwaveStreakEvent
+from src.data.reef_context import reef_context_facts
 
 from src.data.sea_ice import SeaIceRecord
 
@@ -52,6 +53,7 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
             {"label": "lat", "value": event.lat},
             {"label": "lon", "value": event.lon},
             *_climate_context_facts(event.lat, event.lon, category="coral"),
+            *reef_context_facts(event.region_id),
         ],
         historical_context={
             "scope": "coral_reef_watch_regional_dhw_threshold",

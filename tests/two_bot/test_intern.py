@@ -27,6 +27,7 @@ from src.data.open_meteo import (
     RecordEvent,
     RecordStreakEvent,
 )
+from src.data.reef_context import REEF_CONTEXT
 from src.data.river_gauges import FloodEvent
 from src.data.sea_ice import SeaIceRecord
 from src.data.water_levels import StormSurgeEvent
@@ -66,6 +67,24 @@ from src.two_bot.intern import (
 )
 
 from tests.two_bot.conftest import _fire_event
+
+LIVE_CORAL_DHW_REGION_IDS = {
+    "austral_islands",
+    "chagos_archipelago",
+    "costa_rica_pacific",
+    "east_java_bali",
+    "fiji",
+    "galapagos",
+    "gilbert_islands",
+    "great_nicobar",
+    "kenya",
+    "nauru",
+    "samoas",
+    "solomon_islands",
+    "southern_borneo",
+    "west_kalimanta",
+    "western_madagascar",
+}
 
 
 def test_build_fire_bundle_uses_fire_signal_fields():
@@ -716,6 +735,64 @@ def test_build_coral_bleaching_bundle_carries_verifiable_dhw_fields():
     assert labels["dhw_tier"] == 8
     assert labels["bleaching_level"] == "mass bleaching expected"
     assert labels["region_climate_system"] == "the Great Barrier Reef shelf lagoon"
+
+
+def test_reef_context_keys_match_live_region_ids():
+    assert set(REEF_CONTEXT) == LIVE_CORAL_DHW_REGION_IDS
+    for entries in REEF_CONTEXT.values():
+        assert 3 <= len(entries) <= 5
+        assert {entry["kind"] for entry in entries} >= {
+            "current_system",
+            "notable_history",
+            "ecosystem_note",
+        }
+
+
+def test_coral_bundle_includes_context_when_available():
+    event = CoralBleachingEvent(
+        region_id="fiji",
+        region_full_name="Fiji",
+        date="2026-05-13",
+        dhw_value=8.2,
+        dhw_tier=8,
+        bleaching_level="mass bleaching expected",
+        stress_level="Alert Level 1",
+        lat=-17.7,
+        lon=178.1,
+        event_id="coral_dhw_fiji_tier8",
+    )
+    bundle = build_coral_bleaching_bundle(event)
+    context_facts = [
+        fact for fact in bundle.current_facts
+        if fact.get("label") == "reef_context"
+    ]
+    assert 1 <= len(context_facts) <= 3
+    assert {fact["kind"] for fact in context_facts} == {
+        "current_system",
+        "notable_history",
+        "ecosystem_note",
+    }
+    assert any("Great Sea Reef" in fact["value"] for fact in context_facts)
+
+
+def test_unknown_region_omits_context_cleanly():
+    event = CoralBleachingEvent(
+        region_id="unknown_region",
+        region_full_name="Unknown Reef",
+        date="2026-05-13",
+        dhw_value=8.2,
+        dhw_tier=8,
+        bleaching_level="mass bleaching expected",
+        stress_level="Alert Level 1",
+        lat=None,
+        lon=None,
+        event_id="coral_dhw_unknown_region_tier8",
+    )
+    bundle = build_coral_bleaching_bundle(event)
+    assert [
+        fact for fact in bundle.current_facts
+        if fact.get("label") == "reef_context"
+    ] == []
 
 
 def test_build_global_disaster_bundle_preserves_severity_value():

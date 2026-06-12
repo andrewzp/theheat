@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.51.0] - 2026-06-12
+
+THIRTY-LOOP S-23 adds reef-system context to coral bleaching bundles so the
+writer can vary coral drafts with factual regional mechanics instead of
+reusing generic DHW threshold language.
+
+### Changed
+
+- **Add Coral Reef Watch region context.** New `src/data/reef_context.py`
+  maps the live `coral_dhw_last_tier` region keys to capped factual context
+  facts covering the current ocean system, notable history, and ecosystem
+  setting. `src/two_bot/intern/marine.py` now injects up to three
+  `reef_context` facts into coral bleaching bundles, and the writer prompt
+  gets one declarative line naming those facts as bundle-supplied context
+  without authorizing unsupported trend claims.
+
 ## [0.9.50.0] - 2026-06-12
 
 THIRTY-LOOP S-22 dark-ships multi-draft writer sampling and one-pass critic
