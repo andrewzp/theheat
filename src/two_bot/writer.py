@@ -170,7 +170,12 @@ def _call_writer_provider(user_prompt: str) -> str:
     raise RuntimeError(f"Unsupported writer provider: {WRITER_PROVIDER}")
 
 
-def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
+def write_tweet(
+    bundle: StoryBundle,
+    memory: MemorySlice,
+    *,
+    revision_constraint: str | None = None,
+) -> WriterResult:
     """Call the configured writer model and parse a WriterResult.
 
     Signal-agnostic. The bundle's ``signal_kind`` and ``historical_context``
@@ -193,6 +198,11 @@ def write_tweet(bundle: StoryBundle, memory: MemorySlice) -> WriterResult:
         bundle_json=_bundle_json(bundle),
         memory_json=_memory_json(memory),
     )
+    if revision_constraint:
+        base_user_prompt = (
+            f"{base_user_prompt}\n\n"
+            f"[Revision context: {revision_constraint}]"
+        )
 
     last_overlong_tweet: str | None = None
     last_parse_error: str | None = None

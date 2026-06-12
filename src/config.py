@@ -19,6 +19,21 @@ from __future__ import annotations
 
 import os
 
+
+def _int_env(name: str, default: int, *, minimum: int = 1) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, value)
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "on", "yes"}
+
 # Cheap fast model used for structured-output tasks (fact-checking,
 # claim extraction) and for voice-candidate generation. Pinned to the
 # stable Flash snapshot — *not* ``gemini-flash-latest`` — because that
@@ -43,3 +58,8 @@ WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
 # NEVER Flash here — Flash has no taste for editorial gating (see
 # feedback_theheat_flash_no_taste.md).
 CRITIC_MODEL = os.environ.get("THEHEAT_CRITIC_MODEL", "gemini-2.5-pro")
+
+# Dark-shipped S-22 controls. Defaults preserve the legacy one-writer-sample,
+# PASS/KILL-only critic path.
+WRITER_SAMPLES = _int_env("THEHEAT_WRITER_SAMPLES", 1, minimum=1)
+CRITIC_REVISE_ENABLED = _bool_env("THEHEAT_CRITIC_REVISE_ENABLED", False)

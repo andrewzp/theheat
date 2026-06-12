@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.50.0] - 2026-06-12
+
+THIRTY-LOOP S-22 dark-ships multi-draft writer sampling and one-pass critic
+revision so supply can be expanded later without changing default production
+behavior.
+
+### Changed
+
+- **Add flagged best-of and revision paths.** `src/two_bot/pipeline.py` keeps the
+  single-sample path byte-for-byte compatible by default, while
+  `THEHEAT_WRITER_SAMPLES>1` runs parallel writer samples, sends viable drafts
+  to the critic as a slate, and fail-closes on slate parse exhaustion.
+  `THEHEAT_CRITIC_REVISE_ENABLED=1` allows one declarative critic revision
+  note, after which the revised draft reruns safety, fact-check, and a terminal
+  no-revise critic pass; `.github/workflows/bot.yml` also passes through the
+  dark flags and `THEHEAT_MAX_DRAFTS_PER_CYCLE` keeps the default cap at 3.
+
 ## [0.9.49.0] - 2026-06-12
 
 THIRTY-LOOP S-21 closes orchestrator test gaps around coastal water levels,

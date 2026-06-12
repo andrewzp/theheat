@@ -30,6 +30,7 @@ from src.config import CRITIC_MODEL
 from src.state_schema import BotState
 from src.two_bot.json_utils import json_default as _json_default, loads_model_json
 from src.two_bot.prompts.critic_prompt import (
+    CRITIC_SLATE_USER_PROMPT_TEMPLATE,
     CRITIC_SYSTEM_PROMPT,
     CRITIC_USER_PROMPT_TEMPLATE,
 )
@@ -116,8 +117,23 @@ def _format_shipped_block(shipped: list[str], limit: int = 10) -> str:
     return "\n".join(f"- {text}" for text in shipped[:limit] if text)
 
 
-def _parse_critic_json(raw: str) -> tuple[bool, str | None]:
-    """Parse the critic's JSON verdict.
+def _format_candidate_drafts_block(candidate_drafts: list[str]) -> str:
+    if not candidate_drafts:
+        return "(none)"
+    lines: list[str] = []
+    for index, draft in enumerate(candidate_drafts):
+        preview = draft.replace("\n", " ").strip()
+        lines.append(f"{index}. {preview}")
+    return "\n".join(lines)
+
+
+def _parse_critic_result(
+    raw: str,
+    *,
+    allow_revise: bool = False,
+    slate_size: int | None = None,
+) -> CriticResult:
+    """Parse the critic's JSON verdict into a CriticResult.
 
     Mirrors fact_check._parse_fact_check_json's strictness — invalid
     JSON or missing/wrong-type fields raise, and the caller (which sits
@@ -132,16 +148,83 @@ def _parse_critic_json(raw: str) -> tuple[bool, str | None]:
         raise ValueError("Critic returned invalid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Critic response must be a JSON object")
-    if not isinstance(parsed.get("passed"), bool):
-        raise ValueError("Critic response must include boolean passed")
-    passed = parsed["passed"]
-    kill_reason_raw = parsed.get("kill_reason")
-    if passed:
-        return True, None
-    # When passed=False, kill_reason must be a non-empty string.
-    if not isinstance(kill_reason_raw, str) or not kill_reason_raw.strip():
-        raise ValueError("Critic response with passed=false must include kill_reason")
-    return False, kill_reason_raw.strip()
+    if "verdict" not in parsed:
+        if not isinstance(parsed.get("passed"), bool):
+            raise ValueError("Critic response must include boolean passed")
+        passed = parsed["passed"]
+        kill_reason_raw = parsed.get("kill_reason")
+        if passed:
+            return CriticResult(passed=True, kill_reason=None, raw_response=raw)
+        if not isinstance(kill_reason_raw, str) or not kill_reason_raw.strip():
+            raise ValueError("Critic response with passed=false must include kill_reason")
+        return CriticResult(
+            passed=False,
+            kill_reason=kill_reason_raw.strip(),
+            raw_response=raw,
+            verdict="KILL",
+        )
+
+    verdict_raw = parsed.get("verdict")
+    if not isinstance(verdict_raw, str):
+        raise ValueError("Critic response must include string verdict")
+    verdict = verdict_raw.strip().upper()
+    selected_index = parsed.get("selected_index")
+    if selected_index is None:
+        selected = None
+    elif isinstance(selected_index, int):
+        selected = selected_index
+    else:
+        raise ValueError("Critic response selected_index must be an integer or null")
+    if slate_size is not None:
+        if verdict == "PASS" and selected is None:
+            raise ValueError("Critic slate PASS must include selected_index")
+        if selected is not None and not 0 <= selected < slate_size:
+            raise ValueError("Critic response selected_index out of bounds")
+
+    if verdict == "PASS":
+        return CriticResult(
+            passed=True,
+            kill_reason=None,
+            raw_response=raw,
+            verdict="PASS",
+            selected_index=selected,
+        )
+    if verdict == "KILL":
+        kill_reason_raw = parsed.get("kill_reason")
+        if not isinstance(kill_reason_raw, str) or not kill_reason_raw.strip():
+            raise ValueError("Critic KILL verdict must include kill_reason")
+        return CriticResult(
+            passed=False,
+            kill_reason=kill_reason_raw.strip(),
+            raw_response=raw,
+            verdict="KILL",
+        )
+    if verdict == "REVISE":
+        if not allow_revise:
+            raise ValueError("REVISE not allowed for this critic call")
+        instruction = parsed.get("revise_instruction")
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise ValueError("Critic REVISE verdict must include revise_instruction")
+        instruction = instruction.strip()
+        if len(instruction) > 200:
+            raise ValueError("Critic revise_instruction exceeds 200 chars")
+        return CriticResult(
+            passed=False,
+            kill_reason=None,
+            raw_response=raw,
+            verdict="REVISE",
+            revise_instruction=instruction,
+        )
+    raise ValueError("Critic response verdict must be PASS, KILL, or REVISE")
+
+
+def _parse_critic_json(raw: str) -> tuple[bool, str | None]:
+    """Legacy compatibility parser returning ``(passed, kill_reason)``."""
+
+    result = _parse_critic_result(raw)
+    if result.verdict == "REVISE":
+        raise ValueError("Legacy critic parser does not accept REVISE")
+    return result.passed, result.kill_reason
 
 
 def _call_gemini(
@@ -151,6 +234,8 @@ def _call_gemini(
     shipped_recent: list[str],
     *,
     retry_suffix: str = "",
+    allow_revise: bool = False,
+    candidate_drafts: list[str] | None = None,
 ) -> str:
     """Call Gemini 2.5 Pro with the critic prompt.
 
@@ -175,14 +260,30 @@ def _call_gemini(
     # for the 4-day production outage that taught us this. 90000 = 90s.
     client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
 
-    user_prompt = CRITIC_USER_PROMPT_TEMPLATE.format(
-        draft_text=draft_text,
-        bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
-        pending_count=len(pending_today),
-        pending_drafts_block=_format_pending_block(pending_today),
-        shipped_count=len(shipped_recent),
-        shipped_tweets_block=_format_shipped_block(shipped_recent),
-    )
+    if candidate_drafts is None:
+        user_prompt = CRITIC_USER_PROMPT_TEMPLATE.format(
+            draft_text=draft_text,
+            bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
+            pending_count=len(pending_today),
+            pending_drafts_block=_format_pending_block(pending_today),
+            shipped_count=len(shipped_recent),
+            shipped_tweets_block=_format_shipped_block(shipped_recent),
+            revision_mode=(
+                "REVISE is available for one narrow craft fix."
+                if allow_revise
+                else "REVISE is not available; only PASS or KILL."
+            ),
+        )
+    else:
+        user_prompt = CRITIC_SLATE_USER_PROMPT_TEMPLATE.format(
+            candidate_count=len(candidate_drafts),
+            candidate_drafts_block=_format_candidate_drafts_block(candidate_drafts),
+            bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default),
+            pending_count=len(pending_today),
+            pending_drafts_block=_format_pending_block(pending_today),
+            shipped_count=len(shipped_recent),
+            shipped_tweets_block=_format_shipped_block(shipped_recent),
+        )
     if retry_suffix:
         user_prompt = f"{user_prompt}{retry_suffix}"
     response = call_with_retries(
@@ -201,6 +302,7 @@ def critic_review(
     state: BotState,
     *,
     shipped_recent: list[str] | None = None,
+    allow_revise: bool = False,
 ) -> CriticResult:
     """Run the editorial critic against a fact-check-passed draft.
 
@@ -238,20 +340,30 @@ def critic_review(
     for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
         retry_suffix = ""
         if parse_attempt > 0 and last_parse_error is not None:
+            revise_example = (
+                ' or {"verdict": "REVISE", "kill_reason": null, '
+                '"revise_instruction": "<declarative note under 200 chars>", '
+                '"selected_index": null}'
+                if allow_revise
+                else ""
+            )
             retry_suffix = (
                 "\n\n[JSON-output retry: the previous attempt did not return "
                 "valid JSON. Return ONLY the JSON object specified above — "
                 "no prose before or after, no markdown fences, no chain-of-"
-                'thought. Use {"passed": true, "kill_reason": null} or '
-                '{"passed": false, "kill_reason": "<short reason>"}.]'
+                'thought. Use {"verdict": "PASS", "kill_reason": null, '
+                '"revise_instruction": null, "selected_index": null} or '
+                '{"verdict": "KILL", "kill_reason": "<short reason>", '
+                '"revise_instruction": null, "selected_index": null}'
+                f"{revise_example}.]"
             )
         raw = _call_gemini(
             draft_text, bundle, pending_today, shipped_recent,
             retry_suffix=retry_suffix,
+            allow_revise=allow_revise,
         )
         try:
-            passed, kill_reason = _parse_critic_json(raw)
-            return CriticResult(passed=passed, kill_reason=kill_reason, raw_response=raw)
+            return _parse_critic_result(raw, allow_revise=allow_revise)
         except ValueError as exc:
             last_parse_error = str(exc)
 
@@ -266,4 +378,56 @@ def critic_review(
             f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
         ),
         raw_response="(json-parse retry exhausted)",
+    )
+
+
+def critic_select_slate(
+    candidate_drafts: list[str],
+    bundle: StoryBundle,
+    state: BotState,
+    *,
+    shipped_recent: list[str] | None = None,
+) -> CriticResult:
+    """Select the strongest writer sample or KILL the whole slate."""
+
+    pending_today = _collect_pending_today(state, exclude_event_id=bundle.event_id)
+    if shipped_recent is None:
+        memory_block = state.get("memory") or {}
+        shipped_rows = memory_block.get("shipped_tweets", []) if isinstance(memory_block, dict) else []
+        shipped_recent = [
+            str(row.get("tweet_text") or "")
+            for row in shipped_rows[:10]
+            if isinstance(row, dict)
+        ]
+
+    last_parse_error: str | None = None
+    for parse_attempt in range(JSON_PARSE_RETRY_BUDGET + 1):
+        retry_suffix = ""
+        if parse_attempt > 0 and last_parse_error is not None:
+            retry_suffix = (
+                "\n\n[JSON-output retry: the previous attempt did not return "
+                "valid JSON. Return ONLY the JSON object specified above — "
+                "no prose before or after, no markdown fences.]"
+            )
+        raw = _call_gemini(
+            "",
+            bundle,
+            pending_today,
+            shipped_recent,
+            retry_suffix=retry_suffix,
+            candidate_drafts=candidate_drafts,
+        )
+        try:
+            return _parse_critic_result(raw, slate_size=len(candidate_drafts))
+        except ValueError as exc:
+            last_parse_error = str(exc)
+
+    return CriticResult(
+        passed=False,
+        kill_reason=(
+            f"critic returned invalid JSON across "
+            f"{JSON_PARSE_RETRY_BUDGET + 1} attempts: {last_parse_error}"
+        ),
+        raw_response="(json-parse retry exhausted)",
+        verdict="KILL",
     )

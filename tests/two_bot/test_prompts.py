@@ -283,8 +283,10 @@ class TestCriticPromptOutputContract:
     depends on this shape."""
 
     def test_output_shape_documented(self):
-        assert '"passed": true | false' in CRITIC_SYSTEM_PROMPT
+        assert '"verdict": "PASS" | "KILL" | "REVISE"' in CRITIC_SYSTEM_PROMPT
         assert '"kill_reason"' in CRITIC_SYSTEM_PROMPT
+        assert '"revise_instruction"' in CRITIC_SYSTEM_PROMPT
+        assert '"selected_index"' in CRITIC_SYSTEM_PROMPT
 
     def test_no_markdown_directive(self):
         assert "No markdown" in CRITIC_SYSTEM_PROMPT
@@ -297,7 +299,7 @@ class TestCriticPromptOutputContract:
 
 
 class TestCriticUserPromptTemplate:
-    """The user prompt template must accept the four format keys the
+    """The user prompt template must accept the format keys the
     critic.py implementation passes. A mismatch (renamed key, missing
     key) causes KeyError at runtime — these tests catch it before
     deploy."""
@@ -310,6 +312,7 @@ class TestCriticUserPromptTemplate:
             pending_drafts_block="(none)",
             shipped_count=0,
             shipped_tweets_block="(none)",
+            revision_mode="REVISE unavailable",
         )
         assert "example" in rendered
         assert "(none)" in rendered
@@ -324,6 +327,7 @@ class TestCriticUserPromptTemplate:
             pending_drafts_block="THE_PENDING_MARKER",
             shipped_count=0,
             shipped_tweets_block="THE_SHIPPED_MARKER",
+            revision_mode="REVISE unavailable",
         )
         draft_pos = rendered.index("THE_DRAFT_MARKER")
         bundle_pos = rendered.index("THE_BUNDLE_MARKER")

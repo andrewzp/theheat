@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+import os
+
 from src.orchestrator.common import *
 
 
-MAX_DRAFTS_PER_CYCLE = 3
+try:
+    MAX_DRAFTS_PER_CYCLE = int(os.environ.get("THEHEAT_MAX_DRAFTS_PER_CYCLE", "3"))
+except ValueError:
+    MAX_DRAFTS_PER_CYCLE = 3
 
 
 _PRUNE_SOURCE_KEY_BY_TYPE = {

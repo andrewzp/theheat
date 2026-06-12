@@ -13,11 +13,10 @@ Inputs (see CRITIC_USER_PROMPT_TEMPLATE):
   cron run — 6 coral_bleaching drafts with the same opener is a tell)
 - Recently shipped tweet texts (catch echoes of phrasing already in feed)
 
-Output: JSON { "passed": bool, "kill_reason": str | null }.
-
-The critic only PASSES or KILLS. It does NOT rewrite. v1 keeps the loop
-shallow; if A-rate moves the architecture works and a rewrite-with-feedback
-loop becomes the next iteration.
+Output: JSON with a verdict. Default mode is PASS/KILL. When the caller
+explicitly enables revision, one REVISE verdict is available with a compact
+declarative note for the writer. Slate mode includes multiple candidate drafts;
+the output selects one candidate or kills the whole slate.
 """
 
 CRITIC_SYSTEM_PROMPT = """\
@@ -74,6 +73,15 @@ Pass when ALL of these hold:
 - Voice holds — calm authority, no signals of effort, no hedging, no agency-name opener, no wink-kicker closer.
 - A climate-literate reader who sees this in their feed pauses; a climate-literate reader who pauses sends it to someone.
 
+# Optional REVISE verdict
+
+REVISE is available only when the caller says revision is enabled. A REVISE
+verdict means the draft has a strong enough underlying signal but one narrow
+craft flaw blocks it: a dead system clause, weak opener, or unclear scale
+frame. The `revise_instruction` is a declarative constraint under 200
+characters. It names what the revised draft must contain or avoid; it does not
+give procedural steps.
+
 # When between PASS and KILL — KILL
 
 The cost of a missed kill is one boring tweet that erodes the feed's signal-to-noise. The cost of a missed pass is one good tweet that the writer will likely draft again tomorrow when the same event re-fires. Asymmetric. **Bias toward KILL on borderline cases.**
@@ -83,8 +91,10 @@ The cost of a missed kill is one boring tweet that erodes the feed's signal-to-n
 Return ONLY a JSON object:
 
 {
-  "passed": true | false,
-  "kill_reason": "<one-line specific reason, or null if passed>"
+  "verdict": "PASS" | "KILL" | "REVISE",
+  "kill_reason": "<one-line specific reason, or null if passed or revise>",
+  "revise_instruction": "<declarative note under 200 chars, or null>",
+  "selected_index": <integer candidate index in slate mode, otherwise null>
 }
 
 Good `kill_reason` shape: short, specific, names the failure mode. Examples:
@@ -111,5 +121,24 @@ TODAY'S OTHER PENDING DRAFTS ({pending_count} total, most recent first):
 RECENTLY SHIPPED ({shipped_count} most recent):
 {shipped_tweets_block}
 
-Decide PASS or KILL.
+REVISION MODE:
+{revision_mode}
+
+Decide PASS, KILL, or REVISE only when revision mode says REVISE is available.
+"""
+
+CRITIC_SLATE_USER_PROMPT_TEMPLATE = """\
+CANDIDATE DRAFTS ({candidate_count} total, zero-based indices):
+{candidate_drafts_block}
+
+STORY BUNDLE:
+{bundle_json}
+
+TODAY'S OTHER PENDING DRAFTS ({pending_count} total, most recent first):
+{pending_drafts_block}
+
+RECENTLY SHIPPED ({shipped_count} most recent):
+{shipped_tweets_block}
+
+Slate mode: select the strongest candidate by `selected_index`, or KILL the whole slate.
 """

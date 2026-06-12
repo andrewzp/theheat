@@ -1,4 +1,5 @@
 from dataclasses import replace
+import importlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -239,6 +240,227 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
     draft2 = generate_fire_draft(_fire_event(event_id="fire_second"), state)
 
     assert draft2 is None
+
+
+def test_samples_1_is_byte_identical_to_legacy_path(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    from src.two_bot import pipeline
+
+    monkeypatch.delenv("THEHEAT_WRITER_SAMPLES", raising=False)
+    monkeypatch.delenv("THEHEAT_CRITIC_REVISE_ENABLED", raising=False)
+    calls: list[tuple[str, str]] = []
+
+    def write_once(bundle, memory):
+        calls.append(("writer", bundle.event_id))
+        return WriterResult(
+            tweet="Mali fire is 1.4x a 250 MW gas plant.",
+            kill_reason=None,
+            angle_chosen="plain_number",
+            era_anchor_used=None,
+            peer_comparison_used=None,
+            reasoning="test",
+        )
+
+    def safety_once(tweet):
+        calls.append(("safety", tweet))
+        return True, None
+
+    def fact_once(tweet, extracted, bundle, state):
+        calls.append(("fact_check", tweet))
+        return FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
+
+    def critic_once(tweet, bundle, state, **kwargs):
+        calls.append(("critic", tweet))
+        assert kwargs.get("allow_revise") in (None, False)
+        return CriticResult(passed=True, kill_reason=None, raw_response="ok")
+
+    mock_writer.side_effect = write_once
+    mock_safety.side_effect = safety_once
+    mock_fact_check.side_effect = fact_once
+    mock_critic.side_effect = critic_once
+    slate_mock = MagicMock(side_effect=AssertionError("slate critic should be off"))
+    monkeypatch.setattr(pipeline.critic, "critic_select_slate", slate_mock, raising=False)
+
+    draft = generate_draft(_bundle(), _state_with_memory())
+
+    assert draft is not None
+    assert [name for name, _ in calls] == ["writer", "safety", "fact_check", "critic"]
+    assert mock_writer.call_count == 1
+    assert mock_writer.call_args.kwargs == {}
+    assert not slate_mock.called
+
+
+def test_slate_critic_selects_one(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    from src.two_bot import pipeline
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "3")
+    mock_writer.side_effect = [
+        WriterResult("first draft", None, "a", None, None, "one"),
+        WriterResult(None, "writer self-kill", "", None, None, "two"),
+        WriterResult("selected draft", None, "b", None, None, "three"),
+    ]
+    slate_mock = MagicMock(return_value=CriticResult(
+        passed=True,
+        kill_reason=None,
+        raw_response="slate-pass",
+        verdict="PASS",
+        selected_index=1,
+    ))
+    monkeypatch.setattr(pipeline.critic, "critic_select_slate", slate_mock, raising=False)
+    mock_safety.return_value = (True, None)
+    mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
+    mock_critic.return_value = CriticResult(passed=True, kill_reason=None, raw_response="final-pass")
+
+    draft = generate_draft(_bundle(), _state_with_memory())
+
+    assert draft is not None
+    assert draft["text"] == "selected draft"
+    assert mock_writer.call_count == 3
+    slate_arg = slate_mock.call_args.args[0]
+    assert slate_arg == ["first draft", "selected draft"]
+    mock_safety.assert_called_once_with("selected draft")
+    mock_fact_check.assert_called_once()
+    assert not mock_critic.called
+
+
+def test_all_writer_kills_short_circuits(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "2")
+    mock_writer.side_effect = [
+        WriterResult(None, "not enough signal", "", None, None, "one"),
+        WriterResult(None, "too similar", "", None, None, "two"),
+    ]
+    result_out: dict = {}
+
+    draft = generate_draft(_bundle(), _state_with_memory(), result_out=result_out)
+
+    assert draft is None
+    assert result_out["kill_stage"] == "writer"
+    assert "all writer samples killed" in result_out["kill_reason"]
+    assert not mock_safety.called
+    assert not mock_fact_check.called
+    assert not mock_critic.called
+
+
+def test_revise_single_iteration_then_terminal(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
+    mock_writer.side_effect = [
+        WriterResult("first draft", None, "a", None, None, "one"),
+        WriterResult("revised draft", None, "b", None, None, "two"),
+    ]
+    mock_safety.return_value = (True, None)
+    mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
+    mock_critic.side_effect = [
+        CriticResult(
+            passed=False,
+            kill_reason=None,
+            raw_response="revise",
+            verdict="REVISE",
+            revise_instruction="Use the fire scale, not the agency announcement.",
+        ),
+        CriticResult(passed=True, kill_reason=None, raw_response="pass", verdict="PASS"),
+    ]
+
+    draft = generate_draft(_bundle(), _state_with_memory())
+
+    assert draft is not None
+    assert draft["text"] == "revised draft"
+    assert mock_writer.call_count == 2
+    assert "Previous draft: first draft" in mock_writer.call_args_list[1].kwargs["revision_constraint"]
+    assert "The critic requires: Use the fire scale" in mock_writer.call_args_list[1].kwargs["revision_constraint"]
+    assert mock_critic.call_count == 2
+    assert mock_critic.call_args_list[0].kwargs.get("allow_revise") is True
+    assert mock_critic.call_args_list[1].kwargs.get("allow_revise") is False
+
+
+def test_revise_disabled_by_default(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    monkeypatch.delenv("THEHEAT_CRITIC_REVISE_ENABLED", raising=False)
+    mock_writer.return_value = WriterResult("first draft", None, "a", None, None, "one")
+    mock_safety.return_value = (True, None)
+    mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
+    mock_critic.return_value = CriticResult(
+        passed=False,
+        kill_reason=None,
+        raw_response="revise",
+        verdict="REVISE",
+        revise_instruction="Try a sharper system clause.",
+    )
+
+    draft = generate_draft(_bundle(), _state_with_memory())
+
+    assert draft is None
+    assert mock_writer.call_count == 1
+
+
+def test_revised_draft_passes_safety_again(
+    monkeypatch,
+    mock_writer,
+    mock_fact_check,
+    mock_safety,
+    mock_critic,
+):
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
+    mock_writer.side_effect = [
+        WriterResult("first draft", None, "a", None, None, "one"),
+        WriterResult("revised draft", None, "b", None, None, "two"),
+    ]
+    mock_safety.side_effect = [(True, None), (False, "Banned pattern")]
+    mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
+    mock_critic.return_value = CriticResult(
+        passed=False,
+        kill_reason=None,
+        raw_response="revise",
+        verdict="REVISE",
+        revise_instruction="Remove the template opener.",
+    )
+    result_out: dict = {}
+
+    draft = generate_draft(_bundle(), _state_with_memory(), result_out=result_out)
+
+    assert draft is None
+    assert mock_safety.call_args_list[0].args == ("first draft",)
+    assert mock_safety.call_args_list[1].args == ("revised draft",)
+    assert result_out["kill_stage"] == "safety"
+    assert "Banned pattern" in result_out["kill_reason"]
+
+
+def test_max_drafts_per_cycle_env_override(monkeypatch):
+    import src.orchestrator.finalize as finalize
+
+    monkeypatch.setenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", "5")
+    reloaded = importlib.reload(finalize)
+    assert reloaded.MAX_DRAFTS_PER_CYCLE == 5
+
+    monkeypatch.delenv("THEHEAT_MAX_DRAFTS_PER_CYCLE", raising=False)
+    importlib.reload(finalize)
 
 
 # ----------------------- shadow pipeline tests -----------------------
