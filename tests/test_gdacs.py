@@ -1,8 +1,12 @@
 """Tests for GDACS global disaster events."""
 
+from pathlib import Path
+
+import pytest
 import responses
 
-from src.data.gdacs import GlobalDisasterEvent, fetch_disasters, _intensity_tier
+from src.data.gdacs import GDACS_GEORSS_URL, GDACS_URL, GlobalDisasterEvent, fetch_disasters, _intensity_tier
+from src.data.source_status import SourceFetchError
 
 SAMPLE_RESPONSE = {
     "features": [
@@ -141,6 +145,43 @@ class TestFetchDisasters:
         )
         events = fetch_disasters(min_severity="Green")
         assert len(events) == 3
+
+    @responses.activate
+    def test_gdacs_falls_back_to_georss_on_json_failure(self, capsys):
+        responses.add(responses.GET, GDACS_URL, status=500, body="down")
+        responses.add(
+            responses.GET,
+            GDACS_GEORSS_URL,
+            body=Path("tests/fixtures/gdacs_georss_sample.xml").read_text(),
+            status=200,
+        )
+
+        events = fetch_disasters(min_severity="Orange")
+
+        assert "[gdacs] served by georss fallback" in capsys.readouterr().out
+        assert [event.name for event in events] == ["Cyclone Freddy", "Orange earthquake alert in Turkey"]
+        cyclone = events[0]
+        assert cyclone.disaster_type == "Tropical Cyclone"
+        assert cyclone.country == "Mozambique"
+        assert cyclone.severity == "Red"
+        assert cyclone.event_id == "gdacs_TC_1001_tier4"
+        assert cyclone.alert_score == 3.5
+        assert cyclone.severity_value == 230.0
+        assert cyclone.severity_unit == "km/h"
+        assert cyclone.population_affected == 450000
+
+    @responses.activate
+    def test_gdacs_georss_insufficient_fields_raises(self):
+        responses.add(responses.GET, GDACS_URL, status=500, body="down")
+        responses.add(
+            responses.GET,
+            GDACS_GEORSS_URL,
+            body="""<?xml version="1.0"?><rss><channel><item><title>Broken</title></item></channel></rss>""",
+            status=200,
+        )
+
+        with pytest.raises(SourceFetchError, match="insufficient GeoRSS fields"):
+            fetch_disasters(strict=True)
 
 class TestIntensityTier:
     def test_tropical_storm(self):

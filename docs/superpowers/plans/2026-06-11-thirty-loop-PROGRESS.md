@@ -18,7 +18,7 @@
 | S-10 | #20 | Conditional requests (ETag) for CSVs | S-08 | DONE | #232 | Static CO2, ONI, sea-ice, and snow feeds now revalidate with process-local ETag/Last-Modified caches. |
 | S-11 | #8 | Decompose common.py | S-08 | DONE | #233 | common.py split into focused helper modules with legacy shim exports and sync coverage preserved. |
 | S-12 | #4a | gpm chain datapool→s3→opendap + pre-mint | S-09 | DONE | #238 | Datapool now chains through S3 before OPeNDAP; preflight noted external GDACS #234. |
-| S-13 | #4b | GDACS GeoRSS fallback + mirror survey | S-09 | TODO | | |
+| S-13 | #4b | GDACS GeoRSS fallback + mirror survey | S-09 | DONE | #TBD | GeoRSS fallback added; mirror survey records 8 official-source verdicts. |
 | S-14 | #3a | assert_freshness rollout | S-06 | TODO | | |
 | S-16 | #10 | Record-store caps + state pruning | — | TODO | | |
 | S-15 | #3b | Last-good cache (slow movers) | S-14, S-16 | TODO | | |

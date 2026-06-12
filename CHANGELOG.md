@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.40.0] - 2026-06-12
+
+THIRTY-LOOP S-13 gives GDACS a verified GeoRSS fallback and records the mirror
+survey verdicts for the current official-source cluster.
+
+### Changed
+
+- **Add GDACS GeoRSS fallback and mirror survey.** `src/data/gdacs.py` now falls
+  back from the JSON event API to the official GeoRSS feed, preserves normalized
+  disaster event fields, and logs when the fallback serves data. The new mirror
+  survey documents eight official sources with `CHAIN`, `WITNESS`, or `NONE`
+  verdicts for future fallback work.
+
 ## [0.9.39.0] - 2026-06-12
 
 THIRTY-LOOP S-12 strengthens the GPM IMERG fetch chain so the datapool path can

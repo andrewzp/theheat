@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+     xmlns:dc="http://purl.org/dc/elements/1.1/"
+     xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#"
+     xmlns:gdacs="http://www.gdacs.org"
+     xmlns:georss="http://www.georss.org/georss">
+  <channel>
+    <title>GDACS RSS information</title>
+    <item>
+      <title>Red tropical cyclone alert for Cyclone Freddy in Mozambique</title>
+      <description>Category 4 tropical cyclone affecting Mozambique.</description>
+      <link>https://www.gdacs.org/report.aspx?eventtype=TC&amp;eventid=1001</link>
+      <pubDate>Thu, 11 Jun 2026 12:40:57 GMT</pubDate>
+      <gdacs:fromdate>Thu, 11 Jun 2026 12:22:06 GMT</gdacs:fromdate>
+      <gdacs:todate>Thu, 11 Jun 2026 12:22:06 GMT</gdacs:todate>
+      <dc:subject>TC4</dc:subject>
+      <guid isPermaLink="false">TC1001</guid>
+      <geo:Point>
+        <geo:lat>-18.5000</geo:lat>
+        <geo:long>37.0000</geo:long>
+      </geo:Point>
+      <georss:point>-18.5000 37.0000</georss:point>
+      <gdacs:eventtype>TC</gdacs:eventtype>
+      <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:alertscore>3.5</gdacs:alertscore>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodealertscore>3.5</gdacs:episodealertscore>
+      <gdacs:eventname>Cyclone Freddy</gdacs:eventname>
+      <gdacs:eventid>1001</gdacs:eventid>
+      <gdacs:episodeid>4</gdacs:episodeid>
+      <gdacs:severity unit="km/h" value="230.0">Wind 230 km/h</gdacs:severity>
+      <gdacs:population unit="Population Affected" value="450000">450000 affected</gdacs:population>
+      <gdacs:iso3>MOZ</gdacs:iso3>
+      <gdacs:country>Mozambique</gdacs:country>
+    </item>
+    <item>
+      <title>Orange earthquake alert in Turkey</title>
+      <description>Magnitude 6.7 earthquake in Turkey.</description>
+      <link>https://www.gdacs.org/report.aspx?eventtype=EQ&amp;eventid=1002</link>
+      <pubDate>Fri, 12 Jun 2026 00:00:00 GMT</pubDate>
+      <gdacs:fromdate>Fri, 12 Jun 2026 00:00:00 GMT</gdacs:fromdate>
+      <dc:subject>EQ2</dc:subject>
+      <guid isPermaLink="false">EQ1002</guid>
+      <georss:point>37.24 36.45</georss:point>
+      <gdacs:eventtype>EQ</gdacs:eventtype>
+      <gdacs:alertlevel>Orange</gdacs:alertlevel>
+      <gdacs:alertscore>2.1</gdacs:alertscore>
+      <gdacs:eventname />
+      <gdacs:eventid>1002</gdacs:eventid>
+      <gdacs:severity unit="M" value="6.7">Magnitude 6.7M</gdacs:severity>
+      <gdacs:population unit="Population Affected" value="120000">120000 affected</gdacs:population>
+      <gdacs:country>Turkey</gdacs:country>
+    </item>
+  </channel>
+</rss>
