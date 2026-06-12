@@ -17,7 +17,7 @@
 | S-09 | #1c | WAF-aware 403/429 retry + gpm unify | S-07 | DONE | #231 | Host-scoped WAF retry budget added; GPM per-city fetches now use fetch_with_retry. |
 | S-10 | #20 | Conditional requests (ETag) for CSVs | S-08 | DONE | #232 | Static CO2, ONI, sea-ice, and snow feeds now revalidate with process-local ETag/Last-Modified caches. |
 | S-11 | #8 | Decompose common.py | S-08 | DONE | #233 | common.py split into focused helper modules with legacy shim exports and sync coverage preserved. |
-| S-12 | #4a | gpm chain datapool→s3→opendap + pre-mint | S-09 | BLOCKED(main-red-preflight) | | Preflight pytest fails on ocean_sst_anomaly stale fixture; unknown sentinel #235 is also open. |
+| S-12 | #4a | gpm chain datapool→s3→opendap + pre-mint | S-09 | BLOCKED(main-red-preflight) | #236 | Preflight pytest fails on ocean_sst_anomaly stale fixture; unknown sentinel #235 is also open. |
 | S-13 | #4b | GDACS GeoRSS fallback + mirror survey | S-09 | TODO | | |
 | S-14 | #3a | assert_freshness rollout | S-06 | TODO | | |
 | S-16 | #10 | Record-store caps + state pruning | — | TODO | | |
