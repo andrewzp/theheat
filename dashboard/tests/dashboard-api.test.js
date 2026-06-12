@@ -92,6 +92,8 @@ test("dashboard API hydrates page data with one state read and one workflow read
     streaks: {},
     daily_tweet_count: {},
     pending_confirmations: [],
+    publish_ledger: { event_1: { tweet_id: "tweet_123" } },
+    memory: { shipped_tweets: ["large payload omitted"] },
   }
 
   const fetchCalls = []
@@ -114,6 +116,15 @@ test("dashboard API hydrates page data with one state read and one workflow read
     assert.equal(response.status, 200)
     const payload = await response.json()
     assert.equal(payload.stateBackend, "gist")
+    assert.deepEqual(Object.keys(payload.state).sort(), [
+      "daily_tweet_count",
+      "errors",
+      "last_hot10",
+      "run_history",
+      "streaks",
+    ])
+    assert.equal(payload.state.publish_ledger, undefined)
+    assert.equal(payload.state.memory, undefined)
     assert.deepEqual(payload.drafts.drafts.map((d) => d.id), ["draft_high", "draft_low"])
     assert.equal(payload.drafts.drafts[0].tweet_id, "tweet_123")
     assert.deepEqual(payload.suppressions.suppressions.map((s) => s.id), ["s1"])

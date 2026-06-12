@@ -24,7 +24,7 @@
 | S-15 | #3b | Last-good cache (slow movers) | S-14, S-16 | DONE | #245 | Slow movers now cache compact last-good readings with provenance guards and degraded cache telemetry. |
 | S-17 | #12 | Double-post hardening + optimistic lock | — | DONE | #246 | Durable publish ledger, half-post repair, state rev re-merge, and dashboard tweet_id payload added. |
 | S-18 | #21 | SQLite backend CI smoke | — | DONE | #247 | CI now runs env-driven SQLite backend smoke over the existing state suite. |
-| S-19 | #28 | Dashboard payload trim + visibility polling | S-03 | TODO | | |
+| S-19 | #28 | Dashboard payload trim + visibility polling | S-03 | DONE | #248 | Dashboard state is projected to page-read keys and hidden tabs stop interval polling. |
 | S-20 | #7 | DAG concurrency + budgets + breaker (flag) | S-05, S-08, S-11 | TODO | | |
 | S-21 | #23 | Orchestrator test gaps + voice fixtures | — | TODO | | |
 | S-22 | #2 | Multi-draft best-of + critic REVISE (flags) | S-21 | TODO | | |

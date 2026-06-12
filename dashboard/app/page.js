@@ -1301,8 +1301,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000)
-    return () => clearInterval(interval)
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "hidden") return
+      fetchData()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") fetchData()
+    }
+    const interval = setInterval(refreshIfVisible, 30000)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
   }, [fetchData])
 
   async function trigger(mode) {
