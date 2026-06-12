@@ -1681,6 +1681,12 @@ class TestSqliteRoundTripLaneKeys:
             "synthesis_components": {
                 "fires": {"California": [{"event_id": "f1", "frp": 1500.0, "at": "2026-04-20T10:00:00Z"}]},
                 "heats": {"California": [{"event_id": "h1", "anomaly_c": 8.0, "at": "2026-04-20T11:00:00Z"}]},
+                "corals": {"fiji": [{"event_id": "c1", "dhw_tier": 8, "at": "2026-04-20T11:30:00Z"}]},
+                "sst_anomalies": {
+                    "coral_triangle": [
+                        {"event_id": "s1", "anomaly_c": 2.3, "at": "2026-04-20T11:45:00Z"},
+                    ],
+                },
                 "drought_snapshot": {"updated_at": "2026-04-19T12:00:00Z", "entries": []},
             },
             "synthesis_cooldown": {
@@ -1690,6 +1696,8 @@ class TestSqliteRoundTripLaneKeys:
         out = self._sqlite_round_trip(state_in)
         assert out["synthesis_components"]["fires"]["California"][0]["event_id"] == "f1"
         assert out["synthesis_components"]["heats"]["California"][0]["anomaly_c"] == 8.0
+        assert out["synthesis_components"]["corals"]["fiji"][0]["dhw_tier"] == 8
+        assert out["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]["anomaly_c"] == 2.3
         assert out["synthesis_components"]["drought_snapshot"]["updated_at"] == "2026-04-19T12:00:00Z"
         assert out["synthesis_cooldown"]["synthesis_fire_drought_heat"]["California"] == "2026-04-20T12:00:00Z"
 

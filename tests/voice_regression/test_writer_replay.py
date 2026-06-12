@@ -55,6 +55,7 @@ BUNDLE_FIXTURES = [
     "air_quality_hazard_bundle",
     "dust_event_bundle",
     "synthesis_fire_drought_heat_bundle",
+    "synthesis_marine_compound_bundle",
     "marine_heatwave_bundle",
     "wet_bulb_extreme_bundle",
 ]

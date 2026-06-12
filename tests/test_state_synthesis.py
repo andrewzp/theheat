@@ -55,6 +55,36 @@ class TestRecordSynthesisComponent:
             event_id="fire_abc", metadata={"frp": 999.0}, timestamp=_now_iso())
         assert len(fresh_state["synthesis_components"]["fires"]["California"]) == 1
 
+    def test_records_coral_and_sst_anomaly_components(self, fresh_state):
+        record_synthesis_component(
+            fresh_state,
+            kind="coral",
+            region="fiji",
+            event_id="coral_dhw_fiji_tier8",
+            metadata={"dhw_tier": 8, "dhw_value": 9.4},
+            timestamp=_now_iso(),
+        )
+        record_synthesis_component(
+            fresh_state,
+            kind="sst_anomaly",
+            region="coral_triangle",
+            event_id="sst_anom_coral_triangle_2026-06-11",
+            metadata={"anomaly_c": 2.2, "tier": 0},
+            timestamp=_now_iso(),
+        )
+
+        assert fresh_state["synthesis_components"]["corals"]["fiji"][0]["dhw_tier"] == 8
+        assert (
+            fresh_state["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]["anomaly_c"]
+            == 2.2
+        )
+        assert get_synthesis_components(fresh_state, kind="coral", region="fiji")[0]["event_id"] == (
+            "coral_dhw_fiji_tier8"
+        )
+        assert get_synthesis_components(fresh_state, kind="sst_anomaly", region="coral_triangle")[0][
+            "event_id"
+        ] == "sst_anom_coral_triangle_2026-06-11"
+
 
 class TestGetSynthesisComponents:
     def test_empty_state_returns_empty(self, fresh_state):
@@ -86,6 +116,39 @@ class TestPruneStaleSynthesisComponents:
             event_id="old", metadata={}, timestamp=_now_iso(offset_days=30))
         prune_stale_synthesis_components(fresh_state, ttl_days=14)
         assert "Arizona" not in fresh_state["synthesis_components"]["fires"]
+
+    def test_prune_stale_synthesis_components_handles_marine_buckets(self, fresh_state):
+        record_synthesis_component(
+            fresh_state,
+            kind="coral",
+            region="fiji",
+            event_id="old_coral",
+            metadata={"dhw_tier": 8},
+            timestamp=_now_iso(offset_days=20),
+        )
+        record_synthesis_component(
+            fresh_state,
+            kind="coral",
+            region="fiji",
+            event_id="new_coral",
+            metadata={"dhw_tier": 12},
+            timestamp=_now_iso(offset_days=2),
+        )
+        record_synthesis_component(
+            fresh_state,
+            kind="sst_anomaly",
+            region="coral_triangle",
+            event_id="old_sst",
+            metadata={"anomaly_c": 2.4},
+            timestamp=_now_iso(offset_days=20),
+        )
+
+        prune_stale_synthesis_components(fresh_state, ttl_days=14)
+
+        assert [entry["event_id"] for entry in fresh_state["synthesis_components"]["corals"]["fiji"]] == [
+            "new_coral"
+        ]
+        assert "coral_triangle" not in fresh_state["synthesis_components"]["sst_anomalies"]
 
 
 class TestCooldown:
@@ -187,6 +250,45 @@ class TestSynthesisMergePreservesState:
         # Drought snapshot takes the newer updated_at.
         assert merged["synthesis_components"]["drought_snapshot"]["updated_at"] == "2026-04-19T12:00:00Z"
         assert merged["synthesis_components"]["drought_snapshot"]["entries"][0]["d4_pct"] == 12.0
+
+    def test_merge_preserves_marine_component_buckets(self):
+        from src.state import _merge_state
+
+        base = {
+            "synthesis_components": {
+                "corals": {
+                    "fiji": [
+                        {"event_id": "coral_old", "dhw_tier": 8, "at": "2026-06-10T00:00:00Z"},
+                    ],
+                },
+                "sst_anomalies": {},
+            },
+        }
+        incoming = {
+            "synthesis_components": {
+                "corals": {
+                    "fiji": [
+                        {"event_id": "coral_new", "dhw_tier": 12, "at": "2026-06-11T00:00:00Z"},
+                    ],
+                },
+                "sst_anomalies": {
+                    "coral_triangle": [
+                        {"event_id": "sst_1", "anomaly_c": 2.3, "at": "2026-06-11T01:00:00Z"},
+                    ],
+                },
+            },
+        }
+
+        merged = _merge_state(base, incoming)
+
+        assert {entry["event_id"] for entry in merged["synthesis_components"]["corals"]["fiji"]} == {
+            "coral_old",
+            "coral_new",
+        }
+        assert (
+            merged["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]["event_id"]
+            == "sst_1"
+        )
 
     def test_merge_preserves_cooldown_keeping_most_recent(self):
         from src.state import _merge_state

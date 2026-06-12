@@ -2206,6 +2206,76 @@ class TestSynthesisStage:
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
         assert "California" in cooldown
 
+    def test_synthesis_stage_creates_marine_compound_draft(self, monkeypatch):
+        from copy import deepcopy
+        from datetime import datetime, timedelta, UTC
+        from src.state import DEFAULT_STATE, record_synthesis_component
+        from src.orchestrator.sources.synthesis import run_synthesis
+
+        bot_state = deepcopy(DEFAULT_STATE)
+        now = datetime.now(UTC)
+
+        def iso(days_ago):
+            return (now - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
+
+        record_synthesis_component(
+            bot_state,
+            kind="coral",
+            region="great_nicobar",
+            event_id="coral_dhw_great_nicobar_tier8",
+            metadata={
+                "region_id": "great_nicobar",
+                "region_full_name": "Great Nicobar",
+                "dhw_value": 9.1,
+                "dhw_tier": 8,
+                "bleaching_level": "mass bleaching expected",
+                "date": "2026-06-11",
+            },
+            timestamp=iso(1),
+        )
+        record_synthesis_component(
+            bot_state,
+            kind="sst_anomaly",
+            region="bay_of_bengal",
+            event_id="sst_anom_component_bay_of_bengal_2026-06-11",
+            metadata={
+                "region_slug": "bay_of_bengal",
+                "region_display_name": "Bay of Bengal",
+                "anomaly_c": 2.3,
+                "tier": 0,
+                "cells_used": 80,
+                "date": "2026-06-11",
+            },
+            timestamp=iso(1),
+        )
+
+        captured = {}
+
+        def fake_enqueue(bot_state_arg, *, bundle, score, source, legacy_type, event_id, review_context, **kwargs):
+            captured["legacy_type"] = legacy_type
+            captured["event_id"] = event_id
+            captured["source"] = source
+            captured["bundle_signal_kind"] = bundle.signal_kind
+            captured["components"] = bundle.raw_signal_dump.get("components")
+            captured["review_context"] = review_context
+            kwargs["on_draft_success"]()
+            return True
+
+        monkeypatch.setattr(
+            "src.orchestrator.sources.synthesis._enqueue_story_candidate",
+            fake_enqueue,
+        )
+
+        run_synthesis(bot_state, {"sources": []})
+
+        assert captured["legacy_type"] == "synthesis_marine_compound"
+        assert captured["source"] == "synthesis_fire_drought_heat"
+        assert captured["bundle_signal_kind"] == "synthesis_marine_compound"
+        assert captured["components"][0]["kind"] == "coral"
+        assert captured["components"][1]["kind"] == "sst_anomaly"
+        cooldown = bot_state["synthesis_cooldown"].get("marine_compound") or {}
+        assert "great_nicobar" in cooldown
+
 
 # ---------------------------------------------------------------------------
 # Triage integration tests (spec § 8, engineering-review T1/T2 tests)

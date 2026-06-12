@@ -31,6 +31,23 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
             )
             if not _should_draft(score, coral_event.event_id):
                 continue
+            if coral_event.dhw_tier >= 8:
+                state.record_synthesis_component(
+                    bot_state,
+                    kind="coral",
+                    region=coral_event.region_id,
+                    event_id=coral_event.event_id,
+                    metadata={
+                        "region_id": coral_event.region_id,
+                        "region_full_name": coral_event.region_full_name,
+                        "dhw_value": float(coral_event.dhw_value),
+                        "dhw_tier": int(coral_event.dhw_tier),
+                        "bleaching_level": coral_event.bleaching_level,
+                        "stress_level": coral_event.stress_level,
+                        "date": coral_event.date,
+                    },
+                    timestamp=f"{coral_event.date}T00:00:00Z",
+                )
             source_promoted += 1
             review_context = _review_context(
                 source="NOAA Coral Reef Watch",

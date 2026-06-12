@@ -1065,6 +1065,28 @@ def test_build_synthesis_bundle_carries_components():
     assert bundle.headline_metric["value"] == 92
 
 
+def test_build_synthesis_bundle_carries_marine_compound_components():
+    synthesis = {
+        "event_id": "synthesis_marine_compound_great_nicobar_2026-W24",
+        "region": "Great Nicobar",
+        "kind": "marine_compound",
+        "headline": "Great Nicobar reef heat stress overlaps Bay of Bengal SST anomaly",
+        "components": [
+            {"kind": "coral", "region_id": "great_nicobar", "dhw_tier": 8, "dhw_value": 9.1},
+            {"kind": "sst_anomaly", "region_slug": "bay_of_bengal", "anomaly_c": 2.3, "tier": 0},
+        ],
+        "total_score": 84,
+    }
+
+    bundle = build_synthesis_bundle(synthesis)
+
+    assert bundle.signal_kind == "synthesis_marine_compound"
+    assert bundle.where == "Great Nicobar"
+    assert bundle.headline_metric["value"] == 84
+    assert bundle.current_facts[-1]["value"][0]["kind"] == "coral"
+    assert bundle.current_facts[-1]["value"][1]["kind"] == "sst_anomaly"
+
+
 def test_build_hot10_bundle_centers_on_leader():
     cities = [
         {"city": "Phoenix", "country": "US", "temp_high_c": 47.2,

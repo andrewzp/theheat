@@ -230,6 +230,34 @@ class TestCoralDHWSourceRunnerMigration:
         assert candidate.cooldown_exempt is False
         assert candidate.created_at  # iso8601 string — must be non-empty
 
+    def test_run_coral_dhw_records_marine_synthesis_component(self, monkeypatch):
+        from src.orchestrator.sources.coral_dhw import run_coral_dhw
+
+        bot_state = deepcopy(DEFAULT_STATE)
+        event = _make_coral_event(region_id="fiji", region_full_name="Fiji", event_id="coral_dhw_fiji_tier8")
+        reading = _make_reading(region_id="fiji", region_full_name="Fiji")
+
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.coral_dhw.fetch_coral_dhw",
+            lambda **kw: [reading],
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.coral_dhw.detect_dhw_thresholds",
+            lambda readings, last_tiers: [event],
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.coral_dhw.build_coral_bleaching_bundle",
+            _make_bundle,
+        )
+
+        run_coral_dhw(bot_state, {"sources": []})
+
+        component = bot_state["synthesis_components"]["corals"]["fiji"][0]
+        assert component["event_id"] == "coral_dhw_fiji_tier8"
+        assert component["dhw_tier"] == 8
+        assert component["dhw_value"] == 8.2
+        assert bot_state["coral_dhw_last_tier"] == {}
+
     def test_multiple_passing_events_each_enqueue(self, monkeypatch):
         """N passing events → N TriageCandidateBundles in the queue."""
         from src.orchestrator.sources.coral_dhw import run_coral_dhw

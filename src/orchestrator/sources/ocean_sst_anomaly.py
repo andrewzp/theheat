@@ -12,6 +12,22 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
     start = time.perf_counter()
     try:
         readings = ocean_sst_anomaly.fetch_all_regions(strict=False)
+        for reading in readings:
+            state.record_synthesis_component(
+                bot_state,
+                kind="sst_anomaly",
+                region=reading.region_slug,
+                event_id=f"sst_anom_component_{reading.region_slug}_{reading.date}",
+                metadata={
+                    "region_slug": reading.region_slug,
+                    "region_display_name": reading.region_display_name,
+                    "anomaly_c": float(reading.anomaly_c),
+                    "tier": int(reading.tier),
+                    "cells_used": int(reading.cells_used),
+                    "date": reading.date,
+                },
+                timestamp=f"{reading.date}T00:00:00Z",
+            )
         reading_year = readings[0].date[:4] if readings else str(date.today().year)
         prefix = f"{reading_year}/"
         last_tiers = {

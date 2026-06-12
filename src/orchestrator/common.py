@@ -91,6 +91,7 @@ from src.editorial.scoring import (
     score_snow_extreme,
     score_storm_surge,
     score_synthesis_fire_drought_heat,
+    score_synthesis_marine_compound,
     score_wet_bulb_extreme,
 )
 from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
@@ -454,6 +455,7 @@ __all__ = [
     "score_snow_extreme",
     "score_storm_surge",
     "score_synthesis_fire_drought_heat",
+    "score_synthesis_marine_compound",
     "score_wet_bulb_extreme",
     "sea_ice",
     "secrets",

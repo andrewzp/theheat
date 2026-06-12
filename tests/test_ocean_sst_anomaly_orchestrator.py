@@ -51,6 +51,32 @@ def test_run_ocean_sst_anomaly_enqueues_regional_candidate(monkeypatch):
     assert queue[0].source == "ocean_sst_anomaly"
 
 
+def test_run_ocean_sst_anomaly_records_synthesis_component(monkeypatch):
+    from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
+
+    bot_state = _state()
+    monkeypatch.setattr(
+        "src.orchestrator.sources.ocean_sst_anomaly.ocean_sst_anomaly.fetch_all_regions",
+        lambda strict=False: [
+            _reading(
+                slug="coral_triangle",
+                display="Coral Triangle",
+                anomaly=2.1,
+                tier=0,
+                day="2026-08-20",
+            )
+        ],
+    )
+
+    run_ocean_sst_anomaly(bot_state, {"sources": []})
+
+    assert bot_state.get("_triage_queue", []) == []
+    component = bot_state["synthesis_components"]["sst_anomalies"]["coral_triangle"][0]
+    assert component["event_id"] == "sst_anom_component_coral_triangle_2026-08-20"
+    assert component["anomaly_c"] == 2.1
+    assert component["tier"] == 0
+
+
 def test_run_ocean_sst_anomaly_duplicate_updates_tier_without_queue(monkeypatch):
     from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 

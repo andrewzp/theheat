@@ -43,6 +43,7 @@ _FETCH_WORKERS = 4
 
 _FILL_VALUE = -327.68
 _VALID_RANGE = (-15.0, 15.0)
+_SYNTHESIS_ANOMALY_FLOOR_C = 2.0
 
 # Provisional absolute area-weighted basin-mean anomaly tiers in degree C.
 # These are not Hobday MHW categories; recalibrate after NH late-summer runs.
@@ -226,7 +227,9 @@ def _fetch_region_sst_strict(
         raise SourceFetchError(f"ocean_sst_anomaly/{region.slug}: no valid cells")
     tier = _detect_tier(mean)
     if tier is None:
-        return None
+        if mean < _SYNTHESIS_ANOMALY_FLOOR_C:
+            return None
+        tier = 0
     return RegionalSSTReading(
         region_slug=region.slug,
         region_display_name=region.display_name,
