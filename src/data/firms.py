@@ -8,6 +8,7 @@ from datetime import date
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, SourceSkipped
 
@@ -80,6 +81,7 @@ def fetch_fires(
             raise SourceSkipped("NASA_FIRMS_API_KEY is not configured")
         return []
 
+    payload_dates = []
     try:
         resp = fetch_with_retry(
             f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}",
@@ -89,6 +91,7 @@ def fetch_fires(
         reader = csv.DictReader(io.StringIO(resp.text))
         fires = []
         for row in reader:
+            payload_dates.append(row.get("acq_date") or row.get("acq_datetime"))
             conf = _parse_confidence(row.get("confidence"))
             if conf is None:
                 continue
@@ -115,8 +118,6 @@ def fetch_fires(
                     event_id=event_id,
                 ))
 
-        return fires
-
     except (requests.RequestException, csv.Error, KeyError) as exc:
         if strict:
             raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
@@ -125,6 +126,9 @@ def fetch_fires(
         if strict:
             raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
         return []
+    if newest_date := newest_freshness_date(payload_dates):
+        assert_freshness(newest_date, "firms", max_age_days=2)
+    return fires
 
 
 # Ordered list of bounding boxes used to reverse-geocode a FIRMS fire

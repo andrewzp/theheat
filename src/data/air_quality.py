@@ -20,6 +20,7 @@ from typing import Any
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 
 AQ_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
@@ -130,6 +131,8 @@ def _parse_single_location(
     times = hourly.get("time", [])
     if not isinstance(times, list) or not times:
         return None
+    if newest_time := newest_freshness_date(times):
+        assert_freshness(newest_time, "air_quality", max_age_days=2)
 
     today_indices = [
         index

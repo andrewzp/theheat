@@ -14,11 +14,10 @@ JSON endpoint.
 TODO: revisit GWIS if they publish a JSON API for per-complex burned area.
 """
 
-import requests
-
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
@@ -60,7 +59,7 @@ GWIS_URL = (
     "/WFIGS_Incident_Locations_Current/FeatureServer/0/query"
     "?where=IncidentTypeCategory%3D%27WF%27+AND+ActiveFireCandidate%3D1"
     "&outFields=IncidentName,CpxName,IsCpxChild,IncidentSize,POOState"
-    ",FireDiscoveryDateTime,UniqueFireIdentifier,IrwinID"
+    ",FireDiscoveryDateTime,ModifiedOnDateTime,UniqueFireIdentifier,IrwinID"
     "&f=json"
     "&resultRecordCount=2000"
     "&orderByFields=IncidentSize+DESC"
@@ -117,9 +116,15 @@ def fetch_active_fire_perimeters(*, strict: bool = False) -> list["FireComplex"]
         print("[fire_footprint] Warning: NIFC result set exceeded 2000 — largest fires returned first, some may be missing")
 
     complexes: list[FireComplex] = []
+    payload_dates = []
     for feature in data.get("features", []) or []:
         try:
             attrs = feature.get("attributes", {}) or {}
+            payload_dates.append(
+                attrs.get("ModifiedOnDateTime")
+                or attrs.get("LastModifiedDate")
+                or attrs.get("FireDiscoveryDateTime")
+            )
 
             # Skip child incidents that roll up into a complex parent row
             if attrs.get("IsCpxChild") == 1:
@@ -164,6 +169,8 @@ def fetch_active_fire_perimeters(*, strict: bool = False) -> list["FireComplex"]
                 print(f"[fire_footprint] Row skipped: {exc}")
             continue
 
+    if newest_date := newest_freshness_date(payload_dates):
+        assert_freshness(newest_date, "fire_footprint", max_age_days=4)
     return complexes
 
 

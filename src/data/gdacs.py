@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
@@ -174,15 +175,17 @@ def _events_from_georss(
     *,
     min_level: int,
     severity_order: dict[str, int],
-) -> list[GlobalDisasterEvent]:
+) -> tuple[list[GlobalDisasterEvent], date | None]:
     root = ET.fromstring(text.lstrip("\ufeff"))
     events: list[GlobalDisasterEvent] = []
+    payload_dates = []
     for item in root.findall(".//item"):
         event_type_code = _xml_text(item, "gdacs:eventtype")
         alert_level = _xml_text(item, "gdacs:alertlevel") or "Green"
         gdacs_id = _xml_text(item, "gdacs:eventid")
         country = _xml_text(item, "gdacs:country")
         from_date = _xml_text(item, "gdacs:fromdate")
+        payload_dates.append(from_date or _xml_text(item, "gdacs:todate"))
         description = _xml_text(item, "description")
         title = _xml_text(item, "title")
         name = _xml_text(item, "gdacs:eventname") or title
@@ -220,7 +223,7 @@ def _events_from_georss(
             severity_unit=severity_unit,
             population_affected=population_affected,
         ))
-    return events
+    return events, newest_freshness_date(payload_dates)
 
 
 def fetch_disasters(
@@ -241,25 +244,39 @@ def fetch_disasters(
     try:
         resp = fetch_with_retry(GDACS_URL, timeout=30, attempts=3, backoff_base=1.0)
         data = resp.json()
-        return _events_from_features(
-            data.get("features", []),
+        features = data.get("features", [])
+        events = _events_from_features(
+            features,
             min_level=min_level,
             severity_order=severity_order,
         )
+        if newest_date := newest_freshness_date([
+            (feature.get("properties", {}) or {}).get("fromdate")
+            or (feature.get("properties", {}) or {}).get("datemodified")
+            or (feature.get("properties", {}) or {}).get("lastupdate")
+            or (feature.get("properties", {}) or {}).get("date")
+            for feature in features
+        ]):
+            assert_freshness(newest_date, "gdacs", max_age_days=3)
+        return events
 
     except (requests.RequestException, ValueError, KeyError) as exc:
         try:
-            resp = fetch_with_retry(GDACS_GEORSS_URL, timeout=30, attempts=3, backoff_base=1.0)
-            events = _events_from_georss(
+            resp = fetch_with_retry(
+                GDACS_GEORSS_URL, timeout=30, attempts=3, backoff_base=1.0
+            )
+            events, newest_date = _events_from_georss(
                 resp.text,
                 min_level=min_level,
                 severity_order=severity_order,
             )
             print("[gdacs] served by georss fallback")
-            return events
         except (requests.RequestException, ValueError, ET.ParseError, SourceFetchError) as georss_exc:
             if strict:
                 raise SourceFetchError(
                     f"GDACS fetch failed: {exc}; GeoRSS fallback failed: {georss_exc}"
                 ) from georss_exc
             return []
+        if newest_date:
+            assert_freshness(newest_date, "gdacs", max_age_days=3)
+        return events

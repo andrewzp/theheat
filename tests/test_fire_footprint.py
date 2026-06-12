@@ -1,5 +1,6 @@
 """Tests for fire footprint (NIFC WFIGS) data."""
 
+from datetime import UTC, date, datetime, time, timedelta
 from unittest.mock import patch
 
 import responses
@@ -13,6 +14,10 @@ from src.data.fire_footprint import (
     GWIS_URL,
 )
 
+FRESH_MS = int(
+    datetime.combine(date.today() - timedelta(days=1), time(12, 0), tzinfo=UTC).timestamp()
+    * 1000
+)
 
 # NIFC ArcGIS-shape payload. IncidentSize is in acres; we convert to hectares
 # before tier classification.
@@ -34,6 +39,7 @@ SAMPLE_PAYLOAD = {
                 "IncidentSize": 526_321.0,
                 "POOState": "US-CA",
                 "FireDiscoveryDateTime": 1626220800000,
+                "ModifiedOnDateTime": FRESH_MS,
             }
         },
         {
@@ -46,6 +52,7 @@ SAMPLE_PAYLOAD = {
                 "IncidentSize": 148_264.0,
                 "POOState": "US-AK",
                 "FireDiscoveryDateTime": 1625616000000,
+                "ModifiedOnDateTime": FRESH_MS,
             }
         },
         {
@@ -58,6 +65,7 @@ SAMPLE_PAYLOAD = {
                 "IncidentSize": 148_264.0,  # ~60k ha, tier 1 — used as "good row" in exception test
                 "POOState": "US-AK",
                 "FireDiscoveryDateTime": 1625616000000,
+                "ModifiedOnDateTime": FRESH_MS,
             }
         },
         {
@@ -70,6 +78,7 @@ SAMPLE_PAYLOAD = {
                 "IncidentSize": 12_355.0,  # below floor (~4,999 ha)
                 "POOState": "US-OR",
                 "FireDiscoveryDateTime": 1625702400000,
+                "ModifiedOnDateTime": FRESH_MS,
             }
         },
     ]
@@ -156,6 +165,7 @@ class TestFetchActiveFirePerimeters:
                         "IncidentSize": 148_264.0,  # ~60k ha, above floor
                         "POOState": "US-NV",
                         "FireDiscoveryDateTime": 1625616000000,
+                        "ModifiedOnDateTime": FRESH_MS,
                     }
                 }
             ]
@@ -182,6 +192,7 @@ class TestFetchActiveFirePerimeters:
                         "IncidentSize": 526_321.0,
                         "POOState": "US-CA",
                         "FireDiscoveryDateTime": 1626220800000,
+                        "ModifiedOnDateTime": FRESH_MS,
                     }
                 },
                 {
@@ -194,6 +205,7 @@ class TestFetchActiveFirePerimeters:
                         "IncidentSize": 300_000.0,
                         "POOState": "US-CA",
                         "FireDiscoveryDateTime": 1626220800000,
+                        "ModifiedOnDateTime": FRESH_MS,
                     }
                 },
             ]

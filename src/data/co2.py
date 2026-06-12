@@ -7,6 +7,7 @@ from datetime import date
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_cache_revalidation
 from src.data.source_status import SourceFetchError
 
@@ -65,12 +66,13 @@ def fetch_co2_data(*, strict: bool = False) -> list[CO2Reading]:
             except (ValueError, IndexError):
                 continue
 
-        return readings
-
     except (requests.RequestException, ValueError, KeyError) as exc:
         if strict:
             raise SourceFetchError(f"CO2 fetch failed: {exc}") from exc
         return []
+    if readings:
+        assert_freshness(readings[-1].date, "co2", max_age_days=7)
+    return readings
 
 
 def detect_milestone(readings: list[CO2Reading]) -> CO2Milestone | None:

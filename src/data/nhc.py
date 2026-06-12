@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.cyclones import (
     BasinRecordEvent,
@@ -30,6 +31,7 @@ NHC_BASE_URL = "https://www.nhc.noaa.gov/"
 def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
     """Fetch active NHC Atlantic and East Pacific storm advisories."""
 
+    fetched_advisories: list[CycloneAdvisory] = []
     try:
         response = fetch_with_retry(
             NHC_CURRENT_STORMS_URL,
@@ -49,11 +51,16 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
             advisory = _parse_active_storm(raw)
             if advisory is not None:
                 advisories.append(advisory)
-        return advisories
+        fetched_advisories = advisories
     except (requests.RequestException, ValueError, KeyError, TypeError, SourceFetchError) as exc:
         if strict:
             raise SourceFetchError(f"NHC fetch failed: {exc}") from exc
         return []
+    if fetched_advisories and (
+        newest_date := newest_freshness_date([advisory.issued_at for advisory in fetched_advisories])
+    ):
+        assert_freshness(newest_date, "nhc", max_age_days=2)
+    return fetched_advisories
 
 
 def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:

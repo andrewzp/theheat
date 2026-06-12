@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.41.0] - 2026-06-12
+
+THIRTY-LOOP S-14 rolls freshness guardrails across the remaining unguarded
+source parsers so stale upstream payloads fail loudly instead of recording
+silent successes.
+
+### Changed
+
+- **Guard source payload freshness.** `src/data/_freshness.py` now provides
+  shared parsing for ISO, RFC, and epoch-based upstream timestamps, and the
+  unguarded source parsers now call `assert_freshness` with their planned
+  source-specific max ages. Fixture-driven tests cover stale payload failures
+  for all 15 rollout sources while keeping valid empty-feed behavior intact.
+
 ## [0.9.40.0] - 2026-06-12
 
 THIRTY-LOOP S-13 gives GDACS a verified GeoRSS fallback and records the mirror

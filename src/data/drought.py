@@ -10,6 +10,7 @@ from datetime import date, timedelta
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
@@ -49,7 +50,14 @@ def fetch_drought_data(*, strict: bool = False) -> list[DroughtUpdate]:
         data = resp.json()
 
         updates = []
+        release_dates = []
         for entry in data:
+            release_dates.append(
+                entry.get("MapDate")
+                or entry.get("ReleaseDate")
+                or entry.get("ValidStart")
+                or entry.get("Date")
+            )
             state_name = entry.get("Name", "")
             if not state_name or state_name == "Overall":
                 continue
@@ -77,9 +85,11 @@ def fetch_drought_data(*, strict: bool = False) -> list[DroughtUpdate]:
 
         # Sort by worst drought first
         updates.sort(key=lambda u: u.d3_pct + u.d4_pct, reverse=True)
-        return updates[:5]  # Top 5 worst states
 
     except (requests.RequestException, ValueError, KeyError) as exc:
         if strict:
             raise SourceFetchError(f"Drought fetch failed: {exc}") from exc
         return []
+    newest_date = newest_freshness_date(release_dates) or last_thursday
+    assert_freshness(newest_date, "drought", max_age_days=10)
+    return updates[:5]  # Top 5 worst states

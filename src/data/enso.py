@@ -6,11 +6,13 @@ Source: NOAA Climate Prediction Center
 
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_cache_revalidation
 from src.data.source_status import SourceFetchError
 
@@ -20,6 +22,20 @@ _ONI_REVALIDATION_CACHE: dict[str, tuple[str, str]] = {}
 # ENSO thresholds (standard NOAA definitions)
 EL_NINO_THRESHOLD = 0.5
 LA_NINA_THRESHOLD = -0.5
+_SEASON_END_MONTH = {
+    "DJF": 2,
+    "JFM": 3,
+    "FMA": 4,
+    "MAM": 5,
+    "AMJ": 6,
+    "MJJ": 7,
+    "JJA": 8,
+    "JAS": 9,
+    "ASO": 10,
+    "SON": 11,
+    "OND": 12,
+    "NDJ": 1,
+}
 
 
 @dataclass
@@ -29,6 +45,14 @@ class ENSOReading:
     oni_value: float
     status: str  # "El Nino", "La Nina", "Neutral"
     event_id: str
+
+
+def _oni_month_end(season: str, year: int) -> date | None:
+    month = _SEASON_END_MONTH.get(season.upper())
+    if month is None:
+        return None
+    effective_year = year + 1 if season.upper() == "NDJ" else year
+    return date(effective_year, month, monthrange(effective_year, month)[1])
 
 
 def fetch_enso_data(*, strict: bool = False) -> list[ENSOReading]:
@@ -72,6 +96,8 @@ def fetch_enso_data(*, strict: bool = False) -> list[ENSOReading]:
                 event_id=event_id,
             ))
 
+        if readings and (latest_date := _oni_month_end(readings[-1].season, readings[-1].year)):
+            assert_freshness(latest_date, "enso", max_age_days=45)
         return readings
 
     except (requests.RequestException, ValueError) as exc:

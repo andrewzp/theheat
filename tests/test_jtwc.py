@@ -1,5 +1,8 @@
 """Tests for JTWC tropical-cyclone ingestion and parsing."""
 
+from datetime import UTC, date, datetime, time, timedelta
+from email.utils import format_datetime
+
 import responses
 
 from src.data import jtwc
@@ -21,6 +24,9 @@ TROPICAL STORM 02W (MAWAR) WARNING NR 012
 MAX SUSTAINED WINDS - 70 KT, GUSTS 85 KT.
 MINIMUM CENTRAL PRESSURE 975 MB.
 """
+FRESH_PUB_DATE = format_datetime(
+    datetime.combine(date.today() - timedelta(days=1), time(1, 30), tzinfo=UTC)
+)
 
 
 class TestJTWCParsing:
@@ -67,7 +73,7 @@ class TestJTWCParsing:
             <description><![CDATA[
               <a href="https://www.metoc.navy.mil/jtwc/products/wp0226web.txt">WP0226 Warning</a>
             ]]></description>
-            <pubDate>Fri, 15 May 2026 01:30:02 +0000</pubDate>
+            <pubDate>{FRESH_PUB_DATE}</pubDate>
           </item>
         </channel></rss>
         """
