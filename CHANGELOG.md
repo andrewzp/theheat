@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.56.0] - 2026-06-12
+
+THIRTY-LOOP S-29 fills the final temperature-bundle audience-unit gap so Hot 10
+leaderboards lead with the unit expected by the top city's audience.
+
+### Changed
+
+- **Add Hot 10 audience-unit facts.** `src/two_bot/intern/temperature.py`
+  now appends `_audience_unit_facts()` from the leaderboard leader's country
+  inside `build_hot10_bundle`, giving US-led boards `fahrenheit_first` and
+  non-US-led boards `celsius_first`. `tests/two_bot/test_intern.py` adds the
+  named regression tests for both leader-country cases.
+
 ## [0.9.55.0] - 2026-06-12
 
 THIRTY-LOOP S-28 adds the operator runbook for safely activating the dormant
