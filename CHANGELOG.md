@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.49.0] - 2026-06-12
+
+THIRTY-LOOP S-21 closes orchestrator test gaps around coastal water levels,
+NIFC fire footprints, and marine waves, and broadens voice-replay collection
+to cover the newest bundle families.
+
+### Changed
+
+- **Add missing runner and voice coverage.** New orchestrator tests exercise
+  CO-OPS storm surge, NIFC fire footprint, and Open-Meteo marine-wave success,
+  failure, skip where applicable, and dedup paths without live network calls.
+  The voice regression replay set now includes precipitation extreme,
+  air-quality hazard, dust event, synthesis fire-drought-heat, marine heatwave,
+  and wet-bulb extreme fixtures built from realistic production bundle shapes.
+
 ## [0.9.48.0] - 2026-06-12
 
 THIRTY-LOOP S-20 adds a dark-shipped concurrent source scheduler so alerts-mode
