@@ -1102,6 +1102,36 @@ def test_build_hot10_bundle_centers_on_leader():
     assert bundle.headline_metric["value"] == 9.2
 
 
+def test_hot10_bundle_us_leader_gets_fahrenheit_first():
+    cities = [
+        {"city": "Phoenix", "country": "US", "temp_high_c": 47.2,
+         "normal_high_c": 38.0, "anomaly_c": 9.2},
+        {"city": "Madrid", "country": "Spain", "temp_high_c": 39.0,
+         "normal_high_c": 31.0, "anomaly_c": 8.0},
+    ]
+    bundle = build_hot10_bundle(
+        cities, changes=["Phoenix UP 2 spots"], event_id="hot10_2026-05-04",
+    )
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert labels["audience_unit"] == "fahrenheit_first"
+
+
+def test_hot10_bundle_non_us_leader_gets_celsius_first():
+    cities = [
+        {"city": "Madrid", "country": "Spain", "temp_high_c": 39.0,
+         "normal_high_c": 31.0, "anomaly_c": 8.0},
+        {"city": "Phoenix", "country": "US", "temp_high_c": 47.2,
+         "normal_high_c": 38.0, "anomaly_c": 9.2},
+    ]
+    bundle = build_hot10_bundle(
+        cities, changes=["Madrid NEW to the Hot 10"], event_id="hot10_2026-05-04",
+    )
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert labels["audience_unit"] == "celsius_first"
+
+
 class TestStateAndObservationKindEnrichment:
     """Regression: writer hallucinations on 2026-05-08 added "Washington"
     (state) and time-of-day prose ("night" / "afternoon") that weren't

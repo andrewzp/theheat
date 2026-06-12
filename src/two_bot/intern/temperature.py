@@ -537,6 +537,7 @@ def build_hot10_bundle(
             {"label": "city_count", "value": len(cities)},
             {"label": "cities", "value": cities},
             {"label": "rank_changes", "value": changes},
+            *_audience_unit_facts(leader["country"] if leader else None),
         ],
         historical_context={"scope": "daily_top10_anomaly_leaderboard"},
         raw_signal_dump={"cities": cities, "changes": changes, "event_id": event_id},
