@@ -15,6 +15,12 @@ def run_gpm_imerg(
     started = time.perf_counter()
     source_promoted = 0
     try:
+        earthdata_token = os.environ.get("EARTHDATA_TOKEN", "")
+        if earthdata_token:
+            try:
+                gpm_imerg.get_s3_credentials(earthdata_token)
+            except Exception:
+                pass
         max_cities_raw = os.environ.get("GPM_IMERG_MAX_CITIES")
         max_cities = (
             int(max_cities_raw)

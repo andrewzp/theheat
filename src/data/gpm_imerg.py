@@ -153,9 +153,10 @@ def fetch_daily_precip(
     # configured grid source, then finally the legacy OPeNDAP per-city path, so
     # alternate feeds can never regress gpm.
     source = _gpm_source()
-    for grid_source in _gpm_grid_source_chain(source):
+    grid_chain = _gpm_grid_source_chain(source)
+    for chain_index, grid_source in enumerate(grid_chain, start=1):
         try:
-            return _fetch_daily_precip_grid(
+            readings = _fetch_daily_precip_grid(
                 grid_source,
                 cities,
                 target_date=target_date,
@@ -163,8 +164,14 @@ def fetch_daily_precip(
                 max_cities=max_cities,
                 token=token,
             )
+            print(
+                f"[gpm] grid source {grid_source} served "
+                f"(chain position {chain_index})",
+                flush=True,
+            )
+            return readings
         except _GridFetchUnavailable as exc:
-            next_path = "datapool" if grid_source == "s3" else "opendap"
+            next_path = grid_chain[chain_index] if chain_index < len(grid_chain) else "opendap"
             print(
                 f"[gpm_imerg] {grid_source} grid path unavailable ({exc}); "
                 f"falling back to {next_path}",
@@ -573,7 +580,7 @@ def _gpm_grid_source_chain(source: str) -> tuple[str, ...]:
     if source == "s3":
         return ("s3", "datapool")
     if source == "datapool":
-        return ("datapool",)
+        return ("datapool", "s3")
     return ()
 
 

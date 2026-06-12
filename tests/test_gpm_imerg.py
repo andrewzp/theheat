@@ -31,6 +31,30 @@ def _reading(city="Paris", country="France", mm=55.0, day="2026-05-14"):
     )
 
 
+def test_premint_failure_is_nonfatal(monkeypatch):
+    from src.orchestrator.sources import gpm_imerg as runner
+    from src.state import _fresh_state
+
+    calls = []
+
+    def fail_premint(token):
+        calls.append("premint")
+        assert token == "fake-token"
+        raise RuntimeError("credential host down")
+
+    def fake_fetch_daily_precip(**kwargs):
+        calls.append("fetch")
+        return []
+
+    monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+    monkeypatch.setattr(runner.gpm_imerg, "get_s3_credentials", fail_premint)
+    monkeypatch.setattr(runner.gpm_imerg, "fetch_daily_precip", fake_fetch_daily_precip)
+
+    runner.run_gpm_imerg(_fresh_state(), {"sources": []}, [_PARIS])
+
+    assert calls == ["premint", "fetch"]
+
+
 class TestGpmFetch:
     @responses.activate
     @patch("src.data.gpm_imerg.os.environ.get", return_value="fake-token")
@@ -638,6 +662,11 @@ class TestGpmGridFetch:
         monkeypatch.setenv("THEHEAT_GPM_SOURCE", "garbage")  # unknown → legacy
         assert _gpm_source() == "opendap"
 
+    def test_datapool_chain_includes_s3(self):
+        from src.data.gpm_imerg import _gpm_grid_source_chain
+
+        assert _gpm_grid_source_chain("datapool") == ("datapool", "s3")
+
     def test_subset_grid_extracts_city_value(self):
         from src.data.gpm_imerg import _lat_index, _lon_index, _subset_grid
 
@@ -931,6 +960,51 @@ class TestGpmGridFetch:
         assert calls == ["s3", "datapool"]
         assert len(readings) == 1
         assert readings[0].mm_total == 44.0
+
+    def test_chain_falls_through_to_opendap(self, monkeypatch):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "datapool")
+
+        calls = []
+
+        def fail_grid(source, *, target_date, product, token):
+            calls.append(source)
+            raise gpm._GridTransient(f"{source} unavailable")
+
+        def fake_opendap(**kw):
+            calls.append("opendap")
+            return 7.0
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fail_grid)
+        monkeypatch.setattr(gpm, "_fetch_city_precip", fake_opendap)
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        assert calls == ["datapool", "s3", "opendap"]
+        assert len(readings) == 1
+        assert readings[0].mm_total == 7.0
+
+    def test_grid_fallback_logs_serving_leg_position(self, monkeypatch, capsys):
+        import src.data.gpm_imerg as gpm
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "datapool")
+
+        lon_i, lat_i = gpm._lon_index(2.35), gpm._lat_index(48.85)
+
+        def fake_fetch(source, *, target_date, product, token):
+            if source == "datapool":
+                raise gpm._GridTransient("datapool unavailable")
+            return _make_grid_bytes({(0, lon_i, lat_i): 41.0})
+
+        monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
+
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+
+        assert len(readings) == 1
+        assert "[gpm] grid source s3 served (chain position 2)" in capsys.readouterr().out
 
     def test_source_opendap_default_skips_grid_path(self, monkeypatch):
         import src.data.gpm_imerg as gpm

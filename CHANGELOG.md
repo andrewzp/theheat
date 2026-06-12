@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.39.0] - 2026-06-12
+
+THIRTY-LOOP S-12 strengthens the GPM IMERG fetch chain so the datapool path can
+fall through to already-built S3 retrieval before the independent OPeNDAP
+fallback.
+
+### Changed
+
+- **Chain GPM datapool through S3 and pre-mint credentials.** `src/data/gpm_imerg.py`
+  now maps `THEHEAT_GPM_SOURCE=datapool` to `datapool → s3 → opendap`, preserving
+  the existing S3-first `s3 → datapool → opendap` path and logging the grid leg
+  that served data. `src/orchestrator/sources/gpm_imerg.py` now pre-mints the
+  GES DISC S3 credentials when `EARTHDATA_TOKEN` is present, swallowing mint
+  failures so the datapool and OPeNDAP paths remain available.
+
 ## [0.9.38.0] - 2026-06-12
 
 This incident fix restores clean-main preflight by making the regional SST
