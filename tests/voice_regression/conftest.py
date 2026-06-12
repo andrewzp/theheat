@@ -460,6 +460,143 @@ def regional_anomaly_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def precipitation_extreme_bundle() -> StoryBundle:
+    """GPM precipitation record fixture with city-cluster context."""
+    from src.data.gpm_imerg import PrecipExtremeEvent
+    from src.two_bot.intern import build_precipitation_bundle
+
+    ev = PrecipExtremeEvent(
+        kind="daily_city_cluster",
+        location="Sylhet",
+        country="Bangladesh",
+        date="2026-06-11",
+        mm_total=186.4,
+        period_days=1,
+        deviation_from_record_mm=34.2,
+        previous_record_mm=152.2,
+        previous_record_year=2017,
+        lat=24.9,
+        lon=91.9,
+        city_count=5,
+        sample_cities=["Sylhet", "Moulvibazar", "Sunamganj"],
+        event_id="precip_extreme_sylhet_2026-06-11",
+    )
+    return build_precipitation_bundle(ev)
+
+
+@pytest.fixture
+def air_quality_hazard_bundle() -> StoryBundle:
+    """CAMS PM2.5 hazard fixture for a dense South Asian city."""
+    from src.data.air_quality import PM25HazardEvent
+    from src.two_bot.intern import build_pm25_hazard_bundle
+
+    ev = PM25HazardEvent(
+        city="Lahore",
+        country="Pakistan",
+        lat=31.5,
+        lon=74.3,
+        date="2026-06-11",
+        pm25_24h_mean=182.6,
+        tier=1,
+        who_multiple=12.2,
+        us_aqi_daily_max=244,
+        event_id="pm25_lahore_2026-06-11_tier1",
+    )
+    return build_pm25_hazard_bundle(ev)
+
+
+@pytest.fixture
+def dust_event_bundle() -> StoryBundle:
+    """Mineral dust fixture with CAMS model evidence and AOD support."""
+    from src.data.air_quality import DustEvent
+    from src.two_bot.intern import build_dust_event_bundle
+
+    ev = DustEvent(
+        city="Khartoum",
+        country="Sudan",
+        lat=15.5,
+        lon=32.6,
+        date="2026-06-11",
+        dust_daily_max=1640.0,
+        tier=1,
+        aod_daily_max=1.74,
+        event_id="dust_khartoum_2026-06-11_tier1",
+    )
+    return build_dust_event_bundle(ev)
+
+
+@pytest.fixture
+def synthesis_fire_drought_heat_bundle() -> StoryBundle:
+    """Cross-source fire + drought + heat synthesis fixture."""
+    from src.two_bot.intern import build_synthesis_bundle
+
+    synthesis = {
+        "event_id": "synthesis_fire_drought_heat_texas_2026-06-11",
+        "region": "Texas",
+        "kind": "fire_drought_heat",
+        "headline": "Texas fire, drought, and heat signals overlap",
+        "rule_name": "RULE_FIRE_DROUGHT_HEAT",
+        "components": [
+            {"kind": "drought", "d4_pct": 18.4},
+            {"kind": "fire", "peak_frp_mw": 920.0, "peak_region": "Panhandle"},
+            {
+                "kind": "heat",
+                "peak_city": "Laredo",
+                "peak_kind": "monthly_high",
+                "peak_value_c": 43.1,
+            },
+        ],
+        "window_days": 14,
+        "total_score": 88,
+    }
+    return build_synthesis_bundle(synthesis)
+
+
+@pytest.fixture
+def marine_heatwave_bundle() -> StoryBundle:
+    """Global ocean SST streak fixture for marine heatwave wording."""
+    from src.data.ocean_sst import MarineHeatwaveStreakEvent
+    from src.two_bot.intern import build_marine_heatwave_bundle
+
+    ev = MarineHeatwaveStreakEvent(
+        kind="milestone",
+        days=150,
+        peak_anomaly_c=0.92,
+        today_c=21.18,
+        archive_max_c=20.74,
+        archive_max_year=2024,
+        years_of_data=44,
+        date="2026-06-11",
+        event_id="global_sst_streak_150_2026-06-11",
+    )
+    return build_marine_heatwave_bundle(ev)
+
+
+@pytest.fixture
+def wet_bulb_extreme_bundle() -> StoryBundle:
+    """Wet-bulb extreme fixture with audience units and health-context facts."""
+    from src.data.open_meteo import WetBulbEvent
+    from src.two_bot.intern import build_wet_bulb_bundle
+
+    ev = WetBulbEvent(
+        city="Jacobabad",
+        country="Pakistan",
+        daily_max_tw_c=34.1,
+        tier=2,
+        tier_label="extreme",
+        tier_threshold_c=33.0,
+        event_id="wetbulb_jacobabad_2026-06-11_tier2",
+        signal_date=None,
+        lat=28.3,
+        lon=68.4,
+        archive_max_tw_c=33.6,
+        archive_max_year=2022,
+        archive_years=31,
+    )
+    return build_wet_bulb_bundle(ev)
+
+
+@pytest.fixture
 def fresh_memory_slice() -> MemorySlice:
     """Empty memory — all era anchors / peer comparisons / framings
     available. Used in replay tests so writer isn't constrained by

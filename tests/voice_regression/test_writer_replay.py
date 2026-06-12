@@ -51,6 +51,12 @@ BUNDLE_FIXTURES = [
     "cyclone_landfall_bundle",
     "cyclone_basin_record_bundle",
     "regional_anomaly_bundle",
+    "precipitation_extreme_bundle",
+    "air_quality_hazard_bundle",
+    "dust_event_bundle",
+    "synthesis_fire_drought_heat_bundle",
+    "marine_heatwave_bundle",
+    "wet_bulb_extreme_bundle",
 ]
 
 
