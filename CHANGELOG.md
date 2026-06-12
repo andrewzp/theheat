@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.46.0] - 2026-06-12
+
+THIRTY-LOOP S-18 wires a CI smoke test for the SQLite state backend escape
+hatch.
+
+### Changed
+
+- **Exercise SQLite backend selection in CI.** The main bot workflow now runs a
+  dedicated `THEHEAT_DB_PATH=/tmp/theheat-smoke.sqlite` smoke test over the
+  existing SQLite state suite, and `src/state.py` now resolves
+  `THEHEAT_STATE_BACKEND` / `THEHEAT_DB_PATH` at backend-selection time so
+  env-driven selection is covered directly.
+
 ## [0.9.45.0] - 2026-06-12
 
 THIRTY-LOOP S-17 hardens publish idempotency so an approved draft cannot be

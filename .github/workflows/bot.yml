@@ -81,6 +81,11 @@ jobs:
       # daily schedule, not on every PR.
       - run: python -m pytest tests/ -v -m "not voice_replay"
 
+      - name: SQLite backend smoke
+        run: |
+          source .venv/bin/activate 2>/dev/null || true
+          THEHEAT_DB_PATH=/tmp/theheat-smoke.sqlite python -m pytest tests/test_state.py -q -k "Sqlite" --tb=short
+
       - name: Test dashboard
         working-directory: dashboard
         run: npm test
