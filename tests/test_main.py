@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 from unittest.mock import ANY, patch, MagicMock
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -1531,8 +1531,50 @@ class TestRunManualTweet:
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "pending"
 
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_manual_tweet_ignores_spacing_guard(self, mock_safety, mock_post):
+        mock_safety.return_value = (True, None)
+        mock_post.return_value = "posted"
+        state = _fresh_state()
+        recent_posted_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=1)
+        ).isoformat().replace("+00:00", "Z")
+        state["drafts"] = [
+            {
+                "id": "posted_recently",
+                "text": "Already posted",
+                "status": "posted",
+                "posted_at": recent_posted_at,
+            },
+            {
+                "id": "draft_1",
+                "text": "Manual draft",
+                "status": "approved",
+            },
+        ]
+
+        result = run_manual_tweet(state)
+
+        mock_post.assert_called_once_with(state["drafts"][1], state)
+        assert result["drafts"][1]["status"] == "posted"
+
 
 class TestProcessDueDrafts:
+    @staticmethod
+    def _due_auto_draft(draft_id: str, text: str = "Queued draft"):
+        return {
+            "id": draft_id,
+            "text": text,
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {
+                "mode": "armed_auto",
+                "can_auto_approve": True,
+            },
+        }
+
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
     def test_half_recorded_post_repaired_not_reposted(self, mock_safety, mock_post):
@@ -1604,6 +1646,71 @@ class TestProcessDueDrafts:
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["approval_mode"] == "auto"
         assert "auto_approve_at" not in result["drafts"][0]
+
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_spacing_defers_second_due_draft(self, mock_safety, mock_post, capsys):
+        mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [
+            self._due_auto_draft("draft_1", "Queued draft 1"),
+            self._due_auto_draft("draft_2", "Queued draft 2"),
+        ]
+
+        result = process_due_drafts(state)
+
+        assert mock_post.call_count == 1
+        assert result["drafts"][0]["status"] == "posted"
+        assert result["drafts"][1]["status"] == "pending"
+        assert result["drafts"][1]["auto_approve_at"] == "2000-01-01T00:00:00Z"
+        assert "[posting] spacing guard: deferring 1 due drafts" in capsys.readouterr().out
+
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_spacing_allows_after_window(self, mock_safety, mock_post):
+        mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["drafts"] = [
+            {
+                "id": "posted_old",
+                "text": "Already posted",
+                "status": "posted",
+                "posted_at": "2000-01-01T00:00:00Z",
+            },
+            self._due_auto_draft("draft_1", "Queued draft 1"),
+        ]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_called_once_with(state["drafts"][1], state)
+        assert result["drafts"][1]["status"] == "posted"
+
+    @patch.dict("os.environ", {"THEHEAT_MIN_TWEET_SPACING_MIN": "60"})
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
+    def test_spacing_env_override(self, mock_safety, mock_post):
+        mock_post.return_value = "posted"
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        recent_posted_at = (
+            datetime.now(timezone.utc) - timedelta(minutes=30)
+        ).isoformat().replace("+00:00", "Z")
+        state["drafts"] = [
+            {
+                "id": "posted_recently",
+                "text": "Already posted",
+                "status": "posted",
+                "posted_at": recent_posted_at,
+            },
+            self._due_auto_draft("draft_1", "Queued draft 1"),
+        ]
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert result["drafts"][1]["status"] == "pending"
 
     @patch("src.main.post_approved")
     def test_skips_future_auto_approval_windows(self, mock_post):

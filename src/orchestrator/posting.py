@@ -7,6 +7,7 @@ from src.orchestrator.common import *
 
 
 _PUBLISH_INTENT_TTL = timedelta(hours=2)
+_DEFAULT_MIN_TWEET_SPACING_MIN = 15
 
 
 def _coerce_publish_draft(draft_or_text: dict | str) -> dict:
@@ -74,6 +75,26 @@ def _publish_intent_in_progress(draft: dict, bot_state: BotState) -> bool:
         return False
     at = _parse_iso_utc(row.get("at"))
     return at is not None and _utc_now() - at <= _PUBLISH_INTENT_TTL
+
+
+def _min_tweet_spacing() -> timedelta:
+    raw = os.environ.get("THEHEAT_MIN_TWEET_SPACING_MIN", str(_DEFAULT_MIN_TWEET_SPACING_MIN))
+    try:
+        minutes = max(0, int(raw))
+    except ValueError:
+        minutes = _DEFAULT_MIN_TWEET_SPACING_MIN
+    return timedelta(minutes=minutes)
+
+
+def _last_posted_at(bot_state: BotState):
+    last_post = None
+    for draft in bot_state.get("drafts", []):
+        if draft.get("status") != "posted":
+            continue
+        posted_at = _parse_iso_utc(draft.get("posted_at"))
+        if posted_at is not None and (last_post is None or posted_at > last_post):
+            last_post = posted_at
+    return last_post
 
 
 def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
@@ -256,7 +277,17 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
 
     published = 0
     failures = []
-    for draft in due_drafts:
+    spacing = _min_tweet_spacing()
+    for idx, draft in enumerate(due_drafts):
+        last_post = _last_posted_at(bot_state)
+        if last_post is not None and _utc_now() - last_post < spacing:
+            deferred = sum(
+                1 for remaining in due_drafts[idx:]
+                if remaining.get("status") == "pending"
+            )
+            print(f"[posting] spacing guard: deferring {deferred} due drafts")
+            break
+
         if _publish_intent_in_progress(draft, bot_state):
             draft["post_error"] = "Publish intent already recorded; waiting for post result"
             _touch_draft(draft)

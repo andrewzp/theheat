@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.57.0] - 2026-06-12
+
+THIRTY-LOOP S-30 adds an inter-tweet spacing guard so auto-publish runs do not
+post multiple due drafts back-to-back in the same pass.
+
+### Changed
+
+- **Defer closely spaced auto posts.** `src/orchestrator/posting.py` now
+  computes the latest posted draft timestamp and defers remaining due drafts
+  when the previous post is inside `THEHEAT_MIN_TWEET_SPACING_MIN` (default
+  15 minutes), without adding a new state key. `tests/test_main.py` covers
+  deferring the second due draft, allowing posts after the window, the env
+  override, and manual publishes bypassing the guard.
+
 ## [0.9.56.0] - 2026-06-12
 
 THIRTY-LOOP S-29 fills the final temperature-bundle audience-unit gap so Hot 10
