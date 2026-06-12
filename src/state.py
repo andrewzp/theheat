@@ -1439,6 +1439,8 @@ def add_source_run(
     error: str | None = None,
     note: str | None = None,
     details: dict | None = None,
+    error_class: str | None = None,
+    breaker: bool = False,
 ) -> dict:
     """Append a source-level result to an in-progress run record.
 
@@ -1465,6 +1467,10 @@ def add_source_run(
         "error": error,
         "note": note,
     }
+    if error_class:
+        entry["error_class"] = error_class
+    if breaker:
+        entry["breaker"] = True
     if details:
         entry["details"] = details
     run.setdefault("sources", []).append(entry)

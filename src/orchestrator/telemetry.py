@@ -25,6 +25,8 @@ def _record_source_run(
     error: str | None = None,
     note: str | None = None,
     details: dict | None = None,
+    error_class: str | None = None,
+    breaker: bool = False,
 ) -> None:
     """Track a source result when run telemetry is enabled."""
     duration_ms = max(int((time.perf_counter() - started_at) * 1000), 0)
@@ -37,7 +39,7 @@ def _record_source_run(
             source,
             status,
             health_error,
-            error_class=classify_error_class(error),
+            error_class=error_class or classify_error_class(error),
             metrics={
                 "duration_ms": duration_ms,
                 "observed": observed,
@@ -66,6 +68,8 @@ def _record_source_run(
         error=error,
         note=note,
         details=details,
+        error_class=error_class,
+        breaker=breaker,
     )
 
 
