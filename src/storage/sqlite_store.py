@@ -163,6 +163,8 @@ _METADATA_JSON_KEYS = (
     "data_source_failures",
     "source_health",
     "last_good_readings",
+    "publish_ledger",
+    "_state_rev",
     # Reanalysis regional-anomaly onset guard — must persist (§E) so a sustained
     # spell stays suppressed across restarts. The transient _reganom_live_cache is
     # intentionally absent (like _triage_queue): it is rebuilt each cycle.

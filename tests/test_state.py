@@ -1277,6 +1277,52 @@ class TestSqliteBackend:
 
             assert loaded["drafts"][0]["review_context"]["facts"][0]["value"] == "2026-05-07"
 
+    def test_state_rev_conflict_triggers_remerge(self, capsys):
+        captured = {}
+
+        def fake_write(payload):
+            captured["payload"] = payload
+            return True
+
+        incoming = {
+            **DEFAULT_STATE,
+            "_state_rev": 4,
+            "publish_ledger": {
+                "event_new": {
+                    "intent_id": "intent_new",
+                    "tweet_id": None,
+                    "at": "2026-06-12T12:00:00Z",
+                }
+            },
+        }
+        current = {
+            **DEFAULT_STATE,
+            "_state_rev": 5,
+            "publish_ledger": {
+                "event_existing": {
+                    "intent_id": "intent_existing",
+                    "tweet_id": "tweet_123",
+                    "at": "2026-06-12T11:00:00Z",
+                }
+            },
+        }
+
+        with patch.multiple(
+            "src.state",
+            STATE_BACKEND="gist",
+            GIST_ID="gist_123",
+            GITHUB_TOKEN="token_123",
+        ), patch("src.state._read_gist_state", return_value=current), patch(
+            "src.state._write_gist_state", side_effect=fake_write
+        ):
+            assert write_state(incoming) is True
+
+        payload = captured["payload"]
+        assert payload["_state_rev"] == 6
+        assert payload["publish_ledger"]["event_existing"]["tweet_id"] == "tweet_123"
+        assert payload["publish_ledger"]["event_new"]["intent_id"] == "intent_new"
+        assert "[state] write conflict re-merged" in capsys.readouterr().out
+
     def test_write_state_preserves_newer_draft_versions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/theheat.sqlite"

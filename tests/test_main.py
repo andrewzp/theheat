@@ -1066,8 +1066,33 @@ class TestPostApproved:
     def test_respects_daily_cap(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = False
         state = _fresh_state()
-        result = post_approved("test tweet", state)
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+        }
+        result = post_approved(draft, state)
         assert result == "failed"
+        mock_tw.assert_not_called()
+
+    @patch("src.main.state")
+    @patch("src.main.post_tweet")
+    def test_no_tweet_without_durable_intent(self, mock_tw, mock_state):
+        mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = False
+        state = _fresh_state()
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+        }
+
+        result = post_approved(draft, state)
+
+        assert result == "failed"
+        mock_state.write_state.assert_called_once_with(state)
         mock_tw.assert_not_called()
 
     @patch("src.main.state")
@@ -1075,10 +1100,19 @@ class TestPostApproved:
     @patch("src.main.post_tweet")
     def test_increments_count_on_success(self, mock_tw, mock_bluesky, mock_state):
         mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
         mock_tw.return_value = {"id": "123"}
         state = _fresh_state()
-        result = post_approved("test tweet", state)
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+        }
+        result = post_approved(draft, state)
         assert result == "posted"
+        assert state["publish_ledger"]["event_1"]["tweet_id"] == "123"
+        assert draft["tweet_id"] == "123"
         mock_bluesky.assert_called_once_with("test tweet")
         mock_state.increment_daily_count.assert_called_once_with(state)
 
@@ -1086,18 +1120,32 @@ class TestPostApproved:
     @patch("src.main.post_tweet")
     def test_returns_failed_on_failure(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
         mock_tw.return_value = None
         state = _fresh_state()
-        result = post_approved("test tweet", state)
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+        }
+        result = post_approved(draft, state)
         assert result == "failed"
 
     @patch("src.main.state")
     @patch("src.main.post_tweet")
     def test_returns_rate_limited(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
         mock_tw.return_value = {"error": "rate_limited"}
         state = _fresh_state()
-        result = post_approved("test tweet", state)
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+        }
+        result = post_approved(draft, state)
         assert result == "rate_limited"
         mock_state.increment_daily_count.assert_not_called()
 
@@ -1487,6 +1535,54 @@ class TestRunManualTweet:
 class TestProcessDueDrafts:
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
+    def test_half_recorded_post_repaired_not_reposted(self, mock_safety, mock_post):
+        mock_safety.return_value = (True, None)
+        state = _fresh_state()
+        state["publish_ledger"] = {
+            "event_1": {
+                "intent_id": "intent_1",
+                "tweet_id": "tweet_123",
+                "at": "2026-06-12T12:00:00Z",
+            }
+        }
+        state["drafts"] = [{
+            "id": "draft_1",
+            "event_id": "event_1",
+            "text": "Queued draft",
+            "status": "pending",
+            "auto_approve_at": "2000-01-01T00:00:00Z",
+            "approval_policy": {
+                "mode": "armed_auto",
+                "can_auto_approve": True,
+            },
+        }]
+
+        result = process_due_drafts(state)
+
+        mock_safety.assert_not_called()
+        mock_post.assert_not_called()
+        assert result["drafts"][0]["status"] == "posted"
+        assert result["drafts"][0]["tweet_id"] == "tweet_123"
+        assert result["drafts"][0]["posted_at"] == "2026-06-12T12:00:00Z"
+
+    @patch("src.main.post_approved")
+    def test_stale_intent_cleared_after_2h(self, mock_post):
+        state = _fresh_state()
+        state["publish_ledger"] = {
+            "event_1": {
+                "intent_id": "intent_1",
+                "tweet_id": None,
+                "at": "2000-01-01T00:00:00Z",
+            }
+        }
+
+        result = process_due_drafts(state)
+
+        mock_post.assert_not_called()
+        assert "event_1" not in result["publish_ledger"]
+
+    @patch("src.main.post_approved")
+    @patch("src.main.run_safety_pipeline")
     def test_posts_due_auto_approved_drafts(self, mock_safety, mock_post):
         mock_post.return_value = "posted"
         mock_safety.return_value = (True, None)
@@ -1586,7 +1682,7 @@ class TestProcessDueDrafts:
 
         result = process_due_drafts(state)
 
-        mock_post.assert_called_once_with("Suggested draft", state)
+        mock_post.assert_called_once_with(state["drafts"][0], state)
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["approval_mode"] == "auto"
 
@@ -1629,7 +1725,7 @@ class TestProcessDueDrafts:
 
         result = process_due_drafts(state)
 
-        mock_post.assert_called_once_with("Queued draft", state)
+        mock_post.assert_called_once_with(state["drafts"][0], state)
         assert result["drafts"][0]["status"] == "posted"
 
 

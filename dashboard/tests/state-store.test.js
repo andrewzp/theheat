@@ -279,6 +279,14 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
       pdo_last_phase: "Positive",
       ozone_hole_last_peak: { 2026: { peak_date: "2026-09-20", area_million_km2: 23 } },
       ozone_hole_annual_count: { 2026: 1 },
+      publish_ledger: {
+        event_1: {
+          intent_id: "intent_1",
+          tweet_id: "tweet_123",
+          at: "2026-06-12T12:00:00Z",
+        },
+      },
+      _state_rev: 7,
     }
 
     await stateStore.writeStateStore(sourceState)
@@ -325,6 +333,8 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     assert.equal(loaded.pdo_last_phase, "Positive")
     assert.deepEqual(loaded.ozone_hole_last_peak, sourceState.ozone_hole_last_peak)
     assert.deepEqual(loaded.ozone_hole_annual_count, sourceState.ozone_hole_annual_count)
+    assert.deepEqual(loaded.publish_ledger, sourceState.publish_ledger)
+    assert.equal(loaded._state_rev, 7)
     assert.equal(loaded.suppressions.length, 1)
     assert.equal(loaded.suppressions[0].stage, "fact_check")
   } finally {
