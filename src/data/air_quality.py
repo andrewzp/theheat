@@ -34,6 +34,10 @@ try:
     CHUNK_SIZE: int = int(os.environ.get("THEHEAT_AQ_CHUNK_SIZE", "50"))
 except ValueError:
     CHUNK_SIZE = 50
+try:
+    CHUNK_PACING_S: int = int(os.environ.get("THEHEAT_AQ_CHUNK_PACING_S", "8"))
+except ValueError:
+    CHUNK_PACING_S = 8
 
 # Open-Meteo's free tier enforces a per-minute request budget (empirically ~12 of
 # our 50-city chunks). A 638-city sweep is ~13 chunks, so the tail chunk(s) get
@@ -184,16 +188,45 @@ def _rate_limit_wait_seconds(date_header: str | None) -> float:
     return max(_RATE_LIMIT_WAIT_MIN_S, min(wait, _RATE_LIMIT_WAIT_MAX_S))
 
 
+def _retry_after_wait_seconds(retry_after_header: str | None) -> float | None:
+    if not retry_after_header:
+        return None
+    try:
+        wait = float(retry_after_header.strip())
+    except ValueError:
+        return None
+    return max(0.0, wait)
+
+
+def _rate_limit_wait_seconds_for_headers(
+    date_header: str | None,
+    retry_after_header: str | None,
+) -> float:
+    retry_after_wait = _retry_after_wait_seconds(retry_after_header)
+    if retry_after_wait is not None:
+        return retry_after_wait
+    return _rate_limit_wait_seconds(date_header)
+
+
+def _pacing_sleep(seconds: float) -> None:
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def _chunk_pacing_sleep() -> None:
+    _pacing_sleep(float(CHUNK_PACING_S))
+
+
 def _fetch_chunk(
     chunk: list[dict],
     today_str: str,
-) -> tuple[list[CityAirQuality | None], bool, str | None]:
+) -> tuple[list[CityAirQuality | None], bool, str | None, str | None]:
     """Fetch and parse one batched chunk.
 
-    Returns ``(results, ok, rate_limit_date)``. ``ok`` is False when the HTTP
+    Returns ``(results, ok, rate_limit_date, retry_after)``. ``ok`` is False when the HTTP
     fetch failed entirely (every city in the chunk stays None). ``rate_limit_date``
-    carries the server Date header when the failure was a 429, so the caller can
-    time the wait before retrying.
+    and ``retry_after`` carry the server headers when the failure was a 429, so
+    the caller can time the wait before retrying.
     """
     out: list[CityAirQuality | None] = [None] * len(chunk)
     lats = ",".join(str(city["lat"]) for city in chunk)
@@ -216,10 +249,10 @@ def _fetch_chunk(
     except requests.HTTPError as exc:
         resp = exc.response
         if resp is not None and resp.status_code == 429:
-            return out, False, resp.headers.get("Date")
-        return out, False, None
+            return out, False, resp.headers.get("Date"), resp.headers.get("Retry-After")
+        return out, False, None, None
     except (requests.RequestException, ValueError):
-        return out, False, None
+        return out, False, None, None
 
     location_list = payload if isinstance(payload, list) else [payload]
     for offset, loc_data in enumerate(location_list):
@@ -237,7 +270,7 @@ def _fetch_chunk(
             )
         except (KeyError, TypeError, ValueError):
             out[offset] = None
-    return out, True, None
+    return out, True, None, None
 
 
 def fetch_batch_air_quality(
@@ -262,14 +295,16 @@ def fetch_batch_air_quality(
 
     pending = list(range(0, len(cities), chunk_size))
     rate_limit_date: str | None = None
+    retry_after: str | None = None
     for attempt in range(recovery_passes + 1):
         if attempt > 0:
-            time.sleep(_rate_limit_wait_seconds(rate_limit_date))
+            time.sleep(_rate_limit_wait_seconds_for_headers(rate_limit_date, retry_after))
         rate_limit_date = None
+        retry_after = None
         still_failed: list[int] = []
-        for chunk_start in pending:
+        for chunk_index, chunk_start in enumerate(pending):
             chunk = cities[chunk_start : chunk_start + chunk_size]
-            chunk_results, ok, date_header = _fetch_chunk(chunk, today_str)
+            chunk_results, ok, date_header, retry_after_header = _fetch_chunk(chunk, today_str)
             if ok:
                 for offset, value in enumerate(chunk_results):
                     results[chunk_start + offset] = value
@@ -277,6 +312,10 @@ def fetch_batch_air_quality(
                 still_failed.append(chunk_start)
                 if date_header is not None:
                     rate_limit_date = date_header
+                if retry_after_header is not None:
+                    retry_after = retry_after_header
+            if chunk_index < len(pending) - 1:
+                _chunk_pacing_sleep()
         pending = still_failed
         if not pending:
             break

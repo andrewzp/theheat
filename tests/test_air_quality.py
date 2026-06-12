@@ -48,11 +48,15 @@ def _response(payload: object) -> MagicMock:
     return resp
 
 
-def _http_error(status: int, *, date: str | None = None) -> requests.HTTPError:
+def _http_error(status: int, *, date: str | None = None, retry_after: str | None = None) -> requests.HTTPError:
     """Build an HTTPError like fetch_with_retry raises on a 4xx (e.g. a 429)."""
     resp = MagicMock()
     resp.status_code = status
-    resp.headers = {"Date": date} if date else {}
+    resp.headers = {}
+    if date:
+        resp.headers["Date"] = date
+    if retry_after:
+        resp.headers["Retry-After"] = retry_after
     return requests.HTTPError(response=resp)
 
 
@@ -159,7 +163,10 @@ def test_batch_fetch_chunk_splits():
     """638 cities become multiple HTTP calls of at most chunk_size locations each."""
     cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
 
-    with patch("src.data.air_quality.fetch_with_retry") as mock_fetch:
+    with (
+        patch("src.data.air_quality._pacing_sleep") as mock_pacing_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
         mock_fetch.side_effect = [
             _response([_payload() for _ in range(50)]),
             _response([_payload()]),
@@ -168,6 +175,7 @@ def test_batch_fetch_chunk_splits():
 
     assert len(observations) == 51
     assert mock_fetch.call_count == 2
+    assert mock_pacing_sleep.call_count == 1
     first_params = mock_fetch.call_args_list[0].kwargs["params"]
     second_params = mock_fetch.call_args_list[1].kwargs["params"]
     assert len(first_params["latitude"].split(",")) == 50
@@ -209,7 +217,10 @@ def test_batch_fetch_partial_chunk_failure():
     """With recovery disabled, one chunk transport failure leaves that chunk None."""
     cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
 
-    with patch("src.data.air_quality.fetch_with_retry") as mock_fetch:
+    with (
+        patch("src.data.air_quality._pacing_sleep"),
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
         mock_fetch.side_effect = [
             requests.RequestException("timeout"),
             _response([_payload(pm25=[250.0] * 24)]),
@@ -226,6 +237,7 @@ def test_batch_fetch_recovers_rate_limited_chunk_after_wait():
     cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
 
     with (
+        patch("src.data.air_quality._pacing_sleep"),
         patch("src.data.air_quality.time.sleep") as mock_sleep,
         patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
     ):
@@ -242,11 +254,50 @@ def test_batch_fetch_recovers_rate_limited_chunk_after_wait():
     assert mock_sleep.call_count == 1
 
 
-def test_batch_fetch_no_failures_does_not_sleep():
-    """A fully successful sweep never waits — no added latency on healthy runs."""
+def test_chunks_are_paced():
+    """Healthy chunk sweeps pause between chunk requests, but never after the last chunk."""
+    cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(5)]
+
+    with (
+        patch("src.data.air_quality._pacing_sleep") as mock_pacing_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
+        mock_fetch.side_effect = [
+            _response([_payload() for _ in range(2)]),
+            _response([_payload() for _ in range(2)]),
+            _response([_payload()]),
+        ]
+        fetch_batch_air_quality(cities, chunk_size=2)
+
+    assert mock_fetch.call_count == 3
+    assert [call.args[0] for call in mock_pacing_sleep.call_args_list] == [8, 8]
+
+
+def test_retry_after_header_honored():
+    """Open-Meteo Retry-After is the pacing authority when a 429 includes it."""
+    cities = [_city()]
+    err = _http_error(429, date="Tue, 09 Jun 2026 17:44:30 GMT", retry_after="17")
+
+    with (
+        patch("src.data.air_quality.time.sleep") as mock_sleep,
+        patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
+    ):
+        mock_fetch.side_effect = [
+            err,
+            _response([_payload()]),
+        ]
+        observations = fetch_batch_air_quality(cities, chunk_size=1)
+
+    assert observations[0] is not None
+    assert mock_sleep.call_args.args == (17.0,)
+
+
+def test_batch_fetch_no_failures_does_not_recovery_sleep():
+    """A fully successful sweep uses chunk pacing only, not recovery waits."""
     cities = [_city(city=f"City {i}", lat=float(i), lon=float(i + 1)) for i in range(51)]
 
     with (
+        patch("src.data.air_quality._pacing_sleep") as mock_pacing_sleep,
         patch("src.data.air_quality.time.sleep") as mock_sleep,
         patch("src.data.air_quality.fetch_with_retry") as mock_fetch,
     ):
@@ -257,6 +308,7 @@ def test_batch_fetch_no_failures_does_not_sleep():
         fetch_batch_air_quality(cities, chunk_size=50)
 
     assert mock_sleep.call_count == 0
+    assert mock_pacing_sleep.call_count == 1
 
 
 def test_batch_fetch_recovers_transport_failed_chunk():

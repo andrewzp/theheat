@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.53.0] - 2026-06-12
+
+THIRTY-LOOP S-26 spreads Open-Meteo air-quality chunk requests across the
+minute budget so the source avoids self-induced 429 bursts while keeping the
+existing recovery pass as a backstop.
+
+### Changed
+
+- **Pace Air Quality API chunks.** `src/data/air_quality.py` now reads
+  `THEHEAT_AQ_CHUNK_PACING_S` with an 8-second default and sleeps through a
+  testable `_pacing_sleep` seam between chunk requests, never after the last
+  chunk. The 429 recovery path now prefers `Retry-After` when Open-Meteo sends
+  it and falls back to the existing Date-header minute-boundary wait otherwise;
+  `tests/test_air_quality.py` covers pacing, Retry-After, and the existing
+  recovery behavior without real sleeps.
+
 ## [0.9.52.0] - 2026-06-12
 
 THIRTY-LOOP S-25 dark-ships OpenAQ PM2.5 ground-station corroboration so
