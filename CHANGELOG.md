@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.55.0] - 2026-06-12
+
+THIRTY-LOOP S-28 adds the operator runbook for safely activating the dormant
+reanalysis regional-anomaly source without flipping the production variable.
+
+### Changed
+
+- **Document reganom activation.** `docs/runbooks/reganom-activation.md`
+  captures the verified readiness evidence, Andrew-only activation and revert
+  commands, 48-hour watch surfaces, and the five-layer point-index honesty
+  defense for `regional_anomaly`. The source remains dormant until
+  `THEHEAT_REGANOM_ENABLED` is explicitly set outside this PR.
+
 ## [0.9.54.0] - 2026-06-12
 
 THIRTY-LOOP S-27 adds the cheap all-in-state SST x coral synthesis path while
