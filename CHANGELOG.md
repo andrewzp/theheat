@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.38.0] - 2026-06-12
+
+This incident fix restores clean-main preflight by making the regional SST
+anomaly freshness fixture date-stable and keeps healthy quiet SST-anomaly runs
+out of the zero-yield sentinel.
+
+### Changed
+
+- **Fix SST anomaly freshness and yield telemetry.** `src/data/ocean_sst_anomaly.py`
+  now accepts a test-only `today` seam when asserting gridded-data freshness, so
+  fixture-backed tests do not decay as the calendar advances.
+  `src/orchestrator/sources/ocean_sst_anomaly.py` now records sampled region
+  boxes as the source-health observed count, rather than counting only
+  tier-crossing events, so successful below-threshold runs no longer look like
+  a silently empty source.
+
 ## [0.9.37.0] - 2026-06-11
 
 THIRTY-LOOP S-11 decomposes the orchestration common module into focused helper

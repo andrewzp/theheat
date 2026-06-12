@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from src.data.ocean_sst_anomaly import RegionalSSTReading
+from src.data.ocean_sst_anomaly import REGION_REGISTRY, RegionalSSTReading
 from src.state import DEFAULT_STATE
 
 
@@ -136,8 +136,23 @@ def test_run_ocean_sst_anomaly_records_success_when_no_regions_cross_tier(monkey
 
     source_entry = next(s for s in current_run["sources"] if s["source"] == "ocean_sst_anomaly")
     assert source_entry["status"] == "success"
-    assert source_entry["observed"] == 0
+    assert source_entry["observed"] == len(REGION_REGISTRY)
     assert bot_state.get("_triage_queue", []) == []
+
+
+def test_run_ocean_sst_anomaly_source_health_observes_sampled_regions(monkeypatch):
+    from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
+
+    bot_state = _state()
+    monkeypatch.setattr(
+        "src.orchestrator.sources.ocean_sst_anomaly.ocean_sst_anomaly.fetch_all_regions",
+        lambda strict=False: [_reading()],
+    )
+
+    run_ocean_sst_anomaly(bot_state, {"sources": []})
+
+    health = bot_state["source_health"]["ocean_sst_anomaly"]
+    assert health["total_observed"] == len(REGION_REGISTRY)
 
 
 def test_run_ocean_sst_anomaly_records_failed_when_fetch_all_regions_fails(monkeypatch):
