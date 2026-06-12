@@ -34,7 +34,7 @@
 | S-26 | #19 | air_quality chunk pacing | S-09 | DONE | #256 | Air-quality chunks now pace between requests and honor Retry-After on 429 recovery. |
 | S-27 | #6 | Synthesis: SST×coral + global FDH | S-21 | DONE(sst-coral; global-fdh blocked:no-global-drought-signal) | #257 | SST×coral synthesis shipped; global fire-drought-heat blocked by missing global drought-severity signal. |
 | S-28 | #24 | Reganom readiness runbook (NO flip) | — | DONE(awaiting-andrew-flip) | #258 | Activation runbook added with readiness evidence, watch plan, revert command, and Andrew-only flip. |
-| S-29 | #26 | Hot 10 audience-unit fix | — | TODO | | |
+| S-29 | #26 | Hot 10 audience-unit fix | — | DONE | #259 | Hot 10 bundles now set audience_unit from the top city's country. |
 | S-30 | #25 | Inter-tweet spacing guard | — | TODO | | |
 | S-31 | #22 | Cyclone advisory source links | S-21 | TODO | | |
 | S-32 | #18 | Engagement-window scheduling (flag) | S-30 | TODO | | |
