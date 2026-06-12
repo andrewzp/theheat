@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -10,8 +11,17 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> None:
     print("[alerts] Checking NSIDC Snow Today...")
     started = time.perf_counter()
     source_promoted = 0
+    fetch_completed = False
     try:
         readings = _fetch_strict(nsidc_snow.fetch_snow_today)
+        fetch_completed = True
+        if readings:
+            last_good.write(
+                bot_state,
+                "nsidc_snow",
+                readings[0].date,
+                _snow_last_good_payload(readings),
+            )
         events = nsidc_snow.detect_snow_extremes(readings, cast(dict, bot_state))
         for event in events:
             if state.is_duplicate(bot_state, event.event_id):
@@ -102,6 +112,20 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> None:
         )
     except Exception as exc:
         print(f"[alerts] NSIDC Snow Today error: {exc}")
+        cached = (
+            last_good.read(bot_state, "nsidc_snow", max_age_days=21)
+            if not fetch_completed else None
+        )
+        if cached is not None:
+            _record_source_run(
+                current_run,
+                bot_state,
+                "nsidc_snow",
+                started,
+                status="degraded",
+                error=f"served last-good ({cached.data_date})",
+            )
+            return
         state.log_error(bot_state, "nsidc_snow", str(exc))
         _record_source_run(
             current_run,
@@ -112,3 +136,36 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> None:
             error=str(exc),
         )
     return
+
+
+def _snow_last_good_payload(readings: list) -> dict:
+    strongest_delta = max(
+        (row for row in readings if row.swe_delta_mm is not None),
+        key=lambda row: float(row.swe_delta_mm or 0.0),
+        default=None,
+    )
+    strongest_swe = max(
+        (row for row in readings if row.swe_mm is not None),
+        key=lambda row: float(row.swe_mm or 0.0),
+        default=None,
+    )
+    return {
+        "date": readings[0].date,
+        "point_count": len(readings),
+        "max_delta": _snow_payload_row(strongest_delta, "swe_delta_mm"),
+        "max_swe": _snow_payload_row(strongest_swe, "swe_mm"),
+    }
+
+
+def _snow_payload_row(reading, metric: str) -> dict | None:
+    if reading is None:
+        return None
+    value = getattr(reading, metric)
+    if value is None:
+        return None
+    return {
+        "station": reading.station,
+        metric: round(float(value), 1),
+        "lat": round(float(reading.lat), 3),
+        "lon": round(float(reading.lon), 3),
+    }

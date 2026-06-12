@@ -412,6 +412,58 @@ class TestMergeStateContract:
         assert not missing, f"DEFAULT_STATE keys with no MERGE_SPEC strategy: {sorted(missing)}"
         assert not orphan, f"MERGE_SPEC keys absent from DEFAULT_STATE: {sorted(orphan)}"
 
+    def test_last_good_merge_keeps_newest_captured_at_per_source(self):
+        from src.state import _merge_state
+
+        merged = _merge_state(
+            {
+                "last_good_readings": {
+                    "co2": {
+                        "data_date": "2026-06-10",
+                        "captured_at": "2026-06-11T00:00:00Z",
+                        "payload": {"ppm": 429.8},
+                    },
+                    "enso": {
+                        "data_date": "2026-05-31",
+                        "captured_at": "2026-06-09T00:00:00Z",
+                        "payload": {"status": "Neutral"},
+                    },
+                }
+            },
+            {
+                "last_good_readings": {
+                    "co2": {
+                        "data_date": "2026-06-09",
+                        "captured_at": "2026-06-10T00:00:00Z",
+                        "payload": {"ppm": 429.4},
+                    },
+                    "sea_ice_arctic": {
+                        "data_date": "2026-06-10",
+                        "captured_at": "2026-06-11T12:00:00Z",
+                        "payload": {"extent_mkm2": 10.1},
+                    },
+                }
+            },
+        )
+
+        assert merged["last_good_readings"] == {
+            "co2": {
+                "data_date": "2026-06-10",
+                "captured_at": "2026-06-11T00:00:00Z",
+                "payload": {"ppm": 429.8},
+            },
+            "enso": {
+                "data_date": "2026-05-31",
+                "captured_at": "2026-06-09T00:00:00Z",
+                "payload": {"status": "Neutral"},
+            },
+            "sea_ice_arctic": {
+                "data_date": "2026-06-10",
+                "captured_at": "2026-06-11T12:00:00Z",
+                "payload": {"extent_mkm2": 10.1},
+            },
+        }
+
     # --- Strategy regressions locking the Codex adversarial findings (rev 2 spec).
     # These replace the former behavioral-probe test: the structural assertion above
     # proves every key is HANDLED; these prove the specific edge semantics Codex

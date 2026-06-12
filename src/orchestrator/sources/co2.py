@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -20,8 +21,11 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> None:
         for d in bot_state.get("drafts", [])
     )
     co2_start = time.perf_counter()
+    fetch_completed = False
     try:
         readings = _fetch_strict(co2.fetch_co2_data)
+        fetch_completed = True
+        _write_co2_last_good(bot_state, readings)
         milestone = co2.detect_milestone(readings)
         source_promoted = 0
         if (
@@ -62,9 +66,36 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> None:
         )
     except Exception as e:
         print(f"[alerts] CO2 error: {e}")
+        cached = (
+            last_good.read(bot_state, "co2", max_age_days=21)
+            if not fetch_completed else None
+        )
+        if cached is not None:
+            _record_source_run(
+                current_run, bot_state, "co2", co2_start,
+                status="degraded", error=f"served last-good ({cached.data_date})",
+            )
+            return
         state.log_error(bot_state, "co2", str(e))
         _record_source_run(
             current_run, bot_state, "co2", co2_start,
             status="failed", error=str(e)
         )
     return
+
+
+def _write_co2_last_good(bot_state: BotState, readings: list) -> None:
+    if not readings:
+        return
+    latest = readings[-1]
+    try:
+        data_date = str(latest.date)
+        ppm = round(float(latest.ppm), 2)
+        last_good.write(
+            bot_state,
+            "co2",
+            data_date,
+            {"date": data_date, "ppm": ppm},
+        )
+    except (AttributeError, TypeError, ValueError):
+        return

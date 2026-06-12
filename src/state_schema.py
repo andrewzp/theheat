@@ -211,6 +211,7 @@ class BotState(TypedDict, total=False):
     record_streaks: dict[str, RecordStreakEntry]
     data_source_failures: dict[str, int]
     source_health: dict[str, SourceHealth]
+    last_good_readings: dict[str, dict]
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]
     ice_mass_last_milestone: dict[str, float]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -20,9 +21,23 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> None:
 
     print("[alerts] Checking Antarctic ozone hole...")
     source_start = time.perf_counter()
+    fetch_completed = False
     try:
         readings = _fetch_strict(ozone_hole.fetch_ozone_hole_data)
         annual_peaks = _fetch_strict(ozone_hole.fetch_ozone_hole_annual_peaks)
+        fetch_completed = True
+        if readings:
+            last_good.write(
+                bot_state,
+                "ozone_hole",
+                readings[-1].date,
+                {
+                    "latest": _ozone_reading_payload(readings[-1]),
+                    "annual_peak": (
+                        _ozone_peak_payload(annual_peaks[-1]) if annual_peaks else None
+                    ),
+                },
+            )
         event = ozone_hole.detect_seasonal_peak(
             readings,
             annual_peaks,
@@ -78,6 +93,16 @@ def run_ozone_hole(bot_state: BotState, current_run: dict | None) -> None:
         )
     except Exception as e:
         print(f"[alerts] Ozone hole error: {e}")
+        cached = (
+            last_good.read(bot_state, "ozone_hole", max_age_days=135)
+            if not fetch_completed else None
+        )
+        if cached is not None:
+            _record_source_run(
+                current_run, bot_state, "ozone_hole", source_start,
+                status="degraded", error=f"served last-good ({cached.data_date})",
+            )
+            return
         state.log_error(bot_state, "ozone_hole", str(e))
         _record_source_run(
             current_run, bot_state, "ozone_hole", source_start,
@@ -93,3 +118,23 @@ def _ozone_hole_annual_cap_reached(bot_state: BotState) -> bool:
         print(f"[ozone_hole] Annual cap reached ({count}/{OZONE_HOLE_ANNUAL_CAP} for {year_key}), skipping")
         return True
     return False
+
+
+def _ozone_reading_payload(reading) -> dict:
+    return {
+        "date": reading.date,
+        "area_million_km2": round(float(reading.area_million_km2), 2),
+        "climatology_mean": (
+            round(float(reading.climatology_mean), 2)
+            if reading.climatology_mean is not None
+            else None
+        ),
+    }
+
+
+def _ozone_peak_payload(peak) -> dict:
+    return {
+        "year": int(peak.year),
+        "peak_date": peak.peak_date,
+        "area_million_km2": round(float(peak.area_million_km2), 2),
+    }

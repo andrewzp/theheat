@@ -40,6 +40,32 @@ CASES = [
     ("custom.fire_footprint", {"fire_footprint_last_run": "2026-06-01"}, {"fire_footprint_last_run": "2026-06-02"}),
     ("custom.dsf_reset", {"data_source_failures": {"open_meteo": 4}}, {"data_source_failures": {"open_meteo": 0}}),
     ("custom.dsf_absent_keeps_base", {"data_source_failures": {"open_meteo": 4}}, {"data_source_failures": {}}),
+    (
+        "custom.last_good_newest_captured_at",
+        {
+            "last_good_readings": {
+                "co2": {
+                    "data_date": "2026-06-10",
+                    "captured_at": "2026-06-11T00:00:00Z",
+                    "payload": {"ppm": 429.8},
+                }
+            }
+        },
+        {
+            "last_good_readings": {
+                "co2": {
+                    "data_date": "2026-06-09",
+                    "captured_at": "2026-06-10T00:00:00Z",
+                    "payload": {"ppm": 429.4},
+                },
+                "sea_ice_arctic": {
+                    "data_date": "2026-06-10",
+                    "captured_at": "2026-06-11T12:00:00Z",
+                    "payload": {"extent_mkm2": 10.1},
+                },
+            }
+        },
+    ),
     ("custom.ozone_peak", {"ozone_hole_last_peak": {"2026": {"area_million_km2": 22.0}}}, {"ozone_hole_last_peak": {"2026": {"area_million_km2": 25.0}}}),
     (
         "multikey.realistic",

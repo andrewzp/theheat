@@ -258,6 +258,15 @@ def _check_fact_list(
                     f"{field}[{index}].value is missing",
                 )
             )
+        if fact.get("from_cache") is True:
+            issues.append(
+                _issue(
+                    "error",
+                    "cached_reading_in_story_bundle",
+                    f"{field}[{index}].from_cache",
+                    "cached last-good readings cannot be used for story bundles",
+                )
+            )
 
 
 def _check_nested_fact_dicts(
