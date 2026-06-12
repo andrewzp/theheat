@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -16,6 +17,7 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
         for region in ("greenland", "antarctica"):
             region_key = f"ice_mass_{region}"
             im_start = time.perf_counter()
+            fetch_completed = False
             try:
                 if _ice_annual_cap_reached(bot_state):
                     _record_source_run(
@@ -24,6 +26,7 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
                     )
                     continue
                 readings = _fetch_strict(ice_mass.fetch_grace_mass, region=region)
+                fetch_completed = True
                 if not readings:
                     _record_source_run(
                         current_run, bot_state, region_key, im_start,
@@ -31,6 +34,16 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
                     )
                     continue
                 latest_month = readings[-1].month
+                last_good.write(
+                    bot_state,
+                    region_key,
+                    _ice_mass_data_date(latest_month),
+                    {
+                        "region": region,
+                        "latest_month": latest_month,
+                        "readings": [_ice_mass_payload(row) for row in readings[-2:]],
+                    },
+                )
                 last_seen = bot_state.get("ice_mass_last_seen", {}).get(region)
                 if last_seen == latest_month:
                     _record_source_run(
@@ -155,6 +168,22 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
                 )
             except Exception as e:
                 print(f"[alerts] ice_mass {region} error: {e}")
+                cached = (
+                    last_good.read(bot_state, region_key, max_age_days=225)
+                    if not fetch_completed else None
+                )
+                if cached is not None:
+                    latest_month = str(cached.payload.get("latest_month") or "")
+                    if latest_month:
+                        seen = bot_state.setdefault("ice_mass_last_seen", {})
+                        current_seen = str(seen.get(region) or "")
+                        if latest_month > current_seen:
+                            seen[region] = latest_month
+                    _record_source_run(
+                        current_run, bot_state, region_key, im_start,
+                        status="degraded", error=f"served last-good ({cached.data_date})",
+                    )
+                    continue
                 state.log_error(bot_state, region_key, str(e))
                 _record_source_run(
                     current_run, bot_state, region_key, im_start,
@@ -168,3 +197,16 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
                 status="skipped", note="Runs Mondays only",
             )
     return
+
+
+def _ice_mass_data_date(month: str) -> str:
+    month_end = ice_mass._month_end(month)
+    return month_end.isoformat() if month_end else f"{month}-01"
+
+
+def _ice_mass_payload(reading) -> dict:
+    return {
+        "month": reading.month,
+        "mass_gt": round(float(reading.mass_gt), 2),
+        "uncertainty_gt": round(float(reading.uncertainty_gt), 2),
+    }

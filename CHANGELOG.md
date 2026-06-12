@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.44.0] - 2026-06-12
+
+THIRTY-LOOP S-15 adds compact last-good cache continuity for slow-moving
+sources without allowing cached readings to generate story candidates.
+
+### Changed
+
+- **Cache compact slow-mover readings.** `src/data/last_good.py` now stores
+  small per-source derived readings under the new `last_good_readings` state
+  key, merged by newest `captured_at` and persisted through SQLite metadata.
+  CO2, ENSO, sea ice, ice mass, NSIDC Snow Today, climate indices, and ozone
+  hole runners write compact successful readings and record cache-served fetch
+  failures as `degraded` with `served last-good (<data_date>)` telemetry, while
+  `src/two_bot/evidence_contract.py` rejects any bundle facts marked
+  `from_cache=True`.
+
 ## [0.9.43.0] - 2026-06-12
 
 This sentinel fix treats Copernicus EMS as a known-quiet conditional source so

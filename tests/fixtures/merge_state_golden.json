@@ -395,6 +395,56 @@
   },
   {
     "base": {
+      "last_good_readings": {
+        "co2": {
+          "captured_at": "2026-06-11T00:00:00Z",
+          "data_date": "2026-06-10",
+          "payload": {
+            "ppm": 429.8
+          }
+        }
+      }
+    },
+    "expected": {
+      "last_good_readings": {
+        "co2": {
+          "captured_at": "2026-06-11T00:00:00Z",
+          "data_date": "2026-06-10",
+          "payload": {
+            "ppm": 429.8
+          }
+        },
+        "sea_ice_arctic": {
+          "captured_at": "2026-06-11T12:00:00Z",
+          "data_date": "2026-06-10",
+          "payload": {
+            "extent_mkm2": 10.1
+          }
+        }
+      }
+    },
+    "incoming": {
+      "last_good_readings": {
+        "co2": {
+          "captured_at": "2026-06-10T00:00:00Z",
+          "data_date": "2026-06-09",
+          "payload": {
+            "ppm": 429.4
+          }
+        },
+        "sea_ice_arctic": {
+          "captured_at": "2026-06-11T12:00:00Z",
+          "data_date": "2026-06-10",
+          "payload": {
+            "extent_mkm2": 10.1
+          }
+        }
+      }
+    },
+    "label": "custom.last_good_newest_captured_at"
+  },
+  {
+    "base": {
       "ozone_hole_last_peak": {
         "2026": {
           "area_million_km2": 22.0

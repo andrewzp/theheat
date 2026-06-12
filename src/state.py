@@ -101,6 +101,9 @@ DEFAULT_STATE: BotState = {
     # Populated from alert run telemetry so every source row gets a durable
     # health observation, not just the last 20-run dashboard window.
     "source_health": {},
+    # Compact last-good readings for slow-moving sources. Each entry is a
+    # derived detector input, never raw fetched rows.
+    "last_good_readings": {},
     # Global ocean SST archive-high streak. Two-field state:
     # seeded flips True after first observation (enables silent bootstrap);
     # last_milestone_fired tracks which milestone we last tweeted so
@@ -745,6 +748,27 @@ def _merge_data_source_failures(base: Any, nxt: Any) -> dict:
             out[src] = 0 if n == 0 else max(n, int(base.get(src, 0)))
         else:
             out[src] = int(base.get(src, 0))
+    return out
+
+
+def _merge_last_good(base: Any, nxt: Any) -> dict:
+    """Per-source last-good cache merge: keep newest captured_at."""
+
+    base = base if isinstance(base, dict) else {}
+    nxt = nxt if isinstance(nxt, dict) else {}
+    out: dict = {}
+    for source in sorted(set(base) | set(nxt)):
+        a = base.get(source)
+        b = nxt.get(source)
+        if not isinstance(a, dict):
+            out[source] = deepcopy(b)
+            continue
+        if not isinstance(b, dict):
+            out[source] = deepcopy(a)
+            continue
+        a_ts = _parse_state_timestamp(str(a.get("captured_at") or ""))
+        b_ts = _parse_state_timestamp(str(b.get("captured_at") or ""))
+        out[source] = deepcopy(a if a_ts >= b_ts else b)
     return out
 
 
@@ -1622,6 +1646,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "city_monthly_min": _strat_take_incoming,
     "record_streaks": _strat_take_incoming,
     "source_health": _merge_source_health,
+    "last_good_readings": _merge_last_good,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),
     "ice_mass_last_milestone": _strat_reduce_by_key(_present_min),

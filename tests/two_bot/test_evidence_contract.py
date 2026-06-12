@@ -119,6 +119,22 @@ def test_empty_raw_signal_dump_fails_contract():
     assert "missing_raw_signal_dump" in _error_codes(audit)
 
 
+def test_cached_reading_cannot_reach_triage():
+    bundle = replace(
+        _bundle(),
+        current_facts=[
+            {"label": "source", "value": "NOAA"},
+            {"label": "last-good", "value": "2026-06-10", "from_cache": True},
+        ],
+        raw_signal_dump={"source": "NOAA", "event_id": "cached_guard"},
+    )
+
+    audit = audit_story_bundle(bundle)
+
+    assert audit.prompt_ready is False
+    assert "cached_reading_in_story_bundle" in _error_codes(audit)
+
+
 def test_numeric_headline_without_unit_signal_warns():
     bundle = replace(
         _bundle(),

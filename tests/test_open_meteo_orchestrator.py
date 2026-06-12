@@ -219,3 +219,37 @@ def test_wet_bulb_extreme_kill_switch_disables_second_pass(monkeypatch):
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
     assert enqueued == []
+
+
+def test_streaks_not_pruned_on_fetch_failure(monkeypatch):
+    from src.orchestrator.sources import open_meteo as runner
+
+    bot_state = _fresh_state()
+    bot_state["record_streaks"] = {
+        "Paris": {
+            "days": 3,
+            "last_date": "2026-06-01",
+            "start_date": "2026-05-30",
+            "peak_temp_c": 34.0,
+            "updated_at": "2026-06-01",
+        },
+    }
+    current_run = {"id": "run_1", "mode": "alerts", "started_at": "2026-06-12T00:00:00Z", "sources": []}
+    prune_calls = []
+
+    def fake_check(_cities, metrics_out):
+        metrics_out.update({"city_fetch_failures": 5, "city_readings": 0})
+        return [], []
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", fake_check)
+    monkeypatch.setattr(
+        runner.state,
+        "prune_stale_record_streaks",
+        lambda state: prune_calls.append(state) or state,
+    )
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert prune_calls == []
+    assert current_run["sources"][0]["status"] == "failed"

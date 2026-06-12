@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -35,10 +36,23 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> None:
     for index_name, fetcher_name in _INDEX_FETCHERS:
         source_start = time.perf_counter()
         source_promoted = 0
+        fetch_completed = False
         try:
             readings = _fetch_strict(getattr(climate_indices, fetcher_name))
+            fetch_completed = True
             readings_by_index[index_name] = readings
             if readings:
+                latest = readings[-1]
+                prior = readings[-2] if len(readings) > 1 else None
+                last_good.write(
+                    bot_state,
+                    index_name.lower(),
+                    latest.date,
+                    {
+                        "latest": _oscillation_payload(latest),
+                        "previous": _oscillation_payload(prior) if prior else None,
+                    },
+                )
                 state.update_oscillation_last_phase(bot_state, index_name, readings[-1].phase)
 
             for event in (
@@ -115,9 +129,23 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> None:
             )
         except Exception as e:
             print(f"[alerts] {index_name} climate index error: {e}")
-            state.log_error(bot_state, index_name.lower(), str(e))
+            source_key = index_name.lower()
+            cached = (
+                last_good.read(bot_state, source_key, max_age_days=360)
+                if not fetch_completed else None
+            )
+            if cached is not None:
+                latest = cached.payload.get("latest")
+                if isinstance(latest, dict) and latest.get("phase"):
+                    state.update_oscillation_last_phase(bot_state, index_name, str(latest["phase"]))
+                _record_source_run(
+                    current_run, bot_state, source_key, source_start,
+                    status="degraded", error=f"served last-good ({cached.data_date})",
+                )
+                continue
+            state.log_error(bot_state, source_key, str(e))
             _record_source_run(
-                current_run, bot_state, index_name.lower(), source_start,
+                current_run, bot_state, source_key, source_start,
                 status="failed", error=str(e),
             )
 
@@ -222,3 +250,12 @@ def _oscillation_annual_cap_reached(bot_state: BotState, index_name: str) -> boo
         print(f"[{index_name.lower()}] Annual cap reached ({count}/{cap} for {year_key}), skipping")
         return True
     return False
+
+
+def _oscillation_payload(reading) -> dict:
+    return {
+        "year": int(reading.year),
+        "month": int(reading.month),
+        "value": round(float(reading.value), 3),
+        "phase": reading.phase,
+    }

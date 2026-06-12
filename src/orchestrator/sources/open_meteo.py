@@ -710,9 +710,6 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             ):
                 country_count += 1
 
-        # Prune stale streaks at cycle end
-        state.prune_stale_record_streaks(bot_state)
-
         total_observed = sum(signal_counts.values()) + country_count
         # Build a structured note. For GHCN: surface the funnel
         # (active -> with-obs -> checked -> raw_signals -> bundles -> queued)
@@ -763,6 +760,10 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     "provider": "open_meteo",
                     "pipeline_metrics": dict(open_meteo_pipeline_metrics),
                 }
+        # Prune stale streaks only after a non-failed source cycle; a total
+        # fetch failure should not erase continuity state.
+        if source_status != "failed":
+            state.prune_stale_record_streaks(bot_state)
         if source_status == "failed":
             fail_count = state.increment_data_source_failure(bot_state, _signals_provider)
             try:

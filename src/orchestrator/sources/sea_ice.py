@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import last_good
 from src.orchestrator.common import *
 
 
@@ -12,8 +13,22 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> None:
         print("[alerts] Checking sea ice records...")
         for hemisphere in ("Arctic", "Antarctic"):
             sea_ice_start = time.perf_counter()
+            fetch_completed = False
             try:
                 readings = _fetch_strict(sea_ice.fetch_sea_ice, hemisphere=hemisphere)
+                fetch_completed = True
+                if readings:
+                    latest = readings[-1]
+                    last_good.write(
+                        bot_state,
+                        f"sea_ice_{hemisphere.lower()}",
+                        latest.date,
+                        {
+                            "hemisphere": latest.hemisphere,
+                            "date": latest.date,
+                            "extent_mkm2": round(float(latest.extent_million_km2), 3),
+                        },
+                    )
                 record = sea_ice.detect_record_low(readings)
                 sea_ice_score: EditorialScore | None = None
                 if record and not state.is_duplicate(bot_state, record.event_id):
@@ -53,9 +68,20 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> None:
                 )
             except Exception as e:
                 print(f"[alerts] Sea ice ({hemisphere}) error: {e}")
-                state.log_error(bot_state, f"sea_ice_{hemisphere.lower()}", str(e))
+                source_key = f"sea_ice_{hemisphere.lower()}"
+                cached = (
+                    last_good.read(bot_state, source_key, max_age_days=15)
+                    if not fetch_completed else None
+                )
+                if cached is not None:
+                    _record_source_run(
+                        current_run, bot_state, source_key, sea_ice_start,
+                        status="degraded", error=f"served last-good ({cached.data_date})"
+                    )
+                    continue
+                state.log_error(bot_state, source_key, str(e))
                 _record_source_run(
-                    current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
+                    current_run, bot_state, source_key, sea_ice_start,
                     status="failed", error=str(e)
                 )
     else:
