@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.52.0] - 2026-06-12
+
+THIRTY-LOOP S-25 dark-ships OpenAQ PM2.5 ground-station corroboration so
+model-estimated air-quality hazards can carry stronger evidence when Andrew
+adds the OpenAQ API key.
+
+### Changed
+
+- **Add OpenAQ corroboration behind a secret.** New `src/data/openaq.py` fetches
+  the nearest fresh OpenAQ PM2.5 reading within 25 km, upgrades an air-quality
+  event only when the station value is within 35% of the CAMS 24-hour mean, and
+  degrades silently on OpenAQ failures. PM2.5 bundles now carry station facts
+  when corroborated, the writer/fact-check prompts recognize
+  `model_corroborated_by_station`, and `.github/workflows/bot.yml` passes
+  `OPENAQ_API_KEY` from secrets while production remains unchanged until the
+  secret is configured.
+
 ## [0.9.51.0] - 2026-06-12
 
 THIRTY-LOOP S-23 adds reef-system context to coral bleaching bundles so the

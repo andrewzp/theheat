@@ -78,6 +78,10 @@ class PM25HazardEvent:
     who_multiple: float
     us_aqi_daily_max: int | None
     event_id: str
+    evidence_grade: str = "model_estimated"
+    station_name: str | None = None
+    station_pm25_ug_m3: float | None = None
+    station_distance_km: float | None = None
 
 
 @dataclass(frozen=True)

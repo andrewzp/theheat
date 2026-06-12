@@ -6,7 +6,7 @@ import os
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
-from src.data import air_quality
+from src.data import air_quality, openaq
 from src.two_bot.intern import build_dust_event_bundle, build_pm25_hazard_bundle
 
 # A 638-city sweep routinely loses its rate-limited tail chunk to Open-Meteo's
@@ -67,6 +67,7 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
     failures = 0
     pm25_enabled = _enabled("THEHEAT_AQ_PM25_ENABLED")
     dust_enabled = _enabled("THEHEAT_AQ_DUST_ENABLED")
+    openaq_enabled = bool(os.environ.get("OPENAQ_API_KEY", "").strip())
 
     try:
         observations = air_quality.fetch_batch_air_quality(cities)
@@ -82,6 +83,8 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
             if pm25_enabled:
                 pm25_event = air_quality.detect_pm25_hazard(obs)
                 if pm25_event is not None:
+                    if openaq_enabled:
+                        pm25_event = openaq.corroborate_pm25_hazard(pm25_event)
                     city_slug = air_quality._city_slug(pm25_event.city)
                     if _should_emit_tier(
                         bot_state,
@@ -114,7 +117,10 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
                                     _fact("WHO 2021 24h multiple", f"{pm25_event.who_multiple:.1f}x"),
                                     _fact("Tier", f"{pm25_event.tier}/3"),
                                     _fact("US AQI daily-max", pm25_event.us_aqi_daily_max),
-                                    _fact("Evidence grade", "model_estimated; CAMS 0.4 degree grid"),
+                                    _fact("Evidence grade", pm25_event.evidence_grade),
+                                    _fact("OpenAQ station", pm25_event.station_name),
+                                    _fact("OpenAQ PM2.5", pm25_event.station_pm25_ug_m3),
+                                    _fact("OpenAQ distance km", pm25_event.station_distance_km),
                                 ],
                             )
                             bundle = build_pm25_hazard_bundle(pm25_event)
@@ -224,6 +230,7 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
                 "failed_cities": failures,
                 "pm25_enabled": pm25_enabled,
                 "dust_enabled": dust_enabled,
+                "openaq_enabled": openaq_enabled,
             },
         )
     except Exception as exc:
