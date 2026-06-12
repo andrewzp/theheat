@@ -175,11 +175,12 @@ def fetch_region_sst(
     *,
     strict: bool = False,
     min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
 ) -> RegionalSSTReading | None:
     """Fetch and tier a single regional SST anomaly reading."""
 
     try:
-        return _fetch_region_sst_strict(region, min_valid_cells=min_valid_cells)
+        return _fetch_region_sst_strict(region, min_valid_cells=min_valid_cells, today=today)
     except (requests.RequestException, SourceFetchError, ValueError) as exc:
         if strict:
             raise SourceFetchError(f"ocean_sst_anomaly/{region.slug} fetch failed: {exc}") from exc
@@ -191,6 +192,7 @@ def _fetch_region_sst_strict(
     region: RegionDef,
     *,
     min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
 ) -> RegionalSSTReading | None:
     """Fetch one region, raising for source errors and returning None below tier."""
 
@@ -207,7 +209,12 @@ def _fetch_region_sst_strict(
     iso_date, cells = _parse_griddap_csv(text)
     if iso_date is None or not cells:
         raise SourceFetchError(f"ocean_sst_anomaly/{region.slug}: empty grid")
-    assert_freshness(date.fromisoformat(iso_date), "ocean_sst_anomaly", _MAX_DATA_LAG_DAYS)
+    assert_freshness(
+        date.fromisoformat(iso_date),
+        "ocean_sst_anomaly",
+        _MAX_DATA_LAG_DAYS,
+        today=today,
+    )
     if len(cells) < min_valid_cells:
         print(
             f"[sst_anom] {region.slug}: only {len(cells)} valid cells "

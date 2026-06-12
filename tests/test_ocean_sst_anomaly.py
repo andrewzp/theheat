@@ -146,7 +146,7 @@ def test_fetch_region_sst_success_tier2(monkeypatch):
         lambda *args, **kwargs: _response(text),
     )
 
-    reading = fetch_region_sst(region, min_valid_cells=3)
+    reading = fetch_region_sst(region, min_valid_cells=3, today=date(2026, 6, 11))
 
     assert reading is not None
     assert reading.region_slug == "nino34"

@@ -94,7 +94,7 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
             "ocean_sst_anomaly",
             start,
             status="success",
-            observed=len(readings),
+            observed=len(ocean_sst_anomaly.REGION_REGISTRY),
             promoted=source_promoted,
             drafted=0,
         )
