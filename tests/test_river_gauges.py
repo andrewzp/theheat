@@ -1,5 +1,6 @@
 """Tests for USGS river gauge / flood stage data."""
 
+from datetime import date, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -21,6 +22,8 @@ TEST_STATIONS = [
     ("07374000", "Mississippi River", "Baton Rouge, LA"),
 ]
 
+FRESH_DATETIME = f"{(date.today() - timedelta(days=1)).isoformat()}T12:00:00Z"
+
 SAMPLE_USGS_RESPONSE = {
     "value": {
         "timeSeries": [
@@ -31,7 +34,7 @@ SAMPLE_USGS_RESPONSE = {
                 "values": [
                     {
                         "value": [
-                            {"value": "35.5", "dateTime": "2026-04-08T12:00:00"},
+                            {"value": "35.5", "dateTime": FRESH_DATETIME},
                         ]
                     }
                 ],
@@ -43,7 +46,7 @@ SAMPLE_USGS_RESPONSE = {
                 "values": [
                     {
                         "value": [
-                            {"value": "22.1", "dateTime": "2026-04-08T12:00:00"},
+                            {"value": "22.1", "dateTime": FRESH_DATETIME},
                         ]
                     }
                 ],

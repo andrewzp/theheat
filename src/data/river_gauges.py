@@ -11,6 +11,7 @@ from datetime import date
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, assert_response_schema
 
@@ -132,6 +133,7 @@ def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
 
         flood_stages = _fetch_flood_stages(strict=strict)
         readings = []
+        payload_dates = []
         today = date.today().isoformat()
 
         time_series = data.get("value", {}).get("timeSeries", [])
@@ -148,6 +150,7 @@ def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
 
             # Get most recent reading
             latest = values[-1]
+            payload_dates.append(latest.get("dateTime"))
             try:
                 gauge_ft = float(latest.get("value", 0))
             except (ValueError, TypeError):
@@ -171,6 +174,8 @@ def fetch_river_levels(*, strict: bool = False) -> list[RiverReading]:
                 event_id=f"river_{site_id}_{today}",
             ))
 
+        if newest_date := newest_freshness_date(payload_dates):
+            assert_freshness(newest_date, "river_gauges", max_age_days=2)
         return readings
 
     except (requests.RequestException, ValueError, KeyError) as exc:

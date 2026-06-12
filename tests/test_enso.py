@@ -1,16 +1,19 @@
 """Tests for NOAA ENSO/ONI data."""
 
+from datetime import date
+
 import responses
 
 from src.data.enso import ENSOReading, fetch_enso_data, detect_transition
 
-SAMPLE_ONI_TEXT = """SEAS    YR   TOTAL   APTS   ANOM
-DJF    2024    -0.8   26.1   -0.8
-JFM    2024    -0.6   26.3   -0.6
-FMA    2024    -0.3   26.8   -0.3
-MAM    2024     0.1   27.5    0.1
-AMJ    2024     0.3   28.0    0.3
-MJJ    2024     0.6   28.5    0.6
+SAMPLE_YEAR = date.today().year
+SAMPLE_ONI_TEXT = f"""SEAS    YR   TOTAL   APTS   ANOM
+DJF    {SAMPLE_YEAR}    -0.8   26.1   -0.8
+JFM    {SAMPLE_YEAR}    -0.6   26.3   -0.6
+FMA    {SAMPLE_YEAR}    -0.3   26.8   -0.3
+MAM    {SAMPLE_YEAR}     0.1   27.5    0.1
+AMJ    {SAMPLE_YEAR}     0.3   28.0    0.3
+MJJ    {SAMPLE_YEAR}     0.6   28.5    0.6
 """
 
 
@@ -83,7 +86,7 @@ class TestFetchEnsoData:
             status=200,
         )
         readings = fetch_enso_data()
-        assert readings[0].event_id == "enso_DJF_2024"
+        assert readings[0].event_id == f"enso_DJF_{SAMPLE_YEAR}"
 
 
 class TestDetectTransition:

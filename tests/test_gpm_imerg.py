@@ -69,6 +69,7 @@ class TestGpmFetch:
         readings = fetch_daily_precip(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
             target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
             strict=True,
         )
 
@@ -167,6 +168,7 @@ class TestGpmFetch:
 
         readings = fetch_daily_precip(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
+            today=date(2026, 6, 1),
             strict=False,
         )
 
@@ -189,7 +191,12 @@ class TestGpmFetch:
             for i in range(DEFAULT_CITY_LIMIT + 10)
         ]
 
-        readings = fetch_daily_precip(cities, target_date=date(2026, 5, 14), strict=True)
+        readings = fetch_daily_precip(
+            cities,
+            target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
+            strict=True,
+        )
 
         assert len(readings) == DEFAULT_CITY_LIMIT
         assert len(calls) == DEFAULT_CITY_LIMIT
@@ -215,6 +222,7 @@ class TestGpmFetch:
         readings = fetch_daily_precip(
             cities,
             target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
             strict=False,
             max_workers=3,
         )
@@ -253,6 +261,7 @@ class TestGpmFetch:
                     {"city": "Tokyo", "country": "Japan", "lat": "35.68", "lon": "139.69"},
                 ],
                 target_date=date(2026, 5, 14),
+                today=date(2026, 5, 20),
                 strict=True,
             )
 
@@ -289,6 +298,7 @@ class TestGpmFetch:
             fetch_daily_precip(
                 cities,
                 target_date=date(2026, 5, 14),
+                today=date(2026, 5, 20),
                 strict=True,
             )
 
@@ -336,6 +346,7 @@ class TestGpmFetch:
             fetch_daily_precip(
                 cities,
                 target_date=date(2026, 5, 14),
+                today=date(2026, 5, 20),
                 strict=True,
                 max_workers=2,
             )
@@ -363,6 +374,7 @@ class TestGpmFetch:
             fetch_daily_precip(
                 [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
                 target_date=date(2026, 5, 14),
+                today=date(2026, 5, 20),
                 strict=True,
             )
 
@@ -389,6 +401,7 @@ class TestGpmFetch:
         readings = fetch_daily_precip(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
             target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
             strict=True,
         )
 
@@ -412,6 +425,7 @@ class TestGpmFetch:
         readings = fetch_daily_precip(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
             target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
             strict=True,
         )
 
@@ -435,6 +449,7 @@ class TestGpmFetch:
             fetch_daily_precip(
                 [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
                 target_date=date(2026, 5, 14),
+                today=date(2026, 5, 20),
                 strict=True,
             )
 
@@ -463,6 +478,7 @@ class TestGpmFetch:
         readings = fetch_daily_precip(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
             target_date=date(2026, 5, 14),
+            today=date(2026, 5, 20),
             strict=True,
         )
 
@@ -910,7 +926,7 @@ class TestGpmGridFetch:
             lambda *a, **kw: _make_grid_bytes({(0, lon_i, lat_i): 55.0}),
         )
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert len(readings) == 1
         assert readings[0].mm_total == 55.0
@@ -928,7 +944,7 @@ class TestGpmGridFetch:
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", boom)
         monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: 3.0)
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         # Grid path failed → legacy OPeNDAP per-city path delivered the reading.
         assert len(readings) == 1
@@ -955,7 +971,7 @@ class TestGpmGridFetch:
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
         monkeypatch.setattr(gpm, "_fetch_city_precip", fail_opendap)
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert calls == ["s3", "datapool"]
         assert len(readings) == 1
@@ -980,7 +996,7 @@ class TestGpmGridFetch:
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", fail_grid)
         monkeypatch.setattr(gpm, "_fetch_city_precip", fake_opendap)
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert calls == ["datapool", "s3", "opendap"]
         assert len(readings) == 1
@@ -1001,7 +1017,7 @@ class TestGpmGridFetch:
 
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert len(readings) == 1
         assert "[gpm] grid source s3 served (chain position 2)" in capsys.readouterr().out
@@ -1018,7 +1034,7 @@ class TestGpmGridFetch:
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", fail_if_called)
         monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: 9.0)
 
-        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5))
+        readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert len(readings) == 1
         assert readings[0].mm_total == 9.0

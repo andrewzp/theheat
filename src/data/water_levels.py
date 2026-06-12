@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
@@ -66,6 +67,7 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
     """Fetch latest water level readings for all monitored stations."""
     readings = []
     failures: list[str] = []
+    payload_dates = []
     today = date.today()
     now = datetime.now(UTC)
     begin = (now - timedelta(hours=6)).strftime("%Y%m%d %H:%M")
@@ -99,6 +101,7 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
             # Get the most recent observation
             latest_obs = obs_data[-1]
             obs_time = latest_obs.get("t", "")
+            payload_dates.append(obs_time)
             observed = float(latest_obs.get("v", 0))
 
             # Fetch predicted tide for comparison
@@ -151,6 +154,8 @@ def fetch_water_levels(*, strict: bool = False) -> list[WaterLevelReading]:
 
     if strict and failures and not readings:
         raise SourceFetchError(f"Water levels fetch failed for all stations: {failures[0]}")
+    if newest_date := newest_freshness_date(payload_dates):
+        assert_freshness(newest_date, "water_levels", max_age_days=2)
     return readings
 
 

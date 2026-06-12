@@ -9,11 +9,12 @@ The remaining events are either Emergency-tier (catastrophic) or
 hurricane-related (rare by definition).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
 
@@ -69,10 +70,14 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
         data = resp.json()
 
         alerts = []
+        payload_dates = []
         seen_events = set()
 
         for feature in data.get("features", []):
             props = feature.get("properties", {})
+            payload_dates.append(
+                props.get("sent") or props.get("effective") or props.get("onset")
+            )
             event = props.get("event", "")
 
             if event not in TRACKED_EVENTS:
@@ -116,6 +121,8 @@ def fetch_alerts(*, strict: bool = False) -> list[SevereWeatherAlert]:
                 sender_name=sender_name,
             ))
 
+        if newest_date := newest_freshness_date(payload_dates):
+            assert_freshness(newest_date, "nws_alerts", max_age_days=1)
         return alerts
 
     except (requests.RequestException, ValueError, KeyError) as exc:

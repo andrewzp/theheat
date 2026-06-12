@@ -1,22 +1,27 @@
 """Tests for NSIDC sea ice extent data."""
 
+from datetime import date, timedelta
+
 import responses
 
 from src.data.sea_ice import SeaIceReading, SeaIceRecord, fetch_sea_ice, detect_record_low
 
-SAMPLE_CSV = """Year, Month, Day, Extent, Missing, Source Data
+FRESH_DAY = date.today() - timedelta(days=1)
+FRESH_ROW = f"{FRESH_DAY.year}, {FRESH_DAY.month:4d}, {FRESH_DAY.day:4d}"
+
+SAMPLE_CSV = f"""Year, Month, Day, Extent, Missing, Source Data
  , , , in 10^6 sq km, ,
  1979,    1,    1,  13.234,       0, source
  1980,    1,    1,  13.100,       0, source
  2024,    1,    1,  12.800,       0, source
- 2025,    1,    1,  12.500,       0, source
+ {FRESH_ROW},  12.500,       0, source
 """
 
-SAMPLE_CSV_NO_RECORD = """Year, Month, Day, Extent, Missing, Source Data
+SAMPLE_CSV_NO_RECORD = f"""Year, Month, Day, Extent, Missing, Source Data
  , , , in 10^6 sq km, ,
  1979,    1,    1,  13.234,       0, source
  1980,    1,    1,  13.100,       0, source
- 2025,    1,    1,  13.300,       0, source
+ {FRESH_ROW},  13.300,       0, source
 """
 
 
@@ -58,11 +63,11 @@ class TestFetchSeaIce:
 
     @responses.activate
     def test_skips_invalid_rows(self):
-        bad_csv = """Year, Month, Day, Extent, Missing, Source Data
+        bad_csv = f"""Year, Month, Day, Extent, Missing, Source Data
  , , , in 10^6 sq km, ,
  1979,    1,    1,  13.234,       0, source
  bad,  row,  here
- 2025,    1,    1,  12.500,       0, source
+ {FRESH_ROW},  12.500,       0, source
 """
         responses.add(
             responses.GET,

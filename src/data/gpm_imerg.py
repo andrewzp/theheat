@@ -20,6 +20,7 @@ from typing import Any
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._s3credentials import get_s3_credentials
 from src.data.source_status import SourceFetchError, SourceSkipped
@@ -134,6 +135,7 @@ def fetch_daily_precip(
     max_cities: int | None = DEFAULT_CITY_LIMIT,
     max_workers: int | None = DEFAULT_MAX_WORKERS,
     strict: bool = False,
+    today: date | None = None,
 ) -> list[CityPrecipReading]:
     """Fetch point daily precipitation for monitored cities.
 
@@ -163,6 +165,7 @@ def fetch_daily_precip(
                 product=product,
                 max_cities=max_cities,
                 token=token,
+                today=today,
             )
             print(
                 f"[gpm] grid source {grid_source} served "
@@ -191,6 +194,7 @@ def fetch_daily_precip(
             headers=headers,
             max_lookback=_max_lookback_days(),
         )
+    assert_freshness(requested_date, "gpm_imerg", max_age_days=6, today=today)
     rows = cities if cities is not None else load_cities()
     selected = list(rows if max_cities is None else rows[:max_cities])
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
@@ -660,6 +664,7 @@ def _fetch_daily_precip_grid(
     product: str,
     max_cities: int | None,
     token: str,
+    today: date | None = None,
 ) -> list[CityPrecipReading]:
     """Download the daily IMERG grid once (via ``source``) and subset every
     monitored city locally. Raises _GridFetchUnavailable on any failure so the
@@ -690,6 +695,7 @@ def _fetch_daily_precip_grid(
         raise _GridFetchUnavailable(
             f"0 city readings parsed from {source} grid for {resolved_date.isoformat()}"
         )
+    assert_freshness(resolved_date, "gpm_imerg", max_age_days=6, today=today)
     return readings
 
 

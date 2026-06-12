@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
+from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data.cyclones import (
     BasinRecordEvent,
@@ -39,7 +40,12 @@ def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
             },
             timeout=30,
         )
-        return parse_rss(response.text)
+        advisories = parse_rss(response.text)
+        if advisories and (
+            newest_date := newest_freshness_date([advisory.issued_at for advisory in advisories])
+        ):
+            assert_freshness(newest_date, "jtwc", max_age_days=2)
+        return advisories
     except (requests.RequestException, ET.ParseError, ValueError, TypeError) as exc:
         if strict:
             raise SourceFetchError(f"JTWC fetch failed: {exc}") from exc

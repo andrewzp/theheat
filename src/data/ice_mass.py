@@ -19,12 +19,15 @@ hardcoding.
 
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
+from datetime import date
 import math
 import os
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError, SourceSkipped
 
@@ -53,6 +56,16 @@ def _decimal_year_to_month(decimal_year: float) -> str:
     if month_idx > 11:
         month_idx = 11
     return f"{year}-{month_idx + 1:02d}"
+
+
+def _month_end(month: str) -> date | None:
+    try:
+        year_s, month_s = month.split("-", 1)
+        year = int(year_s)
+        month_num = int(month_s)
+        return date(year, month_num, monthrange(year, month_num)[1])
+    except (ValueError, TypeError):
+        return None
 
 
 @dataclass
@@ -186,6 +199,8 @@ def fetch_grace_mass(region: str, *, strict: bool = False) -> list[IceMassReadin
     readings.sort(key=lambda r: r.month)
     if strict and not readings:
         raise SourceFetchError(f"Ice mass fetch failed for {region}: no valid readings")
+    if readings and (latest_month := _month_end(readings[-1].month)):
+        assert_freshness(latest_month, "ice_mass", max_age_days=75)
     return readings
 
 

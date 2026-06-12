@@ -8,12 +8,13 @@ Dataset: G02135
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import datetime
 import csv
 import io
 
 import requests
 
+from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_cache_revalidation
 from src.data.source_status import SourceFetchError
 
@@ -92,12 +93,13 @@ def fetch_sea_ice(
                 event_id=event_id,
             ))
 
-        return readings
-
     except (requests.RequestException, csv.Error) as exc:
         if strict:
             raise SourceFetchError(f"Sea ice fetch failed for {hemisphere}: {exc}") from exc
         return []
+    if readings:
+        assert_freshness(readings[-1].date, "sea_ice", max_age_days=5)
+    return readings
 
 
 def detect_record_low(readings: list[SeaIceReading]) -> SeaIceRecord | None:
