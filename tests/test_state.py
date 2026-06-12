@@ -43,6 +43,10 @@ from src.state import (
 )
 
 
+def _iso(dt: datetime) -> str:
+    return dt.isoformat().replace("+00:00", "Z")
+
+
 def _draft_timestamp(days_ago: int) -> str:
     return (datetime.now(UTC) - timedelta(days=days_ago)).isoformat().replace("+00:00", "Z")
 
@@ -422,6 +426,24 @@ class TestMergeStateContract:
             merged = _merge_state({key: {"A": 2}}, {key: {"A": 1, "C": 0}})
             assert merged[key] == {"A": 2, "C": 0}, key
 
+    def test_tier_touch_ts_merges_by_latest_timestamp(self):
+        from src.state import _merge_state
+
+        merged = _merge_state(
+            {"tier_touch_ts": {"fire_complex_tiers::A": "2026-06-01T00:00:00Z"}},
+            {
+                "tier_touch_ts": {
+                    "fire_complex_tiers::A": "2026-06-02T00:00:00Z",
+                    "cyclone_tiers::B": "2026-06-01T00:00:00Z",
+                }
+            },
+        )
+
+        assert merged["tier_touch_ts"] == {
+            "fire_complex_tiers::A": "2026-06-02T00:00:00Z",
+            "cyclone_tiers::B": "2026-06-01T00:00:00Z",
+        }
+
     def test_ch4_last_milestone_one_sided_keeps_present_value(self):
         """Codex #4: a one-sided merge takes the present value unchanged; both → max."""
         from src.state import _merge_state
@@ -644,6 +666,188 @@ class TestCopernicusFloodState:
         increment_flood_annual_count(fresh_state)
 
         assert fresh_state["flood_annual_count"]["2026"] == 1
+
+
+class TestStatePruning:
+    def test_prune_drops_old_snow_records(self):
+        from src.state import prune_state
+
+        state = _fresh_state()
+        state["snow_recent_by_station"] = {
+            "albro_lake": [{"date": "2026-06-10", "mm": 12.0}],
+        }
+        state["snow_daily_swe_gain_records"] = {
+            "albro_lake:06-09": {"mm": 20.0, "year": 2015, "date": "2015-06-09"},
+            "albro_lake:06-10": {"mm": 24.0, "year": 2016, "date": "2016-06-10"},
+            "albro_lake:06-11": {"mm": 28.0, "year": 2024, "date": "2024-06-11"},
+        }
+
+        prune_state(state, datetime(2026, 6, 12, tzinfo=UTC))
+
+        assert "albro_lake:06-09" not in state["snow_daily_swe_gain_records"]
+        assert set(state["snow_daily_swe_gain_records"]) == {
+            "albro_lake:06-10",
+            "albro_lake:06-11",
+        }
+
+    def test_prune_evicts_dormant_stations(self):
+        from src.state import prune_state
+
+        state = _fresh_state()
+        state["snow_recent_by_station"] = {
+            "active_station": [{"date": "2026-06-01", "mm": 12.0}],
+            "dormant_station": [{"date": "2026-01-01", "mm": 20.0}],
+        }
+        state["snow_daily_swe_gain_records"] = {
+            "active_station:06-01": {"mm": 12.0, "year": 2026, "date": "2026-06-01"},
+            "dormant_station:06-01": {"mm": 30.0, "year": 2026, "date": "2026-06-01"},
+        }
+        state["precip_recent_by_city"] = {
+            "france:paris": [{"date": "2026-06-02", "mm": 45.0}],
+            "italy:rome": [{"date": "2026-01-02", "mm": 55.0}],
+        }
+        state["precip_daily_records"] = {
+            "france:paris:06-02": {"mm": 45.0, "year": 2026, "date": "2026-06-02"},
+            "italy:rome:06-02": {"mm": 55.0, "year": 2026, "date": "2026-06-02"},
+        }
+
+        prune_state(state, datetime(2026, 6, 12, tzinfo=UTC))
+
+        assert state["snow_recent_by_station"] == {
+            "active_station": [{"date": "2026-06-01", "mm": 12.0}],
+        }
+        assert state["snow_daily_swe_gain_records"] == {
+            "active_station:06-01": {"mm": 12.0, "year": 2026, "date": "2026-06-01"},
+        }
+        assert state["precip_recent_by_city"] == {
+            "france:paris": [{"date": "2026-06-02", "mm": 45.0}],
+        }
+        assert state["precip_daily_records"] == {
+            "france:paris:06-02": {"mm": 45.0, "year": 2026, "date": "2026-06-02"},
+        }
+
+    def test_shipped_tweets_capped_in_merge(self):
+        from src.state import _merge_state
+
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+
+        def row(index: int) -> dict:
+            return {
+                "tweet_text": f"tweet {index}",
+                "signal_kind": "test",
+                "event_id": f"event_{index}",
+                "shipped_at": _iso(start + timedelta(minutes=index)),
+            }
+
+        base = {"memory": {"shipped_tweets": [row(i) for i in range(150)]}}
+        incoming = {"memory": {"shipped_tweets": [row(i) for i in range(150, 250)]}}
+
+        merged = _merge_state(base, incoming)
+
+        shipped = merged["memory"]["shipped_tweets"]
+        assert len(shipped) == 200
+        assert shipped[0]["tweet_text"] == "tweet 50"
+        assert shipped[-1]["tweet_text"] == "tweet 249"
+
+    def test_tier_ttl_prune_with_migration_stamp(self):
+        from src.state import prune_state
+
+        now = datetime(2026, 6, 12, 12, tzinfo=UTC)
+        state = _fresh_state()
+        state["fire_complex_tiers"] = {"old_fire": 3, "legacy_fire": 1}
+        state["cyclone_tiers"] = {"old_storm": 4}
+        state["flood_activation_tiers"] = {"old_flood": "Major", "fresh_flood": "Minor"}
+        state["tier_touch_ts"] = {
+            "fire_complex_tiers::old_fire": _iso(now - timedelta(days=91)),
+            "cyclone_tiers::old_storm": _iso(now - timedelta(days=31)),
+            "flood_activation_tiers::old_flood": _iso(now - timedelta(days=61)),
+            "flood_activation_tiers::fresh_flood": _iso(now - timedelta(days=10)),
+            "fire_complex_tiers::orphan": _iso(now),
+        }
+
+        prune_state(state, now)
+
+        assert state["fire_complex_tiers"] == {"legacy_fire": 1}
+        assert state["cyclone_tiers"] == {}
+        assert state["flood_activation_tiers"] == {"fresh_flood": "Minor"}
+        assert state["tier_touch_ts"] == {
+            "fire_complex_tiers::legacy_fire": "2026-06-12T12:00:00Z",
+            "flood_activation_tiers::fresh_flood": "2026-06-02T12:00:00Z",
+        }
+
+    def test_tier_writers_refresh_sidecar(self, fresh_state):
+        from src.state import update_fire_complex_tier
+
+        update_fire_complex_tier(fresh_state, "GWIS_AAA", 2)
+        update_cyclone_tier(fresh_state, "jtwc:06w", 1)
+        update_flood_activation_tier(fresh_state, "EMSR999", "Major")
+
+        assert set(fresh_state["tier_touch_ts"]) == {
+            "fire_complex_tiers::GWIS_AAA",
+            "cyclone_tiers::jtwc:06w",
+            "flood_activation_tiers::EMSR999",
+        }
+
+    def test_annual_counts_old_years_dropped(self):
+        from src.state import prune_state
+
+        state = _fresh_state()
+        for key in DEFAULT_STATE:
+            if key.endswith("_annual_count"):
+                state[key] = {"2024": 1, "2025": 2, "2026": 3}
+        state["ozone_hole_last_peak"] = {
+            "2024": {"area_million_km2": 21.0},
+            "2025": {"area_million_km2": 22.0},
+            "2026": {"area_million_km2": 23.0},
+        }
+
+        prune_state(state, datetime(2026, 6, 12, tzinfo=UTC))
+
+        for key in DEFAULT_STATE:
+            if key.endswith("_annual_count"):
+                assert state[key] == {"2025": 2, "2026": 3}
+        assert state["ozone_hole_last_peak"] == {
+            "2025": {"area_million_km2": 22.0},
+            "2026": {"area_million_km2": 23.0},
+        }
+
+    def test_finalize_run_calls_prune_state(self):
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        state = _fresh_state()
+        state["memory"]["shipped_tweets"] = [
+            {
+                "tweet_text": f"tweet {i}",
+                "signal_kind": "test",
+                "event_id": f"event_{i}",
+                "shipped_at": _iso(start + timedelta(minutes=i)),
+            }
+            for i in range(201)
+        ]
+
+        finalize_run(state, {"id": "run_test", "mode": "alerts", "sources": []})
+
+        assert len(state["memory"]["shipped_tweets"]) == 200
+        assert state["memory"]["shipped_tweets"][0]["tweet_text"] == "tweet 1"
+
+    def test_size_guard_warns_over_800k(self, capsys):
+        from src.state import _write_gist_state
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+        state = _fresh_state()
+        state["memory"]["used_framings"] = [f"{i}-" + ("x" * 1000) for i in range(820)]
+
+        with patch.multiple("src.state", GIST_ID="gist", GITHUB_TOKEN="token"):
+            with patch("src.state.requests.patch", return_value=Response()) as mock_patch:
+                assert _write_gist_state(state) is True
+
+        out = capsys.readouterr().out
+        assert "[state] WARNING size" in out
+        assert "approaching gist inline cliff" in out
+        payload = mock_patch.call_args.kwargs["json"]["files"]["state.json"]["content"]
+        assert '"source":"state_size"' in payload
 
 
 class TestLane08State:
@@ -946,6 +1150,29 @@ class TestSqliteBackend:
 
             assert loaded["sst_anom_last_tier"] == {"2026/north_atlantic": 3, "2026/mediterranean": 2}
             assert loaded["sst_anom_annual_count"] == {"2026": 5}
+
+    def test_tier_touch_ts_survives_sqlite_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "tier_touch_ts": {
+                    "fire_complex_tiers::GWIS_AAA": "2026-06-12T00:00:00Z",
+                    "cyclone_tiers::jtwc:06w": "2026-06-12T00:00:00Z",
+                },
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["tier_touch_ts"] == sample["tier_touch_ts"]
 
     def test_air_quality_tier_keys_survive_sqlite_round_trip(self):
         # Regression (Codex, PR #194 gap, sibling of the SST one): the AQ tier

@@ -149,6 +149,7 @@ _METADATA_JSON_KEYS = (
     "cyclone_wind_history",
     "cyclone_annual_count",
     "flood_activation_tiers",
+    "tier_touch_ts",
     "flood_annual_count",
     "fire_footprint_last_run",
     "synthesis_components",

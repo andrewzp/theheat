@@ -23,6 +23,7 @@ CASES = [
     ("max_by_key.int.ice_annual", {"ice_annual_count": {"2026": 3}}, {"ice_annual_count": {"2026": 7}}),
     ("max_by_key.floor_neg1.fire_tier0", {"fire_complex_tiers": {"A": 2}}, {"fire_complex_tiers": {"A": 1, "C": 0}}),
     ("max_by_key.floor_neg1.cyclone_tier0", {"cyclone_tiers": {}}, {"cyclone_tiers": {"nhc:al01": 0}}),
+    ("max_by_key.str.tier_touch_ts", {"tier_touch_ts": {"fire_complex_tiers::A": "2026-06-01T00:00:00Z"}}, {"tier_touch_ts": {"fire_complex_tiers::A": "2026-06-02T00:00:00Z", "cyclone_tiers::B": "2026-06-01T00:00:00Z"}}),
     ("max_by_key.str.ice_last_seen", {"ice_mass_last_seen": {"greenland": "2026-01"}}, {"ice_mass_last_seen": {"greenland": "2026-03", "antarctica": "2025-12"}}),
     ("max_by_key.str.reganom", {"reganom_last_fired": {"sahel": "2026-05-01"}}, {"reganom_last_fired": {"sahel": "2026-06-01"}}),
     ("reduce.ice_max_loss", {"ice_mass_max_loss": {"r": {"gt": -3.0, "month": "2026-01"}}}, {"ice_mass_max_loss": {"r": {"gt": -7.0, "month": "2026-02"}}}),

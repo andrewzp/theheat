@@ -20,7 +20,7 @@
 | S-12 | #4a | gpm chain datapool→s3→opendap + pre-mint | S-09 | DONE | #238 | Datapool now chains through S3 before OPeNDAP; preflight noted external GDACS #234. |
 | S-13 | #4b | GDACS GeoRSS fallback + mirror survey | S-09 | DONE | #239 | GeoRSS fallback added; mirror survey records 8 official-source verdicts. |
 | S-14 | #3a | assert_freshness rollout | S-06 | DONE | #240 | Freshness guards now cover all 15 planned source parsers. |
-| S-16 | #10 | Record-store caps + state pruning | — | TODO | | |
+| S-16 | #10 | Record-store caps + state pruning | — | DONE | #TBD | Durable prune pass, shipped-tweet cap, tier TTL sidecar, and 800 KB state-size warning added. |
 | S-15 | #3b | Last-good cache (slow movers) | S-14, S-16 | TODO | | |
 | S-17 | #12 | Double-post hardening + optimistic lock | — | TODO | | |
 | S-18 | #21 | SQLite backend CI smoke | — | TODO | | |
