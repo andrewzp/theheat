@@ -66,7 +66,7 @@ test("dashboard API hydrates page data with one state read and one workflow read
   const state = {
     drafts: [
       { id: "draft_low", status: "pending", score: { total: 20 }, created_at: "2026-05-20T09:00:00Z" },
-      { id: "draft_high", status: "pending", score: { total: 80 }, created_at: "2026-05-20T08:00:00Z" },
+      { id: "draft_high", status: "pending", score: { total: 80 }, created_at: "2026-05-20T08:00:00Z", tweet_id: "tweet_123" },
       { id: "draft_posted", status: "posted", score: { total: 99 }, created_at: "2026-05-20T07:00:00Z" },
     ],
     suppressions: [
@@ -115,6 +115,7 @@ test("dashboard API hydrates page data with one state read and one workflow read
     const payload = await response.json()
     assert.equal(payload.stateBackend, "gist")
     assert.deepEqual(payload.drafts.drafts.map((d) => d.id), ["draft_high", "draft_low"])
+    assert.equal(payload.drafts.drafts[0].tweet_id, "tweet_123")
     assert.deepEqual(payload.suppressions.suppressions.map((s) => s.id), ["s1"])
     assert.equal(payload.suppressions.stats.total, 1)
     assert.equal(payload.sourceHealth.sources[0].source, "ghcn")

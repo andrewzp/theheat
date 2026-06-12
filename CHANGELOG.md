@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.45.0] - 2026-06-12
+
+THIRTY-LOOP S-17 hardens publish idempotency so an approved draft cannot be
+sent to X unless its publish intent is already durable.
+
+### Changed
+
+- **Record publish intent before posting.** Approved draft publishing now writes
+  a compact `publish_ledger` row before calling X, aborts when that durable
+  pre-post write fails, repairs half-recorded posted drafts from ledger rows
+  with `tweet_id`, clears stale two-hour intents, and exposes `tweet_id` in
+  dashboard draft payloads. State writes now carry monotonic `_state_rev`
+  values and re-merge once against the fresh gist snapshot when a concurrent
+  revision is observed before PATCH.
+
 ## [0.9.44.0] - 2026-06-12
 
 THIRTY-LOOP S-15 adds compact last-good cache continuity for slow-moving

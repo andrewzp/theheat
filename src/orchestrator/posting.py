@@ -6,13 +6,97 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
-def post_approved(tweet_text: str, bot_state: BotState) -> str:
+_PUBLISH_INTENT_TTL = timedelta(hours=2)
+
+
+def _coerce_publish_draft(draft_or_text: dict | str) -> dict:
+    if isinstance(draft_or_text, dict):
+        return draft_or_text
+    return {"text": str(draft_or_text or "")}
+
+
+def _publish_event_id(draft: dict, *, ensure: bool = True) -> str:
+    event_id = str(draft.get("event_id") or draft.get("id") or "").strip()
+    if not event_id:
+        event_id = f"manual:{secrets.token_hex(8)}"
+    if ensure:
+        draft.setdefault("event_id", event_id)
+    return event_id
+
+
+def _publish_intent_id(draft: dict, event_id: str) -> str:
+    return str(draft.get("publish_intent_id") or draft.get("id") or event_id)
+
+
+def _publish_ledger(bot_state: BotState) -> dict:
+    ledger = bot_state.get("publish_ledger")
+    if not isinstance(ledger, dict):
+        ledger = {}
+        bot_state["publish_ledger"] = ledger
+    return ledger
+
+
+def _reconcile_publish_ledger(bot_state: BotState) -> None:
+    """Repair drafts already known posted and clear stale pre-post intents."""
+    ledger = _publish_ledger(bot_state)
+    now = _utc_now()
+    for event_id, row in list(ledger.items()):
+        if not isinstance(row, dict):
+            del ledger[event_id]
+            continue
+        at = _parse_iso_utc(row.get("at"))
+        tweet_id = row.get("tweet_id")
+        if tweet_id:
+            for draft in bot_state.get("drafts", []):
+                if _publish_event_id(draft, ensure=False) != event_id:
+                    continue
+                if draft.get("status") == "posted":
+                    continue
+                draft["status"] = "posted"
+                draft["tweet_id"] = str(tweet_id)
+                draft["posted_at"] = row.get("at") or _utc_now_iso()
+                draft["last_publish_attempt_at"] = draft["posted_at"]
+                draft.pop("auto_approve_at", None)
+                draft.pop("auto_approve_requested_at", None)
+                draft.pop("post_error", None)
+                draft.pop("publish_intent_id", None)
+                _touch_draft(draft)
+                print(f"[post] Repaired posted draft {draft.get('id') or event_id} from publish ledger")
+            continue
+        if at is None or now - at > _PUBLISH_INTENT_TTL:
+            del ledger[event_id]
+            print(f"[post] Cleared stale publish intent for {event_id}")
+
+
+def _publish_intent_in_progress(draft: dict, bot_state: BotState) -> bool:
+    row = _publish_ledger(bot_state).get(_publish_event_id(draft))
+    if not isinstance(row, dict) or row.get("tweet_id"):
+        return False
+    at = _parse_iso_utc(row.get("at"))
+    return at is not None and _utc_now() - at <= _PUBLISH_INTENT_TTL
+
+
+def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     """Post an approved tweet to X.
 
     Returns "posted", "rate_limited", or "failed".
     """
     if not state.check_daily_cap(bot_state):
         print("[post] Daily tweet cap reached, skipping")
+        return "failed"
+
+    draft = _coerce_publish_draft(draft_or_text)
+    tweet_text = str(draft.get("text") or "")
+    event_id = _publish_event_id(draft)
+    intent_id = _publish_intent_id(draft, event_id)
+    ledger = _publish_ledger(bot_state)
+    ledger[event_id] = {
+        "intent_id": intent_id,
+        "tweet_id": None,
+        "at": _utc_now_iso(),
+    }
+    if not state.write_state(bot_state):
+        print(f"[post] Failed to durably record publish intent for {event_id}, aborting")
         return "failed"
 
     result = post_tweet(tweet_text)
@@ -23,6 +107,16 @@ def post_approved(tweet_text: str, bot_state: BotState) -> str:
     if result.get("error") == "rate_limited":
         return "rate_limited"
 
+    tweet_id = str(result.get("id") or "")
+    if not tweet_id:
+        print("[post] Posted response missing tweet id")
+        return "failed"
+
+    ledger[event_id]["tweet_id"] = tweet_id
+    draft["tweet_id"] = tweet_id
+    draft["status"] = "posted"
+    draft["posted_at"] = _utc_now_iso()
+    draft["last_publish_attempt_at"] = draft["posted_at"]
     post_to_bluesky(tweet_text)
     state.increment_daily_count(bot_state)
     print(f"[post] Posted to X: {tweet_text[:60]}...")
@@ -35,6 +129,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
     tweet_text = os.environ.get("TWEET_TEXT", "").strip()
     draft_id = os.environ.get("DRAFT_ID", "").strip()
     publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
+    _reconcile_publish_ledger(bot_state)
     draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
     if not tweet_text:
         print("[manual] No TWEET_TEXT provided, skipping")
@@ -108,7 +203,8 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         return bot_state
 
     print(f"[manual] Posting: {tweet_text}")
-    result = post_approved(tweet_text, bot_state)
+    publish_draft = draft or {"text": tweet_text}
+    result = post_approved(publish_draft, bot_state)
 
     # Update draft status with post result
     if draft:
@@ -141,6 +237,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
 def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Post drafts whose auto-approval window has elapsed."""
     queue_start = time.perf_counter()
+    _reconcile_publish_ledger(bot_state)
     now = _utc_now()
     due_drafts = []
     for draft in bot_state.get("drafts", []):
@@ -160,6 +257,12 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
     published = 0
     failures = []
     for draft in due_drafts:
+        if _publish_intent_in_progress(draft, bot_state):
+            draft["post_error"] = "Publish intent already recorded; waiting for post result"
+            _touch_draft(draft)
+            failures.append(f"{draft.get('id')}: publish intent in progress")
+            continue
+
         policy = draft.get("approval_policy", {})
         is_policy_auto = policy.get("mode") == "armed_auto"
         is_requested_auto = (
@@ -185,7 +288,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             failures.append(f"{draft.get('id')}: safety rejected: {reason}")
             continue
 
-        result = post_approved(draft["text"], bot_state)
+        result = post_approved(draft, bot_state)
         draft["last_publish_attempt_at"] = _utc_now_iso()
         if result == "posted":
             draft["status"] = "posted"

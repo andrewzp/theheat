@@ -22,7 +22,7 @@
 | S-14 | #3a | assert_freshness rollout | S-06 | DONE | #240 | Freshness guards now cover all 15 planned source parsers. |
 | S-16 | #10 | Record-store caps + state pruning | — | DONE | #243 | Durable prune pass, shipped-tweet cap, tier TTL sidecar, and 800 KB state-size warning added. |
 | S-15 | #3b | Last-good cache (slow movers) | S-14, S-16 | DONE | #245 | Slow movers now cache compact last-good readings with provenance guards and degraded cache telemetry. |
-| S-17 | #12 | Double-post hardening + optimistic lock | — | TODO | | |
+| S-17 | #12 | Double-post hardening + optimistic lock | — | DONE | #246 | Durable publish ledger, half-post repair, state rev re-merge, and dashboard tweet_id payload added. |
 | S-18 | #21 | SQLite backend CI smoke | — | TODO | | |
 | S-19 | #28 | Dashboard payload trim + visibility polling | S-03 | TODO | | |
 | S-20 | #7 | DAG concurrency + budgets + breaker (flag) | S-05, S-08, S-11 | TODO | | |

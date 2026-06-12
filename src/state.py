@@ -104,6 +104,11 @@ DEFAULT_STATE: BotState = {
     # Compact last-good readings for slow-moving sources. Each entry is a
     # derived detector input, never raw fetched rows.
     "last_good_readings": {},
+    # Durable publish intent ledger, keyed by event_id. Written before posting
+    # so an interrupted publish pass can avoid immediately re-posting a draft.
+    "publish_ledger": {},
+    # Monotonic state revision used to detect and re-merge gist write conflicts.
+    "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
     # seeded flips True after first observation (enables silent bootstrap);
     # last_milestone_fired tracks which milestone we last tweeted so
@@ -652,6 +657,19 @@ def _strat_dict_overlay(base: Any, nxt: Any) -> dict:
     return {**deepcopy(base or {}), **deepcopy(nxt or {})}
 
 
+def _strat_max_int(base: Any, nxt: Any) -> int:
+    """Scalar integer max for monotonic revision counters."""
+    try:
+        base_i = int(base)
+    except (TypeError, ValueError):
+        base_i = 0
+    try:
+        nxt_i = int(nxt)
+    except (TypeError, ValueError):
+        nxt_i = 0
+    return max(base_i, nxt_i)
+
+
 def _strat_ordered_unique(max_items: int) -> Callable[..., Any]:
     """Order-preserving union with a tail cap (e.g. posted_events)."""
 
@@ -1176,6 +1194,30 @@ def read_state() -> BotState:
     return _read_gist_state(strict=True)
 
 
+def _state_rev_value(snapshot: BotState | dict | None) -> int:
+    if not isinstance(snapshot, dict):
+        return 0
+    try:
+        return int(snapshot.get("_state_rev") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _prepare_merged_write(
+    current: BotState | dict,
+    normalized: BotState,
+    *,
+    log_conflict: bool = False,
+) -> BotState:
+    current_rev = _state_rev_value(current)
+    incoming_rev = _state_rev_value(normalized)
+    if log_conflict and current_rev != incoming_rev:
+        print("[state] write conflict re-merged")
+    merged = _merge_state(current, normalized)
+    merged["_state_rev"] = max(current_rev, incoming_rev) + 1
+    return merged
+
+
 def write_state(state: BotState) -> bool:
     normalized = _normalize_state(state)
     if _configured_backend() == "sqlite":
@@ -1187,7 +1229,7 @@ def write_state(state: BotState) -> bool:
             return False
         try:
             return sqlite_store.write_state(
-                DB_PATH, cast(dict, _merge_state(current, normalized))
+                DB_PATH, cast(dict, _prepare_merged_write(current, normalized))
             )
         except (TypeError, ValueError):
             return False
@@ -1196,7 +1238,7 @@ def write_state(state: BotState) -> bool:
     except StateReadError:
         return False
     try:
-        return _write_gist_state(_merge_state(current, normalized))
+        return _write_gist_state(_prepare_merged_write(current, normalized, log_conflict=True))
     except (TypeError, ValueError):
         return False
 
@@ -1647,6 +1689,8 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "record_streaks": _strat_take_incoming,
     "source_health": _merge_source_health,
     "last_good_readings": _merge_last_good,
+    "publish_ledger": _strat_dict_overlay,
+    "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),
     "ice_mass_last_milestone": _strat_reduce_by_key(_present_min),

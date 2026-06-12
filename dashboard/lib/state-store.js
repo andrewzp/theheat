@@ -35,6 +35,8 @@ const DEFAULT_STATE = {
   record_streaks: {},
   data_source_failures: {},
   source_health: {},
+  publish_ledger: {},
+  _state_rev: 0,
   ocean_sst_streak: {
     seeded: false,
     last_milestone_fired: null,
@@ -209,6 +211,8 @@ const METADATA_JSON_KEYS = [
   "memory",
   "data_source_failures",
   "source_health",
+  "publish_ledger",
+  "_state_rev",
 ]
 
 const PYTHON_OWNED_METADATA_KEYS = METADATA_JSON_KEYS.filter((key) => key !== "suppressions")

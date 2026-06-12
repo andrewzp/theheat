@@ -32,6 +32,7 @@ function pendingDrafts(state) {
       if (scoreDiff !== 0) return scoreDiff
       return new Date(b.created_at || 0) - new Date(a.created_at || 0)
     })
+    .map((d) => ({ ...d, tweet_id: d.tweet_id ?? null }))
 }
 
 function suppressionsPayload(state, { sourceFilter, sinceFilter, limit }) {

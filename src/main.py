@@ -70,9 +70,9 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
     return _posting.process_due_drafts(bot_state, current_run=current_run)
 
 
-def post_approved(tweet_text: str, bot_state: BotState) -> str:
+def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     _sync_compat_globals()
-    return _posting.post_approved(tweet_text, bot_state)
+    return _posting.post_approved(draft_or_text, bot_state)
 
 
 _PUBLIC_WRAPPERS.update({

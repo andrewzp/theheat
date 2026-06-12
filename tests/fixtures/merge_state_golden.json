@@ -445,6 +445,53 @@
   },
   {
     "base": {
+      "publish_ledger": {
+        "event_existing": {
+          "at": "2026-06-12T11:00:00Z",
+          "intent_id": "intent_existing",
+          "tweet_id": "tweet_123"
+        }
+      }
+    },
+    "expected": {
+      "publish_ledger": {
+        "event_existing": {
+          "at": "2026-06-12T11:00:00Z",
+          "intent_id": "intent_existing",
+          "tweet_id": "tweet_123"
+        },
+        "event_new": {
+          "at": "2026-06-12T12:00:00Z",
+          "intent_id": "intent_new",
+          "tweet_id": null
+        }
+      }
+    },
+    "incoming": {
+      "publish_ledger": {
+        "event_new": {
+          "at": "2026-06-12T12:00:00Z",
+          "intent_id": "intent_new",
+          "tweet_id": null
+        }
+      }
+    },
+    "label": "dict_overlay.publish_ledger"
+  },
+  {
+    "base": {
+      "_state_rev": 7
+    },
+    "expected": {
+      "_state_rev": 7
+    },
+    "incoming": {
+      "_state_rev": 5
+    },
+    "label": "max_int.state_rev"
+  },
+  {
+    "base": {
       "ozone_hole_last_peak": {
         "2026": {
           "area_million_km2": 22.0

@@ -66,6 +66,28 @@ CASES = [
             }
         },
     ),
+    (
+        "dict_overlay.publish_ledger",
+        {
+            "publish_ledger": {
+                "event_existing": {
+                    "intent_id": "intent_existing",
+                    "tweet_id": "tweet_123",
+                    "at": "2026-06-12T11:00:00Z",
+                }
+            }
+        },
+        {
+            "publish_ledger": {
+                "event_new": {
+                    "intent_id": "intent_new",
+                    "tweet_id": None,
+                    "at": "2026-06-12T12:00:00Z",
+                }
+            }
+        },
+    ),
+    ("max_int.state_rev", {"_state_rev": 7}, {"_state_rev": 5}),
     ("custom.ozone_peak", {"ozone_hole_last_peak": {"2026": {"area_million_km2": 22.0}}}, {"ozone_hole_last_peak": {"2026": {"area_million_km2": 25.0}}}),
     (
         "multikey.realistic",
