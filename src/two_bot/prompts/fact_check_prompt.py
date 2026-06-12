@@ -103,7 +103,7 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
    - "fruit trees blooming early."
    - "the ground froze."
 
-**g) Model-estimated vs. station-measured.** When `current_facts` contains `evidence_grade: "model_estimated"`, claims that the value was "recorded," "measured at a station," or "observed by instruments on the ground" are UNVERIFIABLE. The bundle says it is a model estimate.
+**g) Model-estimated vs. station-measured.** When `current_facts` contains `evidence_grade: "model_estimated"`, claims that the value was "recorded," "measured at a station," or "observed by instruments on the ground" are UNVERIFIABLE. The bundle says it is a model estimate. When `evidence_grade: "model_corroborated_by_station"` and station facts are present, ACCEPT claims that the CAMS model estimate is "consistent with a nearby ground-station reading"; still require the headline PM2.5 value to be framed as the CAMS 24-hour mean, not as the station's exact measurement.
 
 **h) Wet-bulb physiology.** The approximate 35C TW physiological ceiling for healthy adults is established threshold science. ACCEPT: "above the point where the body can cool by sweating," "the evaporative cooling limit," "where heat dissipation fails." Do NOT accept specific mortality time windows, population-specific claims (children, elderly people, athletes), or direct fatality claims unless the bundle supplies outcome data.
 

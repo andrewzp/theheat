@@ -52,6 +52,25 @@ def test_build_pm25_hazard_bundle_evidence_grade():
     assert _fact(bundle, "evidence_grade")["value"] == "model_estimated"
 
 
+def test_build_pm25_hazard_bundle_station_grade_facts():
+    event = _pm25_event()
+    event = PM25HazardEvent(
+        **{
+            **event.__dict__,
+            "evidence_grade": "model_corroborated_by_station",
+            "station_name": "Lahore Jail Road",
+            "station_pm25_ug_m3": 172.0,
+            "station_distance_km": 4.2,
+        }
+    )
+    bundle = build_pm25_hazard_bundle(event)
+
+    assert _fact(bundle, "evidence_grade")["value"] == "model_corroborated_by_station"
+    assert _fact(bundle, "station_name")["value"] == "Lahore Jail Road"
+    assert _fact(bundle, "station_pm25_ug_m3")["value"] == 172.0
+    assert _fact(bundle, "station_distance_km")["value"] == 4.2
+
+
 def test_build_pm25_hazard_bundle_who_guideline():
     bundle = build_pm25_hazard_bundle(_pm25_event())
 

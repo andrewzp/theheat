@@ -21,8 +21,14 @@ def build_pm25_hazard_bundle(event: PM25HazardEvent) -> StoryBundle:
         {"label": "model_resolution_km", "value": 45},
         {"label": "lat", "value": event.lat},
         {"label": "lon", "value": event.lon},
-        {"label": "evidence_grade", "value": "model_estimated"},
+        {"label": "evidence_grade", "value": event.evidence_grade},
     ]
+    if event.evidence_grade == "model_corroborated_by_station":
+        current_facts.extend([
+            {"label": "station_name", "value": event.station_name},
+            {"label": "station_pm25_ug_m3", "value": event.station_pm25_ug_m3},
+            {"label": "station_distance_km", "value": event.station_distance_km},
+        ])
     return StoryBundle(
         signal_kind="air_quality_hazard",
         where=f"{event.city}, {event.country}",
