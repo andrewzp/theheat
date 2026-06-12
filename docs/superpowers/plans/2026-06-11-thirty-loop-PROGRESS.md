@@ -31,7 +31,7 @@
 | S-23 | #16 | Coral reef-system angle library | S-21 | DONE | #253 | Live coral DHW region keys now carry capped reef-system context facts. |
 | S-24 | #17 | Record margin-percentile fact | S-21 | BLOCKED(schema-no-history) | #254 | Threshold DB stores only current record value/year, not margin-history distributions. |
 | S-25 | #15 | AQ ground-station corroboration (OpenAQ) | S-08 | DONE(dark; needs OPENAQ_API_KEY secret) | #255 | OpenAQ PM2.5 station corroboration wired behind OPENAQ_API_KEY. |
-| S-26 | #19 | air_quality chunk pacing | S-09 | TODO | | |
+| S-26 | #19 | air_quality chunk pacing | S-09 | DONE | #256 | Air-quality chunks now pace between requests and honor Retry-After on 429 recovery. |
 | S-27 | #6 | Synthesis: SST×coral + global FDH | S-21 | TODO | | |
 | S-28 | #24 | Reganom readiness runbook (NO flip) | — | TODO | | |
 | S-29 | #26 | Hot 10 audience-unit fix | — | TODO | | |
