@@ -23,6 +23,7 @@ from src.editorial.scoring import (
     score_seasonal_snow_record,
     score_simultaneous_records,
     score_snow_extreme,
+    score_synthesis_marine_compound,
 )
 
 
@@ -404,3 +405,21 @@ class TestScoreSynthesisFireDroughtHeat:
         joined = " ".join(score.reasons).lower()
         assert "drought" in joined or "d4" in joined
         assert "fire" in joined
+
+
+class TestScoreSynthesisMarineCompound:
+    def test_score_synthesis_marine_compound_minimum_passes_threshold(self):
+        score = score_synthesis_marine_compound(
+            dhw_value=8.0,
+            dhw_tier=8,
+            sst_anomaly_c=2.0,
+            coral_region="Great Nicobar",
+            sst_region="Bay of Bengal",
+        )
+
+        assert score.category == "synthesis_marine_compound"
+        assert score.threshold == 82
+        assert score.passes
+        joined = " ".join(score.reasons).lower()
+        assert "dhw" in joined
+        assert "sst" in joined

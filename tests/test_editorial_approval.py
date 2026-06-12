@@ -164,3 +164,15 @@ class TestSynthesisPolicy:
         assert policy.recommended_delay_minutes == 120
         assert policy.can_auto_approve is True
         assert policy.key == "synthesis_review"
+
+    def test_marine_compound_manual_only(self):
+        from src.editorial.approval import recommend_approval_policy
+        policy = recommend_approval_policy(
+            "synthesis_marine_compound",
+            signal_total=88,
+            candidate_score={"total": 78},
+        )
+        assert policy.mode == "manual_only"
+        assert policy.recommended_delay_minutes is None
+        assert policy.can_auto_approve is False
+        assert policy.key == "manual_only"

@@ -213,6 +213,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         82,
         "Elite synthesis signal; minimum qualifying fire, drought, and heat case is designed to clear.",
     ),
+    "synthesis_marine_compound": ThresholdEntry(
+        "synthesis_marine_compound",
+        82,
+        "Elite SST x coral synthesis signal; minimum qualifying DHW Alert Level 2 plus regional SST anomaly case clears.",
+    ),
     "precipitation_extreme": ThresholdEntry(
         "precipitation_extreme",
         70,

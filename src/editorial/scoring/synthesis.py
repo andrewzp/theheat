@@ -53,3 +53,41 @@ def score_synthesis_fire_drought_heat(
         threshold=get_threshold("synthesis_fire_drought_heat"),
         reasons=reasons,
     )
+
+
+def score_synthesis_marine_compound(
+    *,
+    dhw_value: float,
+    dhw_tier: int,
+    sst_anomaly_c: float,
+    coral_region: str,
+    sst_region: str,
+) -> EditorialScore:
+    """Score an SST x coral synthesis signal at the elite synthesis bar."""
+    severity = (
+        82
+        + max(dhw_tier - 8, 0) * 1.4
+        + max(dhw_value - 8.0, 0.0) * 1.2
+        + max(sst_anomaly_c - 2.0, 0.0) * 3.5
+    )
+    novelty = 88
+    timeliness = 90
+    confidence = 88
+    shareability = 88 + (3 if coral_region else 0) + (2 if sst_region else 0)
+    sensitivity = 16
+    reasons = [
+        f"DHW {dhw_value:.1f} C-weeks at Alert Level 2+",
+        f"SST anomaly {sst_anomaly_c:+.1f}C in {sst_region}",
+        f"reef region: {coral_region}",
+    ]
+    return _build_score(
+        "synthesis_marine_compound",
+        severity=severity,
+        novelty=novelty,
+        timeliness=timeliness,
+        confidence=confidence,
+        shareability=shareability,
+        sensitivity=sensitivity,
+        threshold=get_threshold("synthesis_marine_compound"),
+        reasons=reasons,
+    )

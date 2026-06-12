@@ -11,7 +11,13 @@ from src.state import (
     record_synthesis_drought_snapshot,
     record_synthesis_fired,
 )
-from src.editorial.synthesis import detect_fire_drought_heat, SynthesisSignal
+from src.editorial.synthesis import (
+    CORAL_TO_SST_REGION,
+    RULE_MARINE_COMPOUND,
+    detect_fire_drought_heat,
+    detect_marine_compound,
+    SynthesisSignal,
+)
 
 
 def _iso(offset_days: int = 0) -> str:
@@ -193,3 +199,88 @@ class TestSynthesisHeatAnomalyField:
         signals = detect_fire_drought_heat(s)
         comps = signals[0].components
         assert comps["heat_peak_anomaly_c"] == 0.0
+
+
+def _state_with_marine_components(*, coral_offset_days: int = 1, sst_offset_days: int = 1):
+    s = deepcopy(DEFAULT_STATE)
+    record_synthesis_component(
+        s,
+        kind="coral",
+        region="great_nicobar",
+        event_id="coral_dhw_great_nicobar_tier8",
+        metadata={
+            "region_id": "great_nicobar",
+            "region_full_name": "Great Nicobar",
+            "dhw_value": 9.1,
+            "dhw_tier": 8,
+            "bleaching_level": "mass bleaching expected",
+            "date": "2026-06-11",
+        },
+        timestamp=_iso(offset_days=coral_offset_days),
+    )
+    record_synthesis_component(
+        s,
+        kind="sst_anomaly",
+        region="bay_of_bengal",
+        event_id="sst_anom_component_bay_of_bengal_2026-06-11",
+        metadata={
+            "region_slug": "bay_of_bengal",
+            "region_display_name": "Bay of Bengal",
+            "anomaly_c": 2.2,
+            "tier": 0,
+            "cells_used": 80,
+            "date": "2026-06-11",
+        },
+        timestamp=_iso(offset_days=sst_offset_days),
+    )
+    return s
+
+
+class TestMarineCompound:
+    def test_marine_compound_fires_on_overlap(self):
+        signals = detect_marine_compound(_state_with_marine_components())
+
+        assert len(signals) == 1
+        sig = signals[0]
+        assert isinstance(sig, SynthesisSignal)
+        assert sig.rule_name == RULE_MARINE_COMPOUND
+        assert sig.region == "great_nicobar"
+        assert "great_nicobar" in sig.event_id
+        assert sig.components["coral_dhw_tier"] == 8
+        assert sig.components["sst_anomaly_c"] == 2.2
+        assert sig.components["sst_region_slug"] == "bay_of_bengal"
+
+    def test_marine_compound_respects_window_and_cooldown(self):
+        stale = _state_with_marine_components(sst_offset_days=20)
+        assert detect_marine_compound(stale) == []
+
+        on_cooldown = _state_with_marine_components()
+        record_synthesis_fired(
+            on_cooldown,
+            RULE_MARINE_COMPOUND,
+            "great_nicobar",
+            timestamp=_iso(offset_days=3),
+        )
+        assert detect_marine_compound(on_cooldown) == []
+
+        cooled = _state_with_marine_components()
+        record_synthesis_fired(
+            cooled,
+            RULE_MARINE_COMPOUND,
+            "great_nicobar",
+            timestamp=_iso(offset_days=61),
+        )
+        assert len(detect_marine_compound(cooled)) == 1
+
+    def test_region_mapping_total(self):
+        from src.data.ocean_sst_anomaly import REGION_REGISTRY
+        from src.data.reef_context import REEF_CONTEXT
+
+        valid_sst_regions = {region.slug for region in REGION_REGISTRY}
+        assert set(REEF_CONTEXT) <= set(CORAL_TO_SST_REGION)
+        assert CORAL_TO_SST_REGION["great_nicobar"] == "bay_of_bengal"
+        assert CORAL_TO_SST_REGION["fiji"] is None
+        assert all(
+            mapped is None or mapped in valid_sst_regions
+            for mapped in CORAL_TO_SST_REGION.values()
+        )

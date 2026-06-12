@@ -553,6 +553,39 @@ def synthesis_fire_drought_heat_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def synthesis_marine_compound_bundle() -> StoryBundle:
+    """Cross-source SST + coral synthesis fixture."""
+    from src.two_bot.intern import build_synthesis_bundle
+
+    synthesis = {
+        "event_id": "synthesis_marine_compound_great_nicobar_2026-W24",
+        "region": "Great Nicobar",
+        "kind": "marine_compound",
+        "headline": "Great Nicobar reef heat stress overlaps Bay of Bengal SST anomaly",
+        "rule_name": "RULE_MARINE_COMPOUND",
+        "components": [
+            {
+                "kind": "coral",
+                "region_id": "great_nicobar",
+                "region": "Great Nicobar",
+                "dhw_value": 9.1,
+                "dhw_tier": 8,
+            },
+            {
+                "kind": "sst_anomaly",
+                "region_slug": "bay_of_bengal",
+                "region": "Bay of Bengal",
+                "anomaly_c": 2.3,
+                "tier": 0,
+            },
+        ],
+        "window_days": 14,
+        "total_score": 84,
+    }
+    return build_synthesis_bundle(synthesis)
+
+
+@pytest.fixture
 def marine_heatwave_bundle() -> StoryBundle:
     """Global ocean SST streak fixture for marine heatwave wording."""
     from src.data.ocean_sst import MarineHeatwaveStreakEvent

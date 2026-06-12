@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.54.0] - 2026-06-12
+
+THIRTY-LOOP S-27 adds the cheap all-in-state SST x coral synthesis path while
+documenting that the global fire-drought-heat half remains blocked without a
+current global drought-severity signal.
+
+### Changed
+
+- **Add SST x coral synthesis.** `src/state.py` now preserves dynamic marine
+  synthesis component buckets, `src/orchestrator/sources/coral_dhw.py` records
+  DHW Alert Level 2+ coral components, and
+  `src/orchestrator/sources/ocean_sst_anomaly.py` records `>= +2.0C` regional
+  SST anomaly evidence without lowering the existing regional-SST draft gate.
+  `src/editorial/synthesis.py` adds an explicit coral-to-SST-region mapping,
+  a 60-day marine-compound cooldown, scoring/threshold/approval wiring for
+  `synthesis_marine_compound`, synthesis runner enqueue support, and a voice
+  replay fixture for the new bundle family.
+
 ## [0.9.53.0] - 2026-06-12
 
 THIRTY-LOOP S-26 spreads Open-Meteo air-quality chunk requests across the

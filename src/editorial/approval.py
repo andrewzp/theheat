@@ -193,6 +193,7 @@ def recommend_approval_policy(
             "absolute_extreme",
             "wet_bulb_extreme",
             "regional_anomaly",
+            "synthesis_marine_compound",
         }
         or tweet_type.startswith("cyclone_")
     ):

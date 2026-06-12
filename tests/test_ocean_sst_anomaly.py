@@ -170,6 +170,25 @@ def test_fetch_region_sst_below_floor_returns_none(monkeypatch):
     assert fetch_region_sst(region, min_valid_cells=3) is None
 
 
+def test_fetch_region_sst_returns_synthesis_floor_tier0(monkeypatch):
+    region = RegionDef("coral_triangle", "Coral Triangle", -10, 10, 120, 150)
+    text = _fake_griddap_csv(
+        "2026-06-06",
+        [(0.0, 140.0, 2.1), (0.0, 141.0, 2.1), (0.0, 142.0, 2.1)],
+    )
+    monkeypatch.setattr(
+        "src.data.ocean_sst_anomaly.fetch_with_retry",
+        lambda *args, **kwargs: _response(text),
+    )
+
+    reading = fetch_region_sst(region, min_valid_cells=3, today=date(2026, 6, 11))
+
+    assert reading is not None
+    assert reading.region_slug == "coral_triangle"
+    assert reading.anomaly_c == pytest.approx(2.1)
+    assert reading.tier == 0
+
+
 def test_fetch_region_sst_rejects_low_valid_cell_coverage(monkeypatch):
     region = RegionDef("gbr", "Great Barrier Reef", -24, -10, 142, 154)
     text = _fake_griddap_csv("2026-06-06", [(-18.0, 148.0, 4.0)])
@@ -287,6 +306,14 @@ def test_detect_events_fires_only_on_tier_increase():
     assert [event.region_slug for event in events] == ["mediterranean", "nino34"]
     assert events[0].event_id == "sst_anom_mediterranean_tier3_2026-08-01"
     assert events[1].event_id == "sst_anom_nino34_tier1_2026-08-01"
+
+
+def test_tier0_reading_does_not_fire_regional_event():
+    readings = [
+        RegionalSSTReading("coral_triangle", "Coral Triangle", "2026-08-01", 2.1, 0, 50),
+    ]
+
+    assert detect_regional_sst_anomaly_events(readings, {}) == []
 
 
 def test_annual_tier_key_rotation_uses_reading_date():

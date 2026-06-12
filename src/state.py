@@ -1017,9 +1017,9 @@ def _merge_synthesis_components(
     - ``drought_snapshot`` is a single dict refreshed on each USDM poll.
       Take the one with the later ``updated_at``.
     """
-    b: SynthesisComponents = base or {}
-    n: SynthesisComponents = incoming or {}
-    merged: SynthesisComponents = {"fires": {}, "heats": {}, "drought_snapshot": None}
+    b: dict = cast(dict, base or {})
+    n: dict = cast(dict, incoming or {})
+    merged: dict = {"fires": {}, "heats": {}, "drought_snapshot": None}
 
     def _merge_bucket(
         b_bucket: dict[str, list[dict]], n_bucket: dict[str, list[dict]]
@@ -1029,8 +1029,25 @@ def _merge_synthesis_components(
             result[key] = _merge_synthesis_event_list(b_bucket.get(key), n_bucket.get(key))
         return result
 
-    merged["fires"] = _merge_bucket(b.get("fires") or {}, n.get("fires") or {})
-    merged["heats"] = _merge_bucket(b.get("heats") or {}, n.get("heats") or {})
+    event_bucket_keys = (
+        set(b.keys())
+        | set(n.keys())
+        | {"fires", "heats"}
+    ) - {"drought_snapshot"}
+    for bucket_key in sorted(event_bucket_keys):
+        b_bucket_raw = b.get(bucket_key)
+        n_bucket_raw = n.get(bucket_key)
+        b_bucket = (
+            cast(dict[str, list[dict]], b_bucket_raw)
+            if isinstance(b_bucket_raw, dict)
+            else {}
+        )
+        n_bucket = (
+            cast(dict[str, list[dict]], n_bucket_raw)
+            if isinstance(n_bucket_raw, dict)
+            else {}
+        )
+        merged[bucket_key] = _merge_bucket(b_bucket, n_bucket)
 
     b_snap = b.get("drought_snapshot")
     n_snap = n.get("drought_snapshot")
@@ -1046,7 +1063,7 @@ def _merge_synthesis_components(
         merged["drought_snapshot"] = deepcopy(
             n_snap if n_at >= b_at else b_snap
         )
-    return merged
+    return cast(SynthesisComponents, merged)
 
 
 def _merge_ozone_hole_last_peak(current: dict | None, incoming: dict | None) -> dict:
@@ -1950,6 +1967,18 @@ def finalize_run(state: BotState, run: dict, status: str = "success", max_runs: 
     return state
 
 
+_SYNTHESIS_COMPONENT_BUCKET_BY_KIND = {
+    "fire": "fires",
+    "heat": "heats",
+    "coral": "corals",
+    "sst_anomaly": "sst_anomalies",
+}
+
+
+def _synthesis_bucket_key(kind: str) -> str:
+    return _SYNTHESIS_COMPONENT_BUCKET_BY_KIND.get(kind, "heats")
+
+
 def record_synthesis_component(
     state: BotState,
     *,
@@ -1959,7 +1988,7 @@ def record_synthesis_component(
     metadata: dict | None = None,
     timestamp: str | None = None,
 ) -> BotState:
-    bucket_key = "fires" if kind == "fire" else "heats"
+    bucket_key = _synthesis_bucket_key(kind)
     state.setdefault("synthesis_components", {
         "fires": {}, "heats": {}, "drought_snapshot": None
     })
@@ -1983,7 +2012,7 @@ def record_synthesis_component(
 def get_synthesis_components(
     state: BotState, *, kind: str, region: str, since: str | None = None,
 ) -> list[dict]:
-    bucket_key = "fires" if kind == "fire" else "heats"
+    bucket_key = _synthesis_bucket_key(kind)
     components: dict = cast(dict, state.get("synthesis_components") or {})
     entries = (components.get(bucket_key) or {}).get(region) or []
     if since is None:
@@ -2058,7 +2087,12 @@ def prune_stale_synthesis_components(state: BotState, ttl_days: int = 14) -> Bot
         "fires": {}, "heats": {}, "drought_snapshot": None
     })
     components: dict = cast(dict, state["synthesis_components"])
-    for bucket_key in ("fires", "heats"):
+    event_bucket_keys = [
+        key
+        for key, value in components.items()
+        if key != "drought_snapshot" and isinstance(value, dict)
+    ]
+    for bucket_key in event_bucket_keys:
         bucket = components.setdefault(bucket_key, {})
         for region in list(bucket.keys()):
             fresh = [e for e in bucket[region] if e.get("at", "") >= cutoff]

@@ -125,6 +125,8 @@ class SynthesisComponents(TypedDict, total=False):
 
     fires: dict[str, list[dict]]
     heats: dict[str, list[dict]]
+    corals: dict[str, list[dict]]
+    sst_anomalies: dict[str, list[dict]]
     drought_snapshot: DroughtSnapshot | None
 
 
