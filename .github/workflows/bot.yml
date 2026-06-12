@@ -223,6 +223,9 @@ jobs:
           # execution; flipping is an explicit operator action.
           THEHEAT_CONCURRENT_SOURCES: ${{ vars.THEHEAT_CONCURRENT_SOURCES || '0' }}
           THEHEAT_CRITIC_ENABLED: ${{ vars.THEHEAT_CRITIC_ENABLED || '1' }}
+          THEHEAT_WRITER_SAMPLES: ${{ vars.THEHEAT_WRITER_SAMPLES || '1' }}
+          THEHEAT_CRITIC_REVISE_ENABLED: ${{ vars.THEHEAT_CRITIC_REVISE_ENABLED || '0' }}
+          THEHEAT_MAX_DRAFTS_PER_CYCLE: ${{ vars.THEHEAT_MAX_DRAFTS_PER_CYCLE || '3' }}
           # Reanalysis regional-anomaly signal (Part B, PR #203). manual_only +
           # env-gated; code default stays "0" (dormant). Production controls it via
           # the repo variable. Activate: gh variable set THEHEAT_REGANOM_ENABLED --body 1 --repo andrewzp/theheat

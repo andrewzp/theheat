@@ -20,6 +20,7 @@ from src.two_bot.critic import (
     _format_pending_block,
     _format_shipped_block,
     _parse_critic_json,
+    _parse_critic_result,
 )
 from src.two_bot.types import CriticResult, StoryBundle
 
@@ -94,6 +95,49 @@ class TestParseCriticJson:
     def test_killing_with_non_string_reason_raises(self):
         with pytest.raises(ValueError, match="must include kill_reason"):
             _parse_critic_json('{"passed": false, "kill_reason": 42}')
+
+
+class TestParseCriticResult:
+    def test_verdict_pass_parses(self):
+        result = _parse_critic_result('{"verdict": "PASS", "kill_reason": null}')
+        assert result.passed is True
+        assert result.verdict == "PASS"
+
+    def test_verdict_kill_parses(self):
+        result = _parse_critic_result(
+            '{"verdict": "KILL", "kill_reason": "interesting_but_not_memorable"}'
+        )
+        assert result.passed is False
+        assert result.verdict == "KILL"
+        assert result.kill_reason == "interesting_but_not_memorable"
+
+    def test_verdict_revise_requires_flag(self):
+        with pytest.raises(ValueError, match="REVISE not allowed"):
+            _parse_critic_result(
+                '{"verdict": "REVISE", "revise_instruction": "Make the system clause load-bearing."}'
+            )
+
+    def test_verdict_revise_parses_when_allowed(self):
+        result = _parse_critic_result(
+            '{"verdict": "REVISE", "revise_instruction": "Make the system clause load-bearing."}',
+            allow_revise=True,
+        )
+        assert result.passed is False
+        assert result.verdict == "REVISE"
+        assert result.revise_instruction == "Make the system clause load-bearing."
+
+    def test_revise_instruction_length_cap(self):
+        long_instruction = "x" * 201
+        raw = json.dumps({"verdict": "REVISE", "revise_instruction": long_instruction})
+        with pytest.raises(ValueError, match="revise_instruction"):
+            _parse_critic_result(raw, allow_revise=True)
+
+    def test_slate_selected_index_bounds(self):
+        with pytest.raises(ValueError, match="selected_index"):
+            _parse_critic_result(
+                '{"verdict": "PASS", "kill_reason": null, "selected_index": 3}',
+                slate_size=2,
+            )
 
 
 class TestCollectPendingToday:
@@ -247,6 +291,44 @@ class TestCriticReview:
         shipped_arg = mock_gemini.call_args.args[3]
         assert "from memory" in shipped_arg
         assert "second" in shipped_arg
+
+    def test_allows_revise_when_requested(self, mock_gemini):
+        mock_gemini.return_value = json.dumps({
+            "verdict": "REVISE",
+            "revise_instruction": "Replace the opener with the fire scale.",
+        })
+        result = critic.critic_review(
+            "test tweet",
+            _bundle(),
+            _state_with_drafts([]),
+            allow_revise=True,
+        )
+        assert result.verdict == "REVISE"
+        assert result.revise_instruction == "Replace the opener with the fire scale."
+
+    def test_slate_critic_selects_candidate(self, mock_gemini):
+        mock_gemini.return_value = json.dumps({
+            "verdict": "PASS",
+            "kill_reason": None,
+            "selected_index": 1,
+        })
+        result = critic.critic_select_slate(
+            ["draft one", "draft two"],
+            _bundle(),
+            _state_with_drafts([]),
+        )
+        assert result.passed is True
+        assert result.selected_index == 1
+
+    def test_slate_critic_fails_closed_on_bad_json(self, mock_gemini):
+        mock_gemini.return_value = "not json"
+        result = critic.critic_select_slate(
+            ["draft one", "draft two"],
+            _bundle(),
+            _state_with_drafts([]),
+        )
+        assert result.passed is False
+        assert "invalid JSON across" in result.kill_reason
 
 
 class TestCriticResultInvariants:

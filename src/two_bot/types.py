@@ -155,26 +155,77 @@ class CriticResult:
 
     The critic runs after fact_check passes and acts as the final
     editorial gate before a draft enters the human-approval queue.
-    PASS/KILL only — no rewrite loop in v1.
+    Legacy construction stays PASS/KILL; S-22 adds optional REVISE and
+    slate-selection metadata behind dark flags.
     """
 
     passed: bool
     kill_reason: str | None
     raw_response: str
+    verdict: str = ""
+    revise_instruction: str | None = None
+    selected_index: int | None = None
 
     def __post_init__(self) -> None:
-        if self.passed and self.kill_reason is not None:
-            raise ValueError(
-                "CriticResult invariant violated: kill_reason must be None when passed=True"
-            )
-        if not self.passed and not self.kill_reason:
-            raise ValueError(
-                "CriticResult invariant violated: kill_reason required when passed=False"
-            )
+        if not self.verdict:
+            self.verdict = "PASS" if self.passed else "KILL"
+        self.verdict = self.verdict.upper()
+        if self.verdict == "PASS":
+            if not self.passed:
+                raise ValueError(
+                    "CriticResult invariant violated: PASS verdict requires passed=True"
+                )
+            if self.kill_reason is not None:
+                raise ValueError(
+                    "CriticResult invariant violated: kill_reason must be None when passed=True"
+                )
+            if self.revise_instruction is not None:
+                raise ValueError(
+                    "CriticResult invariant violated: revise_instruction must be None for PASS"
+                )
+            return
+        if self.verdict == "KILL":
+            if self.passed:
+                raise ValueError(
+                    "CriticResult invariant violated: KILL verdict requires passed=False"
+                )
+            if not self.kill_reason:
+                raise ValueError(
+                    "CriticResult invariant violated: kill_reason required when passed=False"
+                )
+            if self.revise_instruction is not None:
+                raise ValueError(
+                    "CriticResult invariant violated: revise_instruction must be None for KILL"
+                )
+            return
+        if self.verdict == "REVISE":
+            if self.passed:
+                raise ValueError(
+                    "CriticResult invariant violated: REVISE verdict requires passed=False"
+                )
+            if self.kill_reason is not None:
+                raise ValueError(
+                    "CriticResult invariant violated: kill_reason must be None for REVISE"
+                )
+            if not self.revise_instruction:
+                raise ValueError(
+                    "CriticResult invariant violated: revise_instruction required for REVISE"
+                )
+            if len(self.revise_instruction) > 200:
+                raise ValueError(
+                    "CriticResult invariant violated: revise_instruction exceeds 200 chars"
+                )
+            return
+        raise ValueError(f"CriticResult invariant violated: unknown verdict {self.verdict!r}")
 
     def to_dict(self) -> dict:
-        return {
+        payload: dict[str, Any] = {
             "passed": self.passed,
             "kill_reason": self.kill_reason,
             "raw_response": self.raw_response,
+            "verdict": self.verdict,
+            "revise_instruction": self.revise_instruction,
         }
+        if self.selected_index is not None:
+            payload["selected_index"] = self.selected_index
+        return payload

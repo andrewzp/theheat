@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 import os
 
+from src import config
 from src.data.firms import FireEvent
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, writer
 from src.two_bot.evidence_contract import audit_story_bundle
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
-from src.two_bot.types import StoryBundle
+from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
 from src.voice.safety import run_safety_pipeline
 
 
@@ -53,6 +55,27 @@ def _critic_enabled() -> bool:
     return raw not in {"0", "false", "off", "no"}
 
 
+def _writer_samples() -> int:
+    try:
+        return max(1, int(os.environ.get("THEHEAT_WRITER_SAMPLES", str(config.WRITER_SAMPLES))))
+    except ValueError:
+        return config.WRITER_SAMPLES
+
+
+def _critic_revise_enabled() -> bool:
+    raw = os.environ.get("THEHEAT_CRITIC_REVISE_ENABLED")
+    if raw is None:
+        return config.CRITIC_REVISE_ENABLED
+    return raw.strip().lower() in {"1", "true", "on", "yes"}
+
+
+def _revision_constraint(previous_tweet: str, revise_instruction: str) -> str:
+    return (
+        f"Previous draft: {previous_tweet}\n"
+        f"The critic requires: {revise_instruction}"
+    )
+
+
 def _audit_bundle_for_generation(
     bundle: StoryBundle,
     *,
@@ -79,6 +102,58 @@ def _audit_bundle_for_generation(
     if record_kill is not None:
         record_kill("evidence_contract", reason)
     return False
+
+
+def _writer_sample_slate(
+    bundle: StoryBundle,
+    memory_slice: MemorySlice,
+    samples: int,
+) -> list[WriterResult]:
+    if samples <= 1:
+        return [writer.write_tweet(bundle, memory_slice)]
+    with ThreadPoolExecutor(max_workers=samples) as executor:
+        futures = [
+            executor.submit(writer.write_tweet, bundle, memory_slice)
+            for _ in range(samples)
+        ]
+        return [future.result() for future in futures]
+
+
+def _check_safety_honesty_fact(
+    tweet: str,
+    bundle: StoryBundle,
+    state: BotState,
+    *,
+    record_kill: Callable[[str, str], None],
+) -> FactCheckResult | None:
+    safety_passed, safety_reason = run_safety_pipeline(tweet)
+    if not safety_passed:
+        print(
+            f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
+            f"draft: {safety_reason}"
+        )
+        record_kill("safety", safety_reason or "unknown")
+        return None
+
+    forbidden_hit = _forbidden_claim_violation(tweet, bundle)
+    if forbidden_hit is not None:
+        print(
+            f"[two_bot.pipeline] Honesty gate rejected {bundle.signal_kind} "
+            f"draft: forbidden claim {forbidden_hit!r}"
+        )
+        record_kill("honesty_gate", f"forbidden claim: {forbidden_hit!r}")
+        return None
+
+    fact_result = fact_check.fact_check(tweet, [], bundle, state)
+    if not fact_result.passed:
+        failures_str = "; ".join(fact_result.failures)
+        print(
+            f"[two_bot.pipeline] Fact-check rejected {bundle.signal_kind} "
+            f"draft: {failures_str}"
+        )
+        record_kill("fact_check", failures_str or "unknown")
+        return None
+    return fact_result
 
 
 def generate_draft(
@@ -121,69 +196,100 @@ def generate_draft(
             return None
 
         memory_slice = memory.build_memory_slice(state, bundle)
-        writer_result = writer.write_tweet(bundle, memory_slice)
-        if writer_result.tweet is None:
-            print(
-                f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: "
-                f"{writer_result.kill_reason}"
-            )
-            _record_kill("writer", writer_result.kill_reason or "unknown")
+        samples = _writer_samples()
+        writer_results = _writer_sample_slate(bundle, memory_slice, samples)
+        viable_results = [result for result in writer_results if result.tweet is not None]
+        if not viable_results:
+            kill_reasons = [
+                result.kill_reason or "unknown"
+                for result in writer_results
+            ]
+            reason = "all writer samples killed: " + "; ".join(kill_reasons)
+            print(f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: {reason}")
+            _record_kill("writer", reason)
             return None
 
-        # Safety gate at draft-time. Historically run_safety_pipeline was
-        # only called at post-time (main.py:2874, 2956), so a banned-pattern
-        # tweet could sit in the queue waiting for a human to notice. Now
-        # the writer output is checked before fact-check — saves an LLM
-        # call on the obvious kills and surfaces the failure in the
-        # suppression dashboard with stage="safety".
-        safety_passed, safety_reason = run_safety_pipeline(writer_result.tweet)
-        if not safety_passed:
-            print(
-                f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
-                f"draft: {safety_reason}"
+        writer_result = viable_results[0]
+        slate_critic_result = None
+        if samples > 1 and _critic_enabled():
+            candidate_texts = [result.tweet for result in viable_results if result.tweet is not None]
+            slate_critic_result = critic.critic_select_slate(
+                candidate_texts,
+                bundle,
+                state,
+                shipped_recent=memory_slice.shipped_tweet_texts[:10],
             )
-            _record_kill("safety", safety_reason or "unknown")
-            return None
+            if not slate_critic_result.passed:
+                print(
+                    f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
+                    f"slate: {slate_critic_result.kill_reason}"
+                )
+                _record_kill("critic", slate_critic_result.kill_reason or "unknown")
+                return None
+            selected_index = slate_critic_result.selected_index or 0
+            writer_result = viable_results[selected_index]
 
-        # §F honesty gate (Layer 0): deterministic, bundle-aware, runs BEFORE
-        # fact-check. For regional-anomaly drafts a bare-region / national /
-        # area-weighted aggregate is a factual misrepresentation, not a style
-        # nit — kill it deterministically rather than trusting the LLM checker.
-        forbidden_hit = _forbidden_claim_violation(writer_result.tweet, bundle)
-        if forbidden_hit is not None:
-            print(
-                f"[two_bot.pipeline] Honesty gate rejected {bundle.signal_kind} "
-                f"draft: forbidden claim {forbidden_hit!r}"
-            )
-            _record_kill("honesty_gate", f"forbidden claim: {forbidden_hit!r}")
-            return None
-
-        fact_result = fact_check.fact_check(
-            writer_result.tweet, [], bundle, state
+        assert writer_result.tweet is not None
+        fact_result = _check_safety_honesty_fact(
+            writer_result.tweet,
+            bundle,
+            state,
+            record_kill=_record_kill,
         )
-        if not fact_result.passed:
-            failures_str = "; ".join(fact_result.failures)
-            print(
-                f"[two_bot.pipeline] Fact-check rejected {bundle.signal_kind} "
-                f"draft: {failures_str}"
-            )
-            _record_kill("fact_check", failures_str or "unknown")
+        if fact_result is None:
             return None
 
         # Stage 5: editorial critic — final gate before the draft reaches
-        # the human-approval queue. Sees cross-draft context the writer
-        # cannot (same-day pending drafts), so it catches template
-        # convergence in a single cron run. Kill-switch via
-        # THEHEAT_CRITIC_ENABLED=0 if the critic over-kills in production.
+        # the human-approval queue. In multi-sample mode the slate critic
+        # already selected the strongest candidate before safety/fact-check.
         critic_result = None
-        if _critic_enabled():
+        if _critic_enabled() and slate_critic_result is None:
             shipped_recent = memory_slice.shipped_tweet_texts[:10]
+            revise_enabled = _critic_revise_enabled()
             critic_result = critic.critic_review(
                 writer_result.tweet,
                 bundle,
                 state,
                 shipped_recent=shipped_recent,
+                allow_revise=revise_enabled,
             )
+            if critic_result.verdict == "REVISE":
+                if not revise_enabled:
+                    _record_kill("critic", "critic returned REVISE while revise is disabled")
+                    return None
+                assert critic_result.revise_instruction is not None
+                revised = writer.write_tweet(
+                    bundle,
+                    memory_slice,
+                    revision_constraint=_revision_constraint(
+                        writer_result.tweet,
+                        critic_result.revise_instruction,
+                    ),
+                )
+                if revised.tweet is None:
+                    print(
+                        f"[two_bot.pipeline] Revision writer killed "
+                        f"{bundle.signal_kind} draft: {revised.kill_reason}"
+                    )
+                    _record_kill("writer", revised.kill_reason or "unknown")
+                    return None
+                revised_tweet = revised.tweet
+                writer_result = revised
+                fact_result = _check_safety_honesty_fact(
+                    revised_tweet,
+                    bundle,
+                    state,
+                    record_kill=_record_kill,
+                )
+                if fact_result is None:
+                    return None
+                critic_result = critic.critic_review(
+                    revised_tweet,
+                    bundle,
+                    state,
+                    shipped_recent=shipped_recent,
+                    allow_revise=False,
+                )
             if not critic_result.passed:
                 print(
                     f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
@@ -206,6 +312,9 @@ def generate_draft(
         }
         if critic_result is not None:
             metadata["critic"] = critic_result.to_dict()
+            metadata["critic_model"] = critic.CRITIC_MODEL
+        elif slate_critic_result is not None:
+            metadata["critic"] = slate_critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL
         return {
             "type": bundle.signal_kind,
