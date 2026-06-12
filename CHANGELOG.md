@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.47.0] - 2026-06-12
+
+THIRTY-LOOP S-19 trims the dashboard state payload and stops hidden browser
+tabs from polling continuously.
+
+### Changed
+
+- **Project dashboard state and gate polling.** `/api/dashboard` now returns
+  only the state keys the page reads (`last_hot10`, `streaks`, `errors`,
+  `daily_tweet_count`, and `run_history`) while preserving full server-side
+  state for drafts, suppressions, and source-health derivation. The dashboard
+  refresh interval now skips hidden tabs and refreshes immediately when the tab
+  becomes visible again.
+
 ## [0.9.46.0] - 2026-06-12
 
 THIRTY-LOOP S-18 wires a CI smoke test for the SQLite state backend escape

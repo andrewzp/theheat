@@ -1,6 +1,7 @@
 import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
+import { projectStateForDashboard } from "../../../lib/projection.js"
 
 export const runtime = "nodejs"
 
@@ -132,7 +133,7 @@ export async function GET(request) {
 
   try {
     const state = await readStateStore()
-    results.state = state
+    results.state = projectStateForDashboard(state)
     results.stateBackend = getStateBackend()
     results.drafts = { drafts: pendingDrafts(state) }
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
