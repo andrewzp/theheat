@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
+from src.editorial.scheduling import defer_to_engagement_window
 from src.editorial.approval import recommend_approval_policy
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
 from src.orchestrator.common import (
+    _parse_iso_utc,
     _unwrap_generated_result,
     _utc_after_minutes_iso,
     _utc_now,
@@ -25,6 +28,15 @@ from src.state_schema import BotState
 
 def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
+
+
+def _maybe_defer_auto_approve_at(auto_approve_at: str) -> str:
+    if os.environ.get("THEHEAT_ENGAGEMENT_WINDOW_ENABLED", "0") != "1":
+        return auto_approve_at
+    parsed = _parse_iso_utc(auto_approve_at)
+    if parsed is None:
+        return auto_approve_at
+    return defer_to_engagement_window(parsed).isoformat().replace("+00:00", "Z")
 
 
 def save_draft(
@@ -195,7 +207,9 @@ def save_draft(
     draft.setdefault("approval_mode", "manual")
 
     if policy.mode == "armed_auto" and policy.recommended_delay_minutes:
-        draft["auto_approve_at"] = _utc_after_minutes_iso(policy.recommended_delay_minutes)
+        draft["auto_approve_at"] = _maybe_defer_auto_approve_at(
+            _utc_after_minutes_iso(policy.recommended_delay_minutes)
+        )
         draft["auto_approve_requested_at"] = _utc_now_iso()
         draft["approval_mode"] = "policy_auto"
 
