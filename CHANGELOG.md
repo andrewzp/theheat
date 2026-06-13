@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.63] - 2026-06-13
+
+### Added
+
+- **SOURCE-REDUNDANCY LANE plan** (`docs/superpowers/plans/2026-06-13-source-redundancy-lane.md` + PROGRESS). A redundant-data-feed execution lane in the THIRTY-LOOP style, MERGING two same-night drafts (Andrew's call): same-provider product chains + chain provenance/dashboard visibility AND genuinely independent feeds that MAY create a draft during a host outage — tagged via the existing `evidence_grade` mechanism (`observed_alt_host`/`model_fallback`) so a backup never claims an observation it didn't make, and still gated by the manual approval queue. 10 steps: R-00 provenance foundation, R-01 dashboard/sentinel leg-visibility, R-02 firms/NOAA-HMS, R-03 gpm/Open-Meteo, R-04 gdacs/ReliefWeb, R-05 river/GloFAS, R-06 FIRMS product chain, R-07 coral/CRW-ERDDAP, R-08 GDACS subtype substitutes (optional), R-09 sea-ice (dep-gated). Endpoints live-verified; both halves code-grounded; the independent-feed half got a Codex pass (5 P0s fixed; ocean_sst + global-FDH cut). The deciding rule: a backup MAY draft, because that is the only design that actually stops host-outage no-draft days.
+
 ## [0.9.62.0] - 2026-06-13
 
 THIRTY-LOOP S-35 extracts the dashboard's remaining page-level components so
