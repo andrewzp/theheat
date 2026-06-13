@@ -164,6 +164,7 @@ _METADATA_JSON_KEYS = (
     "source_health",
     "last_good_readings",
     "publish_ledger",
+    "tweet_metrics",
     "_state_rev",
     # Reanalysis regional-anomaly onset guard — must persist (§E) so a sustained
     # spell stays suppressed across restarts. The transient _reganom_live_cache is

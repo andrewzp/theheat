@@ -168,6 +168,15 @@ class SourceHealth(TypedDict, total=False):
     runs: list[SourceHealthRun]
 
 
+class TweetMetric(TypedDict):
+    """Public engagement metrics for one posted X tweet."""
+
+    at: str
+    likes: int
+    retweets: int
+    replies: int
+
+
 class AirQualityTier(TypedDict):
     """Last successfully drafted air-quality tier for one city/date."""
 
@@ -215,6 +224,7 @@ class BotState(TypedDict, total=False):
     source_health: dict[str, SourceHealth]
     last_good_readings: dict[str, dict]
     publish_ledger: dict[str, dict]
+    tweet_metrics: dict[str, TweetMetric]
     _state_rev: int
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]

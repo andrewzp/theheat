@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data import twitter_metrics
 from src.orchestrator.common import *
+
+
+_METRICS_SOURCE = "twitter_metrics"
+_METRICS_LOOKBACK_DAYS = 30
+_METRICS_MAX_IDS = 50
 
 
 def _compact_hot10_rows(hot10) -> list[dict]:
@@ -17,6 +23,118 @@ def _compact_hot10_rows(hot10) -> list[dict]:
             "temp_high_c": round(float(ct.temp_high_c), 1),
         })
     return rows
+
+
+def _metrics_enabled() -> bool:
+    return os.environ.get("THEHEAT_METRICS_ENABLED", "0") == "1"
+
+
+def _metric_source_seen_today(bot_state: BotState, now: datetime) -> bool:
+    today = now.date()
+    for run in bot_state.get("run_history", []):
+        run_at = _parse_iso_utc(run.get("started_at") or run.get("ended_at"))
+        if run_at is None or run_at.date() != today:
+            continue
+        for source in run.get("sources", []):
+            if source.get("source") == _METRICS_SOURCE:
+                return True
+    return False
+
+
+def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]:
+    cutoff = now - timedelta(days=_METRICS_LOOKBACK_DAYS)
+    candidates: list[tuple[datetime, str]] = []
+
+    def add(tweet_id, sampled_at) -> None:
+        tweet_id = str(tweet_id or "").strip()
+        sampled = _parse_iso_utc(str(sampled_at or ""))
+        if not tweet_id or sampled is None or sampled < cutoff:
+            return
+        candidates.append((sampled, tweet_id))
+
+    publish_ledger = bot_state.get("publish_ledger", {})
+    if isinstance(publish_ledger, dict):
+        for row in publish_ledger.values():
+            if isinstance(row, dict):
+                add(row.get("tweet_id"), row.get("at"))
+
+    for draft in bot_state.get("drafts", []):
+        if not isinstance(draft, dict):
+            continue
+        add(draft.get("tweet_id"), draft.get("posted_at") or draft.get("last_publish_attempt_at"))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    ids: list[str] = []
+    seen = set()
+    for _sampled, tweet_id in candidates:
+        if tweet_id in seen:
+            continue
+        seen.add(tweet_id)
+        ids.append(tweet_id)
+        if len(ids) >= _METRICS_MAX_IDS:
+            break
+    return ids
+
+
+def _run_twitter_metrics(
+    bot_state: BotState,
+    current_run: dict | None = None,
+    *,
+    now: datetime | None = None,
+) -> None:
+    if not _metrics_enabled():
+        return
+
+    metrics_start = time.perf_counter()
+    sample_time = now or _utc_now()
+
+    if _metric_source_seen_today(bot_state, sample_time):
+        _record_source_run(
+            current_run, bot_state, _METRICS_SOURCE, metrics_start,
+            status="skipped", note="Metrics already polled today"
+        )
+        return
+
+    tweet_ids = _metric_candidate_tweet_ids(bot_state, sample_time)
+    if not tweet_ids:
+        _record_source_run(
+            current_run, bot_state, _METRICS_SOURCE, metrics_start,
+            status="skipped", note="No recent tweet ids to poll"
+        )
+        return
+
+    if not twitter_metrics.credentials_available():
+        _record_source_run(
+            current_run, bot_state, _METRICS_SOURCE, metrics_start,
+            status="skipped", observed=len(tweet_ids),
+            note="No Twitter credentials configured"
+        )
+        return
+
+    try:
+        metrics = twitter_metrics.fetch_metrics(tweet_ids)
+    except Exception as exc:
+        _record_source_run(
+            current_run, bot_state, _METRICS_SOURCE, metrics_start,
+            status="failed", observed=len(tweet_ids), error=str(exc)
+        )
+        return
+
+    sampled_at = sample_time.isoformat().replace("+00:00", "Z")
+    table = bot_state.setdefault("tweet_metrics", {})
+    for tweet_id, row in metrics.items():
+        table[str(tweet_id)] = {
+            "at": sampled_at,
+            "likes": int(row.get("likes", 0)),
+            "retweets": int(row.get("retweets", 0)),
+            "replies": int(row.get("replies", 0)),
+        }
+
+    _record_source_run(
+        current_run, bot_state, _METRICS_SOURCE, metrics_start,
+        status="success", observed=len(tweet_ids), promoted=len(metrics),
+        note=f"Stored {len(metrics)} metric row(s)"
+    )
 
 
 def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> BotState:
@@ -40,6 +158,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                 current_run, bot_state, "leaderboard", leaderboard_start,
                 status="success", observed=0, promoted=0, drafted=0, note="No temperature data available"
             )
+            _run_twitter_metrics(bot_state, current_run)
             return bot_state
 
         temps_with_anomalies = open_meteo.compute_anomalies(temps, normals)
@@ -51,6 +170,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                 current_run, bot_state, "leaderboard", leaderboard_start,
                 status="success", observed=len(temps), promoted=0, drafted=0, note="No valid anomalies to rank"
             )
+            _run_twitter_metrics(bot_state, current_run)
             return bot_state
 
         prev_cities = bot_state.get("last_hot10", {}).get("cities", [])
@@ -119,6 +239,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=0
         )
         _drain_and_write_triage_queue(bot_state, current_run)
+        _run_twitter_metrics(bot_state, current_run)
 
     except Exception as e:
         print(f"[leaderboard] Error: {e}")

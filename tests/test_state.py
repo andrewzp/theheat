@@ -465,6 +465,46 @@ class TestMergeStateContract:
             },
         }
 
+    def test_tweet_metrics_merge_keeps_newest_at_per_tweet(self):
+        from src.state import _merge_state
+
+        merged = _merge_state(
+            {
+                "tweet_metrics": {
+                    "tweet_1": {
+                        "at": "2026-06-12T10:00:00Z",
+                        "likes": 1,
+                        "retweets": 2,
+                        "replies": 3,
+                    }
+                }
+            },
+            {
+                "tweet_metrics": {
+                    "tweet_1": {
+                        "at": "2026-06-12T12:00:00Z",
+                        "likes": 4,
+                        "retweets": 5,
+                        "replies": 6,
+                    },
+                    "tweet_2": {
+                        "at": "2026-06-12T11:00:00Z",
+                        "likes": 7,
+                        "retweets": 8,
+                        "replies": 9,
+                    },
+                }
+            },
+        )
+
+        assert merged["tweet_metrics"]["tweet_1"] == {
+            "at": "2026-06-12T12:00:00Z",
+            "likes": 4,
+            "retweets": 5,
+            "replies": 6,
+        }
+        assert merged["tweet_metrics"]["tweet_2"]["likes"] == 7
+
     # --- Strategy regressions locking the Codex adversarial findings (rev 2 spec).
     # These replace the former behavioral-probe test: the structural assertion above
     # proves every key is HANDLED; these prove the specific edge semantics Codex
@@ -1219,6 +1259,38 @@ class TestSqliteBackend:
 
             assert loaded["sst_anom_last_tier"] == {"2026/north_atlantic": 3, "2026/mediterranean": 2}
             assert loaded["sst_anom_annual_count"] == {"2026": 5}
+
+    def test_tweet_metrics_survive_sqlite_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "tweet_metrics": {
+                    "tweet_1": {
+                        "at": "2026-06-12T12:00:00Z",
+                        "likes": 4,
+                        "retweets": 5,
+                        "replies": 6,
+                    }
+                },
+            }
+
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+
+            assert loaded["tweet_metrics"]["tweet_1"] == {
+                "at": "2026-06-12T12:00:00Z",
+                "likes": 4,
+                "retweets": 5,
+                "replies": 6,
+            }
 
     def test_tier_touch_ts_survives_sqlite_round_trip(self):
         with tempfile.TemporaryDirectory() as tmpdir:

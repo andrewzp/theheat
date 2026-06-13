@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.61.0] - 2026-06-13
+
+THIRTY-LOOP S-34 adds a dark Twitter engagement-metrics ingestion path so the
+bot can begin retaining coarse per-tweet audience response data once the API
+tier is verified.
+
+### Added
+
+- **Store daily tweet engagement metrics behind a flag.**
+  `src/data/twitter_metrics.py` fetches X public metrics in batches of up to
+  100 tweet IDs, while `src/orchestrator/hot10.py` piggybacks a default-off
+  `THEHEAT_METRICS_ENABLED` hook at the end of leaderboard mode. The hook
+  samples recent tweet IDs from `publish_ledger` and posted drafts, caps each
+  attempt at 50 IDs from the last 30 days, and records at most one poll per
+  day.
+- **Persist metrics safely across backends.** `src/state.py` adds the
+  top-level `tweet_metrics` table with newest-`at` merge semantics, and
+  `src/storage/sqlite_store.py` preserves the table through SQLite-backed
+  round trips. The merge golden fixture adds a focused
+  `custom.tweet_metrics_newest_at` case.
+
 ## [0.9.60.0] - 2026-06-13
 
 THIRTY-LOOP S-33 adds a default-off Hot 10 media card path so approved

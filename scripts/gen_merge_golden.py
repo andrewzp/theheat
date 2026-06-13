@@ -87,6 +87,35 @@ CASES = [
             }
         },
     ),
+    (
+        "custom.tweet_metrics_newest_at",
+        {
+            "tweet_metrics": {
+                "tweet_1": {
+                    "at": "2026-06-12T10:00:00Z",
+                    "likes": 1,
+                    "retweets": 2,
+                    "replies": 3,
+                }
+            }
+        },
+        {
+            "tweet_metrics": {
+                "tweet_1": {
+                    "at": "2026-06-12T12:00:00Z",
+                    "likes": 4,
+                    "retweets": 5,
+                    "replies": 6,
+                },
+                "tweet_2": {
+                    "at": "2026-06-12T11:00:00Z",
+                    "likes": 7,
+                    "retweets": 8,
+                    "replies": 9,
+                },
+            }
+        },
+    ),
     ("max_int.state_rev", {"_state_rev": 7}, {"_state_rev": 5}),
     ("custom.ozone_peak", {"ozone_hole_last_peak": {"2026": {"area_million_km2": 22.0}}}, {"ozone_hole_last_peak": {"2026": {"area_million_km2": 25.0}}}),
     (

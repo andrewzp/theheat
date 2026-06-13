@@ -107,6 +107,8 @@ DEFAULT_STATE: BotState = {
     # Durable publish intent ledger, keyed by event_id. Written before posting
     # so an interrupted publish pass can avoid immediately re-posting a draft.
     "publish_ledger": {},
+    # Public engagement metrics for posted X tweets, keyed by tweet_id.
+    "tweet_metrics": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -789,6 +791,27 @@ def _merge_last_good(base: Any, nxt: Any) -> dict:
         a_ts = _parse_state_timestamp(str(a.get("captured_at") or ""))
         b_ts = _parse_state_timestamp(str(b.get("captured_at") or ""))
         out[source] = deepcopy(a if a_ts >= b_ts else b)
+    return out
+
+
+def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
+    """Per-tweet metrics merge: keep the row sampled at the newest timestamp."""
+
+    base = base if isinstance(base, dict) else {}
+    nxt = nxt if isinstance(nxt, dict) else {}
+    out: dict = {}
+    for tweet_id in sorted(set(base) | set(nxt)):
+        a = base.get(tweet_id)
+        b = nxt.get(tweet_id)
+        if not isinstance(a, dict):
+            out[tweet_id] = deepcopy(b)
+            continue
+        if not isinstance(b, dict):
+            out[tweet_id] = deepcopy(a)
+            continue
+        a_ts = _parse_state_timestamp(str(a.get("at") or ""))
+        b_ts = _parse_state_timestamp(str(b.get("at") or ""))
+        out[tweet_id] = deepcopy(a if a_ts >= b_ts else b)
     return out
 
 
@@ -1715,6 +1738,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "source_health": _merge_source_health,
     "last_good_readings": _merge_last_good,
     "publish_ledger": _strat_dict_overlay,
+    "tweet_metrics": _merge_tweet_metrics,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),
