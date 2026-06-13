@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.64.0] - 2026-06-13
+
+GREENLIT the SOURCE-REDUNDANCY lane — Andrew's next-step decision: execute the redundant-feed
+work to stop host-outage no-draft days.
+
+### Added
+
+- **`docs/superpowers/plans/2026-06-13-source-redundancy-lane.md` + `-PROGRESS.md`** land on
+  `main` (R-00..R-09: independent backup feeds — NOAA HMS / Open-Meteo precip+ensemble /
+  ReliefWeb / Open-Meteo Flood — that MAY draft during a host outage, tagged `evidence_grade`-
+  honest and manual-queue gated; born as a merge of two drafts, Codex-reviewed, 5 P0s fixed).
+- **`docs/superpowers/plans/2026-06-13-source-redundancy-CODEX-KICKOFF.md`** — the launch command
+  + verbatim, diligence-enforcing executor prompt: per-step verify-live-feed → TDD → implement-to-
+  spec → gates-with-pasted-evidence → self-review on `[CODEX]` steps → honesty checklist, one green
+  PR per step, token-free Codex execution.
+
+### Changed
+
+- **`docs/handoffs/2026-06-13.md`** — the redundancy lane flips from PARKED to the ACTIVE NEXT JOB;
+  the resume prompt now kicks it off. (Supersedes PR #266, which first carried the plan; close it.)
+
 ## [0.9.63.0] - 2026-06-13
 
 Session-end docs sweep after the THIRTY-LOOP completed and the supply flags went live.
