@@ -25,6 +25,7 @@ class FireEvent:
     nearest_city: str
     country: str
     event_id: str
+    source_leg: str | None = None  # witness leg that served (R-00); None = primary
 
 
 # VIIRS confidence is categorical (l/n/h), MODIS is 0-100 percentage.
