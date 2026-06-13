@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.62.0] - 2026-06-13
+
+THIRTY-LOOP S-35 extracts the dashboard's remaining page-level components so
+future dashboard changes can land in focused files.
+
+### Changed
+
+- **Split the dashboard page into component modules.** `dashboard/app/page.js`
+  now keeps state, fetches, actions, and tab switching, while Badge,
+  AutomationStrip, DraftWorkbench, PipelineView, SourcesView, SuppressedView,
+  Hot10Card, RunsTable, and shared view helpers live under
+  `dashboard/app/components/`.
+- **Surface the state backend and trim dead route code.** The dashboard header
+  now displays the fetched state backend (`gist`/`sqlite`), and the unused
+  tracked `/api/state` route was removed after tracked-source grep found no
+  consumers.
+
 ## [0.9.61.0] - 2026-06-13
 
 THIRTY-LOOP S-34 adds a dark Twitter engagement-metrics ingestion path so the

@@ -40,10 +40,10 @@
 | S-32 | #18 | Engagement-window scheduling (flag) | S-30 | DONE(dark; flag THEHEAT_ENGAGEMENT_WINDOW_ENABLED) | #262 | Auto-approve scheduling can defer dead-zone times when the default-off flag is enabled. |
 | S-33 | #9 | Hot 10 image card + alt text (flag) | S-29 | DONE(dark; flag THEHEAT_HOT10_CARD_ENABLED) | #263 | Hot 10 drafts persist compact rows; posts can attach a PNG card plus alt text when the flag is enabled. |
 | S-34 | #5 | Engagement metrics ingestion (flag) | S-17 | DONE(dark; tier-unverified) | #264 | Tweet metrics ingestion is dark behind THEHEAT_METRICS_ENABLED; API tier still needs Andrew verification. |
-| S-35 | #11 | Dashboard component extraction | S-19 | TODO | | |
+| S-35 | #11 | Dashboard component extraction | S-19 | DONE | #265 | Dashboard page split into components; state backend pill surfaced and unused `/api/state` route removed. |
 
 ## Session log
 
 | Date | Session | Steps shipped | Notes |
 |---|---|---|---|
-| | | | |
+| 2026-06-13 | Codex THIRTY-LOOP | S-27-S-35 | Loop queue complete; S-24 remains blocked by missing schema history, and Andrew-owned flips/secrets remain pending where noted above. |
