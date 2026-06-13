@@ -141,6 +141,7 @@ class TriageCandidateBundle:
     cooldown_exempt: bool       # for elite-signal bypass
     legacy_type: str            # for save_draft type field
     created_at: str             # iso8601 — used as triage tiebreaker
+    draft_metadata: dict | None = None  # extra persisted draft fields
     # Optional zero-argument callable invoked by the drain step on successful
     # draft. Use for source-specific side effects that must only fire when a
     # draft actually ships (e.g. incrementing an annual count, updating a

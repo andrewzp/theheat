@@ -63,6 +63,7 @@ def _enqueue_story_candidate(
     city: str = "",
     tweet_date: str = "",
     cooldown_exempt: bool = False,
+    draft_metadata: dict | None = None,
     on_draft_success: Callable[[], None] | None = None,
 ) -> bool:
     """Audit and enqueue one writer candidate.
@@ -103,6 +104,7 @@ def _enqueue_story_candidate(
             cooldown_exempt=cooldown_exempt,
             legacy_type=legacy_type,
             created_at=_utc_now_iso(),
+            draft_metadata=draft_metadata,
             on_draft_success=on_draft_success,
         ),
     )
@@ -205,6 +207,8 @@ def _drain_and_write_triage_queue(
             draft_kwargs["tweet_date"] = candidate.tweet_date
         if candidate.cooldown_exempt:
             draft_kwargs["cooldown_exempt"] = candidate.cooldown_exempt
+        if candidate.draft_metadata:
+            draft_kwargs["draft_metadata"] = candidate.draft_metadata
         drafted = _common._try_two_bot_draft(
             candidate.bundle,
             bot_state,

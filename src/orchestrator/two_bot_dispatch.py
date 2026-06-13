@@ -92,6 +92,7 @@ def _try_two_bot_draft(
     city: str = "",
     tweet_date: str = "",
     cooldown_exempt: bool = False,
+    draft_metadata: dict | None = None,
 ) -> bool:
     """Run the live two-bot pipeline (writer → claim extract → fact-check
     → memory) and save the draft. Returns True iff a draft was saved.
@@ -158,6 +159,7 @@ def _try_two_bot_draft(
         event_id,
         score=score,
         review_context=review_context,
+        evaluator_metadata=draft_metadata,
         city=city,
         tweet_date=tweet_date,
         cooldown_exempt=cooldown_exempt,
