@@ -1643,6 +1643,143 @@ class TestRunLeaderboard:
         assert "Miami" in result["last_hot10"]["cities"]
 
 
+class TestTwitterMetricsIngestion:
+    def _restore_telemetry_state(self, monkeypatch):
+        import src.state as state_module
+        import src.orchestrator.telemetry as telemetry
+
+        monkeypatch.setattr(telemetry, "state", state_module)
+
+    def test_metrics_batches_and_stores(self, monkeypatch):
+        from src.orchestrator import hot10
+
+        self._restore_telemetry_state(monkeypatch)
+        now = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
+        state = _fresh_state()
+        state["publish_ledger"] = {
+            f"event_{idx}": {
+                "tweet_id": f"tweet_{idx}",
+                "at": (now - timedelta(hours=idx)).isoformat().replace("+00:00", "Z"),
+            }
+            for idx in range(60)
+        }
+        captured = {}
+
+        def fake_fetch(tweet_ids):
+            captured["tweet_ids"] = tweet_ids
+            return {
+                tweet_id: {"likes": idx, "retweets": idx + 1, "replies": idx + 2}
+                for idx, tweet_id in enumerate(tweet_ids)
+            }
+
+        monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+        monkeypatch.setattr(hot10.twitter_metrics, "credentials_available", lambda: True)
+        monkeypatch.setattr(hot10.twitter_metrics, "fetch_metrics", fake_fetch)
+        current_run = {"started_at": now.isoformat().replace("+00:00", "Z"), "sources": []}
+
+        hot10._run_twitter_metrics(state, current_run, now=now)
+
+        assert len(captured["tweet_ids"]) == 50
+        assert captured["tweet_ids"][:3] == ["tweet_0", "tweet_1", "tweet_2"]
+        assert state["tweet_metrics"]["tweet_0"] == {
+            "at": "2026-06-12T12:00:00Z",
+            "likes": 0,
+            "retweets": 1,
+            "replies": 2,
+        }
+        assert current_run["sources"][-1]["source"] == "twitter_metrics"
+        assert current_run["sources"][-1]["status"] == "success"
+        assert current_run["sources"][-1]["observed"] == 50
+
+    def test_metrics_respects_30d_window(self, monkeypatch):
+        from src.orchestrator import hot10
+
+        self._restore_telemetry_state(monkeypatch)
+        now = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
+        state = _fresh_state()
+        state["publish_ledger"] = {
+            "recent_event": {
+                "tweet_id": "recent_from_ledger",
+                "at": (now - timedelta(days=2)).isoformat().replace("+00:00", "Z"),
+            },
+            "old_event": {
+                "tweet_id": "old_from_ledger",
+                "at": (now - timedelta(days=31)).isoformat().replace("+00:00", "Z"),
+            },
+        }
+        state["drafts"] = [
+            {
+                "id": "recent_draft",
+                "tweet_id": "recent_from_draft",
+                "posted_at": (now - timedelta(days=5)).isoformat().replace("+00:00", "Z"),
+            },
+            {
+                "id": "old_draft",
+                "tweet_id": "old_from_draft",
+                "posted_at": (now - timedelta(days=45)).isoformat().replace("+00:00", "Z"),
+            },
+        ]
+        captured = {}
+
+        def fake_fetch(tweet_ids):
+            captured["tweet_ids"] = tweet_ids
+            return {}
+
+        monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+        monkeypatch.setattr(hot10.twitter_metrics, "credentials_available", lambda: True)
+        monkeypatch.setattr(hot10.twitter_metrics, "fetch_metrics", fake_fetch)
+
+        hot10._run_twitter_metrics(state, {"started_at": "2026-06-12T12:00:00Z", "sources": []}, now=now)
+
+        assert captured["tweet_ids"] == ["recent_from_ledger", "recent_from_draft"]
+
+    def test_flag_off_noop(self, monkeypatch):
+        from src.orchestrator import hot10
+
+        self._restore_telemetry_state(monkeypatch)
+        state = _fresh_state()
+
+        def fail_fetch(tweet_ids):
+            raise AssertionError("metrics should not fetch when flag is off")
+
+        monkeypatch.delenv("THEHEAT_METRICS_ENABLED", raising=False)
+        monkeypatch.setattr(hot10.twitter_metrics, "credentials_available", lambda: True)
+        monkeypatch.setattr(hot10.twitter_metrics, "fetch_metrics", fail_fetch)
+        current_run = {"started_at": "2026-06-12T12:00:00Z", "sources": []}
+
+        hot10._run_twitter_metrics(state, current_run)
+
+        assert state["tweet_metrics"] == {}
+        assert current_run["sources"] == []
+
+    def test_metrics_skips_when_already_polled_today(self, monkeypatch):
+        from src.orchestrator import hot10
+
+        self._restore_telemetry_state(monkeypatch)
+        now = datetime(2026, 6, 12, 12, 0, tzinfo=timezone.utc)
+        state = _fresh_state()
+        state["run_history"] = [
+            {
+                "started_at": "2026-06-12T01:00:00Z",
+                "sources": [{"source": "twitter_metrics", "status": "success"}],
+            }
+        ]
+
+        def fail_fetch(tweet_ids):
+            raise AssertionError("metrics should not fetch twice in one day")
+
+        monkeypatch.setenv("THEHEAT_METRICS_ENABLED", "1")
+        monkeypatch.setattr(hot10.twitter_metrics, "credentials_available", lambda: True)
+        monkeypatch.setattr(hot10.twitter_metrics, "fetch_metrics", fail_fetch)
+        current_run = {"started_at": "2026-06-12T12:00:00Z", "sources": []}
+
+        hot10._run_twitter_metrics(state, current_run, now=now)
+
+        assert current_run["sources"][-1]["source"] == "twitter_metrics"
+        assert current_run["sources"][-1]["status"] == "skipped"
+        assert current_run["sources"][-1]["note"] == "Metrics already polled today"
+
+
 class TestRunManualTweet:
     @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
     @patch("src.main.post_approved")

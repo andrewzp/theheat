@@ -480,6 +480,51 @@
   },
   {
     "base": {
+      "tweet_metrics": {
+        "tweet_1": {
+          "at": "2026-06-12T10:00:00Z",
+          "likes": 1,
+          "replies": 3,
+          "retweets": 2
+        }
+      }
+    },
+    "expected": {
+      "tweet_metrics": {
+        "tweet_1": {
+          "at": "2026-06-12T12:00:00Z",
+          "likes": 4,
+          "replies": 6,
+          "retweets": 5
+        },
+        "tweet_2": {
+          "at": "2026-06-12T11:00:00Z",
+          "likes": 7,
+          "replies": 9,
+          "retweets": 8
+        }
+      }
+    },
+    "incoming": {
+      "tweet_metrics": {
+        "tweet_1": {
+          "at": "2026-06-12T12:00:00Z",
+          "likes": 4,
+          "replies": 6,
+          "retweets": 5
+        },
+        "tweet_2": {
+          "at": "2026-06-12T11:00:00Z",
+          "likes": 7,
+          "replies": 9,
+          "retweets": 8
+        }
+      }
+    },
+    "label": "custom.tweet_metrics_newest_at"
+  },
+  {
+    "base": {
       "_state_rev": 7
     },
     "expected": {
