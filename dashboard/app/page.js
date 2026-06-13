@@ -231,6 +231,7 @@ export default function Dashboard() {
   }
 
   const state = data?.state
+  const stateBackend = data?.stateBackend
   const stateError = data?.stateError
   const runs = data?.runs || []
   const hot10 = state?.last_hot10 || {}
@@ -291,6 +292,7 @@ export default function Dashboard() {
             @theheat <span>control panel</span>
           </h1>
           <div className="refresh-group">
+            {stateBackend && <span className="backend-pill">state: {stateBackend}</span>}
             {refreshError && (
               <span className="refresh-error" title={refreshError}>
                 refresh failed
