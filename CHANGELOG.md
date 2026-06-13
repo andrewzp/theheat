@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.63.0] - 2026-06-13
+
+Session-end docs sweep after the THIRTY-LOOP completed and the supply flags went live.
+
+### Changed
+
+- **New canonical handoff `docs/handoffs/2026-06-13.md`** (supersedes 2026-06-11): THIRTY-LOOP
+  complete (S-01..S-35, PRs #222–#265, only S-24 blocked); dashboard deployed;
+  `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` flipped LIVE; the
+  SOURCE-REDUNDANCY lane (#266, R-00..R-09) planned but PARKED pending Andrew; full
+  feature-flag status table; root-cause framing (no-draft-days are mostly editorial
+  supply, not outages); paste-ready resume prompt.
+- **BRIEFING.md** — new 2026-06-13 status block prepended; the 2026-06-09 v4 block demoted
+  to historical.
+- **docs/handoffs/README.md** — index updated (adds 2026-06-13 as CURRENT + the previously
+  un-indexed 2026-06-11; v4 demoted).
+- **PIPELINE.md** — header pointer updated to the 2026-06-13 handoff (the editorial-pipeline
+  body is unchanged; the glossary was already current as of S-02).
+
+Note: PR #266 also claims 0.9.63.0 on its parked branch; whichever merges second rebumps.
+
 ## [0.9.62.0] - 2026-06-13
 
 THIRTY-LOOP S-35 extracts the dashboard's remaining page-level components so
