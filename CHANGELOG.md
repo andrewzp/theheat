@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.58.0] - 2026-06-12
+
+THIRTY-LOOP S-31 adds deterministic public-advisory links to cyclone drafts
+when the final text can safely fit the URL.
+
+### Changed
+
+- **Append cyclone advisory URLs.** `src/orchestrator/two_bot_dispatch.py`
+  now appends `public_advisory_url` from cyclone bundles for cyclone legacy
+  types only, using conservative raw-length checks before saving and rerunning
+  safety on the final linked text. `tests/test_main.py` covers the fit,
+  over-budget, and non-cyclone cases, while `tests/test_safety.py` verifies
+  advisory URLs remain regex-safe.
+
 ## [0.9.57.0] - 2026-06-12
 
 THIRTY-LOOP S-30 adds an inter-tweet spacing guard so auto-publish runs do not

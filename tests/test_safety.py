@@ -83,6 +83,13 @@ class TestRegexGate:
         passed, reason = check_regex("x" * 280)
         assert passed
 
+    def test_safety_passes_with_url(self):
+        passed, reason = check_regex(
+            "Beryl jumped to Category 4 in the Atlantic.\n"
+            "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
+        )
+        assert passed, reason
+
     def test_dark_humor_passes(self):
         passed, reason = check_regex(
             "Phoenix. Again. 119F. New record. The old one was set... last year."

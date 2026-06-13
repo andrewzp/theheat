@@ -1,6 +1,7 @@
 """Integration tests for main orchestrator with all externals mocked."""
 
 from copy import deepcopy
+from types import SimpleNamespace
 from unittest.mock import ANY, patch, MagicMock
 from datetime import date, datetime, timedelta, timezone
 
@@ -435,6 +436,88 @@ class TestSaveDraft:
 
         assert state["drafts"][0]["approval_policy"]["mode"] == "manual_only"
         assert "auto_approve_at" not in state["drafts"][0]
+
+    def _bundle_with_advisory_url(self, url: str):
+        return SimpleNamespace(
+            signal_kind="cyclone_tier_crossing",
+            where="Beryl, Atlantic",
+            current_facts=[{"label": "public_advisory_url", "value": url}],
+        )
+
+    def _dispatch_module(self):
+        import importlib
+        import src.orchestrator.two_bot_dispatch as dispatch
+
+        return importlib.reload(dispatch)
+
+    def test_cyclone_draft_gets_advisory_url_when_fits(self, monkeypatch):
+        from src.editorial.scoring import score_cyclone_tier_crossing
+        dispatch = self._dispatch_module()
+
+        monkeypatch.setattr(
+            "src.two_bot.pipeline.generate_draft",
+            lambda *args, **kwargs: {"text": "Beryl jumped to Category 4 in the Atlantic.", "two_bot_metadata": {}},
+        )
+        state = _fresh_state()
+        url = "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
+
+        saved = dispatch._try_two_bot_draft(
+            self._bundle_with_advisory_url(url),
+            state,
+            score_cyclone_tier_crossing(2, 4, "Atlantic"),
+            legacy_type="cyclone_tier_crossing",
+            event_id="cyclone_evt_1",
+            review_context={"facts": []},
+        )
+
+        assert saved is True
+        assert state["drafts"][0]["text"].endswith(f"\n{url}")
+
+    def test_url_omitted_when_over_budget(self, monkeypatch):
+        from src.editorial.scoring import score_cyclone_tier_crossing
+        dispatch = self._dispatch_module()
+
+        monkeypatch.setattr(
+            "src.two_bot.pipeline.generate_draft",
+            lambda *args, **kwargs: {"text": "x" * 250, "two_bot_metadata": {}},
+        )
+        state = _fresh_state()
+        url = "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
+
+        saved = dispatch._try_two_bot_draft(
+            self._bundle_with_advisory_url(url),
+            state,
+            score_cyclone_tier_crossing(2, 4, "Atlantic"),
+            legacy_type="cyclone_tier_crossing",
+            event_id="cyclone_evt_2",
+            review_context={"facts": []},
+        )
+
+        assert saved is True
+        assert state["drafts"][0]["text"] == "x" * 250
+
+    def test_non_cyclone_unaffected(self, monkeypatch):
+        from src.editorial.scoring import score_fire_event
+        dispatch = self._dispatch_module()
+
+        monkeypatch.setattr(
+            "src.two_bot.pipeline.generate_draft",
+            lambda *args, **kwargs: {"text": "Fire signal draft", "two_bot_metadata": {}},
+        )
+        state = _fresh_state()
+        url = "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
+
+        saved = dispatch._try_two_bot_draft(
+            self._bundle_with_advisory_url(url),
+            state,
+            score_fire_event(97, 1200, region="Northern California"),
+            legacy_type="fire",
+            event_id="fire_evt_1",
+            review_context={"facts": []},
+        )
+
+        assert saved is True
+        assert state["drafts"][0]["text"] == "Fire signal draft"
 
 
 class TestSameCityDayDedup:
