@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 
 
@@ -57,9 +58,16 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
                 event_id=fire.event_id,
                 review_context=review_context,
             )
+        # R-01/R-02: if the NOAA HMS witness served (primary FIRMS down), record
+        # `degraded` with "served via <leg>" so the sentinel + dashboard show the
+        # primary is down even while backup drafts still flow. A healthy primary
+        # leaves source_leg unset -> success.
+        served = degraded_via(fires)
         _record_source_run(
             current_run, bot_state, "firms", firms_start,
-            status="success", observed=len(fires), promoted=source_promoted, drafted=0
+            status="degraded" if served else "success",
+            observed=len(fires), promoted=source_promoted, drafted=0,
+            note=served,
         )
     except SourceSkipped as e:
         print(f"[alerts] FIRMS skipped: {e}")

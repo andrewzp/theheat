@@ -33,7 +33,7 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
     frp_rounded = round(fire.frp, 1)
     tier_label, tier_floor = _frp_tier(frp_rounded)
 
-    return StoryBundle(
+    bundle = StoryBundle(
         signal_kind="fire",
         where=fire.nearest_city or fire.country,
         when=date.today().isoformat(),
@@ -60,6 +60,17 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
             "event_id": fire.event_id,
         },
     )
+    # R-02: a fire served by the NOAA HMS witness during a FIRMS outage carries
+    # honest provenance. observed_alt_host = a real observation from an independent
+    # host/instrument (treat as observed; note the alternate source). The grade is
+    # a current_facts entry the writer/fact-check prompts already honor (R-00).
+    if fire.source_leg == "noaa_hms":
+        bundle.current_facts.append({"label": "evidence_grade", "value": "observed_alt_host"})
+        bundle.current_facts.append(
+            {"label": "data_source", "value": "NOAA HMS (GOES/VIIRS, analyst-reviewed) — FIRMS backup feed"}
+        )
+    return bundle
+
 
 def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
     """A wildfire perimeter has crossed a tier threshold (acreage)."""

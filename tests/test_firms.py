@@ -304,3 +304,97 @@ class TestLatLonToCountry:
     def test_unknown_deep_ocean(self):
         # South Atlantic deep ocean, far from any of our boxes.
         assert _lat_lon_to_country(-55.0, -45.0) == "Unknown"
+
+
+from pathlib import Path  # noqa: E402
+
+from src.two_bot.intern import build_fire_bundle  # noqa: E402
+
+HMS_URL_BASE = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text"
+FIRMS_PRIMARY_URL = (
+    "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key/VIIRS_SNPP_NRT/world/1"
+)
+HMS_HEADER = "        Lon,        Lat, YearDay, Time, Satellite, Method, Ecosystem, FRP\n"
+
+
+def _hms_url(today=None):
+    today = today or date.today()
+    return f"{HMS_URL_BASE}/{today:%Y}/{today:%m}/hms_fire{today:%Y%m%d}.txt"
+
+
+class TestNoaaHmsWitness:
+    """R-02: NOAA HMS independent fire witness for firms.
+
+    HMS fires ONLY when the primary FIRMS fetch fails (with_witness). It is an
+    independent host + instrument, N. America only, graded observed_alt_host.
+    """
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_primary_healthy_skips_hms(self):
+        # HMS URL intentionally NOT registered: if the witness fired, `responses`
+        # would raise on the unregistered URL. Healthy primary -> no source_leg.
+        responses.add(
+            responses.GET, FIRMS_PRIMARY_URL,
+            body=FIRMS_CSV_HEADER + "34.05,-118.25,90,350.0\n", status=200,
+        )
+        fires = fetch_fires()
+        assert len(fires) == 1
+        assert fires[0].source_leg is None
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_hms_parses_fixture(self):
+        for _ in range(3):
+            responses.add(responses.GET, FIRMS_PRIMARY_URL, status=503)
+        fixture = (Path(__file__).parent / "fixtures" / "hms_fire_sample.txt").read_text()
+        responses.add(responses.GET, _hms_url(), body=fixture, status=200)
+        fires = fetch_fires()  # default frp_min=250
+        # Fixture has 2 N.America rows >=250 MW; one <250, one -999, one outside NA.
+        assert len(fires) == 2
+        assert all(f.source_leg == "noaa_hms" for f in fires)
+        assert all(f.confidence == 80 for f in fires)
+        assert {round(f.frp) for f in fires} == {389, 520}
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_hms_empty_outside_north_america(self):
+        for _ in range(3):
+            responses.add(responses.GET, FIRMS_PRIMARY_URL, status=503)
+        body = HMS_HEADER + " 130.000000, -25.000000, 2026164, 0203, HIMAWARI, NGFS, 15, 600.000\n"
+        responses.add(responses.GET, _hms_url(), body=body, status=200)
+        # High FRP but in Australia -> HMS has no coverage there -> nothing.
+        assert fetch_fires() == []
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_frp_negative_treated_missing(self):
+        for _ in range(3):
+            responses.add(responses.GET, FIRMS_PRIMARY_URL, status=503)
+        body = (
+            HMS_HEADER
+            + "-100.000000, 40.000000, 2026164, 0202, GOES-EAST, NGFS, 10, -999.000\n"
+            + "-118.250000, 34.050000, 2026164, 0201, GOES-WEST, NGFS, 22, 400.000\n"
+        )
+        responses.add(responses.GET, _hms_url(), body=body, status=200)
+        fires = fetch_fires()
+        assert len(fires) == 1  # -999 row dropped as missing, not treated as 0
+        assert round(fires[0].frp) == 400
+
+    def test_firms_hms_observed_alt_host_grade(self):
+        fire = FireEvent(
+            lat=34.05, lon=-118.25, confidence=80, frp=520.0,
+            nearest_city="California", country="US", event_id="fire_x",
+            source_leg="noaa_hms",
+        )
+        bundle = build_fire_bundle(fire)
+        grades = [f for f in bundle.current_facts if f.get("label") == "evidence_grade"]
+        assert grades == [{"label": "evidence_grade", "value": "observed_alt_host"}]
+
+    def test_firms_primary_fire_has_no_grade(self):
+        fire = FireEvent(
+            lat=34.05, lon=-118.25, confidence=90, frp=520.0,
+            nearest_city="California", country="US", event_id="fire_y",
+        )
+        bundle = build_fire_bundle(fire)
+        assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)
