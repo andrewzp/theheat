@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.59.0] - 2026-06-12
+
+THIRTY-LOOP S-32 adds a default-off engagement-window scheduler so future
+auto-approval times can avoid the 05:00-11:00 UTC dead zone.
+
+### Changed
+
+- **Gate auto-approve scheduling behind an engagement window flag.**
+  `src/editorial/scheduling.py` adds the pure `defer_to_engagement_window()`
+  helper, and `src/orchestrator/draft_save.py` applies it to
+  `auto_approve_at` only when `THEHEAT_ENGAGEMENT_WINDOW_ENABLED=1`.
+  `.github/workflows/bot.yml` passes the repo variable through with a default
+  of `0`, and `tests/test_scheduling.py` covers pure-window behavior, flag-off
+  behavior, and the 04:59/05:00/11:00 UTC boundaries.
+
 ## [0.9.58.0] - 2026-06-12
 
 THIRTY-LOOP S-31 adds deterministic public-advisory links to cyclone drafts
