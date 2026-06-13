@@ -2,9 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
-import { RunStatus } from "./components/Badge.js"
 import { DraftWorkbench } from "./components/DraftWorkbench.js"
+import { Hot10Card, Hot10Leaderboard } from "./components/Hot10Card.js"
 import { PipelineView } from "./components/PipelineView.js"
+import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
@@ -558,36 +559,11 @@ export default function Dashboard() {
                 <div className="stat">{todayCount}</div>
                 <div className="stat-label">of 10 daily cap</div>
               </div>
-              <div className="card">
-                <h2>Last Hot 10</h2>
-                <div className="stat stat-with-chip">
-                  <span>{hot10.date || "—"}</span>
-                  {hot10Stale && (
-                    <span className="badge running hot10-stale-chip">(stale {hot10StaleAgeDays}d)</span>
-                  )}
-                </div>
-                <div className="stat-label">
-                  {hot10.date ? timeAgo(hot10.date + "T12:00:00Z") : "no data yet"}
-                </div>
-              </div>
+              <Hot10Card hot10={hot10} hot10Stale={hot10Stale} hot10StaleAgeDays={hot10StaleAgeDays} />
             </div>
 
             <div className="grid">
-              <div className="card">
-                <h2>Hot 10 Leaderboard</h2>
-                {hot10.cities?.length > 0 ? (
-                  <ul className="hot10-list">
-                    {hot10.cities.map((city, i) => (
-                      <li key={city}>
-                        <span className="rank">{i + 1}.</span>
-                        <span className="city">{city}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="empty">no leaderboard data yet</div>
-                )}
-              </div>
+              <Hot10Leaderboard hot10={hot10} />
               <div className="card">
                 <h2>Streaks</h2>
                 {sortedStreaks.length > 0 ? (
@@ -605,28 +581,7 @@ export default function Dashboard() {
             </div>
 
             {/* Recent GitHub Workflow Runs (cron sanity check) */}
-            <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Recent Runs</h2>
-              {runs.length > 0 ? (
-                <table className="runs-table">
-                  <thead>
-                    <tr><th>Status</th><th>Trigger</th><th>When</th><th>Link</th></tr>
-                  </thead>
-                  <tbody>
-                    {runs.map((r) => (
-                      <tr key={r.id}>
-                        <td><RunStatus conclusion={r.conclusion} status={r.status} /></td>
-                        <td>{r.event === "schedule" ? "cron" : r.event}</td>
-                        <td>{timeAgo(r.created_at)}</td>
-                        <td><a href={r.html_url} target="_blank" rel="noopener">logs</a></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="empty">no runs yet</div>
-              )}
-            </div>
+            <RunsTable runs={runs} />
 
             {/* Errors */}
             <div className="card full">
