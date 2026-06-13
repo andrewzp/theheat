@@ -660,3 +660,49 @@ test("same failure rate: upstream cause → external (amber), our cause → unhe
   assert.equal(byKey.nasa_down.health, "external", "502 is NASA → external, not our problem")
   assert.equal(byKey.our_bug.health, "unhealthy", "KeyError is our bug → red")
 })
+
+// R-01: a primary served by a redundancy witness records status "degraded" with
+// the diagnostic "served via <leg>". Parity contract — these outcomes must match
+// scripts/source_health_sentinel.py (tests/test_source_health_sentinel.py
+// TestServedViaBackupLeg) on the same fixture: degraded + served_via leg.
+function _backupServedState(lastError, status) {
+  return {
+    drafts: [],
+    source_health: {
+      firms: {
+        success: status === "success" ? 5 : 0,
+        failed: 0,
+        degraded: status === "degraded" ? 5 : 0,
+        skipped: 0,
+        last_error: lastError,
+        last_success_ts: "2026-05-09T04:00:00Z",
+        runs: Array.from({ length: 5 }, (_, i) => ({
+          ts: `2026-05-09T0${i}:00:00Z`,
+          status,
+        })),
+      },
+    },
+  }
+}
+
+test("source-health: degraded when served via backup leg surfaces the leg", () => {
+  const payload = buildSourceHealthPayload(_backupServedState("served via noaa_hms", "degraded"))
+  const firms = payload.sources.find((s) => s.source === "firms")
+  assert.equal(firms.health, "degraded")
+  assert.equal(firms.served_via, "noaa_hms")
+})
+
+test("source-health: healthy when primary serves (no served_via)", () => {
+  const payload = buildSourceHealthPayload(_backupServedState("", "success"))
+  const firms = payload.sources.find((s) => s.source === "firms")
+  assert.equal(firms.health, "healthy")
+  assert.equal(firms.served_via, null)
+})
+
+test("source-health: stale served-via cleared once primary recovers to healthy", () => {
+  // All-success recent window -> healthy -> the stale "served via" must not show.
+  const payload = buildSourceHealthPayload(_backupServedState("served via noaa_hms", "success"))
+  const firms = payload.sources.find((s) => s.source === "firms")
+  assert.equal(firms.health, "healthy")
+  assert.equal(firms.served_via, null)
+})

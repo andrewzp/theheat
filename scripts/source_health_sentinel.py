@@ -96,6 +96,21 @@ _UPSTREAM_RE = re.compile(
 _EARTHDATA_CREDENTIAL_HOST_RE = re.compile(r"earthdata|urs\.earthdata|EDL|podaac", re.IGNORECASE)
 _HTTP_403_RE = re.compile(r"\b403\b")
 
+# A run served by a redundancy witness (src/data/_witness.py) records status
+# "degraded" with the diagnostic "served via <leg>". Surfacing the leg lets the
+# dashboard render "firms — degraded (served via noaa_hms)" instead of an error,
+# and warns the operator the primary is down even while backup drafts still flow.
+# Kept byte-equivalent with dashboard/lib/source-health.js parseServedVia.
+_SERVED_VIA_RE = re.compile(r"served via (\S+)")
+
+
+def parse_served_via(diagnostic: str | None) -> str | None:
+    """Return the backup leg from a ``served via <leg>`` degraded diagnostic, else None."""
+    if not diagnostic:
+        return None
+    match = _SERVED_VIA_RE.search(str(diagnostic))
+    return match.group(1) if match else None
+
 # error_class -> (cause label, what-to-do hint shown in the issue)
 _CAUSE = {
     "our_bug": ("ours", "Patch on our side — a code error, expired credential, or a moved endpoint."),
@@ -243,6 +258,9 @@ def classify_source(
             category = "degraded"
 
     cause, action = _CAUSE.get(error_class, _CAUSE["unknown"])
+    # Only meaningful while degraded — a recovered primary (back to healthy)
+    # clears the stale "served via" diagnostic so it can't masquerade.
+    served_via = parse_served_via(last_error) if category == "degraded" else None
     return {
         "source": name,
         "category": category,
@@ -253,6 +271,7 @@ def classify_source(
         "last_success_ts": health.get("last_success_ts"),
         "days_since_success": round(days_dark, 1) if days_dark is not None else None,
         "recent_success_rate": recent_rate,
+        "served_via": served_via,
     }
 
 
@@ -463,6 +482,12 @@ def _print_report(report: dict[str, Any]) -> None:
     )
     for v in report["failing"]:
         print(f"  FAILING  {v['source']} [{v['cause']}]: {v['last_error'][:80]}")
+    for v in report["degraded"]:
+        if v.get("served_via"):
+            print(
+                f"  BACKUP   {v['source']} primary down — served via {v['served_via']} "
+                f"(drafts still flow; manual queue still gates)"
+            )
 
 
 def _run_gh(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:

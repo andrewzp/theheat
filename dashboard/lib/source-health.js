@@ -27,6 +27,19 @@ const UPSTREAM_RE = /\b(403|429|50\d)\b|Server Error|Bad Gateway|Service Unavail
 const EARTHDATA_CREDENTIAL_HOST_RE = /earthdata|urs\.earthdata|EDL|podaac/i
 const HTTP_403_RE = /\b403\b/
 
+// Mirror of scripts/source_health_sentinel.py parse_served_via. A run served by a
+// redundancy witness (src/data/_witness.py) records status "degraded" with the
+// diagnostic "served via <leg>". Surfacing the leg lets the dashboard render
+// "firms — degraded (served via noaa_hms)" instead of treating it as an error, and
+// warns the operator the primary is down even while backup drafts still flow.
+const SERVED_VIA_RE = /served via (\S+)/
+
+function parseServedVia(diagnostic) {
+  if (!diagnostic) return null
+  const m = SERVED_VIA_RE.exec(String(diagnostic))
+  return m ? m[1] : null
+}
+
 function classifyError(lastError) {
   if (!lastError) return "none"
   const t = String(lastError).trim()
@@ -80,11 +93,15 @@ function addDerivedFields(s) {
   // using s.runs (which includes skips) made the fraction contradict the % for
   // cadence-gated sources (e.g. ice_mass: "33% (1/10)" instead of "33% (1/3)").
   const active = s.successes + s.failures + s.degraded + s.partial_failures
+  const health = classifyHealth(s)
   return {
     ...s,
     active,
     success_rate: active > 0 ? s.successes / active : null,
-    health: classifyHealth(s),
+    health,
+    // Only meaningful while degraded — a recovered primary (back to healthy)
+    // clears the stale "served via" diagnostic so it can't masquerade.
+    served_via: health === "degraded" ? parseServedVia(s.last_error) : null,
   }
 }
 
