@@ -7,7 +7,7 @@
 | Step | Target | Leg added | Kind | Tier | Deps | Status | PR | Note |
 |---|---|---|---|---|---|---|---|---|
 | R-00 | foundation | source-leg provenance + 2 grades + `with_witness` | infra | A | — | DONE | #PENDING | `_witness.py` + `source_leg` on 6 dataclasses + 2 prompt grades + survey table; 11 witness tests |
-| R-01 | dashboard+sentinel | chain-leg visibility (Py+JS in sync) | infra | A | R-00 | TODO | | sync-contract pair |
+| R-01 | dashboard+sentinel | chain-leg visibility (Py+JS in sync) | infra | A | R-00 | DONE | #PENDING | `served_via` field (Py+JS byte-equiv), dashboard row chip, runbook; backup-served=degraded not healthy |
 | R-02 | firms (NASA 5/40) | NOAA HMS (NESDIS+GOES, N. America) | independent | A | R-00 | TODO | | stops host-outage no-draft |
 | R-03 | gpm_imerg (NASA 18/40) | Open-Meteo precip + ensemble filter | independent(model) | A | R-00 | TODO | | highest value |
 | R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | TODO | | |
@@ -26,3 +26,4 @@ Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 un
 | Date | Session | Steps shipped | Notes |
 |---|---|---|---|
 | 2026-06-13 | Claude (direct, codex step skipped per Andrew) | R-00 | Provenance foundation: `_witness.py`, `source_leg` on 6 dataclasses, `observed_alt_host`+`model_fallback` prompt grades, survey legs table. Self-review caught a real `dataclasses.replace` type-var error that `mypy src/` missed (file not yet in import graph) — fixed. |
+| 2026-06-13 | Claude (direct) | R-01 | Sync-contract pair: `served_via` parser+field byte-equivalent in `source-health.js` + `source_health_sentinel.py`; dashboard row chip + red-error suppression; runbook with unbacked-source table. Backup-served = degraded (never healthy), no issue opened; parity tests both suites. |

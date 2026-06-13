@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.66.0] - 2026-06-13
+
+SOURCE-REDUNDANCY LANE R-01 — dashboard + sentinel visibility for backup-served sources. When a
+redundancy witness serves (R-00 mechanics), an operator must be able to see WHICH leg served, or a
+chronically-down primary silently masquerades as healthy behind its backup.
+
+### Changed
+
+- **`served_via` derived field** computed identically by `dashboard/lib/source-health.js`
+  (`parseServedVia`) and `scripts/source_health_sentinel.py` (`parse_served_via`) — the sync-contract
+  pair, byte-equivalent regex `served via (\S+)`. A `status="degraded"` run whose diagnostic is
+  `served via <leg>` (the `_witness.degraded_via` telemetry) is classified **degraded, never healthy**,
+  and surfaces the leg. The field is gated to the degraded state so a recovered primary clears any
+  stale `served via` diagnostic.
+- **Dashboard source row** (`dashboard/app/components/SourcesView.js`) renders
+  `firms — degraded · served via noaa_hms` and suppresses the red error row for a backup-serving note
+  (it's not an error).
+- **Sentinel report** prints a `BACKUP <source> primary down — served via <leg>` line. A backup-served
+  source stays `degraded`, so it does NOT open a GitHub issue (only hard-failing sources do) — the
+  visibility is the dashboard row + the CLI line.
+
+### Added
+
+- **`docs/runbooks/source-redundancy.md`** — how to read `served via`, the unbacked-source table
+  (`jtwc`, `nsidc_snow`, `sea_ice`, `copernicus_ems` get visibility but no autonomous backup draft),
+  and the both-legs-down path.
+
 ## [0.9.65.0] - 2026-06-13
 
 SOURCE-REDUNDANCY LANE R-00 — the provenance foundation every later redundancy step builds on. A

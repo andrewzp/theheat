@@ -49,7 +49,14 @@ export function SourcesView({ sources, stats }) {
         {sources.map((s) => (
           <div key={s.source} className="source-row">
             <span className="source-name">{s.source}</span>
-            <span className={`badge source-${s.health}`}>{s.health}</span>
+            <span className={`badge source-${s.health}`}>
+              {s.health}
+              {s.served_via && (
+                <span style={{ marginLeft: 6, fontWeight: 400, opacity: 0.85 }}>
+                  · served via {s.served_via}
+                </span>
+              )}
+            </span>
             <span className="source-rate">
               {s.success_rate != null ? `${Math.round(s.success_rate * 100)}%` : "—"}
               <span style={{ color: "#555", marginLeft: 8, fontSize: 11 }}>
@@ -66,7 +73,7 @@ export function SourcesView({ sources, stats }) {
                 <span style={{ color: "#f87171", marginLeft: 4 }}>(failed)</span>
               )}
             </span>
-            {s.last_error && (
+            {s.last_error && !s.served_via && (
               <div
                 className="source-error"
                 style={{

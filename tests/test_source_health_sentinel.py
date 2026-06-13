@@ -18,6 +18,7 @@ from scripts.source_health_sentinel import (
     build_yield_watch_body,
     classify_error,
     classify_source,
+    parse_served_via,
     plan_issue_actions,
     plan_yield_watch_action,
     run_sentinel,
@@ -393,3 +394,55 @@ class TestPlanIssueActions:
             "remove_labels": ["external"],
             "body": build_issue_body(current),
         }]
+
+
+class TestServedViaBackupLeg:
+    """R-01: a primary served by a redundancy witness records `served via <leg>`.
+
+    Parity contract: dashboard/lib/source-health.js parseServedVia +
+    classifyHealth must agree with these outcomes on the same fixture (see
+    dashboard/tests/source-health.test.js `served via backup leg`).
+    """
+
+    def test_parse_served_via_extracts_leg(self):
+        assert parse_served_via("served via noaa_hms") == "noaa_hms"
+        assert parse_served_via("served via open_meteo_flood") == "open_meteo_flood"
+
+    def test_parse_served_via_none_for_real_errors(self):
+        assert parse_served_via(None) is None
+        assert parse_served_via("") is None
+        assert parse_served_via("503 Server Error") is None
+
+    def test_degraded_when_served_via_backup_leg(self):
+        # Primary down, witness served every recent cycle: status="degraded",
+        # diagnostic "served via noaa_hms", NO hard failures. Must be degraded
+        # (not healthy, not failing) and surface the leg.
+        v = classify_source(
+            "firms",
+            _src(statuses=["degraded"] * 5, last_error="served via noaa_hms"),
+            now=NOW,
+        )
+        assert v["category"] == "degraded"
+        assert v["served_via"] == "noaa_hms"
+
+    def test_healthy_when_primary_serves(self):
+        # Primary healthy every recent cycle: no served_via, classified healthy.
+        v = classify_source("firms", _src(statuses=["success"] * 5), now=NOW)
+        assert v["category"] == "healthy"
+        assert v["served_via"] is None
+
+    def test_served_via_cleared_when_recovered_to_healthy(self):
+        # A stale "served via" diagnostic must NOT show once the primary recovered
+        # (all recent success -> healthy -> served_via cleared).
+        v = classify_source(
+            "firms",
+            _src(statuses=["success"] * 5, last_error="served via noaa_hms"),
+            now=NOW,
+        )
+        assert v["category"] == "healthy"
+        assert v["served_via"] is None
+
+    def test_backup_served_does_not_open_issue(self):
+        report = run_sentinel({"firms": _src(statuses=["degraded"] * 5, last_error="served via noaa_hms")})
+        assert report["has_failures"] is False
+        assert [v["source"] for v in report["degraded"]] == ["firms"]
