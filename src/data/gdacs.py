@@ -42,6 +42,7 @@ class GlobalDisasterEvent:
     severity_value: float = 0.0  # wind speed for TC (km/h), magnitude for EQ, etc.
     severity_unit: str = ""
     population_affected: int = 0
+    source_leg: str | None = None  # witness leg that served (R-00); None = primary
 
 
 # Saffir-Simpson-ish thresholds in km/h for cyclone intensity tiers.

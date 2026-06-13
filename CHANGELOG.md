@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.65.0] - 2026-06-13
+
+SOURCE-REDUNDANCY LANE R-00 — the provenance foundation every later redundancy step builds on. A
+"witness" is a fallback feed that fires only when a primary source fetch fails, carrying honest
+provenance so a backup-served reading can never masquerade as a primary observation.
+
+### Added
+
+- **`src/data/_witness.py`** — shared witness helpers. `with_witness(primary, witness, *, source_key, leg_label)`
+  returns the primary's result untouched on success and falls back to the witness ONLY on
+  `SourceFetchError` / `requests.RequestException` (never `SourceSkipped` — a deliberately-disabled
+  source is never substituted); if the witness also fails it raises a `SourceFetchError` chaining both
+  error strings (GDACS GeoRSS-fallback style). `tag_source_leg(events, leg)` stamps each returned
+  event's provenance (frozen-dataclass safe via `dataclasses.replace`); `source_leg_of` / `degraded_via`
+  turn that provenance into the runner's `served via <leg>` degraded-telemetry note. Public fetch return
+  shapes are unchanged — provenance rides on the event objects.
+- **`source_leg: str | None` field** on the six chained event dataclasses (`FireEvent`,
+  `CityPrecipReading`, `GlobalDisasterEvent`, `RiverReading`, `CoralDHWReading`, `SeaIceReading`) —
+  additive/optional, invisible to the evidence contract (which inspects bundle `current_facts`, not
+  the source dataclasses).
+- **Two evidence grades** taught declaratively to both `writer_prompt.py` and `fact_check_prompt.py`,
+  mirroring the existing `model_estimated` wording: `observed_alt_host` (an independent backup host or
+  instrument served during a primary outage — may say "observed", note the alternate source) and
+  `model_fallback` (a numerical model stood in for the usual observation — must NOT say
+  "observed/measured/recorded/gauge", frame as a model estimate).
+- **Verified-redundancy-legs table** appended to `docs/superpowers/specs/2026-06-12-mirror-survey.md`
+  (R-02..R-09 endpoints, auth, tier, grade, verdict — endpoints live-verified 2026-06-12/13).
+
 ## [0.9.64.0] - 2026-06-13
 
 GREENLIT the SOURCE-REDUNDANCY lane — Andrew's next-step decision: execute the redundant-feed

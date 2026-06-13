@@ -102,6 +102,7 @@ class CityPrecipReading:
     mm_total: float
     source_product: str
     event_id: str
+    source_leg: str | None = None  # witness leg that served (R-00); None = primary
 
 
 @dataclass(frozen=True)
