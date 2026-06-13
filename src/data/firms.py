@@ -10,10 +10,24 @@ import requests
 
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
+from src.data._witness import tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 FIRMS_API_KEY = os.environ.get("NASA_FIRMS_API_KEY", "")
 FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+
+# NOAA HMS independent fire witness (R-02). Independent HOST
+# (satepsanone.nesdis.noaa.gov, NESDIS) AND independent INSTRUMENT (GOES) — so it
+# covers a full FIRMS host outage that the same-host R-06 product chain cannot.
+# Daily accumulating text file; no auth. N. America coverage only.
+HMS_FIRE_URL = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text"
+# HMS publishes no per-detection confidence percentage — the analyst/NGFS QC IS
+# the confidence. We assign the FIRMS "high" floor so HMS events score comparably
+# to primary events; the observed_alt_host grade + data_source fact mark provenance.
+HMS_NOMINAL_CONFIDENCE = 80
+# HMS (GOES-East/West) only resolves the Americas. Outside this box the witness
+# returns nothing and FIRMS has no fallback (stated honestly in the bundle).
+_HMS_NORTH_AMERICA_BBOX = (7.0, 83.0, -170.0, -50.0)  # lat_min, lat_max, lon_min, lon_max
 
 
 @dataclass
@@ -82,7 +96,29 @@ def fetch_fires(
             raise SourceSkipped("NASA_FIRMS_API_KEY is not configured")
         return []
 
-    payload_dates = []
+    def primary() -> list[FireEvent]:
+        return _fetch_fires_primary(confidence_min, frp_min, source, days)
+
+    def witness() -> list[FireEvent]:
+        return _fetch_fires_hms(frp_min)
+
+    try:
+        return with_witness(primary, witness, source_key="firms", leg_label="noaa_hms")
+    except (SourceFetchError, requests.RequestException) as exc:
+        if strict:
+            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
+        return []
+
+
+def _fetch_fires_primary(
+    confidence_min: int,
+    frp_min: float,
+    source: str,
+    days: int,
+) -> list[FireEvent]:
+    """Primary NASA FIRMS fetch. Raises ``SourceFetchError`` on any failure so the
+    ``with_witness`` chain in ``fetch_fires`` can fall through to the HMS leg."""
+    payload_dates: list[str | None] = []
     try:
         resp = fetch_with_retry(
             f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}",
@@ -120,16 +156,74 @@ def fetch_fires(
                 ))
 
     except (requests.RequestException, csv.Error, KeyError) as exc:
-        if strict:
-            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
-        return []
+        raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
+    except SourceFetchError:
+        raise
     except Exception as exc:
-        if strict:
-            raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
-        return []
+        raise SourceFetchError(f"FIRMS fetch failed: {exc}") from exc
     if newest_date := newest_freshness_date(payload_dates):
         assert_freshness(newest_date, "firms", max_age_days=2)
     return fires
+
+
+def _in_north_america(lat: float, lon: float) -> bool:
+    lat_min, lat_max, lon_min, lon_max = _HMS_NORTH_AMERICA_BBOX
+    return lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
+
+
+def _fetch_fires_hms(frp_min: float) -> list[FireEvent]:
+    """NOAA HMS independent fire witness (R-02).
+
+    Fetches the daily HMS fire-points text file (GOES/VIIRS detections from an
+    independent NESDIS host) and maps the SAME ``FireEvent`` shape, tagged
+    ``source_leg="noaa_hms"``. N. America only — points outside the HMS coverage
+    box are dropped (FIRMS has no fallback there). ``-999.0`` FRP is missing, not
+    zero. Confidence is the analyst-QC nominal floor (HMS has no per-row %)."""
+    today = date.today()
+    url = f"{HMS_FIRE_URL}/{today:%Y}/{today:%m}/hms_fire{today:%Y%m%d}.txt"
+    resp = fetch_with_retry(url, timeout=30)
+
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    if not rows:
+        return []
+    header = [h.strip() for h in rows[0]]
+    try:
+        i_lon, i_lat, i_frp = header.index("Lon"), header.index("Lat"), header.index("FRP")
+    except ValueError as exc:
+        raise SourceFetchError(f"HMS fire schema drift: header={header}") from exc
+
+    fires: list[FireEvent] = []
+    last_col = max(i_lon, i_lat, i_frp)
+    for raw in rows[1:]:
+        if len(raw) <= last_col:
+            continue
+        try:
+            lon = float(raw[i_lon].strip())
+            lat = float(raw[i_lat].strip())
+            frp = float(raw[i_frp].strip())
+        except (ValueError, IndexError):
+            continue
+        if frp < 0:  # -999.0 sentinel = FRP not retrieved
+            continue
+        if frp < frp_min:
+            continue
+        if not _in_north_america(lat, lon):
+            continue
+        city, country = reverse_geocode_simple(lat, lon)
+        event_id = f"fire_{lat:.2f}_{lon:.2f}_{today.isoformat()}"
+        fires.append(FireEvent(
+            lat=lat,
+            lon=lon,
+            confidence=HMS_NOMINAL_CONFIDENCE,
+            frp=frp,
+            nearest_city=city,
+            country=country,
+            event_id=event_id,
+        ))
+    # The file is named for today's UTC date; guard against a stale/misdated file
+    # within the same freshness budget the primary uses.
+    assert_freshness(today.isoformat(), "firms", max_age_days=2)
+    return tag_source_leg(fires, "noaa_hms")
 
 
 # Ordered list of bounding boxes used to reverse-geocode a FIRMS fire

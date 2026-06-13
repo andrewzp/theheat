@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.67.0] - 2026-06-13
+
+SOURCE-REDUNDANCY LANE R-02 — NOAA HMS independent fire witness for FIRMS. FIRMS (NASA GESDISC
+family) fails ~5/40 with no host redundancy; NOAA HMS is an independent host
+(`satepsanone.nesdis.noaa.gov`) AND an independent instrument (GOES), so it covers a full FIRMS
+host outage that the same-host R-06 product chain cannot.
+
+### Added
+
+- **NOAA HMS fire witness** in `src/data/firms.py`: `fetch_fires` now wraps its primary fetch in the
+  R-00 `with_witness` helper. On a primary `SourceFetchError`/`RequestException`, it fetches the daily
+  HMS fire-points text file (`.../Fire_Points/Text/{YYYY}/{MM}/hms_fire{YYYYMMDD}.txt`, no auth), parses
+  by column name (whitespace-padded header), drops `-999.0` FRP (missing) and points outside the N.
+  America coverage box, and returns the SAME `FireEvent` shape tagged `source_leg="noaa_hms"`. HMS has
+  no per-row confidence (analyst/NGFS QC is the confidence) → events get the `HMS_NOMINAL_CONFIDENCE`
+  (80) floor so they score comparably; event_id format matches the primary so `is_duplicate` dedups
+  across legs.
+- **`observed_alt_host` grade** on HMS-sourced fire bundles (`src/two_bot/intern/fire.py`) plus a
+  `data_source` fact noting "NOAA HMS (GOES/VIIRS, analyst-reviewed) — FIRMS backup feed".
+- **Degraded telemetry** in `src/orchestrator/sources/firms.py`: when the HMS leg served, the run
+  records `status="degraded"` with `served via noaa_hms` (via the R-00 `degraded_via` helper) so the
+  R-01 sentinel + dashboard show the primary is down even while backup drafts flow.
+
+### Notes
+
+- Coverage honesty: HMS = North America only; FIRMS has no fallback elsewhere. Same-host R-06 product
+  chain is NOT a host-outage fix — HMS is the independent leg.
+
 ## [0.9.66.0] - 2026-06-13
 
 SOURCE-REDUNDANCY LANE R-01 — dashboard + sentinel visibility for backup-served sources. When a

@@ -24,7 +24,13 @@ def test_firms_strict_request_error_is_failed(monkeypatch):
     from src.data import firms
 
     monkeypatch.setattr(firms, "FIRMS_API_KEY", "key")
-    with patch("src.data.firms.requests.get", side_effect=Exception("network down")):
+    # R-02: both the primary FIRMS leg AND the NOAA HMS witness use fetch_with_retry;
+    # when BOTH fail, with_witness chains the errors into a SourceFetchError. (Pre-R-02
+    # this patched requests.get, which fetch_with_retry no longer calls directly.)
+    with patch(
+        "src.data.firms.fetch_with_retry",
+        side_effect=requests.RequestException("network down"),
+    ):
         with pytest.raises(SourceFetchError):
             firms.fetch_fires(strict=True)
 
