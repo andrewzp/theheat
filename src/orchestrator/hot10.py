@@ -6,6 +6,19 @@ from __future__ import annotations
 from src.orchestrator.common import *
 
 
+def _compact_hot10_rows(hot10) -> list[dict]:
+    rows = []
+    for rank, ct in enumerate(hot10[:10], start=1):
+        rows.append({
+            "rank": rank,
+            "city": ct.city,
+            "country": ct.country,
+            "anomaly_c": round(float(ct.anomaly_c or 0.0), 1),
+            "temp_high_c": round(float(ct.temp_high_c), 1),
+        })
+    return rows
+
+
 def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Generate the daily Hot 10 leaderboard as a draft."""
     _activate_suppression_ctx(
@@ -71,6 +84,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                 ],
             )
             from src.two_bot.intern import build_hot10_bundle
+            hot10_rows = _compact_hot10_rows(hot10)
             hot10_dicts = [
                 {
                     "city": ct.city,
@@ -92,6 +106,7 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
                 legacy_type="hot10",
                 event_id=event_id,
                 review_context=review_context,
+                draft_metadata={"hot10_rows": hot10_rows},
             )
 
         bot_state["last_hot10"] = {

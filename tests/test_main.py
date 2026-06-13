@@ -1,5 +1,6 @@
 """Integration tests for main orchestrator with all externals mocked."""
 
+import json
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import ANY, patch, MagicMock
@@ -1232,6 +1233,69 @@ class TestPostApproved:
         assert result == "rate_limited"
         mock_state.increment_daily_count.assert_not_called()
 
+    @patch.dict("os.environ", {"THEHEAT_HOT10_CARD_ENABLED": "0"}, clear=True)
+    @patch("src.main.state")
+    @patch("src.main.post_tweet")
+    def test_flag_off_posts_text_only(self, mock_tw, mock_state):
+        mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
+        mock_tw.return_value = {"id": "123"}
+        state = _fresh_state()
+        draft = {
+            "id": "draft_1",
+            "event_id": "hot10_2026-06-12",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+            "hot10_rows": [
+                {
+                    "rank": 1,
+                    "city": "Phoenix",
+                    "country": "US",
+                    "anomaly_c": 8.1,
+                    "temp_high_c": 44.2,
+                }
+            ],
+        }
+
+        result = post_approved(draft, state)
+
+        assert result == "posted"
+        mock_tw.assert_called_once_with("test tweet", media_png=None, alt_text=None)
+
+    @patch.dict("os.environ", {"THEHEAT_HOT10_CARD_ENABLED": "1"}, clear=True)
+    @patch("src.main.state")
+    @patch("src.main.post_tweet")
+    def test_flag_on_posts_hot10_card_media(self, mock_tw, mock_state):
+        mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
+        mock_tw.return_value = {"id": "123"}
+        state = _fresh_state()
+        rows = [
+            {
+                "rank": idx,
+                "city": f"City {idx}",
+                "country": "US",
+                "anomaly_c": 10.0 - idx,
+                "temp_high_c": 30.0 + idx,
+            }
+            for idx in range(1, 11)
+        ]
+        draft = {
+            "id": "draft_1",
+            "event_id": "hot10_2026-06-12",
+            "publish_intent_id": "intent_1",
+            "text": "test tweet",
+            "hot10_rows": rows,
+        }
+
+        result = post_approved(draft, state)
+
+        assert result == "posted"
+        _, kwargs = mock_tw.call_args
+        assert kwargs["media_png"].startswith(b"\x89PNG\r\n\x1a\n")
+        assert "City 1" in kwargs["alt_text"]
+        assert "and 5 more" in kwargs["alt_text"]
+
 
 class TestRunAlerts:
     @patch("src.main.save_draft")
@@ -1466,6 +1530,48 @@ class TestRunLeaderboard:
         mock_gen.generate_tweet.assert_not_called()
         mock_two_bot.assert_called_once()
         assert result is not None
+
+    @patch("src.main.save_draft")
+    @patch("src.main.generator")
+    @patch("src.main._try_two_bot_draft")
+    @patch("src.main.open_meteo")
+    @patch("src.main.state")
+    def test_persists_compact_hot10_rows(
+        self, mock_state, mock_om, mock_two_bot, mock_gen, mock_draft
+    ):
+        ranked = [
+            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx)
+            for idx in range(1, 11)
+        ]
+        mock_om.load_cities.return_value = []
+        mock_om.load_normals.return_value = {}
+        mock_om.fetch_all_city_temps.return_value = ranked
+        mock_om.compute_anomalies.return_value = ranked
+        mock_om.rank_hot10.return_value = ranked
+        mock_state.update_streaks.return_value = {}
+        captured = {}
+
+        def fake_two_bot(bundle, bot_state, score, **kwargs):
+            captured["draft_metadata"] = kwargs.get("draft_metadata")
+            return True
+
+        mock_two_bot.side_effect = fake_two_bot
+
+        state = _fresh_state()
+        run_leaderboard(state)
+
+        rows = captured["draft_metadata"]["hot10_rows"]
+        assert len(rows) == 10
+        assert rows[0] == {
+            "rank": 1,
+            "city": "City 1",
+            "country": "US",
+            "anomaly_c": 9.0,
+            "temp_high_c": 31.0,
+        }
+        assert set(rows[0]) == {"rank", "city", "country", "anomaly_c", "temp_high_c"}
+        assert "normal_high_c" not in rows[0]
+        assert len(json.dumps(rows, separators=(",", ":")).encode("utf-8")) < 1024
 
     @patch("src.main.save_draft")
     @patch("src.main.generator")

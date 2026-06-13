@@ -10,6 +10,26 @@ _PUBLISH_INTENT_TTL = timedelta(hours=2)
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
 
 
+def _hot10_card_enabled() -> bool:
+    return os.environ.get("THEHEAT_HOT10_CARD_ENABLED", "0") == "1"
+
+
+def _hot10_media_for_draft(draft: dict) -> tuple[bytes | None, str | None]:
+    if not _hot10_card_enabled():
+        return None, None
+    rows = draft.get("hot10_rows")
+    if not isinstance(rows, list) or not rows:
+        return None, None
+
+    try:
+        from src.media.hot10_card import build_hot10_alt_text, render_hot10_card
+
+        return render_hot10_card(rows), build_hot10_alt_text(rows)
+    except Exception as exc:
+        print(f"[post] Hot 10 card render failed; posting text-only: {exc!r}")
+        return None, None
+
+
 def _coerce_publish_draft(draft_or_text: dict | str) -> dict:
     if isinstance(draft_or_text, dict):
         return draft_or_text
@@ -120,7 +140,8 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         print(f"[post] Failed to durably record publish intent for {event_id}, aborting")
         return "failed"
 
-    result = post_tweet(tweet_text)
+    media_png, alt_text = _hot10_media_for_draft(draft)
+    result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
     if result is None:
         print("[post] Failed to post to X")
         return "failed"

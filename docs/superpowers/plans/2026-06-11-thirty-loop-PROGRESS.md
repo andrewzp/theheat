@@ -38,7 +38,7 @@
 | S-30 | #25 | Inter-tweet spacing guard | — | DONE | #260 | Auto-publish now defers remaining due drafts inside the inter-tweet spacing window. |
 | S-31 | #22 | Cyclone advisory source links | S-21 | DONE | #261 | Cyclone drafts now append public advisory URLs when the final text safely fits. |
 | S-32 | #18 | Engagement-window scheduling (flag) | S-30 | DONE(dark; flag THEHEAT_ENGAGEMENT_WINDOW_ENABLED) | #262 | Auto-approve scheduling can defer dead-zone times when the default-off flag is enabled. |
-| S-33 | #9 | Hot 10 image card + alt text (flag) | S-29 | TODO | | |
+| S-33 | #9 | Hot 10 image card + alt text (flag) | S-29 | DONE(dark; flag THEHEAT_HOT10_CARD_ENABLED) | #263 | Hot 10 drafts persist compact rows; posts can attach a PNG card plus alt text when the flag is enabled. |
 | S-34 | #5 | Engagement metrics ingestion (flag) | S-17 | TODO | | |
 | S-35 | #11 | Dashboard component extraction | S-19 | TODO | | |
 

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.60.0] - 2026-06-13
+
+THIRTY-LOOP S-33 adds a default-off Hot 10 media card path so approved
+leaderboard posts can attach an accessible PNG ranking without storing image
+bytes in state.
+
+### Added
+
+- **Render Hot 10 cards at post time.** `src/media/hot10_card.py` renders a
+  deterministic 1200x675 PNG from compact city rows using vendored DejaVu Sans
+  Mono and `Pillow==12.2.0`, and builds <=420-character alt text naming the
+  leader plus the top five anomalies.
+- **Upload X media with alt text behind a flag.** Hot 10 drafts now persist
+  only compact `hot10_rows` metadata; `post_approved()` renders media from
+  those rows only when `THEHEAT_HOT10_CARD_ENABLED=1`, while
+  `src/posting/twitter.py` uploads PNGs via tweepy v1.1 before creating the
+  tweet with `media_ids`.
+
 ## [0.9.59.0] - 2026-06-12
 
 THIRTY-LOOP S-32 adds a default-off engagement-window scheduler so future
