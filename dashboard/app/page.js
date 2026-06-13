@@ -1,20 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { hot10IsStale, hot10StaleDays, todayTweetCount } from "../lib/format.js"
+import { formatDuration, hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import "./dashboard.css"
-
-function timeAgo(dateStr) {
-  if (!dateStr) return "never"
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
-}
 
 function RunStatus({ conclusion, status }) {
   if (status === "in_progress") return <span className="badge running">RUNNING</span>
@@ -123,12 +111,6 @@ function AutomationStatusStrip({ status, error }) {
       )}
     </div>
   )
-}
-
-function formatDuration(ms) {
-  if (ms === undefined || ms === null) return "—"
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
 }
 
 function formatUtcStamp(dateStr) {

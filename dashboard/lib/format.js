@@ -12,6 +12,24 @@ export function todayTweetCount(dailyMap, nowIso) {
   return dailyMap?.[todayKey] ?? 0
 }
 
+export function timeAgo(dateStr) {
+  if (!dateStr) return "never"
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "just now"
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+export function formatDuration(ms) {
+  if (ms === undefined || ms === null) return "—"
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
 export function hot10IsStale(dateStr, nowIso) {
   const stampMs = dayStampMs(dateStr)
   const nowMs = new Date(nowIso).getTime()
