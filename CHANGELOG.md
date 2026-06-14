@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.71.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-05 + R-07 — deferred to a fresh tranche with the discovery work captured
+(docs-only). Both witnesses need reference coordinates that live behind their failing primary host,
+which doesn't fit a long context; the hard part is recorded so a fresh session finishes quickly.
+
+### Added
+
+- **`docs/superpowers/specs/2026-06-14-r05-r07-groundwork.md`**: R-05 — Open-Meteo Flood + p75
+  endpoints live-verified (200) and the authoritative USGS gauge coordinates gathered (`MAJOR_STATIONS`
+  has site_ids but no coords); two open design problems documented (discharge↔ft impedance, p75
+  semantics). R-07 — CRW ERDDAP host/var/format live-verified (the live host is `coastwatch.noaa.gov`,
+  NOT the plan's `coastwatch.pfeg.noaa.gov`, which 404s); the open obstacle is the hardcoded
+  station→grid coordinate map.
+- PROGRESS R-05/R-07 marked `TODO (groundwork done)` pointing at the doc.
+
 ## [0.9.70.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-06 — FIRMS same-host product chain. Cheap product-gap insurance: a given
