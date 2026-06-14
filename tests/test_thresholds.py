@@ -52,6 +52,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_storm_surge": {"storm_surge"},
     "score_synthesis_fire_drought_heat": {"synthesis_fire_drought_heat"},
     "score_synthesis_marine_compound": {"synthesis_marine_compound"},
+    "score_usgs_earthquake": {"usgs_earthquake"},
     "score_wet_bulb_extreme": {"wet_bulb_extreme"},
 }
 

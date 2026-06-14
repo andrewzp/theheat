@@ -180,6 +180,7 @@ def recommend_approval_policy(
             "fire_footprint",
             "severe_weather",
             "global_disaster",
+            "usgs_earthquake",
             "global_flood",
             "storm_surge",
             "river_flood",

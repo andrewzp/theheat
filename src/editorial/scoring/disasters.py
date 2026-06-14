@@ -63,6 +63,34 @@ def score_global_disaster(severity: str, disaster_type: str) -> EditorialScore:
         reasons=reasons,
     )
 
+def score_usgs_earthquake(
+    magnitude: float,
+    alert: str | None = None,
+    significance: int | None = None,
+    tsunami: bool = False,
+) -> EditorialScore:
+    alert_key = (alert or "").lower()
+    alert_bonus = {"green": 4, "yellow": 8, "orange": 16, "red": 24}.get(alert_key, 0)
+    significance_bonus = min(max((significance or 0) - 600, 0) / 50, 10)
+    tsunami_bonus = 6 if tsunami else 0
+    magnitude_bonus = max(magnitude - 5.5, 0) * 12
+    reasons = [f"M{magnitude:.1f}", "USGS significant earthquake feed"]
+    if alert_key:
+        reasons.append(f"PAGER {alert_key} alert")
+    if tsunami:
+        reasons.append("USGS tsunami flag")
+    return _build_score(
+        "usgs_earthquake",
+        severity=62 + magnitude_bonus + alert_bonus + tsunami_bonus,
+        novelty=64 + max(magnitude - 6.0, 0) * 10 + significance_bonus,
+        timeliness=96,
+        confidence=94,
+        shareability=58 + max(magnitude - 6.0, 0) * 10 + alert_bonus,
+        sensitivity=86,
+        threshold=get_threshold("usgs_earthquake"),
+        reasons=reasons[:4],
+    )
+
 def score_global_flood(
     severity: str,
     populations_affected: int,

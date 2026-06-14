@@ -27,6 +27,8 @@ from src.data.nws_alerts import SevereWeatherAlert
 
 from src.data.river_gauges import FloodEvent
 
+from src.data.usgs_quakes import SignificantEarthquakeEvent
+
 from src.data.water_levels import StormSurgeEvent
 
 from src.two_bot.types import StoryBundle
@@ -88,6 +90,44 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
         ],
         historical_context={},
         raw_signal_dump=asdict(disaster),
+    )
+
+def build_usgs_earthquake_bundle(quake: SignificantEarthquakeEvent) -> StoryBundle:
+    """A significant earthquake surfaced via USGS."""
+
+    return StoryBundle(
+        signal_kind="usgs_earthquake",
+        where=quake.place or "Unknown",
+        when=(quake.time or date.today().isoformat())[:10],
+        event_id=quake.event_id,
+        headline_metric={
+            "label": "magnitude",
+            "value": quake.magnitude,
+            "unit": "M",
+        },
+        current_facts=[
+            {"label": "source", "value": "USGS Earthquake Hazards Program"},
+            {"label": "usgs_id", "value": quake.usgs_id},
+            {"label": "title", "value": quake.title},
+            {"label": "place", "value": quake.place},
+            {"label": "magnitude", "value": quake.magnitude, "unit": "M"},
+            {"label": "depth_km", "value": quake.depth_km, "unit": "km"},
+            {"label": "time", "value": quake.time},
+            {"label": "pager_alert", "value": quake.alert},
+            {"label": "significance", "value": quake.significance},
+            {"label": "felt_reports", "value": quake.felt_reports},
+            {"label": "cdi", "value": quake.cdi},
+            {"label": "mmi", "value": quake.mmi},
+            {"label": "tsunami", "value": quake.tsunami},
+            {"label": "lat", "value": quake.latitude},
+            {"label": "lon", "value": quake.longitude},
+            {"label": "url", "value": quake.url},
+        ],
+        historical_context={
+            "feed": "USGS significant_day GeoJSON",
+            "coverage": "official significant earthquakes from the past day",
+        },
+        raw_signal_dump=asdict(quake),
     )
 
 def _cyclone_common_facts(

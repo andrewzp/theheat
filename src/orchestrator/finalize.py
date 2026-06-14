@@ -34,6 +34,7 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
     "coral_bleaching": "coral_dhw",
     "severe_weather": "nws_alerts",
     "global_disaster": "gdacs",
+    "usgs_earthquake": "usgs_quakes",
     "global_flood": "copernicus_ems",
     "sea_ice_record": "sea_ice",
     "drought": "drought",

@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.75.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-08 — USGS significant earthquake supply as an
+independent GDACS-subtype source. This adds a separate `usgs_quakes` source key
+instead of folding earthquake availability into GDACS health.
+
+### Added
+
+- **USGS Significant Earthquakes** (`significant_day.geojson`) ingestion,
+  parsing official GeoJSON into `SignificantEarthquakeEvent` objects with
+  magnitude, place, depth, PAGER alert, felt reports, ShakeMap intensities,
+  tsunami flag, and official event URL.
+- **New normal source path**: `run_usgs_quakes` has its own source-health row,
+  review context, two-bot bundle, scorer/threshold, manual-only approval policy,
+  candidate hints, cooldown category, voice-replay fixture, and run-alerts
+  registration.
+
+### Notes
+
+- R-08's cyclone subtype is already covered by existing separate `nhc` and
+  `jtwc` source keys in production. This PR does not duplicate that pipeline or
+  hide GDACS outages as GDACS successes.
+
 ## [0.9.74.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-07 — BLOCKED (records the stop honestly; no code shipped).

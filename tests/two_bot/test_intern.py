@@ -15,6 +15,7 @@ from src.data.gdacs import GlobalDisasterEvent
 from src.data.ice_mass import IceMassRecord
 from src.data.methane import MethaneMilestone
 from src.data.ozone_hole import OzoneHoleSeasonalEvent
+from src.data.usgs_quakes import SignificantEarthquakeEvent
 from src.data.nws_alerts import SevereWeatherAlert
 from src.data.ocean import ExtremeWaveEvent
 from src.data.ocean_sst_anomaly import RegionalSSTAnomalyEvent
@@ -64,6 +65,7 @@ from src.two_bot.intern import (
     build_simultaneous_records_bundle,
     build_storm_surge_bundle,
     build_synthesis_bundle,
+    build_usgs_earthquake_bundle,
 )
 
 from tests.two_bot.conftest import _fire_event
@@ -812,6 +814,36 @@ def test_build_global_disaster_bundle_preserves_severity_value():
     assert bundle.signal_kind == "global_disaster"
     assert bundle.where == "Australia"
     assert {"label": "severity_value", "value": 220.0} in bundle.current_facts
+
+
+def test_build_usgs_earthquake_bundle_preserves_official_facts():
+    quake = SignificantEarthquakeEvent(
+        event_id="usgs_eq_us7000abcd",
+        usgs_id="us7000abcd",
+        title="M 7.1 - 12 km S of Example City, Chile",
+        place="12 km S of Example City, Chile",
+        magnitude=7.1,
+        time="2026-06-14T12:00:00Z",
+        updated="2026-06-14T12:30:00Z",
+        url="https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd",
+        alert="orange",
+        significance=950,
+        felt_reports=480,
+        cdi=7.2,
+        mmi=6.8,
+        tsunami=True,
+        latitude=-32.5,
+        longitude=-71.25,
+        depth_km=18.4,
+    )
+
+    bundle = build_usgs_earthquake_bundle(quake)
+
+    assert bundle.signal_kind == "usgs_earthquake"
+    assert bundle.where == "12 km S of Example City, Chile"
+    assert {"label": "magnitude", "value": 7.1, "unit": "M"} in bundle.current_facts
+    assert {"label": "tsunami", "value": True} in bundle.current_facts
+    assert bundle.raw_signal_dump["usgs_id"] == "us7000abcd"
 
 
 def test_build_sea_ice_bundle_marks_record_type():
