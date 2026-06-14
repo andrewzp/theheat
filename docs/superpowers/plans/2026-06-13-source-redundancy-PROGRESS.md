@@ -15,7 +15,7 @@
 | R-06 | firms (product gaps) | VIIRS_SNPP→NOAA20→NOAA21→MODIS chain | same-provider | A | R-00 | DONE | #276 | product chain in fetch_fires primary; non-first product = source_leg, NO grade; all-empty→[] (no HMS); all-fail→HMS |
 | R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | BLOCKED(erddap-timeout) | #280 | Fresh executor-side live curls to `coastwatch.noaa.gov/erddap/` base/catalog/info/DAS/point-style URLs timed out with 0 bytes (`HTTP:000`). Groundwork shape remains recorded, but implementation STOPped because the PR gate requires a live curl. |
 | R-08 | gdacs subtypes (supply) | USGS quakes + NHC cyclone GIS (new sources) | additive | B | R-00 | DONE(usgs-quakes; cyclone-existing-nhc-jtwc) | #281 | Added independent `usgs_quakes` source key for USGS significant earthquakes, with parser, runner, scorer, bundle, manual-only policy, voice fixture, and source-health telemetry. Cyclone subtype already has separate `nhc`/`jtwc` source keys; no duplicate GIS parser shipped. |
-| R-09 | sea_ice (NSIDC multi-day) | OSI SAF / MET Norway THREDDS | independent | B | R-00 | DONE | | `netCDF4` OSI SAF 401-b witness parses latest NH/SH concentration grids; evidence_grade observed_alt_host; degraded telemetry `served via osi_saf`. |
+| R-09 | sea_ice (NSIDC multi-day) | OSI SAF / MET Norway THREDDS | independent | B | R-00 | DONE | #282 | `netCDF4` OSI SAF 401-b witness parses latest NH/SH concentration grids; evidence_grade observed_alt_host; degraded telemetry `served via osi_saf`. |
 
 Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 unblock; GPM-S3-as-public-mirror. Predecessor docs `second-witness-lane.md` + `source-backup-feeds.md` merged here and deleted.
 
