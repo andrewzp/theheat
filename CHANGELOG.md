@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.73.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-05 — Open-Meteo Flood / GloFAS model fallback for
+`river_gauges`. When the USGS/NWPS primary path is down, known major-river
+station coordinates can now emit a model-framed high-discharge signal instead
+of losing the flood lane entirely.
+
+### Added
+
+- **Open-Meteo Flood witness** inside `fetch_river_levels`: the public return
+  shape remains `list[RiverReading]`, but witness-served readings carry
+  `source_leg="open_meteo_flood"` plus modeled discharge fields. The leg is
+  restricted to the authoritative USGS station-coordinate map captured in the
+  R-05 groundwork doc.
+- **Model-honest flood bundles**: model fallback events omit all gauge-height /
+  flood-stage feet facts, carry `modeled_discharge_m3s`,
+  `model_threshold_m3s`, and `evidence_grade="model_fallback"`, and route
+  through degraded source-health telemetry (`served via open_meteo_flood`).
+- **Conservative gate**: a model signal must clear both the API's ensemble p75
+  discharge field and an absolute discharge floor; the p75 field is treated as
+  an ensemble statistic, not a climatological flood threshold.
+
 ## [0.9.72.0] - 2026-06-14
 
 SOURCE-REDUNDANCY review fixes — preserve the integrity boundaries around backup feeds.
@@ -9,7 +31,7 @@ SOURCE-REDUNDANCY review fixes — preserve the integrity boundaries around back
 ### Fixed
 
 - `with_witness` now only falls back for outage-style primary failures (timeouts, connection errors,
-  connection errors, stale provider payloads, rate limits, 5xx, and WAF-style 403s), while
+  stale provider payloads, rate limits, 5xx, and WAF-style 403s), while
   auth/config/schema/parser failures propagate instead of being hidden by a successful witness.
 - FIRMS product chaining now stops on non-witnessable failures such as an invalid MAP_KEY instead of
   walking through sibling products and then NOAA HMS.

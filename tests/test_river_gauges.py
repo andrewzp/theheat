@@ -10,12 +10,17 @@ from src.data.source_status import SourceFetchError
 from src.data.river_gauges import (
     RiverReading,
     FloodEvent,
+    _OPEN_METEO_FLOOD_COORDS,
+    OPEN_METEO_FLOOD_URL,
     fetch_river_levels,
     detect_floods,
     _fetch_flood_stages,
+    _fetch_open_meteo_flood,
     USGS_URL,
     FLOOD_URL,
 )
+from src.two_bot.intern import build_river_flood_bundle
+from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
 
 TEST_STATIONS = [
     ("07010000", "Mississippi River", "St. Louis, MO"),
@@ -132,6 +137,146 @@ class TestFetchRiverLevels:
         assert fetch_river_levels() == []
         usgs_calls = [c for c in responses.calls if c.request.url.startswith(USGS_URL)]
         assert len(usgs_calls) == 3
+
+    @responses.activate
+    def test_riverflood_primary_healthy_skips_witness(self):
+        responses.add(responses.GET, USGS_URL, json=SAMPLE_USGS_RESPONSE, status=200)
+        _add_nwps_stage("07010000", 30.0)
+        _add_nwps_stage("07374000", 35.0)
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS), \
+             patch("src.data.river_gauges._fetch_open_meteo_flood") as witness_mock:
+            readings = fetch_river_levels(strict=True)
+
+        witness_mock.assert_not_called()
+        assert readings and all(r.source_leg is None for r in readings)
+
+
+class TestOpenMeteoFloodWitness:
+    @responses.activate
+    @patch("src.data._http.time.sleep")
+    def test_riverflood_falls_back_on_primary_fetch_error(self, _sleep):
+        for _ in range(3):
+            responses.add(responses.GET, USGS_URL, status=500)
+        responses.add(
+            responses.GET,
+            OPEN_METEO_FLOOD_URL,
+            json={
+                "daily": {
+                    "time": ["2026-06-15"],
+                    "river_discharge": [1200.0],
+                    "river_discharge_mean": [1100.0],
+                    "river_discharge_p75": [1000.0],
+                }
+            },
+            status=200,
+        )
+
+        with patch("src.data.river_gauges.MAJOR_STATIONS", TEST_STATIONS[:1]):
+            readings = fetch_river_levels()
+
+        assert len(readings) == 1
+        assert readings[0].source_leg == "open_meteo_flood"
+        assert readings[0].gauge_height_ft is None
+        assert readings[0].discharge_m3s == 1200.0
+
+    def test_riverflood_only_known_coords(self, monkeypatch):
+        calls = []
+
+        def fake_station(site_id, river, location, coords):
+            calls.append((site_id, river, location, coords))
+            return None
+
+        monkeypatch.setattr(
+            "src.data.river_gauges._fetch_open_meteo_flood_station",
+            fake_station,
+        )
+        stations = [
+            ("07010000", "Mississippi River", "St. Louis, MO"),
+            ("99999999", "Imaginary River", "Nowhere, ZZ"),
+        ]
+        with patch("src.data.river_gauges.MAJOR_STATIONS", stations):
+            assert _fetch_open_meteo_flood() == []
+
+        assert calls == [
+            (
+                "07010000",
+                "Mississippi River",
+                "St. Louis, MO",
+                _OPEN_METEO_FLOOD_COORDS["07010000"],
+            )
+        ]
+
+    def test_riverflood_witness_omits_gauge_ft_facts(self):
+        event = FloodEvent(
+            river="Mississippi River",
+            location="St. Louis, MO",
+            gauge_height_ft=None,
+            flood_stage_ft=None,
+            above_by_ft=None,
+            date="2026-06-15",
+            event_id="flood_model_07010000_2026-06-15",
+            source_leg="open_meteo_flood",
+            discharge_m3s=1800.0,
+            discharge_threshold_m3s=1200.0,
+            discharge_ratio=1.5,
+        )
+
+        bundle = build_river_flood_bundle(event)
+        labels = {fact["label"] for fact in bundle.current_facts}
+
+        assert "gauge_height_ft" not in labels
+        assert "flood_stage_ft" not in labels
+        assert "above_by_ft" not in labels
+        assert bundle.headline_metric == {
+            "label": "modeled_discharge_m3s",
+            "value": 1800.0,
+            "unit": "m3/s",
+        }
+        assert {"label": "modeled_discharge_m3s", "value": 1800.0, "unit": "m3/s"} in bundle.current_facts
+        assert {"label": "model_threshold_m3s", "value": 1200.0, "unit": "m3/s"} in bundle.current_facts
+
+    def test_riverflood_witness_model_fallback_grade(self):
+        reading = RiverReading(
+            river="Mississippi River",
+            location="St. Louis, MO",
+            site_id="07010000",
+            gauge_height_ft=None,
+            flood_stage_ft=None,
+            above_flood=True,
+            date="2026-06-15",
+            event_id="river_model_07010000_2026-06-15",
+            source_leg="open_meteo_flood",
+            discharge_m3s=1800.0,
+            discharge_threshold_m3s=1200.0,
+            discharge_ratio=1.5,
+        )
+
+        events = detect_floods([reading])
+        assert len(events) == 1
+        assert events[0].source_leg == "open_meteo_flood"
+
+        bundle = build_river_flood_bundle(events[0])
+        assert {"label": "evidence_grade", "value": "model_fallback"} in bundle.current_facts
+
+    def test_riverflood_model_fallback_claiming_gauge_reading_killed(self):
+        event = FloodEvent(
+            river="Mississippi River",
+            location="St. Louis, MO",
+            gauge_height_ft=None,
+            flood_stage_ft=None,
+            above_by_ft=None,
+            date="2026-06-15",
+            event_id="flood_model_07010000_2026-06-15",
+            source_leg="open_meteo_flood",
+            discharge_m3s=1800.0,
+            discharge_threshold_m3s=1200.0,
+            discharge_ratio=1.5,
+        )
+
+        bundle = build_river_flood_bundle(event)
+        assert {"label": "evidence_grade", "value": "model_fallback"} in bundle.current_facts
+        assert "model_fallback" in FACT_CHECK_SYSTEM_PROMPT
+        assert "gauge" in FACT_CHECK_SYSTEM_PROMPT.lower()
 
 
 class TestDetectFloods:
