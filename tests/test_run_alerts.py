@@ -78,6 +78,7 @@ def test_run_alerts_drafted_count_comes_from_drain_only(monkeypatch, capsys):
         "run_methane",
         "run_nws_alerts",
         "run_gdacs",
+        "run_usgs_quakes",
         "run_copernicus_ems",
         "_process_cyclone_source",
         "run_sea_ice",

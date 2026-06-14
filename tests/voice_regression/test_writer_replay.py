@@ -50,6 +50,7 @@ BUNDLE_FIXTURES = [
     "cyclone_rapid_intensification_bundle",
     "cyclone_landfall_bundle",
     "cyclone_basin_record_bundle",
+    "usgs_earthquake_bundle",
     "regional_anomaly_bundle",
     "precipitation_extreme_bundle",
     "air_quality_hazard_bundle",

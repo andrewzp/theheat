@@ -31,6 +31,7 @@ from src.orchestrator.sources.reanalysis_anomaly import run_reanalysis_anomaly
 from src.orchestrator.sources.river_gauges import run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
 from src.orchestrator.sources.synthesis import run_synthesis
+from src.orchestrator.sources.usgs_quakes import run_usgs_quakes
 
 
 def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState:
@@ -105,6 +106,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 SourceRunner("ch4_milestone", lambda: run_methane(bot_state, current_run)),
                 SourceRunner("nws_alerts", lambda: run_nws_alerts(bot_state, current_run)),
                 SourceRunner("gdacs", lambda: run_gdacs(bot_state, current_run)),
+                SourceRunner("usgs_quakes", lambda: run_usgs_quakes(bot_state, current_run)),
                 SourceRunner("copernicus_ems", lambda: run_copernicus_ems(bot_state, current_run)),
                 SourceRunner(
                     "nhc",
@@ -175,6 +177,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         run_methane(bot_state, current_run)
         run_nws_alerts(bot_state, current_run)
         run_gdacs(bot_state, current_run)
+        run_usgs_quakes(bot_state, current_run)
         run_copernicus_ems(bot_state, current_run)
         _process_cyclone_source(
             bot_state,

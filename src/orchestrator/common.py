@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from datetime import UTC, date, datetime, timedelta
 
 from src import state
-from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, ocean_sst_anomaly, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow, air_quality
+from src.data import open_meteo, ghcn, firms, fire_footprint, co2, coral_dhw, copernicus_ems, methane, nws_alerts, gdacs, usgs_quakes, nhc, jtwc, sea_ice, drought, enso, ocean, ocean_sst, ocean_sst_anomaly, water_levels, river_gauges, ice_mass, climate_indices, ozone_hole, gpm_imerg, nsidc_snow, air_quality
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -92,6 +92,7 @@ from src.editorial.scoring import (
     score_storm_surge,
     score_synthesis_fire_drought_heat,
     score_synthesis_marine_compound,
+    score_usgs_earthquake,
     score_wet_bulb_extreme,
 )
 from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
@@ -456,6 +457,7 @@ __all__ = [
     "score_storm_surge",
     "score_synthesis_fire_drought_heat",
     "score_synthesis_marine_compound",
+    "score_usgs_earthquake",
     "score_wet_bulb_extreme",
     "sea_ice",
     "secrets",
@@ -465,6 +467,7 @@ __all__ = [
     "sys",
     "time",
     "timedelta",
+    "usgs_quakes",
     "water_levels",
     "annual_cap_reached",
     "increment_annual_count",

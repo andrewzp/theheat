@@ -22,6 +22,16 @@ class TestApprovalPolicy:
         assert policy.mode == "manual_only"
         assert policy.can_auto_approve is False
 
+    def test_usgs_earthquake_requires_manual_review(self):
+        policy = recommend_approval_policy(
+            "usgs_earthquake",
+            signal_total=88,
+            candidate_score={"total": 82},
+        )
+
+        assert policy.mode == "manual_only"
+        assert policy.can_auto_approve is False
+
     def test_records_recommend_slower_review_window(self):
         policy = recommend_approval_policy(
             "record",

@@ -24,6 +24,7 @@ from src.editorial.scoring import (
     score_simultaneous_records,
     score_snow_extreme,
     score_synthesis_marine_compound,
+    score_usgs_earthquake,
 )
 
 
@@ -52,6 +53,18 @@ class TestEditorialScoring:
         red = score_global_disaster("Red", "Tropical Cyclone")
         orange = score_global_disaster("Orange", "Flood")
         assert red.total > orange.total
+
+    def test_usgs_earthquake_scores_major_shaking(self):
+        score = score_usgs_earthquake(
+            magnitude=7.1,
+            alert="orange",
+            significance=950,
+            tsunami=True,
+        )
+
+        assert score.passes
+        assert score.category == "usgs_earthquake"
+        assert any("M7.1" in reason for reason in score.reasons)
 
     def test_cyclone_rapid_intensification_scores_high_bar_signal(self):
         score = score_cyclone_rapid_intensification(

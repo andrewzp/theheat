@@ -29,6 +29,7 @@ CATEGORY_HINTS = {
     "coral_bleaching": ("DHW", "coral", "reef"),
     "severe_weather": ("warning", "issued", "for"),
     "global_disaster": ("GDACS", "alert", "severity"),
+    "usgs_earthquake": ("USGS", "magnitude", "earthquake"),
     "sea_ice_record": ("sea ice", "satellite", "record"),
     "drought": ("drought", "extreme", "exceptional"),
     "enso": ("ENSO", "NOAA", "ONI"),

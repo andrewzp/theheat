@@ -336,6 +336,50 @@ def cyclone_basin_record_bundle() -> StoryBundle:
 
 
 @pytest.fixture
+def usgs_earthquake_bundle() -> StoryBundle:
+    """USGS significant earthquake: official geophysical hazard source."""
+    return StoryBundle(
+        signal_kind="usgs_earthquake",
+        where="12 km S of Example City, Chile",
+        when="2026-06-14",
+        event_id="usgs_eq_us7000abcd",
+        headline_metric={"label": "magnitude", "value": 7.1, "unit": "M"},
+        current_facts=[
+            {"label": "source", "value": "USGS Earthquake Hazards Program"},
+            {"label": "usgs_id", "value": "us7000abcd"},
+            {"label": "title", "value": "M 7.1 - 12 km S of Example City, Chile"},
+            {"label": "place", "value": "12 km S of Example City, Chile"},
+            {"label": "magnitude", "value": 7.1, "unit": "M"},
+            {"label": "depth_km", "value": 18.4, "unit": "km"},
+            {"label": "time", "value": "2026-06-14T12:00:00Z"},
+            {"label": "pager_alert", "value": "orange"},
+            {"label": "significance", "value": 950},
+            {"label": "felt_reports", "value": 480},
+            {"label": "cdi", "value": 7.2},
+            {"label": "mmi", "value": 6.8},
+            {"label": "tsunami", "value": True},
+            {"label": "lat", "value": -32.5},
+            {"label": "lon", "value": -71.25},
+            {
+                "label": "url",
+                "value": "https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd",
+            },
+        ],
+        historical_context={
+            "feed": "USGS significant_day GeoJSON",
+            "coverage": "official significant earthquakes from the past day",
+        },
+        raw_signal_dump={
+            "usgs_id": "us7000abcd",
+            "magnitude": 7.1,
+            "place": "12 km S of Example City, Chile",
+            "alert": "orange",
+            "tsunami": True,
+        },
+    )
+
+
+@pytest.fixture
 def co2_milestone_bundle() -> StoryBundle:
     """CO2 milestone — no city, no temperature. Tests writer adapting to
     a non-place, non-temperature signal kind."""

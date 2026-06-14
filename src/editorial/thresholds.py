@@ -131,6 +131,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         62,
         "GDACS global disaster alert signal; historical value, not retuned in this refactor.",
     ),
+    "usgs_earthquake": ThresholdEntry(
+        "usgs_earthquake",
+        70,
+        "USGS significant-earthquake feed; separate official earthquake supply from GDACS, manual-only.",
+    ),
     "global_flood": ThresholdEntry(
         "global_flood",
         72,

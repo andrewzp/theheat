@@ -162,6 +162,11 @@ def score_global_disaster(*args: Any, **kwargs: Any) -> EditorialScore:
     return _disasters.score_global_disaster(*args, **kwargs)
 
 
+def score_usgs_earthquake(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _disasters.score_usgs_earthquake(*args, **kwargs)
+
+
 def score_global_flood(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _disasters.score_global_flood(*args, **kwargs)
@@ -275,6 +280,7 @@ __all__ = [
     "score_regional_sst_anomaly",
     "score_severe_weather",
     "score_global_disaster",
+    "score_usgs_earthquake",
     "score_global_flood",
     "score_cyclone_rapid_intensification",
     "score_cyclone_tier_crossing",

@@ -66,6 +66,7 @@ _SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
     "hot10": "hot10",
     "synthesis": "synthesis",
     "global_disaster": "global_disaster",
+    "usgs_earthquake": "global_disaster",
 }
 
 
