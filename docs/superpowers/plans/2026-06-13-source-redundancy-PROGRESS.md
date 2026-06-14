@@ -13,7 +13,7 @@
 | R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | BLOCKED(reliefweb-appname) | | 403 AccessDeniedHttpException — ReliefWeb now requires a PRE-APPROVED appname (policy change since plan research). AWAITING-ANDREW. |
 | R-05 | river_gauges (403s) | Open-Meteo Flood (GloFAS, model-framed) | independent(model) | A | R-00 | DONE | #279 | model-fallback witness in fetch_river_levels; known USGS coords only; discharge+p75+absolute-floor gate; no ft facts; degraded telemetry |
 | R-06 | firms (product gaps) | VIIRS_SNPP→NOAA20→NOAA21→MODIS chain | same-provider | A | R-00 | DONE | #276 | product chain in fetch_fires primary; non-first product = source_leg, NO grade; all-empty→[] (no HMS); all-fail→HMS |
-| R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | BLOCKED(erddap-timeout) | #TBD | Fresh executor-side live curls to `coastwatch.noaa.gov/erddap/` base/catalog/info/DAS/point-style URLs timed out with 0 bytes (`HTTP:000`). Groundwork shape remains recorded, but implementation STOPped because the PR gate requires a live curl. |
+| R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | BLOCKED(erddap-timeout) | #280 | Fresh executor-side live curls to `coastwatch.noaa.gov/erddap/` base/catalog/info/DAS/point-style URLs timed out with 0 bytes (`HTTP:000`). Groundwork shape remains recorded, but implementation STOPped because the PR gate requires a live curl. |
 | R-08 | gdacs subtypes (supply) | USGS quakes + NHC cyclone GIS (new sources) | additive | B | R-00 | TODO | | optional / supply expansion |
 | R-09 | sea_ice (NSIDC multi-day) | OSI SAF / U. Bremen | independent | B | R-00 | TODO | | dep-gated (netCDF4/pyhdf) |
 
