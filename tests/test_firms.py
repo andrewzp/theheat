@@ -398,3 +398,69 @@ class TestNoaaHmsWitness:
         )
         bundle = build_fire_bundle(fire)
         assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)
+
+
+FIRMS_BASE = "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test_key"
+
+
+class TestFirmsProductChain:
+    """R-06: same-host product chain VIIRS_SNPP→NOAA20→NOAA21→MODIS.
+
+    Semantically-equivalent observations — a non-first product records source_leg
+    (degraded) but NO evidence_grade. Product-gap insurance; NOT a host-outage fix.
+    """
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_primary_product_unchanged_when_healthy(self):
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+                      body=FIRMS_CSV_HEADER + "34.05,-118.25,90,400.0\n", status=200)
+        fires = fetch_fires()
+        assert len(fires) == 1
+        assert fires[0].source_leg is None  # primary product, no provenance
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_product_chain_advances_on_empty(self):
+        # SNPP reachable but empty (no qualifying fires) -> advance to NOAA20.
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+                      body=FIRMS_CSV_HEADER, status=200)
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
+                      body=FIRMS_CSV_HEADER + "34.05,-118.25,90,500.0\n", status=200)
+        fires = fetch_fires()
+        assert len(fires) == 1
+        assert fires[0].source_leg == "VIIRS_NOAA20_NRT"
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_product_chain_records_leg_no_grade(self):
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+                      body=FIRMS_CSV_HEADER, status=200)
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
+                      body=FIRMS_CSV_HEADER + "34.05,-118.25,90,500.0\n", status=200)
+        fires = fetch_fires()
+        bundle = build_fire_bundle(fires[0])
+        # Same-provider equivalent product -> NO evidence_grade (unlike HMS).
+        assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_product_chain_advances_on_product_failure(self):
+        # SNPP fails outright (500x3 retries) -> NOAA20 serves the gap.
+        for _ in range(3):
+            responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1", status=500)
+        responses.add(responses.GET, f"{FIRMS_BASE}/VIIRS_NOAA20_NRT/world/1",
+                      body=FIRMS_CSV_HEADER + "34.05,-118.25,90,500.0\n", status=200)
+        fires = fetch_fires()
+        assert len(fires) == 1
+        assert fires[0].source_leg == "VIIRS_NOAA20_NRT"
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_all_products_empty_returns_empty_no_hms(self):
+        # Every product reachable but empty (FIRMS up, no fires) -> [] WITHOUT
+        # invoking the independent HMS witness (HMS URL left unregistered).
+        for product in ("VIIRS_SNPP_NRT", "VIIRS_NOAA20_NRT", "VIIRS_NOAA21_NRT", "MODIS_NRT"):
+            responses.add(responses.GET, f"{FIRMS_BASE}/{product}/world/1",
+                          body=FIRMS_CSV_HEADER, status=200)
+        assert fetch_fires() == []

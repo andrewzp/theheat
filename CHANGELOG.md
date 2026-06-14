@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.70.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-06 — FIRMS same-host product chain. Cheap product-gap insurance: a given
+VIIRS/MODIS product can be momentarily empty or lagged while a sibling product has the data.
+
+### Added
+
+- **FIRMS product chain** (`_fetch_fires_product_chain` in `src/data/firms.py`): `fetch_fires`'s
+  primary now tries `VIIRS_SNPP_NRT → VIIRS_NOAA20_NRT → VIIRS_NOAA21_NRT → MODIS_NRT` in order
+  (freshest sensors first), advancing when a product is empty or fails. All share the area/csv host +
+  MAP_KEY, so they are **semantically-equivalent observations** — a non-first product records
+  `source_leg` (→ status degraded, surfaced by R-01) but **no `evidence_grade`** (a faithful
+  VIIRS/MODIS hotspot is a hotspot). Each product's rows pass the existing confidence normalizer.
+- Returns `[]` when every product is reachable but empty (FIRMS up, no fires — does NOT fall through
+  to the independent HMS witness); raises only when EVERY product fails (real host outage → HMS via
+  R-02's `with_witness`).
+
+### Notes
+
+- Same host: this is a product-gap fix, **NOT a host-outage fix** (that's R-02's independent NOAA HMS
+  leg). The freshness rollout test for FIRMS now targets `_fetch_fires_primary` (the public path chains
+  + falls back, so the single-product stale error is intentionally superseded).
+
 ## [0.9.69.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-04 — BLOCKED (records the stop honestly; no code shipped). ReliefWeb's API
