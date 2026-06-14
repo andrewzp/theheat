@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from datetime import date
+from typing import Any
 
 from src.data.coral_dhw import CoralBleachingEvent
 
@@ -64,6 +65,17 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
 
 def build_sea_ice_bundle(record: SeaIceRecord) -> StoryBundle:
     """A polar sea-ice extent reading set a new record."""
+    current_facts: list[dict[str, Any]] = [
+        {"label": "hemisphere", "value": record.hemisphere},
+        {"label": "extent_million_km2", "value": record.extent_million_km2},
+        {"label": "record_type", "value": record.record_type},
+        {"label": "date", "value": record.date},
+    ]
+    if record.source_leg == "osi_saf":
+        current_facts.extend([
+            {"label": "data_source", "value": "OSI SAF sea-ice concentration grid"},
+            {"label": "evidence_grade", "value": "observed_alt_host"},
+        ])
 
     return StoryBundle(
         signal_kind="sea_ice_record",
@@ -75,12 +87,7 @@ def build_sea_ice_bundle(record: SeaIceRecord) -> StoryBundle:
             "value": record.extent_million_km2,
             "unit": "million_km2",
         },
-        current_facts=[
-            {"label": "hemisphere", "value": record.hemisphere},
-            {"label": "extent_million_km2", "value": record.extent_million_km2},
-            {"label": "record_type", "value": record.record_type},
-            {"label": "date", "value": record.date},
-        ],
+        current_facts=current_facts,
         historical_context={
             "previous_extent": record.previous_extent,
             "previous_year": record.previous_year,

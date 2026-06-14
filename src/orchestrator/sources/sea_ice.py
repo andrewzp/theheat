@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.data import last_good
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 
 
@@ -62,9 +63,14 @@ def run_sea_ice(bot_state: BotState, current_run: dict | None) -> None:
                         review_context=review_context,
                     )
                 observed = len(readings) if hasattr(readings, "__len__") else 0
+                degraded_note = degraded_via(readings)
                 _record_source_run(
                     current_run, bot_state, f"sea_ice_{hemisphere.lower()}", sea_ice_start,
-                    status="success", observed=observed, promoted=source_promoted, drafted=0
+                    status="degraded" if degraded_note else "success",
+                    note=degraded_note,
+                    observed=observed,
+                    promoted=source_promoted,
+                    drafted=0,
                 )
             except Exception as e:
                 print(f"[alerts] Sea ice ({hemisphere}) error: {e}")

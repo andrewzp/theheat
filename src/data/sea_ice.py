@@ -16,6 +16,7 @@ import requests
 
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_cache_revalidation
+from src.data._witness import with_witness
 from src.data.source_status import SourceFetchError
 
 # NSIDC bumped these CSVs from v3.0 to v4.0 sometime in early 2026; the v3.0
@@ -44,6 +45,10 @@ class SeaIceRecord:
     previous_extent: float
     previous_year: int
     event_id: str
+    source_leg: str | None = None  # witness leg that served; None = primary
+
+
+from src.data import sea_ice_witness  # noqa: E402  # imported after dataclasses to avoid cycles
 
 
 def fetch_sea_ice(
@@ -52,6 +57,27 @@ def fetch_sea_ice(
     strict: bool = False,
 ) -> list[SeaIceReading]:
     """Fetch sea ice extent data for a hemisphere."""
+    try:
+        return with_witness(
+            lambda: _fetch_sea_ice_primary(hemisphere=hemisphere, strict=True),
+            lambda: sea_ice_witness.fetch_osi_saf_sea_ice(hemisphere=hemisphere, strict=True),
+            source_key=f"sea_ice_{hemisphere.lower()}",
+            leg_label=sea_ice_witness.OSI_SAF_LEG,
+        )
+    except (requests.RequestException, SourceFetchError) as exc:
+        if strict:
+            if isinstance(exc, SourceFetchError):
+                raise
+            raise SourceFetchError(f"Sea ice fetch failed for {hemisphere}: {exc}") from exc
+        return []
+
+
+def _fetch_sea_ice_primary(
+    hemisphere: str = "Arctic",
+    *,
+    strict: bool = False,
+) -> list[SeaIceReading]:
+    """Fetch primary NSIDC sea-ice extent data for a hemisphere."""
     url = ARCTIC_URL if hemisphere == "Arctic" else ANTARCTIC_URL
 
     try:
@@ -143,6 +169,7 @@ def detect_record_low(readings: list[SeaIceReading]) -> SeaIceRecord | None:
             previous_extent=prev_lowest.extent_million_km2,
             previous_year=prev_year,
             event_id=f"sea_ice_record_{latest.hemisphere.lower()}_{latest.date}",
+            source_leg=latest.source_leg,
         )
 
     return None
