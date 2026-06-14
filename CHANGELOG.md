@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.68.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-03 — Open-Meteo independent precip witness for `gpm_imerg` (the flakiest
+source, 18/40; still 5/12 after the S-12 datapool→s3→opendap chain — one provider family). Only a
+genuinely independent feed covers a full GESDISC-family outage.
+
+### Added
+
+- **Open-Meteo precip witness** in `src/data/gpm_imerg.py`: `fetch_daily_precip` now wraps the
+  primary (renamed `_fetch_daily_precip_primary`, behavior unchanged) in the R-00 `with_witness`. On a
+  primary `SourceFetchError`/`RequestException` it builds the SAME `CityPrecipReading` shape from the
+  Open-Meteo forecast API, tagged `source_leg="open_meteo"`, for the cities gpm scans.
+- **Multi-model agreement filter** (`_open_meteo_precip_with_agreement`): a city's reading is emitted
+  ONLY if ≥3 of the ICON/GFS/ECMWF ensemble means land within `max(25%, 2mm)` of the deterministic
+  forecast — NWP daily precip and satellite IMERG diverge wildly in convection, so this is the honesty
+  guard. The detector still owns thresholding.
+- **`model_fallback` grade** on witness-served precip bundles (`precipitation.py`): `source_leg`
+  propagates readings → `PrecipExtremeEvent` (stamped in `detect_precip_records`) → the builder appends
+  the grade + a `data_source` model-estimate note. The writer/fact-check prompts (R-00) forbid
+  "observed/measured/recorded" for `model_fallback`.
+- **Degraded telemetry** in `run_gpm_imerg`: witness-served runs record `status="degraded"` +
+  `served via open_meteo` so the R-01 sentinel + dashboard surface the down primary.
+
+### Notes
+
+- The witness is model-framed, never claims observation. Removed a duplicate iCloud test artifact
+  (`tests/test_freshness_rollout 2.py`) that was inflating test collection.
+
 ## [0.9.67.0] - 2026-06-13
 
 SOURCE-REDUNDANCY LANE R-02 — NOAA HMS independent fire witness for FIRMS. FIRMS (NASA GESDISC

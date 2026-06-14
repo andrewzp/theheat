@@ -289,8 +289,10 @@ def test_gpm_imerg_stale_data_raises_freshness(_env, monkeypatch):
     monkeypatch.setattr(gpm_imerg, "_resolve_available_date", lambda **kw: date(2020, 1, 1))
     monkeypatch.setattr(gpm_imerg, "_fetch_city_precip", lambda **kw: 1.0)
 
+    # R-03: asserts the PRIMARY's freshness gate (public fetch_daily_precip now
+    # falls back to the Open-Meteo witness when the primary raises).
     with pytest.raises(SourceFetchError, match="gpm_imerg stale data"):
-        gpm_imerg.fetch_daily_precip(
+        gpm_imerg._fetch_daily_precip_primary(
             [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
             strict=True,
         )

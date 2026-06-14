@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, MutableMapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 import csv
 import io
@@ -23,7 +23,22 @@ import requests
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._s3credentials import get_s3_credentials
+from src.data._witness import source_leg_of, tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, SourceSkipped
+
+# Open-Meteo independent precip witness (R-03). No auth; an independent model
+# family (ICON/GFS/ECMWF) that covers a full GESDISC outage the S-12 gpm grid
+# chain (one provider family) cannot. Model-framed -> evidence_grade model_fallback.
+_OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+_OPEN_METEO_ENSEMBLE_URL = "https://ensemble-api.open-meteo.com/v1/ensemble"
+_OPEN_METEO_MODELS = ("icon_seamless", "gfs_seamless", "ecmwf_ifs025")
+# Multi-model agreement gate: a city's reading is emitted only if >=3 models'
+# ensemble means land within tolerance of the deterministic forecast. NWP daily
+# precip and satellite IMERG diverge wildly in convection — the filter is the
+# honesty guard, do not loosen it.
+_OPEN_METEO_AGREEMENT_MIN_MODELS = 3
+_OPEN_METEO_AGREEMENT_REL_TOL = 0.25
+_OPEN_METEO_AGREEMENT_ABS_TOL_MM = 2.0
 
 LATE_OPENDAP_BASE = "https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDL.07"
 FINAL_OPENDAP_BASE = "https://gpm1.gesdisc.eosdis.nasa.gov/opendap/GPM_L3/GPM_3IMERGDF.07"
@@ -121,6 +136,7 @@ class PrecipExtremeEvent:
     city_count: int | None
     sample_cities: list[str]
     event_id: str
+    source_leg: str | None = None  # witness leg that served (R-03); None = primary
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
@@ -138,7 +154,50 @@ def fetch_daily_precip(
     strict: bool = False,
     today: date | None = None,
 ) -> list[CityPrecipReading]:
-    """Fetch point daily precipitation for monitored cities.
+    """Fetch point daily precipitation for monitored cities (R-03 chained).
+
+    Tries the primary GESDISC-family path first; on a primary fetch failure
+    (NOT a deliberate skip — missing EARTHDATA_TOKEN propagates ``SourceSkipped``
+    and never substitutes), falls through to the Open-Meteo model witness, whose
+    readings are tagged ``source_leg="open_meteo"`` and later graded
+    ``model_fallback``. Return shape is unchanged.
+    """
+
+    def primary() -> list[CityPrecipReading]:
+        return _fetch_daily_precip_primary(
+            cities,
+            target_date=target_date,
+            product=product,
+            max_cities=max_cities,
+            max_workers=max_workers,
+            strict=strict,
+            today=today,
+        )
+
+    def witness() -> list[CityPrecipReading]:
+        return _fetch_precip_open_meteo(cities, max_cities=max_cities, today=today)
+
+    try:
+        return with_witness(
+            primary, witness, source_key="gpm_imerg", leg_label="open_meteo"
+        )
+    except (SourceFetchError, requests.RequestException) as exc:
+        if strict:
+            raise SourceFetchError(f"GPM IMERG fetch failed: {exc}") from exc
+        return []
+
+
+def _fetch_daily_precip_primary(
+    cities: list[Mapping[str, Any]] | None = None,
+    *,
+    target_date: date | None = None,
+    product: str = "late",
+    max_cities: int | None = DEFAULT_CITY_LIMIT,
+    max_workers: int | None = DEFAULT_MAX_WORKERS,
+    strict: bool = False,
+    today: date | None = None,
+) -> list[CityPrecipReading]:
+    """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
     Returns city readings sorted in input order. Missing credentials skip the
     source in non-strict mode; strict mode raises so smoke tests can fail loud.
@@ -362,6 +421,95 @@ def _failure_signature(exc: Exception) -> str:
     return type(exc).__name__
 
 
+def _open_meteo_precip_with_agreement(lat: float, lon: float) -> float | None:
+    """Return yesterday's deterministic precip (mm) for a point ONLY if the
+    multi-model ensemble agrees; else None (omit the city).
+
+    Agreement = at least ``_OPEN_METEO_AGREEMENT_MIN_MODELS`` of the requested
+    models' ensemble means land within ``max(25%, 2mm)`` of the deterministic
+    forecast. NWP daily precip vs satellite IMERG diverge hugely in convection;
+    this filter is the honesty guard for a model-fallback reading."""
+    forecast = fetch_with_retry(
+        f"{_OPEN_METEO_FORECAST_URL}?latitude={lat}&longitude={lon}"
+        "&daily=precipitation_sum&past_days=1&forecast_days=0&timezone=UTC",
+        timeout=30,
+    ).json()
+    series = (forecast.get("daily") or {}).get("precipitation_sum") or []
+    if not series or series[0] is None:
+        return None
+    forecast_mm = float(series[0])
+
+    ensemble = fetch_with_retry(
+        f"{_OPEN_METEO_ENSEMBLE_URL}?latitude={lat}&longitude={lon}"
+        "&daily=precipitation_sum&past_days=1&forecast_days=0"
+        f"&models={','.join(_OPEN_METEO_MODELS)}",
+        timeout=30,
+    ).json()
+    daily = ensemble.get("daily") or {}
+    tolerance = max(
+        _OPEN_METEO_AGREEMENT_REL_TOL * forecast_mm, _OPEN_METEO_AGREEMENT_ABS_TOL_MM
+    )
+    models_in_agreement = 0
+    for model in _OPEN_METEO_MODELS:
+        member_values = [
+            float(arr[0])
+            for key, arr in daily.items()
+            if key != "time"
+            and model in key
+            and isinstance(arr, list)
+            and arr
+            and arr[0] is not None
+        ]
+        if not member_values:
+            continue
+        model_mean = sum(member_values) / len(member_values)
+        if abs(model_mean - forecast_mm) <= tolerance:
+            models_in_agreement += 1
+    if models_in_agreement >= _OPEN_METEO_AGREEMENT_MIN_MODELS:
+        return forecast_mm
+    return None
+
+
+def _fetch_precip_open_meteo(
+    cities: list[Mapping[str, Any]] | None = None,
+    *,
+    max_cities: int | None = DEFAULT_CITY_LIMIT,
+    today: date | None = None,
+) -> list[CityPrecipReading]:
+    """Open-Meteo independent precip witness (R-03).
+
+    Builds the SAME ``CityPrecipReading`` shape the primary returns, tagged
+    ``source_leg="open_meteo"``, for the cities gpm scans — but only for cities
+    where the ensemble agrees with the forecast (else the city is omitted). The
+    event_id mirrors the primary so dedup is consistent. The detector still does
+    the thresholding; this only supplies the daily readings."""
+    rows = cities if cities is not None else load_cities()
+    selected = list(rows if max_cities is None else rows[:max_cities])
+    target_date = (today or date.today()) - timedelta(days=1)
+    date_key = target_date.isoformat()
+    readings: list[CityPrecipReading] = []
+    for city in selected:
+        city_name = str(city["city"])
+        country = str(city["country"])
+        lat = float(city["lat"])
+        lon = float(city["lon"])
+        mm_total = _open_meteo_precip_with_agreement(lat, lon)
+        if mm_total is None:
+            continue
+        readings.append(CityPrecipReading(
+            city=city_name,
+            country=country,
+            lat=lat,
+            lon=lon,
+            date=date_key,
+            mm_total=mm_total,
+            source_product="open_meteo",
+            event_id=f"gpm_imerg_{_safe_key(country)}_{_safe_key(city_name)}_{date_key}",
+        ))
+    assert_freshness(date_key, "gpm_imerg", max_age_days=6, today=today)
+    return tag_source_leg(readings, "open_meteo")
+
+
 def detect_precip_records(
     readings: list[CityPrecipReading],
     state: Mapping[str, Any] | None = None,
@@ -400,6 +548,12 @@ def detect_precip_records(
 
     events.extend(_detect_rolling_accumulations(readings, tracking))
     events.extend(_detect_country_events(events, min_country_records=min_country_records))
+    # R-03: readings are homogeneous per cycle (the whole fetch was served by one
+    # leg). If a witness served, stamp every derived event so the bundle builder
+    # can append the correct evidence_grade.
+    leg = source_leg_of(readings)
+    if leg:
+        events = [replace(event, source_leg=leg) for event in events]
     return events
 
 
