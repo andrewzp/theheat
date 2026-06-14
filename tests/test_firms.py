@@ -464,3 +464,22 @@ class TestFirmsProductChain:
             responses.add(responses.GET, f"{FIRMS_BASE}/{product}/world/1",
                           body=FIRMS_CSV_HEADER, status=200)
         assert fetch_fires() == []
+
+    @responses.activate
+    @patch("src.data.firms.FIRMS_API_KEY", "test_key")
+    def test_firms_invalid_map_key_does_not_call_hms(self):
+        # Bad credentials are our-side/auth failures. The independent HMS witness
+        # must not mask them as "degraded served via noaa_hms".
+        for _ in range(3):
+            responses.add(
+                responses.GET,
+                f"{FIRMS_BASE}/VIIRS_SNPP_NRT/world/1",
+                status=401,
+                body="Unauthorized",
+            )
+
+        import pytest
+        from src.data.source_status import SourceFetchError
+
+        with pytest.raises(SourceFetchError, match="Unauthorized"):
+            fetch_fires(strict=True)

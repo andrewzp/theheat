@@ -91,10 +91,11 @@ def run_gpm_imerg(
                 cooldown_exempt=event.kind == "country_precip_event",
             )
 
-        gpm_imerg.update_precip_tracking(cast(dict, bot_state), readings)
         # R-01/R-03: if the Open-Meteo model witness served (GPM down), record
         # degraded + "served via open_meteo" so the sentinel + dashboard surface it.
         served = degraded_via(readings)
+        if not served:
+            gpm_imerg.update_precip_tracking(cast(dict, bot_state), readings)
         _record_source_run(
             current_run,
             bot_state,

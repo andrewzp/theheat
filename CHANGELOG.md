@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.72.0] - 2026-06-14
+
+SOURCE-REDUNDANCY review fixes — preserve the integrity boundaries around backup feeds.
+
+### Fixed
+
+- `with_witness` now only falls back for outage-style primary failures (timeouts, connection errors,
+  connection errors, stale provider payloads, rate limits, 5xx, and WAF-style 403s), while
+  auth/config/schema/parser failures propagate instead of being hidden by a successful witness.
+- FIRMS product chaining now stops on non-witnessable failures such as an invalid MAP_KEY instead of
+  walking through sibling products and then NOAA HMS.
+- GPM Open-Meteo model fallback readings no longer seed satellite-observation record state in
+  `precip_daily_records` / `precip_recent_by_city`; witness-served runs still report degraded
+  telemetry.
+- SOURCE-REDUNDANCY progress docs now use the merged PR numbers and remove the stale Vercel-awaiting
+  note.
+
 ## [0.9.71.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-05 + R-07 — deferred to a fresh tranche with the discovery work captured
