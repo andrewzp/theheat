@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.76.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-09 — OSI SAF sea-ice concentration witness for
+NSIDC sea-ice extent. When the primary NSIDC CSV is unavailable or stale,
+the bot can now compute a same-shaped sea-ice reading from independent public
+NetCDF concentration grids instead of losing the sea-ice lane entirely.
+
+### Added
+
+- **OSI SAF witness** for Arctic/Antarctic sea ice using MET Norway THREDDS
+  catalogs and `ice_conc_{nh,sh}_polstere-100_multi_YYYYMMDD1200.nc` NetCDF
+  grids.
+- **Extent parser**: counts valid concentration grid cells at >=15% ice
+  concentration, multiplies by projected grid-cell area, and returns the
+  existing `SeaIceReading` shape with `source_leg="osi_saf"`.
+- **Evidence-honest propagation**: sea-ice records produced from the witness
+  carry `source_leg`, bundle facts add `evidence_grade="observed_alt_host"`,
+  and source health reports degraded telemetry (`served via osi_saf`).
+
+### Notes
+
+- The older Ifremer path in the plan no longer exposes the sea-ice catalog.
+  The live public OSI SAF 401-b concentration catalog is served from
+  `thredds.met.no`; this PR uses that current host.
+- `netCDF4>=1.7,<2` is now a runtime dependency for this witness.
+
 ## [0.9.75.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-08 — USGS significant earthquake supply as an

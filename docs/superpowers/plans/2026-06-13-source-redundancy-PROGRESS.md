@@ -15,12 +15,11 @@
 | R-06 | firms (product gaps) | VIIRS_SNPP→NOAA20→NOAA21→MODIS chain | same-provider | A | R-00 | DONE | #276 | product chain in fetch_fires primary; non-first product = source_leg, NO grade; all-empty→[] (no HMS); all-fail→HMS |
 | R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | BLOCKED(erddap-timeout) | #280 | Fresh executor-side live curls to `coastwatch.noaa.gov/erddap/` base/catalog/info/DAS/point-style URLs timed out with 0 bytes (`HTTP:000`). Groundwork shape remains recorded, but implementation STOPped because the PR gate requires a live curl. |
 | R-08 | gdacs subtypes (supply) | USGS quakes + NHC cyclone GIS (new sources) | additive | B | R-00 | DONE(usgs-quakes; cyclone-existing-nhc-jtwc) | #281 | Added independent `usgs_quakes` source key for USGS significant earthquakes, with parser, runner, scorer, bundle, manual-only policy, voice fixture, and source-health telemetry. Cyclone subtype already has separate `nhc`/`jtwc` source keys; no duplicate GIS parser shipped. |
-| R-09 | sea_ice (NSIDC multi-day) | OSI SAF / U. Bremen | independent | B | R-00 | TODO | | dep-gated (netCDF4/pyhdf) |
+| R-09 | sea_ice (NSIDC multi-day) | OSI SAF / MET Norway THREDDS | independent | B | R-00 | DONE | #282 | `netCDF4` OSI SAF 401-b witness parses latest NH/SH concentration grids; evidence_grade observed_alt_host; degraded telemetry `served via osi_saf`. |
 
 Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 unblock; GPM-S3-as-public-mirror. Predecessor docs `second-witness-lane.md` + `source-backup-feeds.md` merged here and deleted.
 
 ## Awaiting Andrew (decisions parked by design)
-- R-09 sea-ice: needs a parser dependency (`netCDF4` or `pyhdf`) — implement behind it, flip on approval.
 - **R-04 ReliefWeb: needs an APPROVED appname (NEW, 2026-06-14).** ReliefWeb's API now returns
   `403 AccessDeniedHttpException` for any unregistered appname (verified live with the spec URL + the
   courtesy UA — the `appname=theheat` the plan assumed is no longer accepted). Request a free approved
@@ -42,3 +41,4 @@ Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 un
 | 2026-06-14 | Codex | R-05 | Open-Meteo Flood / GloFAS model fallback for river_gauges. Kept public shape, added known-coordinate discharge witness, model_fallback bundle facts with no gauge/stage feet, and degraded telemetry (`served via open_meteo_flood`). p75 treated as ensemble gate, not climatological threshold. |
 | 2026-06-14 | Codex | R-07(BLOCKED) | NOAA CRW ERDDAP was unreachable from executor-side curls during implementation: base, catalog, info, DAS, and point-style requests all timed out with 0 bytes / `HTTP:000`. Honored the live-verify STOP; no parser shipped against an unavailable endpoint. |
 | 2026-06-14 | Codex | R-08 | Added USGS Significant Earthquakes as independent `usgs_quakes` supply for GDACS earthquake blind spots. Existing separate `nhc`/`jtwc` cyclone source keys cover the cyclone subtype; no GDACS health masking or duplicate cyclone parser. |
+| 2026-06-14 | Codex | R-09 | Added OSI SAF sea-ice witness through the current MET Norway THREDDS public catalog, with `netCDF4` parsing, observed_alt_host bundle grade, and degraded telemetry when NSIDC is unavailable/stale. |
