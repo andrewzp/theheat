@@ -10,7 +10,7 @@
 | R-01 | dashboard+sentinel | chain-leg visibility (Py+JS in sync) | infra | A | R-00 | DONE | #PENDING | `served_via` field (Py+JS byte-equiv), dashboard row chip, runbook; backup-served=degraded not healthy |
 | R-02 | firms (NASA 5/40) | NOAA HMS (NESDIS+GOES, N. America) | independent | A | R-00 | DONE | #PENDING | HMS witness in fetch_fires; observed_alt_host grade; runner degraded telemetry; live-verified 200 |
 | R-03 | gpm_imerg (NASA 18/40) | Open-Meteo precip + ensemble filter | independent(model) | A | R-00 | DONE | #PENDING | with_witness wrap; ≥3-model agreement filter; model_fallback grade; runner telemetry; endpoints live-verified 200 |
-| R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | TODO | | |
+| R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | BLOCKED(reliefweb-appname) | | 403 AccessDeniedHttpException — ReliefWeb now requires a PRE-APPROVED appname (policy change since plan research). AWAITING-ANDREW. |
 | R-05 | river_gauges (403s) | Open-Meteo Flood (GloFAS, model-framed) | independent(model) | A | R-00 | TODO | | copernicus_ems OUT |
 | R-06 | firms (product gaps) | VIIRS_SNPP→NOAA20→NOAA21→MODIS chain | same-provider | A | R-00 | TODO | | same host; not a host-outage fix |
 | R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | TODO | | verify dataset id live |
@@ -21,6 +21,14 @@ Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 un
 
 ## Awaiting Andrew (decisions parked by design)
 - R-09 sea-ice: needs a parser dependency (`netCDF4` or `pyhdf`) — implement behind it, flip on approval.
+- **R-04 ReliefWeb: needs an APPROVED appname (NEW, 2026-06-14).** ReliefWeb's API now returns
+  `403 AccessDeniedHttpException` for any unregistered appname (verified live with the spec URL + the
+  courtesy UA — the `appname=theheat` the plan assumed is no longer accepted). Request a free approved
+  appname at https://apidoc.reliefweb.int/parameters#appname, set it (e.g. a `RELIEFWEB_APPNAME` env
+  var / repo variable), then R-04 can be built + verified. The lane's STOP rule (don't ship an
+  unverified endpoint) was honored — no parser was written against an unseen response shape.
+- **Vercel prod deploy (R-01):** dashboard `served_via` UI is on `main` but the live dashboard surface
+  needs a manual `cd dashboard && vercel --prod` (auto-deploy was blocked by the safety classifier).
 
 ## Session log
 | Date | Session | Steps shipped | Notes |

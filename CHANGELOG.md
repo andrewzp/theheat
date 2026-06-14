@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.69.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-04 — BLOCKED (records the stop honestly; no code shipped). ReliefWeb's API
+now requires a pre-approved `appname`: a live verify (spec URL + courtesy UA) returns
+`403 AccessDeniedHttpException` ("You are not using an approved appname"). This is a policy change
+since the plan's research, which assumed `appname` was courtesy-only. Per the lane's STOP rule, no
+parser was written against an unverifiable endpoint.
+
+### Changed
+
+- PROGRESS R-04 → `BLOCKED(reliefweb-appname)`; added an **Awaiting Andrew** entry: request a free
+  approved appname at https://apidoc.reliefweb.int/parameters#appname, then R-04 can be built. Also
+  recorded the still-pending R-01 Vercel prod deploy there.
+
 ## [0.9.68.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-03 — Open-Meteo independent precip witness for `gpm_imerg` (the flakiest
