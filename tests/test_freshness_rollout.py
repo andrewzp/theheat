@@ -39,8 +39,11 @@ def test_firms_stale_data_raises_freshness():
         status=200,
     )
 
+    # R-06: asserts the PRIMARY product's freshness gate. The public fetch_fires
+    # now chains products (R-06) and falls back to the NOAA HMS witness (R-02), so
+    # this specific stale-product error is intentionally superseded there.
     with pytest.raises(SourceFetchError, match="firms stale data"):
-        firms.fetch_fires(strict=True)
+        firms._fetch_fires_primary(80, 250.0, "VIIRS_SNPP_NRT", 1)
 
 
 @responses.activate

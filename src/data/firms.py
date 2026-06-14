@@ -25,6 +25,16 @@ HMS_FIRE_URL = "https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points
 # the confidence. We assign the FIRMS "high" floor so HMS events score comparably
 # to primary events; the observed_alt_host grade + data_source fact mark provenance.
 HMS_NOMINAL_CONFIDENCE = 80
+# FIRMS same-host product chain (R-06). A given product can be momentarily
+# empty/lagged while a sibling has the data. Freshest sensors lead; all share the
+# area/csv host + MAP_KEY, so they are semantically-equivalent observations (no
+# evidence_grade). This is product-gap insurance, NOT a host-outage fix (HMS is).
+_FIRMS_PRODUCT_CHAIN = [
+    "VIIRS_SNPP_NRT",
+    "VIIRS_NOAA20_NRT",
+    "VIIRS_NOAA21_NRT",
+    "MODIS_NRT",
+]
 # HMS (GOES-East/West) only resolves the Americas. Outside this box the witness
 # returns nothing and FIRMS has no fallback (stated honestly in the bundle).
 _HMS_NORTH_AMERICA_BBOX = (7.0, 83.0, -170.0, -50.0)  # lat_min, lat_max, lon_min, lon_max
@@ -97,7 +107,7 @@ def fetch_fires(
         return []
 
     def primary() -> list[FireEvent]:
-        return _fetch_fires_primary(confidence_min, frp_min, source, days)
+        return _fetch_fires_product_chain(confidence_min, frp_min, source, days)
 
     def witness() -> list[FireEvent]:
         return _fetch_fires_hms(frp_min)
@@ -110,14 +120,54 @@ def fetch_fires(
         return []
 
 
+def _fetch_fires_product_chain(
+    confidence_min: int,
+    frp_min: float,
+    source: str,
+    days: int,
+) -> list[FireEvent]:
+    """Try FIRMS products in order (R-06): a given product can be momentarily
+    empty/lagged while a sibling has the data. Same host + MAP_KEY, so these are
+    semantically-equivalent observations — a non-first product records
+    ``source_leg`` (→ status degraded) but NO ``evidence_grade``. Order leads with
+    the freshest sensors.
+
+    Returns ``[]`` only when every reachable product is genuinely empty (FIRMS up,
+    no big fires — do NOT fall through to the independent HMS witness). Raises
+    ``SourceFetchError`` only when EVERY product failed (a real host outage), so
+    ``with_witness`` then tries the independent NOAA HMS leg. This chain is the
+    same host and therefore NOT a host-outage fix; HMS (R-02) is."""
+    if source in _FIRMS_PRODUCT_CHAIN:
+        chain = _FIRMS_PRODUCT_CHAIN[_FIRMS_PRODUCT_CHAIN.index(source):]
+    else:
+        chain = [source, *[p for p in _FIRMS_PRODUCT_CHAIN if p != source]]
+
+    last_exc: Exception | None = None
+    any_reachable = False
+    for index, product in enumerate(chain):
+        try:
+            fires = _fetch_fires_primary(confidence_min, frp_min, product, days)
+        except (SourceFetchError, requests.RequestException) as exc:
+            last_exc = exc
+            continue
+        any_reachable = True
+        if fires:
+            # index 0 is the requested product (primary, no provenance); a later
+            # product served the gap -> tag the leg (degraded), no grade.
+            return fires if index == 0 else tag_source_leg(fires, product)
+    if not any_reachable and last_exc is not None:
+        raise SourceFetchError(f"FIRMS product chain exhausted: {last_exc}") from last_exc
+    return []
+
+
 def _fetch_fires_primary(
     confidence_min: int,
     frp_min: float,
     source: str,
     days: int,
 ) -> list[FireEvent]:
-    """Primary NASA FIRMS fetch. Raises ``SourceFetchError`` on any failure so the
-    ``with_witness`` chain in ``fetch_fires`` can fall through to the HMS leg."""
+    """Single-product NASA FIRMS fetch. Raises ``SourceFetchError`` on any failure
+    so the product chain / ``with_witness`` can fall through."""
     payload_dates: list[str | None] = []
     try:
         resp = fetch_with_retry(
