@@ -7,6 +7,7 @@ from __future__ import annotations
 
 
 from dataclasses import asdict
+from typing import Any
 
 from datetime import date
 
@@ -256,7 +257,39 @@ def build_cyclone_basin_record_bundle(event: BasinRecordEvent) -> StoryBundle:
     )
 
 def build_river_flood_bundle(flood: FloodEvent) -> StoryBundle:
-    """A USGS river gauge crossed its flood-stage threshold."""
+    """A river flood signal from either a gauge stage or a model fallback."""
+
+    if flood.source_leg == "open_meteo_flood":
+        facts: list[dict[str, Any]] = [
+            {"label": "river", "value": flood.river},
+            {"label": "location", "value": flood.location},
+            {"label": "modeled_discharge_m3s", "value": flood.discharge_m3s, "unit": "m3/s"},
+            {
+                "label": "model_threshold_m3s",
+                "value": flood.discharge_threshold_m3s,
+                "unit": "m3/s",
+            },
+            {"label": "discharge_ratio", "value": flood.discharge_ratio},
+            {"label": "data_source", "value": "Open-Meteo Flood / GloFAS model"},
+            {"label": "evidence_grade", "value": "model_fallback"},
+        ]
+        return StoryBundle(
+            signal_kind="river_flood",
+            where=flood.location,
+            when=flood.date,
+            event_id=flood.event_id,
+            headline_metric={
+                "label": "modeled_discharge_m3s",
+                "value": flood.discharge_m3s,
+                "unit": "m3/s",
+            },
+            current_facts=facts,
+            historical_context={
+                "model_fallback": True,
+                "coverage_limit": "GloFAS samples the largest nearby river cell; this is modeled discharge, not a gauge reading.",
+            },
+            raw_signal_dump=asdict(flood),
+        )
 
     return StoryBundle(
         signal_kind="river_flood",

@@ -204,17 +204,39 @@ def score_storm_surge(anomaly_m: float) -> EditorialScore:
         reasons=reasons,
     )
 
-def score_river_flood(above_by_ft: float) -> EditorialScore:
-    reasons = [f"{above_by_ft:.1f}ft above flood stage"]
-    if above_by_ft >= 5:
+def score_river_flood(
+    above_by_ft: float | None = None,
+    *,
+    discharge_ratio: float | None = None,
+) -> EditorialScore:
+    if discharge_ratio is not None:
+        reasons = [
+            f"modeled discharge {discharge_ratio:.2f}x ensemble p75",
+            "Open-Meteo Flood / GloFAS model fallback",
+        ]
+        return _build_score(
+            "river_flood",
+            severity=82 + max(discharge_ratio - 1.0, 0) * 20,
+            novelty=74,
+            timeliness=84,
+            confidence=72,
+            shareability=70,
+            sensitivity=66,
+            threshold=get_threshold("river_flood"),
+            reasons=reasons,
+        )
+
+    above_ft = float(above_by_ft or 0.0)
+    reasons = [f"{above_ft:.1f}ft above flood stage"]
+    if above_ft >= 5:
         reasons.append("major river flood exceedance")
     return _build_score(
         "river_flood",
-        severity=50 + above_by_ft * 8,
+        severity=50 + above_ft * 8,
         novelty=58,
         timeliness=86,
         confidence=88,
-        shareability=54 + above_by_ft * 4,
+        shareability=54 + above_ft * 4,
         sensitivity=72,
         threshold=get_threshold("river_flood"),
         reasons=reasons,
