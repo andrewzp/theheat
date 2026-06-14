@@ -10,6 +10,7 @@ from src.data.gpm_imerg import (
     DEFAULT_CITY_LIMIT,
     PrecipExtremeEvent,
     _ascii_subset_url,
+    _fetch_daily_precip_primary,
     _lat_index,
     _lon_index,
     detect_precip_records,
@@ -254,8 +255,10 @@ class TestGpmFetch:
         import pytest
         from src.data.source_status import SourceFetchError
 
+        # R-03: this asserts the PRIMARY's strict fail-fast internals (the public
+        # fetch_daily_precip now falls back to the Open-Meteo witness on failure).
         with pytest.raises(SourceFetchError) as exc_info:
-            fetch_daily_precip(
+            _fetch_daily_precip_primary(
                 [
                     {"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"},
                     {"city": "Tokyo", "country": "Japan", "lat": "35.68", "lon": "139.69"},
@@ -295,7 +298,7 @@ class TestGpmFetch:
         ]
 
         with pytest.raises(SourceFetchError, match="3 repeated Timeout failures"):
-            fetch_daily_precip(
+            _fetch_daily_precip_primary(
                 cities,
                 target_date=date(2026, 5, 14),
                 today=date(2026, 5, 20),
@@ -343,7 +346,7 @@ class TestGpmFetch:
         ]
 
         with pytest.raises(SourceFetchError, match="3 repeated Timeout failures"):
-            fetch_daily_precip(
+            _fetch_daily_precip_primary(
                 cities,
                 target_date=date(2026, 5, 14),
                 today=date(2026, 5, 20),
@@ -371,7 +374,7 @@ class TestGpmFetch:
         from src.data.source_status import SourceFetchError
 
         with pytest.raises(SourceFetchError, match="HTTP 404"):
-            fetch_daily_precip(
+            _fetch_daily_precip_primary(
                 [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
                 target_date=date(2026, 5, 14),
                 today=date(2026, 5, 20),
@@ -446,7 +449,7 @@ class TestGpmFetch:
         responses.add(responses.GET, url_pattern, status=401, body="Unauthorized")
 
         with pytest.raises(SourceFetchError):
-            fetch_daily_precip(
+            _fetch_daily_precip_primary(
                 [{"city": "Paris", "country": "France", "lat": "48.85", "lon": "2.35"}],
                 target_date=date(2026, 5, 14),
                 today=date(2026, 5, 20),
@@ -1038,3 +1041,129 @@ class TestGpmGridFetch:
 
         assert len(readings) == 1
         assert readings[0].mm_total == 9.0
+
+
+from datetime import timedelta  # noqa: E402
+from unittest.mock import MagicMock  # noqa: E402
+
+from src.data import gpm_imerg as _gpm  # noqa: E402
+from src.data.gpm_imerg import (  # noqa: E402
+    _fetch_precip_open_meteo,
+    _open_meteo_precip_with_agreement,
+)
+from src.data.source_status import SourceFetchError  # noqa: E402
+from src.two_bot.intern import build_precipitation_bundle  # noqa: E402
+from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT  # noqa: E402
+
+
+def _fake_json_resp(payload):
+    resp = MagicMock()
+    resp.json.return_value = payload
+    return resp
+
+
+def _open_meteo_responder(forecast_mm, model_means):
+    """side_effect for fetch_with_retry: forecast URL -> deterministic value;
+    ensemble URL -> one ensemble-mean field per model."""
+    def _side_effect(url, **kwargs):
+        if "ensemble-api" in url:
+            daily = {"time": ["2026-06-12"]}
+            for model, value in model_means.items():
+                daily[f"precipitation_sum_{model}_eps"] = [value]
+            return _fake_json_resp({"daily": daily})
+        return _fake_json_resp(
+            {"daily": {"time": ["2026-06-12"], "precipitation_sum": [forecast_mm]}}
+        )
+    return _side_effect
+
+
+class TestOpenMeteoPrecipWitness:
+    """R-03: Open-Meteo independent precip witness for gpm_imerg."""
+
+    def test_gpm_witness_omits_city_without_multimodel_agreement(self):
+        # Forecast 50mm but models scatter (5, 60, 2): only GFS within max(12.5,2)
+        # of 50 -> <3 models agree -> omit (None).
+        with patch.object(
+            _gpm, "fetch_with_retry",
+            side_effect=_open_meteo_responder(50.0, {"icon_seamless": 5.0, "gfs_seamless": 60.0, "ecmwf_ifs025": 2.0}),
+        ):
+            assert _open_meteo_precip_with_agreement(48.85, 2.35) is None
+
+    def test_gpm_witness_returns_value_on_agreement(self):
+        with patch.object(
+            _gpm, "fetch_with_retry",
+            side_effect=_open_meteo_responder(50.0, {"icon_seamless": 48.0, "gfs_seamless": 52.0, "ecmwf_ifs025": 51.0}),
+        ):
+            assert _open_meteo_precip_with_agreement(48.85, 2.35) == 50.0
+
+    def test_gpm_witness_reading_shape_matches_primary(self):
+        today = date(2026, 6, 13)
+        cities = [{"city": "Paris", "country": "France", "lat": 48.85, "lon": 2.35}]
+        with patch.object(
+            _gpm, "fetch_with_retry",
+            side_effect=_open_meteo_responder(80.0, {"icon_seamless": 79.0, "gfs_seamless": 81.0, "ecmwf_ifs025": 80.0}),
+        ):
+            readings = _fetch_precip_open_meteo(cities, today=today)
+        assert len(readings) == 1
+        r = readings[0]
+        assert isinstance(r, CityPrecipReading)
+        assert r.source_leg == "open_meteo"
+        assert r.source_product == "open_meteo"
+        assert r.mm_total == 80.0
+        assert r.date == "2026-06-12"  # past_days=1 -> yesterday
+        assert r.event_id == "gpm_imerg_france_paris_2026-06-12"
+
+    def test_gpm_primary_healthy_skips_witness(self):
+        primary_readings = [_reading(city="Paris", country="France", mm=40.0)]
+        with patch.object(_gpm, "_fetch_daily_precip_primary", return_value=primary_readings), \
+             patch.object(_gpm, "_fetch_precip_open_meteo") as witness_mock:
+            out = fetch_daily_precip(strict=True)
+        witness_mock.assert_not_called()
+        assert out == primary_readings
+        assert out[0].source_leg is None
+
+    def test_gpm_witness_serves_when_primary_fails(self):
+        witness_readings = _gpm.tag_source_leg(
+            [_reading(city="Paris", country="France", mm=90.0)], "open_meteo"
+        )
+        with patch.object(_gpm, "_fetch_daily_precip_primary", side_effect=SourceFetchError("GESDISC down")), \
+             patch.object(_gpm, "_fetch_precip_open_meteo", return_value=witness_readings):
+            out = fetch_daily_precip(strict=True)
+        assert out and out[0].source_leg == "open_meteo"
+
+    def test_gpm_witness_event_yields_model_fallback_grade(self):
+        readings = _gpm.tag_source_leg(
+            [_reading(city="Paris", country="France", mm=120.0, day="2026-06-12")], "open_meteo"
+        )
+        state = {"precip_daily_records": {
+            _gpm._daily_record_key(readings[0]): {"mm": 20.0, "year": 2020, "date": "2020-06-12"}
+        }}
+        events = detect_precip_records(readings, state)
+        assert events, "expected a daily_record event"
+        assert all(e.source_leg == "open_meteo" for e in events)
+        bundle = build_precipitation_bundle(events[0])
+        grades = [f for f in bundle.current_facts if f.get("label") == "evidence_grade"]
+        assert grades == [{"label": "evidence_grade", "value": "model_fallback"}]
+
+    def test_gpm_model_fallback_claiming_observed_is_killed(self):
+        # The kill is enforced by the fact-check prompt contract: a model_fallback
+        # bundle must forbid "observed/measured/recorded". Assert both the bundle
+        # carries the grade AND the prompt encodes the prohibition.
+        readings = _gpm.tag_source_leg(
+            [_reading(city="Paris", country="France", mm=120.0, day="2026-06-12")], "open_meteo"
+        )
+        state = {"precip_daily_records": {
+            _gpm._daily_record_key(readings[0]): {"mm": 20.0, "year": 2020, "date": "2020-06-12"}
+        }}
+        bundle = build_precipitation_bundle(detect_precip_records(readings, state)[0])
+        assert {"label": "evidence_grade", "value": "model_fallback"} in bundle.current_facts
+        assert "model_fallback" in FACT_CHECK_SYSTEM_PROMPT
+        assert "model estimate" in FACT_CHECK_SYSTEM_PROMPT.lower()
+
+    def test_primary_precip_event_has_no_grade(self):
+        readings = [_reading(city="Paris", country="France", mm=120.0, day="2026-06-12")]
+        state = {"precip_daily_records": {
+            _gpm._daily_record_key(readings[0]): {"mm": 20.0, "year": 2020, "date": "2020-06-12"}
+        }}
+        bundle = build_precipitation_bundle(detect_precip_records(readings, state)[0])
+        assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)

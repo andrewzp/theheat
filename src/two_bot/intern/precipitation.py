@@ -32,6 +32,14 @@ def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
         {"label": "lon", "value": event.lon},
         *_climate_context_facts(event.lat, event.lon, category="rain"),
     ]
+    # R-03: precip served by the Open-Meteo model witness during a GPM outage is a
+    # MODEL estimate, not a satellite observation. model_fallback tells the writer
+    # + fact-check prompts to never write "observed/measured/recorded" (R-00).
+    if event.source_leg == "open_meteo":
+        facts.append({"label": "evidence_grade", "value": "model_fallback"})
+        facts.append(
+            {"label": "data_source", "value": "Open-Meteo multi-model forecast (ICON/GFS/ECMWF) — GPM backup, model estimate"}
+        )
     return StoryBundle(
         signal_kind="precipitation_extreme",
         where=where,
