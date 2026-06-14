@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.74.0] - 2026-06-14
+
+SOURCE-REDUNDANCY LANE R-07 — BLOCKED (records the stop honestly; no code shipped).
+The NOAA CRW ERDDAP `noaacrwdhwDaily` grid endpoint was documented in the
+groundwork, but fresh executor-side live curls now time out before any bytes are
+received, including base, catalog, info, DAS, and point-style requests.
+
+### Notes
+
+- PROGRESS R-07 -> `BLOCKED(erddap-timeout)`. The same-day groundwork still
+  records the expected host/dataset/variable shape, but the lane requires a live
+  curl in the implementation PR body; writing a parser while the endpoint is
+  unreachable would violate the stop rule.
+- No code, thresholds, editorial gates, source-health classifiers, or dashboard
+  behavior changed.
+
 ## [0.9.73.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-05 — Open-Meteo Flood / GloFAS model fallback for
