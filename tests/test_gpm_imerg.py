@@ -1167,3 +1167,35 @@ class TestOpenMeteoPrecipWitness:
         }}
         bundle = build_precipitation_bundle(detect_precip_records(readings, state)[0])
         assert not any(f.get("label") == "evidence_grade" for f in bundle.current_facts)
+
+    def test_gpm_model_witness_does_not_seed_satellite_record_state(self, monkeypatch):
+        from src.orchestrator.sources.gpm_imerg import run_gpm_imerg
+        from src.state import _fresh_state
+
+        bot_state = _fresh_state()
+        reading = _gpm.tag_source_leg(
+            [_reading(city="Paris", country="France", mm=120.0, day="2026-06-12")],
+            "open_meteo",
+        )[0]
+
+        monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
+        monkeypatch.setattr(
+            "src.orchestrator.sources.gpm_imerg.gpm_imerg.get_s3_credentials",
+            lambda token: object(),
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.gpm_imerg.gpm_imerg.fetch_daily_precip",
+            lambda **kwargs: [reading],
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.gpm_imerg.gpm_imerg.detect_precip_records",
+            lambda readings, state: [],
+        )
+
+        current_run = {"sources": []}
+        run_gpm_imerg(bot_state, current_run, [_PARIS])
+
+        assert bot_state["precip_daily_records"] == {}
+        assert bot_state["precip_recent_by_city"] == {}
+        assert current_run["sources"][0]["status"] == "degraded"
+        assert current_run["sources"][0]["note"] == "served via open_meteo"

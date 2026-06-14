@@ -43,13 +43,57 @@ def test_with_witness_returns_primary_when_healthy():
 
 def test_with_witness_falls_back_on_fetch_error():
     def primary() -> list[_Event]:
-        raise SourceFetchError("primary down")
+        raise SourceFetchError("503 Service Unavailable")
 
     def witness() -> list[_Event]:
         return tag_source_leg([_Event(event_id="w")], "noaa_hms")
 
     result = with_witness(primary, witness, source_key="firms", leg_label="noaa_hms")
     assert result == [_Event(event_id="w", source_leg="noaa_hms")]
+
+
+def test_with_witness_does_not_mask_auth_failure():
+    def primary() -> list[_Event]:
+        raise SourceFetchError("401 Client Error: Unauthorized")
+
+    def witness() -> list[_Event]:
+        raise AssertionError("witness must not hide primary credential failures")
+
+    with pytest.raises(SourceFetchError, match="Unauthorized"):
+        with_witness(primary, witness, source_key="firms", leg_label="noaa_hms")
+
+
+def test_with_witness_does_not_mask_schema_drift():
+    def primary() -> list[_Event]:
+        raise SourceFetchError("firms schema drift: missing required field latitude")
+
+    def witness() -> list[_Event]:
+        raise AssertionError("witness must not hide parser/schema failures")
+
+    with pytest.raises(SourceFetchError, match="schema drift"):
+        with_witness(primary, witness, source_key="firms", leg_label="noaa_hms")
+
+
+def test_with_witness_falls_back_on_stale_provider_data():
+    def primary() -> list[_Event]:
+        raise SourceFetchError("gpm_imerg stale data: latest data point is 2026-06-01")
+
+    def witness() -> list[_Event]:
+        return tag_source_leg([_Event(event_id="w")], "open_meteo")
+
+    result = with_witness(primary, witness, source_key="gpm_imerg", leg_label="open_meteo")
+    assert result == [_Event(event_id="w", source_leg="open_meteo")]
+
+
+def test_with_witness_does_not_mask_malformed_freshness_date():
+    def primary() -> list[_Event]:
+        raise SourceFetchError("freshness check failed: invalid date 'not-a-date'")
+
+    def witness() -> list[_Event]:
+        raise AssertionError("witness must not hide parser/freshness defects")
+
+    with pytest.raises(SourceFetchError, match="invalid date"):
+        with_witness(primary, witness, source_key="gpm_imerg", leg_label="open_meteo")
 
 
 def test_with_witness_falls_back_on_requests_exception():

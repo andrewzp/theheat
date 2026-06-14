@@ -4,13 +4,13 @@ import csv
 import io
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
-from src.data._witness import tag_source_leg, with_witness
+from src.data._witness import is_witness_eligible_failure, tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, SourceSkipped
 
 FIRMS_API_KEY = os.environ.get("NASA_FIRMS_API_KEY", "")
@@ -62,7 +62,7 @@ _VIIRS_CONFIDENCE = {
 }
 
 
-def _parse_confidence(raw: str) -> int | None:
+def _parse_confidence(raw: object | None) -> int | None:
     """Return a 0-100 confidence score, or None if unparseable.
 
     Handles both numeric percentages (MODIS, "90" or "90%") and VIIRS
@@ -148,6 +148,8 @@ def _fetch_fires_product_chain(
         try:
             fires = _fetch_fires_primary(confidence_min, frp_min, product, days)
         except (SourceFetchError, requests.RequestException) as exc:
+            if not is_witness_eligible_failure(exc):
+                raise
             last_exc = exc
             continue
         any_reachable = True
@@ -168,7 +170,7 @@ def _fetch_fires_primary(
 ) -> list[FireEvent]:
     """Single-product NASA FIRMS fetch. Raises ``SourceFetchError`` on any failure
     so the product chain / ``with_witness`` can fall through."""
-    payload_dates: list[str | None] = []
+    payload_dates: list[date | datetime | int | float | str | None] = []
     try:
         resp = fetch_with_retry(
             f"{FIRMS_URL}/{FIRMS_API_KEY}/{source}/world/{days}",
