@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.80.0] - 2026-06-15
+
+Dashboard source-health diagnostic tone fix. Known upstream outages and
+degraded source telemetry no longer render as red hard-error panels in the main
+dashboard.
+
+### Fixed
+
+- **Source-health diagnostics**: red diagnostic panels are now reserved for
+  `unhealthy` sources. `external` rows render as amber external issues, and
+  `degraded` rows render as yellow diagnostics.
+
 ## [0.9.79.0] - 2026-06-15
 
 Production state-size and SST anomaly timeout fix. The bot now trims durable
