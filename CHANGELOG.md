@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.77.0] - 2026-06-15
+
+SOURCE-REDUNDANCY LANE R-07 — NOAA Coral Reef Watch ERDDAP grid witness for
+`coral_dhw`. The previously blocked CoastWatch ERDDAP endpoint is reachable
+again, so coral DHW can now serve a same-provider grid backup when the
+virtual-station text path is unavailable.
+
+### Added
+
+- **CRW ERDDAP DHW witness** using `noaacrwdhwDaily` and
+  `degree_heating_week[(last)][lat][lon]` point queries.
+- **Pinned CRW station-to-grid map** for high-signal reef regions, derived from
+  CRW virtual-station headers, so the witness does not depend on station text
+  files during an outage.
+- **Provenance propagation** from `CoralDHWReading` to `CoralBleachingEvent`,
+  bundle `evidence_grade="observed_alt_host"`, and degraded telemetry
+  (`served via crw_erddap`) when the backup leg serves.
+
+### Notes
+
+- The ERDDAP grid is still NOAA CRW, so this is same-provider product/path
+  redundancy, not independent institutional redundancy. It covers station-text
+  endpoint failures; it does not claim to cover a full NOAA outage.
+
 ## [0.9.76.0] - 2026-06-14
 
 SOURCE-REDUNDANCY LANE R-09 — OSI SAF sea-ice concentration witness for

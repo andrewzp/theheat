@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import csv
 import html
+import io
+import math
 import re
 from collections.abc import Mapping
 
@@ -13,11 +16,18 @@ import requests
 
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
+from src.data._witness import tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 SOURCE_NAME = "NOAA Coral Reef Watch"
 STATION_INDEX_URL = "https://coralreefwatch.noaa.gov/product/vs/data.php"
 STATION_DATA_BASE_URL = "https://coralreefwatch.noaa.gov/product/vs/data/"
+CRW_ERDDAP_LEG = "crw_erddap"
+CRW_ERDDAP_DATASET_URL = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwdhwDaily.csv"
+# CRW's ERDDAP grid can lag the virtual-station index by several days; the
+# 2026-06-14 unblock probe returned a six-day-old latest grid. Keep this
+# witness-only budget tight, but wide enough for the documented grid cadence.
+CRW_ERDDAP_MAX_AGE_DAYS = 7
 _REQUEST_HEADERS = {"User-Agent": "theheat-bot/1.0"}
 
 _LATEST_DATE_RE = re.compile(
@@ -87,6 +97,7 @@ class CoralBleachingEvent:
     lat: float | None = None
     lon: float | None = None
     source_name: str = SOURCE_NAME
+    source_leg: str | None = None  # witness leg that served; None = primary
 
 
 @dataclass(frozen=True)
@@ -95,6 +106,45 @@ class _StationLink:
     region_full_name: str
     stress_level: str
     data_file: str
+
+
+@dataclass(frozen=True)
+class _ErddapStation:
+    region_id: str
+    region_full_name: str
+    lat: float
+    lon: float
+
+
+CRW_ERDDAP_STATIONS: dict[str, _ErddapStation] = {
+    "austral_islands": _ErddapStation("austral_islands", "Austral Islands", -24.825, -149.1),
+    "chagos_archipelago": _ErddapStation("chagos_archipelago", "Chagos Archipelago, UK", -6.2, 71.75),
+    "clipperton_island": _ErddapStation("clipperton_island", "Clipperton Island, France", 10.3, -109.2),
+    "colombia_atlantic": _ErddapStation("colombia_atlantic", "Colombia Atlantic", 9.925, -75.525),
+    "costa_rica_pacific": _ErddapStation("costa_rica_pacific", "Costa Rica Pacific", 9.5, -84.425),
+    "east_java_bali": _ErddapStation("east_java_bali", "East Java and Bali", -6.95, 114.1),
+    "fiji": _ErddapStation("fiji", "Fiji", -16.775, 179.35),
+    "florida_keys": _ErddapStation("florida_keys", "Florida Keys", 24.75, -81.625),
+    "galapagos": _ErddapStation("galapagos", "Galapagos, Ecuador", 0.15, -90.625),
+    "gbr_central": _ErddapStation("gbr_central", "Central GBR", -19.225, 148.275),
+    "gbr_northern": _ErddapStation("gbr_northern", "Northern GBR", -16.1, 145.975),
+    "gbr_southern": _ErddapStation("gbr_southern", "Southern GBR", -22.625, 151.125),
+    "gilbert_islands": _ErddapStation("gilbert_islands", "Gilbert Islands, Kiribati", 0.35, 173.2),
+    "great_nicobar": _ErddapStation("great_nicobar", "Great Nicobar, India", 8.025, 93.325),
+    "howland_baker": _ErddapStation("howland_baker", "Howland and Baker", 0.5, -176.525),
+    "kenya": _ErddapStation("kenya", "Kenya", -3.2, 40.525),
+    "malacca_strait": _ErddapStation("malacca_strait", "Malacca Strait, Malaysia", 3.225, 101.35),
+    "nauru": _ErddapStation("nauru", "Nauru", -0.525, 166.925),
+    "nicaragua": _ErddapStation("nicaragua", "Nicaragua", 14.125, -81.75),
+    "northern_line_islands": _ErddapStation("northern_line_islands", "Northern Line Islands", 3.025, -159.8),
+    "northern_myanmar": _ErddapStation("northern_myanmar", "Northern Myanmar", 18.15, 93.5),
+    "phoenix_islands": _ErddapStation("phoenix_islands", "Phoenix Islands, Kiribati", -3.15, -172.825),
+    "samoas": _ErddapStation("samoas", "Samoas", -12.825, -170.475),
+    "solomon_islands": _ErddapStation("solomon_islands", "Solomon Islands", -8.7, 162.175),
+    "southern_borneo": _ErddapStation("southern_borneo", "Southern Borneo", -3.575, 116.55),
+    "west_kalimanta": _ErddapStation("west_kalimanta", "West Kalimantan", -1.05, 109.375),
+    "western_madagascar": _ErddapStation("western_madagascar", "Western Madagascar", -17.45, 43.45),
+}
 
 
 def fetch_coral_dhw(
@@ -110,6 +160,32 @@ def fetch_coral_dhw(
     then byte-range tails only for stations whose current stress level is not
     ``No Stress``. Tests and manual audits can set ``include_inactive=True``.
     """
+    try:
+        return with_witness(
+            lambda: _fetch_coral_dhw_primary(
+                strict=True,
+                include_inactive=include_inactive,
+                max_age_days=max_age_days,
+            ),
+            lambda: _fetch_coral_dhw_erddap(strict=True, max_age_days=max_age_days),
+            source_key="coral_dhw",
+            leg_label=CRW_ERDDAP_LEG,
+        )
+    except (requests.RequestException, SourceFetchError) as exc:
+        if strict:
+            if isinstance(exc, SourceFetchError):
+                raise
+            raise SourceFetchError(f"coral_dhw fetch failed: {exc}") from exc
+        return []
+
+
+def _fetch_coral_dhw_primary(
+    *,
+    strict: bool = False,
+    include_inactive: bool = False,
+    max_age_days: int = 5,
+) -> list[CoralDHWReading]:
+    """Fetch latest DHW readings from the primary CRW virtual-station text path."""
     try:
         index_text = _fetch_text(STATION_INDEX_URL, source_name="coral_dhw index")
         assert_response_schema({"body": index_text}, ["body"], "coral_dhw")
@@ -187,10 +263,107 @@ def detect_dhw_thresholds(
                 lat=reading.lat,
                 lon=reading.lon,
                 event_id=f"coral_dhw_{reading.region_id}_tier{tier}",
+                source_leg=reading.source_leg,
             )
         )
     events.sort(key=lambda event: (event.dhw_tier, event.dhw_value), reverse=True)
     return events
+
+
+def _fetch_coral_dhw_erddap(
+    *,
+    strict: bool = False,
+    max_age_days: int = 5,
+) -> list[CoralDHWReading]:
+    """Fetch CRW DHW from the NOAA CoastWatch ERDDAP grid backup."""
+    readings: list[CoralDHWReading] = []
+    errors: list[str] = []
+    for station in CRW_ERDDAP_STATIONS.values():
+        try:
+            csv_text = _fetch_erddap_csv(station)
+            readings.append(
+                _reading_from_erddap_csv(
+                    csv_text,
+                    station,
+                    max_age_days=max_age_days,
+                )
+            )
+        except (requests.RequestException, SourceFetchError, ValueError) as exc:
+            errors.append(f"{station.region_id}: {exc}")
+            continue
+    if readings:
+        return tag_source_leg(readings, CRW_ERDDAP_LEG)
+    if strict:
+        detail = "; ".join(errors[:5]) if errors else "no stations configured"
+        raise SourceFetchError(f"CRW ERDDAP witness failed: {detail}")
+    return []
+
+
+def _fetch_erddap_csv(station: _ErddapStation) -> str:
+    response = fetch_with_retry(
+        _erddap_point_url(station.lat, station.lon),
+        headers=_REQUEST_HEADERS,
+        timeout=20,
+        attempts=1,
+    )
+    return response.text
+
+
+def _reading_from_erddap_csv(
+    csv_text: str,
+    station: _ErddapStation,
+    *,
+    max_age_days: int,
+) -> CoralDHWReading:
+    rows = csv.DictReader(io.StringIO(csv_text))
+    for row in rows:
+        if row.get("time") == "UTC":
+            continue
+        observed_at = str(row.get("time") or "")
+        observed_date = observed_at.split("T", 1)[0]
+        try:
+            dhw = float(str(row.get("degree_heating_week") or ""))
+            lat = float(str(row.get("latitude") or station.lat))
+            lon = float(str(row.get("longitude") or station.lon))
+        except ValueError as exc:
+            raise SourceFetchError(
+                f"CRW ERDDAP schema drift for {station.region_id}: malformed row"
+            ) from exc
+        if not math.isfinite(dhw):
+            raise SourceFetchError(f"CRW ERDDAP returned non-finite DHW for {station.region_id}")
+        if dhw <= -300:
+            raise SourceFetchError(f"CRW ERDDAP returned fill value for {station.region_id}")
+        assert_freshness(
+            observed_date,
+            "coral_dhw",
+            max(max_age_days, CRW_ERDDAP_MAX_AGE_DAYS),
+        )
+        return CoralDHWReading(
+            region_id=station.region_id,
+            region_full_name=station.region_full_name,
+            date=observed_date,
+            dhw_value=round(dhw, 1),
+            stress_level=_stress_level_for_dhw(dhw),
+            baa_7day_max=None,
+            lat=lat,
+            lon=lon,
+        )
+    raise SourceFetchError(f"CRW ERDDAP schema drift for {station.region_id}: no data rows")
+
+
+def _erddap_point_url(lat: float, lon: float) -> str:
+    return (
+        f"{CRW_ERDDAP_DATASET_URL}?"
+        f"degree_heating_week%5B(last)%5D%5B({lat})%5D%5B({lon})%5D"
+    )
+
+
+def _stress_level_for_dhw(dhw: float) -> str:
+    if dhw >= 8:
+        return "Bleaching Alert Level 2"
+    if dhw >= 4:
+        return "Bleaching Alert Level 1"
+    return "No Stress"
 
 
 def _fetch_text(

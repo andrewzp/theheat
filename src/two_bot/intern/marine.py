@@ -32,6 +32,24 @@ from ._shared import _climate_context_facts
 
 def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
     """A Coral Reef Watch region crossed a DHW bleaching threshold."""
+    current_facts: list[dict[str, Any]] = [
+        {"label": "region_id", "value": event.region_id},
+        {"label": "region_full_name", "value": event.region_full_name},
+        {"label": "dhw_value", "value": event.dhw_value, "unit": "°C-weeks"},
+        {"label": "dhw_tier", "value": event.dhw_tier, "unit": "°C-weeks"},
+        {"label": "bleaching_level", "value": event.bleaching_level},
+        {"label": "stress_level", "value": event.stress_level},
+        {"label": "source_name", "value": event.source_name},
+        {"label": "lat", "value": event.lat},
+        {"label": "lon", "value": event.lon},
+        *_climate_context_facts(event.lat, event.lon, category="coral"),
+        *reef_context_facts(event.region_id),
+    ]
+    if event.source_leg == "crw_erddap":
+        current_facts.extend([
+            {"label": "data_source", "value": "NOAA Coral Reef Watch ERDDAP DHW grid"},
+            {"label": "evidence_grade", "value": "observed_alt_host"},
+        ])
 
     return StoryBundle(
         signal_kind="coral_bleaching",
@@ -43,19 +61,7 @@ def build_coral_bleaching_bundle(event: CoralBleachingEvent) -> StoryBundle:
             "value": event.dhw_value,
             "unit": "°C-weeks",
         },
-        current_facts=[
-            {"label": "region_id", "value": event.region_id},
-            {"label": "region_full_name", "value": event.region_full_name},
-            {"label": "dhw_value", "value": event.dhw_value, "unit": "°C-weeks"},
-            {"label": "dhw_tier", "value": event.dhw_tier, "unit": "°C-weeks"},
-            {"label": "bleaching_level", "value": event.bleaching_level},
-            {"label": "stress_level", "value": event.stress_level},
-            {"label": "source_name", "value": event.source_name},
-            {"label": "lat", "value": event.lat},
-            {"label": "lon", "value": event.lon},
-            *_climate_context_facts(event.lat, event.lon, category="coral"),
-            *reef_context_facts(event.region_id),
-        ],
+        current_facts=current_facts,
         historical_context={
             "scope": "coral_reef_watch_regional_dhw_threshold",
             "thresholds_c_weeks": [4, 8, 12],
