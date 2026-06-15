@@ -29,7 +29,9 @@ STATE_BACKEND = os.environ.get("THEHEAT_STATE_BACKEND", "").lower()
 DB_PATH = os.environ.get("THEHEAT_DB_PATH", "")
 MAX_DRAFTS = 200
 MAX_SHIPPED_TWEETS = 200
+MAX_SUPPRESSIONS = 100
 STATE_SIZE_WARNING_BYTES = 800_000
+SOURCE_HEALTH_MAX_RUNS = 10
 RECENT_RECORD_TTL_DAYS = 90
 RECORD_STORE_RETENTION_YEARS = 10
 REJECTED_DRAFT_RETENTION_DAYS = 30
@@ -441,7 +443,7 @@ def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50
     return merged[-max_items:]
 
 
-def _merge_suppressions(current: list[dict], incoming: list[dict], max_items: int = 200) -> list[dict]:
+def _merge_suppressions(current: list[dict], incoming: list[dict], max_items: int = MAX_SUPPRESSIONS) -> list[dict]:
     """Merge suppression records. Dedupe by id (latest ts wins), then trim."""
     merged: dict[str, dict] = {}
     anonymous: list[dict] = []
@@ -1595,7 +1597,6 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
     cutoff = _source_health_window_cutoff(runs)
     seen = set()
     ordered: list[SourceHealthRun] = []
-    duration_values: list[int] = []
     for run in sorted(runs, key=lambda row: _parse_state_timestamp(row.get("ts"))):
         ts = _format_state_timestamp(run.get("ts"))
         if _parse_state_timestamp(ts) < cutoff:
@@ -1618,10 +1619,17 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
         for metric in _SOURCE_HEALTH_METRICS:
             raw_value = run.get(metric)
             value = _nonnegative_int(raw_value)
-            if value is None:
+            if value is None or value == 0:
                 continue
             entry_writeable[metric] = value
         ordered.append(entry)
+
+    ordered = ordered[-SOURCE_HEALTH_MAX_RUNS:]
+    duration_values: list[int] = []
+    for entry in ordered:
+        status = str(entry.get("status") or "failed")
+        error_text = entry.get("error")
+        entry_writeable = cast(dict, entry)
         health_counts = cast(dict, health)
         health_counts[status] = int(health_counts.get(status, 0)) + 1
         for metric in _SOURCE_HEALTH_METRICS:
@@ -1636,10 +1644,10 @@ def _rebuild_source_health(runs: list[SourceHealthRun]) -> SourceHealth:
                 health_key = f"total_{metric}"
                 health_counts[health_key] = int(health_counts.get(health_key, 0)) + value
         if status == "success":
-            health["last_success_ts"] = ts
+            health["last_success_ts"] = entry.get("ts")
         elif status in {"degraded", "failed"} and error_text:
             health["last_error"] = error_text
-            health["last_error_ts"] = ts
+            health["last_error_ts"] = entry.get("ts")
     if duration_values:
         health["avg_duration_ms"] = round(sum(duration_values) / len(duration_values))
     health["runs"] = ordered

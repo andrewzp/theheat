@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
+from src.state import MAX_SUPPRESSIONS
 
 if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
@@ -203,8 +204,8 @@ def _record_triage_suppression(
         "reasons": reasons_field,
         "summary": getattr(getattr(candidate, "bundle", None), "where", None) or candidate.city or None,
     })
-    if len(suppressions) > 200:
-        bot_state["suppressions"] = suppressions[-200:]
+    if len(suppressions) > MAX_SUPPRESSIONS:
+        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
 
 
 def select_survivors(

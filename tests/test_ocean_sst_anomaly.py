@@ -156,6 +156,25 @@ def test_fetch_region_sst_success_tier2(monkeypatch):
     assert reading.cells_used == 3
 
 
+def test_fetch_region_sst_uses_short_timeout_budget(monkeypatch):
+    region = RegionDef("nino34", "Nino 3.4", -5, 5, -170, -120)
+    text = _fake_griddap_csv(
+        "2026-06-06",
+        [(0.0, -160.0, 3.6), (0.0, -159.0, 3.6), (0.0, -158.0, 3.6)],
+    )
+    calls = []
+
+    def _fake_fetch(*args, **kwargs):
+        calls.append(kwargs)
+        return _response(text)
+
+    monkeypatch.setattr("src.data.ocean_sst_anomaly.fetch_with_retry", _fake_fetch)
+
+    assert fetch_region_sst(region, min_valid_cells=3, today=date(2026, 6, 11)) is not None
+    assert calls[0]["timeout"] == 10
+    assert calls[0]["attempts"] == 1
+
+
 def test_fetch_region_sst_below_floor_returns_none(monkeypatch):
     region = RegionDef("nino34", "Nino 3.4", -5, 5, -170, -120)
     text = _fake_griddap_csv(
@@ -289,6 +308,21 @@ def test_fetch_all_regions_raises_when_all_regions_fail(monkeypatch):
 
     with pytest.raises(SourceFetchError, match="all regions failed"):
         fetch_all_regions()
+
+
+def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
+    def _raise(region, *, min_valid_cells=10):
+        raise SourceFetchError(f"{region.slug} timed out")
+
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
+
+    with pytest.raises(SourceFetchError) as exc_info:
+        fetch_all_regions()
+
+    msg = str(exc_info.value)
+    assert "all regions failed" in msg
+    assert "north_atlantic timed out" in msg
+    assert "subpolar_n_atlantic timed out" in msg
 
 
 def test_detect_events_fires_only_on_tier_increase():
