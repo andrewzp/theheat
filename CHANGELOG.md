@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.78.0] - 2026-06-15
+
+Dashboard source-health display fix. Recovered sources no longer render stale
+`last_error` diagnostics as red active-looking failure panels after the latest
+run has succeeded.
+
+### Fixed
+
+- **Stale source-health diagnostics**: healthy/idle sources clear old
+  `last_error` fields, and sources recovering from an upstream blip hide the
+  old diagnostic once their latest run is successful. Current degraded/failed
+  rows still surface their diagnostics.
+
 ## [0.9.77.0] - 2026-06-15
 
 SOURCE-REDUNDANCY LANE R-07 — NOAA Coral Reef Watch ERDDAP grid witness for

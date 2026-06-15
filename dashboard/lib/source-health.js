@@ -94,14 +94,23 @@ function addDerivedFields(s) {
   // cadence-gated sources (e.g. ice_mass: "33% (1/10)" instead of "33% (1/3)").
   const active = s.successes + s.failures + s.degraded + s.partial_failures
   const health = classifyHealth(s)
+  const latestRunSucceeded = s.last_run_status === "success"
+  const showDiagnostic =
+    health !== "healthy" &&
+    health !== "idle" &&
+    (!latestRunSucceeded || health === "unhealthy")
+  const lastError = showDiagnostic ? s.last_error : null
+  const lastErrorAt = showDiagnostic ? s.last_error_at : null
   return {
     ...s,
+    last_error: lastError,
+    last_error_at: lastErrorAt,
     active,
     success_rate: active > 0 ? s.successes / active : null,
     health,
     // Only meaningful while degraded — a recovered primary (back to healthy)
     // clears the stale "served via" diagnostic so it can't masquerade.
-    served_via: health === "degraded" ? parseServedVia(s.last_error) : null,
+    served_via: health === "degraded" ? parseServedVia(lastError) : null,
   }
 }
 

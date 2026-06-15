@@ -577,6 +577,62 @@ test("old degraded rows do not keep a recovered durable source yellow", () => {
   assert.equal(row.health, "healthy")
 })
 
+test("recovered healthy source clears stale last_error fields", () => {
+  const runs = [
+    { ts: "2026-06-01T00:00:00Z", status: "degraded", error: "old warning" },
+    ok("2026-06-02T00:00:00Z"),
+    ok("2026-06-03T00:00:00Z"),
+    ok("2026-06-04T00:00:00Z"),
+    ok("2026-06-05T00:00:00Z"),
+    ok("2026-06-06T00:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      air_quality: {
+        success: 5,
+        failed: 0,
+        degraded: 1,
+        skipped: 0,
+        last_error: "old warning",
+        last_error_ts: "2026-06-01T00:00:00Z",
+        runs,
+      },
+    },
+  })
+  const row = sources.find((s) => s.source === "air_quality")
+  assert.equal(row.health, "healthy")
+  assert.equal(row.last_error, null)
+  assert.equal(row.last_error_at, null)
+})
+
+test("latest success hides stale upstream diagnostic while source is recovering", () => {
+  const runs = [
+    ok("2026-06-01T00:00:00Z"),
+    fail("2026-06-01T01:00:00Z"),
+    ok("2026-06-01T02:00:00Z"),
+    ok("2026-06-01T03:00:00Z"),
+    ok("2026-06-01T04:00:00Z"),
+  ]
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      copernicus_ems: {
+        success: 4,
+        failed: 1,
+        degraded: 0,
+        skipped: 0,
+        last_error: "503 Server Error: Service Temporarily Unavailable",
+        last_error_ts: "2026-06-01T01:00:00Z",
+        runs,
+      },
+    },
+  })
+  const row = sources.find((s) => s.source === "copernicus_ems")
+  assert.equal(row.last_run_status, "success")
+  assert.equal(row.health, "external")
+  assert.equal(row.last_error, null)
+  assert.equal(row.last_error_at, null)
+})
+
 test("a source degraded every cycle is degraded, not unhealthy (sync with sentinel #201)", () => {
   // air_quality loses a rate-limited tail chunk every run → `degraded` each
   // cycle, never a hard `failed`. With a 0% clean-success rate it must still
