@@ -1872,7 +1872,7 @@ class TestSuppressions:
         assert ids["supp_a"]["ts"] == "2026-05-06T12:00:00Z"
         assert ids["supp_b"]["summary"] == "kept"
 
-    def test_merge_caps_at_200(self):
+    def test_merge_caps_at_100(self):
         from src.state import _merge_suppressions
         many = [
             {"id": f"supp_{i}", "ts": f"2026-05-06T{i:02d}:00:00Z"}
@@ -1884,7 +1884,7 @@ class TestSuppressions:
             for i in range(0, 250)
         ]
         merged = _merge_suppressions([], many)
-        assert len(merged) == 200
+        assert len(merged) == 100
 
     def test_merge_sorts_by_ts(self):
         from src.state import _merge_suppressions
@@ -1996,14 +1996,14 @@ class TestShouldDraftSuppressionCapture:
         assert _should_draft(score, "ev_x") is False
         assert bot_state.get("suppressions", []) == []
 
-    def test_capture_caps_at_200(self, monkeypatch):
+    def test_capture_caps_at_100(self, monkeypatch):
         from src.main import _should_draft, _activate_suppression_ctx
         monkeypatch.setenv("SUPPRESSION_NEAR_MISS_GAP", "100")
-        bot_state = {"suppressions": [{"id": f"old_{i}", "ts": "2026-05-01T00:00:00Z"} for i in range(190)]}
+        bot_state = {"suppressions": [{"id": f"old_{i}", "ts": "2026-05-01T00:00:00Z"} for i in range(95)]}
         _activate_suppression_ctx(bot_state, source="alerts")
         for i in range(15):
             _should_draft(self._make_score(total=60, threshold=72), f"ev_{i}")
-        assert len(bot_state["suppressions"]) == 200
+        assert len(bot_state["suppressions"]) == 100
 
     def test_score_gate_record_has_stage_field(self, monkeypatch):
         from src.main import _should_draft, _activate_suppression_ctx

@@ -9,6 +9,7 @@ import secrets
 
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.common import _utc_now_iso
+from src.state import MAX_SUPPRESSIONS
 from src.state_schema import BotState
 
 
@@ -110,9 +111,7 @@ def _record_suppression(
     score: EditorialScore,
     summary: str | None,
 ) -> None:
-    """Append an editorial-gate near-miss suppression record (stage=score_gate),
-    capped to last 200.
-    """
+    """Append an editorial-gate near-miss suppression record (stage=score_gate)."""
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
@@ -129,8 +128,8 @@ def _record_suppression(
         "reasons": _score_reasons(score),
         "summary": summary,
     })
-    if len(suppressions) > 200:
-        bot_state["suppressions"] = suppressions[-200:]
+    if len(suppressions) > MAX_SUPPRESSIONS:
+        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
 
 
 def _record_downstream_suppression(
@@ -166,8 +165,8 @@ def _record_downstream_suppression(
         "reasons": [kill_reason] if kill_reason else [],
         "summary": summary,
     })
-    if len(suppressions) > 200:
-        bot_state["suppressions"] = suppressions[-200:]
+    if len(suppressions) > MAX_SUPPRESSIONS:
+        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
 
 
 def _record_save_rejection(
@@ -221,8 +220,8 @@ def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None
         "reasons": [err_text] if err_text else [],
         "summary": None,
     })
-    if len(suppressions) > 200:
-        bot_state["suppressions"] = suppressions[-200:]
+    if len(suppressions) > MAX_SUPPRESSIONS:
+        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
 
 
 def _should_draft(

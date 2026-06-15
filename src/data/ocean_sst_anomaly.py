@@ -40,6 +40,8 @@ _GRID_STRIDE = max(1, round(_TARGET_DEG / _GRID_DEG))
 _MAX_DATA_LAG_DAYS = 5
 _MIN_VALID_CELLS = 10
 _FETCH_WORKERS = 4
+_FETCH_TIMEOUT_SECONDS = 10
+_FETCH_ATTEMPTS = 1
 
 _FILL_VALUE = -327.68
 _VALID_RANGE = (-15.0, 15.0)
@@ -199,9 +201,9 @@ def _fetch_region_sst_strict(
 
     response = fetch_with_retry(
         _build_url(region),
-        timeout=30,
+        timeout=_FETCH_TIMEOUT_SECONDS,
         headers=_REQUEST_HEADERS,
-        attempts=3,
+        attempts=_FETCH_ATTEMPTS,
     )
     text = response.text
     assert_response_schema({"body": text}, ["body"], "ocean_sst_anomaly")
@@ -244,6 +246,7 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
     """Fetch all configured regions, degrading per region by default."""
 
     readings_by_index: dict[int, RegionalSSTReading] = {}
+    failures_by_index: dict[int, str] = {}
     failures = 0
     worker_count = min(_FETCH_WORKERS, len(REGION_REGISTRY))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -261,13 +264,18 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
                         f"ocean_sst_anomaly/{region.slug} fetch failed: {exc}"
                     ) from exc
                 failures += 1
+                failures_by_index[index] = f"{region.slug}: {exc}"
                 print(f"[sst_anom] {region.slug}: fetch skipped ({exc})")
                 continue
             if reading is not None:
                 readings_by_index[index] = reading
 
     if failures >= len(REGION_REGISTRY):
-        raise SourceFetchError("ocean_sst_anomaly: all regions failed")
+        samples = "; ".join(
+            failures_by_index[index] for index in sorted(failures_by_index)[:3]
+        )
+        detail = f"; samples: {samples}" if samples else ""
+        raise SourceFetchError(f"ocean_sst_anomaly: all regions failed{detail}")
     return [readings_by_index[index] for index in sorted(readings_by_index)]
 
 

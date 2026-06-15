@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.79.0] - 2026-06-15
+
+Production state-size and SST anomaly timeout fix. The bot now trims durable
+operator telemetry more aggressively before the Gist state approaches the
+inline truncation cliff, and the NOAA CoastWatch SST anomaly source fails
+quickly with sampled region-level causes while the endpoint is hanging.
+
+### Fixed
+
+- **State-size pressure**: source-health retains the latest 10 runs per source
+  and omits zero-valued per-run metrics; suppressions now cap at 100 rows.
+- **SST anomaly outages**: regional CoastWatch requests use a 10-second,
+  single-attempt budget, and an all-region failure records sample region errors
+  instead of only `all regions failed`.
+
 ## [0.9.78.0] - 2026-06-15
 
 Dashboard source-health display fix. Recovered sources no longer render stale

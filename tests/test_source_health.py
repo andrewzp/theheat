@@ -84,6 +84,35 @@ def test_record_source_health_rolls_up_duration_and_funnel_metrics():
     assert health["runs"][0]["duration_ms"] == 1200
 
 
+def test_record_source_health_caps_run_rows_and_omits_zero_metrics():
+    state = {"source_health": {}}
+
+    for i in range(12):
+        record_source_health(
+            state,
+            "gpm_imerg",
+            "success",
+            timestamp=f"2026-06-15T{i:02d}:00:00Z",
+            metrics={
+                "duration_ms": 100 + i,
+                "observed": 0,
+                "promoted": 0,
+                "triaged_in": 0,
+                "triaged_out": 0,
+                "writer_attempted": 0,
+                "drafted": 0,
+            },
+        )
+
+    health = state["source_health"]["gpm_imerg"]
+    assert health["success"] == 10
+    assert len(health["runs"]) == 10
+    assert health["runs"][0]["ts"] == "2026-06-15T02:00:00Z"
+    assert "duration_ms" in health["runs"][0]
+    assert "observed" not in health["runs"][0]
+    assert "drafted" not in health["runs"][0]
+
+
 def test_record_source_health_aggregates_multiple_statuses():
     state = {"source_health": {}}
 
