@@ -10,7 +10,7 @@
 | R-01 | dashboard+sentinel | chain-leg visibility (Py+JS in sync) | infra | A | R-00 | DONE | #270 | `served_via` field (Py+JS byte-equiv), dashboard row chip, runbook; backup-served=degraded not healthy; Vercel prod deployed 2026-06-14 |
 | R-02 | firms (NASA 5/40) | NOAA HMS (NESDIS+GOES, N. America) | independent | A | R-00 | DONE | #271 | HMS witness in fetch_fires; observed_alt_host grade; runner degraded telemetry; live-verified 200 |
 | R-03 | gpm_imerg (NASA 18/40) | Open-Meteo precip + ensemble filter | independent(model) | A | R-00 | DONE | #274 | with_witness wrap; ≥3-model agreement filter; model_fallback grade; runner telemetry; endpoints live-verified 200 |
-| R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | BLOCKED(reliefweb-appname) | | 403 AccessDeniedHttpException — ReliefWeb now requires a PRE-APPROVED appname (policy change since plan research). AWAITING-ANDREW. |
+| R-04 | gdacs (EU 9/40) | ReliefWeb (UN OCHA) | independent | A | R-00 | AWAITING-ANDREW(appname-approval-email) | | ReliefWeb appname request submitted 2026-06-15 for `TheHeat-GDACSBackup-RW7K2Q` using `contact@theheat.app`; immediate API probe still returns 403 until ReliefWeb approves it. |
 | R-05 | river_gauges (403s) | Open-Meteo Flood (GloFAS, model-framed) | independent(model) | A | R-00 | DONE | #279 | model-fallback witness in fetch_river_levels; known USGS coords only; discharge+p75+absolute-floor gate; no ft facts; degraded telemetry |
 | R-06 | firms (product gaps) | VIIRS_SNPP→NOAA20→NOAA21→MODIS chain | same-provider | A | R-00 | DONE | #276 | product chain in fetch_fires primary; non-first product = source_leg, NO grade; all-empty→[] (no HMS); all-fail→HMS |
 | R-07 | coral_dhw (NOAA 403s) | CRW ERDDAP `noaacrwdhwDaily` grid | same-provider | A | R-00 | DONE | #283 | Endpoint recovered on fresh probe; ERDDAP point witness samples pinned CRW station coords, adds observed_alt_host grade, and records degraded telemetry `served via crw_erddap`. |
@@ -20,12 +20,14 @@
 Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 unblock; GPM-S3-as-public-mirror. Predecessor docs `second-witness-lane.md` + `source-backup-feeds.md` merged here and deleted.
 
 ## Awaiting Andrew (decisions parked by design)
-- **R-04 ReliefWeb: needs an APPROVED appname (NEW, 2026-06-14).** ReliefWeb's API now returns
+- **R-04 ReliefWeb: waiting on appname approval email.** ReliefWeb's API now returns
   `403 AccessDeniedHttpException` for any unregistered appname (verified live with the spec URL + the
-  courtesy UA — the `appname=theheat` the plan assumed is no longer accepted). Request a free approved
-  appname at https://apidoc.reliefweb.int/parameters#appname, set it (e.g. a `RELIEFWEB_APPNAME` env
-  var / repo variable), then R-04 can be built + verified. The lane's STOP rule (don't ship an
-  unverified endpoint) was honored — no parser was written against an unseen response shape.
+  courtesy UA — the `appname=theheat` the plan assumed is no longer accepted). Codex submitted the
+  free appname request on 2026-06-15 for `TheHeat-GDACSBackup-RW7K2Q` with `contact@theheat.app`.
+  ReliefWeb's form says they review and respond within two business days. Once approved, provide/set
+  the approved value as `RELIEFWEB_APPNAME`, then R-04 can be built + verified. The lane's STOP rule
+  (don't ship an unverified endpoint) remains honored — no parser was written against an unseen
+  response shape.
 
 ## Session log
 | Date | Session | Steps shipped | Notes |
@@ -43,3 +45,4 @@ Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 un
 | 2026-06-14 | Codex | R-08 | Added USGS Significant Earthquakes as independent `usgs_quakes` supply for GDACS earthquake blind spots. Existing separate `nhc`/`jtwc` cyclone source keys cover the cyclone subtype; no GDACS health masking or duplicate cyclone parser. |
 | 2026-06-14 | Codex | R-09 | Added OSI SAF sea-ice witness through the current MET Norway THREDDS public catalog, with `netCDF4` parsing, observed_alt_host bundle grade, and degraded telemetry when NSIDC is unavailable/stale. |
 | 2026-06-15 | Codex | R-07 | Re-probed NOAA CoastWatch ERDDAP after the timeout blocker; endpoint returned 200, so added CRW grid fallback for coral_dhw with pinned station coords, observed_alt_host grade, and degraded telemetry. |
+| 2026-06-15 | Codex | R-04(appname-requested) | Submitted ReliefWeb appname request for `TheHeat-GDACSBackup-RW7K2Q` using `contact@theheat.app`; Google Forms confirmation returned, and an immediate API probe still returned 403 pending approval. |
