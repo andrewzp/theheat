@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 from src.two_bot.intern import build_coral_bleaching_bundle
 
@@ -112,9 +113,11 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
                 legacy_type="coral_bleaching",
                 on_draft_success=_on_success,
             )
+        degraded_note = degraded_via(readings)
         _record_source_run(
             current_run, bot_state, "coral_dhw", coral_start,
-            status="success",
+            status="degraded" if degraded_note else "success",
+            note=degraded_note,
             observed=len(readings),
             promoted=source_promoted,
             drafted=0,  # drafted credited by _drain_and_write_triage_queue

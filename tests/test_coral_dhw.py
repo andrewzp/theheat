@@ -1,9 +1,14 @@
 """Tests for NOAA Coral Reef Watch DHW source handling."""
 
 from copy import deepcopy
+from datetime import date, timedelta
+
+import pytest
 
 from src.data import coral_dhw
+from src.data._witness import tag_source_leg
 from src.data.coral_dhw import CoralBleachingEvent, CoralDHWReading, detect_dhw_thresholds, fetch_coral_dhw
+from src.data.source_status import SourceFetchError
 from src.editorial.scoring import score_coral_bleaching
 from src.state import DEFAULT_STATE
 from src.two_bot.types import StoryBundle
@@ -56,7 +61,6 @@ def test_fetch_coral_dhw_uses_index_and_station_byte_ranges(monkeypatch):
     # passes regardless of when CI runs. Previously hardcoded to 2026-05-13,
     # which began failing every cron after 2026-05-18 because `assert_freshness`
     # (added by the Codex source-hardening pass) rejected anything > 5 days old.
-    from datetime import date, timedelta
     today = date.today()
     yesterday = today - timedelta(days=1)
     index = f"""
@@ -108,6 +112,240 @@ Polygon Middle Latitude:
     assert readings[0].lat == -16.1
     assert readings[0].lon == 145.975
     assert not any("florida_keys.txt" in url for url, _range in calls)
+
+
+def test_coral_primary_healthy_skips_erddap(monkeypatch):
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    index = f"""
+Latest Data Date: {today:%b}. {today.day}, {today.year}
+<tr>
+  <td><a href="timeseries/great_barrier_reef.php#gbr_northern">Northern GBR</a></td>
+  <td style="background-color:#FF0000"><a href="gauges/gbr_northern.php">Alert Level 1</a></td>
+  <td><a href="data/gbr_northern.txt">txt</a></td>
+</tr>
+"""
+    tail = f"""
+{yesterday.year} {yesterday.month:02d} {yesterday.day:02d} 27.8300 30.4600 29.6000      3.2680       0.0000    7.9000            2
+{today.year} {today.month:02d} {today.day:02d} 28.0800 30.4800 29.7700      3.2560       0.1700    8.2000            3
+"""
+    head = """
+Name:
+Northern GBR
+
+Polygon Middle Longitude:
+145.9750
+
+Polygon Middle Latitude:
+-16.1000
+"""
+
+    def fake_fetch_text(url, *, source_name, byte_range=None):
+        if url.endswith("data.php"):
+            return index
+        if byte_range == "bytes=-8192":
+            return tail
+        if byte_range == "bytes=0-2048":
+            return head
+        raise AssertionError(f"unexpected fetch {url} {byte_range}")
+
+    monkeypatch.setattr(coral_dhw, "_fetch_text", fake_fetch_text)
+    monkeypatch.setattr(
+        coral_dhw,
+        "_fetch_coral_dhw_erddap",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("witness should not be called")),
+    )
+
+    readings = fetch_coral_dhw(strict=True)
+
+    assert readings
+    assert all(reading.source_leg is None for reading in readings)
+
+
+def test_coral_erddap_station_coord_mapping():
+    station = coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"]
+
+    assert station.region_full_name == "Northern GBR"
+    assert station.lat == -16.1
+    assert station.lon == 145.975
+
+
+def test_coral_erddap_point_fetch_is_bounded(monkeypatch):
+    calls = []
+
+    class Response:
+        text = "time,latitude,longitude,degree_heating_week\n"
+
+    def fake_fetch_with_retry(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setattr(coral_dhw, "fetch_with_retry", fake_fetch_with_retry)
+
+    coral_dhw._fetch_erddap_csv(coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"])
+
+    assert len(calls) == 1
+    url, kwargs = calls[0]
+    assert "degree_heating_week%5B(last)%5D%5B(-16.1)%5D%5B(145.975)%5D" in url
+    assert kwargs["timeout"] == 20
+    assert kwargs["attempts"] == 1
+
+
+def test_coral_erddap_parses_fixture():
+    today = date.today()
+    csv_text = f"""time,latitude,longitude,degree_heating_week
+UTC,degrees_north,degrees_east,degree_Celsius_weeks
+{today.isoformat()}T12:00:00Z,-16.075,145.975,8.34
+"""
+
+    reading = coral_dhw._reading_from_erddap_csv(
+        csv_text,
+        coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
+        max_age_days=5,
+    )
+
+    assert reading == CoralDHWReading(
+        region_id="gbr_northern",
+        region_full_name="Northern GBR",
+        date=today.isoformat(),
+        dhw_value=8.3,
+        stress_level="Bleaching Alert Level 2",
+        baa_7day_max=None,
+        lat=-16.075,
+        lon=145.975,
+    )
+
+
+def test_coral_erddap_accepts_documented_grid_lag():
+    lagged = date.today() - timedelta(days=6)
+    csv_text = f"""time,latitude,longitude,degree_heating_week
+UTC,degrees_north,degrees_east,degree_Celsius_weeks
+{lagged.isoformat()}T12:00:00Z,-16.075,145.975,8.34
+"""
+
+    reading = coral_dhw._reading_from_erddap_csv(
+        csv_text,
+        coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
+        max_age_days=5,
+    )
+
+    assert reading.date == lagged.isoformat()
+
+
+def test_coral_erddap_nan_cell_raises_source_fetch_error():
+    today = date.today()
+    csv_text = f"""time,latitude,longitude,degree_heating_week
+UTC,degrees_north,degrees_east,degree_Celsius_weeks
+{today.isoformat()}T12:00:00Z,-16.075,145.975,NaN
+"""
+
+    with pytest.raises(SourceFetchError, match="non-finite"):
+        coral_dhw._reading_from_erddap_csv(
+            csv_text,
+            coral_dhw.CRW_ERDDAP_STATIONS["gbr_northern"],
+            max_age_days=5,
+        )
+
+
+def test_coral_falls_back_to_erddap_when_primary_raises(monkeypatch):
+    witness_readings = tag_source_leg(
+        [
+            CoralDHWReading(
+                region_id="gbr_northern",
+                region_full_name="Northern GBR",
+                date=date.today().isoformat(),
+                dhw_value=8.3,
+                stress_level="Bleaching Alert Level 2",
+                baa_7day_max=None,
+                lat=-16.075,
+                lon=145.975,
+            )
+        ],
+        "crw_erddap",
+    )
+    monkeypatch.setattr(
+        coral_dhw,
+        "_fetch_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(SourceFetchError("coral_dhw down")),
+    )
+    monkeypatch.setattr(coral_dhw, "_fetch_coral_dhw_erddap", lambda **kwargs: witness_readings)
+
+    readings = fetch_coral_dhw(strict=True)
+
+    assert readings == witness_readings
+    assert readings[0].source_leg == "crw_erddap"
+
+
+def test_detect_dhw_thresholds_propagates_coral_witness_source_leg():
+    readings = [
+        CoralDHWReading(
+            region_id="gbr_northern",
+            region_full_name="Northern GBR",
+            date="2026-06-08",
+            dhw_value=8.3,
+            stress_level="Bleaching Alert Level 2",
+            baa_7day_max=None,
+            lat=-16.075,
+            lon=145.975,
+            source_leg="crw_erddap",
+        )
+    ]
+
+    events = detect_dhw_thresholds(readings, {})
+
+    assert events
+    assert events[0].source_leg == "crw_erddap"
+
+
+def test_coral_erddap_bundle_marks_observed_alt_host():
+    from src.two_bot.intern import build_coral_bleaching_bundle
+
+    bundle = build_coral_bleaching_bundle(
+        CoralBleachingEvent(
+            region_id="gbr_northern",
+            region_full_name="Northern GBR",
+            date="2026-06-08",
+            dhw_value=8.3,
+            dhw_tier=8,
+            bleaching_level="mass bleaching expected",
+            stress_level="Bleaching Alert Level 2",
+            lat=-16.075,
+            lon=145.975,
+            event_id="coral_dhw_gbr_northern_tier8",
+            source_leg="crw_erddap",
+        )
+    )
+
+    assert {"label": "evidence_grade", "value": "observed_alt_host"} in bundle.current_facts
+
+
+def test_run_coral_dhw_records_degraded_when_erddap_served(fresh_state, monkeypatch):
+    from src.orchestrator.sources import coral_dhw as runner
+
+    readings = tag_source_leg(
+        [
+            CoralDHWReading(
+                region_id="gbr_northern",
+                region_full_name="Northern GBR",
+                date=date.today().isoformat(),
+                dhw_value=8.3,
+                stress_level="Bleaching Alert Level 2",
+                baa_7day_max=None,
+                lat=-16.075,
+                lon=145.975,
+            )
+        ],
+        "crw_erddap",
+    )
+    monkeypatch.setattr(runner, "_fetch_strict", lambda *args, **kwargs: readings)
+    monkeypatch.setattr(runner.coral_dhw, "detect_dhw_thresholds", lambda readings, last_tiers: [])
+
+    current_run = {"sources": []}
+    runner.run_coral_dhw(fresh_state, current_run)
+
+    row = next(item for item in current_run["sources"] if item["source"] == "coral_dhw")
+    assert row["status"] == "degraded"
+    assert row["note"] == "served via crw_erddap"
 
 
 # ---------------------------------------------------------------------------
