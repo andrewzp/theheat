@@ -1,6 +1,10 @@
 "use client"
 
 import { formatDuration, timeAgo } from "../../lib/format.js"
+import {
+  sourceDiagnosticClass,
+  sourceDiagnosticLabel,
+} from "../../lib/source-diagnostic.js"
 
 export function SourcesView({ sources, stats }) {
   if (!sources || sources.length === 0) {
@@ -75,16 +79,9 @@ export function SourcesView({ sources, stats }) {
             </span>
             {s.last_error && !s.served_via && (
               <div
-                className="source-error"
-                style={{
-                  gridColumn: "1 / -1",
-                  color: "#f87171",
-                  fontSize: 11,
-                  marginTop: 4,
-                  paddingLeft: 12,
-                }}
+                className={`source-diagnostic ${sourceDiagnosticClass(s.health)}`}
               >
-                last error ({s.last_error_at ? timeAgo(s.last_error_at) : "—"}): {s.last_error}
+                {sourceDiagnosticLabel(s.health)} ({s.last_error_at ? timeAgo(s.last_error_at) : "—"}): {s.last_error}
               </div>
             )}
           </div>

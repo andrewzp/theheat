@@ -70,6 +70,29 @@
   color: #555;
   border: 1px solid #333;
 }
+.source-health-table .source-diagnostic {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+.source-health-table .source-diagnostic-unhealthy {
+  color: #f87171;
+  background: #1a1010;
+  border: 1px solid #3a1010;
+}
+.source-health-table .source-diagnostic-external {
+  color: #fb923c;
+  background: #1f1408;
+  border: 1px solid #4a3015;
+}
+.source-health-table .source-diagnostic-degraded {
+  color: #fbbf24;
+  background: #1f1808;
+  border: 1px solid #4a3a1a;
+}
 
 /* === Global styles (was <style jsx global> in the page component) === */
 * { margin: 0; padding: 0; box-sizing: border-box; }
