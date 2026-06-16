@@ -51,6 +51,10 @@ changes should flow through bot code and the normal merge/write path.
 - `src/orchestrator/`: scheduled modes, source runners, triage, draft saving,
   posting, and finalize hooks.
 - `src/two_bot/`: writer, fact-check, critic, prompts, and bundle builders.
+- `docs/plans/`: dated implementation plans. The active one is the **Throughput
+  Initiative** (`2026-06-16-throughput-initiative-EXECUTION.md` + phases A-D),
+  aiming to move from ~6 drafts/week toward 3-5 outstanding tweets/day. Each phase
+  is flag-gated default-OFF and carries a codex outside review.
 
 ## Current Operations
 
