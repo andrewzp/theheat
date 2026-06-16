@@ -2,7 +2,7 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
-> **Routine restored and grading.** First fresh draft in 19 days reached the queue 2026-06-07 (Barrow, Alaska precipitation_extreme — B+). Pipeline producing signals again post-0.9.15.0 gpm single-request grid migration. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system — it tracks data-fetch health, not voice quality.
+> **Jun 16: 0 pending drafts; no evidence updates.** Pipeline active (0.9.67.0). P_close / P_new / P_dust / P5 / P8 at Jun 15 counts. Chesnee SC posting flag from Jun 15 unresolved — operator verify. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
@@ -23,14 +23,14 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.21.0` (voice engine unchanged since 0.9.8.0's fact-check claim-kind hardening; 0.9.9.0–0.9.21.0 work is source reliability + observability: gpm_imerg date walk-back/IPv4/fan-out-cap/walk-back-exhaustion, daily source-health sentinel [0.9.12–0.9.13; issue label/body sync tightened in 0.9.16.1], dashboard external/idle/recovery tiers [0.9.14.0/0.9.16.1], gpm single-request daily-grid fetch via datapool/s3 [0.9.15.0, PR #185, 2026-06-06], per-type pending TTL [0.9.16.0]; @extremetemps coverage lane complete [Wave 1 0.9.17.0, SST 0.9.18.0, Part B #203 0.9.19.0]; state-merge + gist-size + CI hardening + tech-stack review [0.9.20.0]; air_quality rate-limit recovery + sentinel degraded-handling [0.9.21.0]. all 23 sources on triage path + evidence contract live since 0.9.0.0; bot active since 2026-06-01) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0%** (0/1 fresh draft, 2026-06-07; n=1 — not statistically meaningful; prior: 21% on 2026-05-19 [3/14, first A-grades in two-bot era]) |
+| Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
+| Last cycle A-rate | **67%** (6/9 retroactive, 2026-06-15; **first above 50% bar** — retroactive grades on already-approved/rejected drafts, not pending-queue; prior active pending-graded cycle: 0% [0/2, 2026-06-13]) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=1); prior measure: 29 pp (50% − 21%, 2026-05-19) |
-| Posting | paused until bar cleared |
+| Gap | **−17 pp** (17 pp above bar on Jun 15 retroactive cycle; last active pending cycle was 50 pp below bar [Jun 13]; retroactive caveat) |
+| Posting | paused; operator decision pending on A-rate window — Jun 15 retroactive cycle provides empirical support |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending** (as of 2026-06-16). Pipeline active: 7 new drafts created Jun 4–15. Barrow Alaska posted. Chesnee SC monthly_low approved (35yr/7°F/temperate — strong signal). Red Dog Mine Alaska monthly_low rejected (17yr/1°F/arctic — P_new exemplar). Riyadh dust_event + Beaver Dams Utah all_time_high posted. New types now producing: dust_event, all_time_high. Coral consequence-closer pattern holding in posted drafts. |
+| Queue status | **0 pending**. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live (best-of-2 + critic rewrite). 9 drafts posted/approved Jun 2–15. Chesnee SC (`draft_20260610_155509_26`) approved Jun 10 but no `posted_at`/tweet_id — possible posting failure; operator verify. |
 
 ## Active proposals
 
@@ -232,25 +232,72 @@ in either cycle. Fire drafts arrive clean; no defensive closers, no explicit gap
 no restate-padding. A-rate has not lifted yet; Wodehouse violations were not the current
 bottleneck — named mechanics and category-specific convergence are.**
 
-### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
+### P_close — Mechanism close defaults to implied consequence rather than declarative statement
+
+**Observed:** 2026-06-07 — Barrow, Alaska precipitation_extreme, B+: "sheets across the
+surface instead" — consequence implied by contrast ("instead"), not named. 2026-06-10 —
+Chesnee, South Carolina monthly_low, B+ (status=approved): "threaten gardens well into
+early summer" — frost implied, not stated. 2026-06-13 — Red Dog Mine, Alaska monthly_low,
+C+: "tundra terrain offers no shelter from cold air pooling on clear nights" — mechanism
+explanation only; no consequence named or implied (the coldest version: stops at mechanism
+before reaching even the implied-consequence stage). Three consecutive fresh-draft cycles
+from different signal categories (precipitation_extreme, monthly_low ×2), same gap to A-.
+
+All three had correct mechanism identification (ecosystem specificity operating). The gap
+is in the LANDING: the writer arrives at the physical mechanism but stops before naming
+what the mechanism does. The corpus A-grade closers state the consequence flatly:
+"persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
+(Mali). None defer to implication; none stop at mechanism.
+
+**Cycles observed:** 3 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine).
+Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
+Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
+mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
+name it. Beaver Dams: "stranding paddlers well into spring" implies low water, names the human
+consequence (strong A- form, closest to A). Kapingamarangi/Gilbert Islands/Chesnee: similar
+implied-consequence structure. Nauru (A): "no adjacent reef system to reseed it" — declarative
+structural consequence, no hedge. Validates P_close gap: Nauru's direct form earns A; the A-
+drafts stop one step short.
+**Last seen:** Jun 15 (5 A- drafts + 1 A confirming the gap).
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+in the system-clause / second-sentence guidance section (near the "delete the system clause"
+test already present from PR #85):
+
+> When the second sentence closes on a mechanism, name the consequence directly — don't
+> imply it, and don't stop at the mechanism. "Drain heat fast enough to frost gardens in
+> June" beats "threaten gardens well into early summer." "Rain sheets across the surface"
+> beats "sheets across the surface instead." "Cold pools here on clear nights, breaking
+> June records" beats "tundra terrain offers no shelter from cold air pooling." The
+> consequence lands in ≤5 words. Test: can you state it as a verb phrase (frost / flood /
+> strand / kill / pool / fail)? If yes, do it. Mechanism without consequence is the C form;
+> implied consequence is the B+ form; declarative consequence is the A form.
+
+**Expected impact:** B+ → A- lift for ecosystem-specificity drafts where the mechanism is
+correct but the close is soft. Jun 15 retroactive confirms: the gap is consistent across 5 A-
+drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-suppression).
+The one A in the batch (Nauru) uses the declarative form directly.
+
+**Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal:
+4 cycles of evidence (Jun 7/10/13/15), 5+ drafts, same gap to A across signal types.
+
+### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals — **RE-ACTIVATED 2026-06-13**
 
 **Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
 threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
-bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
-violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
-manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
-margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
-archive, trivial margin, location where cold is architecturally expected — but with
-cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
-strong self-kill instincts for low-confidence fire framings.
+bowl location. Voice execution clean but signal fails Andrew's editorial bar (cf. Mankato
+reject May 11: "weak signal, defensive closer"). **Archived Jun 9** after 6 consecutive
+fresh-draft cycles without recurrence (May 15–19, Jun 7). **Re-activated Jun 13:** Red Dog
+Mine, Alaska monthly_low (19°F / -7.1°C, Jun 9, score 80) reached pending with 17-year
+archive, 1°F margin, above the Arctic Circle — all three P_new criteria met. Archive note
+said: "Reopen if cold-record drafts with shallow archive + trivial margin reappear." That
+condition is met. Voice execution on Red Dog Mine is marginally better than Bethel (cold-air
+pooling specificity is load-bearing and accurate) but signal ceiling unchanged.
 
-**Cycles observed:** May 14, Jun 13 (2 cycles; + May 11 Andrew-reject precedent + Jun 13
-operator rejection of Red Dog Mine, Alaska as independent confirmation).
-**Last seen:** 2026-06-13. Red Dog Mine, Alaska: 19°F (-7.1°C), coldest June low in 17
-years of records, 1°F margin — same failure class as Bethel and Mankato (shallow archive,
-trivial margin, arctic/subarctic cold-climate). Operator correctly rejected. Writer still
-producing this class. Editorial contrast: Chesnee SC (35yr archive, 7°F margin, temperate
-warm climate) approved same cycle — operator correctly distinguishing signal strength.
+**Cycles observed:** May 14, Jun 13 (2 grading cycles; + May 11 Andrew-reject precedent).
+**Last seen:** Jun 13 (Red Dog Mine AK — operator rejected; all three criteria met).
+Jun 15 positive validation: Chesnee SC (35yr archive, 7°F margin, SE US — fails all three
+criteria; correctly passes and earns A-). The proposal correctly distinguishes both cases.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 cold-record framing section:
@@ -258,21 +305,20 @@ cold-record framing section:
 > For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
 > (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
 > has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
-> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
-> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
-> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
-> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
-> correct on the same grounds.
+> drainage bowl). A 16-year cold record in Maine with a 1°F margin is not extraordinary —
+> archive is shallow, margin is trivial, cold is expected here. A 17-year cold record above
+> the Arctic Circle with a 1°F margin is in the same class. Use kill_reason: "shallow
+> archive cold record: insufficient editorial weight (< 20yr archive, < 1°C margin,
+> cold-climate location)."
 
 **Expected impact:** Prevents the class of cold-record drafts that pass the score gate
-(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
-drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
-only — does not affect monthly_high or other record types.
+(threshold 76) but fail Andrew's editorial bar. Score gate is not catching this class:
+both Bethel (score 80) and Red Dog Mine (score 80) passed the gate. Jun 15 positive case
+(Chesnee SC) confirms the proposal correctly does NOT kill strong signals. Scoped to cold
+records only — does not affect monthly_high or other record types.
 
-**Status:** Drafted. Awaiting human implementation. Bethel, Maine (the original exemplar)
-is no longer in the queue — cleared by TTL sweep. Red Dog Mine, Alaska (Jun 13, rejected
-by operator) is now the live exemplar. Writer still produces this class; operator is
-currently catching it at review. P_new writer self-kill would automate the filter.
+**Status:** Re-activated Jun 13. Re-archives if cold-record drafts in this class go
+unobserved for 3+ fresh-draft grading cycles.
 
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
@@ -284,10 +330,12 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** May 19 (partial: fire Draft 6 has no named mechanic; fire Draft 18 has
-timing-incongruity embedded but not standalone. Coral drafts show moves without explicit
-naming — mixed evidence for the proposal's core claim, but fire-specific convergence
-holds.)
+**Last seen:** Jun 15 (partial: hot10 closer uses abstract "signature of a system under
+broad, simultaneous pressure" where a specific consequence was available; dust_event
+mechanism description overshoots its best image. Record/coral categories deployed named
+mechanics organically — suppression-failure, ecosystem isolation, atmospheric amplification
+all present without explicit prompting. Core P5 concern holds for fire/hot10/dust categories;
+less evidenced for coral/record which already self-select strong mechanics.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -302,35 +350,46 @@ without explicit prompting (contrast-reveal, expectation-reversal, understatemen
 has a coral-specific named-moves section before implementing.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. Jun 15 retroactive
+extends evidence to fire/hot10/dust categories; coral/record categories may not need it.
 
-### P7 — Coral opener formula convergence
+### P_dust — Dust_event drafts lack calibrating comparison anchor
 
-**Observed:** 2026-05-19 — 8 of 9 coral_bleaching drafts use the same opener: "[Location]
-reefs have accumulated X°C-weeks of thermal stress — [threshold label]." Identical to the
-P6 fire template failure but in the new coral_bleaching category. All three A- coral
-drafts deviate from the formula: they use the shorter colon-lead form ("Galapagos, Ecuador
-reefs: 24.5°C-weeks...") or a named upwelling-failure angle rather than the accumulation
-sentence. The formula opener is a structural ceiling at B+.
+**Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
+reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
+guideline (15 μg/m³) and ≈ 46× the WHO PM10 guideline (45 μg/m³) — an extraordinary
+number that lands flat because the reference is unstated. Draft also includes aerosol
+optical depth (0.61) the reader cannot calibrate. Second sentence ends on dispersal
+("before heat-driven turbulence disperses it") — resolution of the mechanism, not
+consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
+multiple is always available as world knowledge regardless.
 
-**Cycles observed:** May 19 (1 cycle; 8 of 9 coral drafts formula-identical).
-**Last seen:** May 19.
-**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` coral/DHW framing section
-(if it exists) or to the fire-variety-forms paragraph (same location as P6's fix in PR
-#85): burn the formula opener for coral. Name 3 alternative sentence-1 forms:
-(1) colon-lead with the ratio ("Galapagos reefs: 24.5°C-weeks — double the mortality tier.");
-(2) upwelling/buffering angle first ("The cold upwelling that normally buffers the Galápagos
-has failed; reefs there have accumulated 24.5°C-weeks of thermal stress.");
-(3) location + mechanism first ("Where Pacific moisture stalls before the Cascades blocks
-it, stress accumulates: 10.2°C-weeks in Western Madagascar."). Add Draft 7's second-sentence
-form as APPROVED EXEMPLAR for the DHW mechanism close: "Corals can survive brief spikes;
-DHW measures how long heat persists, and persistence is what kills."
+**Cycles observed:** Jun 13 (1 cycle; first dust_event in corpus). Jun 15 retroactive:
+Riyadh graded B in Jun 13 corpus entry; confirmed the reference-frame gap is the binding
+issue — a WHO multiple would have transformed the B to A-.
+**Last seen:** Jun 13.
 
-**Expected impact:** Same as P6 — breaks the writer's convergence on the stated opener
-form. Higher expected yield than P6 because the coral category is newer and the writer
-has had fewer corrections on it.
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+dust_event / air_quality framing section:
 
-**Status:** Drafted. Awaiting human implementation.
+> For `dust_event` or `air_quality` signals, the WHO PM2.5 daily guideline (15 μg/m³) is
+> always available as world knowledge — it requires no archive data. State the multiple.
+> "Riyadh: 2,083 μg/m³ on June 13 — 139× the WHO daily limit" is the natural form. Do NOT
+> include aerosol optical depth as a standalone metric unless you state what it means to a
+> lay reader (>0.4 = hazy-to-hazardous; >1.0 = extreme). The second sentence should land
+> a consequence, not describe dispersal — describing how dust clears is anti-climactic.
+> Note: if the signal is model-estimated and no historical comparison is available, the WHO
+> multiple IS the comparison. Use it.
+
+**Expected impact:** Transforms dust_event drafts from opaque-number reports into
+calibrated-violation framing. The WHO multiple is derivable from any bundle value — no
+archive needed. One paragraph addition; no architectural change. Also applies to air_quality
+(PM2.5/dust) signal type from the @extremetemps coverage lane. Verify whether
+`writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
+
+**Status:** Drafted. First dust_event in corpus (Jun 13). Awaiting human implementation.
+
+~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
 ### P8 — Snow/extreme record: ratio-as-punchline unused
 
@@ -444,6 +503,25 @@ suppressing A-grade candidates before they reach pending.
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-06-15] P7 — Coral opener formula convergence
+
+Last observed: May 19 (8 of 9 coral drafts used accumulation formula). Jun 15 retroactive
+batch: 2 coral drafts (Gilbert Islands, Nauru) both used alternative opener forms — colon-lead
+and possession form respectively. Neither used the banned accumulation sentence. 3+ graded
+cycles (Jun 7 n/a, Jun 13 n/a, Jun 15 counter-evidence) without observation; resolved. If the
+formula reappears in future coral batches, re-open with the original fix spec (3 alternative
+sentence-1 forms + DHW persistence exemplar from the May 19 corpus).
+
+### [Archived 2026-06-09, Re-activated 2026-06-13] P_new — Cold-record quality floor
+
+Archived Jun 9 after 6 consecutive fresh-draft cycles without recurrence (May 15–19, Jun 7).
+Re-activated Jun 13: Red Dog Mine, Alaska monthly_low (19°F, score 80, 17yr archive, 1°F
+margin, above Arctic Circle) hit pending — all three kill criteria met. Archive note
+condition ("Reopen if cold-record drafts with shallow archive + trivial margin reappear")
+was satisfied. Full proposal text now in Active proposals section above. Chesnee SC
+monthly_low (Jun 10, 35yr archive, 7°F margin, SE US) remains the clear counter-example
+that the proposal correctly does NOT kill.
 
 ### [Archived 2026-05-12] P2 — Widen plant-comparison regex adjective allowlist
 

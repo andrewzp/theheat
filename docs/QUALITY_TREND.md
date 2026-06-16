@@ -33,7 +33,14 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-26 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 13 carry-overs (same queue as May 25). **6th consecutive no-fresh-draft cycle**; queue static since May 18T15:52Z (8 days, ~48 cron cycles). No bulk-reject candidates by policy; `gh` CLI absent (10th consecutive skip). Coral drafts now 8–11 days old; operator must verify NOAA CRW DHW values before publishing. Evidence contract gate most likely suppression bottleneck — operator should check `evidence_contract` kill counts in suppression ledger for May 22–26. No proposal evidence updates. |
 | 2026-06-07 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | First fresh draft in 19 days. Barrow, Alaska precipitation_extreme (213.8 mm/3d, 42.5% above record): B+ (permafrost drainage ecosystem specificity; "sheets across the surface instead" — implied contrast, soft close vs. A-grade declaratives). Restate-math minor violation (63.8 mm above the record of 150.0 mm). n=1; not statistically meaningful. 0.9.15.0 gpm S3 feed appears to have unlocked precipitation_extreme type. TTL sweep cleared 13 carry-overs including 3 A-/B+ coral drafts. P5 not observed (ecosystem specificity deployed naturally). |
 | 2026-06-08 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Barrow Alaska precipitation_extreme, B+ from Jun 7 — not re-graded). Queue static since Jun 7T04:07Z (~35h). No proposal evidence updates. Staleness check: draft ~35h old, no real-time-baked language — clear. |
-| 2026-06-16 | 0 | — | — | — | — | **N/A** | — | 0 pending drafts; pipeline active. 7 drafts created Jun 4–15: Kapingamarangi monthly_high (posted), Gilbert Islands + Nauru coral_bleaching (posted; consequence-closer form), Barrow posted, Chesnee SC monthly_low (approved; 35yr/7°F/temperate — strong), Red Dog Mine Alaska monthly_low (rejected; P_new — 17yr/1°F/arctic), Riyadh dust_event (posted; new type), Beaver Dams Utah all_time_high (posted; score 91). P_new gains cycle 2 evidence. 13th consecutive staleness-skip. |
+| 2026-06-09 | 0 | — | — | — | — | **—** | — | No fresh drafts. Queue now empty (0 pending; Barrow AK precipitation_extreme draft cleared between Jun 8 ~15:00 UTC and Jun 9 ~15:00 UTC — likely published or operator-rejected). No proposal evidence updates. P_new (cold record quality floor) moved to Resolved: 6 consecutive fresh-draft cycles without observation (May 15–19 + Jun 7). `gh` CLI absent (13th consecutive staleness skip). |
+| 2026-06-10 | 0 | — | — | — | — | **—** | — | No fresh drafts. Queue confirmed empty (0 pending; verified Jun 9 clear still holds). No proposal evidence updates. P_new archived in Jun 9 run; P5/P7/P8 at last-known counts. Pipeline healthy (0.9.22.0+). `gh` CLI absent (14th consecutive staleness skip). |
+| 2026-06-11 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue confirmed empty (3rd consecutive no-fresh-draft cycle since Jun 7). Barrow Alaska B+ carry-over cleared between Jun 8–9 by operator (under 7d TTL, not auto-expired; likely published). No new drafts since Jun 7T04:07Z (4 days). No proposal evidence updates; P_new archived Jun 9. `gh` CLI absent (15th consecutive staleness skip). |
+| 2026-06-12 | 0 | — | — | — | — | **N/A** | — | No pending drafts. Jun 7 Barrow draft confirmed posted. 1 approved draft (Chesnee SC monthly_low, Jun 10, score 86) graded B+ as voice observation (not pending). Same B+/A- implied-close gap as Barrow Jun 7: "threaten gardens well into early summer" implies frost vs. declarative form. New proposal P_close added. P_new not triggered — Chesnee counter-evidence (35yr archive, 7°F margin, SE US — fails all kill criteria). Bot at 0.9.47.0 (voice engine unchanged). `gh` CLI absent (16th consecutive staleness skip). |
+| 2026-06-13 | 2 | 0 | 0 | 2 | 0 | **0%** | ✗ | 2 fresh drafts: monthly_low (Red Dog Mine AK — P_new re-activated, 17yr/1°F/Arctic Circle, C+); dust_event debut (Riyadh — 2,083 μg/m³ flat without WHO ref, C). P_close 3rd cycle (Red Dog Mine: mechanism-only close — most concrete evidence yet). P_dust new proposal added. Supply flags WRITER_SAMPLES=2+CRITIC_REVISE now live. No Wodehouse violations. Bot at 0.9.67.0. |
+| 2026-06-14 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 2 carry-overs from Jun 13 (Red Dog Mine C+, Riyadh C — not re-graded). Both ~31h old; neither stale by policy. No proposal evidence updates. P_close/P_new/P_dust unchanged from Jun 13 counts. |
+| 2026-06-15 | 9 retro | 6 | 2 | 1 | 0 | **67%** | ✓ | Retroactive grades: 9 drafts posted/approved/rejected Jun 2–15; 0 pending. **First cycle above 50% bar (retroactive caveat).** Suppression-failure + ecosystem isolation mechanics driving A-range. P_new confirmed (Red Dog Mine rejected — 17yr, 1°F, Arctic; 2nd cycle). P7 counter-evidence (2 coral drafts used alt opener forms → Resolved). New types: hot10 (B+), dust_event (B). Chesnee SC (approved Jun 10) missing posted_at — possible posting failure. |
+| 2026-06-16 | 0 | — | — | — | — | **N/A** | — | 0 pending drafts. No new evidence for any active proposal. Pipeline active (triage_cap + critic + writer + fact_check kills observed in Jun 15 22:27 suppression log). Chesnee SC posting flag from Jun 15 unresolved — operator verify. 20th consecutive staleness-skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -44,11 +51,57 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 
 Drafts that got rejected, with dates.
 
-### 2026-06-16 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
+### 2026-06-16 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (20th consecutive skip)
 
-**Status:** 0 pending drafts — no staleness review needed. Pipeline processed all recent
-drafts (Jun 4–15) before the routine ran. `gh` CLI absent in remote execution environment;
-13th consecutive skip (May 13 → Jun 16). No operator action needed.
+**Status:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent in remote
+execution environment; 20th consecutive skip (May 13 → Jun 16). No operator action needed.
+
+### 2026-06-15 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (19th consecutive skip)
+
+**Status:** 0 pending drafts — staleness policy not triggered. One draft in "approved" status
+(`draft_20260610_155509_26`, Chesnee SC monthly_low, created 2026-06-10T15:55Z, approved
+2026-06-10T16:17Z) lacks `posted_at` and tweet_id — possible posting failure not related to
+staleness policy. `gh` CLI absent in remote execution environment; 19th consecutive skip
+(May 13 → Jun 15). No operator dashboard action needed on staleness grounds; operator should
+verify whether Chesnee SC tweet was actually sent.
+
+### 2026-06-14 — Staleness bulk-reject: 0 candidates; gh CLI absent (18th consecutive skip)
+
+**Status:** 2 pending carry-over drafts reviewed. Draft [1] (Red Dog Mine monthly_low, created
+Jun 13T08:03Z) ~31h old — under 48h threshold; "on June 9" is historical observation date. Draft
+[2] (Riyadh dust_event, created Jun 13T08:05Z) ~31h old — "June 13" is historical measurement
+date reference, consistent with prior corpus rulings. Neither draft triggers the staleness
+policy. `gh` CLI absent; 18th consecutive skip (May 13 → Jun 14). No operator action needed.
+
+### 2026-06-13 — Staleness bulk-reject: 0 candidates; gh CLI absent (17th consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Both created 2026-06-13T08:03-08:05Z (< 8h old at
+grading) — well under the 48h threshold. Draft [2] (Riyadh dust_event) bakes "June 13"
+in the text; not stale by policy (under threshold). Neither draft contains
+"today/tonight/forecast" language beyond the date reference in draft [2]. 0 candidates.
+`gh` CLI absent; 17th consecutive skip (May 13 → Jun 13). No operator action needed.
+
+### 2026-06-12 — Staleness bulk-reject: 0 candidates; gh CLI absent (16th consecutive skip)
+
+**Status:** 0 pending drafts — nothing to evaluate. Jun 7 Barrow draft is now status='posted'.
+No real-time-baked language in queue (queue is empty). `gh` CLI absent in remote execution
+environment; 16th consecutive skip (May 13 → Jun 12). No operator action needed.
+
+### 2026-06-11 — Staleness bulk-reject: 0 candidates; gh CLI absent (15th consecutive skip)
+
+**Status:** 0 pending drafts. Queue confirmed empty since Jun 9 run. No candidates. `gh` CLI
+absent; 15th consecutive skip (May 13 → Jun 11). No operator action needed.
+
+### 2026-06-10 — Staleness bulk-reject: 0 candidates; gh CLI absent (14th consecutive skip)
+
+**Status:** 0 pending drafts. Queue empty (Barrow AK draft cleared Jun 9). No candidates.
+`gh` CLI absent; 14th consecutive skip (May 13 → Jun 10). No operator action needed.
+
+### 2026-06-09 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
+
+**Status:** 0 pending drafts — Barrow AK precipitation_extreme cleared between Jun 8 and Jun 9
+(~59h old at clearing; under 48h threshold was missed in Jun 8 review; cleared by operator).
+`gh` CLI absent; 13th consecutive skip (May 13 → Jun 9). No operator action needed.
 
 ### 2026-06-08 — Staleness bulk-reject: 0 candidates; gh CLI absent (12th consecutive skip)
 
