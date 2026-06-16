@@ -6,6 +6,33 @@ from typing import Any
 
 
 @dataclass
+class RelatedSignal:
+    """A bundle-grade fact about ANOTHER same-cycle event (Phase D).
+
+    Attached to a StoryBundle so the writer can reference a *verifiable*
+    cross-signal pattern. Carries only facts that already cleared the editorial
+    gate for their own event — never prose, correlation, or causation.
+    """
+
+    event_id: str
+    signal_kind: str
+    where: str
+    when: str
+    headline_metric: dict[str, Any]
+    country: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "event_id": self.event_id,
+            "signal_kind": self.signal_kind,
+            "where": self.where,
+            "when": self.when,
+            "headline_metric": self.headline_metric,
+            "country": self.country,
+        }
+
+
+@dataclass
 class StoryBundle:
     """The intern's output. Pure facts; no editorial angles.
 
@@ -22,9 +49,16 @@ class StoryBundle:
     current_facts: list[dict[str, Any]]
     historical_context: dict[str, Any] = field(default_factory=dict)
     raw_signal_dump: dict[str, Any] = field(default_factory=dict)
+    # Phase D geo + cross-signal context. ``country`` is the canonical 2-letter
+    # code used to window related signals (falls back to a current_facts entry
+    # when a builder hasn't set it). ``related_signals`` rides in the USER prompt
+    # via to_dict — never the cached WRITER_SYSTEM_PROMPT — so the prompt cache
+    # is preserved and single-event behavior is byte-identical when empty.
+    country: str = ""
+    related_signals: list["RelatedSignal"] = field(default_factory=list)
 
     def to_dict(self) -> dict:
-        return {
+        data: dict[str, Any] = {
             "signal_kind": self.signal_kind,
             "where": self.where,
             "when": self.when,
@@ -34,6 +68,13 @@ class StoryBundle:
             "historical_context": self.historical_context,
             "raw_signal_dump": self.raw_signal_dump,
         }
+        # Omit when empty so single-event bundles serialize byte-identically
+        # (flag OFF / no related signals == today's user prompt).
+        if self.country:
+            data["country"] = self.country
+        if self.related_signals:
+            data["related_signals"] = [r.to_dict() for r in self.related_signals]
+        return data
 
 
 @dataclass

@@ -264,3 +264,22 @@ MEMORY SLICE:
 
 Write the tweet, or return tweet=null.
 """
+
+# Phase D — appended to the USER prompt ONLY (never WRITER_SYSTEM_PROMPT, so the
+# prompt cache + byte-identity test are preserved) when story_bundle carries
+# related_signals. A deterministic honesty gate enforces these rules in code; the
+# prompt is the editorial bar, not the safety net.
+MULTISIGNAL_GUIDANCE = """\
+CROSS-SIGNAL CONTEXT:
+story_bundle.related_signals lists OTHER verified signals from the same country
+and the same short window. You MAY ground a wider-pattern observation in them —
+but ONLY as a bare enumeration of those facts (e.g. "the same week in the region,
+X and Y also broke"). Strict honesty:
+- Use ONLY the facts in related_signals. Never invent a link or a number.
+- NEVER assert they share a cause or are "driven by", "fueled by", "linked to",
+  a "global pattern", a "fingerprint", a "feedback loop", or otherwise causally
+  connected — you cannot verify causation, and claiming it is an automatic kill.
+- The headline number stays from THIS bundle; related_signals are context only.
+- If you cannot add the context honestly as bare enumeration, ignore
+  related_signals and write the single-event tweet.
+"""
