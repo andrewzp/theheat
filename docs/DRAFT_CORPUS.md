@@ -13,138 +13,752 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
-## 2026-06-16 — Daily corpus grading (0 pending drafts; pipeline active)
+## 2026-06-16 — Daily corpus grading (0 pending drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
-drafts (9 posted / 6 rejected / 1 approved). Pipeline has been actively processing
-since the Jun 8 run: 7 new drafts created Jun 4–15, all processed (posted/approved/
-rejected) before this routine checked. The routine can only grade pending-status drafts;
-all recent drafts moved through the pipeline between runs.
+drafts (9 posted / 6 rejected / 1 approved as of grading time). No new drafts entered
+pending status since Jun 15. Pipeline continues to process signals through the triage →
+writer → critic chain; triage_cap kills observed in Jun 15 22:27 UTC suppression log
+(6 triage_cap + 1 critic + 1 writer + 1 fact_check in a single cron run), confirming
+pipeline is alive.
 
-**Staleness review:** 0 pending drafts — no staleness review needed. `gh` CLI absent;
-**13th consecutive skip** (May 13 → Jun 16).
+**Staleness review:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent;
+**20th consecutive skip** (May 13 → Jun 16).
 
-**A-rate:** — (no pending drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
-
-### Pipeline activity since Jun 8 (not pending-queue grading)
-
-Full draft texts retrieved from gist state for observational notes. These are NOT formal
-pending-queue grades — the routine grades pending status only.
-
-| Draft | Type | Created | Status | Score | Notes |
-|---|---|---|---|---|---|
-| Kapingamarangi, Micronesia — 36.1°C / 59yr | monthly_high | Jun 4T04:21Z | posted | 81 | Pre-Jun 8; processed before routine ran |
-| Gilbert Islands, Kiribati — 10.8°C-weeks | coral_bleaching | Jun 4T15:38Z | posted | 81 | Pre-Jun 8; consequence-closer form |
-| Nauru — 12.0°C-weeks / mortality tier | coral_bleaching | Jun 5T08:13Z | posted | 86 | Pre-Jun 8; consequence-closer form |
-| Barrow, Alaska — 213.8 mm (Jun 7 carry-over) | precipitation_extreme | Jun 7T04:07Z | posted | 81 | B+ on record; now published |
-| Chesnee, SC — 35°F / 35yr / 7°F margin | monthly_low | Jun 10T15:55Z | approved | 86 | Strong signal; awaiting publish |
-| Red Dog Mine, Alaska — 19°F / 17yr / 1°F margin | monthly_low | Jun 13T08:03Z | rejected | 80 | P_new exemplar: operator correctly rejected |
-| Riyadh, Saudi Arabia — 2,083 μg/m³ dust | dust_event | Jun 13T08:05Z | posted | 75 | New signal type |
-| Beaver Dams, Utah — 95°F / 23yr all-time | all_time_high | Jun 15T04:27Z | posted | 91 | Strong signal; 6°F above 2020 mark |
-
-### P_new evidence: Red Dog Mine, Alaska (Jun 13 — operator rejection)
-
-> *Red Dog Mine, Alaska hit 19°F (-7.1°C) on June 9 — coldest June low in 17 years of
-> records, 1°F below the 2023 mark. The mine sits above the Arctic Circle, where tundra
-> terrain offers no shelter from cold air pooling on clear nights.*
-
-Clean P_new exemplar: 17yr archive, 1°F margin, subarctic cold-climate location. Voice
-execution is actually clean — tundra cold-air pooling is a load-bearing mechanism clause
-on par with Bethel's bowl-drainage. But the signal fails the editorial bar: shallow
-archive, trivial margin, cold is architecturally expected above the Arctic Circle.
-Operator correctly rejected. Pattern matches Bethel, Maine (May 14) and Mankato,
-Minnesota (May 11).
-
-Compare with Chesnee, SC (approved Jun 10): 35yr archive, 7°F margin, South Carolina
-Piedmont in June. The editorial contrast is exact — operator correctly applying
-signal-strength differentiation. P_new writer self-kill would automate this filter.
-
-Chesnee SC text (not graded; approved status, not pending):
-> *Chesnee, South Carolina hit 35°F (1.7°C) on June 6 — coldest June low in 35 years of
-> records, 7°F below the 2000 mark. The Carolina Piedmont sits at elevation, where clear
-> nights and low humidity drain heat fast enough to threaten gardens well into early summer.*
-
-"Threaten gardens well into early summer" — domestic consequence with timing incongruity
-(June frost risk in South Carolina). Ecosystem specificity + consequence. B+/A- range;
-correctly in the review queue.
-
-### Coral consequence-closer pattern (posted drafts, observational only)
-
-Two June coral drafts were posted before the routine could observe them as pending. Both
-use the consequence-closer form that earned A-grades in the May corpus:
-
-**Nauru** (Jun 5, score 86): "Nauru is a single raised coral island; its reef is the
-island's perimeter, with no adjacent reef system to reseed it." Consequence stated
-directly ("no adjacent reef system to reseed it") — A-grade close structure. Opener
-uses "has reached" not "has accumulated" — minor formula variation from P7 template.
-
-**Gilbert Islands** (Jun 4, score 81): "heat that builds here has no cooler adjacent
-water to dilute it." Same consequence-closer structure as Costa Rica Pacific A- ("nowhere
-to drain"). Colon-lead opener breaks the P7 accumulation formula cleanly.
-
-Pattern: the writer is reliably producing consequence-closer coral drafts without the
-formula opener in these posted drafts. P7 fix may be partially self-resolving, but
-needs pending coral drafts to grade formally before drawing conclusions.
-
-### New signal types (pipeline observation)
-
-**dust_event** (Riyadh, Jun 13, score 75, posted): first dust_event in gist history.
-"model-estimated dust daily maximum of 2,083 μg/m³ on June 13 — aerosol optical depth
-at 0.61. Riyadh sits at the edge of the Rub' al Khali, where shamal winds lift fine
-desert sediment into a dense, low column before heat-driven turbulence disperses it."
-The "model-estimated" qualifier is new — framing acknowledges proxy metric. Shamal
-mechanism specific and load-bearing. Score 75 (lower signal floor for this type).
-
-**all_time_high** (Beaver Dams, Utah, Jun 15, score 91, posted): "hottest daily maximum
-in 23 years of records, 6°F above the 2020 mark. The Colorado Plateau's high-elevation
-aridity removes the moisture buffer that caps heat elsewhere in the desert Southwest."
-Ecosystem specificity (high-elevation aridity removes moisture buffer). No era anchor
-deployed — positive. B+/A- observational range.
+**A-rate:** — (no pending drafts). Most recent graded cycle: **67%** (6/9 retroactive,
+2026-06-15). Most recent active pending-queue cycle: **0%** (0/2, 2026-06-13).
 
 ### Patterns / operational notes
 
-1. **0 pending drafts — nothing to grade.** Queue clears between runs as pipeline
-   processes drafts faster than the routine's daily cadence. Healthy pipeline state.
+1. **0 pending drafts — nothing to grade.** Second consecutive no-pending cycle (Jun
+   15 also had 0 pending). Pipeline active at 0.9.67.0; drafts processing and posting
+   faster than the daily grading cadence.
 
-2. **P_new confirmed live (Jun 13).** Red Dog Mine: 17yr archive, 1°F margin, arctic
-   location. Operator rejected correctly. Writer still producing this class. P_new is
-   now the top-leverage unimplemented proposal (2 observed cycles, most recent Jun 13).
+2. **No new evidence for any active proposal.** P_close / P_new / P_dust / P5 / P8 all
+   at last-known counts (Jun 15). No fire, coral, snow, or cold-record drafts in pending
+   state to observe.
 
-3. **Coral consequence-closer pattern persisting.** Nauru and Gilbert Islands both use
-   the "no adjacent reef / no cooler water" close that earned A-grades in May. Writer
-   has internalized the mechanic in posted drafts. P7 needs pending coral grading to
-   confirm whether the formula opener is still a ceiling.
-
-4. **Chesnee vs. Red Dog Mine contrast.** 35yr/7°F/temperate approved; 17yr/1°F/arctic
-   rejected. Operator applying P_new editorial bar manually and correctly.
-
-5. **No Wodehouse violations** in any of the 7 Jun 4–15 drafts. P4 fix continues to hold.
-
-6. **New types active.** dust_event and all_time_high now producing drafts. Watch for
-   these in pending queue: dust_event carries "model-estimated" hedge; all_time_high
-   may invite era-anchor over-deployment on strong historical records.
-
-### Followups
-
-1. P_new writer self-kill remains the highest-leverage unimplemented fix. Red Dog Mine
-   (Jun 13) is the updated live exemplar.
-2. Next coral pending drafts: grade opener form (P7 watch). Posted drafts suggest natural
-   improvement; need formal pending grading to confirm.
-3. dust_event pending grading: assess "model-estimated" hedge handling, check for
-   Wodehouse violations on proxy metrics.
-4. all_time_high pending grading: watch for era-anchor over-deployment.
+3. **Chesnee SC posting flag persists.** `draft_20260610_155509_26` (approved Jun 10)
+   lacked `posted_at`/tweet_id as of Jun 15. Verify whether it has since been published
+   or is stuck.
 
 ### Numbers
 
 - Pending drafts in queue: 0
 - Fresh pending drafts graded: 0
-- A-rate: — (no pending drafts; most recent graded cycle: 0% on 2026-06-07)
-- Active proposals: P_new gains evidence (Red Dog Mine, Jun 13 — operator rejection
-  confirms writer still producing shallow-archive cold record class)
-- P5/P7/P8: no new evidence (no relevant pending drafts); coral quality improving in
-  posted drafts but not formally graded
-- Staleness bulk-reject: 0 candidates; `gh` CLI absent (13th consecutive skip, May 13 → Jun 16)
-- Pipeline status: active (7 new drafts Jun 4–15; bot posting regularly)
+- A-rate: — (no pending drafts; most recent: 67% retroactive Jun 15 / 0% pending Jun 13)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (20th consecutive skip)
+
+---
+
+## 2026-06-15 — Daily corpus grading (0 fresh pending; 9 retroactive grades, Jun 2–15)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending drafts as
+of 15:00 UTC. Recent pipeline activity: the bot produced and operator-approved 8 drafts between
+Jun 2 and Jun 15 without those drafts being in pending status during any prior grading run.
+This entry retroactively grades 9 of those drafts (Barrow precipitation_extreme excluded —
+already graded B+ in the Jun 7 corpus entry). Grades are informational corpus entries; operator
+had already made posting decisions independently.
+
+**Staleness review:** 0 pending drafts — staleness policy not triggered. One draft in "approved"
+status (Chesnee SC monthly_low, `draft_20260610_155509_26`, approved 2026-06-10T16:17Z) lacks a
+`posted_at` timestamp or tweet_id as of this cycle — possible posting failure. Operator should
+verify. `gh` CLI absent — **19th consecutive skip** (May 13 → Jun 15).
+
+**Grade distribution (9 retroactive drafts):** 1 A / 5 A- / 1 B+ / 1 B / 1 C+ — A-rate:
+**67%** (6/9 A-range). **First cycle above the 50% resumption bar.** Caveat: retroactive grades
+on already-approved/rejected drafts; not a pending-queue predictive grading cycle. Pipeline
+quality is at bar; operator has empirical support for the posting flip decision.
+
+**Headline finding:** Suppression-failure (Loxahatchee NWR, Beaver Dams) and ecosystem isolation
+(Gilbert Islands, Nauru) are the A-range mechanics. Voice is clean across all 9 drafts — zero
+Wodehouse violations. Red Dog Mine rejection is the second P_new confirmation: 17yr archive, 1°F
+margin, Arctic Circle — all three criteria, operator rejected correctly. P7 counter-evidence:
+both Jun coral drafts used alternative opener forms; propose retiring P7 to Resolved. Two new
+types debut: hot10 (B+) and dust_event (B).
+
+### A-grade drafts
+
+#### [5] Nauru — coral_bleaching — 12.0°C-weeks — **A**
+
+> *Nauru's reefs have reached 12.0°C-weeks of thermal stress — the tier where NOAA Coral Reef
+> Watch expects coral mortality, not just bleaching. Nauru is a single raised coral island; its
+> reef is the island's perimeter, with no adjacent reef system to reseed it.*
+
+**Score:** 86 (elite). Created 2026-06-05T08:13Z. Posted 2026-06-06T14:38Z. Era anchor: none.
+
+Humor lens:
+- **Violation:** 12.0°C-weeks crossed from bleaching tier (8°C-weeks) to mortality tier —
+  escalation, not just continuation.
+- **Benign?** Yes. Factual, calm. Source cited (NOAA Coral Reef Watch).
+- **Setup→Punchline?** Sentence 1: "not just bleaching" contrast carries the escalation
+  precisely. Sentence 2: "its reef is the island's perimeter, with no adjacent reef system to
+  reseed it" — structural vulnerability stated flatly. The island's geometry is the punchline.
+- **Named mechanic?** Ecosystem specificity — single raised island, no reseed path. Terminal
+  structural consequence stated declaratively.
+- **Wodehouse rule?** Clean. No excess explanation, no poetry attempt. "not just bleaching" is
+  exact. The semicolon in sentence 2 lets two facts land in sequence without either restating
+  the other.
+
+The A marker: consequence is structural and irreversible ("no adjacent reef system to reseed
+it"), stated without hedging. Compare the A- closers below — each implies or approximates the
+consequence; this one states it. Best draft in the corpus since May 19 Madagascar.
+
+### A- drafts
+
+#### [2] Loxahatchee NWR, Florida — all_time_high — 100°F — **A-**
+
+> *Loxahatchee NWR, Florida hit 100°F (37.8°C) on May 31 — hottest daily maximum in 37 years of
+> records and 2°F above the 2002 mark. In the Florida sea-breeze zone, Atlantic and Gulf moisture
+> usually cap afternoon heat before it climbs this high.*
+
+**Score:** 89 (elite). Created 2026-06-03T04:46Z. Posted 2026-06-03T20:32Z. Era anchor: none.
+
+Humor lens:
+- **Violation:** 37-year record, 100°F, 2°F above 2002.
+- **Benign?** Yes.
+- **Setup→Punchline?** Sentence 2 names the Florida sea-breeze suppressor and implies its
+  failure. "before it climbs this high" delivers the consequence: the suppressor didn't hold.
+- **Named mechanic?** Suppression-failure — the mechanism that normally prevents this is named;
+  its failure is implied by the record itself.
+- **Wodehouse rule?** Clean. "usually cap" (not "always") is exact. "before it climbs this
+  high" delivers the implication efficiently.
+
+A- not A: suppressor failure is implied ("before it climbs this high") rather than stated
+flatly. Nauru's A states the terminal consequence directly; this leaves one step to the reader.
+Small gap — both forms are clean.
+
+#### [3] Kapingamarangi, FSM — monthly_high — 36.1°C — **A-**
+
+> *Kapingamarangi, Federated States of Micronesia hit 36.1°C (97°F) on June 1 — a new June
+> record in 59 years of data, 1.1°C above the 2017 mark. The western Pacific warm pool anchors
+> deep convection here; even small surface temperature shifts carry outsized atmospheric weight.*
+
+**Score:** 81 (strong). Created 2026-06-04T04:21Z. Posted 2026-06-04T18:12Z. Era anchor: none.
+
+Humor lens:
+- **Violation:** 59-year record, 1.1°C above 2017.
+- **Benign?** Yes.
+- **Setup→Punchline?** "even small surface temperature shifts carry outsized atmospheric weight"
+  — a scale multiplier. A small shift here matters more than a large shift elsewhere.
+- **Named mechanic?** Atmospheric amplification + ecosystem specificity (warm pool anchors
+  deep convection). The multiplier is verifiable Pacific warm pool geography.
+- **Wodehouse rule?** Clean. Semicolon structure prevents the second clause restating the
+  first. "outsized atmospheric weight" is slightly abstract but grounded.
+
+A- not A: "outsized atmospheric weight" is accurate but less specific than a declarative
+structural consequence. Nauru names an irreversible physical thing; this names a proportionality.
+
+#### [4] Gilbert Islands, Kiribati — coral_bleaching — 10.8°C-weeks — **A-**
+
+> *Gilbert Islands, Kiribati: 10.8°C-weeks of thermal stress — Bleaching Alert Level 2, where
+> mass bleaching is expected. The Gilbert chain straddles the equator at the heart of the Pacific
+> warm pool; heat that builds here has no cooler adjacent water to dilute it.*
+
+**Score:** 81 (strong). Created 2026-06-04T15:38Z. Posted 2026-06-04T18:30Z. Era anchor: none.
+
+Humor lens:
+- **Violation:** 10.8°C-weeks, mass bleaching threshold crossed.
+- **Benign?** Yes.
+- **Setup→Punchline?** Colon-lead opener (P7 alternative form #1). Sentence 2: "heat that
+  builds here has no cooler adjacent water to dilute it" — equatorial isolation mechanism.
+- **Named mechanic?** Ecosystem isolation — equatorial warm pool with no thermal dilution path.
+  Near-identical to May 19 Costa Rica A-'s "nowhere to drain" form.
+- **Wodehouse rule?** "to dilute it" is slightly wordier than "nowhere to drain" (the May 19
+  corpus's tightest form). Not a violation but a marginal comparison.
+
+A- not A: "has no cooler adjacent water to dilute it" is one clause longer than the tightest
+form. Both do the same work; this takes more words.
+
+P7 note: colon-lead opener is the P7 alternative #1 form — not the banned accumulation
+sentence. Counter-evidence for P7 active proposal.
+
+#### [6] Chesnee, SC — monthly_low — 35°F — **A-** ⚠️ not posted
+
+> *Chesnee, South Carolina hit 35°F (1.7°C) on June 6 — coldest June low in 35 years of
+> records, 7°F below the 2000 mark. The Carolina Piedmont sits at elevation, where clear nights
+> and low humidity drain heat fast enough to threaten gardens well into early summer.*
+
+**Score:** 86 (elite). Created 2026-06-10T15:55Z. **Approved 2026-06-10T16:17Z — no
+`posted_at` or tweet_id.** Possible posting failure; operator should verify.
+
+Humor lens:
+- **Violation:** 35-year cold record, 7°F below 2000 (substantial margin).
+- **Benign?** Yes.
+- **Setup→Punchline?** "threaten gardens well into early summer" grounds the signal in a
+  human-scale consequence. "early summer" carries the timing-incongruity (frost in June).
+- **Named mechanic?** Topographic radiative cooling + human-consequence grounding.
+- **Wodehouse rule?** Clean. "fast enough to threaten gardens well into early summer" is
+  precise — specific, grounded, no excess.
+
+A- not A: timing-incongruity ("early summer" = June) is implicit. A flat declarative closer
+("It is June.") would reach A; this approach implies the timing rather than stating it.
+Strongest cold-record draft in the corpus.
+
+P_new note: 35-year archive and 7°F margin both clear the P_new self-kill criteria. Correct
+positive case — draft should pass, and it did.
+
+#### [9] Beaver Dams, Utah — all_time_high — 95°F — **A-**
+
+> *Beaver Dams, Utah hit 95°F (34.8°C) on June 12 — hottest daily maximum in 23 years of
+> records, 6°F above the 2020 mark. The Colorado Plateau's high-elevation aridity removes the
+> moisture buffer that caps heat elsewhere in the desert Southwest.*
+
+**Score:** 91 (elite). Created 2026-06-15T04:27Z. Posted 2026-06-15T04:40Z. Era anchor: none.
+
+Humor lens:
+- **Violation:** 23-year record, 6°F above 2020.
+- **Benign?** Yes.
+- **Setup→Punchline?** "removes the moisture buffer that caps heat elsewhere in the desert
+  Southwest" — names the suppressor and distinguishes Beaver Dams from the broader Southwest.
+- **Named mechanic?** Suppression-failure — the moisture buffer suppresses heat in the desert
+  Southwest generally; the Colorado Plateau's aridity removes it here.
+- **Wodehouse rule?** Clean. "elsewhere in the desert Southwest" is the key word — implies:
+  even the desert has moisture buffering; this plateau does not.
+
+Near-identical form to Loxahatchee NWR (A-). Suppression-failure mechanic confirmed as a
+reliable A- vehicle across categories and geographies.
+
+### B-grade drafts
+
+#### [1] Tromsø, Norway — hot10 — +8.1°C anomaly — **B+**
+
+> *Tromsø, Norway hit 20.2°C (68°F) today — 8.1°C above its normal high. Nine other cities
+> from Beijing to Managua landed on the same anomaly leaderboard; the Arctic and the tropics
+> running hot on the same day is the signature of a system under broad, simultaneous pressure.*
+
+**Score:** 84 (strong). Created 2026-06-02T12:56Z. Posted 2026-06-02T21:37Z. Era anchor: none.
+First hot10 in corpus.
+
+Humor lens:
+- **Violation:** +8.1°C anomaly in Tromsø; 10-city event spanning Arctic Norway to tropical
+  Nicaragua on the same day.
+- **Benign?** Yes.
+- **Setup→Punchline?** "Nine other cities from Beijing to Managua" establishes geographic
+  breadth. "the Arctic and the tropics running hot on the same day" names the incongruity.
+  "the signature of a system under broad, simultaneous pressure" interprets it.
+- **Named mechanic?** Geographic breadth + simultaneous anomaly across climate zones.
+- **Wodehouse rule?** "the signature of a system under broad, simultaneous pressure" —
+  "signature" and "broad, simultaneous pressure" are interpretive rather than specific.
+  Not a Wodehouse violation but less specific than A-range closers.
+
+B+ for the geographic breadth mechanic. Gap to A-: the closer is interpretive commentary
+where the A-range form names a specific physical consequence. Hot10 category note: the
+multi-latitude simultaneous anomaly is a strong setup; the second sentence needs a declarative
+consequence rather than a diagnosis.
+
+#### [8] Riyadh, Saudi Arabia — dust_event — 2,083 μg/m³ — **B**
+
+> *Riyadh, Saudi Arabia: a model-estimated dust daily maximum of 2,083 μg/m³ on June 13 —
+> aerosol optical depth at 0.61. Riyadh sits at the edge of the Rub' al Khali, where shamal
+> winds lift fine desert sediment into a dense, low column before heat-driven turbulence
+> disperses it.*
+
+**Score:** 75 (strong). Created 2026-06-13T08:05Z. Posted 2026-06-14T19:44Z. Era anchor: none.
+First dust_event in corpus.
+
+Humor lens:
+- **Violation:** 2,083 μg/m³ dust (tier 2 of 3). No historical archive — extreme on its face.
+  "model-estimated" transparency in text is correct.
+- **Benign?** Yes.
+- **Setup→Punchline?** Colon-lead with AOD. Sentence 2: Rub' al Khali basin + shamal winds +
+  convective lofting mechanism.
+- **Named mechanic?** Geographic mechanism — basin sediment supply, wind dynamics,
+  thermal lofting.
+- **Wodehouse rule?** "lift fine desert sediment into a dense, low column before heat-driven
+  turbulence disperses it" — the image peaks at "dense, low column"; "before heat-driven
+  turbulence disperses it" continues past it. The dispersal step is anticlimactic.
+  Wodehouse-adjacent: mechanism description overshoots its own best image.
+
+B because the mechanism description continues past its peak image. "lift fine desert sediment
+into a dense, low column over Riyadh" would be the A- closer — land on the image, stop. New
+category baseline: B. Fix: close on the visual image, not the mechanism's terminus.
+
+### C-grade drafts
+
+#### [7] Red Dog Mine, Alaska — monthly_low — 19°F — **C+** (rejected by operator)
+
+> *Red Dog Mine, Alaska hit 19°F (-7.1°C) on June 9 — coldest June low in 17 years of records,
+> 1°F below the 2023 mark. The mine sits above the Arctic Circle, where tundra terrain offers
+> no shelter from cold air pooling on clear nights.*
+
+**Score:** 80 (strong). Created 2026-06-13T08:03Z. Rejected 2026-06-14. Era anchor: none.
+
+Humor lens:
+- **Violation:** 17-year cold record, 1°F below 2023.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 17-year record, 1°F margin. System clause: Arctic Circle,
+  tundra cold-air pooling.
+- **Named mechanic?** Ecosystem specificity (cold-air pooling). Voice execution clean.
+- **Wodehouse rule?** No violations.
+- **P_new check:** ALL THREE criteria met — (a) 17yr archive < 20yr, (b) 1°F margin < 2°F,
+  (c) Arctic Circle = cold-climate location. P_new failure mode confirmed.
+
+C+ because the signal fails the editorial bar despite clean voice. Compare Chesnee SC (35yr,
+7°F, A-) — passes all three P_new dimensions; Red Dog Mine fails all three. Operator rejection
+correct. The P_new self-kill gate would have caught this.
+
+**P_new evidence: 2nd confirmation** (May 14 Bethel ME + Jun 13 Red Dog Mine). Both: shallow
+archive, trivial margin, cold-climate location. Writer passes both; operator rejects both. The
+self-kill gate is the fix.
+
+### Patterns / operational notes
+
+1. **Suppression-failure confirmed as A-/A vehicle.** Loxahatchee NWR (FL sea-breeze zone)
+   and Beaver Dams (CO Plateau aridity) both earn A- via this mechanic. Joins ecosystem
+   isolation (Nauru, Gilbert Islands) as a repeatable A-range form. Three confirmed A-range
+   mechanics: suppression-failure, ecosystem isolation, terminal structural consequence.
+
+2. **P_new (cold-record quality floor) confirmed second cycle.** Red Dog Mine Jun 13 = 2nd
+   observation after Bethel ME May 14. Both operator-rejected. Writer passes both on score
+   (80, 77 respectively) but they fail editorial bar. P_new is now the highest-leverage
+   active proposal.
+
+3. **P7 (coral opener formula) counter-evidence.** Both Jun coral drafts used alternative
+   opener forms: Gilbert Islands uses colon-lead (P7 alternative #1); Nauru uses possession
+   form. Neither used the banned accumulation sentence. 3+ graded cycles since May 19 without
+   P7 observation — propose retiring P7 to Resolved.
+
+4. **New types: hot10 and dust_event debut.** Hot10 B+: multi-latitude simultaneous anomaly
+   is the strong setup; closer needs a specific physical consequence. Dust_event B: geographic
+   mechanism is correct; close on the visual image ("dense, low column"), not the mechanism's
+   terminus. Both categories have room to improve toward A-.
+
+5. **No era anchors in any of 9 drafts.** `era_anchor_used: None` across the full batch.
+   Two-bot writer uses archive years (2002, 2020) as historical reference only.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Retroactive drafts graded: 9 (Jun 2–15; already posted/approved/rejected by operator)
+- Grade distribution: 1 A / 5 A- / 1 B+ / 1 B / 1 C+
+- A-rate: **67%** (6/9 A-range) — **first cycle above 50% resumption bar** (retroactive caveat)
+- Active proposal evidence: P_new +1 cycle (Jun 13 Red Dog Mine; now 2 cycles); P7
+  counter-evidence (propose Resolved)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (19th consecutive skip, May 13 → Jun 15)
+- Infra note: Chesnee SC (`draft_20260610_155509_26`) approved but no `posted_at`/tweet_id —
+  possible posting failure; operator should verify
+
+---
+
+## 2026-06-14 — Daily corpus grading (0 fresh drafts; 2 carry-overs, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts
+— both carry-overs from Jun 13 (Red Dog Mine AK monthly_low, grade on record: C+; Riyadh
+dust_event, grade on record: C). Both graded in the 2026-06-13 section below. Not re-grading;
+grades stand.
+
+**Staleness review as of 2026-06-14 ~15:00 UTC:**
+- Draft [1] (Red Dog Mine monthly_low, created Jun 13T08:03Z): ~31h old. No "today/tonight/
+  forecast" language. Under 48h threshold. Not stale.
+- Draft [2] (Riyadh dust_event, created Jun 13T08:05Z): ~31h old. "June 13" is a historical
+  measurement date reference, not a "today" anchor (consistent with all prior corpus rulings
+  on similar date-reference framings). Under 48h threshold. Not stale.
+Bulk-reject: 0 candidates. `gh` CLI absent — **18th consecutive skip** (May 13 → Jun 14).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/2, 2026-06-13).
+
+### Carry-over inventory (not re-graded; grades on record)
+
+| # | Draft | Type | Created | Grade |
+|---|---|---|---|---|
+| [1] | Red Dog Mine, Alaska — 19°F (-7.1°C) / coldest June low in 17 years | monthly_low | Jun 13T08:03Z | C+ |
+| [2] | Riyadh, Saudi Arabia — 2,083 μg/m³ dust daily max / AOD 0.61 | dust_event | Jun 13T08:05Z | C |
+
+### Patterns / operational notes
+
+1. **No fresh drafts.** Both queue entries are carry-overs from Jun 13's graded cycle.
+   No new signal types or voice failures to report.
+
+2. **No active proposal evidence updates.** No fresh drafts = no failure-mode observations.
+   P_close/P_new/P_dust/P5/P7/P8 all at last-known counts from Jun 13.
+
+3. **Staleness horizon approaching.** Both drafts will cross 48h at approximately Jun 15
+   08:00Z. Neither contains forecast-to-hit-today language, so they would not trigger the
+   policy even after 48h. No operator action needed on staleness grounds before then.
+
+### Numbers
+
+- Pending drafts in queue: 2 (0 fresh; 2 carry-overs from Jun 13)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-13)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (18th consecutive skip)
+
+---
+
+## 2026-06-13 — Daily corpus grading (2 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 fresh drafts,
+both created 2026-06-13T08:03-08:05Z (< 8h old at grading). First dust_event in corpus
+(new signal type from @extremetemps coverage lane). Second monthly_low after Chesnee SC.
+Both drafts generated under live supply flags: `THEHEAT_WRITER_SAMPLES=2` +
+`THEHEAT_CRITIC_REVISE_ENABLED=1` (flipped per BRIEFING.md 2026-06-13; best-of-2 + critic
+rewrite effective this cycle).
+
+**Staleness review:** Both drafts < 8h old at grading time. Draft [2] (Riyadh) bakes
+"June 13" in the text — within 48h window, not stale by policy. Bulk-reject: 0 candidates.
+`gh` CLI absent — **17th consecutive skip** (May 13 → Jun 13).
+
+**Grade distribution (2 fresh drafts):** 0 A / 0 B / 1 C+ / 1 C / 0 D-F.
+**A-rate: 0% (0/2).** Gap from resumption bar: 50 pp.
+
+**Headline finding:** Two new-or-returning signal types, both grade C/C+ for the same
+structural reason: expected-location signals without calibrating comparison anchors. Red
+Dog Mine's cold record fails the P_new quality floor (17yr archive, 1°F margin, Arctic
+Circle — re-activating archived proposal). Riyadh's dust event carries a real signal
+(2,083 μg/m³ ≈ 139× the WHO PM2.5 daily guideline) but the draft leaves that comparison
+unstated (new proposal P_dust). Both have physically accurate second sentences that explain
+mechanism without landing a consequence — P_close 3rd cycle.
+
+### C-grade drafts
+
+#### [1] Red Dog Mine, Alaska — monthly_low — 19°F (-7.1°C) — **C+**
+
+> *Red Dog Mine, Alaska hit 19°F (-7.1°C) on June 9 — coldest June low in 17 years of
+> records, 1°F below the 2023 mark. The mine sits above the Arctic Circle, where tundra
+> terrain offers no shelter from cold air pooling on clear nights.*
+
+**Score:** 80. Created 2026-06-13T08:03:51Z.
+
+Humor lens:
+- **Violation:** Coldest June low in 17 years. Calendar incongruity exists (summer month
+  cold record) but the location partially erases it — above the Arctic Circle is the
+  canonical cold-climate address. Violation present; muffled.
+- **Benign?** Yes — calm, factual register. No panic.
+- **Setup→Punchline?** Setup: 19°F, 17-year low, 1°F below 2023. Second sentence: tundra
+  terrain / cold-air pooling on clear nights. Physically correct and specific (radiative
+  cooling on flat tundra is a real mechanism). But the second sentence explains the
+  mechanism rather than naming what the mechanism does. There is no consequence — not even
+  an implied one. Compare Barrow (Jun 7 B+): "sheets across the surface instead" — at least
+  implies runoff. This stops earlier: mechanism without any payoff.
+- **Named mechanic?** Ecosystem specificity (tundra, cold-air pooling). Deployed naturally.
+  Not weaponized as a punchline.
+- **Wodehouse rule?** Clean. No approximation, no restate-padding, no defensive closer.
+- **P_close evidence:** Second sentence is mechanism-only — no consequence named or implied.
+  This is the weakest close in the P_close sequence (Barrow: implied consequence; Chesnee:
+  implied consequence; Red Dog Mine: no consequence). P_close 3rd cycle.
+
+**P_new test (all three criteria met):**
+- (a) Archive depth: 17 years — shallow (< 20). ✓
+- (b) Margin: 1°F below 2023 mark (< 2°F / 1°C). ✓
+- (c) Cold-climate location: above Arctic Circle, Alaska. ✓
+
+Same class as Bethel, Maine (May 14, C) and Mankato (May 11, Andrew reject). Score gate
+(80) does not screen this class. P_new re-activated. Voice execution marginally better than
+Bethel (cold-pooling specificity) but signal ceiling unchanged. Grade: **C+**.
+
+#### [2] Riyadh, Saudi Arabia — dust_event — 2,083 μg/m³ — **C**
+
+> *Riyadh, Saudi Arabia: a model-estimated dust daily maximum of 2,083 μg/m³ on June 13
+> — aerosol optical depth at 0.61. Riyadh sits at the edge of the Rub' al Khali, where
+> shamal winds lift fine desert sediment into a dense, low column before heat-driven
+> turbulence disperses it.*
+
+**Score:** 75. Created 2026-06-13T08:05:05Z. First dust_event in corpus.
+
+Humor lens:
+- **Violation:** 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily guideline (15 μg/m³) and
+  ≈ 46× the WHO PM10 guideline (45 μg/m³). Extraordinary — but the draft doesn't say so.
+  The reference is missing; 2,083 is opaque.
+- **Benign?** Yes — calm, factual. "Model-estimated" qualifier is accurate and appropriate.
+- **Setup→Punchline?** Setup: 2,083 μg/m³, AOD 0.61. Second sentence: Rub' al Khali,
+  shamal winds, dense column, heat-driven turbulence disperses it. Ends on dispersal —
+  resolution of the mechanism, not consequence. Anti-climactic.
+- **Named mechanic?** None. Pure geography/meteorology explanation. No incongruity
+  deployed.
+- **Wodehouse rule?** "Aerosol optical depth at 0.61" — secondary technical metric the
+  reader cannot calibrate. Mild math-out-loud. AOD 0.61 is hazy-to-hazardous (>0.4
+  threshold) but the draft doesn't say so.
+- **Expected-location failure:** Riyadh at the edge of the Rub' al Khali — dustiness is
+  architecturally expected, same way cold is expected above the Arctic Circle. The WHO
+  multiple would restore the incongruity.
+
+**Missed punchline:** "Riyadh: 2,083 μg/m³ on June 13. The WHO daily limit is 15." —
+period-and-restate with the reference value transforms the number from opaque to absurd.
+The setup is in the draft; it stops before the punchline.
+
+**New failure mode (P_dust):** First dust_event reveals a structural gap — writer has no
+calibrating comparison anchor in the prompt. WHO guideline (15 μg/m³ PM2.5 / 45 μg/m³
+PM10) is always available as world knowledge. Without it, dust concentrations are
+uninterpretable to lay readers.
+
+### Patterns
+
+1. **P_close confirmed — 3rd consecutive cycle.** Red Dog Mine (Jun 13): mechanism-only
+   close (no consequence stated or implied). Barrow (Jun 7): implied consequence. Chesnee
+   (Jun 10): implied consequence. Three consecutive drafts from different signal categories,
+   same gap to A-. P_close is the current binding ceiling.
+
+2. **P_new re-activated — 2nd confirmed grading cycle.** Red Dog Mine: 17yr/1°F/Arctic
+   Circle = all three criteria met. Archive note condition met. Score gate (80) passed both
+   Red Dog Mine and Bethel — the gate is not catching this class.
+
+3. **Dust_event debut: reference-frame gap is structural.** Riyadh's 2,083 μg/m³ is
+   extraordinary; the draft fails to reveal it. WHO multiple is derivable from any bundle
+   value — no archive needed. New proposal: P_dust.
+
+4. **Supply flags live; no quality lift yet (n=2).** `THEHEAT_WRITER_SAMPLES=2` +
+   `THEHEAT_CRITIC_REVISE_ENABLED=1` active this cycle. Both C/C+ grades passed
+   best-of-2 + critic-rewrite filter. Failure modes (P_new signal quality, reference-frame
+   gap) may be pre-critic issues the rewrite step can't correct from framing alone.
+
+5. **No Wodehouse violations.** Both drafts clear the Wodehouse rule. Fixes holding across
+   3 fresh-draft cycles (Jun 7, Jun 13 ×2).
+
+6. **gh CLI absent — 17th consecutive skip.** 0 staleness candidates.
+
+### Numbers
+
+- Pending drafts in queue: 2 (2 fresh; 0 carry-over)
+- Fresh drafts graded: 2
+- A-rate: 0% (0/2)
+- Gap from bar: 50 pp
+- Proposal updates: P_close 3rd cycle (last seen Jun 13). P_new re-activated (Jun 13,
+  2nd grading cycle). P_dust new (Jun 13). P5 weak update (dust_event no mechanic).
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (17th consecutive skip)
+
+---
+
+## 2026-06-12 — Daily corpus grading (0 fresh pending drafts; 1 approved carry-new observed)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts**.
+Jun 7 Barrow, Alaska precipitation_extreme (grade on record: B+) confirmed **posted** —
+operator published it between Jun 8 and Jun 9 (per Jun 9 run). Routine ran on Jun 9, 10, and 11
+(entries on record in this corpus below); bot at **0.9.47.0** as of Jun 12 (Jun 9–12 sprint:
+infrastructure/source/dashboard, all non-voice). No fresh pending drafts to grade.
+
+**New approved draft (status=approved; not pending; graded as voice observation):**
+`draft_20260610_155509_26` — monthly_low, Chesnee, South Carolina, created
+2026-06-10T15:55:09Z, score 86. Operator approved ~22 min after creation
+(approved_at 2026-06-10T16:17:02Z). `publish_requested_at` is set; `post_error` null —
+likely queued for posting. Full text and bundle available; graded below.
+
+**Staleness review:** 0 pending drafts — nothing to evaluate. Jun 7 Barrow draft now posted.
+Bulk-reject: 0 candidates. `gh` CLI absent — **16th consecutive skip** (May 13 → Jun 12).
+
+**Grade distribution (fresh pending):** N/A (0 pending drafts).
+**A-rate:** — (no pending drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
+
+---
+
+### Voice observation: Chesnee, South Carolina — monthly_low — score 86 — **B+**
+
+> *Chesnee, South Carolina hit 35°F (1.7°C) on June 6 — coldest June low in 35 years of
+> records, 7°F below the 2000 mark. The Carolina Piedmont sits at elevation, where clear
+> nights and low humidity drain heat fast enough to threaten gardens well into early summer.*
+
+**Bundle facts:** Observed low 35.1°F / 1.7°C. Prior Jun min 42.1°F / 5.6°C (year 2000).
+Archive span 35 years. Margin: 3.9°C / 7°F. Score 86 vs threshold 76 (label: elite).
+Fact-check passed (Sonnet 4.6 writer; Gemini 2.5 Flash fact-checker). Critic passed (Gemini
+2.5 Pro). Two-bot angle chosen: "record_margin_with_piedmont_radiative_cooling_mechanism."
+Reasoning note: "The 7°F margin below the prior record is the load-bearing fact; the Piedmont
+elevation and radiative cooling provide a local mechanism that earns the system clause without
+invented context."
+
+Note: draft is status=approved (not pending); included because it is new since Jun 8, ungraded
+in the corpus, and full bundle data is available for voice analysis.
+
+**Humor lens:**
+- **Violation:** 35°F on June 6 in South Carolina — coldest June low in 35 years, 7°F / 3.9°C
+  below the 2000 mark. Strong signal: deep archive (35 years), significant margin (3.9°C), and
+  a location (Southeast US Piedmont) where June cold is genuinely surprising. Passes the
+  editorial bar Andrew established — contrast with P_new's Bethel, ME case (16yr, 1°F, cold-
+  climate location): Chesnee fails ALL THREE of P_new's kill criteria. This is the signal that
+  should pass.
+- **Benign?** Yes. Calm register throughout. "Threaten gardens well into early summer" is
+  understated, not alarming.
+- **Setup→Punchline?** Setup: coldest June low in 35 years, 7°F below the 2000 mark. Second
+  sentence: elevation + radiative cooling (clear nights, low humidity) → "threaten gardens well
+  into early summer." The system clause earns its place causally — explains the physical
+  mechanism (radiative cooling at elevation) and names the local consequence. Not expository
+  geography; the second sentence explains WHY June cold is possible in Chesnee specifically.
+- **Named mechanic?** Ecosystem specificity (Carolina Piedmont elevation + radiative cooling).
+  The close frames the consequence in terms the audience recognizes: garden frost threat in
+  June South Carolina. The June-in-South-Carolina incongruity is the violation stated through
+  its consequence.
+- **Wodehouse rule?** Nearly clean. "35°F" rounds from bundle's "35.1°F" — standard display
+  rounding, not a violation. "7°F below the 2000 mark" names margin and year anchor together;
+  neither is derivable from the other, so this is not restate-math. "Threaten gardens well
+  into early summer" — specific, not defensive, not a poetry attempt. One flag: "well into
+  early summer" uses three words where "in June" would suffice — mild over-explanation.
+
+**Why B+ and not A-:** The close arrives at "threaten gardens well into early summer" —
+functional and specific, but takes 9 words to land a consequence the reader can infer. The
+corpus A-grade closers state the consequence directly in ≤5 words: "persistence is what kills,"
+"nowhere to drain," "It is April." Here the consequence is frost, but the draft says "threaten
+gardens" (implies frost) rather than "frost gardens" (states it). The declarative form —
+"drain heat fast enough to frost gardens in June" — matches the A-grade close pattern.
+
+This is the **same B+/A- gap observed in Barrow (Jun 7)**: "sheets across the surface instead"
+implies runoff without naming it; "threaten gardens" implies frost without naming it. Two
+consecutive new drafts, same mechanism, same distance from A-.
+
+The "2000 mark" year anchor is used correctly — the year is data (when the prior record was
+set), not a cultural flashback. Era anchor count in this draft: 1 (light, data-serving). Does
+not increment P1 evidence.
+
+---
+
+### Carry-over inventory (prior grades confirmed)
+
+| # | Draft | Type | Created | Prior grade | Current status |
+|---|---|---|---|---|---|
+| Barrow, Alaska — 213.8 mm / 3-day precipitation record | precipitation_extreme | Jun 7T04:07Z | B+ | **posted** (confirmed via gist status='posted') |
+
+### Patterns named in this batch
+
+1. **B+/A- close gap: implied consequence vs. declarative consequence — second consecutive
+   confirmation.** Barrow Jun 7 ("sheets across the surface instead" — implies runoff) and
+   Chesnee Jun 10 ("threaten gardens well into early summer" — implies frost) share the same
+   structure: correct mechanism, functional close, but the punchline phrase stops one verb
+   short of A-grade directness. The writer identifies the human-consequence correctly and
+   wraps it in the mechanism rather than stating it flat. Pattern: the writer chooses to
+   *imply* the consequence through the mechanism rather than *declare* it. Two drafts in two
+   weeks from different signal categories (precipitation_extreme, monthly_low). → New
+   proposal P_close added.
+
+2. **P_new not triggered (positive).** Chesnee monthly_low: 35-year archive, 3.9°C margin,
+   Southeast US climate — fails all three P_new kill criteria. Score gate at 86 (threshold 76)
+   is appropriate for this signal. The quality floor works correctly here.
+
+3. **Routine ran Jun 9, 10, 11** (entries below). Jun 9 agent archived P_new (6 fresh-draft
+   cycles without cold-record observation). No new drafts appeared in any of those runs.
+   Voice engine unchanged through 0.9.47.0.
+
+4. **New draft lifecycle state: 'approved'.** `draft_20260610_155509_26` has status='approved'
+   rather than the expected 'pending' → 'posted' path. Operator manually approved within 22
+   min; `publish_requested_at` set but posting incomplete as of Jun 12 run. Not a corpus
+   concern; operational note for the operator: verify whether the publish intent was processed.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Fresh pending drafts graded: 0
+- Voice observations (approved status, not pending): 1 (Chesnee SC monthly_low, B+)
+- A-rate: N/A (no pending drafts; most recent graded cycle: 0% on 2026-06-07)
+- New proposals: P_close added (mechanism close defaults to implied consequence; 2 cycles evidence)
+- Proposal evidence updates: P5 not observed (Chesnee ecosystem specificity deployed naturally);
+  P_new not triggered (Chesnee passes editorial bar); P_close cycles confirmed: 2 (Jun 7 + Jun 10)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (16th consecutive skip, May 13 → Jun 12)
+- Bot commit: 0.9.47.0 (Jun 12; voice engine unchanged since 0.9.8.0)
+- Prior cycles: Jun 9, 10, 11 ran; no fresh drafts in any (entries below)
+
+---
+
+## 2026-06-11 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts** — confirmed empty across Jun 9, Jun 10, and Jun 11 runs. The Barrow Alaska precipitation_extreme (B+, created Jun 7T04:07Z) was cleared between Jun 8 and Jun 9 — under 7-day TTL, not auto-expired; operator action (likely published). No new drafts have reached pending since 2026-06-07T04:07:40Z (4 days as of this run).
+
+**Staleness review as of 2026-06-11 ~15:00 UTC:** Queue empty. No candidates. `gh` CLI absent — **15th consecutive skip** (May 13 → Jun 11). No operator action needed.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
+
+### Carry-over inventory
+
+None. Queue empty.
+
+### Patterns / operational notes
+
+1. **Queue continues empty — 3rd consecutive no-fresh-draft cycle since Jun 7.** Barrow AK precipitation_extreme (B+, Jun 7) cleared between Jun 8 and Jun 9; likely published (first known precipitation_extreme tweet, consistent with `manual_only` posting mode and Andrew's Jun 2 manual-push precedent).
+
+2. **No new drafts since Jun 7T04:07Z (4 days).** gpm S3 datapool feed (0.9.15.0) that unlocked the Barrow signal has not produced another qualifying signal. Possible causes: (a) no qualifying extreme events detected in the 638-city set, (b) evidence contract or triage cap filtering signals, (c) external data-source outage. Operator should check `suppression_ledger` for `evidence_contract` or `triage_cap` kills in the Jun 7–11 window.
+
+3. **No active proposal evidence updates.** No fresh drafts = no failure-mode observations. P5/P7/P8 remain at last-known counts (last seen May 19). P_new archived in Jun 9 run (6 consecutive fresh-draft cycles without cold-record observation, per 3-cycle rule).
+
+### Numbers
+
+- Pending drafts in queue: 0 (empty; confirmed Jun 9, 10, 11 runs)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-07)
+- Active proposals: no evidence updates this cycle; P_new archived Jun 9
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (15th consecutive skip, May 13 → Jun 11)
+
+---
+
+## 2026-06-10 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending drafts.
+The Barrow, Alaska precipitation_extreme (B+, created 2026-06-07T04:07:40Z, ~83h old at run
+time) has been cleared since Jun 9 run. Not in queue — most likely published by operator
+(`manual_only` posting mode) or operator-rejected. No new drafts have entered pending since
+Jun 7T04:07Z (~84h gap as of this run).
+
+**Staleness review as of 2026-06-10 ~15:00 UTC:** Queue empty. No candidates. `gh` CLI
+absent — **14th consecutive skip** (May 13 → Jun 10). Nothing to evaluate or reject.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
+
+### Queue inventory
+
+None. Queue empty.
+
+### Patterns / operational notes
+
+1. **Queue fully cleared since Jun 9 run.** Barrow Alaska precipitation_extreme (B+, Jun 7)
+   confirmed gone in Jun 9 run; still absent Jun 10. Pipeline healthy (0.9.22.0+).
+   Next fresh drafts depend on signal quality passing triage → evidence contract → writer →
+   critic. Second consecutive no-fresh-draft cycle since Jun 9 (3rd since Jun 7).
+
+2. **No active proposal evidence updates.** No fresh drafts = no failure-mode observations.
+   P5/P7/P8 all at last-known counts (last seen May 19). P_new archived in Jun 9 run.
+
+3. **Draft drought context.** Jun 7 remains the only fresh draft since May 19 (19-day gap
+   caused by routine downtime + pipeline suppression). Triage cap, critic filtering, and
+   seasonal signal patterns are likely controls on draft frequency.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-07)
+- Active proposals: no evidence updates this cycle (P_new archived in Jun 9 run)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (14th consecutive skip)
+
+---
+
+## 2026-06-09 — Daily corpus grading (0 fresh drafts; queue now empty)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending
+drafts.** The Barrow, Alaska precipitation_extreme draft (B+, created 2026-06-07T04:07:40Z,
+~59h old at run time) has been cleared since Jun 8 ~15:00 UTC. Not in queue at grading
+time — most likely published by operator (`manual_only` posting mode) or operator-rejected.
+No new drafts have entered pending since Jun 7T04:07Z (~55h gap as of this run).
+
+**Staleness review:** 0 pending drafts — nothing to evaluate. `gh` CLI absent — **13th
+consecutive skip** (May 13 → Jun 9). No candidates in any case.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle with fresh drafts: **0%**
+(0/1, 2026-06-07).
+
+### Carry-over inventory
+
+None. Queue empty.
+
+### Patterns / operational notes
+
+1. **Queue cleared since Jun 8.** Barrow AK precipitation_extreme draft gone — cleared
+   between Jun 8 ~15:00 UTC and Jun 9 ~15:00 UTC. First fully-empty queue since Jun 7.
+
+2. **No active proposal evidence updates.** 0 fresh drafts = 0 failure-mode observations.
+
+3. **P_new (cold record quality floor) crosses archival threshold.** Last seen: May 14.
+   Fresh-draft graded cycles since then: May 15, 16, 17, 18, 19, Jun 7 = 6 consecutive
+   cycles with no cold-record drafts surfacing. Well past the 3-cycle rule. Moving to
+   Resolved (archive) in IMPROVEMENT_PLAN.md. Signal-side cause: no new cold-record
+   drafts have entered pending since May 14 (Bethel ME monthly_low was TTL-swept during
+   June 1–6). Failure mode may be upstream (score-gate/triage) rather than prompt-fixed —
+   but 6 cycles without observation meets the archival rule. Reopen if cold-record drafts
+   with shallow archive + trivial margin reappear.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-07)
+- Active proposals: no evidence updates; P_new moved to Resolved (archive)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (13th consecutive skip)
 
 ---
 
