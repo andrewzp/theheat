@@ -2,7 +2,43 @@ from __future__ import annotations
 
 """Approval policy heuristics for draft review and auto-publish windows."""
 
+import os
 from dataclasses import dataclass
+
+
+# Phase B — decouple the ship gate. A HARD, explicit tweet_type allowlist for
+# auto-shipping on a critic PASS — NOT inferred from policy mode / can_auto_approve
+# (the default policy returns suggested_auto + can_auto_approve=True for ANY unknown
+# type, and suggested_auto also covers country records / ozone / ice mass / generic
+# synthesis_*). Scoped to the smallest, lowest-sensitivity set: the recurring
+# leaderboard + the two global atmospheric milestones, none of which carry a
+# human-impact framing or a geography qualifier the human gate would need to fix.
+AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({"hot10", "co2_milestone", "ch4_milestone"})
+
+_DEFAULT_AUTOSHIP_MAX_AGE_H = 36
+
+
+def autoship_on_critic_pass_enabled() -> bool:
+    """True only when THEHEAT_AUTOSHIP_ON_CRITIC_PASS is explicitly truthy.
+
+    Default OFF. This is the live-posting switch — flag OFF is byte-for-byte the
+    current behavior, and flipping it back to 0 (repo variable, no deploy) stops
+    auto-shipping immediately, including drafts already marked in the queue.
+    """
+    raw = os.environ.get("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "").strip().lower()
+    return raw in {"1", "true", "on", "yes"}
+
+
+def autoship_max_age_hours() -> int:
+    """Freshness ceiling for auto-shipping (THEHEAT_AUTOSHIP_MAX_AGE_H, default 36).
+
+    A draft older than this baked its real-time framing too long ago to post
+    unattended — it is handed back to manual review (kills the staleness spiral).
+    """
+    try:
+        return max(1, int(os.environ.get("THEHEAT_AUTOSHIP_MAX_AGE_H", str(_DEFAULT_AUTOSHIP_MAX_AGE_H))))
+    except (TypeError, ValueError):
+        return _DEFAULT_AUTOSHIP_MAX_AGE_H
 
 
 @dataclass(frozen=True)

@@ -4,10 +4,44 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
+from src.editorial.approval import (
+    AUTOSHIP_ALLOWLIST,
+    autoship_max_age_hours,
+    autoship_on_critic_pass_enabled,
+)
+from src.orchestrator.draft_save import _critic_passed
 
 
 _PUBLISH_INTENT_TTL = timedelta(hours=2)
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
+
+
+def _demote_autoship_to_manual(draft: dict, reason: str) -> None:
+    """Pull a marked auto-ship draft back to manual review (Phase B guard)."""
+    draft.pop("auto_approve_at", None)
+    draft["approval_mode"] = "manual"
+    draft["post_error"] = reason
+    _touch_draft(draft)
+
+
+def _autoship_freshness_anchor(draft: dict):
+    """Oldest of the draft's queue age and its source-observation date.
+
+    ``created_at`` catches drafts that SAT in the queue; the source date
+    (``tweet_date`` or the persisted bundle ``when``, e.g. a CO2/CH4 milestone's
+    measurement date) catches a freshly-created draft built from stale upstream
+    data. Either being older than the ceiling blocks the auto-ship.
+    """
+    anchors = [
+        _parse_iso_utc(draft.get("created_at")),
+        _parse_iso_utc(draft.get("tweet_date")),
+    ]
+    review = draft.get("review_context")
+    bundle = review.get("two_bot", {}).get("bundle") if isinstance(review, dict) else None
+    if isinstance(bundle, dict):
+        anchors.append(_parse_iso_utc(bundle.get("when")))
+    valid = [a for a in anchors if a is not None]
+    return min(valid) if valid else None
 
 
 def _hot10_card_enabled() -> bool:
@@ -341,6 +375,59 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             failures.append(f"{draft.get('id')}: blocked by policy")
             continue
 
+        # Phase B auto-ship guards. A draft is "managed" if it was armed at save
+        # time (the marker) OR — to close the activation-window hole — it is a due
+        # allowlist-type draft while the flag is ON (e.g. an armed_auto policy_auto
+        # draft created before the flag was flipped on). When the flag is OFF and a
+        # draft has no marker, `managed` is False → byte-for-byte the current path.
+        flag_on = autoship_on_critic_pass_enabled()
+        managed = bool(draft.get("autoship_on_critic_pass")) or (
+            flag_on and draft.get("type") in AUTOSHIP_ALLOWLIST
+        )
+        if managed:
+            # (1) Rollback: flag flipped OFF stops auto-shipping even pre-marked drafts.
+            if not flag_on:
+                _demote_autoship_to_manual(draft, "Autoship disabled (flag off)")
+                failures.append(f"{draft.get('id')}: autoship disabled")
+                continue
+            # (1b) Critic PASS is mandatory. Pre-marked drafts already proved it at
+            # save time; an unmarked transition-window draft must prove it now from
+            # its review_context (fail-closed: no critic PASS ⇒ manual, never post).
+            if not draft.get("autoship_on_critic_pass") and not _critic_passed(draft.get("review_context")):
+                _demote_autoship_to_manual(draft, "Autoship blocked: no critic PASS")
+                failures.append(f"{draft.get('id')}: autoship no critic pass")
+                continue
+            # (2) Idempotency (one-shot): a prior attempt that didn't confirm 'posted'
+            # is handed to a human — never blind-retried (unknown-success double-post).
+            if draft.get("autoship_attempted"):
+                _demote_autoship_to_manual(draft, "Autoship attempt unconfirmed; needs human review")
+                failures.append(f"{draft.get('id')}: autoship attempt unconfirmed")
+                continue
+            # (3) Freshness: stale real-time framing must not auto-ship — checks
+            # both queue age AND source-observation date (oldest wins).
+            anchor = _autoship_freshness_anchor(draft)
+            if anchor is not None and _utc_now() - anchor > timedelta(hours=autoship_max_age_hours()):
+                _demote_autoship_to_manual(draft, "Autoship blocked: stale framing (queue or source age)")
+                failures.append(f"{draft.get('id')}: autoship stale")
+                continue
+            # (4) Event idempotency: never auto-post an event already posted (a
+            # second pending draft for the same event_id from a state merge would
+            # otherwise double-post — post_approved overwrites the ledger row).
+            event_id = _publish_event_id(draft, ensure=False)
+            ledger_row = _publish_ledger(bot_state).get(event_id)
+            already_posted = (event_id and event_id in (bot_state.get("posted_events") or [])) or (
+                isinstance(ledger_row, dict) and ledger_row.get("tweet_id")
+            )
+            if already_posted:
+                _demote_autoship_to_manual(draft, "Autoship blocked: event already posted")
+                failures.append(f"{draft.get('id')}: autoship event already posted")
+                continue
+            # Mark the attempt BEFORE post_approved's durable state write, and bump
+            # updated_at so this marked draft copy wins the state merge — a crash
+            # mid-post can't drop the marker and blind-retry into a double-post.
+            draft["autoship_attempted"] = True
+            _touch_draft(draft)
+
         # Safety check before auto-posting (same gate as manual path)
         passed, reason = run_safety_pipeline(draft["text"])
         if not passed:
@@ -365,9 +452,20 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             published += 1
         elif result == "rate_limited":
             draft["post_error"] = "Rate limited — retry later"
+            # Clean pre-post rejection (no tweet sent) — safe to retry next cycle, so
+            # clear the one-shot marker on any auto-ship draft we attempted (marked
+            # or transition-window). Keyed on autoship_attempted, which only managed
+            # drafts ever carry.
+            if draft.get("autoship_attempted"):
+                draft.pop("autoship_attempted", None)
             failures.append(f"{draft.get('id')}: rate limited")
         else:
             draft["post_error"] = "Failed to post to X"
+            # Unknown outcome (request may have reached X) — hand to a human rather
+            # than blind-retry into a possible double-post.
+            if draft.get("autoship_attempted"):
+                draft["approval_mode"] = "manual"
+                draft.pop("auto_approve_at", None)
             failures.append(f"{draft.get('id')}: failed to post")
         _touch_draft(draft)
 

@@ -6,7 +6,11 @@ import os
 from typing import Any
 
 from src.editorial.scheduling import defer_to_engagement_window
-from src.editorial.approval import recommend_approval_policy
+from src.editorial.approval import (
+    AUTOSHIP_ALLOWLIST,
+    autoship_on_critic_pass_enabled,
+    recommend_approval_policy,
+)
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
@@ -28,6 +32,21 @@ from src.state_schema import BotState
 
 def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
+
+
+def _critic_passed(review_context: dict | None) -> bool:
+    """True only when the draft carries an explicit two-bot critic PASS.
+
+    Fail-closed (Phase B / codex): no two-bot critic metadata (critic disabled, or
+    a non-two-bot draft) ⇒ NOT a pass. A fact-check-only draft never auto-ships.
+    """
+    if not isinstance(review_context, dict):
+        return False
+    critic = review_context.get("two_bot", {})
+    critic = critic.get("critic") if isinstance(critic, dict) else None
+    if not isinstance(critic, dict):
+        return False
+    return critic.get("passed") is True and str(critic.get("verdict", "")).upper() == "PASS"
 
 
 def _maybe_defer_auto_approve_at(auto_approve_at: str) -> str:
@@ -206,7 +225,23 @@ def save_draft(
     draft["approval_policy"] = policy.as_dict()
     draft.setdefault("approval_mode", "manual")
 
-    if policy.mode == "armed_auto" and policy.recommended_delay_minutes:
+    if autoship_on_critic_pass_enabled() and tweet_type in AUTOSHIP_ALLOWLIST:
+        # Phase B: when the flag is ON, this branch governs ALL auto-shipping for the
+        # HARD allowlist types — including the armed_auto-policy (strong) variants, so
+        # they no longer bare-post around the critic/freshness/idempotency guards.
+        # A real critic PASS arms the guarded autoship path (approval_mode="auto" + a
+        # delayed auto_approve_at — process_due_drafts needs BOTH — plus the marker
+        # that scopes the posting-time guards). Anything else stays MANUAL
+        # (fail-closed): a disabled/absent critic verdict never auto-ships.
+        if _critic_passed(review_context):
+            delay = policy.recommended_delay_minutes or 30
+            draft["auto_approve_at"] = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
+            draft["auto_approve_requested_at"] = _utc_now_iso()
+            draft["approval_mode"] = "auto"
+            draft["autoship_on_critic_pass"] = True
+    elif policy.mode == "armed_auto" and policy.recommended_delay_minutes:
+        # Existing armed_auto path: flag OFF, or armed_auto types NOT in the allowlist
+        # (e.g. oscillation_transition). Byte-for-byte the current behavior.
         draft["auto_approve_at"] = _maybe_defer_auto_approve_at(
             _utc_after_minutes_iso(policy.recommended_delay_minutes)
         )
