@@ -81,12 +81,11 @@ def _prune_weakest_cycle_drafts(
     """Enforce MAX_DRAFTS_PER_CYCLE by dropping the weakest drafts added
     this cycle.
 
-    When a draft is pruned, its ``event_id`` must also be removed from
-    ``posted_events`` — each source block records the event as "seen"
-    as soon as it saves a draft, so leaving pruned IDs in the list
-    permanently blocks future cycles from re-drafting that event even
-    though no tweet ever shipped. Also rolls back overstated
-    source-level ``drafted`` telemetry in the run record.
+    When a draft is pruned, its ``event_id`` is also removed from
+    ``posted_events`` if legacy draft-time state put it there; leaving
+    those stale IDs in the list permanently blocks future cycles from
+    re-drafting that event even though no tweet ever shipped. Also rolls
+    back overstated source-level ``drafted`` telemetry in the run record.
 
     Returns the post-prune drafted count the caller should report.
     """

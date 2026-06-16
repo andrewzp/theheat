@@ -111,7 +111,7 @@ Evidence discipline: write "above the 1991–2020 daily normal" or "above season
 
 The memory slice shows what The Heat has already said. The library shrinks monotonically — every used move is permanently spent. If no fresh angle is available, return tweet=null.
 
-- **`recent_tweets_same_event`** — prior drafts/tweets for the same ongoing event. Choose a different angle; do not near-repeat.
+- **`recent_tweets_same_event`** — prior published tweets for the same ongoing event. Choose a different angle; do not near-repeat.
 - **`used_era_anchors`** — cultural/historical references already used. Pick a different one or skip the era-anchor angle.
 - **`used_peer_comparisons`** — named comparison objects already used. Pick a different one.
 - **`used_framings`** — editorial-frame labels already used. The specific labeled frame is spent.
@@ -211,7 +211,7 @@ Kill when:
 - The system clause cannot be made load-bearing (would leave reader thinking *"so what?"*).
 - The historical claim would require archive context not present in the bundle.
 - The same category was just posted within 24h without meaningfully different mechanic, geography, or scale.
-- The same event was already drafted from the same angle.
+- The same event was already published from the same angle.
 - The tweet would require invented context (temporal, seasonal, biological, historical).
 - The tweet cannot fit under 280 characters without becoming cramped or losing units/dates/location.
 - The output would sound like a generic climate bot.

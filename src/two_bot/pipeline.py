@@ -163,7 +163,8 @@ def generate_draft(
     result_out: dict | None = None,
 ) -> dict | None:
     """Run the full pipeline (writer → claim extract → fact-check) and
-    record memory on success. Returns a save_draft-ready dict, or
+    return a save_draft-ready dict. Publish memory is recorded only after
+    successful posting. Returns a save_draft-ready dict, or
     ``None`` if the writer kills, fact-check rejects, or anything raises.
 
     Signal-agnostic. The bundle's ``signal_kind`` carries the type
@@ -298,8 +299,6 @@ def generate_draft(
                 _record_kill("critic", critic_result.kill_reason or "unknown")
                 return None
 
-        canonical_claims = fact_result.extracted_claims
-        memory.record_shipped(state, bundle, writer_result, canonical_claims)
         metadata = {
             "signal_kind": bundle.signal_kind,
             "angle_chosen": writer_result.angle_chosen,
@@ -307,6 +306,7 @@ def generate_draft(
             "peer_comparison_used": writer_result.peer_comparison_used,
             "reasoning": writer_result.reasoning,
             "fact_check": fact_result.to_dict(),
+            "bundle": memory.bundle_memory_snapshot(bundle),
             "writer_model": writer.WRITER_MODEL,
             "fact_checker_model": fact_check.FACT_CHECKER_MODEL,
         }
