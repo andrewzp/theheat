@@ -5,9 +5,28 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 Documentation sweep aligning the operator docs with the 0.9.81.0 production
-state, plus Phase A of the Throughput Initiative (funnel instrumentation, dark).
+state, plus Throughput Initiative Phases A (funnel instrumentation) and B
+(ship-gate decouple) — both dark, default-OFF.
 
 ### Added
+
+- **Auto-ship on critic PASS (Throughput Initiative Phase B)** behind
+  `THEHEAT_AUTOSHIP_ON_CRITIC_PASS` (default OFF). When enabled, the flag governs
+  ALL auto-shipping for a HARD `tweet_type` allowlist (`hot10`, `co2_milestone`,
+  `ch4_milestone` — explicit, not policy-mode inferred): a draft that earned a
+  real two-bot **critic PASS** is armed (`save_draft` sets BOTH
+  `approval_mode="auto"` and a delayed `auto_approve_at`, plus an
+  `autoship_on_critic_pass` marker), and anything else stays manual. In
+  `process_due_drafts`, every due allowlist draft (the marked ones AND any
+  pre-flag `policy_auto` leftover pulled in at activation) must clear: a critic
+  PASS, flag-rollback demotion (flipping the flag OFF stops pre-marked drafts),
+  one-shot idempotency (an unconfirmed prior attempt is handed to a human, never
+  blind-retried), a freshness ceiling over both queue age AND source-observation
+  date (`THEHEAT_AUTOSHIP_MAX_AGE_H`, default 36h — kills the staleness spiral),
+  and an event-already-posted dedup. **Fail-closed**: absent/non-PASS critic
+  metadata never auto-ships; human-impact categories stay `manual_only`;
+  non-allowlist `armed_auto` types and the double-gate safety re-run are
+  untouched. Flag OFF is byte-for-byte the current behavior.
 
 - **Funnel telemetry (Throughput Initiative Phase A)** behind
   `THEHEAT_FUNNEL_TELEMETRY` (default OFF). When enabled, each alerts cycle
