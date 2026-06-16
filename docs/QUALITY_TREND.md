@@ -33,6 +33,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-26 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 13 carry-overs (same queue as May 25). **6th consecutive no-fresh-draft cycle**; queue static since May 18T15:52Z (8 days, ~48 cron cycles). No bulk-reject candidates by policy; `gh` CLI absent (10th consecutive skip). Coral drafts now 8–11 days old; operator must verify NOAA CRW DHW values before publishing. Evidence contract gate most likely suppression bottleneck — operator should check `evidence_contract` kill counts in suppression ledger for May 22–26. No proposal evidence updates. |
 | 2026-06-07 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | First fresh draft in 19 days. Barrow, Alaska precipitation_extreme (213.8 mm/3d, 42.5% above record): B+ (permafrost drainage ecosystem specificity; "sheets across the surface instead" — implied contrast, soft close vs. A-grade declaratives). Restate-math minor violation (63.8 mm above the record of 150.0 mm). n=1; not statistically meaningful. 0.9.15.0 gpm S3 feed appears to have unlocked precipitation_extreme type. TTL sweep cleared 13 carry-overs including 3 A-/B+ coral drafts. P5 not observed (ecosystem specificity deployed naturally). |
 | 2026-06-08 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Barrow Alaska precipitation_extreme, B+ from Jun 7 — not re-graded). Queue static since Jun 7T04:07Z (~35h). No proposal evidence updates. Staleness check: draft ~35h old, no real-time-baked language — clear. |
+| 2026-06-16 | 0 | — | — | — | — | **N/A** | — | 0 pending drafts; pipeline active. 7 drafts created Jun 4–15: Kapingamarangi monthly_high (posted), Gilbert Islands + Nauru coral_bleaching (posted; consequence-closer form), Barrow posted, Chesnee SC monthly_low (approved; 35yr/7°F/temperate — strong), Red Dog Mine Alaska monthly_low (rejected; P_new — 17yr/1°F/arctic), Riyadh dust_event (posted; new type), Beaver Dams Utah all_time_high (posted; score 91). P_new gains cycle 2 evidence. 13th consecutive staleness-skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -42,6 +43,12 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-16 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
+
+**Status:** 0 pending drafts — no staleness review needed. Pipeline processed all recent
+drafts (Jun 4–15) before the routine ran. `gh` CLI absent in remote execution environment;
+13th consecutive skip (May 13 → Jun 16). No operator action needed.
 
 ### 2026-06-08 — Staleness bulk-reject: 0 candidates; gh CLI absent (12th consecutive skip)
 

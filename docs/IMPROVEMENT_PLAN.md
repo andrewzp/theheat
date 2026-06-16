@@ -30,7 +30,7 @@ Living plan for closing the gap between the bot's current voice quality and the 
 | Gap | **50 pp** (50% − 0%, n=1); prior measure: 29 pp (50% − 21%, 2026-05-19) |
 | Posting | paused until bar cleared |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, created 2026-06-07T04:07:40Z, ~35h old as of Jun 8 run — not stale). 13 May fast-signal carry-overs auto-rejected by TTL sweep during June 1–6; 0.9.16.0 now gives slow coral/DHW drafts a 21d window. Pipeline active; gpm datapool migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
+| Queue status | **0 pending** (as of 2026-06-16). Pipeline active: 7 new drafts created Jun 4–15. Barrow Alaska posted. Chesnee SC monthly_low approved (35yr/7°F/temperate — strong signal). Red Dog Mine Alaska monthly_low rejected (17yr/1°F/arctic — P_new exemplar). Riyadh dust_event + Beaver Dams Utah all_time_high posted. New types now producing: dust_event, all_time_high. Coral consequence-closer pattern holding in posted drafts. |
 
 ## Active proposals
 
@@ -232,6 +232,48 @@ in either cycle. Fire drafts arrive clean; no defensive closers, no explicit gap
 no restate-padding. A-rate has not lifted yet; Wodehouse violations were not the current
 bottleneck — named mechanics and category-specific convergence are.**
 
+### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
+
+**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
+threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
+bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
+violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
+manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
+margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
+archive, trivial margin, location where cold is architecturally expected — but with
+cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
+strong self-kill instincts for low-confidence fire framings.
+
+**Cycles observed:** May 14, Jun 13 (2 cycles; + May 11 Andrew-reject precedent + Jun 13
+operator rejection of Red Dog Mine, Alaska as independent confirmation).
+**Last seen:** 2026-06-13. Red Dog Mine, Alaska: 19°F (-7.1°C), coldest June low in 17
+years of records, 1°F margin — same failure class as Bethel and Mankato (shallow archive,
+trivial margin, arctic/subarctic cold-climate). Operator correctly rejected. Writer still
+producing this class. Editorial contrast: Chesnee SC (35yr archive, 7°F margin, temperate
+warm climate) approved same cycle — operator correctly distinguishing signal strength.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+cold-record framing section:
+
+> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
+> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
+> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
+> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
+> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
+> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
+> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
+> correct on the same grounds.
+
+**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
+(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
+drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
+only — does not affect monthly_high or other record types.
+
+**Status:** Drafted. Awaiting human implementation. Bethel, Maine (the original exemplar)
+is no longer in the queue — cleared by TTL sweep. Red Dog Mine, Alaska (Jun 13, rejected
+by operator) is now the live exemplar. Writer still produces this class; operator is
+currently catching it at review. P_new writer self-kill would automate the filter.
+
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
 **Observed:** Apr 25-27 corpus — SYSTEM_PROMPT named only a subset of available moves;
@@ -315,46 +357,6 @@ where the new value is a multiple of the prior. Prevents the writer from dilutin
 naturally strong signal with topographic explanation.
 
 **Status:** Drafted. Awaiting human implementation.
-
-### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
-
-**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
-threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
-bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
-violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
-manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
-margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
-archive, trivial margin, location where cold is architecturally expected — but with
-cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
-strong self-kill instincts for low-confidence fire framings.
-
-**Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
-**Last seen:** May 14. Note: no new cold-record drafts appeared in 5 subsequent fresh-draft
-cycles (May 15–19), so the failure mode is dormant but not confirmed resolved. The absence
-is likely upstream (score-gate/triage), not a structural fix.
-
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-cold-record framing section:
-
-> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
-> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
-> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
-> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
-> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
-> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
-> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
-> correct on the same grounds.
-
-**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
-(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
-drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
-only — does not affect monthly_high or other record types.
-
-**Status:** Drafted. Awaiting human implementation. Note: Bethel, Maine (the exemplar
-case) remains in the pending queue as of 2026-05-24 — the failure mode is live, not
-theoretical. 5 fresh graded cycles have passed since the proposal was first observed
-(May 15/16/17/18/19) with no new cold-record evidence surfacing, but the original
-draft persists.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
