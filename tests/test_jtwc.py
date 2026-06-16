@@ -91,6 +91,37 @@ class TestJTWCParsing:
         assert advisories[0].storm_name == "Mawar"
 
     @responses.activate
+    def test_fetch_active_cyclones_tries_plain_rss_when_enhanced_feed_is_forbidden(self, capsys):
+        rss = """<?xml version="1.0"?>
+        <rss><channel>
+          <item>
+            <title>Western Pacific Tropical Warning</title>
+            <description><![CDATA[
+              TROPICAL STORM 02W (MAWAR) WARNING NR 012
+              MAX SUSTAINED WINDS - 70 KT, GUSTS 85 KT.
+              LOCATED NEAR 12.5N 145.2E.
+            ]]></description>
+            <pubDate>{FRESH_PUB_DATE}</pubDate>
+          </item>
+        </channel></rss>
+        """
+        responses.add(
+            responses.GET,
+            jtwc.JTWC_RSS_URL,
+            status=403,
+            body="Forbidden",
+            match=[responses.matchers.query_param_matcher({"layout": "enhanced"})],
+        )
+        responses.add(responses.GET, jtwc.JTWC_PLAIN_RSS_URL, body=rss, status=200)
+
+        advisories = jtwc.fetch_active_cyclones(strict=True)
+
+        assert "[jtwc] served by plain_rss" in capsys.readouterr().out
+        assert len(advisories) == 1
+        assert advisories[0].storm_name == "Mawar"
+        assert advisories[0].source_leg == "plain_rss"
+
+    @responses.activate
     def test_fetch_error_returns_empty_non_strict(self):
         responses.add(responses.GET, jtwc.JTWC_RSS_URL, status=500)
         assert jtwc.fetch_active_cyclones() == []

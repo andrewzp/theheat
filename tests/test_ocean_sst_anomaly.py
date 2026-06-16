@@ -8,13 +8,16 @@ import pytest
 import requests
 
 from src.data.ocean_sst_anomaly import (
+    NOAA_STAR_SSTA_LEG,
     REGION_REGISTRY,
     RegionDef,
     RegionalSSTReading,
     _area_weighted_mean,
     _build_url,
     _detect_tier,
+    _latest_noaa_star_file_from_index,
     _parse_griddap_csv,
+    _readings_from_noaa_star_netcdf_bytes,
     detect_regional_sst_anomaly_events,
     fetch_all_regions,
     fetch_region_sst,
@@ -310,9 +313,33 @@ def test_fetch_all_regions_raises_when_all_regions_fail(monkeypatch):
         fetch_all_regions()
 
 
-def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
+def test_fetch_all_regions_uses_noaa_star_nc_when_erddap_times_out(monkeypatch):
     def _raise(region, *, min_valid_cells=10):
         raise SourceFetchError(f"{region.slug} timed out")
+
+    fallback = [
+        RegionalSSTReading(
+            "north_atlantic",
+            "North Atlantic",
+            "2026-06-14",
+            3.7,
+            2,
+            42,
+            source_leg=NOAA_STAR_SSTA_LEG,
+        )
+    ]
+    monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
+    monkeypatch.setattr(
+        "src.data.ocean_sst_anomaly._fetch_noaa_star_ssta_regions_strict",
+        lambda *, min_valid_cells=10, today=None: fallback,
+    )
+
+    assert fetch_all_regions() == fallback
+
+
+def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
+    def _raise(region, *, min_valid_cells=10):
+        raise SourceFetchError(f"{region.slug} schema drift")
 
     monkeypatch.setattr("src.data.ocean_sst_anomaly._fetch_region_sst_strict", _raise)
 
@@ -321,8 +348,64 @@ def test_fetch_all_regions_all_failure_includes_sampled_causes(monkeypatch):
 
     msg = str(exc_info.value)
     assert "all regions failed" in msg
-    assert "north_atlantic timed out" in msg
-    assert "subpolar_n_atlantic timed out" in msg
+    assert "north_atlantic schema drift" in msg
+    assert "subpolar_n_atlantic schema drift" in msg
+
+
+def test_latest_noaa_star_file_from_index_ignores_md5_placeholders():
+    selected = _latest_noaa_star_file_from_index(
+        """
+        <a href="ct5km_ssta_v3.1_20260613.nc">ct5km_ssta_v3.1_20260613.nc</a>
+        <a href="ct5km_ssta_v3.1_20260614.nc.md5">ct5km_ssta_v3.1_20260614.nc.md5</a>
+        <a href="ct5km_ssta_v3.1_20260614.nc">ct5km_ssta_v3.1_20260614.nc</a>
+        """
+    )
+
+    assert selected.data_date == "2026-06-14"
+    assert selected.url.endswith("/2026/ct5km_ssta_v3.1_20260614.nc")
+
+
+def test_noaa_star_netcdf_parser_computes_region_mean_and_tags_source_leg(tmp_path):
+    from netCDF4 import Dataset
+    import numpy as np
+
+    nc_path = tmp_path / "ssta.nc"
+    with Dataset(nc_path, "w") as dataset:
+        dataset.createDimension("time", 1)
+        dataset.createDimension("lat", 41)
+        dataset.createDimension("lon", 41)
+        dataset.createVariable("time", "i4", ("time",))[:] = [0]
+        dataset.createVariable("lat", "f4", ("lat",))[:] = np.linspace(1.0, -1.0, 41)
+        dataset.createVariable("lon", "f4", ("lon",))[:] = np.linspace(-1.0, 1.0, 41)
+        ssta = dataset.createVariable(
+            "sea_surface_temperature_anomaly",
+            "f4",
+            ("time", "lat", "lon"),
+            fill_value=-32768,
+        )
+        grid = np.full((41, 41), 3.6)
+        grid[20, :] = 3.8
+        ssta[0, :, :] = grid
+
+    readings = _readings_from_noaa_star_netcdf_bytes(
+        nc_path.read_bytes(),
+        data_date="2026-06-14",
+        regions=(RegionDef("test", "Test Region", -1, 1, -1, 1),),
+        min_valid_cells=3,
+        today=date(2026, 6, 16),
+    )
+
+    assert readings == [
+        RegionalSSTReading(
+            "test",
+            "Test Region",
+            "2026-06-14",
+            3.67,
+            2,
+            9,
+            source_leg=NOAA_STAR_SSTA_LEG,
+        )
+    ]
 
 
 def test_detect_events_fires_only_on_tier_increase():

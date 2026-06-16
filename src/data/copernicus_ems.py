@@ -16,6 +16,7 @@ import requests
 
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
+from src.data._witness import tag_source_leg, with_witness
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 SUMMARY_URL = (
@@ -28,6 +29,8 @@ DETAIL_URL = (
 )
 ACTIVATION_URL = "https://mapping.emergency.copernicus.eu/activations/{code}/"
 SOURCE_NAME = "copernicus_ems"
+FRONTEND_ACTIVATIONS_URL = "https://mapping.emergency.copernicus.eu/activations/api/activations/"
+FRONTEND_API_LEG = "frontend_api"
 _REQUEST_HEADERS = {"User-Agent": "(theheat-bot, contact@theheat.app)"}
 
 POPULATION_THRESHOLD = 100_000
@@ -62,13 +65,14 @@ class CopernicusFloodActivation:
     name: str = ""
     closed: bool = False
     last_update: str = ""
+    source_leg: str | None = None
 
 
 def _safe_float(value: object) -> float:
     try:
         if value in (None, "", "-", "NA"):
             return 0.0
-        return float(value)
+        return float(str(value))
     except (TypeError, ValueError):
         return 0.0
 
@@ -77,7 +81,7 @@ def _safe_int(value: object) -> int:
     try:
         if value in (None, "", "-", "NA"):
             return 0
-        return int(float(value))
+        return int(float(str(value)))
     except (TypeError, ValueError):
         return 0
 
@@ -241,6 +245,36 @@ def fetch_active_flood_activations(
     deploy does not draft historical floods. Tests and archive checks can pass
     ``include_closed=True``.
     """
+    try:
+        return with_witness(
+            lambda: _fetch_active_flood_activations_primary(
+                strict=strict,
+                include_closed=include_closed,
+                limit=limit,
+            ),
+            lambda: _fetch_frontend_flood_activations(
+                strict=True,
+                include_closed=include_closed,
+                limit=limit,
+            ),
+            source_key=SOURCE_NAME,
+            leg_label=FRONTEND_API_LEG,
+        )
+    except (requests.RequestException, SourceFetchError, ValueError) as exc:
+        if strict:
+            if isinstance(exc, SourceFetchError):
+                raise
+            raise SourceFetchError(f"Copernicus EMS flood fetch failed: {exc}") from exc
+        return []
+
+
+def _fetch_active_flood_activations_primary(
+    *,
+    strict: bool = False,
+    include_closed: bool = False,
+    limit: int = 50,
+) -> list[CopernicusFloodActivation]:
+    """Fetch current public Copernicus Rapid Mapping flood activations."""
     params: dict[str, str | int] = {"category": _FLOOD_CATEGORY, "limit": limit}
     if not include_closed:
         params["closed"] = "false"
@@ -282,6 +316,61 @@ def fetch_active_flood_activations(
     except (requests.RequestException, ValueError, SourceFetchError) as exc:
         if strict:
             raise SourceFetchError(f"Copernicus EMS flood fetch failed: {exc}") from exc
+        return []
+
+
+def _fetch_frontend_flood_activations(
+    *,
+    strict: bool = False,
+    include_closed: bool = False,
+    limit: int = 50,
+) -> list[CopernicusFloodActivation]:
+    """Fallback to the public activations API used by the Copernicus page."""
+    params: dict[str, str | int] = {
+        "categories": _FLOOD_CATEGORY.lower(),
+        "limit": limit,
+        "offset": 0,
+    }
+    if not include_closed:
+        params["closed"] = "false"
+    try:
+        response = fetch_with_retry(
+            FRONTEND_ACTIVATIONS_URL,
+            params=params,
+            headers={**_REQUEST_HEADERS, "Accept": "application/json"},
+            timeout=30,
+        )
+        payload = response.json()
+        assert_response_schema(payload, ["count", "results"], SOURCE_NAME)
+        results = payload.get("results") if isinstance(payload, Mapping) else None
+        if not isinstance(results, list):
+            raise SourceFetchError(f"{SOURCE_NAME} schema drift: frontend results was not a list")
+        latest_update = max(
+            (
+                str(row.get("lastUpdate") or row.get("activationTime") or "")
+                for row in results
+                if isinstance(row, Mapping)
+            ),
+            default="",
+        )
+        if latest_update:
+            assert_freshness(latest_update, SOURCE_NAME, _SUMMARY_MAX_AGE_DAYS)
+
+        activations: list[CopernicusFloodActivation] = []
+        for row in results:
+            if not isinstance(row, Mapping):
+                if strict:
+                    raise SourceFetchError(
+                        f"{SOURCE_NAME} schema drift: frontend result was not an object"
+                    )
+                continue
+            activation = _parse_activation(row, detail=None)
+            if activation is not None:
+                activations.append(activation)
+        return tag_source_leg(activations, FRONTEND_API_LEG)
+    except (requests.RequestException, ValueError, SourceFetchError) as exc:
+        if strict:
+            raise SourceFetchError(f"Copernicus EMS frontend flood fetch failed: {exc}") from exc
         return []
 
 

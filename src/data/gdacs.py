@@ -6,17 +6,22 @@ Docs: https://www.gdacs.org/Knowledge/models.aspx
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 import xml.etree.ElementTree as ET
 
 import requests
 
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
+from src.data._witness import tag_source_leg, with_witness
+from src.data import jtwc, nhc, usgs_quakes
+from src.data.cyclones import CycloneAdvisory
 from src.data.source_status import SourceFetchError
+from src.data.usgs_quakes import SignificantEarthquakeEvent
 
 GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
 GDACS_GEORSS_URL = "https://www.gdacs.org/xml/rss.xml"
+GDACS_SUBTYPE_LEG = "subtype_witnesses"
 
 # Event types GDACS tracks
 EVENT_TYPES = {
@@ -179,7 +184,7 @@ def _events_from_georss(
 ) -> tuple[list[GlobalDisasterEvent], date | None]:
     root = ET.fromstring(text.lstrip("\ufeff"))
     events: list[GlobalDisasterEvent] = []
-    payload_dates = []
+    payload_dates: list[date | datetime | int | float | str | None] = []
     for item in root.findall(".//item"):
         event_type_code = _xml_text(item, "gdacs:eventtype")
         alert_level = _xml_text(item, "gdacs:alertlevel") or "Green"
@@ -239,6 +244,26 @@ def fetch_disasters(
     Args:
         min_severity: Minimum alert level — "Red", "Orange", or "Green".
     """
+    if not strict:
+        return _fetch_disasters_primary(min_severity=min_severity, strict=False)
+    try:
+        return with_witness(
+            lambda: _fetch_disasters_primary(min_severity=min_severity, strict=True),
+            lambda: _fetch_subtype_witnesses(min_severity=min_severity),
+            source_key="gdacs",
+            leg_label=GDACS_SUBTYPE_LEG,
+        )
+    except (requests.RequestException, SourceFetchError) as exc:
+        if isinstance(exc, SourceFetchError):
+            raise
+        raise SourceFetchError(f"GDACS fetch failed: {exc}") from exc
+
+
+def _fetch_disasters_primary(
+    min_severity: str = "Red",
+    *,
+    strict: bool = False,
+) -> list[GlobalDisasterEvent]:
     severity_order = {"Green": 0, "Orange": 1, "Red": 2}
     min_level = severity_order.get(min_severity, 1)
 
@@ -273,6 +298,8 @@ def fetch_disasters(
             )
             print("[gdacs] served by georss fallback")
         except (requests.RequestException, ValueError, ET.ParseError, SourceFetchError) as georss_exc:
+            if isinstance(georss_exc, SourceFetchError) and "insufficient GeoRSS fields" in str(georss_exc):
+                raise SourceFetchError(f"GDACS GeoRSS schema drift: {georss_exc}") from georss_exc
             if strict:
                 raise SourceFetchError(
                     f"GDACS fetch failed: {exc}; GeoRSS fallback failed: {georss_exc}"
@@ -281,3 +308,100 @@ def fetch_disasters(
         if newest_date:
             assert_freshness(newest_date, "gdacs", max_age_days=3)
         return events
+
+
+def _fetch_subtype_witnesses(min_severity: str) -> list[GlobalDisasterEvent]:
+    """Independent subtype witnesses for GDACS outage coverage.
+
+    ReliefWeb remains blocked on appname approval, so this witness covers only
+    the GDACS subtypes that already have verified official feeds in the repo:
+    USGS significant earthquakes and NHC/JTWC active cyclones.
+    """
+    errors: list[str] = []
+    events: list[GlobalDisasterEvent] = []
+
+    try:
+        events.extend(
+            _quake_to_gdacs_event(quake)
+            for quake in usgs_quakes.fetch_significant_earthquakes(strict=True)
+        )
+    except (requests.RequestException, SourceFetchError) as exc:
+        errors.append(f"usgs_quakes: {exc}")
+
+    for source_name, fetch_fn in (
+        ("nhc", nhc.fetch_active_cyclones),
+        ("jtwc", jtwc.fetch_active_cyclones),
+    ):
+        try:
+            events.extend(_cyclone_to_gdacs_event(advisory) for advisory in fetch_fn(strict=True))
+        except (requests.RequestException, SourceFetchError) as exc:
+            errors.append(f"{source_name}: {exc}")
+
+    severity_order = {"Green": 0, "Orange": 1, "Red": 2}
+    min_level = severity_order.get(min_severity, 1)
+    filtered = [
+        event for event in events
+        if event is not None and severity_order.get(event.severity, 0) >= min_level
+    ]
+    if filtered:
+        return tag_source_leg(filtered, GDACS_SUBTYPE_LEG)
+    if errors and len(errors) >= 3:
+        raise SourceFetchError(
+            "GDACS subtype witnesses failed: " + "; ".join(errors)
+        )
+    return []
+
+
+def _quake_to_gdacs_event(quake: SignificantEarthquakeEvent) -> GlobalDisasterEvent:
+    severity = _quake_severity(quake)
+    return GlobalDisasterEvent(
+        disaster_type="Earthquake",
+        name=quake.title or f"M {quake.magnitude:.1f} earthquake",
+        country=quake.place or "Unknown",
+        severity=severity,
+        description=(
+            "USGS significant earthquake feed"
+            + (f"; PAGER alert {quake.alert}" if quake.alert else "")
+        ),
+        event_id=f"gdacs_EQ_usgs_{quake.usgs_id}_{date.today().isoformat()}",
+        alert_score=float(quake.significance or 0),
+        severity_value=quake.magnitude,
+        severity_unit="M",
+        population_affected=0,
+    )
+
+
+def _quake_severity(quake: SignificantEarthquakeEvent) -> str:
+    alert = (quake.alert or "").lower()
+    if alert == "red":
+        return "Red"
+    if alert == "orange":
+        return "Orange"
+    if quake.magnitude >= 7.5 and (quake.tsunami or (quake.significance or 0) >= 1000):
+        return "Red"
+    if quake.magnitude >= 7.0:
+        return "Orange"
+    return "Green"
+
+
+def _cyclone_to_gdacs_event(advisory: CycloneAdvisory) -> GlobalDisasterEvent:
+    severity_value_kmh = round(float(advisory.wind_kt) * 1.852, 2)
+    category = advisory.category
+    severity = "Red" if category >= 4 else "Orange" if category >= 3 else "Green"
+    intensity_tier = _intensity_tier("TC", severity_value_kmh)
+    source = advisory.source or "cyclone"
+    return GlobalDisasterEvent(
+        disaster_type="Tropical Cyclone",
+        name=advisory.storm_name or advisory.storm_id,
+        country=advisory.basin or "Unknown",
+        severity=severity,
+        description=(
+            f"{source.upper()} active cyclone advisory"
+            + (f" {advisory.advisory_number}" if advisory.advisory_number else "")
+        ),
+        event_id=f"gdacs_TC_{source}_{advisory.storm_id}_{intensity_tier}",
+        alert_score=float(category),
+        severity_value=severity_value_kmh,
+        severity_unit="km/h",
+        population_affected=0,
+    )

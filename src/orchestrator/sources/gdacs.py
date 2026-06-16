@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 
 
@@ -14,6 +15,8 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
         disasters = _fetch_strict(gdacs.fetch_disasters, min_severity="Red")
         source_promoted = 0
         for disaster in disasters:
+            if disaster.source_leg == gdacs.GDACS_SUBTYPE_LEG:
+                continue
             if state.is_duplicate(bot_state, disaster.event_id):
                 continue
             score = score_global_disaster(disaster.severity, disaster.disaster_type)
@@ -45,9 +48,14 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
                 event_id=disaster.event_id,
                 review_context=review_context,
             )
+        degraded_note = degraded_via(disasters)
         _record_source_run(
             current_run, bot_state, "gdacs", gdacs_start,
-            status="success", observed=len(disasters), promoted=source_promoted, drafted=0
+            status="degraded" if degraded_note else "success",
+            observed=len(disasters),
+            promoted=source_promoted,
+            drafted=0,
+            note=degraded_note,
         )
     except Exception as e:
         print(f"[alerts] GDACS error: {e}")

@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.81.0] - 2026-06-16
+
+Source redundancy fix for live upstream outages. GDACS, Copernicus EMS, JTWC,
+and regional SST anomaly checks now have additional verified fallback paths for
+the failure modes surfacing in production source health.
+
+### Added
+
+- **Regional SST anomaly NOAA STAR fallback**: when CoastWatch ERDDAP times out
+  across regions, the bot downloads the latest NOAA STAR/CRW SST anomaly NetCDF
+  once and fills failed regions from that grid with `served via noaa_star_nc`.
+- **Copernicus EMS frontend API fallback**: dashboard API 403/transport
+  failures can fall back to the public activations API used by the Copernicus
+  web page, with conservative impact/severity parsing.
+- **JTWC plain RSS fallback**: enhanced RSS failures now fall through quickly to
+  the plain official RSS endpoint and report `served via plain_rss`.
+- **GDACS subtype witnesses**: if both GDACS API and GeoRSS are unavailable,
+  verified USGS significant-earthquake and NHC/JTWC cyclone feeds provide
+  same-shape subtype coverage while ReliefWeb remains appname-blocked. The
+  GDACS runner counts these as degraded observations but leaves drafting to the
+  dedicated USGS/NHC/JTWC source runners to avoid duplicate stories.
+
 ## [0.9.80.0] - 2026-06-15
 
 Dashboard source-health diagnostic tone fix. Known upstream outages and

@@ -27,6 +27,7 @@ class CycloneAdvisory:
     classification: str = ""
     public_advisory_url: str = ""
     advisory_text: str = ""
+    source_leg: str | None = None
 
     @property
     def category(self) -> int:

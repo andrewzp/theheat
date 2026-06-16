@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import csv
 import math
-from collections.abc import Mapping
+import re
+from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date
@@ -29,10 +30,16 @@ import requests
 
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
+from src.data._witness import is_witness_eligible_failure
 from src.data.ocean_sst import _REQUEST_HEADERS
 from src.data.source_status import SourceFetchError, assert_response_schema
 
 _ERDDAP_BASE = "https://coastwatch.noaa.gov/erddap/griddap/noaacrwsstanomalyDaily.csv"
+NOAA_STAR_SSTA_LEG = "noaa_star_nc"
+NOAA_STAR_SSTA_BASE_URL = (
+    "https://www.star.nesdis.noaa.gov/pub/sod/mecb/crw/data/5km/"
+    "v3.1_op/nc/v1.0/daily/ssta"
+)
 _SST_ANOM_VAR = "sea_surface_temperature_anomaly"
 _GRID_DEG = 0.05
 _TARGET_DEG = 1.0
@@ -46,6 +53,7 @@ _FETCH_ATTEMPTS = 1
 _FILL_VALUE = -327.68
 _VALID_RANGE = (-15.0, 15.0)
 _SYNTHESIS_ANOMALY_FLOOR_C = 2.0
+_NOAA_STAR_FILE_RE = re.compile(r"^ct5km_ssta_v3\.1_(\d{8})\.nc$")
 
 # Provisional absolute area-weighted basin-mean anomaly tiers in degree C.
 # These are not Hobday MHW categories; recalibrate after NH late-summer runs.
@@ -94,6 +102,7 @@ class RegionalSSTReading:
     anomaly_c: float
     tier: int
     cells_used: int
+    source_leg: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +114,14 @@ class RegionalSSTAnomalyEvent:
     tier: int
     cells_used: int
     event_id: str
+    source_leg: str | None = None
+
+
+@dataclass(frozen=True)
+class NoaaStarSstaFile:
+    url: str
+    data_date: str
+    name: str
 
 
 def _build_url(region: RegionDef, *, time_token: str = "last") -> str:
@@ -270,6 +287,31 @@ def fetch_all_regions(*, strict: bool = False) -> list[RegionalSSTReading]:
             if reading is not None:
                 readings_by_index[index] = reading
 
+    if failures_by_index and _all_failures_star_eligible(failures_by_index.values()):
+        try:
+            fallback_readings = _fetch_noaa_star_ssta_regions_strict(
+                min_valid_cells=_MIN_VALID_CELLS,
+                today=None,
+            )
+            fallback_by_slug = {reading.region_slug: reading for reading in fallback_readings}
+            for index, region in enumerate(REGION_REGISTRY):
+                if index in readings_by_index:
+                    continue
+                if region.slug in fallback_by_slug:
+                    readings_by_index[index] = fallback_by_slug[region.slug]
+            if failures >= len(REGION_REGISTRY):
+                return [readings_by_index[index] for index in sorted(readings_by_index)]
+        except (requests.RequestException, SourceFetchError, ValueError) as exc:
+            if failures >= len(REGION_REGISTRY):
+                samples = "; ".join(
+                    failures_by_index[index] for index in sorted(failures_by_index)[:3]
+                )
+                raise SourceFetchError(
+                    "ocean_sst_anomaly: all regions failed"
+                    f"; NOAA STAR fallback failed: {exc}"
+                    + (f"; samples: {samples}" if samples else "")
+                ) from exc
+
     if failures >= len(REGION_REGISTRY):
         samples = "; ".join(
             failures_by_index[index] for index in sorted(failures_by_index)[:3]
@@ -305,7 +347,184 @@ def detect_regional_sst_anomaly_events(
                 event_id=(
                     f"sst_anom_{reading.region_slug}_tier{reading.tier}_{reading.date}"
                 ),
+                source_leg=reading.source_leg,
             )
         )
     events.sort(key=lambda event: (event.tier, event.anomaly_c), reverse=True)
     return events
+
+
+def _all_failures_star_eligible(failures: Iterable[str]) -> bool:
+    messages: list[str] = [str(message) for message in failures]
+    if not messages:
+        return False
+    return all(
+        is_witness_eligible_failure(SourceFetchError(str(message)))
+        for message in messages
+    )
+
+
+def _fetch_noaa_star_ssta_regions_strict(
+    *,
+    min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
+) -> list[RegionalSSTReading]:
+    selected = _latest_noaa_star_ssta_file(today=today)
+    response = fetch_with_retry(selected.url, timeout=60, attempts=2, backoff_base=1.0)
+    return _readings_from_noaa_star_netcdf_bytes(
+        response.content,
+        data_date=selected.data_date,
+        regions=REGION_REGISTRY,
+        min_valid_cells=min_valid_cells,
+        today=today,
+    )
+
+
+def _latest_noaa_star_ssta_file(*, today: date | None = None) -> NoaaStarSstaFile:
+    current = today or date.today()
+    errors: list[str] = []
+    for year in (current.year, current.year - 1):
+        try:
+            response = fetch_with_retry(
+                _noaa_star_year_index_url(year),
+                timeout=20,
+                attempts=2,
+                backoff_base=1.0,
+            )
+            return _latest_noaa_star_file_from_index(response.text)
+        except (requests.RequestException, SourceFetchError) as exc:
+            errors.append(f"{year}: {exc}")
+            continue
+    raise SourceFetchError(
+        "NOAA STAR SST anomaly index lookup failed: " + "; ".join(errors)
+    )
+
+
+def _latest_noaa_star_file_from_index(index_html: str) -> NoaaStarSstaFile:
+    names = re.findall(r"""href=["']([^"']+)["']""", index_html)
+    candidates: list[NoaaStarSstaFile] = []
+    for raw_name in names:
+        name = raw_name.rsplit("/", 1)[-1]
+        match = _NOAA_STAR_FILE_RE.fullmatch(name)
+        if match is None:
+            continue
+        yyyymmdd = match.group(1)
+        data_date = f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:8]}"
+        candidates.append(
+            NoaaStarSstaFile(
+                url=f"{NOAA_STAR_SSTA_BASE_URL}/{yyyymmdd[:4]}/{name}",
+                data_date=data_date,
+                name=name,
+            )
+        )
+    if not candidates:
+        raise SourceFetchError("NOAA STAR SST anomaly index had no NetCDF files")
+    return max(candidates, key=lambda item: item.data_date)
+
+
+def _readings_from_noaa_star_netcdf_bytes(
+    content: bytes,
+    *,
+    data_date: str,
+    regions: tuple[RegionDef, ...] = REGION_REGISTRY,
+    min_valid_cells: int = _MIN_VALID_CELLS,
+    today: date | None = None,
+) -> list[RegionalSSTReading]:
+    try:
+        from netCDF4 import Dataset
+        import numpy as np
+    except ImportError as exc:
+        raise SourceFetchError("NOAA STAR SST anomaly fallback requires netCDF4/numpy") from exc
+
+    assert_freshness(
+        data_date,
+        "ocean_sst_anomaly",
+        _MAX_DATA_LAG_DAYS,
+        today=today,
+    )
+    try:
+        with Dataset("noaa_star_ssta.nc", memory=content) as dataset:
+            latitudes = np.asarray(dataset.variables["lat"][:], dtype=float)
+            longitudes = np.asarray(dataset.variables["lon"][:], dtype=float)
+            ssta = dataset.variables[_SST_ANOM_VAR]
+            if ssta.ndim != 3:
+                raise SourceFetchError("NOAA STAR SST anomaly schema drift: SSTA grid was not 3D")
+            readings = []
+            for region in regions:
+                reading = _reading_from_noaa_star_grid(
+                    ssta,
+                    latitudes,
+                    longitudes,
+                    region,
+                    data_date=data_date,
+                    min_valid_cells=min_valid_cells,
+                    np=np,
+                )
+                if reading is not None:
+                    readings.append(reading)
+            return readings
+    except KeyError as exc:
+        raise SourceFetchError(f"NOAA STAR SST anomaly schema drift: missing {exc}") from exc
+    except (OSError, RuntimeError) as exc:
+        raise SourceFetchError(f"NOAA STAR SST anomaly NetCDF read failed: {exc}") from exc
+
+
+def _reading_from_noaa_star_grid(
+    ssta,
+    latitudes,
+    longitudes,
+    region: RegionDef,
+    *,
+    data_date: str,
+    min_valid_cells: int,
+    np,
+) -> RegionalSSTReading | None:
+    lat_slice = _axis_window_slice(latitudes, region.lat_s, region.lat_n, np=np)
+    lon_slice = _axis_window_slice(longitudes, region.lon_w, region.lon_e, np=np)
+    grid = np.ma.array(ssta[0, lat_slice, lon_slice], dtype=float)
+    grid = np.ma.masked_invalid(grid)
+    grid = np.ma.masked_outside(grid, _VALID_RANGE[0], _VALID_RANGE[1])
+    cells_used = int(np.ma.count(grid))
+    if cells_used < min_valid_cells:
+        return None
+    mean = _weighted_grid_mean(grid, latitudes[lat_slice], np=np)
+    if mean is None:
+        raise SourceFetchError(f"NOAA STAR SST anomaly/{region.slug}: no valid cells")
+    tier = _detect_tier(mean)
+    if tier is None:
+        if mean < _SYNTHESIS_ANOMALY_FLOOR_C:
+            return None
+        tier = 0
+    return RegionalSSTReading(
+        region_slug=region.slug,
+        region_display_name=region.display_name,
+        date=data_date,
+        anomaly_c=round(float(mean), 2),
+        tier=tier,
+        cells_used=cells_used,
+        source_leg=NOAA_STAR_SSTA_LEG,
+    )
+
+
+def _axis_window_slice(values, lower: float, upper: float, *, np) -> slice:
+    indices = np.flatnonzero((values >= lower) & (values <= upper))
+    if len(indices) == 0:
+        raise SourceFetchError("NOAA STAR SST anomaly schema drift: region outside grid")
+    start = int(indices[0])
+    stop = int(indices[-1]) + 1
+    return slice(start, stop, _GRID_STRIDE)
+
+
+def _weighted_grid_mean(grid, latitudes, *, np) -> float | None:
+    weights = np.cos(np.deg2rad(latitudes))[:, None]
+    weights = np.broadcast_to(weights, grid.shape)
+    mask = np.ma.getmaskarray(grid)
+    weighted = np.ma.array(grid * weights, mask=mask)
+    denom = np.ma.array(weights, mask=mask).sum()
+    if not denom:
+        return None
+    return float(weighted.sum() / denom)
+
+
+def _noaa_star_year_index_url(year: int) -> str:
+    return f"{NOAA_STAR_SSTA_BASE_URL}/{year}/"

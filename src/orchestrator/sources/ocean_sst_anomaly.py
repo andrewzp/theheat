@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_sst_anomaly_bundle
 
@@ -104,15 +105,17 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
                 on_draft_success=_on_success,
             )
 
+        degraded_note = degraded_via(readings)
         _record_source_run(
             current_run,
             bot_state,
             "ocean_sst_anomaly",
             start,
-            status="success",
+            status="degraded" if degraded_note else "success",
             observed=len(ocean_sst_anomaly.REGION_REGISTRY),
             promoted=source_promoted,
             drafted=0,
+            note=degraded_note,
         )
     except Exception as exc:
         print(f"[alerts] ocean_sst_anomaly error: {exc}")
