@@ -717,6 +717,72 @@ test("same failure rate: upstream cause → external (amber), our cause → unhe
   assert.equal(byKey.our_bug.health, "unhealthy", "KeyError is our bug → red")
 })
 
+test("problem sources include a bounded troubleshooting log with run metrics", () => {
+  const { sources } = buildSourceHealthPayload({
+    source_health: {
+      ocean_sst_anomaly: {
+        success: 1,
+        failed: 2,
+        degraded: 1,
+        skipped: 0,
+        runs: [
+          {
+            ts: "2026-06-01T00:00:00Z",
+            status: "success",
+            duration_ms: 900,
+            observed: 78,
+          },
+          {
+            ts: "2026-06-01T01:00:00Z",
+            status: "degraded",
+            error: "served via noaa_star_nc",
+            error_class: "upstream",
+            duration_ms: 61200,
+            observed: 78,
+            promoted: 1,
+            drafted: 0,
+          },
+          {
+            ts: "2026-06-01T02:00:00Z",
+            status: "failed",
+            error: "coastwatch timeout",
+            error_class: "upstream",
+            duration_ms: 80800,
+            observed: 0,
+          },
+          {
+            ts: "2026-06-01T03:00:00Z",
+            status: "failed",
+            error: "KeyError: 'sea_surface_temperature_anomaly'",
+            error_class: "our_bug",
+            duration_ms: 1200,
+            observed: 0,
+          },
+        ],
+      },
+    },
+  })
+
+  const row = sources.find((s) => s.source === "ocean_sst_anomaly")
+
+  assert.equal(row.troubleshooting_log.length, 3)
+  assert.deepEqual(row.troubleshooting_log[0], {
+    at: "2026-06-01T03:00:00Z",
+    status: "failed",
+    diagnostic: "KeyError: 'sea_surface_temperature_anomaly'",
+    error_class: "our_bug",
+    duration_ms: 1200,
+    observed: 0,
+    promoted: 0,
+    triaged_in: 0,
+    triaged_out: 0,
+    writer_attempted: 0,
+    drafted: 0,
+  })
+  assert.equal(row.troubleshooting_log[1].diagnostic, "coastwatch timeout")
+  assert.equal(row.troubleshooting_log[2].diagnostic, "served via noaa_star_nc")
+})
+
 // R-01: a primary served by a redundancy witness records status "degraded" with
 // the diagnostic "served via <leg>". Parity contract — these outcomes must match
 // scripts/source_health_sentinel.py (tests/test_source_health_sentinel.py

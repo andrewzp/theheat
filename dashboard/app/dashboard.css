@@ -93,6 +93,62 @@
   background: #1f1808;
   border: 1px solid #4a3a1a;
 }
+.source-health-table .source-troubleshooting {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  display: grid;
+  gap: 7px;
+}
+.source-health-table .source-troubleshooting-title {
+  color: #777;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+.source-health-table .source-troubleshooting-row {
+  display: grid;
+  gap: 4px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.source-health-table .source-troubleshooting-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.source-health-table .source-troubleshooting-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.source-health-table .source-troubleshooting-meta strong {
+  color: #f87171;
+  text-transform: uppercase;
+}
+.source-health-table .source-troubleshooting-meta span {
+  color: #777;
+}
+.source-health-table .source-troubleshooting-meta code {
+  color: #fb923c;
+  background: rgba(251, 146, 60, 0.1);
+  border: 1px solid rgba(251, 146, 60, 0.22);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.source-health-table .source-troubleshooting-diagnostic {
+  color: #ddd;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.source-health-table .source-troubleshooting-metrics {
+  color: #777;
+  font-size: 10px;
+}
 
 /* === Global styles (was <style jsx global> in the page component) === */
 * { margin: 0; padding: 0; box-sizing: border-box; }

@@ -6,6 +6,43 @@ import {
   sourceDiagnosticLabel,
 } from "../../lib/source-diagnostic.js"
 
+function formatTroubleshootingMetric(entry) {
+  return [
+    `observed ${entry.observed ?? 0}`,
+    `promoted ${entry.promoted ?? 0}`,
+    `drafted ${entry.drafted ?? 0}`,
+    `latency ${entry.duration_ms ? formatDuration(entry.duration_ms) : "0ms"}`,
+  ].join(" / ")
+}
+
+function TroubleshootingLog({ source }) {
+  if (source.health === "healthy" || source.health === "idle") return null
+  const entries = Array.isArray(source.troubleshooting_log)
+    ? source.troubleshooting_log.slice(0, 3)
+    : []
+  if (entries.length === 0) return null
+  return (
+    <div className={`source-troubleshooting ${sourceDiagnosticClass(source.health)}`}>
+      <div className="source-troubleshooting-title">Troubleshooting log</div>
+      {entries.map((entry, index) => (
+        <div className="source-troubleshooting-row" key={`${entry.at || "unknown"}-${index}`}>
+          <div className="source-troubleshooting-meta">
+            <strong>{entry.status || "unknown"}</strong>
+            <span>{entry.at ? timeAgo(entry.at) : "unknown time"}</span>
+            {entry.error_class && <code>{entry.error_class}</code>}
+          </div>
+          <div className="source-troubleshooting-diagnostic">
+            {entry.diagnostic || "(no diagnostic recorded)"}
+          </div>
+          <div className="source-troubleshooting-metrics">
+            {formatTroubleshootingMetric(entry)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function SourcesView({ sources, stats }) {
   if (!sources || sources.length === 0) {
     return (
@@ -84,6 +121,7 @@ export function SourcesView({ sources, stats }) {
                 {sourceDiagnosticLabel(s.health)} ({s.last_error_at ? timeAgo(s.last_error_at) : "—"}): {s.last_error}
               </div>
             )}
+            <TroubleshootingLog source={s} />
           </div>
         ))}
       </div>

@@ -31,6 +31,21 @@ const SOURCES = [
     last_run_status: "failed",
     success_rate: 0,
     health: "unhealthy",
+    troubleshooting_log: [
+      {
+        at: "2026-05-14T21:12:40Z",
+        status: "failed",
+        diagnostic: LONG_ERROR,
+        error_class: "upstream",
+        duration_ms: 80800,
+        observed: 0,
+        promoted: 0,
+        triaged_in: 0,
+        triaged_out: 0,
+        writer_attempted: 0,
+        drafted: 0,
+      },
+    ],
   },
   {
     source: "open_meteo_extreme_signals",
@@ -147,6 +162,15 @@ test("health page truncates long last_error text while keeping the full title", 
   assert.ok(markup.includes(`>${clipped}</strong>`))
   assert.ok(markup.includes(`title="${LONG_ERROR}"`))
   assert.ok(!markup.includes(`>${LONG_ERROR}</strong>`))
+})
+
+test("health page renders troubleshooting log details for failing sources", () => {
+  const markup = render()
+
+  assert.match(markup, /Troubleshooting log/)
+  assert.match(markup, /failed/)
+  assert.match(markup, /upstream/)
+  assert.match(markup, /observed 0/)
 })
 
 test("health page renders empty state when no sources are available", () => {
