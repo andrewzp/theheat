@@ -9,6 +9,16 @@ const HEALTH_METRIC_TOTALS = [
   "total_writer_attempted",
   "total_drafted",
 ]
+const RUN_METRICS = [
+  "duration_ms",
+  "observed",
+  "promoted",
+  "triaged_in",
+  "triaged_out",
+  "writer_attempted",
+  "drafted",
+]
+const TROUBLESHOOTING_LOG_LIMIT = 8
 
 // How many of the most-recent runs define "now" for health classification.
 // The cumulative counters span src/state.py's 7-day window, so a single bad
@@ -87,6 +97,37 @@ function numberOrZero(value) {
   return Number.isFinite(n) ? n : 0
 }
 
+function normalizedProblemStatus(status) {
+  if (status === "partial_failure") return "partial_failure"
+  if (status === "degraded") return "degraded"
+  if (status === "failed") return "failed"
+  return null
+}
+
+function troubleshootingEntry(row, at) {
+  const status = normalizedProblemStatus(row?.status)
+  if (!status) return null
+  const diagnostic = String(row?.error || row?.note || "").trim()
+  const entry = {
+    at: at || row?.ts || null,
+    status,
+    diagnostic: diagnostic || "(no diagnostic recorded)",
+    error_class: row?.error_class || (diagnostic ? classifyError(diagnostic) : "none"),
+  }
+  for (const key of RUN_METRICS) {
+    entry[key] = numberOrZero(row?.[key])
+  }
+  return entry
+}
+
+function buildTroubleshootingLogFromRuns(runs, getTimestamp) {
+  return (Array.isArray(runs) ? runs : [])
+    .map((row) => troubleshootingEntry(row, getTimestamp(row)))
+    .filter(Boolean)
+    .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+    .slice(0, TROUBLESHOOTING_LOG_LIMIT)
+}
+
 function addDerivedFields(s) {
   // active = runs that actually attempted the fetch (skips excluded). This is
   // the denominator for both success_rate AND the displayed "(N/M)" fraction —
@@ -108,6 +149,9 @@ function addDerivedFields(s) {
     active,
     success_rate: active > 0 ? s.successes / active : null,
     health,
+    troubleshooting_log: Array.isArray(s.troubleshooting_log)
+      ? s.troubleshooting_log
+      : [],
     // Only meaningful while degraded — a recovered primary (back to healthy)
     // clears the stale "served via" diagnostic so it can't masquerade.
     served_via: health === "degraded" ? parseServedVia(lastError) : null,
@@ -149,6 +193,7 @@ function aggregateFromSourceHealth(sourceHealth) {
       last_error_at: health?.last_error_ts || null,
       last_run_at: lastRun?.ts || null,
       last_run_status: lastRun?.status || null,
+      troubleshooting_log: buildTroubleshootingLogFromRuns(runs, (r) => r?.ts || null),
     }
     for (const key of HEALTH_METRIC_TOTALS) {
       row[key] = health?.[key] ?? (key === "avg_duration_ms" ? null : 0)
@@ -189,6 +234,7 @@ function aggregateFromRunHistory(history) {
           last_error_at: null,
           last_run_at: null,
           last_run_status: null,
+          troubleshooting_log: [],
         })
       }
       const agg = bySource.get(key)
@@ -222,11 +268,18 @@ function aggregateFromRunHistory(history) {
         agg.last_error_at = runStartedAt
         agg.last_error = diagnostic
       }
+      const logEntry = troubleshootingEntry(s, runStartedAt)
+      if (logEntry) {
+        agg.troubleshooting_log.push(logEntry)
+      }
     }
   }
 
   return [...bySource.values()].map((s) => ({
     ...s,
+    troubleshooting_log: s.troubleshooting_log
+      .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))
+      .slice(0, TROUBLESHOOTING_LOG_LIMIT),
     avg_duration_ms: s.runs > 0 ? Math.round(s.total_duration_ms / s.runs) : null,
   })).map(addDerivedFields)
 }

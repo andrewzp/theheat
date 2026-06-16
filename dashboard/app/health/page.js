@@ -81,9 +81,55 @@ function CounterPill({ label, value, tone }) {
   )
 }
 
+function formatDurationMs(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return "0ms"
+  if (n < 1000) return `${Math.round(n)}ms`
+  return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}s`
+}
+
+function troubleshootingMetricText(entry) {
+  return [
+    `observed ${entry.observed ?? 0}`,
+    `promoted ${entry.promoted ?? 0}`,
+    `drafted ${entry.drafted ?? 0}`,
+    `latency ${formatDurationMs(entry.duration_ms)}`,
+  ].join(" / ")
+}
+
+function TroubleshootingLog({ entries, now, health }) {
+  if (health === "healthy" || health === "idle") return null
+  if (!Array.isArray(entries) || entries.length === 0) return null
+  return h(
+    "div",
+    { className: "troubleshooting-log" },
+    h("div", { className: "troubleshooting-title" }, "Troubleshooting log"),
+    entries.slice(0, 5).map((entry, index) =>
+      h(
+        "div",
+        { className: "troubleshooting-row", key: `${entry.at || "unknown"}-${index}` },
+        h(
+          "div",
+          { className: "troubleshooting-row-head" },
+          h("strong", null, entry.status || "unknown"),
+          h("span", null, entry.at ? timeAgo(entry.at, now) : "unknown time"),
+          entry.error_class
+            ? h("code", null, entry.error_class)
+            : null
+        ),
+        h("p", { title: entry.diagnostic || "" }, entry.diagnostic || "(no diagnostic recorded)"),
+        h("small", null, troubleshootingMetricText(entry))
+      )
+    )
+  )
+}
+
 function SourceRow({ source, now }) {
   const lastError = source.last_error || ""
   const clippedError = truncateError(lastError)
+  const troubleshootingLog = Array.isArray(source.troubleshooting_log)
+    ? source.troubleshooting_log
+    : []
   return h(
     "article",
     { className: `source-card ${healthClass(source.health)}`, "data-source": source.source },
@@ -125,7 +171,8 @@ function SourceRow({ source, now }) {
           h("span", null, "last error"),
           h("strong", null, clippedError)
         )
-      : null
+      : null,
+    h(TroubleshootingLog, { entries: troubleshootingLog, now, health: source.health })
   )
 }
 
@@ -511,6 +558,61 @@ body {
   color: #f87171;
   font-weight: 500;
   overflow-wrap: anywhere;
+}
+.troubleshooting-log {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.troubleshooting-title {
+  color: #666;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.troubleshooting-row {
+  padding: 8px 10px;
+  background: #151515;
+  border: 1px solid #2a2a2a;
+  border-radius: 4px;
+}
+.troubleshooting-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.troubleshooting-row-head strong {
+  color: #f87171;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.troubleshooting-row-head span {
+  color: #666;
+  font-size: 11px;
+}
+.troubleshooting-row-head code {
+  color: #fb923c;
+  background: #20140a;
+  border: 1px solid #3a2410;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 10px;
+}
+.troubleshooting-row p {
+  margin: 0;
+  color: #ccc;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.troubleshooting-row small {
+  display: block;
+  margin-top: 5px;
+  color: #777;
+  font-size: 10px;
 }
 .empty-state,
 .loading {
