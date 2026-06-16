@@ -13,6 +13,141 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-16 — Daily corpus grading (0 pending drafts; pipeline active)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
+drafts (9 posted / 6 rejected / 1 approved). Pipeline has been actively processing
+since the Jun 8 run: 7 new drafts created Jun 4–15, all processed (posted/approved/
+rejected) before this routine checked. The routine can only grade pending-status drafts;
+all recent drafts moved through the pipeline between runs.
+
+**Staleness review:** 0 pending drafts — no staleness review needed. `gh` CLI absent;
+**13th consecutive skip** (May 13 → Jun 16).
+
+**A-rate:** — (no pending drafts). Most recent graded cycle: **0%** (0/1, 2026-06-07).
+
+### Pipeline activity since Jun 8 (not pending-queue grading)
+
+Full draft texts retrieved from gist state for observational notes. These are NOT formal
+pending-queue grades — the routine grades pending status only.
+
+| Draft | Type | Created | Status | Score | Notes |
+|---|---|---|---|---|---|
+| Kapingamarangi, Micronesia — 36.1°C / 59yr | monthly_high | Jun 4T04:21Z | posted | 81 | Pre-Jun 8; processed before routine ran |
+| Gilbert Islands, Kiribati — 10.8°C-weeks | coral_bleaching | Jun 4T15:38Z | posted | 81 | Pre-Jun 8; consequence-closer form |
+| Nauru — 12.0°C-weeks / mortality tier | coral_bleaching | Jun 5T08:13Z | posted | 86 | Pre-Jun 8; consequence-closer form |
+| Barrow, Alaska — 213.8 mm (Jun 7 carry-over) | precipitation_extreme | Jun 7T04:07Z | posted | 81 | B+ on record; now published |
+| Chesnee, SC — 35°F / 35yr / 7°F margin | monthly_low | Jun 10T15:55Z | approved | 86 | Strong signal; awaiting publish |
+| Red Dog Mine, Alaska — 19°F / 17yr / 1°F margin | monthly_low | Jun 13T08:03Z | rejected | 80 | P_new exemplar: operator correctly rejected |
+| Riyadh, Saudi Arabia — 2,083 μg/m³ dust | dust_event | Jun 13T08:05Z | posted | 75 | New signal type |
+| Beaver Dams, Utah — 95°F / 23yr all-time | all_time_high | Jun 15T04:27Z | posted | 91 | Strong signal; 6°F above 2020 mark |
+
+### P_new evidence: Red Dog Mine, Alaska (Jun 13 — operator rejection)
+
+> *Red Dog Mine, Alaska hit 19°F (-7.1°C) on June 9 — coldest June low in 17 years of
+> records, 1°F below the 2023 mark. The mine sits above the Arctic Circle, where tundra
+> terrain offers no shelter from cold air pooling on clear nights.*
+
+Clean P_new exemplar: 17yr archive, 1°F margin, subarctic cold-climate location. Voice
+execution is actually clean — tundra cold-air pooling is a load-bearing mechanism clause
+on par with Bethel's bowl-drainage. But the signal fails the editorial bar: shallow
+archive, trivial margin, cold is architecturally expected above the Arctic Circle.
+Operator correctly rejected. Pattern matches Bethel, Maine (May 14) and Mankato,
+Minnesota (May 11).
+
+Compare with Chesnee, SC (approved Jun 10): 35yr archive, 7°F margin, South Carolina
+Piedmont in June. The editorial contrast is exact — operator correctly applying
+signal-strength differentiation. P_new writer self-kill would automate this filter.
+
+Chesnee SC text (not graded; approved status, not pending):
+> *Chesnee, South Carolina hit 35°F (1.7°C) on June 6 — coldest June low in 35 years of
+> records, 7°F below the 2000 mark. The Carolina Piedmont sits at elevation, where clear
+> nights and low humidity drain heat fast enough to threaten gardens well into early summer.*
+
+"Threaten gardens well into early summer" — domestic consequence with timing incongruity
+(June frost risk in South Carolina). Ecosystem specificity + consequence. B+/A- range;
+correctly in the review queue.
+
+### Coral consequence-closer pattern (posted drafts, observational only)
+
+Two June coral drafts were posted before the routine could observe them as pending. Both
+use the consequence-closer form that earned A-grades in the May corpus:
+
+**Nauru** (Jun 5, score 86): "Nauru is a single raised coral island; its reef is the
+island's perimeter, with no adjacent reef system to reseed it." Consequence stated
+directly ("no adjacent reef system to reseed it") — A-grade close structure. Opener
+uses "has reached" not "has accumulated" — minor formula variation from P7 template.
+
+**Gilbert Islands** (Jun 4, score 81): "heat that builds here has no cooler adjacent
+water to dilute it." Same consequence-closer structure as Costa Rica Pacific A- ("nowhere
+to drain"). Colon-lead opener breaks the P7 accumulation formula cleanly.
+
+Pattern: the writer is reliably producing consequence-closer coral drafts without the
+formula opener in these posted drafts. P7 fix may be partially self-resolving, but
+needs pending coral drafts to grade formally before drawing conclusions.
+
+### New signal types (pipeline observation)
+
+**dust_event** (Riyadh, Jun 13, score 75, posted): first dust_event in gist history.
+"model-estimated dust daily maximum of 2,083 μg/m³ on June 13 — aerosol optical depth
+at 0.61. Riyadh sits at the edge of the Rub' al Khali, where shamal winds lift fine
+desert sediment into a dense, low column before heat-driven turbulence disperses it."
+The "model-estimated" qualifier is new — framing acknowledges proxy metric. Shamal
+mechanism specific and load-bearing. Score 75 (lower signal floor for this type).
+
+**all_time_high** (Beaver Dams, Utah, Jun 15, score 91, posted): "hottest daily maximum
+in 23 years of records, 6°F above the 2020 mark. The Colorado Plateau's high-elevation
+aridity removes the moisture buffer that caps heat elsewhere in the desert Southwest."
+Ecosystem specificity (high-elevation aridity removes moisture buffer). No era anchor
+deployed — positive. B+/A- observational range.
+
+### Patterns / operational notes
+
+1. **0 pending drafts — nothing to grade.** Queue clears between runs as pipeline
+   processes drafts faster than the routine's daily cadence. Healthy pipeline state.
+
+2. **P_new confirmed live (Jun 13).** Red Dog Mine: 17yr archive, 1°F margin, arctic
+   location. Operator rejected correctly. Writer still producing this class. P_new is
+   now the top-leverage unimplemented proposal (2 observed cycles, most recent Jun 13).
+
+3. **Coral consequence-closer pattern persisting.** Nauru and Gilbert Islands both use
+   the "no adjacent reef / no cooler water" close that earned A-grades in May. Writer
+   has internalized the mechanic in posted drafts. P7 needs pending coral grading to
+   confirm whether the formula opener is still a ceiling.
+
+4. **Chesnee vs. Red Dog Mine contrast.** 35yr/7°F/temperate approved; 17yr/1°F/arctic
+   rejected. Operator applying P_new editorial bar manually and correctly.
+
+5. **No Wodehouse violations** in any of the 7 Jun 4–15 drafts. P4 fix continues to hold.
+
+6. **New types active.** dust_event and all_time_high now producing drafts. Watch for
+   these in pending queue: dust_event carries "model-estimated" hedge; all_time_high
+   may invite era-anchor over-deployment on strong historical records.
+
+### Followups
+
+1. P_new writer self-kill remains the highest-leverage unimplemented fix. Red Dog Mine
+   (Jun 13) is the updated live exemplar.
+2. Next coral pending drafts: grade opener form (P7 watch). Posted drafts suggest natural
+   improvement; need formal pending grading to confirm.
+3. dust_event pending grading: assess "model-estimated" hedge handling, check for
+   Wodehouse violations on proxy metrics.
+4. all_time_high pending grading: watch for era-anchor over-deployment.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Fresh pending drafts graded: 0
+- A-rate: — (no pending drafts; most recent graded cycle: 0% on 2026-06-07)
+- Active proposals: P_new gains evidence (Red Dog Mine, Jun 13 — operator rejection
+  confirms writer still producing shallow-archive cold record class)
+- P5/P7/P8: no new evidence (no relevant pending drafts); coral quality improving in
+  posted drafts but not formally graded
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (13th consecutive skip, May 13 → Jun 16)
+- Pipeline status: active (7 new drafts Jun 4–15; bot posting regularly)
+
+---
+
 ## 2026-06-08 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft
