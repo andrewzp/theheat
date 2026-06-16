@@ -112,6 +112,7 @@ def run_coral_dhw(bot_state: BotState, current_run: dict | None) -> None:
                 cooldown_exempt=False,
                 legacy_type="coral_bleaching",
                 on_draft_success=_on_success,
+                annual_cap_check=lambda: _coral_dhw_annual_cap_reached(bot_state),
             )
         degraded_note = degraded_via(readings)
         _record_source_run(

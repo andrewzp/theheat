@@ -148,6 +148,13 @@ class TriageCandidateBundle:
     # last-seen tier). Defaults to None = no-op. NOT persisted (queue is
     # transient and never written to sqlite).
     on_draft_success: Callable[[], None] | None = None
+    # Optional zero-argument predicate returning True when this candidate's annual
+    # cap is already reached, re-evaluated against LIVE bot_state. The Phase C
+    # refill loop calls it at admit time (after firing prior successes' callbacks
+    # inline) so reaching deeper near a cap can't overshoot in-cycle — and it keys
+    # the cap by the source's own logic (event-date year, per-index counter), which
+    # a static legacy_type map can't. Defaults to None = uncapped.
+    annual_cap_check: Callable[[], bool] | None = None
 
 
 @dataclass

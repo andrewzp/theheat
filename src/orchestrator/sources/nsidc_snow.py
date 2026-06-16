@@ -97,6 +97,14 @@ def run_nsidc_snow(bot_state: BotState, current_run: dict | None) -> None:
                 city=event.station,
                 tweet_date=event.date,
                 on_draft_success=_on_success,
+                # The snow annual cap is SEASONAL-only (gated + incremented only for
+                # seasonal_snow_record); snow_extreme never consumes it, so it must
+                # not be admit-time blocked by it.
+                annual_cap_check=(
+                    (lambda: _snow_annual_cap_reached(bot_state))
+                    if _event_kind == "seasonal_snow_record"
+                    else None
+                ),
             )
 
         nsidc_snow.update_snow_tracking(cast(dict, bot_state), readings)

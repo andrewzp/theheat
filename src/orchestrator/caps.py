@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import cast
 
@@ -18,6 +19,52 @@ CORAL_DHW_ANNUAL_CAP = 16
 ICE_ANNUAL_CAP = 8
 SNOW_ANNUAL_CAP = 8
 SST_ANOM_ANNUAL_CAP = 10
+
+_DEFAULT_DRAFTS_TARGET_PER_CYCLE = 3
+
+
+def refill_enabled() -> bool:
+    """True only when THEHEAT_REFILL_ENABLED is explicitly truthy (Phase C).
+
+    Default OFF — the drain attempts the top survivors once (legacy). When ON, the
+    drain becomes a generate-and-select loop that keeps attempting ranked distinct
+    candidates until it reaches the per-cycle target.
+    """
+    raw = os.environ.get("THEHEAT_REFILL_ENABLED", "").strip().lower()
+    return raw in {"1", "true", "on", "yes"}
+
+
+def drafts_target_per_cycle() -> int:
+    """Successful-draft target per cycle (THEHEAT_DRAFTS_TARGET_PER_CYCLE, default 3).
+
+    Default = the historical MAX_DRAFTS_PER_CYCLE so flipping refill on with the
+    default target preserves the current ~3-per-cycle ceiling. This is also the
+    cycle-cap prune ceiling under refill — a single knob (codex must-fix #1).
+    """
+    raw = os.environ.get("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "")
+    try:
+        return max(1, int(raw)) if raw else _DEFAULT_DRAFTS_TARGET_PER_CYCLE
+    except (TypeError, ValueError):
+        return _DEFAULT_DRAFTS_TARGET_PER_CYCLE
+
+
+def refill_max_attempts(target: int) -> int:
+    """Attempt ceiling for the refill loop (THEHEAT_REFILL_MAX_ATTEMPTS, default 2*N).
+
+    Bounds LLM spend on thin-supply days where most candidates fail.
+    """
+    raw = os.environ.get("THEHEAT_REFILL_MAX_ATTEMPTS", "")
+    try:
+        return max(target, int(raw)) if raw else max(1, 2 * target)
+    except (TypeError, ValueError):
+        return max(1, 2 * target)
+
+
+# Admit-time annual-cap re-check (codex must-fix #3) is done per-candidate via the
+# source's own ``annual_cap_check`` closure on TriageCandidateBundle — NOT a static
+# legacy_type→cap map, which can't represent event-date-keyed caps (SST anomaly) or
+# one type spanning multiple counters (climate-index NAO/AO/PDO).
+
 
 _ANNUAL_CAP_LABELS = {
     "co2_annual_count": "co2",
@@ -121,6 +168,9 @@ __all__ = [
     "MAX_DRAFTS",
     "SNOW_ANNUAL_CAP",
     "SST_ANOM_ANNUAL_CAP",
+    "drafts_target_per_cycle",
+    "refill_enabled",
+    "refill_max_attempts",
     "_ch4_annual_cap_reached",
     "_co2_annual_cap_reached",
     "_coral_dhw_annual_cap_reached",

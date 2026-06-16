@@ -65,6 +65,7 @@ def _enqueue_story_candidate(
     cooldown_exempt: bool = False,
     draft_metadata: dict | None = None,
     on_draft_success: Callable[[], None] | None = None,
+    annual_cap_check: Callable[[], bool] | None = None,
 ) -> bool:
     """Audit and enqueue one writer candidate.
 
@@ -106,9 +107,190 @@ def _enqueue_story_candidate(
             created_at=_utc_now_iso(),
             draft_metadata=draft_metadata,
             on_draft_success=on_draft_success,
+            annual_cap_check=annual_cap_check,
         ),
     )
     return True
+
+
+def _draft_kwargs_for(candidate: "TriageCandidateBundle") -> dict:
+    kwargs: dict = {
+        "legacy_type": candidate.legacy_type,
+        "event_id": candidate.event_id,
+        "review_context": candidate.review_context,
+    }
+    if candidate.city:
+        kwargs["city"] = candidate.city
+    if candidate.tweet_date:
+        kwargs["tweet_date"] = candidate.tweet_date
+    if candidate.cooldown_exempt:
+        kwargs["cooldown_exempt"] = candidate.cooldown_exempt
+    if candidate.draft_metadata:
+        kwargs["draft_metadata"] = candidate.draft_metadata
+    return kwargs
+
+
+def _refill_drain(
+    bot_state: BotState,
+    current_run: dict | None,
+    queue: list,
+    *,
+    defer_callbacks: list | None = None,
+    funnel_sink: dict | None = None,
+) -> int:
+    """Phase C generate-and-select loop (THEHEAT_REFILL_ENABLED=1).
+
+    Ranks the whole queue, then walks it attempting DISTINCT candidates until it
+    reaches the per-cycle target of SUCCESSFUL drafts (or the queue / attempt
+    budget is exhausted). Deterministic cooldown/dedup runs as a $0 pre-writer
+    predicate; the per-category / pending-type / annual caps are enforced
+    SUCCESS-aware (codex must-fix #2) so failed writer attempts don't burn cap
+    slots and the loop can reach deeper. Returns the number of drafts written.
+
+    on_draft_success callbacks fire INLINE here (not deferred): the loop stops at
+    the target and the prune cap equals the target, so no loop-produced draft is
+    ever pruned — firing inline keeps annual counts live so a candidate's
+    ``annual_cap_check`` reflects this-cycle successes (codex must-fix #3).
+    ``defer_callbacks`` is accepted for signature parity but unused.
+    """
+    from src.orchestrator import caps as _caps
+    from src.orchestrator import common as _common
+    from src.orchestrator import funnel as _funnel
+    from src.orchestrator import triage as _triage
+    from src.orchestrator.draft_save import can_draft_candidate
+
+    try:
+        ranked = _triage.select_survivors(bot_state, queue, refill=True)
+    except Exception as exc:  # noqa: BLE001
+        err_text = str(exc)[:200]
+        print(f"[triage] refill ranking error: {exc!r} — falling back to queue order")
+        from src import state as _state
+
+        _record_triage_error_suppression(bot_state, err_text)
+        _state.record_source_health(bot_state, "triage", "degraded", err_text)
+        ranked = list(queue)
+
+    target = _caps.drafts_target_per_cycle()
+    max_attempts = _caps.refill_max_attempts(target)
+    per_cat_cap = _triage._per_category_cap()
+    pending_cap = _triage._pending_type_cap()
+
+    success_by_category: dict[str, int] = {}
+    pending_by_type: dict[str, int] = {}
+    attempted_event_ids: set[str] = set()
+
+    ctx = _current_suppression_ctx() or {}
+    run_id = ctx.get("run_id")
+    sink_active = funnel_sink is not None
+
+    def _pre_writer_kill(candidate: "TriageCandidateBundle", stage: str, reason: str) -> None:
+        # $0 LLM — show in the funnel as a pre-writer kill at the specific stage.
+        _record_downstream_suppression(
+            bot_state=bot_state,
+            source=candidate.source,
+            run_id=run_id,
+            event_id=candidate.event_id,
+            score=candidate.score,
+            kill_stage=stage,
+            kill_reason=reason,
+            summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
+        )
+        if sink_active:
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
+
+    def _cut(candidate: "TriageCandidateBundle", reason: str) -> None:
+        _triage._record_triage_suppression(
+            bot_state, candidate, cap=per_cat_cap, global_cap=target, reason=reason,
+        )
+        if sink_active:
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
+
+    drafted_count = 0
+    attempts = 0
+    for candidate in ranked:
+        if drafted_count >= target or attempts >= max_attempts:
+            _cut(candidate, "global_cap")
+            continue
+
+        # Distinct candidates only: never spend a 2nd writer call on an event_id we
+        # already attempted this cycle (the first attempt may have critic-killed, so
+        # can_draft_candidate wouldn't catch it). (codex)
+        if candidate.event_id and candidate.event_id in attempted_event_ids:
+            _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
+            continue
+
+        category = getattr(getattr(candidate, "bundle", None), "signal_kind", "") or ""
+        draft_type = getattr(candidate, "legacy_type", "") or ""
+
+        # Diversity caps — counted against SUCCESSES, not selections.
+        if success_by_category.get(category, 0) >= per_cat_cap:
+            _cut(candidate, "per_category_cap")
+            continue
+        if draft_type:
+            if draft_type not in pending_by_type:
+                pending_by_type[draft_type] = _triage._pending_count_for_type(bot_state, draft_type)
+            if pending_by_type[draft_type] >= pending_cap:
+                _cut(candidate, "pending_type_cap")
+                continue
+
+        # Annual-cap re-check at admit time (codex must-fix #3) via the source's own
+        # cap predicate against LIVE state. Prior successes' callbacks fired inline,
+        # so this reflects this-cycle drafts and keys the cap correctly (event-date
+        # year, per-index counter) where a static legacy_type map could not.
+        if candidate.annual_cap_check is not None:
+            try:
+                capped = bool(candidate.annual_cap_check())
+            except Exception as exc:  # noqa: BLE001 — a broken check must not crash the cron
+                print(f"[triage] annual_cap_check error for {candidate.source}: {exc!r}")
+                capped = False
+            if capped:
+                _pre_writer_kill(candidate, "annual_cap", "pre-writer: annual cap reached in-cycle")
+                continue
+
+        # Deterministic pre-writer predicate ($0 LLM) — cooldown / dedup / dup-event.
+        can_draft, reason = can_draft_candidate(bot_state, candidate)
+        if not can_draft:
+            _pre_writer_kill(candidate, reason, f"pre-writer: {reason}")
+            continue
+
+        _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+        _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
+        attempts += 1
+        if candidate.event_id:
+            attempted_event_ids.add(candidate.event_id)
+
+        draft_kwargs = _draft_kwargs_for(candidate)
+        cand_result: dict | None = {} if sink_active else None
+        if cand_result is not None:
+            draft_kwargs["result_out"] = cand_result
+        drafted = _common._try_two_bot_draft(
+            candidate.bundle, bot_state, candidate.score, **draft_kwargs,
+        )
+        if sink_active and cand_result is not None:
+            _funnel.record_candidate_passes(funnel_sink, cand_result.get("stage_outcomes"))
+            if drafted:
+                terminal = "drafted"
+            elif cand_result.get("kill_stage"):
+                terminal = cand_result["kill_stage"]
+            else:
+                terminal = "save_rejected"
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
+
+        if drafted:
+            drafted_count += 1
+            success_by_category[category] = success_by_category.get(category, 0) + 1
+            if draft_type:
+                pending_by_type[draft_type] = pending_by_type.get(draft_type, 0) + 1
+            _bump_run_drafted(current_run, candidate.source)
+            # Fire inline (see docstring): keeps annual counts live for the next
+            # candidate's annual_cap_check. Safe — no loop draft is ever pruned.
+            if candidate.on_draft_success is not None:
+                try:
+                    candidate.on_draft_success()
+                except Exception as cb_exc:  # noqa: BLE001
+                    print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+
+    return drafted_count
 
 
 def _drain_and_write_triage_queue(
@@ -145,11 +327,13 @@ def _drain_and_write_triage_queue(
           drain step credits the actual count once survivors are written.
     """
     from src import state as _state
+    from src.orchestrator import caps as _caps
     from src.orchestrator import common as _common
     from src.orchestrator import triage as _triage
 
     triage_enabled = _triage_enabled()
-    if triage_enabled:
+    refill_enabled = _caps.refill_enabled()
+    if triage_enabled or refill_enabled:
         # Pending-queue TTL sweep — auto-reject stale drafts BEFORE triage so the
         # freshly-opened slots are immediately available to incoming candidates
         # via the pending-type cap. Errors here must NOT block the cycle: a
@@ -182,6 +366,14 @@ def _drain_and_write_triage_queue(
     queued_by_source = Counter(candidate.source for candidate in queue)
     for source, count in queued_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_in", count)
+
+    # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
+    # ranking, success-aware caps, pre-writer predicate and stop condition.
+    if refill_enabled:
+        return _refill_drain(
+            bot_state, current_run, queue,
+            defer_callbacks=defer_callbacks, funnel_sink=funnel_sink,
+        )
 
     survivors = queue  # default: legacy passthrough
     if triage_enabled:

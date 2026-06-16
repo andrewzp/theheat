@@ -59,6 +59,7 @@ def run_co2(bot_state: BotState, current_run: dict | None) -> None:
                     event_id=milestone.event_id,
                     review_context=review_context,
                     on_draft_success=lambda: _increment_co2_annual_count(bot_state),
+                    annual_cap_check=lambda: _co2_annual_cap_reached(bot_state),
                 )
         _record_source_run(
             current_run, bot_state, "co2", co2_start,

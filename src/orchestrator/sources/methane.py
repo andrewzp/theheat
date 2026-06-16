@@ -62,6 +62,7 @@ def run_methane(bot_state: BotState, current_run: dict | None) -> None:
                     event_id=ch4_milestone.event_id,
                     review_context=review_context,
                     on_draft_success=_on_success,
+                    annual_cap_check=lambda: _ch4_annual_cap_reached(bot_state),
                 )
         _record_source_run(
             current_run, bot_state, "ch4_milestone", ch4_start,

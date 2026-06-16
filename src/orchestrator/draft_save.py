@@ -34,6 +34,52 @@ def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
 
 
+def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
+    """Pre-writer deterministic gate (Phase C): would ``save_draft`` reject this
+    candidate regardless of the not-yet-written copy? If so the refill loop skips
+    it BEFORE the writer runs ($0 LLM). ``save_draft`` keeps the same gates as
+    defense in depth; this only mirrors the *certain* rejections.
+
+    Safe because two-bot drafts never pass ``candidate_score`` to ``save_draft``,
+    so the copy-elite cooldown bypass is dead — every rejection here is certain.
+    Covers BOTH dedup layers (codex correction): durable posted-event dedup
+    (``state.is_duplicate``) AND draft_save's event/city-date/cooldown gates.
+    Returns ``(True, "")`` when drafting may proceed, else ``(False, reason)``
+    where reason matches the suppression stage vocabulary.
+    """
+    from src import state as _state
+
+    event_id = getattr(candidate, "event_id", "") or ""
+    drafts = bot_state.get("drafts", []) or []
+    if event_id and any(d.get("event_id") == event_id for d in drafts):
+        return False, "duplicate_draft"
+    if event_id and _state.is_duplicate(bot_state, event_id):
+        return False, "duplicate_posted"
+
+    city = getattr(candidate, "city", "") or ""
+    tweet_date = getattr(candidate, "tweet_date", "") or ""
+    score = getattr(candidate, "score", None)
+    new_total = int(getattr(score, "total", 0) or 0)
+    if city and tweet_date:
+        if _same_day_already_posted(drafts, city, tweet_date):
+            return False, "same_day_posted"
+        collision = _same_day_pending_collision(drafts, city, tweet_date)
+        if collision:
+            _idx, other = collision
+            other_total = int((other.get("score") or {}).get("total", 0) or 0)
+            if new_total <= other_total:
+                return False, "same_day_dedup"
+            # Stronger than the pending same-day draft — save_draft will supersede
+            # (pop) the weaker one; allow the attempt.
+    if (
+        city
+        and not getattr(candidate, "cooldown_exempt", False)
+        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS)
+    ):
+        return False, "city_cooldown"
+    return True, ""
+
+
 def _critic_passed(review_context: dict | None) -> bool:
     """True only when the draft carries an explicit two-bot critic PASS.
 
@@ -288,5 +334,6 @@ def _save_generated_draft(
 __all__ = [
     "_save_generated_draft",
     "_touch_draft",
+    "can_draft_candidate",
     "save_draft",
 ]

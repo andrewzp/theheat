@@ -151,6 +151,7 @@ def run_ice_mass(bot_state: BotState, current_run: dict | None) -> None:
                             event_id=ice_record.event_id,
                             review_context=review_context,
                             on_draft_success=_on_success,
+                            annual_cap_check=lambda: _ice_annual_cap_reached(bot_state),
                         )
 
                 # Always mark the month as seen so we don't reprocess until data updates.

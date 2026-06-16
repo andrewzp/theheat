@@ -5,10 +5,26 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 Documentation sweep aligning the operator docs with the 0.9.81.0 production
-state, plus Throughput Initiative Phases A (funnel instrumentation) and B
-(ship-gate decouple) — both dark, default-OFF.
+state, plus Throughput Initiative Phases A (funnel instrumentation), B
+(ship-gate decouple) and C (refill loop) — all dark, default-OFF.
 
 ### Added
+
+- **Generate-and-select refill loop (Throughput Initiative Phase C)** behind
+  `THEHEAT_REFILL_ENABLED` (default OFF). When enabled, the drain stops attempting
+  the top-3 survivors once and instead walks the FULL ranked queue, attempting
+  DISTINCT candidates until it reaches `THEHEAT_DRAFTS_TARGET_PER_CYCLE`
+  successful drafts (default 3 = behavior-preserving) or the queue / attempt
+  budget (`THEHEAT_REFILL_MAX_ATTEMPTS`, default 2×target) is exhausted. New
+  `can_draft_candidate` runs the cooldown/dedup checks as a **$0 pre-writer
+  predicate** (covering both the durable posted-event layer and draft_save's
+  event/city-date/cooldown gates), so doomed candidates never burn an LLM call.
+  The per-category, pending-type, and annual caps are enforced **success-aware**
+  (counted against drafts written, not selections — so a failed writer attempt
+  doesn't burn a slot and the loop reaches deeper), with annual caps re-checked
+  at admit time against live state + this-cycle successes (no overshoot). The
+  cycle-cap prune ceiling now follows the target (one knob). Flag OFF is
+  byte-for-byte the current top-3-once behavior.
 
 - **Auto-ship on critic PASS (Throughput Initiative Phase B)** behind
   `THEHEAT_AUTOSHIP_ON_CRITIC_PASS` (default OFF). When enabled, the flag governs
