@@ -5,6 +5,7 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 import os
 
+from src.orchestrator.caps import drafts_target_per_cycle, refill_enabled
 from src.orchestrator.common import *
 
 
@@ -12,6 +13,12 @@ try:
     MAX_DRAFTS_PER_CYCLE = int(os.environ.get("THEHEAT_MAX_DRAFTS_PER_CYCLE", "3"))
 except ValueError:
     MAX_DRAFTS_PER_CYCLE = 3
+
+
+def _effective_cycle_cap() -> int:
+    """Cycle-cap prune ceiling. Under refill (Phase C) the target IS the cap — one
+    knob (codex must-fix #1) — so a raised target isn't pruned back to 3."""
+    return drafts_target_per_cycle() if refill_enabled() else MAX_DRAFTS_PER_CYCLE
 
 
 _PRUNE_SOURCE_KEY_BY_TYPE = {
@@ -89,15 +96,16 @@ def _prune_weakest_cycle_drafts(
 
     Returns the post-prune drafted count the caller should report.
     """
+    cap = _effective_cycle_cap()
     drafts = bot_state.get("drafts", [])
     new_drafts = drafts[drafts_before:]
-    if len(new_drafts) <= MAX_DRAFTS_PER_CYCLE:
+    if len(new_drafts) <= cap:
         return drafted
 
     scored = [(d, d.get("score", {}).get("total", 0)) for d in new_drafts]
     scored.sort(key=lambda x: x[1], reverse=True)
-    keep = {id(d) for d, _ in scored[:MAX_DRAFTS_PER_CYCLE]}
-    pruned = [d for d, _ in scored[MAX_DRAFTS_PER_CYCLE:]]
+    keep = {id(d) for d, _ in scored[:cap]}
+    pruned = [d for d, _ in scored[cap:]]
     bot_state["drafts"] = drafts[:drafts_before] + [d for d in new_drafts if id(d) in keep]
 
     pruned_event_ids = {d.get("event_id") for d in pruned if d.get("event_id")}
@@ -123,8 +131,8 @@ def _prune_weakest_cycle_drafts(
                         continue
                     break
 
-    print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {MAX_DRAFTS_PER_CYCLE}")
-    for d, s in scored[MAX_DRAFTS_PER_CYCLE:]:
+    print(f"[alerts] Pruned {len(pruned)} weaker drafts, kept top {cap}")
+    for d, s in scored[cap:]:
         print(f"[alerts]   Pruned: score={s} {d.get('text', '')[:50]}...")
         ctx = _current_suppression_ctx()
         if ctx is not None:
@@ -135,10 +143,10 @@ def _prune_weakest_cycle_drafts(
                 event_id=d.get("event_id", ""),
                 score=d.get("score") or {},
                 kill_stage="cycle_cap",
-                kill_reason=f"Pruned by MAX_DRAFTS_PER_CYCLE={MAX_DRAFTS_PER_CYCLE}",
+                kill_reason=f"Pruned by cycle cap={cap}",
                 summary=d.get("text", "")[:120] or d.get("event_id"),
             )
-    return MAX_DRAFTS_PER_CYCLE
+    return cap
 
 
 def _fire_surviving_draft_callbacks(pending: list, pruned_event_ids: set) -> None:

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from functools import partial
+
 from src.data import last_good
 from src.orchestrator.common import *
 
@@ -120,6 +122,7 @@ def run_climate_indices(bot_state: BotState, current_run: dict | None) -> None:
                     event_id=event.event_id,
                     review_context=review_context,
                     on_draft_success=_on_success,
+                    annual_cap_check=partial(_oscillation_annual_cap_reached, bot_state, _index_name),
                 )
 
             _record_source_run(
@@ -224,6 +227,10 @@ def _run_nao_ao_alignment(
             event_id=event.event_id,
             review_context=review_context,
             on_draft_success=_on_success,
+            annual_cap_check=lambda: (
+                _oscillation_annual_cap_reached(bot_state, "NAO")
+                or _oscillation_annual_cap_reached(bot_state, "AO")
+            ),
         )
         _record_source_run(
             current_run, bot_state, "nao_ao_alignment", source_start,

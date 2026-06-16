@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from functools import partial
+
 from src.data._witness import degraded_via
 from src.orchestrator.common import *
 from src.two_bot.intern import build_regional_sst_anomaly_bundle
@@ -103,6 +105,7 @@ def run_ocean_sst_anomaly(bot_state: BotState, current_run: dict | None) -> None
                 tweet_date=event.date,
                 cooldown_exempt=False,
                 on_draft_success=_on_success,
+                annual_cap_check=partial(_sst_anom_annual_cap_reached, bot_state, event.date),
             )
 
         degraded_note = degraded_via(readings)

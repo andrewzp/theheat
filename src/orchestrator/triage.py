@@ -216,6 +216,7 @@ def select_survivors(
     queue: "list[TriageCandidateBundle]",
     *,
     global_cap: int = MAX_DRAFTS_PER_CYCLE,
+    refill: bool = False,
 ) -> "list[TriageCandidateBundle]":
     """Rank, apply per-category cap, apply global cap. Returns survivors
     in writer-call order. Records spilled candidates as kill_stage=
@@ -226,6 +227,12 @@ def select_survivors(
 
     cooldown_exempt=True is a city-cooldown bypass, NOT a triage-cap bypass.
     Elite signals can lose to even more elite signals.
+
+    ``refill=True`` (Phase C): return the FULL ranked list without applying the
+    per-category / pending-type / global caps and without recording triage_cap.
+    The drain's generate-and-select loop owns the stop condition and applies the
+    caps SUCCESS-aware (codex must-fix #2 — caps spent on selection here would
+    stop the loop reaching deeper after failed writer attempts).
     """
     if not queue:
         return []
@@ -238,6 +245,9 @@ def select_survivors(
         ),
         reverse=True,
     )
+
+    if refill:
+        return ranked
 
     cap = _per_category_cap()
     pending_cap = _pending_type_cap()
