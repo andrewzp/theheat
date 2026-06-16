@@ -10,6 +10,7 @@ import requests
 
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
+from src.data._witness import tag_source_leg, with_witness
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -26,30 +27,50 @@ from src.data.cyclones import (
 from src.data.source_status import SourceFetchError
 
 JTWC_RSS_URL = "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss?layout=enhanced"
+JTWC_PLAIN_RSS_URL = "https://www.metoc.navy.mil/jtwc/rss/jtwc.rss"
+JTWC_PLAIN_RSS_LEG = "plain_rss"
 
 
 def fetch_active_cyclones(*, strict: bool = False) -> list[CycloneAdvisory]:
     """Fetch active JTWC tropical warnings from the public RSS feed."""
 
     try:
-        response = fetch_with_retry(
-            JTWC_RSS_URL,
-            headers={
-                "User-Agent": "(theheat-bot, contact@theheat.app)",
-                "Accept": "application/rss+xml, application/xml, text/xml",
-            },
-            timeout=30,
+        advisories = with_witness(
+            lambda: _fetch_active_cyclones_from_rss(JTWC_RSS_URL),
+            lambda: tag_source_leg(
+                _fetch_active_cyclones_from_rss(JTWC_PLAIN_RSS_URL),
+                JTWC_PLAIN_RSS_LEG,
+            ),
+            source_key="jtwc",
+            leg_label=JTWC_PLAIN_RSS_LEG,
         )
-        advisories = parse_rss(response.text)
         if advisories and (
             newest_date := newest_freshness_date([advisory.issued_at for advisory in advisories])
         ):
             assert_freshness(newest_date, "jtwc", max_age_days=2)
         return advisories
-    except (requests.RequestException, ET.ParseError, ValueError, TypeError) as exc:
+    except (requests.RequestException, SourceFetchError, ValueError, TypeError) as exc:
         if strict:
+            if isinstance(exc, SourceFetchError):
+                raise
             raise SourceFetchError(f"JTWC fetch failed: {exc}") from exc
         return []
+
+
+def _fetch_active_cyclones_from_rss(url: str) -> list[CycloneAdvisory]:
+    try:
+        response = fetch_with_retry(
+            url,
+            headers={
+                "User-Agent": "(theheat-bot, contact@theheat.app)",
+                "Accept": "application/rss+xml, application/xml, text/xml",
+            },
+            timeout=30,
+            attempts=1,
+        )
+        return parse_rss(response.text)
+    except ET.ParseError as exc:
+        raise SourceFetchError(f"JTWC RSS parse failed: {exc}") from exc
 
 
 def parse_rss(xml_text: str) -> list[CycloneAdvisory]:

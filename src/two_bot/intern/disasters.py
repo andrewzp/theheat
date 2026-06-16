@@ -67,6 +67,22 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
 
 def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
     """A live-running natural disaster surfaced via GDACS."""
+    current_facts: list[dict[str, Any]] = [
+        {"label": "disaster_type", "value": disaster.disaster_type},
+        {"label": "name", "value": disaster.name},
+        {"label": "country", "value": disaster.country},
+        {"label": "severity", "value": disaster.severity},
+        {"label": "alert_score", "value": disaster.alert_score},
+        {"label": "severity_value", "value": disaster.severity_value},
+        {"label": "severity_unit", "value": disaster.severity_unit},
+        {"label": "population_affected", "value": disaster.population_affected},
+        {"label": "description", "value": disaster.description},
+    ]
+    if disaster.source_leg == "subtype_witnesses":
+        current_facts.extend([
+            {"label": "data_source", "value": "USGS/NHC/JTWC subtype witness"},
+            {"label": "evidence_grade", "value": "observed_alt_host"},
+        ])
 
     return StoryBundle(
         signal_kind="global_disaster",
@@ -77,17 +93,7 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
             "label": "severity",
             "value": disaster.severity,
         },
-        current_facts=[
-            {"label": "disaster_type", "value": disaster.disaster_type},
-            {"label": "name", "value": disaster.name},
-            {"label": "country", "value": disaster.country},
-            {"label": "severity", "value": disaster.severity},
-            {"label": "alert_score", "value": disaster.alert_score},
-            {"label": "severity_value", "value": disaster.severity_value},
-            {"label": "severity_unit", "value": disaster.severity_unit},
-            {"label": "population_affected", "value": disaster.population_affected},
-            {"label": "description", "value": disaster.description},
-        ],
+        current_facts=current_facts,
         historical_context={},
         raw_signal_dump=asdict(disaster),
     )

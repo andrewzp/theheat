@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+from src.data._witness import degraded_via
 from src.orchestrator.common import *
 
 
@@ -70,9 +71,14 @@ def run_copernicus_ems(bot_state: BotState, current_run: dict | None) -> None:
                 review_context=review_context,
                 on_draft_success=_on_success,
             )
+        degraded_note = degraded_via(activations)
         _record_source_run(
             current_run, bot_state, "copernicus_ems", copernicus_start,
-            status="success", observed=len(activations), promoted=source_promoted, drafted=0
+            status="degraded" if degraded_note else "success",
+            observed=len(activations),
+            promoted=source_promoted,
+            drafted=0,
+            note=degraded_note,
         )
     except Exception as e:
         print(f"[alerts] Copernicus EMS flood error: {e}")

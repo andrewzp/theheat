@@ -10,6 +10,8 @@ import responses
 from src import main
 from src.data.copernicus_ems import (
     DETAIL_URL,
+    FRONTEND_ACTIVATIONS_URL,
+    FRONTEND_API_LEG,
     SUMMARY_URL,
     CopernicusFloodActivation,
     detect_flood_events,
@@ -91,6 +93,30 @@ def _detail_payload(code: str = "EMSR999") -> dict:
                     "Population [No.]": 125000,
                     "max_extent": 21540.0,
                 },
+            }
+        ],
+    }
+
+
+def _frontend_payload(code: str = "EMSN228") -> dict:
+    today = date.today().isoformat()
+    return {
+        "count": 1,
+        "next": None,
+        "previous": None,
+        "results": [
+            {
+                "code": code,
+                "countries": [{"short_name": "Italy"}],
+                "category": {"slug": "flood", "name": "Flood"},
+                "name": "Flood and landslides in Friuli Venezia-Giulia, Italy",
+                "centroid": "POINT (13.44682 45.97987)",
+                "activationTime": f"{today}T00:00:00",
+                "lastUpdate": f"{today}T14:11:17",
+                "closed": False,
+                "n_aois": 1,
+                "n_products": 14,
+                "search_snippet": "Flooding affected several municipalities.",
             }
         ],
     }
@@ -179,6 +205,21 @@ def test_schema_drift_raises_in_strict_mode():
 
     with pytest.raises(SourceFetchError):
         fetch_active_flood_activations(strict=True)
+
+
+@responses.activate
+def test_summary_failure_falls_back_to_frontend_activations_api(capsys):
+    responses.add(responses.GET, SUMMARY_URL, status=403, body="Forbidden")
+    responses.add(responses.GET, FRONTEND_ACTIVATIONS_URL, json=_frontend_payload())
+
+    events = fetch_active_flood_activations(strict=True)
+
+    assert "[copernicus_ems] served by frontend_api" in capsys.readouterr().out
+    assert len(events) == 1
+    assert events[0].activation_id == "EMSN228"
+    assert events[0].country == "Italy"
+    assert events[0].severity == "Minor"
+    assert events[0].source_leg == FRONTEND_API_LEG
 
 
 def test_detector_fires_new_major_activation():

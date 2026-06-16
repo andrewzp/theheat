@@ -6,6 +6,7 @@ import time
 from typing import cast
 
 from src import state
+from src.data._witness import degraded_via
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
@@ -240,12 +241,14 @@ def _process_cyclone_source(
             if advisory.category >= 1:
                 state.update_cyclone_tier(bot_state, advisory.tracking_key, advisory.category)
 
+        degraded_note = degraded_via(advisories)
         _record_source_run(
             current_run, bot_state, source_key, source_start,
-            status="success",
+            status="degraded" if degraded_note else "success",
             observed=len(advisories),
             promoted=source_promoted,
             drafted=0,
+            note=degraded_note,
             details={
                 "events": [
                     {

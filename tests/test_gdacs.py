@@ -1,12 +1,18 @@
 """Tests for GDACS global disaster events."""
 
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
 import responses
 
 from src.data.gdacs import GDACS_GEORSS_URL, GDACS_URL, GlobalDisasterEvent, fetch_disasters, _intensity_tier
+from src.data.cyclones import CycloneAdvisory
 from src.data.source_status import SourceFetchError
+from src.state import DEFAULT_STATE
+from src.data.usgs_quakes import SignificantEarthquakeEvent
+from src.orchestrator.sources.gdacs import run_gdacs
+from src.two_bot.intern import build_global_disaster_bundle
 
 SAMPLE_RESPONSE = {
     "features": [
@@ -182,6 +188,102 @@ class TestFetchDisasters:
 
         with pytest.raises(SourceFetchError, match="insufficient GeoRSS fields"):
             fetch_disasters(strict=True)
+
+    @responses.activate
+    def test_gdacs_primary_outage_uses_usgs_and_cyclone_subtype_witnesses(self, monkeypatch, capsys):
+        responses.add(responses.GET, GDACS_URL, status=500, body="down")
+        responses.add(responses.GET, GDACS_GEORSS_URL, status=504, body="timeout")
+        monkeypatch.setattr(
+            "src.data.gdacs.usgs_quakes.fetch_significant_earthquakes",
+            lambda strict=False: [
+                SignificantEarthquakeEvent(
+                    event_id="usgs_eq_us7000abcd",
+                    usgs_id="us7000abcd",
+                    title="M 7.8 - 10 km S of Testville",
+                    place="10 km S of Testville",
+                    magnitude=7.8,
+                    time="2026-06-16T01:02:03Z",
+                    updated="2026-06-16T01:12:03Z",
+                    url="https://earthquake.usgs.gov/earthquakes/eventpage/us7000abcd",
+                    alert="red",
+                    significance=1200,
+                    tsunami=True,
+                )
+            ],
+        )
+        monkeypatch.setattr(
+            "src.data.gdacs.nhc.fetch_active_cyclones",
+            lambda strict=False: [
+                CycloneAdvisory(
+                    source="nhc",
+                    storm_id="AL0126",
+                    storm_name="Alex",
+                    basin="Atlantic",
+                    advisory_number="12",
+                    issued_at="2026-06-16T00:00:00Z",
+                    wind_kt=120,
+                    pressure_mb=930,
+                    lat=18.5,
+                    lon=-62.1,
+                    public_advisory_url="https://www.nhc.noaa.gov/",
+                )
+            ],
+        )
+        monkeypatch.setattr("src.data.gdacs.jtwc.fetch_active_cyclones", lambda strict=False: [])
+
+        events = fetch_disasters(strict=True)
+
+        assert "[gdacs] served by subtype_witnesses" in capsys.readouterr().out
+        assert [event.disaster_type for event in events] == ["Earthquake", "Tropical Cyclone"]
+        assert all(event.source_leg == "subtype_witnesses" for event in events)
+        assert events[0].severity == "Red"
+        assert events[0].severity_value == pytest.approx(7.8)
+        assert events[1].severity_value == pytest.approx(222.24)
+
+    def test_gdacs_subtype_witness_marks_observed_alt_host_grade(self):
+        event = GlobalDisasterEvent(
+            disaster_type="Earthquake",
+            name="M 7.8 - Testville",
+            country="10 km S of Testville",
+            severity="Red",
+            description="USGS significant earthquake alert",
+            event_id="gdacs_EQ_usgs_us7000abcd_2026-06-16",
+            severity_value=7.8,
+            severity_unit="M",
+            source_leg="subtype_witnesses",
+        )
+
+        bundle = build_global_disaster_bundle(event)
+
+        assert {"label": "evidence_grade", "value": "observed_alt_host"} in bundle.current_facts
+
+    def test_gdacs_runner_counts_subtype_witness_without_duplicate_story(self, monkeypatch):
+        event = GlobalDisasterEvent(
+            disaster_type="Earthquake",
+            name="M 7.8 - Testville",
+            country="10 km S of Testville",
+            severity="Red",
+            description="USGS significant earthquake alert",
+            event_id="gdacs_EQ_usgs_us7000abcd_2026-06-16",
+            severity_value=7.8,
+            severity_unit="M",
+            source_leg="subtype_witnesses",
+        )
+        monkeypatch.setattr(
+            "src.orchestrator.sources.gdacs.gdacs.fetch_disasters",
+            lambda *args, **kwargs: [event],
+        )
+        bot_state = deepcopy(DEFAULT_STATE)
+        current_run = {"sources": []}
+
+        run_gdacs(bot_state, current_run)
+
+        assert bot_state.get("_triage_queue", []) == []
+        source = next(item for item in current_run["sources"] if item["source"] == "gdacs")
+        assert source["status"] == "degraded"
+        assert source["observed"] == 1
+        assert source["promoted"] == 0
+        assert source["note"] == "served via subtype_witnesses"
 
 class TestIntensityTier:
     def test_tropical_storm(self):

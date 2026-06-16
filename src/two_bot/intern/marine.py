@@ -169,6 +169,31 @@ def build_marine_heatwave_bundle(mhw: MarineHeatwaveStreakEvent) -> StoryBundle:
 
 def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBundle:
     """A per-region SST anomaly event bundle."""
+    current_facts: list[dict[str, Any]] = [
+        {"label": "region_slug", "value": event.region_slug},
+        {"label": "region_display_name", "value": event.region_display_name},
+        {"label": "anomaly_c", "value": round(event.anomaly_c, 2), "unit": "°C"},
+        {"label": "tier", "value": event.tier},
+        {"label": "tier_threshold_c", "value": [2.5, 3.5, 4.5][event.tier - 1]},
+        {
+            "label": "spatial_aggregation",
+            "value": "cos-latitude area-weighted basin mean",
+        },
+        {"label": "grid_cells_used", "value": event.cells_used},
+        {"label": "anomaly_basis", "value": "NOAA CRW published 5km SST anomaly"},
+        {
+            "label": "signal_note",
+            "value": (
+                "Absolute area-weighted-mean anomaly vs CRW climatology. "
+                "NOT a Hobday duration/percentile MHW classification."
+            ),
+        },
+    ]
+    if event.source_leg == "noaa_star_nc":
+        current_facts.extend([
+            {"label": "data_source", "value": "NOAA STAR CRW SST anomaly NetCDF"},
+            {"label": "evidence_grade", "value": "observed_alt_host"},
+        ])
 
     return StoryBundle(
         signal_kind="regional_sst_anomaly",
@@ -180,26 +205,7 @@ def build_regional_sst_anomaly_bundle(event: RegionalSSTAnomalyEvent) -> StoryBu
             "value": round(event.anomaly_c, 2),
             "unit": "°C",
         },
-        current_facts=[
-            {"label": "region_slug", "value": event.region_slug},
-            {"label": "region_display_name", "value": event.region_display_name},
-            {"label": "anomaly_c", "value": round(event.anomaly_c, 2), "unit": "°C"},
-            {"label": "tier", "value": event.tier},
-            {"label": "tier_threshold_c", "value": [2.5, 3.5, 4.5][event.tier - 1]},
-            {
-                "label": "spatial_aggregation",
-                "value": "cos-latitude area-weighted basin mean",
-            },
-            {"label": "grid_cells_used", "value": event.cells_used},
-            {"label": "anomaly_basis", "value": "NOAA CRW published 5km SST anomaly"},
-            {
-                "label": "signal_note",
-                "value": (
-                    "Absolute area-weighted-mean anomaly vs CRW climatology. "
-                    "NOT a Hobday duration/percentile MHW classification."
-                ),
-            },
-        ],
+        current_facts=current_facts,
         historical_context={
             "scope": "noaa_crw_regional_sst_anomaly",
             "source": (
