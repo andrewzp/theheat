@@ -33,6 +33,14 @@ Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress 
 > Reframe worth carrying forward: input breadth is NOT the bottleneck (~132k
 > observed/day already); the collapse to ~6 drafts/week is architecture + caps +
 > the posting deadlock.
+>
+> **SHIPPED DARK (2026-06-16):** all four phases are coded, tested, codex-checked,
+> and merged to `main` behind default-OFF repo variables (A #297, B #298, C #299,
+> D #300). Nothing auto-activates. Turn-on order + what-to-watch + one-flip
+> rollbacks are in the activation runbook:
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/2026-06-16_throughput-activation-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/2026-06-16_throughput-activation-runbook.md),
+> with the shipped-state handoff at
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16-throughput-shipped.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16-throughput-shipped.md).
 
 ## Progress against plan (as of 2026-05-12)
 

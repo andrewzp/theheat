@@ -7,17 +7,19 @@ and the dashboard now exposes per-source troubleshooting logs for current
 problem rows. The editorial pipeline shape described below is unchanged; the
 source layer is more resilient and more observable.
 
-**Planned — Throughput Initiative (eng-review 2026-06-16).** A four-phase plan
-(A funnel instrumentation -> B decouple the ship gate -> C generate-and-select
-refill loop -> D multi-signal writer context) aims to move from ~6 drafts/week
-toward 3-5 outstanding tweets/day. The pipeline SHAPE below is unchanged by it;
-the phases add a refill loop at the drain step (C), a critic-PASS + freshness
-auto-ship path (B), per-stage funnel rates + a shadow slate (A), and optional
-cross-signal `related_signals` on the StoryBundle (D) — all flag-gated default-OFF.
+**Throughput Initiative — SHIPPED DARK (2026-06-16).** All four phases (A funnel
+instrumentation -> B decouple the ship gate -> C generate-and-select refill loop
+-> D multi-signal writer context) are coded, tested, codex-checked, and merged to
+`main` behind **default-OFF** repo variables (A [#297](https://github.com/andrewzp/theheat/pull/297),
+B [#298](https://github.com/andrewzp/theheat/pull/298), C [#299](https://github.com/andrewzp/theheat/pull/299),
+D [#300](https://github.com/andrewzp/theheat/pull/300)). Nothing auto-activates —
+the pipeline SHAPE below is unchanged with the flags off. The phases add per-stage
+funnel rates + a shadow slate (A), a critic-PASS + freshness auto-ship path (B), a
+refill loop at the drain step (C), and optional cross-signal `related_signals` on
+the StoryBundle (D). Turn-on order + what-to-watch + one-flip rollbacks:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/2026-06-16_throughput-activation-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/2026-06-16_throughput-activation-runbook.md).
 Plans + codex reviews in
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/);
-execution brief
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md).
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/).
 
 **@extremetemps coverage lane — LANDED in full (2026-06-08/09; all `manual_only`).** Wave 1: `absolute-extreme` + `wetbulb-extremes` ([#195](https://github.com/andrewzp/theheat/pull/195)) and `air-quality-pm-dust` (new Open-Meteo Air Quality/CAMS source, [#194](https://github.com/andrewzp/theheat/pull/194)). Wave 2: `sst-anomaly-marine-heatwave` (NOAA Coral Reef Watch 5km anomaly via CoastWatch ERDDAP, 13 global basins, [#198](https://github.com/andrewzp/theheat/pull/198)). Part B: `reanalysis-anomaly` ([#203](https://github.com/andrewzp/theheat/pull/203)) — landed but **DORMANT** (`THEHEAT_REGANOM_ENABLED` unset; one-command flip, Andrew's call). The implementation plans remain in `docs/plans/2026-06-08-*.md` as build records.
 
