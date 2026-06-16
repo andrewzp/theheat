@@ -5,7 +5,23 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 Documentation sweep aligning the operator docs with the 0.9.81.0 production
-state.
+state, plus Phase A of the Throughput Initiative (funnel instrumentation, dark).
+
+### Added
+
+- **Funnel telemetry (Throughput Initiative Phase A)** behind
+  `THEHEAT_FUNNEL_TELEMETRY` (default OFF). When enabled, each alerts cycle
+  freezes a per-run `funnel` object and a top-10 `shadow_slate` onto its
+  `run_history` entry: stage volumes (observed → … → drafted), writer/
+  fact_check/critic **pass** counts, kills-by-terminal-stage (counted from the
+  run's own suppressions, immune to the 100-row cap), and each slate
+  candidate's terminal stage (drafted / triage_cap / critic / cycle_cap / …).
+  New `src/orchestrator/funnel.py` owns the math; `generate_draft` records
+  per-candidate `stage_outcomes` in `result_out`. New authenticated dashboard
+  route `GET /api/funnel` rolls the last 7 days up **from run_history** (not
+  source_health) and derives `critic_pass_rate = passes/(passes+kills)` plus
+  per-stage rates. Pure observability — no pipeline behaviour changes; flag OFF
+  is byte-for-byte the prior cycle.
 
 ### Changed
 

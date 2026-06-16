@@ -125,6 +125,7 @@ def _check_safety_honesty_fact(
     state: BotState,
     *,
     record_kill: Callable[[str, str], None],
+    mark_stage: Callable[[str, str], None] | None = None,
 ) -> FactCheckResult | None:
     safety_passed, safety_reason = run_safety_pipeline(tweet)
     if not safety_passed:
@@ -151,8 +152,12 @@ def _check_safety_honesty_fact(
             f"[two_bot.pipeline] Fact-check rejected {bundle.signal_kind} "
             f"draft: {failures_str}"
         )
+        if mark_stage is not None:
+            mark_stage("fact_check", "kill")
         record_kill("fact_check", failures_str or "unknown")
         return None
+    if mark_stage is not None:
+        mark_stage("fact_check", "pass")
     return fact_result
 
 
@@ -187,10 +192,20 @@ def generate_draft(
     Never raises.
     """
 
+    # Phase A funnel telemetry: per-candidate terminal pass|kill per stage.
+    # REVISE re-runs overwrite a stage's outcome (terminal wins), so each
+    # stage counts a candidate once. Mirrored into result_out for the drain.
+    stage_outcomes: dict[str, str] = {}
+
     def _record_kill(stage: str, reason: str) -> None:
         if result_out is not None:
             result_out["kill_stage"] = stage
             result_out["kill_reason"] = reason
+
+    def _mark_stage(stage: str, outcome: str) -> None:
+        stage_outcomes[stage] = outcome
+        if result_out is not None:
+            result_out["stage_outcomes"] = stage_outcomes
 
     try:
         if not _audit_bundle_for_generation(bundle, record_kill=_record_kill):
@@ -207,8 +222,10 @@ def generate_draft(
             ]
             reason = "all writer samples killed: " + "; ".join(kill_reasons)
             print(f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: {reason}")
+            _mark_stage("writer", "kill")
             _record_kill("writer", reason)
             return None
+        _mark_stage("writer", "pass")
 
         writer_result = viable_results[0]
         slate_critic_result = None
@@ -225,8 +242,10 @@ def generate_draft(
                     f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
                     f"slate: {slate_critic_result.kill_reason}"
                 )
+                _mark_stage("critic", "kill")
                 _record_kill("critic", slate_critic_result.kill_reason or "unknown")
                 return None
+            _mark_stage("critic", "pass")
             selected_index = slate_critic_result.selected_index or 0
             writer_result = viable_results[selected_index]
 
@@ -236,6 +255,7 @@ def generate_draft(
             bundle,
             state,
             record_kill=_record_kill,
+            mark_stage=_mark_stage,
         )
         if fact_result is None:
             return None
@@ -272,6 +292,9 @@ def generate_draft(
                         f"[two_bot.pipeline] Revision writer killed "
                         f"{bundle.signal_kind} draft: {revised.kill_reason}"
                     )
+                    # Terminal outcome is a writer kill — overwrite the earlier
+                    # writer pass so the candidate isn't double-counted.
+                    _mark_stage("writer", "kill")
                     _record_kill("writer", revised.kill_reason or "unknown")
                     return None
                 revised_tweet = revised.tweet
@@ -281,6 +304,7 @@ def generate_draft(
                     bundle,
                     state,
                     record_kill=_record_kill,
+                    mark_stage=_mark_stage,
                 )
                 if fact_result is None:
                     return None
@@ -296,8 +320,10 @@ def generate_draft(
                     f"[two_bot.pipeline] Critic rejected {bundle.signal_kind} "
                     f"draft: {critic_result.kill_reason}"
                 )
+                _mark_stage("critic", "kill")
                 _record_kill("critic", critic_result.kill_reason or "unknown")
                 return None
+            _mark_stage("critic", "pass")
 
         metadata = {
             "signal_kind": bundle.signal_kind,

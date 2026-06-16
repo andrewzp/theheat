@@ -116,6 +116,7 @@ def _drain_and_write_triage_queue(
     current_run: dict | None,
     *,
     defer_callbacks: list | None = None,
+    funnel_sink: dict | None = None,
 ) -> int:
     """Drain the triage queue and call _try_two_bot_draft() for each survivor.
 
@@ -170,6 +171,14 @@ def _drain_and_write_triage_queue(
     if not queue:
         return 0
 
+    # Phase A funnel telemetry: snapshot the shadow slate from the FULL ranked
+    # queue BEFORE draining (codex must-fix #3 — end-of-cycle is too late to
+    # reconstruct it). No-ops when funnel_sink is None (flag OFF).
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        _funnel.capture_slate(funnel_sink, queue)
+
     queued_by_source = Counter(candidate.source for candidate in queue)
     for source, count in queued_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_in", count)
@@ -193,6 +202,16 @@ def _drain_and_write_triage_queue(
     for source, survivor_count in survivor_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_out", survivor_count)
 
+    # Phase A: mark slate candidates the triage cap cut (drain-observed, not from
+    # the truncatable suppression ledger — triage_cap rows carry run_id=None).
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        survivor_ids = {candidate.event_id for candidate in survivors}
+        for candidate in queue:
+            if candidate.event_id not in survivor_ids:
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
+
     drafted_count = 0
     for candidate in survivors:
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
@@ -209,12 +228,28 @@ def _drain_and_write_triage_queue(
             draft_kwargs["cooldown_exempt"] = candidate.cooldown_exempt
         if candidate.draft_metadata:
             draft_kwargs["draft_metadata"] = candidate.draft_metadata
+        cand_result: dict | None = {} if funnel_sink is not None else None
+        if cand_result is not None:
+            draft_kwargs["result_out"] = cand_result
         drafted = _common._try_two_bot_draft(
             candidate.bundle,
             bot_state,
             candidate.score,
             **draft_kwargs,
         )
+        if funnel_sink is not None and cand_result is not None:
+            from src.orchestrator import funnel as _funnel
+
+            _funnel.record_candidate_passes(funnel_sink, cand_result.get("stage_outcomes"))
+            if drafted:
+                terminal = "drafted"
+            elif cand_result.get("kill_stage"):
+                terminal = cand_result["kill_stage"]
+            else:
+                # generate_draft succeeded but save_draft refused (cooldown / dup /
+                # superseded); the specific stage is in the kills counter + ledger.
+                terminal = "save_rejected"
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
         if drafted:
             drafted_count += 1
             # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).

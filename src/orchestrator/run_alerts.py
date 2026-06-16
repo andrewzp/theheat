@@ -46,6 +46,16 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # (Two-guard pattern: this clears on entry; sqlite_store skips on persist.)
     # Cast to plain dict: _triage_queue is a transient key not declared in BotState.
     cast(dict, bot_state).pop("_triage_queue", None)
+
+    # Phase A funnel telemetry (default OFF). Attach the sink BEFORE any source
+    # runner so score-gate kills during the run are counted live. finalize_funnel
+    # pops it after the cycle-cap prune. Transient — never persisted.
+    from src.orchestrator import funnel as _funnel
+
+    cast(dict, bot_state).pop("_funnel_sink", None)
+    funnel_sink = _funnel.new_funnel() if _funnel.funnel_telemetry_enabled() else None
+    _funnel.attach_sink(bot_state, funnel_sink)
+
     drafts_before = len(bot_state.get("drafts", []))
     us_city_state_map: dict[str, str] = {}
     cities_start = time.perf_counter()
@@ -218,9 +228,13 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
     # gateway for ordinary alert sources.
     # Defer on_draft_success callbacks past the cycle-cap prune (Codex #5): a draft
     # that gets pruned must NOT consume dedup/cap state (annual counts, tiers).
+    # Phase A funnel telemetry (default OFF). The drain accumulates writer/
+    # fact_check/critic passes + captures the shadow slate into the sink created
+    # above; finalize freezes the complete funnel onto current_run AFTER the
+    # cycle-cap prune, so cycle_cap reclassification is included.
     pending_callbacks: list = []
     drafted = _drain_and_write_triage_queue(
-        bot_state, current_run, defer_callbacks=pending_callbacks
+        bot_state, current_run, defer_callbacks=pending_callbacks, funnel_sink=funnel_sink
     )
 
     pruned_event_ids: set = set()
@@ -229,5 +243,11 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         pruned_ids_out=pruned_event_ids,
     )
     _fire_surviving_draft_callbacks(pending_callbacks, pruned_event_ids)
+
+    if funnel_sink is not None and current_run is not None:
+        _funnel.finalize_funnel(
+            funnel_sink, current_run, bot_state, pruned_event_ids=pruned_event_ids,
+        )
+
     print(f"[alerts] Done. Saved {drafted} drafts.")
     return bot_state

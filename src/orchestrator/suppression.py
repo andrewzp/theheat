@@ -130,6 +130,9 @@ def _record_suppression(
     })
     if len(suppressions) > MAX_SUPPRESSIONS:
         bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    from src.orchestrator import funnel as _funnel
+
+    _funnel.record_kill(bot_state, "score_gate")
 
 
 def _record_downstream_suppression(
@@ -167,6 +170,9 @@ def _record_downstream_suppression(
     })
     if len(suppressions) > MAX_SUPPRESSIONS:
         bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    from src.orchestrator import funnel as _funnel
+
+    _funnel.record_kill(bot_state, kill_stage)
 
 
 def _record_save_rejection(
@@ -222,6 +228,9 @@ def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None
     })
     if len(suppressions) > MAX_SUPPRESSIONS:
         bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    from src.orchestrator import funnel as _funnel
+
+    _funnel.record_kill(bot_state, "triage_error")
 
 
 def _should_draft(
