@@ -7,6 +7,7 @@ import os
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
+    MULTISIGNAL_GUIDANCE,
     WRITER_SYSTEM_PROMPT,
     WRITER_USER_PROMPT_TEMPLATE,
 )
@@ -198,6 +199,10 @@ def write_tweet(
         bundle_json=_bundle_json(bundle),
         memory_json=_memory_json(memory),
     )
+    # Phase D: cross-signal guidance rides the USER prompt (cache-safe) only when
+    # this bundle actually carries related_signals.
+    if getattr(bundle, "related_signals", None):
+        base_user_prompt = f"{base_user_prompt}\n\n{MULTISIGNAL_GUIDANCE}"
     if revision_constraint:
         base_user_prompt = (
             f"{base_user_prompt}\n\n"

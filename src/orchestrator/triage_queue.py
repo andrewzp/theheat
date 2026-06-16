@@ -355,6 +355,17 @@ def _drain_and_write_triage_queue(
     if not queue:
         return 0
 
+    # Phase D: attach optional verifiable cross-signal context (default OFF). Done
+    # once here so both the legacy drain and the refill loop see enriched bundles.
+    # Errors must never take down the cron — this is a writer enrichment, not a gate.
+    from src.two_bot.multisignal import attach_related_signals, multisignal_context_enabled
+
+    if multisignal_context_enabled():
+        try:
+            attach_related_signals(queue)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[multisignal] attach_related_signals error (continuing): {exc!r}")
+
     # Phase A funnel telemetry: snapshot the shadow slate from the FULL ranked
     # queue BEFORE draining (codex must-fix #3 — end-of-cycle is too late to
     # reconstruct it). No-ops when funnel_sink is None (flag OFF).

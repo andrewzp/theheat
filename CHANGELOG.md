@@ -5,10 +5,27 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 Documentation sweep aligning the operator docs with the 0.9.81.0 production
-state, plus Throughput Initiative Phases A (funnel instrumentation), B
-(ship-gate decouple) and C (refill loop) — all dark, default-OFF.
+state, plus the full Throughput Initiative — Phases A (funnel instrumentation),
+B (ship-gate decouple), C (refill loop) and D (multi-signal writer) — all dark,
+default-OFF.
 
 ### Added
+
+- **Multi-signal writer context (Throughput Initiative Phase D)** behind
+  `THEHEAT_MULTISIGNAL_CONTEXT` (default OFF). When enabled, the drain attaches up
+  to 2 OTHER same-cycle events to a candidate's bundle as `related_signals` — a
+  conservative window of **exact same country AND within 7 days**, ranked by score,
+  excluding global / undated / missing-country signals. The writer can then ground
+  a synthesis-grade tweet in those *verifiable* facts. New `RelatedSignal` +
+  `StoryBundle.related_signals` / `country` (serialized only when present, so
+  single-event bundles are byte-identical). The cross-signal guidance rides the
+  **USER** prompt only — `WRITER_SYSTEM_PROMPT` is untouched, so the prompt cache
+  and its byte-identity test are preserved. A **deterministic** cross-signal
+  honesty gate (`_cross_signal_violation`, not prompt-only — the fact-checker is
+  permissive) kills any causal / shared-system / "global pattern" framing of
+  related signals while allowing bare enumeration; it fires only when
+  `related_signals` are present, so single-event drafts are unaffected. Flag OFF
+  is byte-for-byte the current single-event writer.
 
 - **Generate-and-select refill loop (Throughput Initiative Phase C)** behind
   `THEHEAT_REFILL_ENABLED` (default OFF). When enabled, the drain stops attempting

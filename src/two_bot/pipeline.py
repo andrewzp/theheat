@@ -42,6 +42,65 @@ def _forbidden_claim_violation(tweet: str, bundle: StoryBundle) -> str | None:
     return None
 
 
+# Phase D deterministic cross-signal honesty gate (Layer 0). related_signals carry
+# only verified FACTS, never a verifiable RELATION — so a draft that was handed
+# them may enumerate ("the same week, X and Y") but must not assert causation, a
+# shared cause/system, a trend, or that they're two expressions of one thing. The
+# fact-checker is deliberately permissive ("when in doubt, ACCEPT"), so this CODE
+# gate is the load-bearing FIRST layer of the protection (codex must-fix #1),
+# backstopped at activation by the F3 critic ("default to KILL") and the
+# voice-regression gate (see the activation runbook). The list is intentionally
+# broad — causal/synthesis word STEMS, substring-matched — because a false kill of
+# a multi-signal draft is the safe direction vs an unverifiable claim shipping, and
+# the only allowed cross-signal form (bare enumeration) uses none of these. A
+# substring denylist can never be paraphrase-complete; that residual is what the
+# critic + voice-regression cover. ``co2``/``ch4``/global kinds never reach this
+# gate (they're excluded from windowing), so stems like "fuel" won't false-kill a
+# "fossil fuel" emissions tweet.
+_CROSS_SIGNAL_BANNED_PHRASES: tuple[str, ...] = (
+    # explicit pattern / causation framing
+    "global pattern", "broader pattern", "larger pattern", "pattern of",
+    "fingerprint", "signature of",
+    "driven by", "driving", "driver", "driven", "drives",
+    "fuel", "feeding", "feeds the", "feed the",
+    "caused by", "causing", "the cause", "common cause", "root cause",
+    "because of", "due to", "result of", "resulting from", "stems from",
+    "stem from", "leads to", "leading to", "behind the", "behind both",
+    "behind these", "trigger", "stok",
+    # connection / correlation
+    "linked", "link between", "connected", "connection between", "tied to",
+    "tied together", "tie to", "correlat", "relationship between", "in common",
+    "share a", "shares a", "share the same", "common thread", "common root",
+    "interconnect", "all connected", "no coincidence", "not a coincidence",
+    "not coincidental", "no accident", "not by chance",
+    # amplification / compounding / worsening
+    "amplif", "intensif", "exacerbat", "worsen", "worse", "compound",
+    "accelerat", "magnif", "supercharg", "turbocharg",
+    # systemic / trend / shared-expression framing
+    "trend", "systemic", "same system", "same conditions", "same forces",
+    "same story", "same root", "same driver", "feedback", "cascade",
+    "ripple effect", "knock-on", "expression of", "expressions of",
+    "manifestation", "symptom of", "symptoms of", "two sides of", "two faces of",
+    "shared cause", "converg", "part of a", "part of the same",
+)
+
+
+def _cross_signal_violation(tweet: str, bundle: StoryBundle) -> str | None:
+    """Reject a causal / shared-system / "global pattern" framing in a draft that
+    was handed ``related_signals``. Only fires when related_signals are present, so
+    single-event drafts are never affected (flag OFF == today). Bare enumeration of
+    the related facts is allowed. Returns the matched phrase, or None when clean /
+    no related signals. Curly apostrophes normalized (cf. _forbidden_claim_violation).
+    """
+    if not getattr(bundle, "related_signals", None):
+        return None
+    low = tweet.lower().replace("’", "'").replace("‘", "'")
+    for phrase in _CROSS_SIGNAL_BANNED_PHRASES:
+        if phrase in low:
+            return phrase
+    return None
+
+
 def _critic_enabled() -> bool:
     """Operations kill-switch for the critic stage.
 
@@ -143,6 +202,15 @@ def _check_safety_honesty_fact(
             f"draft: forbidden claim {forbidden_hit!r}"
         )
         record_kill("honesty_gate", f"forbidden claim: {forbidden_hit!r}")
+        return None
+
+    cross_signal_hit = _cross_signal_violation(tweet, bundle)
+    if cross_signal_hit is not None:
+        print(
+            f"[two_bot.pipeline] Cross-signal honesty gate rejected "
+            f"{bundle.signal_kind} draft: {cross_signal_hit!r}"
+        )
+        record_kill("cross_signal", f"unverifiable cross-signal claim: {cross_signal_hit!r}")
         return None
 
     fact_result = fact_check.fact_check(tweet, [], bundle, state)
