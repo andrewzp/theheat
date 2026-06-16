@@ -1,5 +1,16 @@
 # @theheat — Build Brief
 
+> **Historical build-era document.** This describes the April 2026 prototype
+> concept, not the current production architecture. For current operation, start
+> with [/Users/andrewpuschel/Documents/Claude/theheat/README.md](/Users/andrewpuschel/Documents/Claude/theheat/README.md),
+> [/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md](/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md),
+> [/Users/andrewpuschel/Documents/Claude/theheat/PIPELINE.md](/Users/andrewpuschel/Documents/Claude/theheat/PIPELINE.md),
+> and the latest handoff in
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/README.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/README.md).
+> The live system now uses Sonnet writer + Gemini fact-check/critic, a Next.js
+> dashboard, GitHub Actions workflows, source-health sentinel issues, and
+> source-redundancy witnesses.
+
 **Project:** Fully automatic climate awareness bot on Twitter/X
 **Handle:** @theheat (owned)
 **Goal:** Profitable. $0/month operating cost. Fully automatic after deploy.

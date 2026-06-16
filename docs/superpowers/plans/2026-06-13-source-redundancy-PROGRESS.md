@@ -19,6 +19,17 @@
 
 Cut in review (plan §L5): ocean_sst witness; global fire-drought-heat / S-27 unblock; GPM-S3-as-public-mirror. Predecessor docs `second-witness-lane.md` + `source-backup-feeds.md` merged here and deleted.
 
+## Post-lane live follow-ups
+
+- **PR #292 (2026-06-16)** added live redundancy/source fixes for the current
+  dashboard errors outside the original R-table shape: `ocean_sst_anomaly`
+  gained a NOAA STAR/CRW NetCDF fallback, `gdacs` gained subtype witnesses from
+  USGS/NHC/JTWC while ReliefWeb remains appname-blocked, `copernicus_ems` gained
+  the frontend activations API fallback, and `jtwc` gained the plain official
+  RSS fallback.
+- **PR #294 (2026-06-16)** added the dashboard source-health troubleshooting
+  log, derived from compact per-source run diagnostics and metrics.
+
 ## Awaiting Andrew (decisions parked by design)
 - **R-04 ReliefWeb: waiting on appname approval email.** ReliefWeb's API now returns
   `403 AccessDeniedHttpException` for any unregistered appname (verified live with the spec URL + the

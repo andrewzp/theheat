@@ -2170,6 +2170,11 @@ citing "same event already shipped; no fresh angle survives the burned framings 
 The Baudette monthly_low (score 82, threshold 76) was human-rejected, not posted.
 `used_framings` is persisting rejection events as if they were shipped.
 
+**Resolved 2026-06-16:** PR #293 moved same-event, used-framing,
+peer-comparison, shipped-text, and posted-event memory writes behind successful
+publishing. A generated, killed, rejected, or pending draft is no longer treated
+as coverage until `post_approved` returns a real tweet id.
+
 **Two infra sources degraded (non-blocking)**
 
 `ocean_sst`: "Exceeded 30 redirects" on every run today. `river_gauges`: "Expecting

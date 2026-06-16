@@ -45,16 +45,33 @@ The writer prompt gets two JSON objects:
 - `historical_context`
 - `raw_signal_dump`
 
+Backup-served source facts are carried through ordinary bundle fields plus
+explicit provenance:
+
+- `source_leg` on the selected event/reading tells the runner and builder that a
+  non-primary leg served the data.
+- `evidence_grade=observed_alt_host` means an alternate host/instrument supplied
+  an observation.
+- `evidence_grade=model_fallback` means a numerical model stood in for a
+  measurement; the writer must not call it observed, measured, or recorded.
+
+These grades are writer-facing facts, not decoration. If a source adds a new
+witness leg, add/update the relevant bundle test so the grade reaches
+`current_facts`.
+
 `MemorySlice` carries prior output context:
 
-- recent tweets for the same country
-- recent tweets for the same event
+- recent published tweets for the same country
+- recent published tweets for the same event
 - ongoing event context
 - previously used era anchors
 - previously used peer comparisons
 - previously used framings
 - shipped tweet texts
 - recent categories
+
+Generated, killed, rejected, or pending drafts do not count as coverage. The
+publish-backed memory update happens only after a post succeeds.
 
 ## Where Raw Data Disappears
 
@@ -78,7 +95,7 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 |---|---|---|---|---|---|---|
 | Temperature records | `src/orchestrator/sources/open_meteo.py` | Weather and climate record data assembled into city, country, date, temperature, baseline, archive facts | Record, all-time record, monthly high, anomaly, country record, streak, simultaneous-record routing | `temperature.build_record_bundle`, `build_all_time_record_bundle`, `build_monthly_high_bundle`, `build_anomaly_bundle`, `build_country_record_bundle`, `build_record_streak_bundle`, `build_simultaneous_records_bundle` | Rich current facts, archive years, prior record, margin, units, calendar scope, forbidden claims for all-time records | Many builder variants need shared assertions so one path cannot silently lose archive context or date scope |
 | Hot 10 | `src/orchestrator/hot10.py` | Ranked anomaly candidates | Leaderboard selection | `temperature.build_hot10_bundle` | Ranking, anomaly, sample cities | Writer may overstate representativeness unless the bundle keeps leaderboard scope explicit |
-| Fire hotspots | `src/orchestrator/sources/firms.py` | FIRMS fire pixels and FRP values | Threshold/tier selection around location and country | `fire.build_fire_bundle` | FRP, FRP tier, country/region, lat/lon, climate facts | Empty historical context is acceptable only if raw location/source anchors are strong and audited |
+| Fire hotspots | `src/orchestrator/sources/firms.py` | FIRMS fire pixels and FRP values, with NOAA HMS backup for North America and FIRMS product chain for product gaps | Threshold/tier selection around location and country | `fire.build_fire_bundle` | FRP, FRP tier, country/region, lat/lon, climate facts, `observed_alt_host` when NOAA HMS serves | Empty historical context is acceptable only if raw location/source anchors are strong and audited; HMS is alternate observed data, product-chain provenance is not a new evidence grade |
 | Fire footprint | `src/orchestrator/sources/nifc.py` | Incident footprint and acreage data | Complex/incident area thresholding | `fire.build_fire_footprint_bundle` | Hectares, tier, complex, region, country, start date | Burned-area units and incident identity must survive into prompt |
 | CO2 | `src/orchestrator/sources/co2.py` | Atmospheric CO2 measurement | Milestone crossing | `atmospheric.build_co2_milestone_bundle` | PPM, measurement date, preindustrial baseline | Milestone threshold and actual measurement must both be present |
 | Methane | `src/orchestrator/sources/methane.py` | Atmospheric CH4 measurement | Milestone crossing | `atmospheric.build_ch4_milestone_bundle` | PPB crossed, actual PPB, source, preindustrial baseline | Milestone threshold and actual measurement must both be present |
@@ -86,18 +103,19 @@ If a detail matters for factual safety, it belongs in `current_facts`,
 | Climate indices | `src/orchestrator/sources/climate_indices.py` | Oscillation index values and sigma comparisons | Transition, extreme, or alignment event | `atmospheric.build_oscillation_bundle` | Index values, sigma, comparison year, scope | Branching builder has multiple evidence shapes and needs branch-specific tests |
 | Ozone hole | `src/orchestrator/sources/ozone_hole.py` | Ozone hole area and comparison data | Seasonal area comparison or record framing | `atmospheric.build_ozone_hole_bundle` | Area, previous-year area, record/trailing mean context | Larger than previous year is not a long-term record unless record context exists |
 | Drought | `src/orchestrator/sources/drought.py` | USDM weekly drought categories | State count and severe drought extent | `drought.build_drought_bundle` | State count, worst state, D3/D4 coverage, weekly scope | Weekly scope and category definitions must stay visible |
-| GPM precipitation | `src/orchestrator/sources/gpm_imerg.py` | IMERG precipitation estimates | Rainfall total and deviation selection | `precipitation.build_precipitation_bundle` | Rainfall, period, previous value, deviation, cities, lat/lon | Satellite-estimate/source caveat should be explicit in bundle evidence |
+| GPM precipitation | `src/orchestrator/sources/gpm_imerg.py` | IMERG precipitation estimates, with Open-Meteo model fallback | Rainfall total and deviation selection | `precipitation.build_precipitation_bundle` | Rainfall, period, previous value, deviation, cities, lat/lon, `model_fallback` when Open-Meteo serves | Satellite-estimate/source caveat should be explicit; model fallback must never be phrased as observed/measured |
 | Snow water equivalent | `src/orchestrator/sources/nsidc_snow.py` | NSIDC/SNOTEL-style snow and SWE observations | SWE/deviation/consecutive-day event selection | `precipitation.build_snow_extreme_bundle`, `build_seasonal_snow_bundle` | Station, date, SWE, deviation, previous, archive/elevation/lat/lon | Station identity and archive scope must stay intact |
-| Sea ice | `src/orchestrator/sources/sea_ice.py` | Sea ice extent data | Record-low or record-high extent framing | `marine.build_sea_ice_bundle` | Extent, record type, previous extent/year, satellite archive scope | Hemisphere/region identity must be present in `where` and raw dump |
+| Sea ice | `src/orchestrator/sources/sea_ice.py` | Sea ice extent data, with OSI SAF concentration-grid fallback | Record-low or record-high extent framing | `marine.build_sea_ice_bundle` | Extent, record type, previous extent/year, satellite archive scope, `observed_alt_host` when OSI SAF serves | Hemisphere/region identity must be present in `where` and raw dump; OSI SAF values are independent observed-grid estimates, not NSIDC CSV values |
 | Ice mass | `src/orchestrator/sources/ice_mass.py` | Ice mass monthly/current values | Threshold or record/worst comparison | `marine.build_ice_mass_bundle` | Current mass, monthly value, archive years, previous worst, threshold | Negative mass and units must be preserved without sign confusion |
 | Ocean SST | `src/orchestrator/sources/ocean_sst.py` | Sea-surface temperature anomaly/streak data | Marine heatwave or SST anomaly selection | `marine.build_marine_heatwave_bundle` | Streak days, current anomaly, peak anomaly, archive framing | Regional or global scope must be explicit |
-| Regional SST anomaly | `src/orchestrator/sources/ocean_sst_anomaly.py` | NOAA Coral Reef Watch gridded SST anomaly via ERDDAP | Basin tier crossing by cos-lat area-weighted mean anomaly | `marine.build_regional_sst_anomaly_bundle` wrapped in `TriageCandidateBundle` | Region, date, anomaly, tier, cells used, CRW source, non-Hobday signal note | Writer must frame as regional SST anomaly, not Hobday marine-heatwave category |
+| Regional SST anomaly | `src/orchestrator/sources/ocean_sst_anomaly.py` | NOAA Coral Reef Watch gridded SST anomaly via ERDDAP, with NOAA STAR/CRW NetCDF fallback | Basin tier crossing by cos-lat area-weighted mean anomaly | `marine.build_regional_sst_anomaly_bundle` wrapped in `TriageCandidateBundle` | Region, date, anomaly, tier, cells used, CRW source, non-Hobday signal note, alternate-grid provenance when NOAA STAR serves | Writer must frame as regional SST anomaly, not Hobday marine-heatwave category; fallback fills regions from a latest global NetCDF grid |
 | Marine waves | `src/orchestrator/sources/marine.py` | Ocean wave height data | Extreme wave threshold | `marine.build_extreme_wave_bundle` | Wave height and ocean/region | Empty historical context needs source and threshold anchors |
-| Coral DHW | `src/orchestrator/sources/coral_dhw.py` | Coral Reef Watch-style degree heating weeks | Bleaching stress tier selection | `marine.build_coral_bleaching_bundle` wrapped in `TriageCandidateBundle` | DHW, tier, stress level, source, lat/lon, thresholds | This is the queued triage model to copy after evidence audit is stable |
+| Coral DHW | `src/orchestrator/sources/coral_dhw.py` | Coral Reef Watch-style degree heating weeks, with CRW ERDDAP grid fallback | Bleaching stress tier selection | `marine.build_coral_bleaching_bundle` wrapped in `TriageCandidateBundle` | DHW, tier, stress level, source, lat/lon, thresholds, `observed_alt_host` when ERDDAP serves | Station/grid mapping must stay pinned and tested so a reef does not inherit another reef's DHW |
 | NWS alerts | `src/orchestrator/sources/nws_alerts.py` | NWS alert feed | Severe alert type/severity filter | `disasters.build_severe_weather_bundle` | Event type, area, severity, wind/hail/tornado/description/sender | Description is source text, not inferred impact |
-| GDACS | `src/orchestrator/sources/gdacs.py` | GDACS disaster feed | Alert severity/score filter | `disasters.build_global_disaster_bundle` | Disaster type/name/country/severity/score/population/description | Alert score must not be treated as measured physical severity |
-| Copernicus EMS | `src/orchestrator/sources/copernicus_ems.py` | Copernicus EMS activation/feed | Activation and flood/impact selection | `disasters.build_global_flood_bundle` | Activation name, population, area, lat/lon, URL/context | URL/context must survive in raw dump for attribution |
-| River gauges | `src/orchestrator/sources/river_gauges.py` | Gauge height and flood stage data | Above-stage flood selection | `disasters.build_river_flood_bundle` | Gauge, current stage, flood stage, above-by feet | Empty historical context needs gauge/source anchors and local scope |
+| GDACS | `src/orchestrator/sources/gdacs.py` | GDACS disaster feed, with USGS/NHC/JTWC subtype witnesses during outages | Alert severity/score filter | `disasters.build_global_disaster_bundle` | Disaster type/name/country/severity/score/population/description, subtype-witness provenance | Alert score must not be treated as measured physical severity; subtype witnesses are degraded observations and should not mask the GDACS primary outage |
+| USGS earthquakes | `src/orchestrator/sources/usgs_quakes.py` | USGS significant earthquake GeoJSON | Significant earthquake selection | `disasters.build_usgs_earthquake_bundle` | Magnitude, place, depth, PAGER alert, felt reports, ShakeMap intensity, tsunami flag, official URL | Separate source key; do not fold into GDACS health or duplicate GDACS stories |
+| Copernicus EMS | `src/orchestrator/sources/copernicus_ems.py` | Copernicus EMS activation/feed, with frontend activations API fallback | Activation and flood/impact selection | `disasters.build_global_flood_bundle` | Activation name, population, area, lat/lon, URL/context, fallback provenance | URL/context must survive in raw dump for attribution; frontend fallback is conservative when impact stats are absent |
+| River gauges | `src/orchestrator/sources/river_gauges.py` | Gauge height and flood stage data, with Open-Meteo Flood modeled discharge fallback | Above-stage flood selection or modeled high-discharge selection | `disasters.build_river_flood_bundle` | Gauge/current/flood-stage feet for primary; modeled discharge fields and `model_fallback` for Open-Meteo Flood | Model fallback must omit gauge-height/flood-stage feet and never masquerade as a gauge reading |
 | Storm surge | `src/orchestrator/sources/co_ops.py` | CO-OPS water level observations | Observed versus predicted surge anomaly | `disasters.build_storm_surge_bundle` | Observed, predicted, anomaly, station/area | Anomaly sign and station identity must remain explicit |
 | Cyclones | Cyclone helpers in `src/orchestrator/common.py` | Storm track/intensity data | Rapid intensification, tier crossing, landfall, basin record | `disasters.build_cyclone_rapid_intensification_bundle`, `build_cyclone_tier_crossing_bundle`, `build_cyclone_landfall_bundle`, `build_cyclone_basin_record_bundle` | Storm identity, basin, wind values, category/tier, record context where relevant | Each cyclone story type must keep its comparison basis |
 | Synthesis | `src/orchestrator/sources/synthesis.py` | Cross-source components already detected elsewhere | Components combined by region/topic | `synthesis.build_synthesis_bundle` | Region, synthesis kind, component count, component facts | Synthesis can cite only included components and must not invent connecting claims |

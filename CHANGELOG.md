@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Documentation sweep aligning the operator docs with the 0.9.81.0 production
+state.
+
+### Changed
+
+- Updated current-state docs for shipped source redundancy, dashboard
+  troubleshooting logs, and publish-backed same-event/framing memory semantics.
+- Marked older build/future-state docs as historical pointers rather than live
+  architecture references.
+
 ## [0.9.81.0] - 2026-06-16
 
 Source redundancy fix for live upstream outages. GDACS, Copernicus EMS, JTWC,
@@ -2198,7 +2210,7 @@ writer.
 Design context lives at
 [/Users/andrewpuschel/Documents/Claude/theheat/docs/source-to-writer-evidence-contract.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/source-to-writer-evidence-contract.md)
 and the eng-reviewed spec at
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-19-source-to-writer-evidence-contract.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-05-19-source-to-writer-evidence-contract.md).
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-05-19-source-to-writer-evidence-contract.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-05-19-source-to-writer-evidence-contract.md).
 The motivating problem: bundles that passed the editorial score gate
 could still reach the writer missing the source artifacts the writer
 needed to ground its claims — producing tweets that fact-check
@@ -3844,7 +3856,7 @@ Findings report at `docs/codex-review-findings-2026-05-08.md`.
   for each.
 
 - **Claim extractor had no Gemini timeout** in
-  [src/two_bot/claim_extractor.py](src/two_bot/claim_extractor.py).
+  `src/two_bot/claim_extractor.py` (deleted later as dead code).
   Missed in PR #43's timeout-unit fix. SDK default is `None` (=
   unbounded), so a stuck Gemini call could hang the cron run
   indefinitely. Now passes `HttpOptions(timeout=90000)` (90s) for

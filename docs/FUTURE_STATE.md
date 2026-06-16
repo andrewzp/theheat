@@ -1,8 +1,20 @@
 # @theheat Future State
 
-Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress against plan" below for what's actually shipped since).
+Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress against plan" below for what has actually shipped since).
 
-> **Current state pointer (2026-06-09):** This doc hasn't been meaningfully refreshed since April. For the actual current state see [/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md](/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md), [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md) 0.9.22.0, and the canonical handoff at [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-09-v4.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-09-v4.md). **The @extremetemps coverage lane is COMPLETE** (Wave 1 + SST + Part B reanalysis anomaly, all `manual_only`; reganom is landed but DORMANT pending the `THEHEAT_REGANOM_ENABLED=1` flip). A super-detailed tech-stack review (2026-06-09) set the architectural backlog; **bet #1 — the declarative `MERGE_SPEC` — SHIPPED in 0.9.22.0 ([#215](https://github.com/andrewzp/theheat/pull/215))**: the error-prone hand-rolled `_merge_state` (3 silent state-loss bugs) is now a 54-key strategy table + 6-line driver with a structural contract (`set(MERGE_SPEC) == set(DEFAULT_STATE)`); new `DEFAULT_STATE` keys require a `MERGE_SPEC` entry. Remaining bets: unbounded record-store caps (natural follow-on), `common.py` decomposition (1687-line god-module), deciding the dual-SQLite backend's fate, a `requests.Session` for connection pooling, and the missing source-runner abstraction. Database migration off Gist is **still not started**, but the gist was made ~39% smaller (write minified, 0.9.20.0) and the truncation cliff that took prod down 2026-05-13 is defused. The editorial pipeline (sources → triage → evidence contract → writer → safety → fact_check → critic) is complete end-to-end across all 23 sources; `theheat-bot` is active. Source reliability is now self-monitoring: a daily source-health sentinel (0.9.12–0.9.13) files/auto-closes a GitHub issue per failing source, and the dashboard (0.9.14.0) distinguishes `external` (NASA/gov) from our-bug failures (0.9.21.0 hardened the sentinel's `failing` classifier so a consistently-`degraded` source no longer false-alarms; #201/#202 closed). The daily-plan grading routine was **restored 2026-06-08** (down 05-26→06-07; root cause was an unbound repo, fixed in the Routines UI), the gpm precipitation feed is **live on `datapool`** (0.9.15.0, ~2s grid fetch), and the pending TTL is now **per-type** (0.9.16.0; coral/DHW 21d). Posting remains `manual_only` — the flip is now gated on **editorial supply + an A-rate window, not infrastructure**. The **@extremetemps coverage lane LANDED in full**: Wave 1 (absolute-extreme, wet-bulb, air-quality PM2.5/dust — 0.9.17.0), SST regional anomaly (gridded NOAA Coral Reef Watch — 0.9.18.0), and Part B regional reanalysis anomaly ([#203](https://github.com/andrewzp/theheat/pull/203) — 0.9.19.0) — all `manual_only`; reganom is DORMANT pending the `THEHEAT_REGANOM_ENABLED=1` flip. See the canonical handoff.
+> **Current state pointer (2026-06-16):** This remains a future-state architecture
+> doc, not the current runbook. For the actual current system, start with
+> [/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md](/Users/andrewpuschel/Documents/Claude/theheat/BRIEFING.md),
+> [/Users/andrewpuschel/Documents/Claude/theheat/PIPELINE.md](/Users/andrewpuschel/Documents/Claude/theheat/PIPELINE.md),
+> [/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md](/Users/andrewpuschel/Documents/Claude/theheat/CHANGELOG.md)
+> 0.9.81.0, and the canonical handoff at
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16.md).
+> Since this future-state document was written, the editorial pipeline shipped
+> end-to-end, the THIRTY-LOOP audit backlog completed, declarative `MERGE_SPEC`
+> landed, source-health sentinel issues and dashboard source-health views became
+> live operations tools, and most of the SOURCE-REDUNDANCY lane shipped. Posting
+> remains `manual_only`; reganom remains dormant; database migration off the Gist
+> is still future work.
 
 ## Progress against plan (as of 2026-05-12)
 
