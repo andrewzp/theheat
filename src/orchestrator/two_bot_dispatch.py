@@ -93,6 +93,7 @@ def _try_two_bot_draft(
     tweet_date: str = "",
     cooldown_exempt: bool = False,
     draft_metadata: dict | None = None,
+    result_out: dict | None = None,
 ) -> bool:
     """Run the live two-bot pipeline (writer → claim extract → fact-check
     → memory) and save the draft. Returns True iff a draft was saved.
@@ -115,7 +116,9 @@ def _try_two_bot_draft(
     """
     from src.two_bot.pipeline import generate_draft
 
-    pipeline_result: dict = {}
+    # When the caller supplies ``result_out`` (Phase A funnel drain), generate_draft
+    # writes ``kill_stage`` / ``kill_reason`` / ``stage_outcomes`` straight into it.
+    pipeline_result: dict = result_out if result_out is not None else {}
     draft = generate_draft(bundle, bot_state, result_out=pipeline_result)
     if draft is None:
         ctx = _current_suppression_ctx()

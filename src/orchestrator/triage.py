@@ -206,6 +206,9 @@ def _record_triage_suppression(
     })
     if len(suppressions) > MAX_SUPPRESSIONS:
         bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    from src.orchestrator import funnel as _funnel
+
+    _funnel.record_kill(bot_state, "triage_cap")
 
 
 def select_survivors(
