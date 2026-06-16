@@ -25,19 +25,32 @@ kept byte-equivalent across the two (the standing sync contract).
   (`observed_alt_host` / `model_fallback`) per the §L0 ladder, and the manual
   approval queue still gates every draft.
 
-## Unbacked sources — visibility only, no autonomous backup draft
+## Live redundancy legs
 
-These sources have NO verified independent leg yet (see the mirror-survey
-verdicts). They get last-good softening (S-15) and dashboard/sentinel visibility,
-but they do **not** autonomously draft from a backup during an outage. If one is
-chronically down, that is a manual investigation, not an automatic substitution.
+| Source | Leg | What it covers | Evidence / operator meaning |
+|---|---|---|---|
+| `firms` | NOAA HMS (`noaa_hms`) | A FIRMS host outage for North American fire points. | `observed_alt_host`; drafts may mention alternate source. |
+| `firms` | FIRMS product chain (`VIIRS_NOAA20_NRT`, `VIIRS_NOAA21_NRT`, `MODIS_NRT`) | Product lag/empty-product gaps while the FIRMS host/key still work. | Same-provider provenance only; no `evidence_grade`. |
+| `gpm_imerg` | Open-Meteo precipitation (`open_meteo`) | GES DISC / IMERG outage for monitored city precipitation. | `model_fallback`; copy must say model estimate, not observed/measured. |
+| `river_gauges` | Open-Meteo Flood (`open_meteo_flood`) | USGS/NWPS outage for known major-river stations with pinned coords. | `model_fallback`; no gauge-height or flood-stage feet facts. |
+| `coral_dhw` | CRW ERDDAP grid (`crw_erddap`) | NOAA CRW virtual-station text failure. | `observed_alt_host`; same provider, different product/path. |
+| `sea_ice` | OSI SAF / MET Norway THREDDS (`osi_saf`) | NSIDC/NOAA sea-ice CSV outage or stale data. | `observed_alt_host`; independent NetCDF concentration grid. |
+| `gdacs` | Subtype witnesses (`subtype_witnesses`) | GDACS outage for significant earthquakes and active cyclone subtypes. | Degraded observations only; dedicated `usgs_quakes`, `nhc`, and `jtwc` runners own drafting to avoid duplicates. |
+| `copernicus_ems` | Copernicus frontend activations API (`frontend_api`) | Dashboard API 403/transport failures for public flood activations. | Conservative activation fallback; impact fields are only used when present. |
+| `jtwc` | Plain official RSS (`plain_rss`) | Enhanced RSS 403/transport failures. | Official lower-feature feed; degraded source row remains visible. |
+| `ocean_sst_anomaly` | NOAA STAR/CRW SST anomaly NetCDF (`noaa_star_nc`) | CoastWatch ERDDAP timeout or 503 for regional SST anomaly regions. | Downloads latest grid once, fills failed regions, and records degraded telemetry. |
 
-| Source | Why unbacked | Operator action on outage |
+## Still unbacked or operator-gated
+
+These sources or subpaths have no verified autonomous substitute yet. They get
+source-health visibility and, where available, last-good softening, but no
+automatic replacement story should be inferred.
+
+| Source / gap | Why still uncovered | Operator action on outage |
 |---|---|---|
-| `jtwc` | JTWC public page 403s; NHC advisories are not a full west-Pacific/Indian-Ocean mirror. | Confirm the outage; west-Pacific/Indian-Ocean cyclones may simply be uncovered until JTWC returns. No substitute. |
+| `gdacs` full ReliefWeb mirror | ReliefWeb now rejects unapproved appnames with 403. Request for `TheHeat-GDACSBackup-RW7K2Q` is submitted, but the parser must wait for an approved live response. | Wait for approval, set/provide the approved `RELIEFWEB_APPNAME`, then build/verify R-04. |
 | `nsidc_snow` | No verified official mirror for the station SWE point payload. | Keep retry/revalidation on the existing endpoint; wait for recovery. |
-| `sea_ice` | Second source (OSI SAF / U. Bremen) is dep-gated on `netCDF4`/`pyhdf` (R-09, `AWAITING-ANDREW`). | Slow signal; last-good softens short gaps. Approve the parser dep to enable the OSI SAF witness. |
-| `copernicus_ems` | Public activation pages can confirm an activation exists but can't rebuild structured impact stats. | Confirm activation manually if needed; not a structured-data substitute. |
+| `ice_mass` | CMR resolves current PO.DAAC granules, but no second drop-in data mirror is verified. | Treat failures as source outages; do not synthesize replacement ice-mass facts. |
 
 ## When a backup leg is itself failing
 

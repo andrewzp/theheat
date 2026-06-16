@@ -1,6 +1,12 @@
 # Mirror Survey - 2026-06-12
 
-THIRTY-LOOP S-13 survey of the 403-cluster and NASA-style sources. Verdicts:
+THIRTY-LOOP S-13 survey of the 403-cluster and NASA-style sources.
+
+> Current note (2026-06-16): the initial verdict table is a historical probe
+> record. The adopted-leg table at the bottom is updated to the shipped
+> SOURCE-REDUNDANCY state through 0.9.81.0.
+
+Verdicts:
 
 - `CHAIN`: plausible future code path can serve equivalent source payloads.
 - `WITNESS`: useful official corroboration or operator diagnosis, but not a drop-in feed.
@@ -76,15 +82,20 @@ body prefix: Year, Month, Day, Extent, Missing, Source Data
 
 ## Verified redundancy legs (2026-06) — SOURCE-REDUNDANCY LANE
 
-The chainable legs adopted by the redundancy lane (`docs/superpowers/plans/2026-06-13-source-redundancy-lane.md`). Endpoints live-verified 2026-06-12/13; "Grade" is the §L0 evidence-grade a non-primary leg carries.
+The chainable legs adopted by the redundancy lane
+(`docs/superpowers/plans/2026-06-13-source-redundancy-lane.md`). "Grade" is
+the §L0 evidence-grade a non-primary leg carries.
 
 | Step | Primary | Redundancy leg | Endpoint | Auth | Tier | Grade | Verdict |
 |---|---|---|---|---|---|---|---|
 | R-02 | `firms` | NOAA HMS (NESDIS host + GOES instrument) | `https://satepsanone.nesdis.noaa.gov/pub/FIRE/web/HMS/Fire_Points/Text/{YYYY}/{MM}/hms_fire{YYYYMMDD}.txt` | none | A (independent host) | `observed_alt_host` | `INDEPENDENT` — covers a full FIRMS host outage over N. America. |
 | R-03 | `gpm_imerg` | Open-Meteo precipitation + ensemble-agreement filter | `https://api.open-meteo.com/v1/forecast` + `https://ensemble-api.open-meteo.com/v1/ensemble` | none | A (independent model) | `model_fallback` | `INDEPENDENT` — covers a full GESDISC-family outage; model-framed, never "observed". |
-| R-04 | `gdacs` | ReliefWeb (UN OCHA) | `https://api.reliefweb.int/v2/disasters?appname=theheat` | none (appname courtesy) | A (independent host) | `observed_alt_host` | `INDEPENDENT` — lag backstop (6–48 h), gated on report date. |
+| R-04 | `gdacs` | ReliefWeb (UN OCHA) | `https://api.reliefweb.int/v2/disasters?...&appname=<approved>` | approved appname required | A (independent host) | `observed_alt_host` | `AWAITING-ANDREW` — request for `TheHeat-GDACSBackup-RW7K2Q` submitted; API still 403 until ReliefWeb approves it. |
 | R-05 | `river_gauges` | Open-Meteo Flood / GloFAS (modeled discharge) | `https://flood-api.open-meteo.com/v1/flood` | none | A (independent model) | `model_fallback` | `INDEPENDENT` — modeled discharge, never a gauge reading; known coords only. |
 | R-06 | `firms` | FIRMS official product chain `VIIRS_SNPP→NOAA20→NOAA21→MODIS` | `https://firms.modaps.eosdis.nasa.gov/api/area/csv/{key}/{product}/world/{days}` | MAP_KEY | A (same host) | (none — semantically equivalent) | `CHAIN` — product-gap insurance only; NOT a host-outage fix. |
-| R-07 | `coral_dhw` | NOAA CRW ERDDAP DHW grid | `https://coastwatch.pfeg.noaa.gov/erddap/griddap/noaacrwdhwDaily.csv` (confirm host/dataset id live) | none | A (same provider, alt product) | `observed_alt_host` | `CHAIN` — gridded product backs up station text; needs station→grid coord mapping. |
-| R-08 | `gdacs` subtypes | USGS quakes + NHC/CPHC cyclone GIS (NEW sources) | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson` + NHC GIS | none | B (additive supply) | n/a (own source keys) | `ADDITIVE` — optional; separate health rows, never folded into gdacs. |
-| R-09 | `sea_ice` | OSI SAF (Ifremer) / U. Bremen AMSR2 | `osi-saf.ifremer.fr` daily-NRT SIC (NetCDF-3); U. Bremen AMSR2 (HDF4) | none | B (independent) | `observed_alt_host` | `DEP-GATED` — needs `netCDF4`/`pyhdf`; STOPs for Andrew. |
+| R-07 | `coral_dhw` | NOAA CRW ERDDAP DHW grid | `https://coastwatch.noaa.gov/erddap/griddap/noaacrwdhwDaily...` | none | A (same provider, alt product) | `observed_alt_host` | `CHAIN` — gridded product backs up station text using pinned station coords. |
+| R-08 | `gdacs` subtypes | USGS quakes + existing NHC/JTWC cyclone sources | `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson` + NHC/JTWC feeds | none | B (additive/degraded subtype coverage) | n/a for own source keys | `ADDITIVE` — `usgs_quakes` is a separate source; GDACS uses subtype witnesses only as degraded observations. |
+| R-09 | `sea_ice` | OSI SAF / MET Norway THREDDS | `https://thredds.met.no/thredds/catalog/osisaf/met.no/ice/conc/...` NetCDF grids | none | B (independent) | `observed_alt_host` | `DONE` — `netCDF4` parser shipped; independent concentration grids back up NSIDC extent CSVs. |
+| Live fix | `copernicus_ems` | Copernicus frontend activations API | `https://rapidmapping.emergency.copernicus.eu/backend/dashboard-api/public-activations-info/...` | none | A (same institution, alternate public API) | carried via `source_leg` | `CHAIN` — covers dashboard API 403/transport failures conservatively. |
+| Live fix | `jtwc` | Plain official RSS | `https://www.metoc.navy.mil/jtwc/rss/jtwc.rss` | none | A (same provider, simpler endpoint) | carried via `source_leg` | `CHAIN` — enhanced RSS falls back to plain RSS on outage/403. |
+| Live fix | `ocean_sst_anomaly` | NOAA STAR/CRW SST anomaly NetCDF | NOAA STAR daily global SSTA NetCDF index/download | none | A (same NOAA/CRW product family, alternate host/file) | `observed_alt_host` | `CHAIN` — fills failed CoastWatch ERDDAP regions from a single latest NetCDF grid. |

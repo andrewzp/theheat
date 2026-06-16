@@ -29,7 +29,7 @@ writer replays call paid APIs and are run only by the voice-regression workflow.
 - `voice-regression`: daily live writer replay at `0 9 * * *` and opt-in PR
   checks via the `voice-check` label.
 - `source-health-sentinel`: source-health issue reconciliation at
-  `30 */4 * * *`.
+  `30 * * * *`.
 
 ## State
 
@@ -41,11 +41,29 @@ changes should flow through bot code and the normal merge/write path.
 
 - `PIPELINE.md`: current source-to-draft flow and stage glossary.
 - `BRIEFING.md`: operator-level status and context.
+- `docs/handoffs/README.md`: current resume handoff plus dated session records.
+- `docs/runbooks/source-redundancy.md`: how backup-served sources, `served_via`,
+  evidence grades, and remaining unbacked sources work.
+- `docs/source-to-writer-evidence-contract.md`: what facts the writer can see
+  and what every source bundle must preserve.
 - `docs/handoffs/`: dated handoffs and halt notes.
 - `dashboard/`: Next.js operator dashboard.
 - `src/orchestrator/`: scheduled modes, source runners, triage, draft saving,
   posting, and finalize hooks.
 - `src/two_bot/`: writer, fact-check, critic, prompts, and bundle builders.
+
+## Current Operations
+
+- Source redundancy is live for the major flaky feeds that have verified backup
+  legs. Backup-served runs record `status="degraded"` plus
+  `served via <leg>`, never green, so outages stay visible while drafts can still
+  flow.
+- The dashboard Source Health views include a bounded troubleshooting log for
+  currently degraded/external/unhealthy sources. It is derived from compact
+  source-health run rows, not raw fetched payloads.
+- Same-event, used-framing, peer-comparison, and shipped-text memory is
+  publish-backed. A draft that is generated, killed, rejected, or left pending is
+  not treated as coverage until an actual post succeeds.
 
 ## Standing Rails
 
