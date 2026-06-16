@@ -182,6 +182,21 @@ def _memory(state: BotState) -> MemoryState:
     return state_store.get_memory(state)
 
 
+def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
+    """Persist the small bundle subset needed to record publish memory later."""
+
+    return {
+        "signal_kind": bundle.signal_kind,
+        "where": bundle.where,
+        "when": bundle.when,
+        "event_id": bundle.event_id,
+        "current_facts": [
+            dict(fact) for fact in bundle.current_facts
+            if isinstance(fact, dict)
+        ],
+    }
+
+
 def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     """Assemble the relevant memory for the writer."""
 
@@ -256,7 +271,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
 
     same_event_rows = []
     if event_keys:
-        for row in list(memory.get("shipped_tweets", [])) + list(state.get("drafts", [])):
+        for row in memory.get("shipped_tweets", []):
             if not isinstance(row, dict):
                 continue
             row_keys = {
@@ -290,15 +305,18 @@ def record_shipped(
     bundle: StoryBundle,
     writer: WriterResult,
     extracted: list[ExtractedClaim],
+    *,
+    tweet_id: str | None = None,
+    shipped_at: str | None = None,
 ) -> None:
-    """Write successful two-bot draft memory back into state in place."""
+    """Write successful two-bot publish memory back into state in place."""
 
     if writer.tweet is None:
         raise ValueError("Cannot record shipped memory for a killed writer result")
 
     memory = _memory(state)
     country = _country_for(bundle)
-    now = _utc_now_iso()
+    now = shipped_at or _utc_now_iso()
     event_series_key = _event_series_key(bundle)
 
     shipped_row = {
@@ -308,6 +326,8 @@ def record_shipped(
         "country": country,
         "shipped_at": now,
     }
+    if tweet_id:
+        shipped_row["tweet_id"] = tweet_id
     if event_series_key:
         shipped_row["event_series_key"] = event_series_key
     memory.setdefault("shipped_tweets", []).append(shipped_row)
@@ -354,6 +374,113 @@ def record_shipped(
     except (ValueError, TypeError):
         existing["first_seen"] = _today_iso()
         existing["days_running"] = 1
+
+
+def _two_bot_metadata_from_draft(draft: dict) -> dict | None:
+    direct = draft.get("two_bot_metadata")
+    if isinstance(direct, dict):
+        return direct
+    review_context = draft.get("review_context")
+    if not isinstance(review_context, dict):
+        return None
+    two_bot = review_context.get("two_bot")
+    return two_bot if isinstance(two_bot, dict) else None
+
+
+def _story_bundle_from_metadata(two_bot: dict, draft: dict) -> StoryBundle | None:
+    payload = two_bot.get("bundle")
+    if not isinstance(payload, dict):
+        payload = {}
+    event_id = str(payload.get("event_id") or draft.get("event_id") or "")
+    signal_kind = str(payload.get("signal_kind") or two_bot.get("signal_kind") or draft.get("type") or "")
+    if not event_id or not signal_kind:
+        return None
+    facts_raw = payload.get("current_facts")
+    current_facts = [
+        dict(fact) for fact in facts_raw
+        if isinstance(fact, dict)
+    ] if isinstance(facts_raw, list) else []
+    return StoryBundle(
+        signal_kind=signal_kind,
+        where=str(payload.get("where") or draft.get("city") or ""),
+        when=str(payload.get("when") or draft.get("tweet_date") or ""),
+        event_id=event_id,
+        headline_metric={},
+        current_facts=current_facts,
+        historical_context={},
+        raw_signal_dump={},
+    )
+
+
+def _claims_from_metadata(two_bot: dict) -> list[ExtractedClaim]:
+    fact_check = two_bot.get("fact_check")
+    if not isinstance(fact_check, dict):
+        return []
+    raw_claims = fact_check.get("extracted_claims")
+    if not isinstance(raw_claims, list):
+        return []
+    claims: list[ExtractedClaim] = []
+    for raw in raw_claims:
+        if not isinstance(raw, dict):
+            continue
+        text = str(raw.get("text") or "").strip()
+        kind = str(raw.get("kind") or "").strip()
+        if text and kind:
+            claims.append(ExtractedClaim(text=text, kind=kind))
+    return claims
+
+
+def _published_memory_already_recorded(memory: MemoryState, tweet_id: str) -> bool:
+    for row in memory.get("shipped_tweets", []):
+        if not isinstance(row, dict):
+            continue
+        if tweet_id and row.get("tweet_id") == tweet_id:
+            return True
+    return False
+
+
+def record_published_draft(state: BotState, draft: dict) -> bool:
+    """Record two-bot memory for a draft only after it is actually published."""
+
+    if not isinstance(draft, dict):
+        return False
+    tweet_text = _tweet_text(draft).strip()
+    if not tweet_text:
+        return False
+    two_bot = _two_bot_metadata_from_draft(draft)
+    if two_bot is None:
+        return False
+    bundle = _story_bundle_from_metadata(two_bot, draft)
+    if bundle is None:
+        return False
+    tweet_id = str(draft.get("tweet_id") or "").strip()
+    memory = _memory(state)
+    if _published_memory_already_recorded(memory, tweet_id):
+        return False
+    writer = WriterResult(
+        tweet=tweet_text,
+        kill_reason=None,
+        angle_chosen=str(two_bot.get("angle_chosen") or ""),
+        era_anchor_used=(
+            str(two_bot.get("era_anchor_used"))
+            if two_bot.get("era_anchor_used") is not None else None
+        ),
+        peer_comparison_used=(
+            str(two_bot.get("peer_comparison_used"))
+            if two_bot.get("peer_comparison_used") is not None else None
+        ),
+        reasoning=str(two_bot.get("reasoning") or ""),
+    )
+    shipped_at = str(draft.get("posted_at") or "").strip() or None
+    record_shipped(
+        state,
+        bundle,
+        writer,
+        _claims_from_metadata(two_bot),
+        tweet_id=tweet_id or None,
+        shipped_at=shipped_at,
+    )
+    return True
 
 
 def is_reuse(state: BotState, candidate: str, kind: str) -> bool:

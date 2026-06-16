@@ -217,7 +217,6 @@ def _drain_and_write_triage_queue(
         )
         if drafted:
             drafted_count += 1
-            _state.record_event(bot_state, candidate.event_id)
             # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).
             # Source runners write drafted=0 at their call site because candidates
             # are still queued then; the drain step is where drafts actually happen.

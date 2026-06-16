@@ -117,6 +117,15 @@ def _last_posted_at(bot_state: BotState):
     return last_post
 
 
+def _record_published_two_bot_memory(bot_state: BotState, draft: dict) -> None:
+    try:
+        from src.two_bot.memory import record_published_draft
+
+        record_published_draft(bot_state, draft)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[post] Failed to record two-bot publish memory: {exc!r}")
+
+
 def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     """Post an approved tweet to X.
 
@@ -159,6 +168,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     draft["status"] = "posted"
     draft["posted_at"] = _utc_now_iso()
     draft["last_publish_attempt_at"] = draft["posted_at"]
+    if event_id and event_id not in bot_state.get("posted_events", []):
+        state.record_event(bot_state, event_id)
+    _record_published_two_bot_memory(bot_state, draft)
     post_to_bluesky(tweet_text)
     state.increment_daily_count(bot_state)
     print(f"[post] Posted to X: {tweet_text[:60]}...")

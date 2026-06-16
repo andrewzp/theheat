@@ -1201,6 +1201,66 @@ class TestPostApproved:
         mock_state.increment_daily_count.assert_called_once_with(state)
 
     @patch("src.main.state")
+    @patch("src.main.post_to_bluesky")
+    @patch("src.main.post_tweet")
+    def test_records_two_bot_memory_only_after_successful_publish(
+        self,
+        mock_tw,
+        mock_bluesky,
+        mock_state,
+    ):
+        mock_state.check_daily_cap.return_value = True
+        mock_state.write_state.return_value = True
+        mock_tw.return_value = {"id": "tweet_123"}
+        mock_state.record_event.side_effect = (
+            lambda bot_state, event_id: bot_state.setdefault("posted_events", []).append(event_id)
+            or bot_state
+        )
+        state = _fresh_state()
+        draft = {
+            "id": "draft_1",
+            "event_id": "event_1",
+            "publish_intent_id": "intent_1",
+            "text": "Beaver Dams hit 87°F, eleven above the June record.",
+            "review_context": {
+                "two_bot": {
+                    "signal_kind": "monthly_high",
+                    "angle_chosen": "record_margin_with_aridity_mechanism",
+                    "era_anchor_used": None,
+                    "peer_comparison_used": "Colorado Plateau geography",
+                    "reasoning": "test",
+                    "fact_check": {
+                        "extracted_claims": [
+                            {
+                                "text": "Colorado Plateau geography",
+                                "kind": "peer_comparison",
+                            }
+                        ]
+                    },
+                    "bundle": {
+                        "signal_kind": "monthly_high",
+                        "where": "Beaver Dams, Utah",
+                        "when": "2026-06-16",
+                        "event_id": "event_1",
+                        "current_facts": [
+                            {"label": "city", "value": "Beaver Dams"},
+                            {"label": "country", "value": "United States"},
+                        ],
+                    },
+                },
+            },
+        }
+
+        result = post_approved(draft, state)
+
+        assert result == "posted"
+        assert state["posted_events"] == ["event_1"]
+        assert state["memory"]["shipped_tweets"][0]["tweet_text"] == draft["text"]
+        assert state["memory"]["shipped_tweets"][0]["tweet_id"] == "tweet_123"
+        assert "colorado plateau geography" in state["memory"]["used_peer_comparisons"]
+        assert "record_margin_with_aridity_mechanism" in state["memory"]["used_framings"]
+
+    @patch("src.main.state")
     @patch("src.main.post_tweet")
     def test_returns_failed_on_failure(self, mock_tw, mock_state):
         mock_state.check_daily_cap.return_value = True
@@ -1483,7 +1543,7 @@ class TestRunAlerts:
         drafts = fresh_st.get("drafts", [])
         marine_drafts = [d for d in drafts if d.get("type") == "marine_heatwave"]
         assert len(marine_drafts) == 1
-        assert "marine_heatwave_streak_5_2026-04-20" in fresh_st.get("posted_events", [])
+        assert "marine_heatwave_streak_5_2026-04-20" not in fresh_st.get("posted_events", [])
         assert captured["legacy_type"] == "marine_heatwave"
         assert captured["bundle"].signal_kind == "marine_heatwave"
         assert captured["bundle"].headline_metric == {
@@ -2235,8 +2295,8 @@ class TestRunAlertsIceMass:
         assert bot_state["ice_mass_last_seen"].get("greenland") == "2026-03"
         assert bot_state["ice_mass_max_loss"].get("greenland", {}).get("gt") == -500.0
         assert bot_state["ice_annual_count"].get("2026", 0) >= 1
-        # The event must be recorded
-        assert any("ice_mass_record_greenland_monthly_2026-03" == e
+        # A saved draft is not a published event; posting records posted_events.
+        assert all("ice_mass_record_greenland_monthly_2026-03" != e
                    for e in bot_state["posted_events"])
 
     def test_non_monday_skips(self, monkeypatch):
@@ -2405,9 +2465,8 @@ class TestPerCycleCapCleanup:
 
     def _seed_drafts_after_mark(self, n: int):
         """Return (bot_state, drafts_before) with n pre-existing drafts
-        representing 'this cycle produced n drafts' — each with a
-        matching posted_events entry just like run_alerts' per-section
-        record_event() does."""
+        representing legacy state where this cycle produced n drafts and
+        draft-time code already wrote matching posted_events entries."""
         from src.main import MAX_DRAFTS_PER_CYCLE  # noqa: F401 (import side effect)
         state_dict = _fresh_state()
         drafts_before = 0

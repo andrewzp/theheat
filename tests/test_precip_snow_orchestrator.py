@@ -37,7 +37,7 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
     assert bot_state["precip_daily_records"]["france:paris:05-14"]["mm"] == 75.0
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
-    assert "gpm_precip_record_france_paris_2026-05-14" in bot_state["posted_events"]
+    assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
     assert bot_state["precip_daily_records"]["france:paris:05-14"]["mm"] == 75.0
     assert bot_state["source_health"]["gpm_imerg"]["success"] == 1
     assert current_run["sources"][0]["drafted"] == 1
@@ -122,7 +122,7 @@ def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch):
     assert "nsidc_snow_seasonal_snow_record_albro_lake_2026-05-14" not in bot_state["posted_events"]
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
-    assert "nsidc_snow_seasonal_snow_record_albro_lake_2026-05-14" in bot_state["posted_events"]
+    assert "nsidc_snow_seasonal_snow_record_albro_lake_2026-05-14" not in bot_state["posted_events"]
     assert bot_state["snow_annual_count"][str(__import__("datetime").date.today().year)] == 1
     assert bot_state["seasonal_snow_records"]["albro_lake"]["mm"] == 800.0
     assert bot_state["source_health"]["nsidc_snow"]["success"] == 1

@@ -4,6 +4,7 @@ from src.two_bot.memory import (
     _signal_kind_to_category,
     build_memory_slice,
     is_reuse,
+    record_published_draft,
     record_shipped,
 )
 from src.two_bot.types import ExtractedClaim, StoryBundle, WriterResult
@@ -38,7 +39,7 @@ def test_build_memory_slice_filters_by_country():
     assert len(memory_slice.recent_tweets_same_country) == 2
 
 
-def test_build_memory_slice_exposes_recent_tweets_for_event_base():
+def test_build_memory_slice_exposes_recent_published_tweets_for_event_base():
     state = _state_with_memory(
         shipped_tweets=[
             {
@@ -67,9 +68,51 @@ def test_build_memory_slice_exposes_recent_tweets_for_event_base():
     memory_slice = build_memory_slice(state, bundle)
 
     assert memory_slice.recent_tweets_same_event == [
-        "Hurricane Alpha pushed higher again.",
         "Hurricane Alpha hit Cat 3 in the Atlantic.",
     ]
+
+
+def test_record_published_draft_writes_memory_from_persisted_two_bot_metadata():
+    state = _empty_memory_state()
+    draft = {
+        "text": "Hurricane Alpha hit Cat 3 in the Atlantic.",
+        "event_id": "gdacs_TC_1001270_tier3",
+        "type": "global_disaster",
+        "tweet_id": "tweet_123",
+        "review_context": {
+            "two_bot": {
+                "signal_kind": "global_disaster",
+                "angle_chosen": "named_storm_scale",
+                "era_anchor_used": None,
+                "peer_comparison_used": "Category 3 hurricane",
+                "reasoning": "test",
+                "fact_check": {
+                    "extracted_claims": [
+                        {"text": "Category 3 hurricane", "kind": "peer_comparison"}
+                    ]
+                },
+                "bundle": {
+                    "signal_kind": "global_disaster",
+                    "where": "Atlantic",
+                    "when": "2026-05-03",
+                    "event_id": "gdacs_TC_1001270_tier3",
+                    "current_facts": [
+                        {"label": "disaster_type", "value": "Tropical Cyclone"},
+                        {"label": "name", "value": "Alpha"},
+                        {"label": "country", "value": "United States"},
+                    ],
+                },
+            }
+        },
+    }
+
+    assert record_published_draft(state, draft) is True
+
+    memory = state["memory"]
+    assert memory["shipped_tweets"][0]["tweet_text"] == draft["text"]
+    assert memory["shipped_tweets"][0]["tweet_id"] == "tweet_123"
+    assert "category 3 hurricane" in memory["used_peer_comparisons"]
+    assert "named_storm_scale" in memory["used_framings"]
 
 
 def test_build_memory_slice_limits_global_shipped_texts_but_keeps_same_event_context():

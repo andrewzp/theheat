@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.two_bot.fact_check import fact_check as real_fact_check
+from src.two_bot.memory import record_published_draft
 from src.two_bot.pipeline import (
     generate_draft,
     generate_fire_draft,
@@ -13,6 +14,16 @@ from src.two_bot.pipeline import (
 from src.two_bot.types import CriticResult, ExtractedClaim, FactCheckResult, StoryBundle, WriterResult
 
 from tests.two_bot.conftest import _bundle, _fire_event, _state_with_memory
+
+
+def _persisted_draft_from_pipeline_result(draft: dict) -> dict:
+    return {
+        "text": draft["text"],
+        "type": draft["type"],
+        "event_id": draft["event_id"],
+        "tweet_id": "tweet_123",
+        "review_context": {"two_bot": draft["two_bot_metadata"]},
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +73,8 @@ def test_pipeline_happy_path(mock_writer, mock_extract, mock_fact_check):
 
     assert draft is not None
     assert draft["text"].startswith("Mali")
-    assert "250 mw gas plant" in state["memory"]["used_peer_comparisons"]
+    assert state["memory"]["used_peer_comparisons"] == []
+    assert draft["two_bot_metadata"]["bundle"]["event_id"] == "fire_test"
 
 
 def test_pipeline_writer_kills(mock_writer, mock_extract, mock_fact_check):
@@ -219,6 +231,8 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
     draft1 = generate_fire_draft(_fire_event(event_id="fire_first"), state)
 
     assert draft1 is not None
+    assert state["memory"]["used_era_anchors"] == []
+    assert record_published_draft(state, _persisted_draft_from_pipeline_result(draft1))
     assert "spider-man 2002" in state["memory"]["used_era_anchors"]
 
     mock_writer.return_value = WriterResult(
@@ -598,10 +612,12 @@ def test_shadow_returns_none_on_fact_check_fail(mock_writer, mock_extract, mock_
 # ----------------------- generic generate_draft tests -----------------------
 
 
-def test_generate_draft_records_memory(mock_writer, mock_extract, mock_fact_check):
-    """Unlike generate_shadow_draft, generate_draft must write to the
-    memory layer when a draft is produced. This is the live path —
-    skipping memory would let the same tweet ship repeatedly."""
+def test_generate_draft_defers_memory_until_publish(mock_writer, mock_extract, mock_fact_check):
+    """generate_draft only prepares queueable text.
+
+    Publish memory is written by the posting layer after X returns a tweet id;
+    a pending draft must not spend event/angle memory that readers never saw.
+    """
     mock_writer.return_value = WriterResult(
         tweet="Conakry, Guinea: hottest May since 2022.",
         kill_reason=None,
@@ -625,8 +641,19 @@ def test_generate_draft_records_memory(mock_writer, mock_extract, mock_fact_chec
     assert result["text"].startswith("Conakry")
     assert result["type"] == "monthly_high"
     assert result["event_id"] == "meteo_monthly_Conakry_2026-05-01"
-    # Live path DOES record memory — the shadow path is the one that doesn't.
-    assert "some-era-anchor" in state["memory"]["used_era_anchors"]
+    assert state["memory"]["shipped_tweets"] == []
+    assert state["memory"]["used_era_anchors"] == []
+    assert result["two_bot_metadata"]["bundle"] == {
+        "signal_kind": "monthly_high",
+        "where": "Conakry, Guinea",
+        "when": "2026-05-01",
+        "event_id": "meteo_monthly_Conakry_2026-05-01",
+        "current_facts": [
+            {"label": "city", "value": "Conakry"},
+            {"label": "country", "value": "Guinea"},
+            {"label": "month", "value": "May"},
+        ],
+    }
 
 
 def test_generate_draft_returns_none_on_writer_kill(mock_writer, mock_extract, mock_fact_check):
