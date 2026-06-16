@@ -6,6 +6,19 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
+> **Structural update (2026-06-16 eng-review).** This doc tracks voice quality
+> toward the `>50%`-A-rate resumption bar. The 2026-06-16 `/plan-eng-review` found
+> that bar is *structurally* unreachable as wired: it is graded by the
+> daily-plan routine (dead since 2026-05-26), posting is paused until it clears
+> (peak ever 21%), and A-grade drafts go stale in the queue before they could lift
+> it. The **Throughput Initiative** addresses the structural causes directly —
+> **Phase B** decouples the ship gate (per-draft critic-PASS + freshness instead of
+> the dead cycle-level grader) and **Phase A** adds the missing per-stage kill-rate
+> / critic-pass-rate instrumentation so "is voice the bottleneck or is the
+> architecture?" becomes measurable rather than assumed. See
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md).
+> The voice proposals below remain valid; they raise the A-rate at the source.
+
 ## Current state
 
 | | |

@@ -16,6 +16,24 @@ Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress 
 > remains `manual_only`; reganom remains dormant; database migration off the Gist
 > is still future work.
 
+> **Near-term execution of this vision (2026-06-16): the Throughput Initiative.**
+> A four-phase plan operationalizes the parts of this doc that are still
+> aspirational, in dependency order. It maps directly onto the sections below:
+> **Phase A** builds the *durable run ledger + observability* (risk #4, "no durable
+> run ledger") as funnel instrumentation; **Phase B** unlocks *delayed
+> auto-approval + the published-tweet feedback loop* by decoupling the dead
+> `>50%`-A-rate ship gate (uses critic-PASS + a freshness guard); **Phase C** is the
+> *"replace single-shot generation with an editorial loop"* (generate-and-select
+> refill across the day's slate); **Phase D** is *multi-candidate context / "the
+> best events get the best writing"* via verifiable cross-signal synthesis. Each
+> plan is in
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/)
+> with a codex outside review folded in; the execution brief is
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-throughput-initiative-EXECUTION.md).
+> Reframe worth carrying forward: input breadth is NOT the bottleneck (~132k
+> observed/day already); the collapse to ~6 drafts/week is architecture + caps +
+> the posting deadlock.
+
 ## Progress against plan (as of 2026-05-12)
 
 - **Phase 0 (Stabilize production)** — largely shipped. Suppression ledger (#54-#60), source-health visibility (#64, #71), CI on PRs (#56), hermeticity gate (#57), anti-fabrication safety (#58-#60), nightly voice-replay regression (#61), ruff + mypy gates (#62-#63, #72), fact-checker as third boundary (#82). Database migration off Gist *not yet started*; Gist remains the durable state with a `BotState` TypedDict (#72) now enforcing structure in-process.
