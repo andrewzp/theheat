@@ -28,7 +28,14 @@ default-OFF.
   fixes red workflows — auto-merging *mechanical* fixes and opening a PR-and-stop
   for *judgment/destructive* ones. A meta-guard flags the self-heal routine
   itself (via a `SELFHEAL_BEACON` heartbeat) if it goes silent for >26h, so the
-  watcher cannot die unnoticed the way the daily-plan routine did.
+  watcher cannot die unnoticed the way the daily-plan routine did. The Layer-3
+  routine ships as `.github/workflows/workflow-self-heal.yml` (daily 13:00 UTC,
+  Claude Code headless). **Operator setup:** it needs a `SELFHEAL_PAT` repo secret
+  (repo scope + Variables: write) so its fix-PRs trigger the `test` gate and it can
+  write the beacon; without it the routine degrades to detection-only. Hardened
+  per a codex + 12-agent-Opus adversarial review (false-recovery on transient
+  fetch failures, env-first beacon read, dashboard decisive-run selection,
+  autonomy-boundary tightening).
 
 - **Multi-signal writer context (Throughput Initiative Phase D)** behind
   `THEHEAT_MULTISIGNAL_CONTEXT` (default OFF). When enabled, the drain attaches up
