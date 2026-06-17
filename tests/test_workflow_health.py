@@ -11,8 +11,11 @@ death).
 """
 
 from datetime import datetime, timezone
+import os
 
+import scripts.workflow_health as wh
 from scripts.workflow_health import (
+    BEACON_VARIABLE,
     FAILING_CONCLUSIONS,
     LABEL,
     SELFHEAL_MAX_AGE_H,
@@ -21,6 +24,8 @@ from scripts.workflow_health import (
     build_workflow_issue_body,
     classify_workflow_run,
     count_leading_failures,
+    fetch_runs_by_workflow,
+    fetch_selfheal_beacon,
     plan_workflow_issue_actions,
     run_workflow_health,
     selfheal_liveness_verdict,
@@ -203,30 +208,42 @@ class TestSelfHealLiveness:
 
 
 class TestPlanWorkflowIssueActions:
+    # Signature: plan_workflow_issue_actions(failing, recovered, open_issues).
+    # An issue is CLOSED only for a workflow we positively observed RECOVERED —
+    # never merely "not in the failing set" (that auto-closed still-failing issues
+    # on a transient fetch failure: the false-recovery bug both reviewers caught).
     def test_creates_issue_for_new_failure(self):
-        actions = plan_workflow_issue_actions({"voice-regression"}, {})
+        actions = plan_workflow_issue_actions({"voice-regression"}, set(), {})
         assert actions == [{"action": "create", "workflow": "voice-regression"}]
 
     def test_closes_issue_for_recovered_workflow(self):
-        actions = plan_workflow_issue_actions(set(), {"voice-regression": 5})
+        actions = plan_workflow_issue_actions(set(), {"voice-regression"}, {"voice-regression": 5})
         assert actions == [{"action": "close", "workflow": "voice-regression", "number": 5}]
 
-    def test_create_and_close_leaves_still_failing_alone(self):
+    def test_unknown_or_fetch_failed_workflow_issue_is_NOT_closed(self):
+        # The regression test for the false-recovery bug. A workflow with an open
+        # issue that is neither confirmed-failing nor confirmed-recovered (e.g. its
+        # run fetch failed → unknown) must be LEFT ALONE, never auto-closed.
+        assert plan_workflow_issue_actions(set(), set(), {"voice-regression": 5}) == []
+
+    def test_create_and_close_leaves_still_failing_and_unknown_alone(self):
         actions = plan_workflow_issue_actions(
-            {"voice-regression", "theheat-bot"},
-            {"refresh-thresholds": 9, "theheat-bot": 7},
+            {"voice-regression", "theheat-bot"},      # failing
+            {"refresh-thresholds"},                    # recovered (healthy)
+            {"refresh-thresholds": 9, "theheat-bot": 7, "source-health-sentinel": 3},
         )
         kinds = {(a["action"], a["workflow"]) for a in actions}
         assert ("create", "voice-regression") in kinds
         assert ("close", "refresh-thresholds") in kinds
-        assert not any(a["workflow"] == "theheat-bot" for a in actions)
+        assert not any(a["workflow"] == "theheat-bot" for a in actions)        # still failing
+        assert not any(a["workflow"] == "source-health-sentinel" for a in actions)  # unknown → left alone
 
     def test_nothing_to_do_when_aligned(self):
-        assert plan_workflow_issue_actions({"voice-regression"}, {"voice-regression": 1}) == []
+        assert plan_workflow_issue_actions({"voice-regression"}, set(), {"voice-regression": 1}) == []
 
     def test_create_carries_labels_and_body_when_verdict_given(self):
         verdict = classify_workflow_run("voice-regression", "voice-regression.yml", VR_RED_RUNS, now=NOW)
-        actions = plan_workflow_issue_actions({"voice-regression": verdict}, {})
+        actions = plan_workflow_issue_actions({"voice-regression": verdict}, set(), {})
         create = actions[0]
         assert create["action"] == "create"
         assert LABEL in create["labels"]
@@ -235,7 +252,7 @@ class TestPlanWorkflowIssueActions:
     def test_update_when_body_changes(self):
         verdict = classify_workflow_run("voice-regression", "voice-regression.yml", VR_RED_RUNS, now=NOW)
         open_issues = {"voice-regression": {"number": 3, "body": "stale body", "labels": [LABEL]}}
-        actions = plan_workflow_issue_actions({"voice-regression": verdict}, open_issues)
+        actions = plan_workflow_issue_actions({"voice-regression": verdict}, set(), open_issues)
         assert actions[0]["action"] == "update"
         assert actions[0]["number"] == 3
 
@@ -243,7 +260,49 @@ class TestPlanWorkflowIssueActions:
         verdict = classify_workflow_run("voice-regression", "voice-regression.yml", VR_RED_RUNS, now=NOW)
         body = build_workflow_issue_body(verdict)
         open_issues = {"voice-regression": {"number": 3, "body": body, "labels": [LABEL, "ours"]}}
-        assert plan_workflow_issue_actions({"voice-regression": verdict}, open_issues) == []
+        assert plan_workflow_issue_actions({"voice-regression": verdict}, set(), open_issues) == []
+
+
+class TestFetchSelfHealBeacon:
+    # In CI the SELFHEAL_BEACON repo variable is injected as an env var via
+    # `vars.SELFHEAL_BEACON` — the default GITHUB_TOKEN cannot read the variables
+    # REST endpoint, so env-first is the only thing that makes the meta-guard fire.
+    def teardown_method(self):
+        os.environ.pop(BEACON_VARIABLE, None)
+
+    def test_reads_beacon_json_from_env(self):
+        os.environ[BEACON_VARIABLE] = '{"run_at": "2026-06-17T12:00:00Z", "outcome": "ok"}'
+        beacon = fetch_selfheal_beacon()
+        assert beacon == {"run_at": "2026-06-17T12:00:00Z", "outcome": "ok"}
+
+    def test_empty_env_is_none(self):
+        os.environ[BEACON_VARIABLE] = ""
+        assert fetch_selfheal_beacon() is None
+
+    def test_unparseable_env_is_none(self):
+        os.environ[BEACON_VARIABLE] = "not json"
+        assert fetch_selfheal_beacon() is None
+
+
+class TestFetchRunsByWorkflow:
+    def test_marks_fetch_failure_distinct_from_empty(self, monkeypatch):
+        # A failed gh api call must NOT look like "no runs / recovered" — it must
+        # be flagged so downstream never auto-closes a still-failing issue.
+        monkeypatch.setattr(wh, "_gh_api", lambda path: None)
+        result = fetch_runs_by_workflow()
+        assert len(result) == 4
+        for info in result.values():
+            assert info["fetch_ok"] is False
+            assert info["runs"] == []
+
+    def test_marks_fetch_success(self, monkeypatch):
+        monkeypatch.setattr(wh, "_gh_api", lambda path: {"workflow_runs": [
+            _run(1, "success", "2026-06-17T14:00:00Z"),
+        ]})
+        result = fetch_runs_by_workflow()
+        for info in result.values():
+            assert info["fetch_ok"] is True
+            assert len(info["runs"]) == 1
 
 
 class TestBuildWorkflowIssueBody:

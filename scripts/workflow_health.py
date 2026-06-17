@@ -305,16 +305,24 @@ def _normalise_failing(
 
 def plan_workflow_issue_actions(
     failing: Mapping[str, Mapping[str, Any]] | set[str] | Iterable[str],
+    recovered: Iterable[str],
     open_issues: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Reconcile the failing set against open ``workflow-health`` issues.
+    """Reconcile open ``workflow-health`` issues against observed state.
 
-    Create for every failing workflow without an issue; close the issue of every
-    workflow that recovered; update a still-failing workflow's issue only when its
-    body or labels drifted. Keyed by workflow name (mirrors the source sentinel).
+    - Create for every failing workflow without an issue.
+    - Update a still-failing workflow's issue only when its body/labels drifted.
+    - **Close ONLY a workflow we positively observed RECOVERED** (a green decisive
+      run, or a fresh self-heal beacon). A workflow that is merely *not failing*
+      — e.g. its run fetch failed and it classified ``unknown`` — is LEFT ALONE,
+      never auto-closed. Closing on "not failing" was a false-recovery bug: a
+      transient Actions-API blip would close a still-red workflow's issue with a
+      "recovered" comment, then re-open it next hour (and could make the self-heal
+      routine stand down on a still-broken workflow). Keyed by workflow name.
     """
     failing_map = _normalise_failing(failing)
     failing_workflows = set(failing_map)
+    recovered_set = set(recovered)
     actions: list[dict[str, Any]] = []
 
     for workflow in sorted(failing_workflows - set(open_issues)):
@@ -345,7 +353,7 @@ def plan_workflow_issue_actions(
             "body": expected_body,
         })
 
-    for workflow in sorted(set(open_issues) - failing_workflows):
+    for workflow in sorted(recovered_set & set(open_issues)):
         actions.append({
             "action": "close",
             "workflow": workflow,
@@ -381,7 +389,11 @@ def _gh_api(path: str) -> Any:
 
 
 def fetch_runs_by_workflow(per_page: int = 20) -> dict[str, dict[str, Any]]:
-    """Fetch recent ``main`` runs for each monitored workflow via the Actions API."""
+    """Fetch recent ``main`` runs for each monitored workflow via the Actions API.
+
+    Each entry carries ``fetch_ok``: False marks a failed/empty gh-api call so a
+    transient outage is never mistaken for "no runs / recovered" downstream.
+    """
     repo = _repo()
     branch = _branch()
     result: dict[str, dict[str, Any]] = {}
@@ -390,14 +402,35 @@ def fetch_runs_by_workflow(per_page: int = 20) -> dict[str, dict[str, Any]]:
             f"repos/{repo}/actions/workflows/{wf['file']}/runs"
             f"?branch={branch}&per_page={per_page}&exclude_pull_requests=true"
         )
-        data = _gh_api(path) or {}
-        runs = data.get("workflow_runs") if isinstance(data, Mapping) else None
-        result[wf["name"]] = {"file": wf["file"], "runs": runs or []}
+        data = _gh_api(path)
+        if not isinstance(data, Mapping):
+            result[wf["name"]] = {"file": wf["file"], "runs": [], "fetch_ok": False}
+            continue
+        runs = data.get("workflow_runs") or []
+        result[wf["name"]] = {"file": wf["file"], "runs": runs, "fetch_ok": True}
     return result
 
 
 def fetch_selfheal_beacon() -> dict[str, Any] | None:
-    """Read the SELFHEAL_BEACON repo variable; None if unset or unreadable."""
+    """Read the SELFHEAL_BEACON beacon; None if unset, empty, or unparseable.
+
+    Env-first: in CI the repo variable is injected via ``vars.SELFHEAL_BEACON``
+    (the default GITHUB_TOKEN cannot read the Actions *variables* REST endpoint —
+    that needs a dedicated Variables permission that is not even a grantable
+    GITHUB_TOKEN scope, so an API read would silently return None and the
+    meta-guard would never fire). When the env var is present it is authoritative.
+    Locally (no env var) fall back to ``gh api``, which uses the user's PAT.
+    """
+    if BEACON_VARIABLE in os.environ:
+        raw = os.environ[BEACON_VARIABLE].strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
     data = _gh_api(f"repos/{_repo()}/actions/variables/{BEACON_VARIABLE}")
     if not isinstance(data, Mapping):
         return None
@@ -411,8 +444,13 @@ def fetch_selfheal_beacon() -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _list_open_workflow_issues() -> dict[str, dict[str, Any]]:
-    """Map workflow name -> open issue, for issues this observer filed."""
+def _list_open_workflow_issues() -> dict[str, dict[str, Any]] | None:
+    """Map workflow name -> open issue, for issues this observer filed.
+
+    Returns None (not {}) when the listing itself fails, so the caller can tell
+    "no open issues" from "couldn't list" and skip mutations rather than create
+    duplicates of every still-open issue.
+    """
     try:
         out = _run_gh(
             ["issue", "list", "--label", LABEL, "--state", "open",
@@ -421,7 +459,7 @@ def _list_open_workflow_issues() -> dict[str, dict[str, Any]]:
         items = json.loads(out or "[]")
     except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
         print(f"[workflow-health] could not list issues: {exc!r}", file=sys.stderr)
-        return {}
+        return None
     result: dict[str, dict[str, Any]] = {}
     for it in items:
         title = it.get("title", "")
@@ -506,10 +544,28 @@ def main(argv: list[str] | None = None) -> int:
         print("[workflow-health] dry-run — pass --apply or run in CI to open/close issues.")
         return 0
 
+    # Total Actions-API outage: every workflow fetch failed. Reconciling now would
+    # be reconciling against no information — bail like the source sentinel does on
+    # an unreadable state.json. Mutate nothing.
+    if runs_by_workflow and all(not info.get("fetch_ok", True) for info in runs_by_workflow.values()):
+        print("[workflow-health] all workflow-run fetches failed — skipping reconcile.", file=sys.stderr)
+        return 0
+
+    open_issues = _list_open_workflow_issues()
+    if open_issues is None:
+        print("[workflow-health] could not list open issues — skipping reconcile.", file=sys.stderr)
+        return 0
+
     _ensure_labels()
     failing_map = {v["workflow"]: v for v in report["failing"]}
-    open_issues = _list_open_workflow_issues()
-    for action in plan_workflow_issue_actions(failing_map, open_issues):
+    # Close ONLY workflows we positively observed recovered: a green decisive run,
+    # or (for the self-heal heartbeat) a fresh beacon. Never close on "not failing"
+    # — an unknown/fetch-failed workflow keeps its open issue.
+    recovered = {v["workflow"] for v in report["healthy"]}
+    if beacon is not None and selfheal_liveness_verdict(beacon) is None:
+        recovered.add(SELFHEAL_SOURCE)
+
+    for action in plan_workflow_issue_actions(failing_map, recovered, open_issues):
         if action["action"] == "create":
             _create_issue(action["workflow"], failing_map[action["workflow"]])
         elif action["action"] == "update":

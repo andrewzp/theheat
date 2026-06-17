@@ -8,6 +8,23 @@
 // five-day voice-regression outage went unnoticed).
 export const FAILING_CONCLUSIONS = new Set(["failure", "timed_out", "startup_failure"])
 
+// A run we can draw a verdict from. Everything else (cancelled, neutral, skipped,
+// in-progress) is noise we skip to reach the last real signal. Mirrors
+// scripts/workflow_health.py DECISIVE_CONCLUSIONS.
+export const DECISIVE_CONCLUSIONS = new Set([...FAILING_CONCLUSIONS, "success"])
+
+// The most recent run with a decisive conclusion. Skips a newer cancelled/
+// in-progress run so it cannot mask a real failure (the dashboard masking bug).
+export function selectLatestDecisiveRun(runs) {
+  const sorted = [...(runs || [])]
+    .filter(Boolean)
+    .sort((a, b) => (Date.parse(b?.created_at) || 0) - (Date.parse(a?.created_at) || 0))
+  for (const run of sorted) {
+    if (DECISIVE_CONCLUSIONS.has(run?.conclusion)) return run
+  }
+  return null
+}
+
 // How long the self-heal routine's heartbeat may age before its dot goes red.
 // Matches scripts/workflow_health.py SELFHEAL_MAX_AGE_H.
 export const SELFHEAL_MAX_AGE_MS = 26 * 60 * 60 * 1000
@@ -17,8 +34,10 @@ export function dotColorForWorkflow(wf) {
   if (wf.error) return "red"
   if (wf.state === "disabled_manually") return "gray"
   if (FAILING_CONCLUSIONS.has(wf.last_run_conclusion)) return "red"
-  if (wf.state === "active" && wf.last_run_conclusion === "success") return "green"
-  if (wf.state === "active") return "green"
+  if (wf.last_run_conclusion === "success") return "green"
+  // No decisive conclusion (cancelled / in-progress / never-run) → gray, NOT
+  // green. Painting it green would let a real failure hide behind a newer
+  // cancelled run.
   return "gray"
 }
 

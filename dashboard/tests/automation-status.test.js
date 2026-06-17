@@ -6,6 +6,7 @@ import {
   dotColorForWorkflow,
   failingWorkflows,
   dotColorForSelfHeal,
+  selectLatestDecisiveRun,
 } from "../lib/automation-status.js"
 
 const NOW = Date.parse("2026-06-17T16:00:00Z")
@@ -105,4 +106,27 @@ test("self-heal dot: a fresh error heartbeat is yellow", () => {
 test("self-heal dot: a missing beacon is gray (not configured yet, no rollout noise)", () => {
   assert.equal(dotColorForSelfHeal(null, NOW), "gray")
   assert.equal(dotColorForSelfHeal({}, NOW), "gray")
+})
+
+test("selectLatestDecisiveRun skips a newer cancelled run and finds the real failure", () => {
+  // The dashboard masking bug: a cancelled run is newer than the real failure.
+  const runs = [
+    { conclusion: "cancelled", created_at: "2026-06-17T15:00:00Z" },
+    { conclusion: "failure", created_at: "2026-06-17T09:00:00Z" },
+    { conclusion: "success", created_at: "2026-06-16T09:00:00Z" },
+  ]
+  assert.equal(selectLatestDecisiveRun(runs)?.conclusion, "failure")
+})
+
+test("selectLatestDecisiveRun returns null when nothing is decisive", () => {
+  const runs = [
+    { conclusion: null, status: "in_progress", created_at: "2026-06-17T15:00:00Z" },
+    { conclusion: "cancelled", created_at: "2026-06-17T09:00:00Z" },
+  ]
+  assert.equal(selectLatestDecisiveRun(runs), null)
+})
+
+test("a workflow whose latest decisive run is unknown/none is gray, not green (no false green)", () => {
+  // last_run_conclusion null (no decisive run in the window) must NOT paint green.
+  assert.equal(dotColorForWorkflow({ state: "active", last_run_conclusion: null }), "gray")
 })

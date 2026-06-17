@@ -1,4 +1,5 @@
 import { readStateStore } from "./state-store.js"
+import { selectLatestDecisiveRun } from "./automation-status.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
 const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
@@ -51,9 +52,13 @@ export async function fetchWorkflowLastRun(file) {
   if (!process.env.GITHUB_TOKEN) {
     throw new Error("GITHUB_TOKEN not configured")
   }
+  // Fetch a small window (not per_page=1) and pick the latest DECISIVE run, so a
+  // newer cancelled/in-progress run can't mask a real failure — mirrors the
+  // Python observer's select_latest_decisive_run.
   const params = new URLSearchParams({
     branch: productionBranch(),
-    per_page: "1",
+    per_page: "10",
+    exclude_pull_requests: "true",
   })
   const url = `https://api.github.com/repos/${repo()}/actions/workflows/${file}/runs?${params.toString()}`
   const res = await fetch(url, { headers: ghHeaders() })
@@ -63,11 +68,13 @@ export async function fetchWorkflowLastRun(file) {
   const data = await res.json()
   const runs = data.workflow_runs || []
   if (runs.length === 0) return null
-  const r = runs[0]
+  const decisive = selectLatestDecisiveRun(runs)
+  const r = decisive || runs[0]
   return {
     id: r.id,
     status: r.status,
-    conclusion: r.conclusion,
+    // null when no decisive run in the window → dot renders gray, not green.
+    conclusion: decisive ? r.conclusion : null,
     created_at: r.created_at,
   }
 }

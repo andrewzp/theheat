@@ -57,4 +57,9 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The default GITHUB_TOKEN cannot read the Actions *variables* REST
+          # endpoint, so inject the self-heal heartbeat directly from the `vars`
+          # context. workflow_health.py reads this env first; without it the
+          # stale-heartbeat meta-guard would silently never fire.
+          SELFHEAL_BEACON: ${{ vars.SELFHEAL_BEACON }}
         run: python scripts/workflow_health.py

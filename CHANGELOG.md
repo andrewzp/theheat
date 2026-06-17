@@ -11,6 +11,25 @@ default-OFF.
 
 ### Added
 
+- **Autonomous workflow self-heal.** Closes the gap that let `voice-regression`
+  sit red for five days unnoticed. The fix is not another notification (GitHub's
+  failure emails already arrive) — it routes a red scheduled workflow to an
+  autonomous agent instead of to a human. Three layers: (1) a detection substrate
+  (`scripts/workflow_health.py`) that observes all four scheduled workflows
+  (`theheat-bot`, `voice-regression`, `refresh-thresholds`,
+  `source-health-sentinel`) via the Actions API and turns any red on `main` into
+  an auto-closing `workflow-health` issue — folded into the hourly
+  `source-health-sentinel` workflow (adds `actions: read`); (2) a loud dashboard
+  backstop — the previously-unmonitored `source-health-sentinel` is now shown, a
+  failed run renders **red** (was yellow), and a full-width red banner +
+  self-heal liveness dot appear on failure (pure helpers in
+  `dashboard/lib/automation-status.js`, unit-tested); (3) a daily self-heal
+  routine driven by `docs/runbooks/workflow-self-heal.md` that investigates and
+  fixes red workflows — auto-merging *mechanical* fixes and opening a PR-and-stop
+  for *judgment/destructive* ones. A meta-guard flags the self-heal routine
+  itself (via a `SELFHEAL_BEACON` heartbeat) if it goes silent for >26h, so the
+  watcher cannot die unnoticed the way the daily-plan routine did.
+
 - **Multi-signal writer context (Throughput Initiative Phase D)** behind
   `THEHEAT_MULTISIGNAL_CONTEXT` (default OFF). When enabled, the drain attaches up
   to 2 OTHER same-cycle events to a candidate's bundle as `related_signals` — a
