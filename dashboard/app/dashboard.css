@@ -804,3 +804,19 @@ h1 span { color: #666; font-weight: 400; font-size: 14px; margin-left: 8px; }
 .automation-posting-mode { font-size: 12px; color: #a3a3a3; }
 .automation-posting-mode-error { color: #fca5a5; }
 .automation-error, .automation-loading { font-size: 12px; color: #a3a3a3; }
+
+/* Loud red banner when any scheduled workflow is red — impossible to miss. */
+.automation-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #b60205;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 2px solid #7a0103;
+}
+.automation-banner-icon { font-size: 18px; line-height: 1; }
+.automation-banner-text { font-weight: 500; }
+.automation-banner-text strong { font-weight: 700; }
