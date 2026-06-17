@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import responses
@@ -17,6 +17,17 @@ def _ms(value: str) -> int:
     return int(datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000)
 
 
+# Fixture timestamps for the real-fetch path must stay inside the source's
+# freshness window (``assert_freshness(..., max_age_days=2)`` in
+# ``fetch_significant_earthquakes``). Anchoring them to "now" (truncated to whole
+# seconds so the ms round-trip through the parser is exact) keeps the suite
+# date-stable — a fixed calendar date silently broke it at each 2-day rollover.
+_NOW = datetime.now(UTC).replace(microsecond=0)
+_RECENT_TIME = (_NOW - timedelta(hours=12)).isoformat().replace("+00:00", "Z")
+_RECENT_UPDATED = (_NOW - timedelta(hours=11, minutes=30)).isoformat().replace("+00:00", "Z")
+_RECENT_GENERATED = (_NOW - timedelta(hours=11, minutes=15)).isoformat().replace("+00:00", "Z")
+
+
 def _feature(
     *,
     event_id: str = "us7000abcd",
@@ -30,8 +41,8 @@ def _feature(
         "properties": {
             "mag": magnitude,
             "place": "12 km S of Example City, Chile",
-            "time": _ms("2026-06-14T12:00:00Z"),
-            "updated": _ms("2026-06-14T12:30:00Z"),
+            "time": _ms(_RECENT_TIME),
+            "updated": _ms(_RECENT_UPDATED),
             "tz": None,
             "url": f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}",
             "detail": f"https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/{event_id}.geojson",
@@ -62,7 +73,7 @@ def _feature(
     }
 
 
-def _feed(features: list[dict], *, generated: str = "2026-06-14T12:45:00Z") -> dict:
+def _feed(features: list[dict], *, generated: str = _RECENT_GENERATED) -> dict:
     return {
         "type": "FeatureCollection",
         "metadata": {
@@ -117,8 +128,8 @@ class TestFetchSignificantEarthquakes:
         assert event.usgs_id == "us7000abcd"
         assert event.magnitude == 7.1
         assert event.place == "12 km S of Example City, Chile"
-        assert event.time == "2026-06-14T12:00:00Z"
-        assert event.updated == "2026-06-14T12:30:00Z"
+        assert event.time == _RECENT_TIME
+        assert event.updated == _RECENT_UPDATED
         assert event.alert == "orange"
         assert event.significance == 950
         assert event.felt_reports == 480
