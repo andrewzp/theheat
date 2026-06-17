@@ -1,0 +1,107 @@
+name: workflow-self-heal
+
+# The daily autonomous self-heal routine (Layer 3 of the workflow-self-heal
+# system). Runs Claude Code headless against docs/runbooks/workflow-self-heal.md:
+# it checks all four scheduled workflows, and for any red on main investigates and
+# fixes — auto-merging *mechanical* fixes and opening a PR-and-stop for
+# *judgment/destructive* ones — then writes the SELFHEAL_BEACON heartbeat so the
+# hourly observer can tell this routine is still alive.
+#
+# Why GitHub Actions (not a claude.ai Routine): the fixer needs gh + a real dev
+# env to run pytest, open PRs, and merge. The claude.ai Routine env has no gh CLI
+# (that is what killed the daily-plan routine's beacon).
+#
+# REQUIRED SECRET: SELFHEAL_PAT — a PAT (repo scope, + Variables: write) used so
+# (a) PRs the routine opens actually trigger the `test` CI gate (PRs created by the
+# default GITHUB_TOKEN do NOT trigger workflows, so they could never be merged on
+# green) and (b) it can write the SELFHEAL_BEACON repo variable. Without it the
+# workflow degrades to detection-only (no CI-triggering PRs, no heartbeat write).
+
+on:
+  schedule:
+    - cron: '0 13 * * *'   # daily 13:00 UTC (~9am ET) — after the 09:00 voice-regression run
+  workflow_dispatch: {}
+
+concurrency:
+  group: workflow-self-heal
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  self-heal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # PAT so the routine's pushes/PRs trigger CI and can be merged on green.
+          token: ${{ secrets.SELFHEAL_PAT || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      # Pre-build the env the runbook's gates expect, so the agent spends its turns
+      # fixing, not bootstrapping: the `.venv` (ruff/mypy/pytest live here) and the
+      # dashboard deps.
+      - name: Create repo venv
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "theheat-self-heal[bot]"
+          git config user.email "theheat-self-heal@users.noreply.github.com"
+
+      - name: Run workflow self-heal agent
+        uses: anthropics/claude-code-action@v1
+        env:
+          # gh CLI inside the agent's Bash uses this. PAT when available so it can
+          # write the SELFHEAL_BEACON variable and open CI-triggering PRs.
+          GH_TOKEN: ${{ secrets.SELFHEAL_PAT || secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.SELFHEAL_PAT || secrets.GITHUB_TOKEN }}
+          prompt: |
+            You are the @theheat workflow self-heal agent, running headless in
+            GitHub Actions on a scheduled daily run.
+
+            Follow the runbook EXACTLY: docs/runbooks/workflow-self-heal.md
+            Repo: ${{ github.repository }}.
+
+            The environment is already set up for you:
+            - `.venv` exists with ruff/mypy/pytest installed (use `.venv/bin/...`).
+            - Dashboard deps are installed (`cd dashboard && npm test && npm run build`).
+            - `gh` is authenticated; git identity is configured.
+
+            Do the full loop: detect red workflows across all four scheduled
+            workflows (and check source-health-sentinel's own liveness), fix red
+            ones per the autonomy split (auto-merge MECHANICAL; open a PR and STOP
+            for JUDGMENT/DESTRUCTIVE — anything touching tweet output or the
+            voice-regression contract is JUDGMENT), respect the cross-run
+            anti-thrash rule, and ALWAYS write the SELFHEAL_BEACON heartbeat at the
+            end via `gh variable set` — even on a clean no-op run.
+
+            If nothing is red and the beacon write succeeds, you are done.
+          claude_args: |
+            --max-turns 40
+            --allowedTools Bash,Edit,Write,Read,Glob,Grep
