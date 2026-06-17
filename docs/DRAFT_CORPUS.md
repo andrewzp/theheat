@@ -13,6 +13,96 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-17 — Daily corpus grading (1 new draft; 4 prior-graded carry-overs skipped)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
+at runtime. 5 drafts visible in the gist since Jun 8: Chesnee SC monthly_low (approved
+Jun 10, already graded A- in Jun 15 corpus entry), Red Dog Mine AK monthly_low (rejected
+Jun 13, graded C+ in Jun 13 entry), Riyadh SA dust_event (posted Jun 13, graded C in
+Jun 13 entry), Beaver Dams UT all_time_high (posted Jun 15, graded A- in Jun 15 entry),
+and Urumqi China dust_event (posted Jun 17T12:27Z — NOT in any prior entry). Only
+Urumqi is new. Four carry-overs not re-graded; grades on record stand.
+
+**Staleness review:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent;
+**21st consecutive skip** (May 13 → Jun 17). No operator action needed.
+
+**Grade distribution (1 new draft):** 0 A / 1 B / 0 C / 0 D-F.
+- B-: Urumqi China dust_event
+
+**A-rate: 0% (0/1).** Gap from bar: 50 pp (n=1; Jun 15 retro context: 67%, 6/9 A-range).
+
+**Headline finding:** Urumqi confirms P_dust (2nd cycle): 2,260 μg/m³ also lacks WHO
+calibration anchor; 2,260 ÷ 15 μg/m³ = 151× WHO PM2.5 daily limit — unstated. "Traps
+it" close is better than Riyadh's "disperses it" (consequence vs. process-resolution)
+but the WHO-anchor gap is identical. B- vs. Riyadh's C/B (Jun 13/15 retro grades).
+Urumqi's "traps it" form is also the P_close SOLUTION shape — not evidence of P_close
+failure; note as positive counter-case.
+
+### B-grade drafts
+
+#### [1] Urumqi, China — dust_event — 2,260 μg/m³ — **B-**
+
+> *Urumqi, China: a model-estimated dust daily maximum of 2,260 μg/m³ on June 17 —
+> aerosol optical depth at 1.38. The city sits in the Junggar Basin, ringed by the Tian
+> Shan and Altai ranges; when winds funnel desert sediment in, the topography traps it.*
+
+**Score:** 75. Status: posted. Created 2026-06-17T12:27:55Z.
+
+Humor lens:
+- **Violation:** 2,260 μg/m³ PM (model-estimated), AOD 1.38. Score 75. Second dust_event
+  in corpus (after Riyadh Jun 13).
+- **Benign?** Yes.
+- **Setup→Punchline?** Colon-lead opener (location: concentration + AOD). Second sentence:
+  basin geometry → "traps it." "Traps it" is a declarative consequence close: the mechanism
+  (mountain-ringed basin + funneling winds) delivers a one-word consequence.
+- **Named mechanic?** Ecosystem specificity (Junggar Basin, Tian Shan, Altai ranges).
+  "Traps it" closes on consequence rather than process. Compare Riyadh (Jun 13): "before
+  heat-driven turbulence disperses it" — dispersal, not trapping. Urumqi's closing
+  direction is correct (P_close-solution form); Riyadh's was wrong.
+- **P_dust gap:** No WHO calibration anchor. 2,260 ÷ 15 μg/m³ (WHO PM2.5 daily) = 151×
+  the WHO limit. "151× the WHO daily limit" would transform B- to A- range immediately.
+  Same gap as Riyadh (Jun 13: 2,083 μg/m³ = 139× WHO, also unstated). P_dust 2nd cycle.
+- **Wodehouse rule?** Clean. "model-estimated" qualifier is data hygiene. No effort signals.
+
+Gap to A-: WHO anchor absent (P_dust). With it: "Urumqi: 2,260 μg/m³ on June 17 — 151×
+the WHO daily limit. The city sits in the Junggar Basin, ringed by the Tian Shan and
+Altai ranges; the topography traps it." — the multiple transforms the opener from opaque
+to calibrated violation, and "traps it" delivers the consequence cleanly. That's A-.
+
+B- not C (vs. Riyadh Jun 13): "traps it" is declarative consequence, not process-
+resolution. Closing direction matters. AOD 1.38 (vs. Riyadh 0.61) is in the
+"extreme" tier (>1.0 = extreme per P_dust proposal) — unannounced but real.
+
+### Patterns
+
+1. **P_dust confirmed 2nd cycle.** Urumqi (2,260 μg/m³) also lacks WHO calibration
+   anchor. The 151× WHO multiple is always available as world knowledge — no archive
+   needed. Riyadh (Jun 13) was 139×. Both drafts report opaque concentration numbers
+   without reference frame. P_dust fix would lift both from B/B- to A- range.
+
+2. **Urumqi's "traps it" is P_close counter-case.** The P_close failure is stopping at
+   mechanism before naming consequence. "Traps it" IS the declarative consequence. This
+   draft demonstrates the solution form is accessible — the writer CAN produce it. The
+   constraint is that without WHO anchor, the grade ceiling is B- even with the correct
+   close. Fix P_dust first; P_close form is already present.
+
+3. **4 prior-graded drafts not re-graded.** Chesnee A- (Jun 15), Beaver Dams A- (Jun 15),
+   Riyadh C/B (Jun 13/15), Red Dog Mine C+ (Jun 13) — all on record. Pipeline is now
+   posting drafted signals at a pace the daily routine can't grade pending-style. Retroactive
+   grading remains the practical approach; grades from the same-day run may conflict with
+   prior entries.
+
+### Numbers
+
+- Pending at runtime: 0
+- New drafts graded: 1 (Urumqi dust_event B-)
+- A-rate: 0% (0/1)
+- P_dust: 2 cycles (Jun 13, Jun 17), last seen Jun 17
+- P8 retired: 4 fresh-draft cycles without snow_extreme since May 19
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (21st consecutive skip)
+
+---
+
 ## 2026-06-16 — Daily corpus grading (0 pending drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
