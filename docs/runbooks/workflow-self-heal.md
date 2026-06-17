@@ -80,11 +80,14 @@ keeps a daily, amnesiac routine from re-trying the same dead end forever.
 
 ```bash
 .venv/bin/python -m pytest -q          # voice_replay deselected by default
-mypy src/
-ruff check .
+.venv/bin/mypy src/
+.venv/bin/ruff check .
 # if dashboard touched:
 cd dashboard && npm test && npm run build && cd ..
 ```
+
+(These `.venv/bin/...` forms work both locally and in the GitHub Actions host,
+which pre-creates `.venv` and installs dashboard deps before invoking you.)
 
 `voice-regression` itself is paid + non-deterministic — verify it via
 `gh workflow run voice-regression.yml --ref main` and watch, never locally.
