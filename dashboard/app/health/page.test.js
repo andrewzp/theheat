@@ -211,3 +211,23 @@ test("source health fetch helper preserves API error responses", async () => {
     /readStateStore failed/
   )
 })
+
+test("standalone mode keeps the page header and its own nav", () => {
+  const markup = render()
+  assert.match(markup, /source health/)
+  assert.match(markup, /class="health-tabs"/)
+  assert.match(markup, /href="\/health"/)
+})
+
+test("embedded mode renders the body without the standalone header or nav", () => {
+  // Integrated into the control panel (which already provides the header + the
+  // shared tab nav), so emitting its own would drop the rest of the navigation.
+  const markup = render({ embedded: true })
+  // still renders the source content + summary stat cards
+  assert.match(markup, /ocean_sst/)
+  assert.match(markup, /class="stat-card unhealthy"/)
+  // but NOT the standalone page chrome
+  assert.ok(!markup.includes('class="health-tabs"'), "must not emit its own tab nav")
+  assert.ok(!markup.includes('href="/health"'), "must not emit a self-link that breaks out")
+  assert.ok(!markup.includes("source health"), "must not emit the standalone page header")
+})
