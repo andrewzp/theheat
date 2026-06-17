@@ -233,6 +233,18 @@ jobs:
           # the repo variable. Activate: gh variable set THEHEAT_REGANOM_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_REGANOM_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_REGANOM_ENABLED: ${{ vars.THEHEAT_REGANOM_ENABLED || '0' }}
+          # Throughput Initiative (2026-06-16). All default "0"/safe in code;
+          # production controls them via repo variables. Activate in order
+          # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.
+          # NOTE: AUTOSHIP_ON_CRITIC_PASS posts LIVE to @theheat.
+          # Rollback any: gh variable set <NAME> --body 0 --repo andrewzp/theheat
+          THEHEAT_FUNNEL_TELEMETRY: ${{ vars.THEHEAT_FUNNEL_TELEMETRY || '0' }}
+          THEHEAT_AUTOSHIP_ON_CRITIC_PASS: ${{ vars.THEHEAT_AUTOSHIP_ON_CRITIC_PASS || '0' }}
+          THEHEAT_AUTOSHIP_MAX_AGE_H: ${{ vars.THEHEAT_AUTOSHIP_MAX_AGE_H || '36' }}
+          THEHEAT_REFILL_ENABLED: ${{ vars.THEHEAT_REFILL_ENABLED || '0' }}
+          THEHEAT_DRAFTS_TARGET_PER_CYCLE: ${{ vars.THEHEAT_DRAFTS_TARGET_PER_CYCLE || '3' }}
+          THEHEAT_REFILL_MAX_ATTEMPTS: ${{ vars.THEHEAT_REFILL_MAX_ATTEMPTS }}
+          THEHEAT_MULTISIGNAL_CONTEXT: ${{ vars.THEHEAT_MULTISIGNAL_CONTEXT || '0' }}
           # Optional repo-variable knobs for pending-queue diversity and TTL.
           THEHEAT_PENDING_TYPE_CAP: ${{ vars.THEHEAT_PENDING_TYPE_CAP }}
           # Default TTL = fast point-in-time signals (7d). Slow continuous
