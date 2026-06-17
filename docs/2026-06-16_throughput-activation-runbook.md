@@ -96,6 +96,17 @@ gh variable set THEHEAT_MULTISIGNAL_CONTEXT --body 1
   the backstops, so this is the phase to watch the regression corpus closely.
   `critic_pass_rate` should go **up, not down** — if it drops, the synthesis
   framing isn't landing.
+- **Reading `voice-regression` correctly (changed 2026-06-17, PR #304):** a
+  writer **KILL is no longer a failure** in this suite. The writer's own rule is
+  "killing is the default; a mediocre tweet is worse than silence," so the
+  replay now only goes **red when the writer SHIPS bad copy** (>280 chars,
+  banned patterns, fabricated context, dishonest regional framing) or fails to
+  decline an out-of-scope signal. Green = "never shipped anything bad." If it
+  goes red, that is a genuine voice regression worth stopping for. "Is the
+  writer too quiet?" is now answered by the **Phase-A Funnel** (live pass/kill
+  rates), not by this corpus. (This replaced the old contract that hard-asserted
+  "the model always emits a tweet," which flaked red for five days when the
+  writer correctly declined a bare-earthquake and a length-tight bundle.)
 - **Rollback:** `gh variable set THEHEAT_MULTISIGNAL_CONTEXT --body 0` (reverts to
   the single-event writer, byte-identical).
 
