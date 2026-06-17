@@ -185,12 +185,64 @@ export function SourceHealthContent({
   lastUpdated = null,
   onRefresh = null,
   now = Date.now(),
+  embedded = false,
 }) {
   const hasSources = sources.length > 0
+
+  // The body (stats grid + list) is identical standalone and embedded; only the
+  // chrome (header + the standalone-only tab nav + global page styles) differs.
+  // Embedded mode renders inside the main control panel, which already provides
+  // the header + the shared tab nav — so emitting them here is what dropped the
+  // rest of the navigation when Health was a separate /health route.
+  const bodyChildren = [
+    h(
+      "section",
+      { className: "stats-grid", "aria-label": "Source health counts", key: "stats" },
+      h(StatCard, { label: "unhealthy", value: stats?.unhealthy_count ?? 0, tone: "unhealthy" }),
+      h(StatCard, { label: "degraded", value: stats?.degraded_count ?? 0, tone: "degraded" }),
+      h(StatCard, { label: "healthy", value: stats?.healthy_count ?? 0, tone: "healthy" }),
+      h(StatCard, { label: "idle", value: stats?.idle_count ?? 0, tone: "idle" })
+    ),
+    error
+      ? h("div", { className: "status-banner error", role: "alert", key: "err" }, `Source health unavailable: ${error}`)
+      : null,
+    loading
+      ? h("div", { className: "loading", key: "loading" }, "loading...")
+      : hasSources
+      ? h(
+          "section",
+          { className: "source-list", "aria-label": "Source health list", key: "list" },
+          sources.map((source) => h(SourceRow, { key: source.source, source, now }))
+        )
+      : h(
+          "div",
+          { className: "empty-state", key: "empty" },
+          "Source health data not yet available. The next alerts cron will populate this view."
+        ),
+  ]
+
+  if (embedded) {
+    return h(
+      React.Fragment,
+      null,
+      h("style", { dangerouslySetInnerHTML: { __html: styles } }),
+      h(
+        "div",
+        { className: "health-embedded" },
+        h(
+          "p",
+          { className: "health-kicker" },
+          `Aggregated over the last ${stats?.runs_analyzed ?? 0} runs.`
+        ),
+        ...bodyChildren
+      )
+    )
+  }
+
   return h(
     React.Fragment,
     null,
-    h("style", { dangerouslySetInnerHTML: { __html: styles } }),
+    h("style", { dangerouslySetInnerHTML: { __html: globalStyles + styles } }),
     h(
       "main",
       { className: "health-shell" },
@@ -231,30 +283,7 @@ export function SourceHealthContent({
         h("a", { className: "tab-link", href: "/" }, "Dashboard"),
         h("a", { className: "tab-link active", href: "/health" }, "Health")
       ),
-      h(
-        "section",
-        { className: "stats-grid", "aria-label": "Source health counts" },
-        h(StatCard, { label: "unhealthy", value: stats?.unhealthy_count ?? 0, tone: "unhealthy" }),
-        h(StatCard, { label: "degraded", value: stats?.degraded_count ?? 0, tone: "degraded" }),
-        h(StatCard, { label: "healthy", value: stats?.healthy_count ?? 0, tone: "healthy" }),
-        h(StatCard, { label: "idle", value: stats?.idle_count ?? 0, tone: "idle" })
-      ),
-      error
-        ? h("div", { className: "status-banner error", role: "alert" }, `Source health unavailable: ${error}`)
-        : null,
-      loading
-        ? h("div", { className: "loading" }, "loading...")
-        : hasSources
-        ? h(
-            "section",
-            { className: "source-list", "aria-label": "Source health list" },
-            sources.map((source) => h(SourceRow, { key: source.source, source, now }))
-          )
-        : h(
-            "div",
-            { className: "empty-state" },
-            "Source health data not yet available. The next alerts cron will populate this view."
-          )
+      ...bodyChildren
     )
   )
 }
@@ -300,7 +329,9 @@ export default function SourceHealthPage() {
   })
 }
 
-const styles = `
+// Global page chrome — only injected by the standalone /health route. Embedded
+// mode (inside the control panel) skips these so it doesn't restyle the panel.
+const globalStyles = `
 * { box-sizing: border-box; }
 body {
   margin: 0;
@@ -308,6 +339,12 @@ body {
   background: #0a0a0a;
   color: #e0e0e0;
 }
+`
+
+// Component styles — injected in both modes (the .stat-card / .source-card etc.
+// classes live only here, not in the panel's global CSS).
+const styles = `
+.health-embedded { margin-top: 4px; }
 .health-shell {
   max-width: 1040px;
   margin: 0 auto;

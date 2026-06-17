@@ -7,6 +7,7 @@ import { Hot10Card, Hot10Leaderboard } from "./components/Hot10Card.js"
 import { PipelineView } from "./components/PipelineView.js"
 import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
+import { SourceHealthContent } from "./health/page.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import "./dashboard.css"
@@ -357,14 +358,17 @@ export default function Dashboard() {
               <span className="tab-count">{sourcesStats.degraded_count}</span>
             ) : null}
           </button>
-          <a className="tab" href="/health">
+          <button
+            className={`tab ${activeTab === "health" ? "active" : ""}`}
+            onClick={() => setActiveTab("health")}
+          >
             Health
             {sourcesStats?.unhealthy_count > 0 ? (
               <span className="tab-count alert">{sourcesStats.unhealthy_count}</span>
             ) : sourcesStats?.degraded_count > 0 ? (
               <span className="tab-count">{sourcesStats.degraded_count}</span>
             ) : null}
-          </a>
+          </button>
         </div>
 
         {stateError && (
@@ -386,6 +390,8 @@ export default function Dashboard() {
           />
         ) : activeTab === "sources" ? (
           <SourcesView sources={sources} stats={sourcesStats} />
+        ) : activeTab === "health" ? (
+          <SourceHealthContent embedded sources={sources} stats={sourcesStats} />
         ) : activeTab === "pipeline" ? (
           <PipelineView
             run={latestRichRun}
