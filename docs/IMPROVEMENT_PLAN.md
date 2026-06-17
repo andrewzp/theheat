@@ -25,12 +25,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **67%** (6/9 retroactive, 2026-06-15; **first above 50% bar** — retroactive grades on already-approved/rejected drafts, not pending-queue; prior active pending-graded cycle: 0% [0/2, 2026-06-13]) |
+| Last cycle A-rate | **0%** (0/1 new draft, 2026-06-17; prior: 67% retroactive Jun 15 [6/9, first above 50% bar]; prior pending-queue cycle: 0% [0/2, Jun 13]) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **−17 pp** (17 pp above bar on Jun 15 retroactive cycle; last active pending cycle was 50 pp below bar [Jun 13]; retroactive caveat) |
-| Posting | paused; operator decision pending on A-rate window — Jun 15 retroactive cycle provides empirical support |
+| Gap | **50 pp** (Jun 17 single draft, 0%); Jun 15 retro was −17 pp (above bar); Jun 13 pending was +50 pp below bar |
+| Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending**. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live (best-of-2 + critic rewrite). 9 drafts posted/approved Jun 2–15. Chesnee SC (`draft_20260610_155509_26`) approved Jun 10 but no `posted_at`/tweet_id — possible posting failure; operator verify. |
+| Queue status | **0 pending** as of 2026-06-17. Urumqi dust_event (Jun 17T12:27Z) posted before routine ran. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. Chesnee SC posting status from Jun 15 unresolved — operator verify. |
 
 ## Active proposals
 
@@ -364,10 +364,12 @@ optical depth (0.61) the reader cannot calibrate. Second sentence ends on disper
 consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
 multiple is always available as world knowledge regardless.
 
-**Cycles observed:** Jun 13 (1 cycle; first dust_event in corpus). Jun 15 retroactive:
-Riyadh graded B in Jun 13 corpus entry; confirmed the reference-frame gap is the binding
-issue — a WHO multiple would have transformed the B to A-.
-**Last seen:** Jun 13.
+**Cycles observed:** Jun 13, Jun 17 (2 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
+Urumqi 2,260 μg/m³ — both lack WHO calibration anchor). Jun 15 retroactive confirmed
+the reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
+**Last seen:** Jun 17. Urumqi also uses "traps it" close (declarative consequence, correct
+direction) — the grade ceiling is B- only because the WHO anchor is absent. P_dust fix
+would land it at A-.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 dust_event / air_quality framing section:
@@ -391,31 +393,7 @@ archive needed. One paragraph addition; no architectural change. Also applies to
 
 ~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
-### P8 — Snow/extreme record: ratio-as-punchline unused
-
-**Observed:** 2026-05-19 — both snow_extreme drafts (Nooksack 2×, Stahl Peak 5×) state
-the ratio in the first sentence as setup context, then pivot to topographic explanation.
-Neither lands the ratio as a punchline. Stahl Peak's "nearly five times the previous
-blizzard record of 50.8 mm" is the most striking number in the queue; the draft continues
-to explain "the northern Rockies funnel Pacific moisture through low passes; when a storm
-stalls, totals compound fast." "Totals compound fast" restates what "five times the record"
-already shows. The period-and-restate mechanic from the voice spec is the right tool —
-"251.5 mm in 3 days. The previous record was 50.8 mm." — and is not used.
-
-**Cycles observed:** May 19 (1 cycle; 2 of 2 snow_extreme drafts miss the ratio-punchline).
-**Last seen:** May 19.
-**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` general record/extreme
-guidance (after the existing SIGNATURE MOVE section): "When a record is broken by a ratio
-(2×, 5×, 10×), the prior record stated plainly IS the punchline — do not over-explain
-with mechanism geography after stating it. The period-and-restate form: '[Current value].
-The previous record was [prior value].' is available. Test: if the ratio is more
-surprising than the mechanism, state the ratio last."
-
-**Expected impact:** Unlocks the "ratio landing" move for snow, fire, and any category
-where the new value is a multiple of the prior. Prevents the writer from diluting a
-naturally strong signal with topographic explanation.
-
-**Status:** Drafted. Awaiting human implementation.
+~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -503,6 +481,14 @@ suppressing A-grade candidates before they reach pending.
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-06-17] P8 — Snow/extreme record: ratio-as-punchline unused
+
+Last observed May 19 (1 cycle; 2/2 snow_extreme drafts). 4 fresh-draft grading cycles
+without snow_extreme in the queue (Jun 7, Jun 13, Jun 15, Jun 17) — exceeds 3-cycle
+threshold. No new snow_extreme drafts have appeared in the post-0.9.6.0 triage era;
+the absence may be seasonal or score-gate. Reopen if snow_extreme drafts with ≥2×
+ratio appear and still don't land the ratio as punchline.
 
 ### [Archived 2026-06-15] P7 — Coral opener formula convergence
 
