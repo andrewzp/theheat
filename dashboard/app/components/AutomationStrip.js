@@ -1,5 +1,11 @@
 "use client"
 
+import {
+  dotColorForWorkflow,
+  dotColorForSelfHeal,
+  failingWorkflows,
+} from "../../lib/automation-status.js"
+
 function AutomationDot({ name, color, tooltip }) {
   const colorClass = {
     green: "automation-dot-green",
@@ -12,15 +18,6 @@ function AutomationDot({ name, color, tooltip }) {
       <span className="automation-dot-label">{name}</span>
     </span>
   )
-}
-
-function dotColorForWorkflow(wf) {
-  if (wf.error) return "red"
-  if (wf.state === "disabled_manually") return "gray"
-  if (wf.state === "active" && wf.last_run_conclusion === "success") return "green"
-  if (wf.state === "active" && wf.last_run_conclusion === "failure") return "yellow"
-  if (wf.state === "active") return "green"
-  return "gray"
 }
 
 function dotColorForRoutine(routine) {
@@ -52,31 +49,56 @@ export function AutomationStatusStrip({ status, error }) {
   }
   const workflows = status.workflows || []
   const routine = status.routine || {}
+  const selfHeal = status.self_heal || {}
   const pm = status.posting_mode_summary
+  const failing = failingWorkflows(status)
 
   return (
-    <div className="automation-strip">
-      <span className="automation-title">Automation</span>
-      {workflows.map((wf) => (
+    <>
+      {failing.length > 0 && (
+        <div className="automation-banner" role="alert">
+          <span className="automation-banner-icon" aria-hidden="true">⚠</span>
+          <span className="automation-banner-text">
+            {failing.length} workflow{failing.length > 1 ? "s" : ""} failing:{" "}
+            <strong>{failing.map((wf) => wf.name).join(", ")}</strong>
+            {" "}— self-heal will attempt a fix.
+          </span>
+        </div>
+      )}
+      <div className="automation-strip">
+        <span className="automation-title">Automation</span>
+        {workflows.map((wf) => (
+          <AutomationDot
+            key={wf.file}
+            name={wf.name}
+            color={dotColorForWorkflow(wf)}
+            tooltip={`${wf.name} — state: ${wf.state}, last run: ${
+              wf.last_run_at ? new Date(wf.last_run_at).toUTCString() : "never"
+            }, conclusion: ${wf.last_run_conclusion || "none"}${
+              wf.error ? `, ERROR: ${wf.error}` : ""
+            }`}
+          />
+        ))}
         <AutomationDot
-          key={wf.file}
-          name={wf.name}
-          color={dotColorForWorkflow(wf)}
-          tooltip={`${wf.name} — state: ${wf.state}, last run: ${
-            wf.last_run_at ? new Date(wf.last_run_at).toUTCString() : "never"
-          }, conclusion: ${wf.last_run_conclusion || "none"}${
-            wf.error ? `, ERROR: ${wf.error}` : ""
+          name="routine"
+          color={dotColorForRoutine(routine)}
+          tooltip={`${routine.name || "routine"} — last run: ${
+            routine.last_run_at ? new Date(routine.last_run_at).toUTCString() : "never"
+          }, outcome: ${routine.last_run_outcome || "unknown"}`}
+        />
+        <AutomationDot
+          name="self-heal"
+          color={dotColorForSelfHeal({
+            run_at: selfHeal.last_run_at,
+            outcome: selfHeal.last_run_outcome,
+          })}
+          tooltip={`workflow self-heal routine — last run: ${
+            selfHeal.last_run_at ? new Date(selfHeal.last_run_at).toUTCString() : "never"
+          }, outcome: ${selfHeal.last_run_outcome || "unknown"}${
+            selfHeal.failing != null ? `, failing: ${selfHeal.failing}` : ""
           }`}
         />
-      ))}
-      <AutomationDot
-        name="routine"
-        color={dotColorForRoutine(routine)}
-        tooltip={`${routine.name || "routine"} — last run: ${
-          routine.last_run_at ? new Date(routine.last_run_at).toUTCString() : "never"
-        }, outcome: ${routine.last_run_outcome || "unknown"}`}
-      />
-      <span className="automation-spacer" />
+        <span className="automation-spacer" />
       {pm ? (
         <span className="automation-posting-mode">
           {pm.manual_only_count ?? 0} manual / {pm.armed_auto_count ?? 0} auto /{" "}
@@ -87,6 +109,7 @@ export function AutomationStatusStrip({ status, error }) {
           posting status unavailable
         </span>
       )}
-    </div>
+      </div>
+    </>
   )
 }

@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   issues: write
+  actions: read   # workflow_health.py reads each scheduled workflow's run history
 
 concurrency:
   group: source-health-sentinel
@@ -46,3 +47,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/source_health_sentinel.py /tmp/state.json
+
+      # Observe the four scheduled workflows themselves: turn any that are red on
+      # main into an auto-closing `workflow-health` issue (the signal the daily
+      # self-heal routine consumes), and flag the self-heal routine if its
+      # heartbeat is stale. Independent of the bot's gist state — reads the
+      # Actions API directly. Always exits 0; never gates the sentinel.
+      - name: Reconcile workflow-health issues
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/workflow_health.py

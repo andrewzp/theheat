@@ -2,11 +2,15 @@ import { readStateStore } from "./state-store.js"
 
 const DEFAULT_PRODUCTION_BRANCH = "main"
 const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
+const SELFHEAL_BEACON_VARIABLE = "SELFHEAL_BEACON"
 
+// Kept in lockstep with scripts/workflow_health.py MONITORED_WORKFLOWS — both
+// monitor the same four scheduled workflows.
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
   { name: "voice-regression", file: "voice-regression.yml" },
   { name: "refresh-thresholds", file: "refresh-thresholds.yml" },
+  { name: "source-health-sentinel", file: "source-health-sentinel.yml" },
 ]
 
 const ROUTINE = {
@@ -68,17 +72,13 @@ export async function fetchWorkflowLastRun(file) {
   }
 }
 
-export async function readRoutineBeacon() {
-  // Reads the ROUTINE_BEACON repository variable. The routine writes it
-  // each cycle via `gh variable set` in Step 9.5 — uses the routine's
-  // existing `repo` scope, sidestepping the gist:write scope mismatch
-  // that broke the prior gist-based beacon.
+async function readBeaconVariable(name, label) {
   if (!process.env.GITHUB_TOKEN) return null
-  const url = `https://api.github.com/repos/${repo()}/actions/variables/${ROUTINE_BEACON_VARIABLE}`
+  const url = `https://api.github.com/repos/${repo()}/actions/variables/${name}`
   const res = await fetch(url, { headers: ghHeaders() })
   if (res.status === 404) return null
   if (!res.ok) {
-    throw new Error(`readRoutineBeacon: variable read failed: ${res.status}`)
+    throw new Error(`${label}: variable read failed: ${res.status}`)
   }
   const { value } = await res.json()
   try {
@@ -86,6 +86,22 @@ export async function readRoutineBeacon() {
   } catch {
     return null
   }
+}
+
+export async function readRoutineBeacon() {
+  // Reads the ROUTINE_BEACON repository variable. The routine writes it
+  // each cycle via `gh variable set` in Step 9.5 — uses the routine's
+  // existing `repo` scope, sidestepping the gist:write scope mismatch
+  // that broke the prior gist-based beacon.
+  return readBeaconVariable(ROUTINE_BEACON_VARIABLE, "readRoutineBeacon")
+}
+
+export async function readSelfHealBeacon() {
+  // Reads the SELFHEAL_BEACON repository variable, written by the daily
+  // workflow-self-heal routine at the end of each run. A 404 (never set) is a
+  // null beacon, not an error — the dashboard renders it gray, matching the
+  // observer's "missing beacon = quiet" rule.
+  return readBeaconVariable(SELFHEAL_BEACON_VARIABLE, "readSelfHealBeacon")
 }
 
 function summarizePostingModes(drafts) {
@@ -141,9 +157,10 @@ async function readPostingModeSummary() {
 }
 
 export async function getAutomationStatus() {
-  const [workflows, beacon, postingMode] = await Promise.all([
+  const [workflows, beacon, selfHealBeacon, postingMode] = await Promise.all([
     Promise.all(WORKFLOWS.map(fetchWorkflowFull)),
     readRoutineBeacon().catch(() => null),
+    readSelfHealBeacon().catch(() => null),
     readPostingModeSummary(),
   ])
 
@@ -154,6 +171,14 @@ export async function getAutomationStatus() {
       cron: ROUTINE.cron,
       last_run_at: beacon?.routine_last_run_at ?? null,
       last_run_outcome: beacon?.routine_last_run_outcome ?? null,
+    },
+    self_heal: {
+      // Written by the daily workflow-self-heal routine. run_at/outcome mirror
+      // the SELFHEAL_BEACON shape the routine writes.
+      last_run_at: selfHealBeacon?.run_at ?? null,
+      last_run_outcome: selfHealBeacon?.outcome ?? null,
+      failing: selfHealBeacon?.failing ?? null,
+      fixed: selfHealBeacon?.fixed ?? null,
     },
     posting_mode_summary: postingMode.posting_mode_summary,
     posting_mode_error: postingMode.posting_mode_error,
