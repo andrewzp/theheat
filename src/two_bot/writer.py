@@ -50,6 +50,19 @@ WRITER_PROVIDER = _resolve_provider(WRITER_MODEL)
 # Twitter cap. Writer must produce tweets ≤ this many characters.
 TWEET_MAX_LENGTH = 280
 
+# Editorial scope. @theheat is a climate-data account — its voice frames
+# climate / weather / ocean / atmosphere / cryosphere signals. Purely
+# geophysical events with no climate mechanism (earthquakes) are out of
+# editorial scope: the writer must decline them. The live model already
+# reaches this conclusion on its own, but *non-deterministically* — that whim
+# flaked the daily voice-regression workflow for days (it published an
+# earthquake on some samplings and killed it on others). Pinning the decision
+# here makes it deterministic AND saves a paid model call per out-of-scope
+# candidate. Keep this set narrow: only signal_kinds with no climate framing
+# belong here. Floods, storm surge, cyclones, severe weather, etc. stay in
+# scope and are NOT listed.
+OUT_OF_SCOPE_SIGNAL_KINDS = frozenset({"usgs_earthquake"})
+
 # Length-retry budget: 1 initial attempt + N retries. Tuned for ~3 attempts
 # total. With per-call over-length probability p, P(all fail) = p^3, so even
 # at p=0.2 the all-fail rate is ~0.8%. Each retry costs ~$0.07 (Sonnet
@@ -191,6 +204,26 @@ def write_tweet(
     sees a >280-char string from this pipeline, no matter how the model
     drifts on a given sampling.
     """
+
+    # Editorial-scope guard. Out-of-scope signals (earthquakes) are killed
+    # deterministically here, before any model call — the same decision the
+    # live model reaches on its own, but reliable and free. See
+    # OUT_OF_SCOPE_SIGNAL_KINDS.
+    if bundle.signal_kind in OUT_OF_SCOPE_SIGNAL_KINDS:
+        return WriterResult(
+            tweet=None,
+            kill_reason=(
+                f"signal_kind {bundle.signal_kind!r} is outside @theheat's "
+                f"climate-data editorial scope (no climate mechanism to frame)"
+            ),
+            angle_chosen="",
+            era_anchor_used=None,
+            peer_comparison_used=None,
+            reasoning=(
+                "out-of-scope geophysical signal; @theheat publishes climate, "
+                "weather, ocean, atmosphere, and cryosphere signals only"
+            ),
+        )
 
     if WRITER_PROVIDER == "unsupported_openai":
         raise NotImplementedError("OpenAI writer provider is not implemented")

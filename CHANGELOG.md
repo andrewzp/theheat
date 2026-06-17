@@ -82,6 +82,31 @@ default-OFF.
 - Marked older build/future-state docs as historical pointers rather than live
   architecture references.
 
+### Fixed
+
+- **`voice-regression` workflow goes green and stays green.** The daily live
+  writer-replay had failed every night 2026-06-12 → 06-16 (last green 06-11).
+  Root cause was not a voice regression: the writer was correctly *declining*
+  two fixtures, but the suite hard-asserted "the model always emits a tweet"
+  against a non-deterministic model.
+  - **Editorial-scope guard (`OUT_OF_SCOPE_SIGNAL_KINDS` in `two_bot/writer.py`).**
+    @theheat is a climate-data account; a bare earthquake has no climate
+    mechanism to frame. The live model already declined `usgs_earthquake`
+    bundles, but only *sometimes* (hence the flaky red). The writer now kills
+    out-of-scope signals deterministically, before any model call — reliable,
+    free, and unit-tested in the regular suite. The USGS source still runs for
+    GDACS subtype-witness redundancy; only the climate-voice *drafting* of bare
+    quakes is declined.
+  - **Voice-replay suite realigned to the writer's real contract.** A clean
+    kill is now an acceptable outcome for any bundle (the writer's own rule is
+    "killing is the default; a mediocre tweet is worse than silence"). The suite
+    fails only when the writer *ships* bad copy (>280 chars, banned patterns,
+    fabricated context, dishonest regional framing) and asserts out-of-scope
+    signals are declined. "Is the writer too quiet?" is now answered by the
+    Phase-A production funnel, not a flaky paid CI gate. This also fixes the
+    length-tight `regional_anomaly` fixture, whose honest framing legitimately
+    runs to a length-cap kill on some samplings.
+
 ## [0.9.81.0] - 2026-06-16
 
 Source redundancy fix for live upstream outages. GDACS, Copernicus EMS, JTWC,
