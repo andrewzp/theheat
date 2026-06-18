@@ -2,7 +2,7 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
-> **Jun 16: 0 pending drafts; no evidence updates.** Pipeline active (0.9.67.0). P_close / P_new / P_dust / P5 / P8 at Jun 15 counts. Chesnee SC posting flag from Jun 15 unresolved — operator verify. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
+> **Jun 18: 2 fresh drafts (both precipitation_extreme, both B-range).** P_close 5th cycle confirmed (Barrow "any of it" + Amsterdam "stack up faster than they drain" both implied-consequence closes). New proposal P9 added (precipitation_extreme opener template convergence + restate-math). No dust/coral/cold-record drafts this cycle. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
@@ -25,12 +25,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0%** (0/1 new draft, 2026-06-17; prior: 67% retroactive Jun 15 [6/9, first above 50% bar]; prior pending-queue cycle: 0% [0/2, Jun 13]) |
+| Last cycle A-rate | **0%** (0/2 fresh drafts, 2026-06-18; prior: 0% Jun 17 [n=1]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (Jun 17 single draft, 0%); Jun 15 retro was −17 pp (above bar); Jun 13 pending was +50 pp below bar |
+| Gap | **50 pp** (Jun 18 pending-queue cycle, 0%); Jun 15 retro was −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending** as of 2026-06-17. Urumqi dust_event (Jun 17T12:27Z) posted before routine ran. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. Chesnee SC posting status from Jun 15 unresolved — operator verify. |
+| Queue status | **2 pending** (Barrow AK precipitation_extreme B+, created 2026-06-18T04:14Z; Amsterdam precipitation_extreme B, created 2026-06-18T12:02Z). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -249,7 +249,8 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 3 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine).
+**Cycles observed:** 5 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+Jun 15 retroactive; Jun 18 Barrow + Amsterdam).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -258,7 +259,9 @@ consequence (strong A- form, closest to A). Kapingamarangi/Gilbert Islands/Chesn
 implied-consequence structure. Nauru (A): "no adjacent reef system to reseed it" — declarative
 structural consequence, no hedge. Validates P_close gap: Nauru's direct form earns A; the A-
 drafts stop one step short.
-**Last seen:** Jun 15 (5 A- drafts + 1 A confirming the gap).
+**Last seen:** Jun 18 (Barrow AK: "permafrost limits how fast the ground absorbs any of it" —
+implied overflow, not "the water has nowhere to drain"; Amsterdam: "stack up faster than they
+drain" — implied overflow, not "the canals back up / exceed pump capacity").
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -280,6 +283,41 @@ The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal:
 4 cycles of evidence (Jun 7/10/13/15), 5+ drafts, same gap to A across signal types.
+
+### P9 — precipitation_extreme opener template convergence + restate-math
+
+**Observed:** 2026-06-18 — 2 of 2 fresh precipitation_extreme drafts share the same sentence-1
+structure: "[City] received/recorded X mm in [timeframe] — [comparison]." Amsterdam draft
+compounds with restate-math ("14.4 mm above a previous record of 300.0 mm"; margin is derivable
+arithmetic). Jun 7 Barrow had the same restate-math ("63.8 mm above the previous 3-day record of
+150.0 mm"). Three precipitation_extreme corpus drafts across 2 cycles — all 3 share the opener
+template; 2 of 3 have restate-math. Same failure mode as P6 (fire) and P7 (coral, resolved),
+appearing after just 3 drafts.
+
+**Cycles observed:** Jun 7 (1 draft, restate-math; template baseline); Jun 18 (2 drafts, template
++ restate-math in Amsterdam).
+**Last seen:** 2026-06-18.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+precipitation_extreme framing section (or general record guidance): burn the default opener. Name
+3 alternative sentence-1 forms:
+1. **Period-and-restate:** "Amsterdam received 314.4 mm in 7 days. The previous record was 300.0 mm."
+   (No margin arithmetic — let the two values speak.)
+2. **Lead with mechanism or context first:** "The Rhine-Meuse delta has nowhere to put 314.4 mm in
+   7 days. That is 14 mm past Amsterdam's previous record." (Context before number.)
+3. **Preserve punchline placement when the comparator IS the joke:** "Barrow, Alaska recorded 71.2 mm
+   of rain in a single day on June 16 — the previous daily record was 0.0 mm." (When the prior
+   record is extraordinary, keep sentence 1 tight and make sentence 2 one declarative consequence.)
+
+Also add explicit ban on restate-math form: "Do NOT state the derivable margin when both values are
+present: '14.4 mm above a previous record of 300.0 mm' is three numbers where two suffice. Use
+ratio form ('4.8% above the prior record') or period-and-restate."
+
+**Expected impact:** Breaks the default opener for precipitation_extreme after just 3 drafts —
+earlier intervention than P6 (fire, 3+ cycles before fix) and P7 (coral, resolved). Restate-math
+ban reduces a recurring violation across signal types.
+
+**Status:** Drafted. First observation 2026-06-18. Awaiting human implementation.
 
 ### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals — **RE-ACTIVATED 2026-06-13**
 

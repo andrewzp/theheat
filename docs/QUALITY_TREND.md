@@ -42,6 +42,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-15 | 9 retro | 6 | 2 | 1 | 0 | **67%** | ✓ | Retroactive grades: 9 drafts posted/approved/rejected Jun 2–15; 0 pending. **First cycle above 50% bar (retroactive caveat).** Suppression-failure + ecosystem isolation mechanics driving A-range. P_new confirmed (Red Dog Mine rejected — 17yr, 1°F, Arctic; 2nd cycle). P7 counter-evidence (2 coral drafts used alt opener forms → Resolved). New types: hot10 (B+), dust_event (B). Chesnee SC (approved Jun 10) missing posted_at — possible posting failure. |
 | 2026-06-16 | 0 | — | — | — | — | **N/A** | — | 0 pending drafts. No new evidence for any active proposal. Pipeline active (triage_cap + critic + writer + fact_check kills observed in Jun 15 22:27 suppression log). Chesnee SC posting flag from Jun 15 unresolved — operator verify. 20th consecutive staleness-skip. |
 | 2026-06-17 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | 1 new draft: Urumqi China dust_event (B- — "traps it" declarative close vs Riyadh's "disperses it"; better close, same WHO-calibration gap). 4 of 5 gist drafts since Jun 8 already graded in Jun 12–15 entries (Chesnee A-, Beaver Dams A-, Riyadh C/B, Red Dog Mine C+). P_dust 2nd cycle confirmed (Urumqi: 2,260 μg/m³ = 151× WHO PM2.5 daily; unstated). P8 retired (4 fresh-draft cycles without snow_extreme since May 19). 21st consecutive staleness skip. |
+| 2026-06-18 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh precipitation_extreme drafts. Barrow AK (71.2 mm single-day, prior record 0.0 mm — B+): elite signal, over-packed sentence 2, P_close implied close ("any of it"). Amsterdam (314.4 mm / 7d, 4.8% above prior — B): thin margin, restate-math, P_close implied close ("stack up faster than they drain"). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. P_close 5th cycle. 22nd consecutive staleness skip. n=2. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -51,6 +52,15 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-18 — Staleness bulk-reject: 0 candidates; gh CLI absent (22nd consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Draft [1] (Barrow Alaska, created 2026-06-18T04:14Z,
+10.8h old) references "June 16" as historical observation date — past-tense, no "today" or
+forecast language. Draft [2] (Amsterdam, created 2026-06-18T12:02Z, 3.0h old) uses past-tense
+"received" — no real-time-baked language. Neither qualifies under the staleness policy. `gh`
+CLI absent in remote execution environment — 22nd consecutive skip (May 13 → Jun 18). No
+operator action needed.
 
 ### 2026-06-16 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (20th consecutive skip)
 
