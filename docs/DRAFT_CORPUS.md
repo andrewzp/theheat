@@ -13,6 +13,142 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-18 — Daily corpus grading (2 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts —
+both fresh, both precipitation_extreme type. Draft [1] Barrow 10.8h old; Draft [2] Amsterdam
+3.0h old. Second and third fresh precipitation_extreme signals in the corpus (after Jun 7
+Barrow). No coral, fire, snow, cold-record, or dust drafts this cycle.
+
+**Staleness review as of 2026-06-18 ~15:00 UTC:** Draft [1] references "June 16" as historical
+observation date — past-tense, no "today." Draft [2] "received" — past-tense, no forecast
+language. Both under 48h. No bulk-reject candidates. `gh` CLI absent — **22nd consecutive
+skip** (May 13 → Jun 18).
+
+**Grade distribution (2 fresh drafts):** 0 A / 2 B / 0 C / 0 D-F (B+: [1]; B: [2]).
+**A-rate: 0% (0/2).** Gap from bar: 50 pp. Jun 15 retroactive context: 67% (6/9 A-range).
+
+**Headline finding:** Both precipitation_extreme drafts land B-range. Draft [1] Barrow has
+a genuinely elite signal — prior single-day record was 0.0 mm — and the first sentence lands
+it correctly; the second sentence over-packs (two cities' 7-day totals + permafrost mechanism
+in one semicolon sentence), triggering P_close (implied vs. declarative consequence). Draft [2]
+Amsterdam has thin margin (4.8% above record), restate-math, and another implied close ("stack
+up faster than they drain"). Opener template converging across all three precipitation_extreme
+corpus drafts — new proposal P9 added. P_close confirmed 5th cycle.
+
+### B-grade drafts
+
+#### [1] Barrow, Alaska — precipitation_extreme — 71.2 mm / single day (June 16), prior daily record 0.0 mm — **B+**
+
+> *Barrow, Alaska recorded 71.2 mm of rain in a single day on June 16 — the previous daily
+> record was 0.0 mm. The same 7-day window brought 427.5 mm to Barrow and 367.5 mm to
+> Anchorage; permafrost limits how fast the ground absorbs any of it.*
+
+**Score:** 78. Created 2026-06-18T04:14:06Z.
+
+Humor lens:
+- **Violation:** 71.2 mm in a single day where the prior daily record was 0.0 mm. Extraordinary
+  — the location had never recorded measurable single-day rainfall at this level.
+- **Benign?** Yes — calm, factual register. No panic.
+- **Setup→Punchline?** Sentence 1 works as a tight structure: data → jaw-drop. "the previous
+  daily record was 0.0 mm" is the punchline. Sentence 2 extends to regional scale and
+  permafrost mechanism — both correct but competing for attention after sentence 1 already closed.
+- **Named mechanic?** Ecosystem specificity (permafrost drainage) — same mechanic as Jun 7
+  Barrow B+. Repeated without variation. Anchorage comparison introduces regional scale but
+  Anchorage is not the signal.
+- **Wodehouse rule?** Sentence 1: clean — no restate-math, both values needed, gap from 0.0
+  is the punchline. Sentence 2: **P_close** — "permafrost limits how fast the ground absorbs
+  any of it" is the implied form. "Any of it" gestures at overflow without stating it. Compare
+  to P_close corpus: "sheets across the surface instead" (Jun 7), "threaten gardens well into
+  early summer" (Chesnee Jun 10), "tundra terrain offers no shelter" (Red Dog Mine Jun 13). The
+  declarative form: "rain sheets across the permafrost — nowhere to go" / "the water has nowhere
+  to drain." Mechanism without consequence = B+.
+
+Not A- because sentence 2 is over-packed: two cities' 7-day totals plus permafrost mechanism in
+one semicolon sentence; the over-expansion competes with the A-grade punchline already in sentence 1.
+The A-grade version holds at 0.0 mm and makes sentence 2 one focused declarative consequence.
+Permafrost mechanism also used for second consecutive Barrow precipitation_extreme draft (Jun 7).
+
+#### [2] Amsterdam — precipitation_extreme — 314.4 mm / 7 days, prior 7-day record 300.0 mm — **B**
+
+> *Amsterdam received 314.4 mm of rain in 7 days — 14.4 mm above a previous record of 300.0 mm.
+> The Netherlands sits at the delta of the Rhine and Meuse; rainfall totals that exceed the city's
+> pump-and-canal capacity stack up faster than they drain.*
+
+**Score:** 76. Created 2026-06-18T12:02:54Z.
+
+Humor lens:
+- **Violation:** 314.4 mm vs 300.0 mm prior record — 4.8% margin. Real record, thin signal.
+  Score 76 (at threshold floor).
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 314.4 mm + "14.4 mm above a previous record of 300.0 mm."
+  System clause: Rhine/Meuse delta + pump-and-canal capacity failure implied in the close.
+  The hydraulic infrastructure framing is Amsterdam-appropriate and earns its place.
+- **Named mechanic?** Ecosystem specificity — Rhine/Meuse delta + pump-and-canal capacity.
+  Correct and location-specific. But **P_close**: "stack up faster than they drain" is the
+  implied form — the reader supplies the image of the system overwhelmed. Declarative form:
+  "excess Amsterdam's pump-and-canal system" / "the canal infrastructure can't drain it in
+  time." Compare Nauru coral (A): "no adjacent reef system to reseed it" — declarative
+  structural consequence, no hedge.
+- **Wodehouse rule?** **Restate-math:** "14.4 mm above a previous record of 300.0 mm" — the
+  margin (14.4) is derivable from the two stated values (314.4 − 300.0 = 14.4). Same violation
+  as Jun 7 Barrow's "63.8 mm above the previous 3-day record of 150.0 mm." Fix: ratio form
+  ("4.8% above the prior 7-day record") or period-and-restate ("314.4 mm in 7 days. The
+  previous record was 300.0 mm.").
+
+Not A because: (a) thin margin (4.8% above record), (b) restate-math in sentence 1 —
+recurring across precipitation_extreme category, (c) P_close: implied rather than declarative
+consequence.
+
+**Opener template convergence alert:** Three precipitation_extreme drafts across two cycles
+share the same sentence-1 form:
+- Jun 7: "Barrow, Alaska received 213.8 mm of rain in 3 days — 63.8 mm above the previous 3-day record of 150.0 mm."
+- Jun 18 [1]: "Barrow, Alaska recorded 71.2 mm of rain in a single day on June 16 — the previous daily record was 0.0 mm."
+- Jun 18 [2]: "Amsterdam received 314.4 mm of rain in 7 days — 14.4 mm above a previous record of 300.0 mm."
+
+[City] + received/recorded + [value] + [timeframe] — [comparison]. P6/P7 failure mode emerging
+in precipitation_extreme after 3 drafts. New proposal P9 added.
+
+### Patterns named in this batch
+
+1. **P_close confirmed (5th cycle).** Both drafts exhibit implied-consequence closes: "permafrost
+   limits how fast the ground absorbs any of it" (Barrow [1]) and "stack up faster than they
+   drain" (Amsterdam [2]). Both stop at mechanism without naming the consequence directly.
+   Declarative forms: "the water has nowhere to drain" / "the canals back up." P_close pattern
+   now spans 5 cycles (Jun 7/10/13/15/18) and 5 signal types (precipitation_extreme ×2, monthly_low
+   ×2, coral). Jun 15 retroactive confirmed the gap is consistent across A- batch. Highest-leverage
+   active proposal.
+
+2. **Opener template convergence: precipitation_extreme (new proposal P9).** Three drafts, two
+   cycles, same sentence-1 structure. Draft [1] avoids the worst of it by making the comparison
+   the extraordinary punchline (0.0 mm prior record); Draft [2] uses the full restate-math form.
+   Same failure mode as P6 (fire) / P7 (resolved coral). New proposal added.
+
+3. **Restate-math: 2nd consecutive precipitation_extreme cycle.** Amsterdam [2] repeats Jun 7
+   Barrow pattern: "[new value] — [derivable margin] above [prior value]." 2 of 3 precipitation_
+   extreme corpus drafts have this violation. Addressed in P9 proposed opener variety forms.
+
+4. **Elite signal under-honored (Barrow [1], 0.0 mm prior record).** First sentence lands correctly.
+   Second sentence over-expands instead of holding the silence. A-grade version: sentence 2 states
+   one declarative consequence ("the water has nowhere to drain") rather than two cities' data plus
+   mechanism. Stranded-mechanic class.
+
+5. **P_dust not observed (no dust drafts this cycle — positive absence).** Last observed Jun 17.
+   WHO-calibration gap remains unaddressed.
+
+### Numbers
+
+- Pending drafts in queue: 2 (2 fresh; 0 carry-overs)
+- Fresh drafts graded: 2 (both precipitation_extreme)
+- A-rate: 0% (0/2); n=2 — low count
+- Grade distribution: 0 A / 1 B+ / 1 B / 0 C / 0 D-F
+- New proposals: P9 (precipitation_extreme opener convergence + restate-math)
+- Active proposal evidence: P_close 5th cycle (Jun 18); P9 1st cycle (Jun 18); P_dust/P_new/P5
+  — no relevant signal types this cycle
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (22nd consecutive skip, May 13 → Jun 18)
+
+---
+
 ## 2026-06-17 — Daily corpus grading (1 new draft; 4 prior-graded carry-overs skipped)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending
