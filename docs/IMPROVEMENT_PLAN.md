@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 19: 0 fresh drafts; queue empty.** All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z]). First operator rejection of a B+ graded draft. No proposal evidence updates this cycle.
+>
 > **Jun 18: 2 fresh drafts (both precipitation_extreme, both B-range).** P_close 5th cycle confirmed (Barrow "any of it" + Amsterdam "stack up faster than they drain" both implied-consequence closes). New proposal P9 added (precipitation_extreme opener template convergence + restate-math). No dust/coral/cold-record drafts this cycle. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
@@ -25,12 +27,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0%** (0/2 fresh drafts, 2026-06-18; prior: 0% Jun 17 [n=1]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
+| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-06-19; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (Jun 18 pending-queue cycle, 0%); Jun 15 retro was −17 pp (above bar) |
+| Gap | **50 pp** (Jun 18 last graded cycle, 0%); Jun 15 retro was −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **2 pending** (Barrow AK precipitation_extreme B+, created 2026-06-18T04:14Z; Amsterdam precipitation_extreme B, created 2026-06-18T12:02Z). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. Pipeline active at 0.9.67.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **0 pending** (queue empty as of 2026-06-19; all 3 Jun 18 precipitation_extreme drafts operator-rejected). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
