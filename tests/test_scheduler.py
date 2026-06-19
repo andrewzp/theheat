@@ -2,11 +2,25 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 
 from src import state
 from src.orchestrator import suppression
 from src.orchestrator.scheduler import SourceRunner, run_stage1_sources, run_stage1_then_synthesis
 from src.state import _fresh_state
+
+
+def _recent_timeout_timestamps(count: int = 3) -> tuple[str, ...]:
+    """Ascending UTC timestamps a few hours old, ordered before ``now``.
+
+    The breaker skip is stamped at ``now`` and the rolling source-health
+    window is anchored to the *latest* run (``latest - 7d``), so seed
+    failures must stay within 7 days of that skip. Fixed calendar dates
+    silently rot once they age past the window, so derive them from the
+    current time instead.
+    """
+    base = datetime.now(UTC) - timedelta(hours=count)
+    return tuple((base + timedelta(hours=i)).isoformat().replace("+00:00", "Z") for i in range(count))
 
 
 def test_stage1_concurrent_stage2_after():
@@ -55,7 +69,7 @@ def test_runner_budget_timeout_records_failed():
 
 def test_breaker_skips_after_3_timeouts():
     bot_state = _fresh_state()
-    for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+    for ts in _recent_timeout_timestamps():
         state.record_source_health(
             bot_state,
             "slow_source",
@@ -86,7 +100,7 @@ def test_breaker_skips_after_3_timeouts():
 
 def test_breaker_records_skipped_not_failed():
     bot_state = _fresh_state()
-    for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+    for ts in _recent_timeout_timestamps():
         state.record_source_health(
             bot_state,
             "slow_source",
@@ -115,7 +129,7 @@ def test_breaker_records_skipped_not_failed():
 def test_composite_runner_records_real_source_health_keys():
     bot_state = _fresh_state()
     for source in ("sea_ice_arctic", "sea_ice_antarctic"):
-        for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+        for ts in _recent_timeout_timestamps():
             state.record_source_health(
                 bot_state,
                 source,

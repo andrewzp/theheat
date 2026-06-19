@@ -110,6 +110,19 @@ default-OFF.
 
 ### Fixed
 
+- **`theheat-bot` `test` gate no longer rots on a calendar boundary.**
+  `tests/test_scheduler.py::test_breaker_records_skipped_not_failed` seeded its
+  three timeout failures at fixed `2026-06-12` timestamps, then let the circuit
+  breaker record a `skipped` run stamped at *now*. Because the rolling
+  source-health window is anchored to the latest run (`latest − 7d`), once real
+  time crossed 7 days past the hardcoded seeds (2026-06-19) the freshly-stamped
+  skip slid the window cutoff past the seeded failures and pruned them, so
+  `source_health[...]["failed"]` read `0` instead of `3` and the daily run went
+  red. Product behavior was correct; the fixtures were time-fragile. The three
+  breaker tests now derive their seed timestamps from `datetime.now(UTC)` via a
+  `_recent_timeout_timestamps()` helper, keeping them inside the window on any
+  calendar date. No product code changed.
+
 - **`voice-regression` workflow goes green and stays green.** The daily live
   writer-replay had failed every night 2026-06-12 → 06-16 (last green 06-11).
   Root cause was not a voice regression: the writer was correctly *declining*
