@@ -13,6 +13,65 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-19 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending drafts.
+All 3 Jun 18 precipitation_extreme drafts are now status=rejected (2 graded in the Jun 18 cycle
++ 1 ungraded draft created Jun 18T15:43Z after the prior grading window). No new drafts since
+Jun 18T15:43Z.
+
+**Note — ungraded Jun 18 draft:** A third precipitation_extreme draft (Barrow, Alaska 7-day,
+427.5 mm, prior record 300.0 mm — 127.5 mm / 42.5% above) was created at Jun 18T15:43Z, after
+the Jun 18 grading cycle (15:00 UTC). Text closely mirrors the Jun 7 Barrow B+ draft ("sheets
+across the surface instead" second sentence reused verbatim; restate-math "127.5 mm above the
+previous 7-day record of 300.0 mm"). It is now rejected — never graded. Voice pattern: third
+precipitation_extreme in ~15h window with identical template + permafrost ecosystem specificity.
+P9 evidence (opener template convergence) would have incremented on this draft as well.
+
+**Operator rejection of Jun 18 drafts:** All 3 Jun 18 precipitation_extreme drafts are now
+status=rejected. Not auto-rejected by TTL (all < 24h old at time of rejection). Operator cleared
+them — including the B+ Barrow daily (elite 0.0mm prior record signal). No posted_at timestamps
+found. Reasons unclear from gist state; most likely: (a) Jun 18 drafts had persistent quality
+issues the operator identified (over-packed sentence 2 on Barrow [1], thin margin + restate-math
+on Amsterdam [2], template-identical text on Barrow [3]); or (b) operator is batch-clearing
+precipitation_extreme pending as the pipeline continues to produce them.
+
+**Staleness review:** 0 pending drafts — nothing to evaluate. `gh` CLI absent — **23rd
+consecutive skip** (May 13 → Jun 19).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/2, 2026-06-18).
+Jun 15 retroactive (67%) remains highest meaningful cycle.
+
+### Patterns / operational notes
+
+1. **Queue empty; operator rejected all 3 Jun 18 precipitation_extreme drafts.** The Jun 18
+   batch included a genuinely elite signal (Barrow daily record from 0.0mm prior, B+ graded)
+   that was operator-rejected. This is the first operator rejection of a B+ draft since the two-bot
+   era began. Possible interpretations: (a) operator has raised editorial floor on
+   precipitation_extreme category; (b) the "over-packed sentence 2" / template issues in the Jun 18
+   batch caused rejection; (c) pacing — 3 precipitation_extreme drafts in ~12h is surplus inventory.
+
+2. **No active proposal evidence updates.** 0 fresh graded drafts. P_close / P9 / P_new / P5 /
+   P_dust all at last-known counts.
+
+3. **Ungraded Jun 18T15:43Z Barrow draft confirms P9 at force of habit.** The second permafrost
+   ecosystem-specificity close using "sheets across the surface instead" (verbatim from Jun 7) and
+   another restate-math opener ("127.5 mm above the previous 7-day record of 300.0 mm") suggests
+   the pipeline generates precipitation_extreme drafts from a narrow template even within 12h of
+   prior precipitation_extreme drafts. P9 fix is warranted.
+
+4. **Staleness bulk-reject: 0 candidates; `gh` CLI absent (23rd consecutive skip, May 13 → Jun 19).**
+
+### Numbers
+
+- Pending drafts in queue: 0 (queue empty; all Jun 18 precipitation_extreme drafts operator-rejected)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-18)
+- Active proposals: no evidence updates this cycle
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (23rd consecutive skip)
+
+---
+
 ## 2026-06-18 — Daily corpus grading (2 fresh drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts —
