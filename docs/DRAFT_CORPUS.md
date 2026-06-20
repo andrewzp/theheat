@@ -13,6 +13,105 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-20 — Daily corpus grading (0 pending; 1 retroactive, Jun 18T15:43Z)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending.
+Same state as Jun 19. One draft (`draft_20260618_154318_15`, Barrow AK 7-day
+precipitation_extreme, 427.5 mm, created 2026-06-18T15:43Z) was never formally graded —
+generated after the Jun 18 ~15:00 UTC grading window, then operator-rejected. Graded
+retroactively here.
+
+**Staleness review:** 0 pending drafts; nothing to assess. `gh` CLI absent — **24th
+consecutive skip** (May 13 → Jun 20). Queue empty; staleness check moot.
+
+**A-rate:** 0% (0/1 retroactive, n=1). Most recent fresh-draft graded cycle: 0% (Jun 18,
+n=2). Jun 15 retroactive remains highest: 67% (6/9).
+
+**Grade distribution (1 retroactive draft):** 0 A / 1 B+ / 0 C / 0 D-F.
+
+**Headline finding:** Barrow AK 7-day is the first precipitation_extreme draft with a
+declarative close — "water that can't sink pools on the surface, and a record margin this
+large has nowhere to go." P_close was NOT triggered (declarative form is the positive
+target, not a failure). P9 opener template and restate-math remain. Prior record value
+(300.0 mm) matches same-day Amsterdam value exactly — a sparse-archive placeholder.
+Operator rejection was data-quality driven, not voice quality.
+
+### B-grade drafts
+
+#### [retro-1] Barrow, Alaska — precipitation_extreme — 427.5 mm / 7 days — **B+**
+
+> *Barrow, Alaska received 427.5 mm of rain in 7 days — 127.5 mm above the previous 7-day
+> record of 300.0 mm. Barrow sits on the Arctic coast, where permafrost blocks infiltration;
+> water that can't sink pools on the surface, and a record margin this large has nowhere
+> to go.*
+
+**Score:** 82. Created 2026-06-18T15:43Z. Status: rejected.
+
+Humor lens:
+- **Violation:** 427.5 mm / 7 days, 42.5% above prior record of 300.0 mm. Strong margin —
+  but prior record is a suspiciously round number (identical to same-day Amsterdam's
+  "previous record of 300.0 mm"; almost certainly a sparse-archive default, not a real
+  historical record).
+- **Benign?** Yes — calm register, no panic.
+- **Setup→Punchline?** Sentence 1: volume + margin. Sentence 2: permafrost mechanism →
+  "water that can't sink pools on the surface" (declarative consequence) + "a record margin
+  this large has nowhere to go" (scale amplification). The "nowhere to go" form echoes
+  Costa Rica coral A- ("heat that builds has nowhere to drain") — same declarative zero-out.
+- **Named mechanic?** Ecosystem specificity (permafrost blocks infiltration) + declarative
+  consequence. "Pools on the surface" is stated, not implied.
+- **Wodehouse rule?** Restate-math: "127.5 mm above the previous 7-day record of 300.0 mm"
+  — three values where two suffice (same P9 pattern as Jun 7 and Jun 18 Amsterdam). No
+  other violations.
+
+Not A- because: (a) sentence-1 restate-math deducts; (b) prior record value suspicious
+(300.0 mm = same as same-day Amsterdam — data quality concern undermines the comparison);
+(c) P9 opener template unchanged. The **close** is A- form; the opener is B+. Both must
+land for an A-. If the prior record were a real historical figure and the opener varied,
+this rates A-.
+
+Operator rejection was data-quality driven (300.0 mm = same-day Amsterdam prior value;
+Barrow generating 3 precipitation_extreme drafts in one day). Voice quality stands at B+.
+
+### Patterns named in this batch
+
+1. **First declarative close in precipitation_extreme category.** "Water that can't sink
+   pools on the surface, and a record margin this large has nowhere to go" — consequence
+   stated directly ("pools"), not implied by contrast. Closest prior attempts: Jun 18 Barrow
+   daily "any of it" (implied), Jun 7 "sheets across the surface instead" (implied contrast).
+   P_close was NOT triggered. The A- close form is available to the writer and appeared here
+   without prompt intervention. The fix still belongs in the prompt — to make the declarative
+   form the default, not the occasional outcome.
+
+2. **Round-number prior record confirmed as systematic pattern (new proposal P_precip_baseline).** 
+   The Barrow 7-day and same-day Amsterdam drafts share an identical prior-record value of
+   300.0 mm for their respective 7-day precipitation records. Different cities, different
+   continents, same value — cannot be coincidence. The Jun 18 Barrow daily draft also had
+   a previous daily record of 0.0 mm (unambiguous placeholder). All 3 Jun 18 drafts were
+   operator-rejected. New proposal P_precip_baseline documents this as a writer self-kill
+   opportunity.
+
+3. **P9 opener template: 3rd/4th corpus exemplar (retroactive).** "[City] received/recorded
+   X mm in [timeframe] — [comparison]." The Barrow 7-day draft uses the same template as
+   Jun 7, Jun 18 Barrow daily, and Jun 18 Amsterdam. All 4 precipitation_extreme corpus
+   drafts share the opener. Retroactive confirmation only — cycles observed count unchanged
+   (Jun 18 already counted).
+
+4. **Session-branch routing note.** This cycle committed to `claude/pensive-wozniak-7k8tb7`
+   (CCR session-assigned branch) rather than the usual `daily-plan-current` (PR #207). Prior
+   Jun 9–19 commits remain on `daily-plan-current`. Operator: merge or cherry-pick as needed.
+
+### Numbers
+
+- Pending drafts in queue: 0 (empty since Jun 18)
+- Retroactive drafts graded: 1 (Barrow AK 7-day precipitation_extreme, B+)
+- A-rate: 0% (0/1 retro, n=1 — not statistically meaningful)
+- Active proposals: P_close positive (NOT triggered by this draft); P9 retroactive 4th
+  exemplar; P_precip_baseline new proposal; P_new/P_dust/P5 no new evidence
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (24th consecutive skip, May 13 → Jun 20)
+- Queue empty since: 2026-06-18 (all 3 Jun 18 precipitation_extreme drafts operator-rejected)
+
+---
+
 ## 2026-06-19 — Daily corpus grading (0 fresh drafts; queue empty)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending drafts.

@@ -2,6 +2,15 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 20: 0 pending; 1 retroactive (Barrow AK 7-day precipitation_extreme, B+).** First
+> declarative close in precipitation_extreme category ("pools on the surface / nowhere to
+> go") — P_close NOT triggered (positive). P9 4th corpus exemplar confirmed (retroactive;
+> opener template + restate-math unchanged). New proposal P_precip_baseline added
+> (round-number prior-record values indicate sparse-archive placeholders — Barrow 7-day and
+> Amsterdam both cited 300.0 mm; Barrow daily cited 0.0 mm; all 3 operator-rejected Jun 18).
+> Branch note: cycle committed to `claude/pensive-wozniak-7k8tb7` (CCR session branch)
+> rather than `daily-plan-current` (PR #207); operator should merge/cherry-pick as needed.
+>
 > **Jun 19: 0 fresh drafts; queue empty.** All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z]). First operator rejection of a B+ graded draft. No proposal evidence updates this cycle.
 >
 > **Jun 18: 2 fresh drafts (both precipitation_extreme, both B-range).** P_close 5th cycle confirmed (Barrow "any of it" + Amsterdam "stack up faster than they drain" both implied-consequence closes). New proposal P9 added (precipitation_extreme opener template convergence + restate-math). No dust/coral/cold-record drafts this cycle. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
@@ -27,12 +36,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-06-19; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
+| Last cycle A-rate | **0%** (0/1 retro, 2026-06-20 [n=1, not statistically meaningful]; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | **50 pp** (Jun 18 last graded cycle, 0%); Jun 15 retro was −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending** (queue empty as of 2026-06-19; all 3 Jun 18 precipitation_extreme drafts operator-rejected). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **0 pending** (queue empty as of 2026-06-20; all 3 Jun 18 precipitation_extreme drafts operator-rejected Jun 18–19). Pipeline active; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -284,7 +293,12 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal:
-4 cycles of evidence (Jun 7/10/13/15), 5+ drafts, same gap to A across signal types.
+5 cycles of evidence (Jun 7/10/13/15/18), 5+ drafts, same gap across signal types.
+**Jun 20 positive note:** Barrow AK 7-day (retroactive, Jun 18T15:43Z) used the declarative
+form organically — "pools on the surface / nowhere to go" — without prompt intervention.
+P_close was NOT triggered by this draft. The fix still belongs in the prompt: the declarative
+form should be the default, not the occasional outcome. With the fix, this B+ (good close,
+weak opener) becomes the baseline, not the ceiling.
 
 ### P9 — precipitation_extreme opener template convergence + restate-math
 
@@ -320,6 +334,11 @@ earlier intervention than P6 (fire, 3+ cycles before fix) and P7 (coral, resolve
 ban reduces a recurring violation across signal types.
 
 **Status:** Drafted. First observation 2026-06-18. Awaiting human implementation.
+**Jun 20 retroactive:** Barrow 7-day (created Jun 18T15:43Z, graded Jun 20) is the 4th
+precipitation_extreme corpus draft with the template opener. Restate-math present ("127.5 mm
+above the previous 7-day record of 300.0 mm"). All 4 corpus drafts (Jun 7, Jun 18 daily,
+Jun 18 Amsterdam, Jun 18 7-day) share the opener form. Fix needed before more
+precipitation_extreme drafts queue; the category is now active (gpm S3 feed live).
 
 ### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals — **RE-ACTIVATED 2026-06-13**
 
@@ -430,6 +449,38 @@ archive needed. One paragraph addition; no architectural change. Also applies to
 `writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
 
 **Status:** Drafted. First dust_event in corpus (Jun 13). Awaiting human implementation.
+
+### P_precip_baseline — precipitation_extreme prior-record values include sparse-archive placeholders
+
+**Observed:** 2026-06-18 — all 3 precipitation_extreme drafts operator-rejected. Two share
+an identical "previous 7-day record" value: Barrow AK (427.5 mm) and Amsterdam (314.4 mm)
+both cite "previous record of 300.0 mm." Different cities, different continents, same value
+— not a coincidence. A third draft (Barrow daily, Jun 18T04:14Z) cites "previous daily
+record was 0.0 mm." Both 300.0 mm and 0.0 mm are unambiguous placeholder/default values,
+not real historical records. Operator-rejected all three.
+
+**Cycles observed:** 1 (Jun 18; 3 drafts, all operator-rejected).
+**Last seen:** 2026-06-18.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+precipitation_extreme framing section:
+
+> For `precipitation_extreme` signals: self-kill when the previous record value is exactly
+> 0.0 mm (missing archive — no historical baseline exists) or a suspiciously round number
+> with no meaningful precision (100.0, 200.0, 300.0 mm — indicating a sparse-archive
+> default, not a measured record). Barrow and Amsterdam sharing a "previous record of
+> 300.0 mm" on the same day is a data-pipeline artifact, not a real historical comparison.
+> Use kill_reason: "suspicious prior record: round-number or zero baseline indicates missing
+> archive data." Also self-kill when the margin above the prior record is less than 5%
+> — "14.4 mm above 300.0 mm" (4.8%) is not a meaningful record breach.
+
+**Expected impact:** Prevents precipitation_extreme drafts from reaching pending when the
+baseline comparison is a data artifact. All 3 Jun 18 operator rejections are plausibly
+in this class. Pairs with P9's opener-template fix to address the two main failure modes
+in the category after only 4 corpus drafts. The real upstream fix is in the precipitation
+signal builder (proper archive depth validation); this prompt rule is the surgical stopgap.
+
+**Status:** Drafted. First observation 2026-06-18. Awaiting human implementation.
 
 ~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
