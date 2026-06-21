@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 from src import state
 from src.orchestrator import suppression
@@ -86,7 +87,16 @@ def test_breaker_skips_after_3_timeouts():
 
 def test_breaker_records_skipped_not_failed():
     bot_state = _fresh_state()
-    for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+    # Anchor the failures to "now" rather than a frozen calendar date: the breaker
+    # records its skip with a now() timestamp, which becomes the latest run and
+    # pulls the 7-day source-health window cutoff forward. Hardcoded past dates
+    # eventually fall outside that window and get pruned (failed -> 0), so this
+    # test must stay relative to wall-clock time to keep asserting failed == 3.
+    now = datetime.now(timezone.utc)
+    recent = tuple(
+        (now - timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ") for h in (3, 2, 1)
+    )
+    for ts in recent:
         state.record_source_health(
             bot_state,
             "slow_source",

@@ -110,6 +110,20 @@ default-OFF.
 
 ### Fixed
 
+- **`theheat-bot` workflow goes green — frozen-date time bomb in the scheduler
+  breaker test.** `tests/test_scheduler.py::test_breaker_records_skipped_not_failed`
+  seeded three `failed` source-health records at a hardcoded `2026-06-12` and
+  asserted `failed == 3` after the circuit breaker fires. But the breaker records
+  its `skipped` run with a `now()` timestamp, which becomes the latest run and
+  pulls the rolling 7-day source-health window cutoff forward; once wall-clock
+  time passed `2026-06-19` the hardcoded failures fell outside the window and were
+  pruned (`failed -> 0`), turning the run red. Production is unaffected — real
+  timeouts and the breaker skip happen within minutes, so nothing prunes. Fix
+  anchors the seeded failures to `now()` (−3h/−2h/−1h) so they stay in-window
+  regardless of run date; the contract assertion (`failed == 3`) is unchanged.
+  Shipped autonomously by the self-heal routine (mechanical: a timing/env test
+  fix unrelated to output semantics).
+
 - **`voice-regression` workflow goes green and stays green.** The daily live
   writer-replay had failed every night 2026-06-12 → 06-16 (last green 06-11).
   Root cause was not a voice regression: the writer was correctly *declining*
