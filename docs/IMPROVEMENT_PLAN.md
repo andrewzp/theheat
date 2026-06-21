@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 21: 0 fresh drafts; queue empty.** No new drafts since Jun 18T15:43Z (~2.5d gap). P_new archived (2nd time): 3 consecutive fresh-draft cycles without cold-record (Jun 15/17/18) meets the 3+ runbook threshold. No new evidence for P_close/P9/P_dust/P5. `gh` CLI absent (24th consecutive staleness skip).
+>
 > **Jun 19: 0 fresh drafts; queue empty.** All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z]). First operator rejection of a B+ graded draft. No proposal evidence updates this cycle.
 >
 > **Jun 18: 2 fresh drafts (both precipitation_extreme, both B-range).** P_close 5th cycle confirmed (Barrow "any of it" + Amsterdam "stack up faster than they drain" both implied-consequence closes). New proposal P9 added (precipitation_extreme opener template convergence + restate-math). No dust/coral/cold-record drafts this cycle. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
@@ -27,12 +29,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-06-19; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
+| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-06-21; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
 | Resumption bar | majority A (>50%) sustained |
 | Gap | **50 pp** (Jun 18 last graded cycle, 0%); Jun 15 retro was −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending** (queue empty as of 2026-06-19; all 3 Jun 18 precipitation_extreme drafts operator-rejected). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **0 pending** (queue empty as of 2026-06-21; ~2.5d since last resolved drafts Jun 18T15:43Z). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -321,44 +323,7 @@ ban reduces a recurring violation across signal types.
 
 **Status:** Drafted. First observation 2026-06-18. Awaiting human implementation.
 
-### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals — **RE-ACTIVATED 2026-06-13**
-
-**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
-threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
-bowl location. Voice execution clean but signal fails Andrew's editorial bar (cf. Mankato
-reject May 11: "weak signal, defensive closer"). **Archived Jun 9** after 6 consecutive
-fresh-draft cycles without recurrence (May 15–19, Jun 7). **Re-activated Jun 13:** Red Dog
-Mine, Alaska monthly_low (19°F / -7.1°C, Jun 9, score 80) reached pending with 17-year
-archive, 1°F margin, above the Arctic Circle — all three P_new criteria met. Archive note
-said: "Reopen if cold-record drafts with shallow archive + trivial margin reappear." That
-condition is met. Voice execution on Red Dog Mine is marginally better than Bethel (cold-air
-pooling specificity is load-bearing and accurate) but signal ceiling unchanged.
-
-**Cycles observed:** May 14, Jun 13 (2 grading cycles; + May 11 Andrew-reject precedent).
-**Last seen:** Jun 13 (Red Dog Mine AK — operator rejected; all three criteria met).
-Jun 15 positive validation: Chesnee SC (35yr archive, 7°F margin, SE US — fails all three
-criteria; correctly passes and earns A-). The proposal correctly distinguishes both cases.
-
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-cold-record framing section:
-
-> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
-> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
-> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
-> drainage bowl). A 16-year cold record in Maine with a 1°F margin is not extraordinary —
-> archive is shallow, margin is trivial, cold is expected here. A 17-year cold record above
-> the Arctic Circle with a 1°F margin is in the same class. Use kill_reason: "shallow
-> archive cold record: insufficient editorial weight (< 20yr archive, < 1°C margin,
-> cold-climate location)."
-
-**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
-(threshold 76) but fail Andrew's editorial bar. Score gate is not catching this class:
-both Bethel (score 80) and Red Dog Mine (score 80) passed the gate. Jun 15 positive case
-(Chesnee SC) confirms the proposal correctly does NOT kill strong signals. Scoped to cold
-records only — does not affect monthly_high or other record types.
-
-**Status:** Re-activated Jun 13. Re-archives if cold-record drafts in this class go
-unobserved for 3+ fresh-draft grading cycles.
+~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
@@ -538,6 +503,17 @@ and possession form respectively. Neither used the banned accumulation sentence.
 cycles (Jun 7 n/a, Jun 13 n/a, Jun 15 counter-evidence) without observation; resolved. If the
 formula reappears in future coral batches, re-open with the original fix spec (3 alternative
 sentence-1 forms + DHW persistence exemplar from the May 19 corpus).
+
+### [Archived 2026-06-21, 2nd archiving] P_new — Cold-record quality floor
+
+Re-activated Jun 13 (Red Dog Mine, Alaska: 17yr archive, 1°F margin, above Arctic Circle —
+all three kill criteria met; operator rejected). 3 consecutive fresh-draft cycles since then
+without cold-record drafts (Jun 15 retroactive: no cold-record; Jun 17: dust_event only;
+Jun 18: precipitation_extreme only) — meets the 3+ runbook threshold for archiving.
+Reopen if `monthly_low` or `country_low` drafts with (a) < 20yr archive, (b) < 2°F margin,
+(c) cold-climate location reappear in pending. The fix (self-kill gate in writer_prompt.py)
+remains unimplemented; the absence is seasonal/triage-upstream, not a resolved failure mode.
+Chesnee SC (35yr, 7°F, SE US) remains the counter-example: writer correctly passes strong signals.
 
 ### [Archived 2026-06-09, Re-activated 2026-06-13] P_new — Cold-record quality floor
 

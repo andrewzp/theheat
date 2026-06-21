@@ -13,6 +13,34 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-21 — Daily corpus grading (0 fresh drafts; queue empty)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts** — queue fully empty. Last resolved drafts were the 3 Jun 18 precipitation_extreme entries, all operator-rejected (confirmed in the Jun 19 entry). No new drafts have entered pending status since Jun 18T15:43Z (~2.5 days).
+
+**Staleness review:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent — **24th consecutive skip** (May 13 → Jun 21). No operator action needed.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **0%** (0/2, 2026-06-18). Most recent meaningful: **67%** retroactive Jun 15 (6/9, first above bar).
+
+### Patterns / operational notes
+
+1. **Queue empty; pipeline active.** 3-day gap since Jun 18T15:43Z is normal inter-signal quiet. No new signals reached pending since all Jun 18 precipitation_extreme drafts were operator-rejected. Pipeline at 0.9.67.0+ with `WRITER_SAMPLES=2` + `CRITIC_REVISE_ENABLED=1` live.
+
+2. **P_new archived (second archiving).** 3 consecutive fresh-draft grading cycles passed since P_new was last observed (Jun 13): Jun 15 (9 retro — no cold-record), Jun 17 (1 dust — no cold-record), Jun 18 (2 precip_extreme — no cold-record). Meets the 3+ threshold in the runbook. Moving to Resolved. Reopen if shallow-archive cold-record drafts (< 20yr archive, < 2°F margin, cold-climate location) reappear in pending.
+
+3. **No new evidence for P_close, P9, P_dust, P5.** 0 fresh drafts; no signal types to observe.
+
+4. **Staleness bulk-reject: 0 candidates; `gh` CLI absent (24th consecutive skip, May 13 → Jun 21).**
+
+### Numbers
+
+- Pending drafts in queue: 0 (queue empty)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-06-18)
+- Active proposal evidence updates: P_new archived (3+ cycles threshold met; Jun 15/17/18)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (24th consecutive skip)
+
+---
+
 ## 2026-06-19 — Daily corpus grading (0 fresh drafts; queue empty)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 0 pending drafts.
