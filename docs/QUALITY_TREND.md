@@ -44,6 +44,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-17 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | 1 new draft: Urumqi China dust_event (B- — "traps it" declarative close vs Riyadh's "disperses it"; better close, same WHO-calibration gap). 4 of 5 gist drafts since Jun 8 already graded in Jun 12–15 entries (Chesnee A-, Beaver Dams A-, Riyadh C/B, Red Dog Mine C+). P_dust 2nd cycle confirmed (Urumqi: 2,260 μg/m³ = 151× WHO PM2.5 daily; unstated). P8 retired (4 fresh-draft cycles without snow_extreme since May 19). 21st consecutive staleness skip. |
 | 2026-06-18 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh precipitation_extreme drafts. Barrow AK (71.2 mm single-day, prior record 0.0 mm — B+): elite signal, over-packed sentence 2, P_close implied close ("any of it"). Amsterdam (314.4 mm / 7d, 4.8% above prior — B): thin margin, restate-math, P_close implied close ("stack up faster than they drain"). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. P_close 5th cycle. 22nd consecutive staleness skip. n=2. |
 | 2026-06-19 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty. All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z after prior grading window]). First operator rejection of a B+ graded draft (Barrow 71.2mm/prior 0.0mm). No proposal evidence updates. 23rd consecutive staleness skip. |
+| 2026-06-22 | 1 retro | 1 | 0 | 0 | 0 | **100%** | (n=1) | Retroactive grade: Barrow 7-day precip (A-) — flagged ungraded in Jun 19/21. "Has nowhere to go" = first precipitation_extreme declarative-consequence close (P_close positive evidence). Restate-math confirmed (P9 3rd cycle). Queue empty (4th consecutive day). 25th staleness skip. |
 | 2026-06-21 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty (~2.5d since last resolved drafts Jun 18). P_new archived (2nd time) — 3 consecutive cycles without cold-record: Jun 15/17/18. No evidence updates for P_close/P9/P_dust/P5. 24th consecutive staleness skip. |
 
 **Trend interpretation:**
@@ -54,6 +55,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-22 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (25th consecutive skip)
+
+**Status:** 0 pending drafts — queue empty (4th consecutive day). Retroactive Barrow 7-day draft (rejected Jun 18T19:42Z, ~4h after creation) well under 48h threshold. `gh` CLI absent — 25th consecutive skip (May 13 → Jun 22). No operator action needed.
 
 ### 2026-06-21 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (24th consecutive skip)
 
