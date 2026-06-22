@@ -43,7 +43,14 @@ concurrency:
 
 jobs:
   test:
-    if: github.event_name != 'schedule' || github.event.schedule != '30 * * * *'
+    # Full suite gates PR merges ONLY. Scheduled drafting runs no longer run it:
+    # a flaky/time-dependent unit test must never be able to block — or redden —
+    # production drafting. On 2026-06-19 a time-bomb unit test (hardcoded dates)
+    # started failing and silently halted all drafting for 3 days, because the
+    # run job below was `needs: test`. The run job now has its own fast,
+    # deterministic Smoke gate instead (ruff + import), so genuinely broken main
+    # still can't draft, but a unit-test flake can't dark the bot.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -101,9 +108,14 @@ jobs:
       issues: write
     # Run job posts tweets, writes gist, consumes API quota — skip on PRs
     # so the test job alone gates the merge. PRs from forks also lack secrets.
+    # Intentionally does NOT gate on the test result: the full suite is a
+    # PR-merge gate, not a production-run gate (the test job is skipped on
+    # schedules). Drafting must survive a flaky unit test; the Smoke gate step
+    # below is the real guard against a genuinely broken build. Drafts are
+    # manual-gated (human review before posting), so the residual risk is a
+    # rejected draft, not a bad tweet — far cheaper than a multi-day outage.
     if: |
       always()
-      && (needs.test.result == 'success' || needs.test.result == 'skipped')
       && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -181,6 +193,16 @@ jobs:
           print(f"[thresholds] active={active:,} thresholds={thresh:,}")
           conn.close()
           PYEOF
+
+      # Fast, deterministic guard that replaces the full-suite gate for production
+      # runs: a genuinely broken main (syntax / bad import / circular import) still
+      # cannot draft, but there are no time-dependent or flaky unit tests here.
+      # ruff + import are stable and take seconds. `import src.main` is verified
+      # side-effect-free (no secrets/env needed to import).
+      - name: Smoke gate
+        run: |
+          ruff check src/
+          python -c "import src.main"
 
       - name: Run bot
         env:
