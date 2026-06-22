@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 22: 0 pending; 1 retroactive grade.** Barrow 7-day precip (draft_20260618_154318_15, created Jun 18T15:43Z, flagged ungraded in Jun 19/21) graded A-. "Has nowhere to go" = first precipitation_extreme declarative-consequence close — P_close positive evidence (validates the fix, not a failing observation). Restate-math confirmed: P9 now 3 cycles (all 3 precipitation_extreme corpus drafts). Queue empty 4th consecutive day. `gh` CLI absent (25th consecutive staleness skip).
+>
 > **Jun 21: 0 fresh drafts; queue empty.** No new drafts since Jun 18T15:43Z (~2.5d gap). P_new archived (2nd time): 3 consecutive fresh-draft cycles without cold-record (Jun 15/17/18) meets the 3+ runbook threshold. No new evidence for P_close/P9/P_dust/P5. `gh` CLI absent (24th consecutive staleness skip).
 >
 > **Jun 19: 0 fresh drafts; queue empty.** All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z]). First operator rejection of a B+ graded draft. No proposal evidence updates this cycle.
@@ -29,9 +31,9 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **N/A** (0 fresh drafts, 2026-06-21; prior graded: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar]) |
+| Last cycle A-rate | **A- (1/1 retro, Jun 22; n=1)** — Barrow 7-day precip, retroactive. Prior graded cycle: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (Jun 18 last graded cycle, 0%); Jun 15 retro was −17 pp (above bar) |
+| Gap | **N/A** (n=1 Jun 22 retro); Jun 18 last multi-draft cycle: 50 pp (0%); Jun 15 retro: −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
 | Queue status | **0 pending** (queue empty as of 2026-06-21; ~2.5d since last resolved drafts Jun 18T15:43Z). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
@@ -299,8 +301,10 @@ template; 2 of 3 have restate-math. Same failure mode as P6 (fire) and P7 (coral
 appearing after just 3 drafts.
 
 **Cycles observed:** Jun 7 (1 draft, restate-math; template baseline); Jun 18 (2 drafts, template
-+ restate-math in Amsterdam).
-**Last seen:** 2026-06-18.
++ restate-math in Amsterdam); Jun 22 retroactive (Barrow 7-day: "127.5 mm above the previous 7-day
+record of 300.0 mm" — P9 restate-math; also template convergence confirmed: all 3 precipitation_extreme
+corpus drafts share the "[City] received/recorded X mm in [timeframe] — [comparison]" structure).
+**Last seen:** 2026-06-22. Note: 3 of 3 precipitation_extreme corpus drafts have restate-math. Convergence confirmed.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 precipitation_extreme framing section (or general record guidance): burn the default opener. Name

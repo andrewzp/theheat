@@ -13,6 +13,49 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-22 — Daily corpus grading (0 pending; 1 retroactive grade)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts** — queue still empty, same as Jun 21. No new drafts since Jun 18T15:43Z (~3.5 days). Barrow 7-day precipitation_extreme (draft_20260618_154318_15, created Jun 18T15:43Z, rejected Jun 18T19:42Z) was flagged "ungraded" in the Jun 19 and Jun 21 entries — its text is now available from gist history and is graded here retroactively.
+
+**Staleness review:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent — **25th consecutive skip** (May 13 → Jun 22). No operator action needed.
+
+**A-rate this cycle:** 1 retroactive draft graded; 1 A-. n=1 — not statistically meaningful on its own. Prior graded cycle: 0% (0/2, Jun 18). Prior meaningful: 67% (6/9, Jun 15 retroactive).
+
+### Retroactive grade: Barrow 7-day precipitation_extreme — **A-** (rejected by operator; event-diversity)
+
+> *Barrow, Alaska received 427.5 mm of rain in 7 days — 127.5 mm above the previous 7-day record of 300.0 mm. Barrow sits on the Arctic coast, where permafrost blocks infiltration; water that can't sink pools on the surface, and a record margin this large has nowhere to go.*
+
+**Score:** 82. Created 2026-06-18T15:43Z. Rejected Jun 18T19:42Z (~4h later) — operator batch-reject of all 3 Jun 18 Barrow/Amsterdam precipitation drafts; event-diversity concern, not voice.
+
+Humor lens:
+- **Violation:** 427.5 mm vs 300.0 mm = 42.5% above prior record. Real, substantial.
+- **Benign?** Yes, factual register.
+- **Setup→Punchline?** Sentence 1 restates margin arithmetically ("127.5 mm above the previous 7-day record of 300.0 mm" — P9 restate-math). Sentence 2: permafrost blocks infiltration → water pools → "a record margin this large has nowhere to go." Three-step close: mechanism → surface consequence → terminal declarative.
+- **Named mechanic:** Ecosystem specificity (permafrost blocks infiltration) + near-declarative close ("has nowhere to go"). Compare: Costa Rica Pacific, Jun 18 corpus: "heat that builds has nowhere to drain" → A-. Same "nowhere to [verb]" construction.
+- **P_close lens:** "Has nowhere to go" is the declarative-consequence form, not implied. This is the A form per P_close's framework — the writer named the consequence ("nowhere to go") rather than stopping at the mechanism ("sheets across the surface instead", Jun 7 B+) or implied overflow ("limits how fast the ground absorbs any of it", Jun 18 1-day B+). First precipitation_extreme draft to deploy the declarative close.
+- **P9:** Sentence 1 has restate-math — P9's 3rd evidence point. "127.5 mm above the previous 7-day record of 300.0 mm" restates three values where two suffice.
+- **Wodehouse rule?** No violations. "A record margin this large has nowhere to go" is clean and final. "Water that can't sink pools on the surface" is specific and visual.
+
+**Operator disposition:** Correct reject on event-diversity grounds — 4th Barrow precipitation draft from same Jun 16–17 episode (Jun 7 3-day B+, Jun 18 1-day B+, Jun 18 Amsterdam B, Jun 18 7-day A-). The strongest voice draft of the Barrow event was the one rejected last.
+
+### Patterns / operational notes
+
+1. **P_close positive evidence:** Barrow 7-day "has nowhere to go" is the first precipitation_extreme draft to deploy the declarative-consequence A-form unprompted. The Jun 18 1-day used "limits how fast the ground absorbs any of it" (B+-form implied consequence); this 7-day reached the declarative form and the grade reflects it. Validates that the declarative form is the lever — P_close fix would institutionalize it.
+
+2. **P9 3rd cycle evidence:** Barrow 7-day "127.5 mm above the previous 7-day record of 300.0 mm" = restate-math. Now 3 of 3 precipitation_extreme corpus drafts (Jun 7, Jun 18, Jun 22 retro) contain restate-math. Template convergence complete on that dimension.
+
+3. **Queue:** 0 pending for 4th straight day (Jun 19, 21, 22). No pipeline concern — the Jun 15–18 burst produced 13 drafts in 4 days; dry spell is within normal variance.
+
+### Numbers
+
+- Retroactive drafts graded: 1 (Barrow 7-day A-, Jun 18 event)
+- A-rate: 100% (1/1 retroactive; n=1, not meaningful)
+- Proposals updated: P9 (+1 cycle → 3rd cycle, confirmed in all 3 precipitation_extreme corpus drafts)
+- Proposals not updated: P_close (positive evidence, not a failure observation), P_dust (no dust drafts), P5 (no relevant drafts)
+- Routine operational: queue empty 4th consecutive day; `gh` CLI absent (25th consecutive skip).
+
+---
+
 ## 2026-06-21 — Daily corpus grading (0 fresh drafts; queue empty)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts** — queue fully empty. Last resolved drafts were the 3 Jun 18 precipitation_extreme entries, all operator-rejected (confirmed in the Jun 19 entry). No new drafts have entered pending status since Jun 18T15:43Z (~2.5 days).
