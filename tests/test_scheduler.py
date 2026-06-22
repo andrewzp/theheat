@@ -2,11 +2,29 @@ from __future__ import annotations
 
 import threading
 import time
+from datetime import UTC, datetime, timedelta
 
 from src import state
 from src.orchestrator import suppression
 from src.orchestrator.scheduler import SourceRunner, run_stage1_sources, run_stage1_then_synthesis
 from src.state import _fresh_state
+
+
+def _recent_health_timestamps(count: int = 3) -> tuple[str, ...]:
+    """Source-health seeds anchored to *now*, oldest first.
+
+    These must stay inside the rolling ``SOURCE_HEALTH_WINDOW_DAYS`` window even
+    after the breaker appends a now-stamped ``skipped`` row. Hardcoded calendar
+    dates made these tests time bombs: ``_source_health_window_cutoff`` anchors
+    the window to the latest run, so once real time advanced past the window the
+    now-stamped skip slid the cutoff forward and aged the seeds out (``failed``
+    silently dropped to 0). See ``src/state.py``.
+    """
+    base = datetime.now(UTC).replace(microsecond=0)
+    return tuple(
+        (base - timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for h in reversed(range(count))
+    )
 
 
 def test_stage1_concurrent_stage2_after():
@@ -55,7 +73,7 @@ def test_runner_budget_timeout_records_failed():
 
 def test_breaker_skips_after_3_timeouts():
     bot_state = _fresh_state()
-    for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+    for ts in _recent_health_timestamps():
         state.record_source_health(
             bot_state,
             "slow_source",
@@ -86,7 +104,7 @@ def test_breaker_skips_after_3_timeouts():
 
 def test_breaker_records_skipped_not_failed():
     bot_state = _fresh_state()
-    for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+    for ts in _recent_health_timestamps():
         state.record_source_health(
             bot_state,
             "slow_source",
@@ -115,7 +133,7 @@ def test_breaker_records_skipped_not_failed():
 def test_composite_runner_records_real_source_health_keys():
     bot_state = _fresh_state()
     for source in ("sea_ice_arctic", "sea_ice_antarctic"):
-        for ts in ("2026-06-12T00:00:00Z", "2026-06-12T01:00:00Z", "2026-06-12T02:00:00Z"):
+        for ts in _recent_health_timestamps():
             state.record_source_health(
                 bot_state,
                 source,
