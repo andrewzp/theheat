@@ -10,6 +10,16 @@ or update at least one representative bundle test. The writer only sees
 `StoryBundle` plus `MemorySlice`; any fact needed for a safe tweet must be
 present in those objects before generation.
 
+> **Known limitation + planned evolution (2026-06-16).** This contract validates
+> structural *completeness* (is the fact present in the bundle?), not *warrant* (is
+> the bundle's claim true and entitled to its words?). The 2026-06-16 precip
+> false-record incident showed the model permits illegal claims — a "record" that is
+> really a hardcoded threshold or a 0.0 baseline — which the writer cites faithfully
+> because the field is named `previous_record_mm`. Planned redesign: a claim/warrant
+> model where a `Record` is uninstantiable without a real dated baseline, into which
+> this contract evolves. See
+> [/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md).
+
 ## Current Flow
 
 ```text
