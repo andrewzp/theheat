@@ -28,7 +28,12 @@ ignore = [
 "tests/**/*.py" = ["F401", "F403", "F405"]
 
 [tool.pytest.ini_options]
-addopts = "-m 'not voice_replay'"
+# --ignore-glob skips macOS/iCloud sync-conflict duplicates ("name 2.py"), which
+# are gitignored (.gitignore `* 2.py`) so CI never sees them, but pytest collects
+# them locally and runs STALE copies of real tests (the space-digit suffix is how
+# iCloud names a conflicted copy). Without this, a stale " 2.py" can fail while
+# the real test passes — confusing, local-only double failures.
+addopts = "-m 'not voice_replay' --ignore-glob='* [0-9].py'"
 markers = [
     "voice_replay: live writer-replay test (calls real Anthropic API; skipped by default, run via the voice-regression workflow)",
     "allow_network: opt out of the hermeticity gate and allow real outbound connections",
