@@ -7,6 +7,14 @@ and the dashboard now exposes per-source troubleshooting logs for current
 problem rows. The editorial pipeline shape described below is unchanged; the
 source layer is more resilient and more observable.
 
+**Known integrity gap — claim & warrant (2026-06-16).** The evidence contract
+validates that a bundle's facts are *present*, not that its *claims are true or
+warranted*. A 2026-06-16 incident shipped precip drafts citing a hardcoded threshold
+(and a 0.0 baseline) as "the previous record." Root cause is architectural: no model
+of a claim or its warrant, so illegal states (a record with no baseline) are
+representable across every source. Design-first redesign (no code until reviewed):
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md).
+
 **Throughput Initiative — SHIPPED DARK (2026-06-16).** All four phases (A funnel
 instrumentation -> B decouple the ship gate -> C generate-and-select refill loop
 -> D multi-signal writer context) are coded, tested, codex-checked, and merged to
