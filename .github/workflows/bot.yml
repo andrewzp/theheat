@@ -50,7 +50,14 @@ jobs:
     # run job below was `needs: test`. The run job now has its own fast,
     # deterministic Smoke gate instead (ruff + import), so genuinely broken main
     # still can't draft, but a unit-test flake can't dark the bot.
-    if: github.event_name == 'pull_request'
+    #
+    # Skip the `daily-plan-current` PR (#207): it is a rolling, content-only
+    # DISPLAY PR that is never merged to main, so gating it on the Python +
+    # dashboard suite is pointless — and its routine appends without rebasing
+    # onto main, so it re-ran stale code and emailed a CI failure every day.
+    # Skipping the test job here leaves both jobs skipped on that PR (run is
+    # PR-excluded), so the run is neutral and sends no failure email.
+    if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
