@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 23: 3 fresh drafts (33% A-rate).** Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence. Columbus GA all_time_high (B): 1°F margin, dual-mechanism. Mediterranean SST regional_sst_anomaly (B): comparative-implied close + unexplained NOAA 2.5°C threshold (A3 filed). P_close 6th cycle: Columbus + Mediterranean = failing; Cope Rch = positive. `gh` CLI absent (26th consecutive staleness skip). Mediterranean SST "today" anchor → staleness at Jun 24T17:12Z.
+>
 > **Jun 22: 0 pending; 1 retroactive grade.** Barrow 7-day precip (draft_20260618_154318_15, created Jun 18T15:43Z, flagged ungraded in Jun 19/21) graded A-. "Has nowhere to go" = first precipitation_extreme declarative-consequence close — P_close positive evidence (validates the fix, not a failing observation). Restate-math confirmed: P9 now 3 cycles (all 3 precipitation_extreme corpus drafts). Queue empty 4th consecutive day. `gh` CLI absent (25th consecutive staleness skip).
 >
 > **Jun 21: 0 fresh drafts; queue empty.** No new drafts since Jun 18T15:43Z (~2.5d gap). P_new archived (2nd time): 3 consecutive fresh-draft cycles without cold-record (Jun 15/17/18) meets the 3+ runbook threshold. No new evidence for P_close/P9/P_dust/P5. `gh` CLI absent (24th consecutive staleness skip).
@@ -31,12 +33,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **A- (1/1 retro, Jun 22; n=1)** — Barrow 7-day precip, retroactive. Prior graded cycle: 0% Jun 18 [n=2]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
+| Last cycle A-rate | **33% (1/3, Jun 23)** — Cope Rch TX A-, Columbus GA B, Mediterranean SST B. Prior: 100% Jun 22 [n=1 retro]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **N/A** (n=1 Jun 22 retro); Jun 18 last multi-draft cycle: 50 pp (0%); Jun 15 retro: −17 pp (above bar) |
+| Gap | **17 pp** (50% − 33%, n=3 Jun 23); Jun 18 last multi-draft cycle: 50 pp (0%); Jun 15 retro: −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending** (queue empty as of 2026-06-21; ~2.5d since last resolved drafts Jun 18T15:43Z). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **0 pending; 2 approved** (Mediterranean SST regional_sst_anomaly `draft_20260622_171200_17` — "today" anchor, staleness threshold Jun 24T17:12Z; Chesnee SC monthly_low `draft_20260610_155509_26`). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -255,8 +257,8 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 5 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
-Jun 15 retroactive; Jun 18 Barrow + Amsterdam).
+**Cycles observed:** 6 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing, Cope Rch TX positive).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -265,9 +267,7 @@ consequence (strong A- form, closest to A). Kapingamarangi/Gilbert Islands/Chesn
 implied-consequence structure. Nauru (A): "no adjacent reef system to reseed it" — declarative
 structural consequence, no hedge. Validates P_close gap: Nauru's direct form earns A; the A-
 drafts stop one step short.
-**Last seen:** Jun 18 (Barrow AK: "permafrost limits how fast the ground absorbs any of it" —
-implied overflow, not "the water has nowhere to drain"; Amsterdam: "stack up faster than they
-drain" — implied overflow, not "the canals back up / exceed pump capacity").
+**Last seen:** Jun 23 (Cope Rch TX: "small shifts in that dry column push extremes fast" — declarative consequence, P_close POSITIVE evidence, A-; Columbus GA: 1°F thin margin + dual-mechanism close, B; Mediterranean SST: "retains heat faster than open-ocean basins of comparable size" — comparative-implied form, B).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -485,6 +485,15 @@ without invoking seasonal quiet. Next measurement when queue resumes.
 batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more categories
 are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
 suppressing A-grade candidates before they reach pending.
+
+### A3 — Mediterranean SST threshold calibration gap (P_dust analog)
+
+**Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft (`draft_20260622_171200_17`) states "exceeds the 2.5°C tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier means. Analogous to P_dust's WHO PM2.5 calibration gap: extraordinary number (2.5°C tier) stated without telling the reader its significance. The NOAA CRW tier nomenclature (1.0°C / 2.0°C / 2.5°C / 3.0°C tiers correspond to successively rare basin-wide anomaly events) is not self-evident. Single observation — too thin for active proposal; filing for tracking.
+
+**Cycles observed:** Jun 23 (1 cycle, 1 draft, 1 signal type).
+**Last seen:** Jun 23.
+
+**Watch for:** Future regional_sst_anomaly or ocean_sst drafts that state NOAA CRW tier thresholds without explaining the tier nomenclature. If 2+ cycles observed, promote to active proposal with P_dust-style fix: add NOAA CRW tier calibration as world-knowledge anchor ("2.5°C basin-wide anomaly = among the 5% rarest monthly deviations on record").
 
 ## Resolved (archive)
 
