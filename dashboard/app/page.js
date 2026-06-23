@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { AutomationStatusStrip } from "./components/AutomationStrip.js"
+import { CredentialsCard } from "./components/CredentialsCard.js"
 import { DraftWorkbench } from "./components/DraftWorkbench.js"
 import { Hot10Card, Hot10Leaderboard } from "./components/Hot10Card.js"
 import { PipelineView } from "./components/PipelineView.js"
@@ -238,6 +239,7 @@ export default function Dashboard() {
   const hot10 = state?.last_hot10 || {}
   const streaks = state?.streaks || {}
   const errors = state?.errors || []
+  const credentialExpiry = state?.credential_expiry || {}
   const nowIso = new Date().toISOString()
   const todayCount = todayTweetCount(state?.daily_tweet_count, nowIso)
   const hot10Stale = hot10IsStale(hot10.date, nowIso)
@@ -568,6 +570,7 @@ export default function Dashboard() {
                 <div className="stat-label">of 10 daily cap</div>
               </div>
               <Hot10Card hot10={hot10} hot10Stale={hot10Stale} hot10StaleAgeDays={hot10StaleAgeDays} />
+              <CredentialsCard credentialExpiry={credentialExpiry} nowMs={Date.now()} />
             </div>
 
             <div className="grid">

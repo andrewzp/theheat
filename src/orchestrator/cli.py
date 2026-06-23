@@ -6,7 +6,7 @@ import argparse
 import sys
 from collections.abc import Callable
 
-from src import state
+from src import credentials, state
 from src.state_schema import BotState
 
 
@@ -30,6 +30,9 @@ def main(dispatchers: dict[str, RunMode]) -> None:
         print(f"[main] ERROR: {exc}")
         sys.exit(1)
     current_run = state.init_run(args.mode)
+    # Refresh credential-expiry counters (dashboard) from the live env every run.
+    # Cheap, never raises; only derived expiry dates are stored, not the tokens.
+    bot_state["credential_expiry"] = credentials.collect_credential_expiry()
     final_status = "success"
 
     def _run(mode: str) -> None:

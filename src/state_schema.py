@@ -184,6 +184,19 @@ class AirQualityTier(TypedDict):
     date: str
 
 
+class CredentialExpiry(TypedDict, total=False):
+    """Derived expiry for one tracked credential (the dashboard counter source).
+
+    Holds only the derived expiry date, never the token. Recomputed each run by
+    ``src.credentials.collect_credential_expiry`` so the dashboard can warn
+    before a credential silently expires.
+    """
+
+    label: str
+    expires_at: str  # ISO-8601 UTC, e.g. "2026-08-22T15:18:07Z"
+    source: str  # how the expiry was derived (e.g. "jwt")
+
+
 class BotState(TypedDict, total=False):
     """Top-level durable state for the @theheat orchestrator.
 
@@ -222,6 +235,7 @@ class BotState(TypedDict, total=False):
     record_streaks: dict[str, RecordStreakEntry]
     data_source_failures: dict[str, int]
     source_health: dict[str, SourceHealth]
+    credential_expiry: dict[str, CredentialExpiry]
     last_good_readings: dict[str, dict]
     publish_ledger: dict[str, dict]
     tweet_metrics: dict[str, TweetMetric]
