@@ -45,6 +45,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-18 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh precipitation_extreme drafts. Barrow AK (71.2 mm single-day, prior record 0.0 mm — B+): elite signal, over-packed sentence 2, P_close implied close ("any of it"). Amsterdam (314.4 mm / 7d, 4.8% above prior — B): thin margin, restate-math, P_close implied close ("stack up faster than they drain"). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. P_close 5th cycle. 22nd consecutive staleness skip. n=2. |
 | 2026-06-19 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty. All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z after prior grading window]). First operator rejection of a B+ graded draft (Barrow 71.2mm/prior 0.0mm). No proposal evidence updates. 23rd consecutive staleness skip. |
 | 2026-06-22 | 1 retro | 1 | 0 | 0 | 0 | **100%** | (n=1) | Retroactive grade: Barrow 7-day precip (A-) — flagged ungraded in Jun 19/21. "Has nowhere to go" = first precipitation_extreme declarative-consequence close (P_close positive evidence). Restate-math confirmed (P9 3rd cycle). Queue empty (4th consecutive day). 25th staleness skip. |
+| 2026-06-23 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | 3 fresh drafts (created Jun 22T17–19Z, after prior grading window). Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence; accelerating-warming + ecosystem specificity. Columbus GA all_time_high (B): 1°F margin, dual-mechanism second sentence, P_close 6th cycle failing. Mediterranean SST regional_sst_anomaly (B): comparative-implied close ("retains heat faster than open-ocean basins"), "today" staleness risk at Jun 24T17:12Z, unexplained NOAA 2.5°C threshold (A3 filed). 26th consecutive staleness skip. |
 | 2026-06-21 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty (~2.5d since last resolved drafts Jun 18). P_new archived (2nd time) — 3 consecutive cycles without cold-record: Jun 15/17/18. No evidence updates for P_close/P9/P_dust/P5. 24th consecutive staleness skip. |
 
 **Trend interpretation:**
@@ -55,6 +56,10 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-23 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (26th consecutive skip)
+
+**Status:** 0 pending drafts at runtime — bulk-reject policy not triggered. Mediterranean SST (`draft_20260622_171200_17`, created Jun 22T17:12Z, status=approved) contains "today" anchor; crosses the 48h staleness threshold at Jun 24T17:12Z. Policy applies to pending drafts — operator should post or reject before Jun 24T17:12Z. Columbus GA (`draft_20260622_170931_16`) and Cope Rch TX (`draft_20260622_193302_18`) are status=posted — not candidates. Chesnee SC (`draft_20260610_155509_26`, status=approved) references "June 6" as historical date — no real-time-baked language, not a candidate. `gh` CLI absent in remote execution environment — 26th consecutive skip (May 13 → Jun 23). No operator action needed before Jun 24T17:12Z.
 
 ### 2026-06-22 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (25th consecutive skip)
 

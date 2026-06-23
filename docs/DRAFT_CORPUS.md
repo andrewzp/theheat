@@ -13,6 +13,95 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-23 — Daily corpus grading (3 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts**; 2 approved. Three drafts created Jun 22 after the prior grading window (15:00 UTC): Cope Rch, Texas (all_time_high, created Jun 22T19:33Z); Columbus, Georgia (all_time_high, created Jun 22T17:09Z); Mediterranean Sea (regional_sst_anomaly, created Jun 22T17:12Z). All three are fresh to the corpus. Status "posted" = Cope Rch and Columbus (appear in gist as posted); status "approved" = Mediterranean SST (queued for posting).
+
+**Staleness review as of 2026-06-23 ~15:00 UTC:** Mediterranean SST (`draft_20260622_171200_17`) contains "today" — created Jun 22T17:12Z, ~22h old. Under 48h threshold; not a staleness candidate yet. Crosses threshold at Jun 24T17:12Z. Operator should post or reject before then. Chesnee SC (`draft_20260610_155509_26`, approved Jun 10) — references "June 6" as a historical record date; no "today" anchor; 13 days old — not a staleness candidate by policy. No bulk-reject candidates. `gh` CLI absent — **26th consecutive skip** (May 13 → Jun 23).
+
+**Grade distribution (3 fresh drafts):** 1 A / 2 B / 0 C / 0 D-F.
+**A-rate: 33% (1/3).** Gap from bar: 17 pp (n=3; meaningful but small).
+
+**Headline finding:** First all_time_high batch in two-bot corpus since Jun 15 retroactive. Cope Rch, Texas (118°F, 63yr) earns A-: accelerating-warming closer ("small shifts in that dry column push extremes fast") is the declarative-consequence form — P_close's first confirmed natural deployment in an all_time_high signal type. Columbus, Georgia (106°F, 29yr, 1°F margin): dual-mechanism second sentence, P_close failing instance. Mediterranean SST (regional_sst_anomaly debut): P_close failing instance + unexplained NOAA threshold reference (P_dust analog for SST category — see A3 in Awaiting Evidence). No Wodehouse violations, no restate-math.
+
+### A-grade drafts
+
+#### [1] Cope Rch, Texas — all_time_high — 118°F / 47.8°C — **A-**
+
+> *Cope Rch, Texas hit 118°F (47.8°C) on June 19 — hottest daily maximum in 63 years of records, 2°F above the 2023 mark. In the Chihuahuan Desert, continental air removes the moisture that buffers heat elsewhere; small shifts in that dry column push extremes fast.*
+
+Posted 2026-06-22T19:33Z.
+
+Humor lens:
+- **Violation:** 118°F (47.8°C), 63-year record, 2°F above 2023. The absolute temperature (118°F) is the headline; 63-year archive gives it weight; the thin margin (2°F) is offset by the extraordinary absolute value.
+- **Benign?** Yes. Factual register, no alarm.
+- **Setup→Punchline?** Sentence 1: 118°F + 63yr + 2°F above 2023. Sentence 2: Chihuahuan Desert mechanism → "small shifts in that dry column push extremes fast." The closer is causal and accelerating — it explains WHY Cope Rch sees these extremes, not just WHERE.
+- **Named mechanic?** Accelerating-warming ("small shifts push extremes fast") + ecosystem specificity (Chihuahuan Desert, continental air, absent moisture buffer). Two mechanics operating simultaneously without crowding the sentence.
+- **Wodehouse rule?** Clean. "2°F above the 2023 mark" — stated once, not belabored; the 2023 reference does not over-explain. "Continental air removes the moisture that buffers heat elsewhere" creates implicit comparison without spelling it out. "Push extremes fast" — declarative, direct, no poetry-attempt.
+- **P_close lens:** "small shifts in that dry column push extremes fast" is the declarative-consequence form. The writer named the consequence directly ("push extremes fast") rather than stopping at the mechanism or implying the consequence. Compare the P_close corpus: "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "has nowhere to go" (Barrow 7-day retro Jun 22). Cope Rch joins this list. **Second consecutive P_close positive evidence cycle (Barrow Jun 22 retro + Cope Rch Jun 23 fresh).**
+
+A- because 118°F carries independently of the 2°F thin margin. The 2023 mark (only 3 years ago) is not a dramatic prior record, but the draft doesn't belabor it — it moves to the mechanism that makes such extremes possible. The accelerating-warming closer elevates this from B+ (ecosystem specificity only) to A-.
+
+### B-grade drafts
+
+#### [2] Columbus, Georgia — all_time_high — 106°F / 41.1°C — **B**
+
+> *Columbus, Georgia hit 106°F (41.1°C) on June 20 — hottest daily maximum in 29 years of records, 1°F above the 2012 mark. The Chattahoochee River valley funnels Gulf heat northward while the surrounding Piedmont topography limits the sea-breeze relief that tempers coastal Georgia.*
+
+Posted 2026-06-22T17:09Z.
+
+Humor lens:
+- **Violation:** 106°F, 29-year record, 1°F above 2012. Real signal; thin margin.
+- **Benign?** Yes.
+- **Setup→Punchline?** Sentence 2: two competing mechanisms — (1) Chattahoochee valley funnels Gulf heat + (2) Piedmont topography limits sea-breeze relief. Neither is wrong; together they over-explain without sharpening the landing.
+- **Named mechanic?** Ecosystem specificity — dual mechanism. But P_close: the consequence is implied. "Funnels Gulf heat northward... limits the sea-breeze relief that tempers coastal Georgia" describes the causal chain; the consequence (Columbus sits in an unusual heat trap) is not named.
+- **Wodehouse rule?** "1°F above the 2012 mark" — thin margin, stated once, not belabored. Sentence 2 is slightly effortful: three geographic actors (Chattahoochee, Gulf, Piedmont) in one sentence. The A-grade form picks one causal vector.
+- **P_close lens:** Dual-mechanism close without a terminal declarative consequence. "The sea-breeze relief that tempers coastal Georgia" describes what's absent, but doesn't name what happens as a result. Declarative forms: "Gulf heat pools here, no coastal relief available" / "Columbus has no sea breeze escape." Confirmed P_close 6th cycle.
+
+B because 1°F margin is thin and the dual-mechanism sentence works harder than it lands. Compare Cope Rch: single mechanism + declarative accelerating-warming closer = A-. Columbus: dual mechanism + implied consequence = B.
+
+#### [3] Mediterranean Sea — regional_sst_anomaly — 2.66°C above climatological mean — **B**
+
+> *The Mediterranean Sea is running 2.66°C above its climatological mean today — past the 2.5°C tier threshold in NOAA CRW's basin-wide anomaly index. A semi-enclosed sea with limited Atlantic exchange retains heat faster than open-ocean basins of comparable size.*
+
+Approved 2026-06-22T17:12Z; not yet posted. First regional_sst_anomaly in the corpus.
+
+Humor lens:
+- **Violation:** 2.66°C above climatological mean, past 2.5°C tier. The NOAA CRW basin-wide anomaly index is cited but not explained.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 2.66°C, past 2.5°C threshold. Sentence 2: semi-enclosed sea + limited Atlantic exchange + "retains heat faster than open-ocean basins of comparable size." Comparative rather than declarative.
+- **Named mechanic?** Ecosystem specificity: semi-enclosed sea, limited exchange. The mechanism is correct. But P_close: "retains heat faster than open-ocean basins of comparable size" is the comparative/implied form — the consequence (faster warming, sustained extreme anomalies, higher bleaching risk) is not stated.
+- **Wodehouse rule?** "today" anchor dates the draft (staleness risk — see below). "of comparable size" hedges the comparison. "2.5°C tier threshold in NOAA CRW's basin-wide anomaly index" is inside-baseball for most readers.
+- **P_close lens:** "retains heat faster than open-ocean basins of comparable size" — comparative close without naming the consequence. Declarative form: "the Mediterranean holds heat in — limited Atlantic exchange means no flush" / "sea surface temperatures here don't reset the way open ocean basins do." Confirmed P_close 6th cycle.
+- **Calibration gap (P_dust analog):** "2.5°C tier threshold in NOAA CRW's basin-wide anomaly index" — the reader cannot calibrate what 2.5°C means for a basin-wide anomaly without a reference frame. Compare to P_dust's WHO multiple: the calibrating anchor is always available as world knowledge. For SST anomaly: "2.5°C above climatological mean places the Mediterranean at approximately its 90th percentile of recent anomalies" or similar. See A3 added to Awaiting Evidence.
+
+B because the mechanism is correct and the ecosystem specificity is real, but P_close (comparative form, not declarative), unexplained threshold jargon, and "today" staleness risk all cap the grade. A tighter version: "The Mediterranean doesn't flush the way open basins do — 2.66°C above the climatological mean, with limited Atlantic exchange to draw it down."
+
+**⚠️ Staleness flag:** "today" anchors this to Jun 22. Crosses 48h threshold at Jun 24T17:12Z. Operator should post or reject before then.
+
+### Patterns named in this batch
+
+1. **P_close natural deployment on strongest signal.** Cope Rch TX earns A- using the declarative-consequence form ("push extremes fast") without explicit prompt instruction. Two consecutive positive-evidence cycles (Barrow 7-day Jun 22 retro: "has nowhere to go"; Cope Rch Jun 23: "push extremes fast"). The fix is landing organically on the highest-signal drafts — consistent with P_close's prediction that the model CAN reach the declarative form; it needs prompting to default there rather than stopping at mechanism.
+
+2. **Dual mechanism = B ceiling (confirmed again).** Columbus GA: two mechanisms (valley funneling + topographic sea-breeze block) in one sentence, neither consequence named. Same pattern as May 18 Galapagos coral (conditional close vs. A-grade Madagascar declarative). Pick one causal vector; name its consequence.
+
+3. **Regional_sst_anomaly debut: mechanism correct, calibration gap.** Mediterranean SST's mechanism (semi-enclosed, limited exchange) is right. But "2.5°C tier threshold in NOAA CRW's basin-wide anomaly index" is jargon without context. Same gap as P_dust (PM2.5 without WHO multiple). One draft — too thin for a proposal, but see A3.
+
+4. **No Wodehouse violations; no restate-math.** Clean across all 3 drafts. WRITER_SAMPLES=2 + CRITIC_REVISE appears to be screening these out effectively.
+
+5. **P9/P_dust not observable (correct signal absence).** No precipitation_extreme or dust_event drafts this cycle — can't test template convergence or WHO calibration.
+
+### Numbers
+
+- Pending drafts in queue: 0
+- Fresh drafts graded: 3 (Cope Rch TX A-, Columbus GA B, Mediterranean SST B)
+- A-rate: 33% (1/3); n=3
+- Active proposal evidence: P_close confirmed 6th cycle (Columbus GA + Mediterranean SST failing; Cope Rch positive). P9/P_dust/P5: N/A this cycle (no precipitation_extreme, dust, fire, or hot10 drafts).
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (26th consecutive skip, May 13 → Jun 23). Note: Mediterranean SST ("today" anchor) crosses 48h threshold at Jun 24T17Z.
+- Approved drafts not yet graded here (already graded in prior entries): Chesnee SC (A-, Jun 15 retroactive entry).
+
+---
+
 ## 2026-06-22 — Daily corpus grading (0 pending; 1 retroactive grade)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts** — queue still empty, same as Jun 21. No new drafts since Jun 18T15:43Z (~3.5 days). Barrow 7-day precipitation_extreme (draft_20260618_154318_15, created Jun 18T15:43Z, rejected Jun 18T19:42Z) was flagged "ungraded" in the Jun 19 and Jun 21 entries — its text is now available from gist history and is graded here retroactively.
