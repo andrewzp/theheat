@@ -117,6 +117,7 @@ test("dashboard API hydrates page data with one state read and one workflow read
     const payload = await response.json()
     assert.equal(payload.stateBackend, "gist")
     assert.deepEqual(Object.keys(payload.state).sort(), [
+      "credential_expiry",
       "daily_tweet_count",
       "errors",
       "last_hot10",

@@ -103,6 +103,9 @@ DEFAULT_STATE: BotState = {
     # Populated from alert run telemetry so every source row gets a durable
     # health observation, not just the last 20-run dashboard window.
     "source_health": {},
+    # Derived expiry per tracked credential (dashboard counter). Holds only the
+    # expiry date, never the token; recomputed each run from the environment.
+    "credential_expiry": {},
     # Compact last-good readings for slow-moving sources. Each entry is a
     # derived detector input, never raw fetched rows.
     "last_good_readings": {},
@@ -1744,6 +1747,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "city_monthly_min": _strat_take_incoming,
     "record_streaks": _strat_take_incoming,
     "source_health": _merge_source_health,
+    "credential_expiry": _strat_take_incoming,
     "last_good_readings": _merge_last_good,
     "publish_ledger": _strat_dict_overlay,
     "tweet_metrics": _merge_tweet_metrics,
