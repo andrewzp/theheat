@@ -46,6 +46,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-19 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty. All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z after prior grading window]). First operator rejection of a B+ graded draft (Barrow 71.2mm/prior 0.0mm). No proposal evidence updates. 23rd consecutive staleness skip. |
 | 2026-06-22 | 1 retro | 1 | 0 | 0 | 0 | **100%** | (n=1) | Retroactive grade: Barrow 7-day precip (A-) — flagged ungraded in Jun 19/21. "Has nowhere to go" = first precipitation_extreme declarative-consequence close (P_close positive evidence). Restate-math confirmed (P9 3rd cycle). Queue empty (4th consecutive day). 25th staleness skip. |
 | 2026-06-23 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | 3 fresh drafts (created Jun 22T17–19Z, after prior grading window). Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence; accelerating-warming + ecosystem specificity. Columbus GA all_time_high (B): 1°F margin, dual-mechanism second sentence, P_close 6th cycle failing. Mediterranean SST regional_sst_anomaly (B): comparative-implied close ("retains heat faster than open-ocean basins"), "today" staleness risk at Jun 24T17:12Z, unexplained NOAA 2.5°C threshold (A3 filed). 26th consecutive staleness skip. |
+| 2026-06-24 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh drafts. Randolph UT monthly_high B+ (134yr archive, ecosystem specificity "normally blunts" — P_close 7th cycle failing, implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard B (10.1× WHO stated, shamal mechanism — P_close 7th cycle failing, resolution-close subtype "by evening"; P_dust positive: WHO ratio present unlike dust_event drafts). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. 27th consecutive staleness skip. |
 | 2026-06-21 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty (~2.5d since last resolved drafts Jun 18). P_new archived (2nd time) — 3 consecutive cycles without cold-record: Jun 15/17/18. No evidence updates for P_close/P9/P_dust/P5. 24th consecutive staleness skip. |
 
 **Trend interpretation:**
@@ -56,6 +57,18 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-24 — Staleness bulk-reject: 0 qualifying candidates; gh CLI absent (27th consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Draft [1] (Randolph UT monthly_high, created
+2026-06-24T07:46:05Z) — "June 20" is a historical record date, no real-time-baked
+language. Not a staleness candidate. Draft [2] (Al Aḥmadī Kuwait air_quality_hazard,
+created 2026-06-24T14:50:41Z) — contains "June 24." < 48h old at grading time; not a
+staleness candidate yet. **Operator: Draft [2] crosses 48h threshold ~Jun 26T14:50 UTC
+— post or reject before then.** Mediterranean SST (`draft_20260622_171200_17`, status=
+approved) is ~46h old at grading time (~15:00 UTC), crossing 48h at ~Jun 24T17:12 UTC.
+**Operator: post or reject Mediterranean SST within ~2h of this run.** `gh` CLI absent —
+27th consecutive skip (May 13 → Jun 24).
 
 ### 2026-06-23 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (26th consecutive skip)
 
