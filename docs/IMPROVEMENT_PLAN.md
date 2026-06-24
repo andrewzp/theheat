@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 24: 2 fresh drafts (0% A-rate).** Randolph UT monthly_high (B+): ecosystem specificity "normally blunts" = P_close 7th cycle failing (implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard (B): 10.1× WHO ratio stated (P_dust POSITIVE), closes on system resolution "by evening" = P_close 7th cycle failing (resolution-close subtype). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. Mediterranean SST `draft_20260622_171200_17` crosses 48h at ~Jun 24T17:12 UTC — operator must post/reject within ~2h of this run. `gh` CLI absent (27th consecutive skip).
+>
 > **Jun 23: 3 fresh drafts (33% A-rate).** Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence. Columbus GA all_time_high (B): 1°F margin, dual-mechanism. Mediterranean SST regional_sst_anomaly (B): comparative-implied close + unexplained NOAA 2.5°C threshold (A3 filed). P_close 6th cycle: Columbus + Mediterranean = failing; Cope Rch = positive. `gh` CLI absent (26th consecutive staleness skip). Mediterranean SST "today" anchor → staleness at Jun 24T17:12Z.
 >
 > **Jun 22: 0 pending; 1 retroactive grade.** Barrow 7-day precip (draft_20260618_154318_15, created Jun 18T15:43Z, flagged ungraded in Jun 19/21) graded A-. "Has nowhere to go" = first precipitation_extreme declarative-consequence close — P_close positive evidence (validates the fix, not a failing observation). Restate-math confirmed: P9 now 3 cycles (all 3 precipitation_extreme corpus drafts). Queue empty 4th consecutive day. `gh` CLI absent (25th consecutive staleness skip).
@@ -33,12 +35,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **33% (1/3, Jun 23)** — Cope Rch TX A-, Columbus GA B, Mediterranean SST B. Prior: 100% Jun 22 [n=1 retro]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
+| Last cycle A-rate | **0% (0/2, Jun 24)** — Randolph UT B+, Al Aḥmadī Kuwait B. Prior: 33% Jun 23 [1/3]; 100% Jun 22 [n=1 retro]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **17 pp** (50% − 33%, n=3 Jun 23); Jun 18 last multi-draft cycle: 50 pp (0%); Jun 15 retro: −17 pp (above bar) |
+| Gap | **50 pp** (50% − 0%, n=2 Jun 24); Jun 23: 17 pp (33%); Jun 15 retro: −17 pp (above bar) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **0 pending; 2 approved** (Mediterranean SST regional_sst_anomaly `draft_20260622_171200_17` — "today" anchor, staleness threshold Jun 24T17:12Z; Chesnee SC monthly_low `draft_20260610_155509_26`). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **2 pending** (Randolph UT monthly_high B+, created Jun 24T07:46Z; Al Aḥmadī Kuwait air_quality_hazard B, created Jun 24T14:50Z — "June 24" date-baked, stale by Jun 26T14:50Z). ⚠️ Mediterranean SST `draft_20260622_171200_17` (approved) crosses 48h staleness at Jun 24T17:12Z — operator must act within ~2h of this run. Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -257,8 +259,9 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 6 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
-Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing, Cope Rch TX positive).
+**Cycles observed:** 7 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
+Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -267,7 +270,15 @@ consequence (strong A- form, closest to A). Kapingamarangi/Gilbert Islands/Chesn
 implied-consequence structure. Nauru (A): "no adjacent reef system to reseed it" — declarative
 structural consequence, no hedge. Validates P_close gap: Nauru's direct form earns A; the A-
 drafts stop one step short.
-**Last seen:** Jun 23 (Cope Rch TX: "small shifts in that dry column push extremes fast" — declarative consequence, P_close POSITIVE evidence, A-; Columbus GA: 1°F thin margin + dual-mechanism close, B; Mediterranean SST: "retains heat faster than open-ocean basins of comparable size" — comparative-implied form, B).
+Jun 24: Randolph UT monthly_high B+ ("normally blunts the heat" = implied-consequence form; new
+signal type confirms cross-category scope). Al Aḥmadī Kuwait air_quality_hazard B ("before sea
+breezes suppress them by evening" = resolution-close subtype — close actively defuses the
+violation by naming the system's natural recovery, not just implying consequence). P_close now
+confirmed across 7 signal types: precipitation_extreme, monthly_low, coral, fire, all_time_high,
+monthly_high, air_quality_hazard.
+**Last seen:** Jun 24 (Randolph UT: "normally blunts" — implied-consequence B+ form; Al Aḥmadī:
+"by evening" — resolution-close subtype B form; both failing. Jun 23 Cope Rch TX: "push extremes
+fast" — declarative-consequence A- form, positive evidence).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -339,12 +350,15 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 15 (partial: hot10 closer uses abstract "signature of a system under
-broad, simultaneous pressure" where a specific consequence was available; dust_event
-mechanism description overshoots its best image. Record/coral categories deployed named
-mechanics organically — suppression-failure, ecosystem isolation, atmospheric amplification
-all present without explicit prompting. Core P5 concern holds for fire/hot10/dust categories;
-less evidenced for coral/record which already self-select strong mechanics.)
+**Last seen:** Jun 24 (partial: Al Aḥmadī Kuwait air_quality_hazard uses geography/mechanism
+explanation only — no named humor move beyond ecosystem geography; "routinely" tension
+[10.1× WHO + "routinely loft fine desert dust"] available but unexploited. Jun 15: hot10
+closer uses abstract "signature of a system under broad, simultaneous pressure" where a
+specific consequence was available; dust_event mechanism description overshoots its best
+image. Record/coral categories deployed named mechanics organically — suppression-failure,
+ecosystem isolation, atmospheric amplification all present without explicit prompting. Core
+P5 concern holds for fire/hot10/dust/air_quality categories; less evidenced for coral/record
+which already self-select strong mechanics.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),

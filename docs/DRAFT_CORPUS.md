@@ -13,6 +13,140 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-24 — Daily corpus grading (2 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts
+— both fresh (not previously graded). First multi-draft cycle since Jun 23 (1 day). First
+`air_quality_hazard` type in the corpus.
+
+**Staleness review as of 2026-06-24 ~15:00 UTC:** Draft [1] (Randolph UT, created
+2026-06-24T07:46:05Z) — "June 20" is a historical record date, past-tense framing ("hit").
+Not stale. Draft [2] (Al Aḥmadī Kuwait, created 2026-06-24T14:50:41Z) — contains "June
+24" (present-day anchor). < 48h old; not stale now. **Operator note: Draft [2] becomes a
+staleness candidate at ~2026-06-26T14:50 UTC.** Bulk-reject: 0 qualifying candidates this
+cycle. `gh` CLI absent — **27th consecutive skip** (May 13 → Jun 24).
+
+**Note on Mediterranean SST staleness:** Previous cycle (Jun 23) flagged
+`draft_20260622_171200_17` staleness threshold at Jun 24T17:12Z. This run is at ~15:00 UTC
+— the draft is ~46h old. Not yet past 48h at grading time; operator should post or reject
+within ~2h of this run completing.
+
+**Grade distribution (2 fresh drafts):** 0 A / 2 B (1 B+ / 1 B) / 0 C / 0 D-F.
+**A-rate: 0% (0/2).** Gap from resumption bar: 50 pp.
+
+**Headline finding:** Both drafts confirm P_close for the 7th cycle across two new signal
+types (monthly_high, air_quality_hazard). Randolph Utah earns B+ on 134-year archive +
+ecosystem specificity but closes with the classic P_close implied form ("normally blunts").
+Al Aḥmadī Kuwait earns B on 10.1× WHO ratio + shamal mechanism but closes on the system
+resolution ("by evening") — a P_close subtype where the close actively defuses the
+violation rather than implying it. First air_quality_hazard in the corpus.
+
+### B-grade drafts
+
+#### [1] Randolph, Utah — monthly_high — 93°F / 33.9°C — **B+**
+
+> *Randolph, Utah hit 93°F (33.9°C) on June 20 — hottest June daily maximum in 134 years
+> of records, 1°F above the 2013 mark. At 6,300 feet in the Bear River Range foothills,
+> the valley's high-desert elevation normally blunts the heat that builds across the Great
+> Basin floor.*
+
+**Score:** 80. Created 2026-06-24T07:46:05Z.
+
+Humor lens:
+- **Violation:** 93°F at 6,300 feet — hottest June daily max in 134 years. Strong archive
+  depth. 1°F margin above 2013 — thin margin but real record.
+- **Benign?** Yes — factual, calm.
+- **Setup→Punchline?** Setup: 93°F, 134-year record, 1°F above 2013. System clause: "the
+  valley's high-desert elevation normally blunts the heat that builds across the Great
+  Basin floor." The word "normally" sets up the implied contrast — and yet, June 20. The
+  punchline is in the reader's inference, not stated.
+- **Named mechanic?** Ecosystem specificity: 6,300-foot elevation as heat buffer against
+  Great Basin intrusions. Load-bearing — explains why a 93°F June reading at this elevation
+  is remarkable.
+- **Wodehouse rule?** "1°F above the 2013 mark" is mild restate-math — the year (2013) is
+  useful context; the 1°F margin is derivable. Not a violation. "normally blunts the heat"
+  — doing real work (sets up the contrast), not an effort signal.
+
+**P_close FAILING (7th cycle, monthly_high).** "normally blunts the heat that builds
+across the Great Basin floor" = mechanism with implied consequence. A- form: "At 6,300
+feet, the valley's high-desert elevation normally blunts Great Basin heat. It didn't."
+The fix stated in P_close's proposal — "name the consequence directly, don't stop at the
+mechanism" — applies cleanly here.
+
+Thin margin note: 1°F above 2013 (13 years ago). The archive is 134 years deep but the
+contested value was recent. Doesn't change the grade — the record is real — but limits
+urgency for the reader.
+
+#### [2] Al Aḥmadī, Kuwait — air_quality_hazard — 152.1 μg/m³ PM2.5 — **B**
+
+> *Al Aḥmadī, Kuwait: model-estimated 24-hour mean PM2.5 of 152.1 μg/m³ on June 24 —
+> 10.1× the WHO daily guideline. Kuwait sits at the head of the Arabian Gulf, where summer
+> shamal winds routinely loft fine desert dust before sea breezes suppress them by evening.*
+
+**Score:** 74. Created 2026-06-24T14:50:41Z.
+
+Humor lens:
+- **Violation:** 10.1× the WHO daily guideline — unambiguous extreme. WHO ratio IS stated
+  (positive vs. P_dust's observation that dust_event drafts omit the WHO anchor entirely).
+- **Benign?** Yes — factual, mechanism-explained.
+- **Setup→Punchline?** Setup: 152.1 μg/m³, 10.1× WHO guideline. System clause: shamal
+  winds loft dust, sea breezes suppress by evening. The close lands on "by evening" — the
+  RESOLUTION of the event, not the violation. The reader exits thinking "this clears up,"
+  not "10.1×."
+- **Named mechanic?** Ecosystem geography: head-of-Arabian-Gulf position + shamal/sea-breeze
+  interplay. Load-bearing and specific. No additional humor move deployed.
+- **Wodehouse rule?** Three-clause second sentence. Not an effort signal per se, but the
+  "before sea breezes suppress them by evening" close actively defuses the violation — a
+  P_close subtype (resolution close) where the system self-corrects rather than implying
+  "but not this time." "Routinely" creates available incongruity (10.1× = routine?) that
+  the draft does not exploit.
+
+**P_close FAILING (7th cycle, air_quality_hazard) — resolution-close subtype.** More
+aggressive defuser than implied-consequence form: "by evening" tells the reader the
+problem ends, canceling the extreme reading. Fix: trim "before sea breezes suppress them
+by evening." Close becomes: "Kuwait sits at the head of the Arabian Gulf, where summer
+shamal winds routinely loft fine desert dust." The "routinely" does the work.
+
+**P_dust POSITIVE (new type).** Unlike Riyadh/Urumqi dust_event drafts, Al Aḥmadī states
+the WHO multiple (10.1×). The ratio IS the calibrating anchor P_dust calls for. This
+signal type (air_quality_hazard) does not reproduce the P_dust failure; it reproduces
+P_close instead.
+
+**First air_quality_hazard type in corpus.** "Model-estimated" qualifier is honest but
+weakens the signal's authority. "June 24" date-baked — staleness candidate ~Jun
+26T14:50 UTC.
+
+### Patterns named in this batch
+
+1. **P_close 7th cycle — two new signal types.** Randolph Utah (monthly_high) + Al Aḥmadī
+   (air_quality_hazard) both confirm P_close. The pattern now spans: precipitation_extreme,
+   monthly_low, coral, fire, all_time_high (partial), monthly_high, air_quality_hazard.
+   Cross-category confirmation is the strongest possible evidence: the close-landing gap is
+   not category-specific, it's structural. P_close fix (one sentence in writer_prompt.py)
+   would lift all these categories simultaneously.
+
+2. **Resolution-close subtype.** Al Aḥmadī's "by evening" is a specific P_close variant:
+   the close names the natural resolution of the phenomenon, not just a mechanism. Barrow's
+   "any of it" and Amsterdam's "stack up faster than they drain" implied consequence without
+   resolving it. Al Aḥmadī resolves it actively. The scale of the defuser: "by evening"
+   = the 10.1× problem ends tonight. Trim to before the resolution clause.
+
+3. **"Routinely" as unexploited incongruity.** 10.1× WHO + "routinely loft fine desert
+   dust" — the extreme IS the routine. The draft doesn't land this tension. Potential: end
+   second sentence on "routinely loft fine desert dust" and let "routinely" + "10.1× WHO"
+   in sentence 1 create the joke: routine = 10.1× the guideline.
+
+4. **P_dust positive evidence in air_quality_hazard.** The WHO multiple IS stated (10.1×),
+   unlike Riyadh/Urumqi dust_event drafts. The air_quality_hazard pipeline may have better
+   WHO-anchor prompting than dust_event. If next dust_event drafts also include the WHO
+   anchor, P_dust may need to narrow scope (dust_event specifically) rather than apply to
+   all PM-type signals.
+
+5. **Draft [2] staleness clock running.** "June 24" = staleness candidate at ~Jun
+   26T14:50 UTC. Operator must post or reject before then.
+
+---
+
 ## 2026-06-23 — Daily corpus grading (3 fresh drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: **0 pending drafts**; 2 approved. Three drafts created Jun 22 after the prior grading window (15:00 UTC): Cope Rch, Texas (all_time_high, created Jun 22T19:33Z); Columbus, Georgia (all_time_high, created Jun 22T17:09Z); Mediterranean Sea (regional_sst_anomaly, created Jun 22T17:12Z). All three are fresh to the corpus. Status "posted" = Cope Rch and Columbus (appear in gist as posted); status "approved" = Mediterranean SST (queued for posting).
