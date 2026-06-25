@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 25: 5 fresh drafts (0% A-rate).** P_close 8th cycle: 3 failing (Taiz dust_event ×2 + Michigan monthly_low), 2 positive (Siberia fire "burns deep" + Barrow "nearly twice that total"). P_dust 3rd cycle: both Taiz dust_event drafts lack WHO anchor; all 4 dust_event corpus drafts template-converged. P9 5th precipitation_extreme (Barrow, same opener template + restate-math). First companion-fire peer comparison in fire corpus. "Roughly"/"nearly" hedges cost Barrow A-; date-baking ("today"/"same day") costs Siberia A-. `gh` CLI absent (28th consecutive skip).
+>
 > **Jun 24: 2 fresh drafts (0% A-rate).** Randolph UT monthly_high (B+): ecosystem specificity "normally blunts" = P_close 7th cycle failing (implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard (B): 10.1× WHO ratio stated (P_dust POSITIVE), closes on system resolution "by evening" = P_close 7th cycle failing (resolution-close subtype). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. Mediterranean SST `draft_20260622_171200_17` crosses 48h at ~Jun 24T17:12 UTC — operator must post/reject within ~2h of this run. `gh` CLI absent (27th consecutive skip).
 >
 > **Jun 23: 3 fresh drafts (33% A-rate).** Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence. Columbus GA all_time_high (B): 1°F margin, dual-mechanism. Mediterranean SST regional_sst_anomaly (B): comparative-implied close + unexplained NOAA 2.5°C threshold (A3 filed). P_close 6th cycle: Columbus + Mediterranean = failing; Cope Rch = positive. `gh` CLI absent (26th consecutive staleness skip). Mediterranean SST "today" anchor → staleness at Jun 24T17:12Z.
@@ -35,12 +37,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/2, Jun 24)** — Randolph UT B+, Al Aḥmadī Kuwait B. Prior: 33% Jun 23 [1/3]; 100% Jun 22 [n=1 retro]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
+| Last cycle A-rate | **0% (0/5, Jun 25)** — Siberia fire B+, Barrow AK B+, Michigan monthly_low B, Taiz Jun 25 B-, Taiz Jun 24 C+. Prior: 0% Jun 24 [0/2]; 33% Jun 23 [1/3]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=2 Jun 24); Jun 23: 17 pp (33%); Jun 15 retro: −17 pp (above bar) |
+| Gap | **50 pp** (50% − 0%, n=5 Jun 25); Jun 24: 50 pp (0/2); Jun 23: 17 pp (33%) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **2 pending** (Randolph UT monthly_high B+, created Jun 24T07:46Z; Al Aḥmadī Kuwait air_quality_hazard B, created Jun 24T14:50Z — "June 24" date-baked, stale by Jun 26T14:50Z). ⚠️ Mediterranean SST `draft_20260622_171200_17` (approved) crosses 48h staleness at Jun 24T17:12Z — operator must act within ~2h of this run. Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **5 pending** (Taiz Jun 24 C+ created Jun 24T21:30Z — date-baked, stale by Jun 26T21:30Z ⚠️; Nw Michigan Rsch Farm B created Jun 25T03:46Z; Taiz Jun 25 B- created Jun 25T07:48Z — date-baked, stale by Jun 27T07:48Z ⚠️; Siberia fire B+ created Jun 25T10:46Z — date-baked, stale by Jun 27T10:46Z ⚠️; Barrow AK B+ created Jun 25T14:45Z). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -259,9 +261,10 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 7 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+**Cycles observed:** 8 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
 Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
-Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing).
+Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing; Jun 25 Taiz ×2 +
+Michigan monthly_low failing, Siberia fire + Barrow precip positive).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -276,9 +279,14 @@ breezes suppress them by evening" = resolution-close subtype — close actively 
 violation by naming the system's natural recovery, not just implying consequence). P_close now
 confirmed across 7 signal types: precipitation_extreme, monthly_low, coral, fire, all_time_high,
 monthly_high, air_quality_hazard.
-**Last seen:** Jun 24 (Randolph UT: "normally blunts" — implied-consequence B+ form; Al Aḥmadī:
-"by evening" — resolution-close subtype B form; both failing. Jun 23 Cope Rch TX: "push extremes
-fast" — declarative-consequence A- form, positive evidence).
+Jun 25: Siberia fire B+ ("burns deep" = declarative-consequence, peatland-carbon close, P_close
+POSITIVE). Barrow AK B+ ("delivered nearly twice that total" = declarative annual-ratio, P_close
+POSITIVE). Michigan monthly_low B ("cold air finds less land friction to slow it down" = mechanism-
+only, failing). Taiz Jun 24 C+ ("pushing it into the terrain" = weakest mechanism close in corpus,
+failing). Taiz Jun 25 B- ("push it upslope into the city basin" = transport mechanism, failing).
+P_close now confirmed across 8 signal types (adding dust_event to the prior 7).
+**Last seen:** Jun 25 (Siberia "burns deep" + Barrow "nearly twice that total" = positive; Taiz
+×2 + Michigan = failing. Jun 23 Cope Rch TX "push extremes fast" = most recent prior positive).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -301,6 +309,52 @@ The one A in the batch (Nauru) uses the declarative form directly.
 **Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal:
 4 cycles of evidence (Jun 7/10/13/15), 5+ drafts, same gap to A across signal types.
 
+### P_dust — Dust_event drafts lack calibrating comparison anchor
+
+**Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
+reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
+guideline (15 μg/m³) and ≈ 46× the WHO PM10 guideline (45 μg/m³) — an extraordinary
+number that lands flat because the reference is unstated. Draft also includes aerosol
+optical depth (0.61) the reader cannot calibrate. Second sentence ends on dispersal
+("before heat-driven turbulence disperses it") — resolution of the mechanism, not
+consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
+multiple is always available as world knowledge regardless.
+
+**Cycles observed:** Jun 13, Jun 17, Jun 25 (3 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
+Urumqi 2,260 μg/m³; Jun 25 = Taiz Jun 24 2,271 μg/m³ C+ + Taiz Jun 25 2,135 μg/m³ B- — all 4
+dust_event corpus drafts lack WHO calibration anchor). Jun 15 retroactive confirmed the
+reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
+**Template convergence confirmed:** all 4 dust_event corpus drafts share identical opener
+structure ("[City]: model-estimated dust daily maximum of X µg/m³ on [date] — aerosol optical
+depth at Y.") and AOD-only metric. Jun 24's Al Aḥmadī Kuwait (air_quality_hazard) stated the
+WHO multiple (10.1×) — confirming the gap is specific to the dust_event signal type, not the
+PM signal path generally.
+**Last seen:** Jun 25. Taiz Jun 24 C+ ("pushing it into the terrain" = weakest close in corpus).
+Taiz Jun 25 B- ("push it upslope into the city basin" = transport mechanism, also failing P_close).
+Both lack WHO anchor. Urumqi "traps it" close remains the best dust_event close form; ceiling B-
+only because the WHO anchor is absent.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+dust_event / air_quality framing section:
+
+> For `dust_event` or `air_quality` signals, the WHO PM2.5 daily guideline (15 μg/m³) is
+> always available as world knowledge — it requires no archive data. State the multiple.
+> "Riyadh: 2,083 μg/m³ on June 13 — 139× the WHO daily limit" is the natural form. Do NOT
+> include aerosol optical depth as a standalone metric unless you state what it means to a
+> lay reader (>0.4 = hazy-to-hazardous; >1.0 = extreme). The second sentence should land
+> a consequence, not describe dispersal — describing how dust clears is anti-climactic.
+> Note: if the signal is model-estimated and no historical comparison is available, the WHO
+> multiple IS the comparison. Use it.
+
+**Expected impact:** Transforms dust_event drafts from opaque-number reports into
+calibrated-violation framing. The WHO multiple is derivable from any bundle value — no
+archive needed. One paragraph addition; no architectural change. Also applies to air_quality
+(PM2.5/dust) signal type from the @extremetemps coverage lane. Verify whether
+`writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
+
+**Status:** Drafted. First dust_event in corpus (Jun 13). 3 cycles confirmed (Jun 13/17/25);
+template convergence 4 of 4. Awaiting human implementation.
+
 ### P9 — precipitation_extreme opener template convergence + restate-math
 
 **Observed:** 2026-06-18 — 2 of 2 fresh precipitation_extreme drafts share the same sentence-1
@@ -313,9 +367,13 @@ appearing after just 3 drafts.
 
 **Cycles observed:** Jun 7 (1 draft, restate-math; template baseline); Jun 18 (2 drafts, template
 + restate-math in Amsterdam); Jun 22 retroactive (Barrow 7-day: "127.5 mm above the previous 7-day
-record of 300.0 mm" — P9 restate-math; also template convergence confirmed: all 3 precipitation_extreme
-corpus drafts share the "[City] received/recorded X mm in [timeframe] — [comparison]" structure).
-**Last seen:** 2026-06-22. Note: 3 of 3 precipitation_extreme corpus drafts have restate-math. Convergence confirmed.
+record of 300.0 mm" — P9 restate-math; template convergence confirmed: all 3 prior
+precipitation_extreme corpus drafts share the "[City] received/recorded X mm in [timeframe] —
+[comparison]" structure); Jun 25 (Barrow AK 213.8 mm/3-day B+: "beating the previous 3-day record
+by 63.8 mm" = restate-math; opener "Barrow, Alaska accumulated 213.8 mm of rain in 3 days" —
+same structure, verb varies "accumulated" vs. prior "received/recorded").
+**Last seen:** 2026-06-25. 5 of 5 precipitation_extreme corpus drafts share the opener template;
+4 of 5 have restate-math. Same-event regeneration (Barrow Jun 7 B+ and Jun 25 B+, identical data).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 precipitation_extreme framing section (or general record guidance): burn the default opener. Name
@@ -350,15 +408,11 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 24 (partial: Al Aḥmadī Kuwait air_quality_hazard uses geography/mechanism
-explanation only — no named humor move beyond ecosystem geography; "routinely" tension
-[10.1× WHO + "routinely loft fine desert dust"] available but unexploited. Jun 15: hot10
-closer uses abstract "signature of a system under broad, simultaneous pressure" where a
-specific consequence was available; dust_event mechanism description overshoots its best
-image. Record/coral categories deployed named mechanics organically — suppression-failure,
-ecosystem isolation, atmospheric amplification all present without explicit prompting. Core
-P5 concern holds for fire/hot10/dust/air_quality categories; less evidenced for coral/record
-which already self-select strong mechanics.)
+**Last seen:** Jun 25 (partial: Siberia fire B+ deployed peatland carbon as named mechanic
+organically + companion-fire peer comparison; Barrow B+ used annual-precipitation ratio as
+consequence framing without explicit prompting. Michigan monthly_low B and Taiz dust_event ×2
+show no named humor moves beyond mechanism explanation. Same pattern as prior cycles: fire/precip
+categories self-select mechanics; dust_event/monthly_low categories do not.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -375,44 +429,6 @@ has a coral-specific named-moves section before implementing.
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
 `src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. Jun 15 retroactive
 extends evidence to fire/hot10/dust categories; coral/record categories may not need it.
-
-### P_dust — Dust_event drafts lack calibrating comparison anchor
-
-**Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
-reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
-guideline (15 μg/m³) and ≈ 46× the WHO PM10 guideline (45 μg/m³) — an extraordinary
-number that lands flat because the reference is unstated. Draft also includes aerosol
-optical depth (0.61) the reader cannot calibrate. Second sentence ends on dispersal
-("before heat-driven turbulence disperses it") — resolution of the mechanism, not
-consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
-multiple is always available as world knowledge regardless.
-
-**Cycles observed:** Jun 13, Jun 17 (2 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
-Urumqi 2,260 μg/m³ — both lack WHO calibration anchor). Jun 15 retroactive confirmed
-the reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
-**Last seen:** Jun 17. Urumqi also uses "traps it" close (declarative consequence, correct
-direction) — the grade ceiling is B- only because the WHO anchor is absent. P_dust fix
-would land it at A-.
-
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-dust_event / air_quality framing section:
-
-> For `dust_event` or `air_quality` signals, the WHO PM2.5 daily guideline (15 μg/m³) is
-> always available as world knowledge — it requires no archive data. State the multiple.
-> "Riyadh: 2,083 μg/m³ on June 13 — 139× the WHO daily limit" is the natural form. Do NOT
-> include aerosol optical depth as a standalone metric unless you state what it means to a
-> lay reader (>0.4 = hazy-to-hazardous; >1.0 = extreme). The second sentence should land
-> a consequence, not describe dispersal — describing how dust clears is anti-climactic.
-> Note: if the signal is model-estimated and no historical comparison is available, the WHO
-> multiple IS the comparison. Use it.
-
-**Expected impact:** Transforms dust_event drafts from opaque-number reports into
-calibrated-violation framing. The WHO multiple is derivable from any bundle value — no
-archive needed. One paragraph addition; no architectural change. Also applies to air_quality
-(PM2.5/dust) signal type from the @extremetemps coverage lane. Verify whether
-`writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
-
-**Status:** Drafted. First dust_event in corpus (Jun 13). Awaiting human implementation.
 
 ~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
