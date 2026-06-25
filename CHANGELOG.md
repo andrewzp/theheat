@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### CI / reliability hardening + credential counter (2026-06-23)
+
+A weekend no-draft outage (Fri 06-19 → Mon 06-23) was root-caused to a flaky
+time-bomb unit test gating the production bot off, and the failure *class* was
+structurally prevented. The expired NASA Earthdata token was rotated, and a
+credential-expiry counter was built so a silent token expiry can't recur. Full
+session record: [docs/handoffs/2026-06-23.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-23.md).
+
+- **Credential-expiry counters (dashboard)** ([#330](https://github.com/andrewzp/theheat/pull/330)). `src/credentials.py` decodes the `exp` claim from JWT credentials each run (no network, no signature check; only the derived DATE is stored, never the token) and `cli.py` writes `credential_expiry` to state (new key wired through `DEFAULT_STATE` + `MERGE_SPEC` + `BotState`/`CredentialExpiry`). The dashboard gets a **CREDENTIALS** card beside LAST HOT 10 (`dashboard/lib/credential-status.js`, pure + unit-tested; green >14d / amber ≤14d / red ≤3d-or-expired; exact date on hover). Adding the next credential is one row in `TRACKED_CREDENTIALS`. **Needs a manual `vercel --prod` deploy to go live.**
+- **Decouple production drafting from the full unit-test gate** ([#326](https://github.com/andrewzp/theheat/pull/326)). The `bot.yml` `test` job now runs on `pull_request` only; scheduled drafting runs skip it and pass a fast deterministic **Smoke gate** (`ruff check src/` + `python -c "import src.main"`) instead. A flaky/time-dependent unit test can no longer block — or redden — production drafting (the root cause of the outage). The full suite still gates every PR merge.
+- **De-time-bomb the scheduler breaker health seeds** ([#323](https://github.com/andrewzp/theheat/pull/323)). `tests/test_scheduler.py` seeded source-health failures at hardcoded `2026-06-12` timestamps and asserted `failed == 3`; the breaker's now-stamped `skipped` row slid the rolling-7-day window past the seeds once real time advanced. Anchored the seeds to *now* via `_recent_health_timestamps()`; the suite is time-independent.
+- **pytest ignores iCloud sync-conflict duplicates** ([#325](https://github.com/andrewzp/theheat/pull/325)). `--ignore-glob='* [0-9].py'` so pytest never collects macOS/iCloud "name 2.py" copies locally (one carried the stale pre-#323 test). Already gitignored, so CI never saw them — local-DX guard.
+- **Skip CI for the rolling daily-plan display PR** ([#328](https://github.com/andrewzp/theheat/pull/328)). The content-only `daily-plan-current` PR ([#207](https://github.com/andrewzp/theheat/pull/207)) never merges and its routine appends without rebasing, so it re-ran stale code and emailed a CI failure daily. The `test` job now guards `github.head_ref != 'daily-plan-current'` → both jobs skip → neutral run, no email.
+- **Claim & warrant model — design brief + reviewed design + implementation plan** ([#322](https://github.com/andrewzp/theheat/pull/322) merged; [#324](https://github.com/andrewzp/theheat/pull/324) open, docs-only, awaiting Andrew). A typed claim/warrant model to make false "record" claims unrepresentable across all source types (the 2026-06-16 precip incident). Cross-reviewed (codex `exec -s read-only` + `/plan-eng-review`); both converged on the writer-projection/verifier-evidence split as the load-bearing fix. Docs in `docs/plans/2026-06-22-claim-warrant-model-*.md`.
+- **Ops:** the 60-day NASA `EARTHDATA_TOKEN` (set 2026-04-24) expired on schedule and was rotated (new token expires 2026-08-22); a dispatched run verified the 401s cleared across datapool/s3/opendap.
+
+### Throughput Initiative + workflow self-heal (prior)
+
 Documentation sweep aligning the operator docs with the 0.9.81.0 production
 state, plus the full Throughput Initiative — Phases A (funnel instrumentation),
 B (ship-gate decouple), C (refill loop) and D (multi-signal writer) — all dark,

@@ -1,19 +1,44 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-06-16 (release 0.9.81.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-16.md).
+**Last updated:** 2026-06-23 (release 0.9.81.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-23.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-23.md).
 The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
 and the dashboard now exposes per-source troubleshooting logs for current
 problem rows. The editorial pipeline shape described below is unchanged; the
 source layer is more resilient and more observable.
 
-**Known integrity gap — claim & warrant (2026-06-16).** The evidence contract
-validates that a bundle's facts are *present*, not that its *claims are true or
-warranted*. A 2026-06-16 incident shipped precip drafts citing a hardcoded threshold
-(and a 0.0 baseline) as "the previous record." Root cause is architectural: no model
-of a claim or its warrant, so illegal states (a record with no baseline) are
-representable across every source. Design-first redesign (no code until reviewed):
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-16-claim-warrant-model.md).
+**Production drafting no longer gates on the full unit-test suite since 2026-06-23**
+([#326](https://github.com/andrewzp/theheat/pull/326)). A flaky time-bomb unit test
+(hardcoded dates that detonated on 2026-06-19) had gated the bot's `run` job via
+`needs: test` and silently halted all drafting for a weekend, masked because the
+`:30` `auto_publish_due` cron skips the test job and kept passing. The `bot.yml`
+`test` job now runs on `pull_request` ONLY; scheduled drafting runs skip it and pass
+a fast deterministic **Smoke gate** (`ruff check src/` + `python -c "import src.main"`)
+instead, so a flaky unit test can no longer block — or redden — production drafting.
+The full suite still gates every PR merge; drafts are manual-gated, so the residual
+risk is a rejected draft, not a bad tweet.
+
+**Credential-expiry counters are live since 2026-06-23** ([#330](https://github.com/andrewzp/theheat/pull/330);
+needs a `vercel --prod` deploy to render). The 60-day NASA `EARTHDATA_TOKEN` aged out
+and 401'd every GPM path with no warning. [/Users/andrewpuschel/Documents/Claude/theheat/src/credentials.py](/Users/andrewpuschel/Documents/Claude/theheat/src/credentials.py)
+now decodes the `exp` claim from JWT credentials each run (only the derived date is
+written to state under `credential_expiry`; the token never leaves the bot) and the
+dashboard shows a **CREDENTIALS** card (days-until-expiry, green/amber/red). Adding
+the next credential is one row in `TRACKED_CREDENTIALS`.
+
+**Known integrity gap — claim & warrant (design reviewed 2026-06-22, awaiting Andrew).**
+The evidence contract validates that a bundle's facts are *present*, not that its
+*claims are true or warranted*. A 2026-06-16 incident shipped precip drafts citing a
+hardcoded threshold (and a 0.0 baseline) as "the previous record." Root cause is
+architectural: no model of a claim or its warrant, so illegal states (a record with
+no baseline) are representable across every source. The brief landed in
+[#322](https://github.com/andrewzp/theheat/pull/322); the **reviewed design doc +
+implementation plan** are open for review in [#324](https://github.com/andrewzp/theheat/pull/324)
+([design](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-22-claim-warrant-model-design.md),
+[plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/plans/2026-06-22-claim-warrant-model-implementation-plan.md)).
+Both cross-reviews (codex + plan-eng-review) converged on the same load-bearing fix:
+the writer must see only the claim's projection, not the raw `raw_signal_dump` bundle.
+No implementation code yet — awaiting Andrew's review + 2 tunables.
 
 **Throughput Initiative — SHIPPED DARK (2026-06-16).** All four phases (A funnel
 instrumentation -> B decouple the ship gate -> C generate-and-select refill loop
