@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### European-heatwave fix (`provider=both`) + heat coverage watch (2026-06-25)
+
+The bot was structurally blind to a deadly European heatwave: its heat detector
+had been **US-only for ~7 weeks** (since the 2026-05-05 GHCN cutover, PR #33) — the
+detector ran on `THEHEAT_SIGNALS_PROVIDER=ghcn`, NOAA GHCN-Daily has near-zero
+low-latency non-US coverage, so it ingested 0 European observations and missed
+France's hottest day ever. The deeper failure: **every health check measured
+liveness, never coverage** — a US-only feed was green by every metric. Full session
+record: [docs/handoffs/2026-06-25.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-25.md).
+
+- **`THEHEAT_SIGNALS_PROVIDER=both`** ([#332](https://github.com/andrewzp/theheat/pull/332)). New provider mode in `run_extreme_signals` (`src/orchestrator/sources/open_meteo.py`): run GHCN + Open-Meteo and **partition by country** — US from GHCN (deep NOAA station records, unchanged), the rest of the world incl. Europe from Open-Meteo's curated cities. New pure `src/orchestrator/signal_partition.py` (`is_us_location`, `partition_us_world`) — clean US/non-US split, no fragile name/geo matching (the two providers label the US differently, `"US"` vs `"United States"`/territory brackets; the predicate handles both). In `both` mode Open-Meteo fetches only non-US cities, so the US half isn't slower; the downstream provider branches became per-bundle (`station_id` presence), provably identical for the single-provider modes, so US behavior is preserved exactly and the change is purely additive coverage. `bot.yml` flipped `ghcn`→`both`. Tradeoff: US keeps deep all-time station records; non-US gets monthly/calendar/absolute-extreme (Open-Meteo's archive is shallower). Antarctica is correctly out of the city heat detector (covered by ice sources).
+- **Heat coverage watch** ([#333](https://github.com/andrewzp/theheat/pull/333)) — the monitoring class-fix. Records each surfaced **hot** heat event's geography **at the source** (`state.record_coverage_observation` at the 3 heat enqueue sites, hot-gated; continent resolved once via `src/coverage.py` + `data/country_continent.json`) into a persistent rolling `coverage_log` (new state key through `DEFAULT_STATE` + `MERGE_SPEC` dedup-on-`event_id` + `BotState`/`CoverageRecord` + SQLite `_METADATA_JSON_KEYS`; 21-day window, decoupled from the 20-run `run_history` cap). A pure `coverage_watch` classifier (`scripts/source_health_sentinel.py`, mirrored in `dashboard/lib/source-health.js`) opens an advisory auto-closing GitHub issue when a watched class (heat in v1) goes ≥85% mono-regional by country **or** continent over ≥20 events; emits `insufficient_data` for thin windows (never silently green) and `no_data` when drafting-but-empty. Constants: `COVERAGE_WINDOW_DAYS=21`, `COVERAGE_MIN_EVENTS=20`, `COVERAGE_CONCENTRATION=0.85`, `COVERAGE_DATA_FLOOR=5`. Built subagent-driven off a plan reviewed twice by codex (7 P1s caught — state-schema parity, SQLite persistence, real issue lookup, insufficient-data-not-silent, cold-as-heat, ruff, render scope) + an Opus whole-branch review that verified end-to-end the US-only blind spot is caught. Design + plan: `docs/superpowers/specs/2026-06-25-coverage-monitor-design.md`, `docs/superpowers/plans/2026-06-25-heat-coverage-watch.md`.
+- **Dashboard deployed** (`vercel --prod`). Last session's credential-expiry CREDENTIALS card (#330) is now live (`NASA Earthdata · ~58d`).
+
 ### CI / reliability hardening + credential counter (2026-06-23)
 
 A weekend no-draft outage (Fri 06-19 → Mon 06-23) was root-caused to a flaky
