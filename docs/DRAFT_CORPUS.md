@@ -13,6 +13,243 @@ Add new dated sections at the top. Oldest stays at the bottom.
 
 ---
 
+## 2026-06-25 — Daily corpus grading (5 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending drafts
+— all fresh. Jun 24 queue (Randolph UT B+, Al Aḥmadī Kuwait B) cleared between cycles. First
+dust_event pair in a single cycle (Taiz Yemen ×2). First companion-fire peer comparison in
+fire corpus.
+
+**Staleness review as of 2026-06-25 ~15:00 UTC:** `gh` CLI absent — **28th consecutive skip**
+(May 13 → Jun 25). 0 qualifying candidates this cycle (all drafts <48h old). **Operator note:**
+Draft [1] (Taiz Jun 24 dust, "June 24", created Jun 24T21:30Z) stale by ~Jun 26T21:30 UTC.
+Draft [3] (Taiz Jun 25 dust, "June 25", created Jun 25T07:48Z) stale by ~Jun 27T07:48 UTC.
+Draft [4] (Siberia fire, "today"/"same day", created Jun 25T10:46Z) stale by ~Jun 27T10:46 UTC.
+Operator must act on Drafts [1], [3], [4] within 30–48h.
+
+**Note on Barrow Alaska same-event regeneration:** Draft [5] (Barrow AK 213.8 mm/3-day, created
+Jun 25T14:45Z) matches the Jun 7 corpus entry (same event, same data). Treated as independent
+draft; prior clearance does not chain.
+
+**Grade distribution (5 fresh drafts):** 0 A / 4 B-range (2 B+ / 1 B / 1 B-) / 1 C+ / 0 D-F.
+**A-rate: 0% (0/5).** Gap from resumption bar: 50 pp.
+
+**Headline finding:** P_close 8th cycle — 3 failing (Taiz Jun 24 C+, Michigan monthly_low B,
+Taiz Jun 25 B-), 2 positive (Siberia fire "burns deep" + Barrow "nearly twice that total").
+P_dust 3rd cycle: both Taiz drafts lack WHO PM2.5 anchor (AOD-only); all 4 dust_event corpus
+drafts now template-converged. P9 5th precipitation_extreme (Barrow, same opener + restate-math).
+First companion-fire peer comparison in fire corpus. "Roughly"/"nearly" hedges cost Barrow A-;
+date-baking ("today"/"same day") costs Siberia A-.
+
+### B+ drafts
+
+#### [4] Western Siberia, Russia — fire — 965.6 MW FRP — **B+**
+
+> *965.6 MW of radiative heat in western Siberia today — very-high-intensity fire,
+> satellite-confirmed at 100% confidence. Two nearby fires in the same basin registered
+> 611 and 569.6 MW the same day. Western Siberia's peatlands hold centuries of carbon;
+> summer fire here burns deep.*
+
+**Score:** 84. Created 2026-06-25T10:46Z. "Today"/"same day" date-baked — stale by ~Jun 27T10:46.
+
+Humor lens:
+- **Violation:** 965.6 MW — highest FRP value in fire corpus. Satellite-confirmed at 100%
+  confidence; "very-high-intensity" classification stated.
+- **Benign?** Yes — factual, no human loss language.
+- **Setup→Punchline?** Setup: 965.6 MW, regional record. Pivot: companion fires (611 + 569.6 MW
+  in same basin, same day). Close: "Western Siberia's peatlands hold centuries of carbon; summer
+  fire here burns deep." Named mechanic (peatlands) + declarative consequence ("burns deep").
+  Strong punchline structure.
+- **Named mechanic?** Peatland carbon storage — first peat framing in fire corpus. Companion-fire
+  peer comparison — also first in fire corpus.
+- **Wodehouse rule?** "Burns deep" — tight, earned, not telegraphed. "Centuries of carbon" does
+  real work. No effort signal.
+
+**P_close POSITIVE (8th cycle, fire).** "Burns deep" = declarative consequence. The peatland
+clause sets up the consequence (stored carbon → depth of burn); "burns deep" names it directly.
+Compare to Red Dog Mine (stops at mechanism) and Barrow Jun 7 ("sheets across the surface
+instead" = implied by contrast).
+
+**Why not A?** "Today" and "same day" date-bake the draft — stale by Jun 27T10:46 UTC. Without
+the real-time anchor, this draft reaches A-.
+
+**First companion-fire peer comparison in fire corpus.** Two companions (611 + 569.6 MW) cited
+alongside 965.6 MW — regional system framing instead of single-event report.
+
+#### [5] Barrow (Utqiaġvik), Alaska — precipitation_extreme — 213.8 mm/3-day — **B+**
+
+> *Barrow, Alaska accumulated 213.8 mm of rain in 3 days — beating the previous 3-day
+> record by 63.8 mm. Barrow's mean annual precipitation is roughly 110 mm; this single
+> event delivered nearly twice that total.*
+
+**Score:** 82. Created 2026-06-25T14:45Z. Same event as Jun 7 corpus entry (213.8 mm/3-day, B+).
+
+Humor lens:
+- **Violation:** 213.8 mm / 3-day — 42.5% above the 150.0 mm prior record (63.8 mm margin).
+- **Benign?** Yes — factual.
+- **Setup→Punchline?** Setup: 213.8 mm, beats record by 63.8 mm. Sentence 2 pivots to annual
+  total ("roughly 110 mm"). Close: "this single event delivered nearly twice that total."
+  Annual-ratio IS the punchline — declarative-comparative form. P_close positive.
+- **Named mechanic?** Ratio-to-annual-precipitation — novel framing. No permafrost clause
+  (contrast to Jun 7 B+ version, which used "permafrost beneath Barrow's tundra keeps the
+  ground impermeable; rain that falls here has nowhere to go").
+- **Wodehouse rule?** "Roughly" hedges the annual total; "nearly" hedges the ratio. Two hedges
+  in two sentences. Restate-math in sentence 1: "beating the previous 3-day record by 63.8 mm"
+  (63.8 = 213.8 − 150.0; margin is derivable arithmetic).
+
+**P_close POSITIVE (8th cycle, precipitation_extreme).** "Delivered nearly twice that total" =
+declarative-comparative consequence. Cleaner close than Jun 7 ("sheets across the surface instead"
+= implied by contrast). The annual-ratio is the named consequence.
+
+**Why not A?** "Roughly" + "nearly" soften what should be declarative: "Barrow's mean annual
+precipitation is 110 mm; this three-day event doubled it." Restate-math present. P9 opener
+template: same [City] [verb] [X mm] in [timeframe] structure as all prior precipitation_extreme
+corpus drafts.
+
+**P9 5th cycle.** Opener template saturated (5 of 5 precipitation_extreme corpus drafts). Verb
+varies ("accumulated" vs. prior "received/recorded") — cosmetic. Restate-math: 63.8 mm margin
+derivable from 213.8 − 150.0.
+
+**Same-event regeneration.** Jun 7 B+ and Jun 25 B+: same data, different draft text. Jun 7
+used permafrost-impermeability clause; Jun 25 uses annual-ratio pivot. Both earn B+ for different
+reasons; Jun 25 annual-ratio close is the stronger punchline form.
+
+### B drafts
+
+#### [2] Nw Michigan Rsch Farm — monthly_low — 33°F / 0.6°C — **B**
+
+> *Nw Michigan Rsch Farm hit 33°F (0.6°C) on June 23 — coldest June low in 29 years of
+> records, 4°F below the 1998 mark. In the Great Lakes lake-effect belt, open water keeps
+> nights wetter and unstable; cold air finds less land friction to slow it down.*
+
+**Score:** 74. Created 2026-06-25T03:46Z.
+
+Humor lens:
+- **Violation:** Coldest June low in 29 years, 4°F below 1998 mark. Real record.
+- **Benign?** Yes — factual, lake-effect mechanism explained.
+- **Setup→Punchline?** Setup: 33°F, 29-year June low, 4°F below 1998. System clause: lake-effect
+  belt, open water → wetter/unstable nights. Close: "cold air finds less land friction to slow it
+  down" — mechanism description, consequence unstated (frost? crop damage? June freeze?).
+  P_close failing.
+- **Named mechanic?** Lake-effect cooling from Lake Michigan — load-bearing. Explains why a 33°F
+  June reading at this station matters.
+- **Wodehouse rule?** "Cold air finds less land friction to slow it down" is slightly abstract
+  but not an effort signal. Clean.
+
+**P_close FAILING (8th cycle, monthly_low).** "Less land friction to slow it down" = mechanism
+without consequence. Fix: "cold air finds nothing to slow it down. June records fall." Or: "where
+lake-effect cooling from Lake Michigan delivers June minimums below frost level."
+
+### B- drafts
+
+#### [3] Taiz, Yemen (Jun 25) — dust_event — 2,135 μg/m³ — **B-**
+
+> *Taiz, Yemen: model-estimated dust daily maximum of 2,135 μg/m³ on June 25 — aerosol
+> optical depth at 0.69. Taiz sits in Yemen's western highlands, where summer Kharif winds
+> draw hot, dust-laden air off the Tihama coastal plain and push it upslope into the city
+> basin.*
+
+**Score:** 62. Created 2026-06-25T07:48Z. "June 25" date-baked — stale by ~Jun 27T07:48.
+
+Humor lens:
+- **Violation:** 2,135 μg/m³ = ~142× WHO PM2.5 daily guideline (15 μg/m³). Not stated — only
+  AOD (0.69) given as comparator. P_dust failing.
+- **Benign?** Yes — factual.
+- **Setup→Punchline?** Setup: 2,135 μg/m³, AOD 0.69. System clause: Kharif winds, Tihama plain,
+  upslope push into city basin. Close: "push it upslope into the city basin" — transport
+  mechanism, consequence unstated. P_close failing.
+- **Named mechanic?** Kharif monsoon winds + Tihama geography — more specific than draft [1]'s
+  "dust corridors + southwest monsoon winds." The Tihama/Kharif/basin triad is genuine load-bearing
+  geography.
+- **Wodehouse rule?** Dense second sentence but accurate to the transport chain. Not an effort signal.
+
+**P_dust FAILING (3rd cycle, dust_event type).** 2,135 μg/m³ (~142×) left without WHO calibration.
+AOD (0.69) is not interpretable without additional framing.
+
+**P_close FAILING (8th cycle, dust_event).** "Push it upslope into the city basin" = transport
+mechanism. Consequence (trapped, accumulates, nowhere to vent) unstated. Fix: "the city basin
+has no exit for it" or "the city basin traps it."
+
+**B- over C+:** Geographic specificity (Kharif/Tihama/basin triad) elevates above draft [1]'s
+generic "dust corridors + southwest monsoon winds." Same template structure, meaningfully better
+second sentence.
+
+### C+ drafts
+
+#### [1] Taiz, Yemen (Jun 24) — dust_event — 2,271 μg/m³ — **C+**
+
+> *Taiz, Yemen: model-estimated dust daily maximum of 2,271 µg/m³ on June 24 — aerosol
+> optical depth at 0.73. Taiz sits in Yemen's highlands where the Arabian Peninsula's dust
+> corridors converge with southwest monsoon winds that loft sediment before pushing it
+> into the terrain.*
+
+**Score:** 55. Created 2026-06-24T21:30Z. "June 24" date-baked — stale by ~Jun 26T21:30.
+
+Humor lens:
+- **Violation:** 2,271 μg/m³ = ~151× WHO PM2.5 daily guideline (15 μg/m³). Not stated; AOD
+  (0.73) is the only comparator. The number lands flat without calibration.
+- **Benign?** Yes — factual.
+- **Setup→Punchline?** Setup: 2,271 μg/m³, AOD 0.73. System clause: Arabian Peninsula dust
+  corridors + southwest monsoon. Close: "pushing it into the terrain" — weakest possible
+  mechanism close; "terrain" is vague. No setup→punchline structure.
+- **Named mechanic?** "Dust corridors converge with southwest monsoon winds" — generic. No
+  specific geographic identification (compare: Kharif/Tihama/basin in draft [3]).
+- **Wodehouse rule?** "Into the terrain" is vague (terrain of what?). Low precision but not
+  an effort signal.
+
+**P_dust FAILING (3rd cycle, dust_event).** 2,271 μg/m³ = ~151× WHO. Unstated.
+
+**P_close FAILING (8th cycle, dust_event).** "Pushing it into the terrain" = weakest close
+in corpus. Below "traps it" (Urumqi, B-). No consequence, no named endpoint.
+
+**Template convergence confirmed.** Identical opener structure to all 3 prior dust_event corpus
+drafts: "[City]: model-estimated dust daily maximum of X µg/m³ on [date] — aerosol optical
+depth at Y." All 4 dust_event corpus drafts now share this template.
+
+### Patterns named in this batch
+
+1. **P_close 8th cycle — 5 drafts, 3 failing, 2 positive.** Failing: Taiz [1] (C+,
+   "pushing it into the terrain" = weakest close in corpus), Michigan [2] (B, "less land
+   friction" = mechanism without consequence), Taiz [3] (B-, "push it upslope into the city
+   basin" = transport without named endpoint). Positive: Siberia [4] (B+, "burns deep" =
+   declarative peatland-consequence), Barrow [5] (B+, "nearly twice that total" = declarative
+   annual-ratio). Positive cases share a structural feature: named consequence emerging from
+   specific ecosystem property. P_close now confirmed across 8 signal types (adding dust_event
+   to the prior 7).
+
+2. **P_dust 3rd cycle — template convergence across all 4 dust_event corpus drafts.**
+   Opener: "[City]: model-estimated dust daily maximum of X µg/m³ on [date] — aerosol
+   optical depth at Y." AOD-only metric in all 4 (Riyadh, Urumqi, Taiz Jun 24, Taiz Jun 25).
+   WHO anchor absent in all 4. Jun 24's Al Aḥmadī (air_quality_hazard) stated the WHO multiple
+   (10.1×) — confirming the gap is specific to the dust_event signal type, not the PM signal
+   path generally.
+
+3. **P9 5th precipitation_extreme draft.** Barrow Jun 25 uses the same opener structure as all
+   4 prior precipitation_extreme corpus drafts. 5 of 5 template saturation. Same-event
+   regeneration (Barrow Jun 7 + Jun 25, identical data, different close strategies).
+
+4. **First companion-fire peer comparison in fire corpus.** Siberia cites two companion fires
+   (611 + 569.6 MW) alongside 965.6 MW primary — regional-system framing. Date-baking is the
+   sole A-kill; close form itself is A-grade.
+
+5. **"Roughly"/"nearly" hedges as A-grade inhibitors.** Barrow [5]: "roughly 110 mm" + "nearly
+   twice that total." Declarative form: "Barrow's mean annual precipitation is 110 mm; this
+   three-day event doubled it." The hedge is the A-kill, not the structure.
+
+6. **P5 partial.** Siberia (peatland carbon) and Barrow (annual-ratio) deployed named mechanics
+   organically. Michigan monthly_low and Taiz dust_event ×2 show no named humor moves beyond
+   mechanism explanation.
+
+### Numbers
+
+- **965.6 MW** — highest FRP in fire corpus (Western Siberia); companion fires 611 + 569.6 MW
+- **2,271 µg/m³** (Taiz Jun 24) ≈ 151× WHO PM2.5 daily guideline (15 µg/m³)
+- **2,135 μg/m³** (Taiz Jun 25) ≈ 142× WHO PM2.5 daily guideline
+- **213.8 mm / 3-day** — 42.5% above 3-day record; ~1.94× annual precip total (~110 mm)
+- **33°F / 0.6°C** — coldest June low in 29 years, Nw Michigan Rsch Farm
+
+---
+
 ## 2026-06-24 — Daily corpus grading (2 fresh drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts
