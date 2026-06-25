@@ -1,67 +1,49 @@
-# Heat Coverage Watch Implementation Plan
+# Heat Coverage Watch Implementation Plan (v2 — post codex review)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Detect when @theheat's heat detector silently goes mono-regional (the GHCN US-only blind spot), by recording each surfaced heat event's geography into a persistent rolling tally and opening an advisory issue when one country/continent dominates.
+**Goal:** Detect when @theheat's heat detector silently goes mono-regional (the GHCN US-only blind spot) by recording each surfaced heat event's geography into a persistent rolling tally and opening an advisory issue when one country/continent dominates.
 
-**Architecture:** Geography is recorded **at the source** (`run_extreme_signals`, where heat events carry a clean `country`) into a new persistent `coverage_log` in state — decoupled from the 20-run `run_history` cap so the window is long enough to be reliable. Continent is resolved once at record time (`src/coverage.py`) and stored, so the Python sentinel check and the JS dashboard mirror just read pre-computed `{country, continent}` — no map duplication. The check is a pure function reconciled into one advisory auto-closing GitHub issue, mirroring the existing yield-watch.
+**Architecture:** Geography is recorded **at the source** (`run_extreme_signals`, where heat events carry a clean `country`) into a persistent `coverage_log` in state — decoupled from the 20-run `run_history` cap. Continent is resolved once at record time (`src/coverage.py`) and stored, so the Python sentinel and the JS dashboard mirror just read `{country, continent}`. The check is a pure function reconciled into one advisory auto-closing GitHub issue, mirroring the yield-watch.
 
-**Tech Stack:** Python 3.12 (bot + sentinel, pytest), Node 24 (dashboard, `node --test`), state persisted as JSON in a GitHub gist.
+**Tech Stack:** Python 3.12 (bot + sentinel, pytest), Node 24 (dashboard, `node --test`), state persisted to a GitHub gist **and** SQLite (`src/storage/sqlite_store.py`).
 
 ## Global Constraints
 
-- Python: `ruff check src/ scripts/` clean, `mypy src/` clean, `pytest` green (run via `.venv/bin/python -m pytest`).
-- Dashboard: `node --test` green; `next build` unaffected.
+- `ruff check src/ scripts/` clean; `mypy src/` clean; `.venv/bin/python -m pytest` green; `cd dashboard && node --test` green.
 - Stage only the files each task names — never `git add -A`. Commit messages end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
-- The sentinel is a reporter, never a gate: `scripts/source_health_sentinel.py` must keep exiting 0.
-- Python and JS thresholds (Task 5/7) MUST hold identical numeric values; each side asserts them in its own test.
-- No bot/scoring/provider behavior changes — recording is additive and best-effort (a recording failure must never break a draft).
+- The sentinel is a reporter, never a gate: `scripts/source_health_sentinel.py` keeps exiting 0.
+- Python and JS thresholds (Task 5/7) hold identical values; each side asserts them.
+- Recording is additive + best-effort: a recording failure must never break a draft (`record_coverage_observation` swallows exceptions).
 
-**Tunables (single source of truth, copied verbatim into both languages):**
-`COVERAGE_WINDOW_DAYS = 21`, `COVERAGE_MIN_EVENTS = 20`, `COVERAGE_CONCENTRATION = 0.85`, `COVERAGE_DATA_FLOOR = 5`.
+**Tunables (verbatim in both languages):** `COVERAGE_WINDOW_DAYS = 21`, `COVERAGE_MIN_EVENTS = 20`, `COVERAGE_CONCENTRATION = 0.85`, `COVERAGE_DATA_FLOOR = 5`.
+
+**Codex review fixes folded into this v2** (do not regress them): (1) `coverage_log` is added to `DEFAULT_STATE` **and** `BotState` (state_schema parity test) **and** `_METADATA_JSON_KEYS` (SQLite persistence) with a round-trip test; (2) the issue lookup is title-based (no fictional `_find_marker_issue`); (3) `DATA_FLOOR ≤ n < MIN_EVENTS` emits an explicit `insufficient_data` finding (dashboard-visible, never silent) that does **not** open an issue; (4) recording happens at all heat enqueue sites incl. record-streak; (5) the dashboard actually renders a coverage line.
 
 ---
 
 ### Task 1: Country→continent artifact + generator
 
-**Files:**
-- Create: `scripts/build_country_continent.py`
-- Create: `data/country_continent.json` (generated output, committed)
-
-**Interfaces:**
-- Produces: `data/country_continent.json` — `{ "<cities.csv country string>": "<continent>" }`, e.g. `{"US": "North America", "France": "Europe", "China": "Asia"}`.
+**Files:** Create `scripts/build_country_continent.py`, `data/country_continent.json`.
+**Produces:** `data/country_continent.json` = `{ "<cities.csv country>": "<continent>" }`.
 
 - [ ] **Step 1: Write the generator**
 
 ```python
 # scripts/build_country_continent.py
-"""Derive country -> continent from data/cities.csv lat/lon.
-
-cities.csv is the curated city set the Open-Meteo heat path samples, so its
-country strings are exactly what heat events emit (except GHCN's "United States",
-which is_us_location handles at resolve time). Re-run when cities.csv changes:
-    python scripts/build_country_continent.py
-"""
-import csv
-import json
+"""Derive country -> continent from data/cities.csv lat/lon. Re-run on cities change."""
+import csv, json
 from collections import Counter
 
 
 def continent_for(lat: float, lon: float) -> str:
-    if lat <= -60:
-        return "Antarctica"
-    if lat <= 0 and 110 <= lon <= 180:
-        return "Oceania"
-    if -56 <= lat <= 14 and -82 <= lon <= -34:
-        return "South America"
-    if lat >= 7 and -170 <= lon <= -50:
-        return "North America"
-    if 34 <= lat <= 72 and -25 <= lon <= 60:
-        return "Europe"
-    if -37 <= lat <= 37 and -20 <= lon <= 52:
-        return "Africa"
-    if -15 <= lat <= 82 and 25 <= lon <= 180:
-        return "Asia"
+    if lat <= -60: return "Antarctica"
+    if lat <= 0 and 110 <= lon <= 180: return "Oceania"
+    if -56 <= lat <= 14 and -82 <= lon <= -34: return "South America"
+    if lat >= 7 and -170 <= lon <= -50: return "North America"
+    if 34 <= lat <= 72 and -25 <= lon <= 60: return "Europe"
+    if -37 <= lat <= 37 and -20 <= lon <= 52: return "Africa"
+    if -15 <= lat <= 82 and 25 <= lon <= 180: return "Asia"
     return "Unknown"
 
 
@@ -70,25 +52,22 @@ def build(cities_path: str = "data/cities.csv") -> dict[str, str]:
     with open(cities_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
             country = (row.get("country") or "").strip()
-            if not country:
-                continue
-            cont = continent_for(float(row["lat"]), float(row["lon"]))
-            votes.setdefault(country, Counter())[cont] += 1
+            if not country: continue
+            votes.setdefault(country, Counter())[continent_for(float(row["lat"]), float(row["lon"]))] += 1
     return {c: v.most_common(1)[0][0] for c, v in sorted(votes.items())}
 
 
 if __name__ == "__main__":
     mapping = build()
     with open("data/country_continent.json", "w", encoding="utf-8") as f:
-        json.dump(mapping, f, indent=2, ensure_ascii=False, sort_keys=True)
-        f.write("\n")
+        json.dump(mapping, f, indent=2, ensure_ascii=False, sort_keys=True); f.write("\n")
     print(f"wrote data/country_continent.json ({len(mapping)} countries)")
 ```
 
-- [ ] **Step 2: Generate the artifact**
+- [ ] **Step 2: Generate + spot-check**
 
 Run: `cd /Users/andrewpuschel/Documents/Claude/theheat && .venv/bin/python scripts/build_country_continent.py`
-Expected: `wrote data/country_continent.json (~170 countries)`. Spot-check: `US`→`North America`, `France`→`Europe`, `China`→`Asia`, `Australia`→`Oceania`.
+Expected: `wrote data/country_continent.json (~170 countries)`. Confirm `US`→`North America`, `France`→`Europe`, `China`→`Asia`, `Australia`→`Oceania`.
 
 - [ ] **Step 3: Commit**
 
@@ -101,15 +80,10 @@ git commit -m "feat(coverage): country->continent artifact derived from cities.c
 
 ### Task 2: `src/coverage.py` — continent resolution
 
-**Files:**
-- Create: `src/coverage.py`
-- Test: `tests/test_coverage.py`
+**Files:** Create `src/coverage.py`; Test `tests/test_coverage.py`.
+**Consumes:** `data/country_continent.json`. **Produces:** `is_us_location(country)->bool`, `resolve_continent(country)->str`.
 
-**Interfaces:**
-- Consumes: `data/country_continent.json` (Task 1).
-- Produces: `is_us_location(country: str | None) -> bool`; `resolve_continent(country: str | None) -> str` (returns a continent name or `"Unknown"`).
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Failing test**
 
 ```python
 # tests/test_coverage.py
@@ -117,45 +91,34 @@ from src.coverage import is_us_location, resolve_continent
 
 
 def test_us_forms_resolve_to_north_america():
-    assert is_us_location("US") is True
-    assert is_us_location("United States") is True
-    assert is_us_location("Northern Mariana Islands [United States]") is True
+    assert is_us_location("US") and is_us_location("United States")
+    assert is_us_location("Northern Mariana Islands [United States]")
     assert resolve_continent("United States") == "North America"
     assert resolve_continent("US") == "North America"
 
 
 def test_non_us_resolves_via_map():
-    assert is_us_location("United Kingdom") is False
+    assert not is_us_location("United Kingdom")
     assert resolve_continent("France") == "Europe"
     assert resolve_continent("China") == "Asia"
 
 
-def test_unknown_country_is_unknown():
+def test_unknown_is_unknown():
     assert resolve_continent("Atlantis") == "Unknown"
     assert resolve_continent("") == "Unknown"
     assert resolve_continent(None) == "Unknown"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
+- [ ] **Step 2: Run — expect FAIL** `ModuleNotFoundError: No module named 'src.coverage'`
 Run: `.venv/bin/python -m pytest tests/test_coverage.py -q`
-Expected: FAIL — `ModuleNotFoundError: No module named 'src.coverage'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement**
 
 ```python
 # src/coverage.py
-"""Resolve an event's country to a continent for the coverage watch.
-
-The country -> continent map is derived from cities.csv (data/country_continent.json,
-built by scripts/build_country_continent.py). US name-forms are normalised here so
-both the Open-Meteo ("US") and GHCN ("United States", territory brackets) heat paths
-land in North America.
-"""
+"""Resolve an event's country to a continent for the coverage watch."""
 from __future__ import annotations
-
-import json
-import os
+import json, os
 from functools import lru_cache
 
 _MAP_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "country_continent.json")
@@ -177,80 +140,57 @@ def is_us_location(country: str | None) -> bool:
 
 def resolve_continent(country: str | None) -> str:
     c = (country or "").strip()
-    if not c:
-        return "Unknown"
-    if is_us_location(c):
-        return "North America"
+    if not c: return "Unknown"
+    if is_us_location(c): return "North America"
     return _country_continent().get(c, "Unknown")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `.venv/bin/python -m pytest tests/test_coverage.py -q`
-Expected: PASS (3 tests).
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add src/coverage.py tests/test_coverage.py
-git commit -m "feat(coverage): resolve_continent + is_us_location"
-```
+- [ ] **Step 4: Run — expect PASS (3)** `.venv/bin/python -m pytest tests/test_coverage.py -q`
+- [ ] **Step 5: Commit** `git add src/coverage.py tests/test_coverage.py && git commit -m "feat(coverage): resolve_continent + is_us_location"`
 
 ---
 
-### Task 3: State `coverage_log` — schema, merge, record helper, prune
+### Task 3: State `coverage_log` — schema, SQLite persistence, merge, record, prune
 
 **Files:**
-- Modify: `src/state.py` (DEFAULT_STATE ~line 75; merge-spec ~line 1740; add helpers + merge fn)
+- Modify: `src/state.py` (DEFAULT_STATE :75; MERGE_SPEC :1723; add `_merge_coverage_log`, `record_coverage_observation`, `COVERAGE_WINDOW_DAYS`)
+- Modify: `src/state_schema.py` (add `CoverageRecord` TypedDict + `coverage_log` to `BotState`)
+- Modify: `src/storage/sqlite_store.py` (add `"coverage_log"` to `_METADATA_JSON_KEYS` :108)
 - Test: `tests/test_coverage_state.py`
 
-**Interfaces:**
-- Consumes: `src.coverage.resolve_continent` (Task 2).
-- Produces:
-  - `record_coverage_observation(state: BotState, *, cls: str, event_id: str, country: str | None, when: str | date | None, now: datetime | None = None) -> None` — appends `{cls, event_id, country, continent, date}` to `state["coverage_log"]`, dedups on `event_id`, prunes older than `COVERAGE_WINDOW_DAYS`. Never raises.
-  - `COVERAGE_WINDOW_DAYS = 21` (module constant in `src/state.py`).
-  - `_merge_coverage_log(current, incoming) -> list[dict]` registered for the `coverage_log` key.
+**Consumes:** `src.coverage.resolve_continent`.
+**Produces:** `record_coverage_observation(state, *, cls, event_id, country, when, now=None) -> None`; `COVERAGE_WINDOW_DAYS = 21`; `_merge_coverage_log`; `CoverageRecord`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Failing tests** (`tests/test_coverage_state.py`)
 
 ```python
-# tests/test_coverage_state.py
 from datetime import datetime, timezone
-
 from src import state as state_mod
 from src.state import _fresh_state, record_coverage_observation
 
 
-def _now(d="2026-06-25"):
-    return datetime.fromisoformat(d + "T00:00:00+00:00")
+def _now(d="2026-06-25"): return datetime.fromisoformat(d + "T00:00:00+00:00")
 
 
 def test_record_appends_with_resolved_continent():
     s = _fresh_state()
-    record_coverage_observation(s, cls="heat", event_id="e1", country="United States",
-                                when="2026-06-25", now=_now())
-    assert s["coverage_log"] == [
-        {"cls": "heat", "event_id": "e1", "country": "United States",
-         "continent": "North America", "date": "2026-06-25"}
-    ]
+    record_coverage_observation(s, cls="heat", event_id="e1", country="United States", when="2026-06-25", now=_now())
+    assert s["coverage_log"] == [{"cls": "heat", "event_id": "e1", "country": "United States",
+                                  "continent": "North America", "date": "2026-06-25"}]
 
 
 def test_record_dedups_on_event_id():
     s = _fresh_state()
     for _ in range(2):
-        record_coverage_observation(s, cls="heat", event_id="e1", country="Spain",
-                                    when="2026-06-25", now=_now())
+        record_coverage_observation(s, cls="heat", event_id="e1", country="Spain", when="2026-06-25", now=_now())
     assert len(s["coverage_log"]) == 1
 
 
 def test_record_prunes_older_than_window():
     s = _fresh_state()
-    record_coverage_observation(s, cls="heat", event_id="old", country="Spain",
-                                when="2026-05-01", now=_now())
-    record_coverage_observation(s, cls="heat", event_id="new", country="Spain",
-                                when="2026-06-25", now=_now())
-    ids = {r["event_id"] for r in s["coverage_log"]}
-    assert ids == {"new"}  # 2026-05-01 is > 21 days before 2026-06-25
+    record_coverage_observation(s, cls="heat", event_id="old", country="Spain", when="2026-05-01", now=_now())
+    record_coverage_observation(s, cls="heat", event_id="new", country="Spain", when="2026-06-25", now=_now())
+    assert {r["event_id"] for r in s["coverage_log"]} == {"new"}
 
 
 def test_record_never_raises_on_bad_input():
@@ -261,68 +201,41 @@ def test_record_never_raises_on_bad_input():
 
 def test_merge_dedups_concurrent_writers():
     a = [{"cls": "heat", "event_id": "e1", "country": "US", "continent": "North America", "date": "2026-06-25"}]
-    b = [{"cls": "heat", "event_id": "e1", "country": "US", "continent": "North America", "date": "2026-06-25"},
-         {"cls": "heat", "event_id": "e2", "country": "Spain", "continent": "Europe", "date": "2026-06-25"}]
-    merged = state_mod._merge_coverage_log(a, b)
-    assert {r["event_id"] for r in merged} == {"e1", "e2"}
+    b = a + [{"cls": "heat", "event_id": "e2", "country": "Spain", "continent": "Europe", "date": "2026-06-25"}]
+    assert {r["event_id"] for r in state_mod._merge_coverage_log(a, b)} == {"e1", "e2"}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Failing SQLite round-trip test** — find the existing key-persistence round-trip test (`tests/test_state.py:1237`, which guards SST/AQ key loss) and add `coverage_log` to it (or add a sibling test in `tests/test_coverage_state.py` that saves a state with a `coverage_log` record through `src/storage/sqlite_store.py`'s save/load and asserts the record survives). Read `tests/test_state.py:1230-1260` to mirror the existing round-trip shape exactly.
 
+- [ ] **Step 3: Run — expect FAIL** `ImportError: cannot import name 'record_coverage_observation'` (and the round-trip test fails: `coverage_log` empty after load).
 Run: `.venv/bin/python -m pytest tests/test_coverage_state.py -q`
-Expected: FAIL — `ImportError: cannot import name 'record_coverage_observation'`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 4: Implement**
 
-In `src/state.py`:
-
-(a) Add to `DEFAULT_STATE` (next to `"run_history": [],` ~line 75):
+(a) `src/state.py` DEFAULT_STATE, next to `"run_history": [],` (:75):
 ```python
     "coverage_log": [],  # rolling per-surfaced-event geography for the coverage watch
 ```
-
-(b) Add module constant near the top-of-file constants:
-```python
-COVERAGE_WINDOW_DAYS = 21
-```
-
-(c) Add the merge function (next to `_merge_run_history`):
+(b) `src/state.py` module constant: `COVERAGE_WINDOW_DAYS = 21`
+(c) `src/state.py` merge fn (next to `_merge_run_history`):
 ```python
 def _merge_coverage_log(current: list[dict], incoming: list[dict]) -> list[dict]:
     by_id: dict[str, dict] = {}
     anonymous: list[dict] = []
     for rec in [*(current or []), *(incoming or [])]:
         rec_id = rec.get("event_id")
-        if not rec_id:
-            anonymous.append(dict(rec))
-        else:
-            by_id[rec_id] = dict(rec)  # last writer wins; identical events collapse
+        (anonymous.append(dict(rec)) if not rec_id else by_id.__setitem__(rec_id, dict(rec)))
     return [*by_id.values(), *anonymous]
 ```
-
-(d) Register it in the merge-spec map (the dict that holds `"run_history": _merge_run_history,` ~line 1740):
+(d) `src/state.py` register in `MERGE_SPEC` (:1723), add `"coverage_log": _merge_coverage_log,`
+(e) `src/state.py` record helper:
 ```python
-    "coverage_log": _merge_coverage_log,
-```
-
-(e) Add the record helper (mirror `increment_data_source_failure`'s style):
-```python
-def record_coverage_observation(
-    state: BotState,
-    *,
-    cls: str,
-    event_id: str,
-    country: str | None,
-    when: "str | date | None",
-    now: datetime | None = None,
-) -> None:
-    """Append one surfaced-event geography record; dedup on event_id; prune window.
-
-    Best-effort: never raises (a recording failure must not break a draft).
-    """
+def record_coverage_observation(state: BotState, *, cls: str, event_id: str,
+                                country: str | None, when: "str | date | None",
+                                now: datetime | None = None) -> None:
+    """Append one surfaced-event geography record; dedup on event_id; prune window. Never raises."""
     try:
         from src.coverage import resolve_continent
-
         now = now or datetime.now(UTC)
         if isinstance(when, date) and not isinstance(when, datetime):
             date_str = when.isoformat()
@@ -332,174 +245,151 @@ def record_coverage_observation(
             date_str = now.date().isoformat()
         log = state.setdefault("coverage_log", [])
         log[:] = [r for r in log if r.get("event_id") != event_id]
-        log.append({
-            "cls": cls,
-            "event_id": event_id,
-            "country": country or "",
-            "continent": resolve_continent(country),
-            "date": date_str,
-        })
+        log.append({"cls": cls, "event_id": event_id, "country": country or "",
+                    "continent": resolve_continent(country), "date": date_str})
         cutoff = (now - timedelta(days=COVERAGE_WINDOW_DAYS)).date().isoformat()
         state["coverage_log"] = [r for r in log if str(r.get("date") or "") >= cutoff]
     except Exception:
         pass
 ```
+(f) `src/state_schema.py` — add a record TypedDict (mirror `CityRecord:66`) and the BotState field:
+```python
+class CoverageRecord(TypedDict):
+    cls: str
+    event_id: str
+    country: str
+    continent: str
+    date: str
+```
+and in `BotState`: `coverage_log: list[CoverageRecord]`
+(g) `src/storage/sqlite_store.py` — add `"coverage_log"` to the `_METADATA_JSON_KEYS` tuple (:108).
 
-Ensure `date`, `timedelta`, `UTC` are imported in `src/state.py` (they are used elsewhere; verify with `grep -n "from datetime" src/state.py`).
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `.venv/bin/python -m pytest tests/test_coverage_state.py -q`
-Expected: PASS (5 tests).
-
-- [ ] **Step 5: Commit**
-
+- [ ] **Step 5: Run — expect PASS** `.venv/bin/python -m pytest tests/test_coverage_state.py tests/test_state.py -q` (state-schema parity + sqlite round-trip + the 5 unit tests all green).
+- [ ] **Step 6: Commit**
 ```bash
-git add src/state.py tests/test_coverage_state.py
-git commit -m "feat(coverage): coverage_log state tally (record, merge, prune)"
+git add src/state.py src/state_schema.py src/storage/sqlite_store.py tests/test_coverage_state.py tests/test_state.py
+git commit -m "feat(coverage): persistent coverage_log (schema, sqlite, merge, record)"
 ```
 
 ---
 
-### Task 4: Record heat geography in `run_extreme_signals`
+### Task 4: Record heat geography at every heat enqueue site
 
-**Files:**
-- Modify: `src/orchestrator/sources/open_meteo.py` (after the per-city heat enqueue ~line 421; after the country-record enqueue ~line 711)
-- Test: `tests/test_open_meteo_orchestrator.py` (add one test)
+**Files:** Modify `src/orchestrator/sources/open_meteo.py`; Test `tests/test_open_meteo_orchestrator.py`.
+**Consumes:** `state.record_coverage_observation`. (`state` is in scope via `from src.orchestrator.common import *`.)
 
-**Interfaces:**
-- Consumes: `state.record_coverage_observation` (Task 3).
-- Produces: a heat record in `bot_state["coverage_log"]` for every surfaced heat city + country record.
+Record sites (verified current line numbers; `bundle`/`cr`/`ev_cd` and the event_id vars are all in scope at each):
+- **per-city** strongest signal: top of `if candidate_queued:` (**:434**) — `country=bundle.country`, `event_id=strongest_event_id`, `when=bundle.signal_date`.
+- **record-streak**: inside the streak enqueue success (**:483**, `legacy_type="record_streak"`) — `country=ev_cd.country`, `event_id=streak_event_id`, `when=bundle.signal_date`.
+- **country record**: after `country_count += 1` (**:735**) — `country=cr.country`, `event_id=cr.event_id`, `when=cr.signal_date`.
 
-- [ ] **Step 1: Write the failing test** (append to `tests/test_open_meteo_orchestrator.py`)
+(wet_bulb/simultaneous are lower-volume heat signals; deferred — per-city alone surfaces multiple cities/day, comfortably exceeding MIN_EVENTS over 21 days, and Task 5's `insufficient_data` finding covers thin windows.)
+
+- [ ] **Step 1: Failing test** (append to `tests/test_open_meteo_orchestrator.py`)
 
 ```python
 def test_surfaced_heat_event_records_coverage(monkeypatch):
     from datetime import date
-
     from src.data.open_meteo import AbsoluteExtremeEvent, ExtremeSignalBundle
     from src.orchestrator.sources import open_meteo as runner
     from src.state import _fresh_state
 
-    ev = AbsoluteExtremeEvent(
-        city="Seville", country="Spain", today_temp_c=45.1, band_label="Temperate",
-        threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
-        event_id="absextreme_Seville_2026-06-25", signal_date=date(2026, 6, 25),
-    )
-    bundle = ExtremeSignalBundle(city="Seville", country="Spain", absolute_extreme=ev,
-                                 signal_date=date(2026, 6, 25))
+    ev = AbsoluteExtremeEvent(city="Seville", country="Spain", today_temp_c=45.1,
+        band_label="Temperate", threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
+        event_id="absextreme_Seville_2026-06-25", signal_date=date(2026, 6, 25))
+    bundle = ExtremeSignalBundle(city="Seville", country="Spain", absolute_extreme=ev, signal_date=date(2026, 6, 25))
     bot_state = _fresh_state()
     current_run = {"id": "r1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
     monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, m: ([bundle], []))
     monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
     monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
-
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
-
     recs = [r for r in bot_state["coverage_log"] if r["event_id"] == "absextreme_Seville_2026-06-25"]
     assert recs and recs[0]["cls"] == "heat" and recs[0]["continent"] == "Europe"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
+- [ ] **Step 2: Run — expect FAIL** (`coverage_log` has no matching record)
 Run: `.venv/bin/python -m pytest tests/test_open_meteo_orchestrator.py::test_surfaced_heat_event_records_coverage -q`
-Expected: FAIL — `coverage_log` has no matching record.
 
-- [ ] **Step 3: Implement** — add recording at both heat enqueue sites.
-
-After the per-city enqueue (the `if candidate_queued:` block opens at ~line 437; add at the TOP of that block, so it records whenever a heat city is surfaced):
+- [ ] **Step 3: Implement** — insert at the three sites above. Per-city (top of the `:434` `if candidate_queued:` block):
 ```python
                 if candidate_queued:
-                    state.record_coverage_observation(
-                        bot_state, cls="heat", event_id=strongest_event_id,
-                        country=bundle.country, when=bundle.signal_date,
-                    )
+                    state.record_coverage_observation(bot_state, cls="heat",
+                        event_id=strongest_event_id, country=bundle.country, when=bundle.signal_date)
 ```
-
-After the country-record enqueue succeeds (inside `if _enqueue_story_candidate(...): country_count += 1` ~line 711):
+Record-streak (after its `_enqueue_story_candidate(...)` returns truthy, alongside `signal_counts["streak"] += 1`):
 ```python
-            ):
+                                        state.record_coverage_observation(bot_state, cls="heat",
+                                            event_id=streak_event_id, country=ev_cd.country, when=bundle.signal_date)
+```
+Country record (after `country_count += 1` at :735):
+```python
                 country_count += 1
-                state.record_coverage_observation(
-                    bot_state, cls="heat", event_id=cr.event_id,
-                    country=cr.country, when=cr.signal_date,
-                )
+                state.record_coverage_observation(bot_state, cls="heat",
+                    event_id=cr.event_id, country=cr.country, when=cr.signal_date)
 ```
 
-- [ ] **Step 4: Run tests to verify pass (and nothing regressed)**
-
-Run: `.venv/bin/python -m pytest tests/test_open_meteo_orchestrator.py -q`
-Expected: PASS (all, including the new test).
-
+- [ ] **Step 4: Run — expect PASS (all, incl. new + existing)** `.venv/bin/python -m pytest tests/test_open_meteo_orchestrator.py -q`
 - [ ] **Step 5: Commit**
-
 ```bash
 git add src/orchestrator/sources/open_meteo.py tests/test_open_meteo_orchestrator.py
-git commit -m "feat(coverage): record heat geography at the enqueue sites"
+git commit -m "feat(coverage): record heat geography at enqueue sites"
 ```
 
 ---
 
 ### Task 5: `coverage_watch` classifier (sentinel)
 
-**Files:**
-- Modify: `scripts/source_health_sentinel.py` (add constants + classifier near `yield_watch_sources`)
-- Test: `tests/test_source_health_sentinel.py` (add a class)
+**Files:** Modify `scripts/source_health_sentinel.py`; Test `tests/test_source_health_sentinel.py`.
+**Consumes:** `state["coverage_log"]`, `state["run_history"]`.
+**Produces:** `coverage_watch(coverage_log, run_history, *, now) -> list[dict]`. Finding kinds: `mono_regional`, `insufficient_data`, `no_data`. Shape: `{cls, kind, dominant, share, events, distribution}`.
 
-**Interfaces:**
-- Consumes: `state["coverage_log"]` (Task 3/4), `state["run_history"]` (liveness cross-check).
-- Produces: `coverage_watch(coverage_log, run_history, *, now) -> list[dict]` — returns finding dicts. Each finding: `{"cls": str, "kind": "mono_regional"|"no_data", "dominant": str, "share": float, "events": int, "distribution": dict}` (for `no_data`, `dominant`/`share` describe why).
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Failing test**
 
 ```python
-# in tests/test_source_health_sentinel.py
+# tests/test_source_health_sentinel.py
 from datetime import datetime, timezone
 from scripts.source_health_sentinel import coverage_watch
 
 
-def _log(country, continent, n, cls="heat", day="2026-06-25"):
+def _log(country, continent, n, cls="heat"):
     return [{"cls": cls, "event_id": f"{country}-{i}", "country": country,
-             "continent": continent, "date": day} for i in range(n)]
+             "continent": continent, "date": "2026-06-25"} for i in range(n)]
 
 
-def _alerts_run():
-    return [{"id": "run_alerts_x", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z"}]
+def _alerts(): return [{"id": "r", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z"}]
 
 
 class TestCoverageWatch:
     NOW = datetime(2026, 6, 25, tzinfo=timezone.utc)
 
-    def test_us_only_heat_flags_mono_regional(self):
-        out = coverage_watch(_log("United States", "North America", 22), _alerts_run(), now=self.NOW)
-        assert len(out) == 1
-        f = out[0]
-        assert f["kind"] == "mono_regional" and f["cls"] == "heat"
-        assert f["dominant"] in ("United States", "North America") and f["share"] >= 0.85
+    def test_us_only_flags_mono_regional(self):
+        out = coverage_watch(_log("United States", "North America", 22), _alerts(), now=self.NOW)
+        assert len(out) == 1 and out[0]["kind"] == "mono_regional"
+        assert out[0]["dominant"] in ("United States", "North America") and out[0]["share"] >= 0.85
 
-    def test_diversified_heat_does_not_flag(self):
+    def test_diversified_does_not_flag(self):
         log = (_log("United States", "North America", 8) + _log("Spain", "Europe", 6)
                + _log("India", "Asia", 4) + _log("Brazil", "South America", 4))
-        assert coverage_watch(log, _alerts_run(), now=self.NOW) == []
+        assert coverage_watch(log, _alerts(), now=self.NOW) == []
 
-    def test_below_min_events_does_not_flag(self):
-        assert coverage_watch(_log("United States", "North America", 10), _alerts_run(), now=self.NOW) == []
+    def test_thin_window_is_insufficient_not_silent(self):
+        out = coverage_watch(_log("United States", "North America", 10), _alerts(), now=self.NOW)
+        assert len(out) == 1 and out[0]["kind"] == "insufficient_data"
 
     def test_no_data_while_drafting_flags(self):
-        out = coverage_watch([], _alerts_run(), now=self.NOW)
+        out = coverage_watch([], _alerts(), now=self.NOW)
         assert len(out) == 1 and out[0]["kind"] == "no_data"
 
     def test_no_data_quiet_bot_does_not_flag(self):
-        assert coverage_watch([], [], now=self.NOW) == []  # no alerts runs => bot not active
+        assert coverage_watch([], [], now=self.NOW) == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
+- [ ] **Step 2: Run — expect FAIL** `ImportError: cannot import name 'coverage_watch'`
 Run: `.venv/bin/python -m pytest tests/test_source_health_sentinel.py::TestCoverageWatch -q`
-Expected: FAIL — `ImportError: cannot import name 'coverage_watch'`.
 
-- [ ] **Step 3: Implement** (add to `scripts/source_health_sentinel.py`)
+- [ ] **Step 3: Implement** (`Mapping`, `datetime`, `timezone`, `timedelta` already imported)
 
 ```python
 COVERAGE_WINDOW_DAYS = 21
@@ -512,32 +402,18 @@ COVERAGE_WATCH_MARKER = "<!-- source-health-coverage-watch -->"
 
 
 def _bot_is_drafting(run_history: list[dict] | None) -> bool:
-    return any(
-        str(r.get("mode") or "") in ("alerts", "both")
-        for r in (run_history or [])
-        if isinstance(r, Mapping)
-    )
+    return any(str(r.get("mode") or "") in ("alerts", "both")
+               for r in (run_history or []) if isinstance(r, Mapping))
 
 
-def coverage_watch(
-    coverage_log: list[dict] | None,
-    run_history: list[dict] | None,
-    *,
-    now: datetime,
-) -> list[dict]:
-    """Flag a watched class whose surfaced geography is mono-regional, or missing.
-
-    Pure: continent/country are pre-computed in each record (src/coverage.py).
-    """
+def coverage_watch(coverage_log: list[dict] | None, run_history: list[dict] | None,
+                   *, now: datetime) -> list[dict]:
     cutoff = (now - timedelta(days=COVERAGE_WINDOW_DAYS)).date().isoformat()
     drafting = _bot_is_drafting(run_history)
     findings: list[dict] = []
     for cls in COVERAGE_WATCHED_CLASSES:
-        recs = [
-            r for r in (coverage_log or [])
-            if isinstance(r, Mapping) and r.get("cls") == cls
-            and str(r.get("date") or "") >= cutoff
-        ]
+        recs = [r for r in (coverage_log or []) if isinstance(r, Mapping)
+                and r.get("cls") == cls and str(r.get("date") or "") >= cutoff]
         n = len(recs)
         if n < COVERAGE_DATA_FLOOR:
             if drafting:
@@ -545,152 +421,141 @@ def coverage_watch(
                                  "share": 0.0, "events": n, "distribution": {}})
             continue
         if n < COVERAGE_MIN_EVENTS:
+            findings.append({"cls": cls, "kind": "insufficient_data", "dominant": "—",
+                             "share": 0.0, "events": n, "distribution": {}})
             continue
+        flagged = False
         for axis in ("country", "continent"):
             counts: dict[str, int] = {}
             for r in recs:
                 key = str(r.get(axis) or "Unknown")
                 counts[key] = counts.get(key, 0) + 1
             dominant, top = max(counts.items(), key=lambda kv: kv[1])
-            share = top / n
-            if dominant != "Unknown" and share >= COVERAGE_CONCENTRATION:
+            if dominant != "Unknown" and top / n >= COVERAGE_CONCENTRATION:
                 findings.append({"cls": cls, "kind": "mono_regional", "dominant": dominant,
-                                 "share": round(share, 3), "events": n,
+                                 "share": round(top / n, 3), "events": n,
                                  "distribution": dict(sorted(counts.items(), key=lambda kv: -kv[1]))})
-                break  # one finding per class; country axis takes precedence
+                flagged = True
+                break  # country axis takes precedence
     return findings
 ```
 
-- [ ] **Step 4: Run tests to verify pass**
-
-Run: `.venv/bin/python -m pytest tests/test_source_health_sentinel.py::TestCoverageWatch -q`
-Expected: PASS (5 tests).
-
+- [ ] **Step 4: Run — expect PASS (5)** `.venv/bin/python -m pytest tests/test_source_health_sentinel.py::TestCoverageWatch -q`
 - [ ] **Step 5: Commit**
-
 ```bash
 git add scripts/source_health_sentinel.py tests/test_source_health_sentinel.py
-git commit -m "feat(coverage): coverage_watch classifier (mono-regional + no-data)"
+git commit -m "feat(coverage): coverage_watch classifier (mono-regional / insufficient / no-data)"
 ```
 
 ---
 
 ### Task 6: Coverage-watch issue reconciliation (sentinel `main`)
 
-**Files:**
-- Modify: `scripts/source_health_sentinel.py` (body builder + plan/create/update/close + wire into `main`)
-- Test: `tests/test_source_health_sentinel.py` (add a class)
+**Files:** Modify `scripts/source_health_sentinel.py`; Test `tests/test_source_health_sentinel.py`.
+**Produces:** `build_coverage_watch_body`, `plan_coverage_watch_action`, `_open_coverage_watch_issue`, `_create/_update/_close_coverage_watch_issue`.
+**Issue policy:** only `mono_regional` and `no_data` findings open/keep an issue; `insufficient_data` is dashboard-only (does not open an issue — quiet but not silent).
 
-**Interfaces:**
-- Consumes: `coverage_watch` (Task 5), the existing yield-watch issue helpers as the pattern.
-- Produces: `build_coverage_watch_body(findings) -> str`; `plan_coverage_watch_action(findings, open_issue) -> dict | None` returning `{"action": "create_coverage_watch"|"update_coverage_watch"|"close_coverage_watch", ...}`.
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Failing test**
 
 ```python
-# in tests/test_source_health_sentinel.py
+# tests/test_source_health_sentinel.py
 from scripts.source_health_sentinel import (
-    build_coverage_watch_body, plan_coverage_watch_action, COVERAGE_WATCH_MARKER,
-)
+    build_coverage_watch_body, plan_coverage_watch_action, COVERAGE_WATCH_MARKER)
 
 
 class TestCoverageWatchIssue:
-    FIND = [{"cls": "heat", "kind": "mono_regional", "dominant": "United States",
+    MONO = [{"cls": "heat", "kind": "mono_regional", "dominant": "United States",
              "share": 0.95, "events": 22, "distribution": {"United States": 21, "Spain": 1}}]
+    INSUF = [{"cls": "heat", "kind": "insufficient_data", "dominant": "—",
+              "share": 0.0, "events": 10, "distribution": {}}]
 
-    def test_body_has_marker_and_proxy_note(self):
-        body = build_coverage_watch_body(self.FIND)
-        assert COVERAGE_WATCH_MARKER in body
-        assert "United States" in body and "95" in body
+    def test_body_has_marker_and_share(self):
+        body = build_coverage_watch_body(self.MONO)
+        assert COVERAGE_WATCH_MARKER in body and "United States" in body and "95" in body
 
-    def test_create_when_findings_and_no_open_issue(self):
-        action = plan_coverage_watch_action(self.FIND, None)
-        assert action["action"] == "create_coverage_watch"
+    def test_create_when_mono_and_no_issue(self):
+        assert plan_coverage_watch_action(self.MONO, None)["action"] == "create_coverage_watch"
 
-    def test_close_when_no_findings_and_open_issue(self):
-        action = plan_coverage_watch_action([], {"number": 7, "body": COVERAGE_WATCH_MARKER})
-        assert action == {"action": "close_coverage_watch", "number": 7}
+    def test_insufficient_data_does_not_open_issue(self):
+        assert plan_coverage_watch_action(self.INSUF, None) is None
 
-    def test_noop_when_no_findings_no_issue(self):
+    def test_close_when_clear_and_issue_open(self):
+        assert plan_coverage_watch_action([], {"number": 7, "body": COVERAGE_WATCH_MARKER}) == {
+            "action": "close_coverage_watch", "number": 7}
+
+    def test_noop_when_clear_no_issue(self):
         assert plan_coverage_watch_action([], None) is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-
+- [ ] **Step 2: Run — expect FAIL** (names undefined)
 Run: `.venv/bin/python -m pytest tests/test_source_health_sentinel.py::TestCoverageWatchIssue -q`
-Expected: FAIL — names not defined.
 
-- [ ] **Step 3: Implement** (mirror `build_yield_watch_body` / `plan_yield_watch_action`)
+- [ ] **Step 3: Implement** — mirror the real yield-watch helpers (`_open_yield_watch_issue` is a title match over `gh issue list`, :524; `_open_issue_body`/`_open_issue_number` exist; `LABEL` and `_run_gh` are module-level).
 
 ```python
 def build_coverage_watch_body(findings: list[dict]) -> str:
-    lines = [
-        COVERAGE_WATCH_MARKER,
-        "**A global source may be blind to a region.**",
-        "",
-        "A signal class the bot is supposed to cover globally has gone mono-regional "
-        "(or stopped recording geography). This is the class of failure that hid the "
-        "US-only heat blind spot. Advisory; investigate whether a provider/source "
-        "regressed. Auto-closes only when coverage actually diversifies.",
-        "",
-    ]
+    lines = [COVERAGE_WATCH_MARKER, "**A global source may be blind to a region.**", "",
+             "A signal class the bot covers globally has gone mono-regional (or stopped "
+             "recording geography) — the class of failure that hid the US-only heat blind "
+             "spot. Advisory; check whether a provider/source regressed. Auto-closes only "
+             "when coverage actually diversifies.", ""]
     for f in findings:
         if f["kind"] == "no_data":
-            lines.append(f"- `{f['cls']}`: NO coverage data in the last "
-                         f"{COVERAGE_WINDOW_DAYS}d while the bot is drafting "
-                         f"({f['events']} records) — recording may be broken.")
-        else:
+            lines.append(f"- `{f['cls']}`: NO coverage data in {COVERAGE_WINDOW_DAYS}d while "
+                         f"drafting ({f['events']} records) — recording may be broken.")
+        elif f["kind"] == "mono_regional":
             dist = ", ".join(f"{k}:{v}" for k, v in f["distribution"].items())
             lines.append(f"- `{f['cls']}`: {int(f['share'] * 100)}% concentrated in "
                          f"**{f['dominant']}** over {f['events']} events. Distribution: {dist}")
-    lines.append("")
-    lines.append("_Auto-maintained by the source-health sentinel coverage watch._")
+    lines += ["", "_Auto-maintained by the source-health sentinel coverage watch._"]
     return "\n".join(lines)
 
 
-def _open_coverage_watch_issue() -> dict | None:
-    return _find_marker_issue(COVERAGE_WATCH_MARKER)  # reuse yield-watch lookup helper
+def _issue_worthy(findings: list[dict]) -> list[dict]:
+    return [f for f in findings if f.get("kind") in ("mono_regional", "no_data")]
 
 
-def plan_coverage_watch_action(findings: list[dict], open_issue: dict | None) -> dict | None:
-    if findings:
-        body = build_coverage_watch_body(findings)
+def _open_coverage_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(["issue", "list", "--label", LABEL, "--state", "open",
+                       "--json", "number,title,body,labels", "--limit", "200"]).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list coverage-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == COVERAGE_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_coverage_watch_action(findings: list[dict], open_issue: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    worthy = _issue_worthy(findings)
+    if worthy:
+        body = build_coverage_watch_body(worthy)
         if open_issue is None:
-            return {"action": "create_coverage_watch", "body": body,
-                    "labels": ["source-health-sentinel", "unknown"]}
+            return {"action": "create_coverage_watch", "body": body, "labels": [LABEL, "unknown"]}
         if _open_issue_body(open_issue).strip() != body.strip():
-            return {"action": "update_coverage_watch",
-                    "number": _open_issue_number(open_issue), "body": body}
+            return {"action": "update_coverage_watch", "number": _open_issue_number(open_issue), "body": body}
         return None
     if open_issue is not None:
         return {"action": "close_coverage_watch", "number": _open_issue_number(open_issue)}
     return None
 ```
 
-Note: the yield-watch uses an inline `_open_yield_watch_issue` that lists issues by title. Refactor that lookup into a shared `_find_marker_issue(marker)` (search open issues whose body contains `marker`) OR copy the title-search shape with `COVERAGE_WATCH_TITLE`. The body-marker search is more robust to title edits; if refactoring is too invasive for this task, mirror the title-search exactly. Add `_create_coverage_watch_issue` / `_update_coverage_watch_issue` / `_close_coverage_watch_issue` mirroring the three yield-watch issue functions (gh issue create/edit/close), and wire into `main()` next to the yield-watch block:
-
+Add `_create_coverage_watch_issue(action)` / `_update_coverage_watch_issue(action)` / `_close_coverage_watch_issue(number)` mirroring the three `_*_yield_watch_issue` functions verbatim (same `_run_gh` create/edit/close shape, swapping `COVERAGE_WATCH_TITLE`). Wire into `main()` next to the yield-watch block (state already parsed via `json.load`):
 ```python
-    coverage_findings = coverage_watch(
-        (state or {}).get("coverage_log"), (state or {}).get("run_history"),
-        now=datetime.now(timezone.utc),
-    )
-    cov_action = plan_coverage_watch_action(coverage_findings, _open_coverage_watch_issue())
+    cov = coverage_watch(state.get("coverage_log"), state.get("run_history"),
+                         now=datetime.now(timezone.utc))
+    cov_action = plan_coverage_watch_action(cov, _open_coverage_watch_issue())
     if cov_action:
-        if cov_action["action"] == "create_coverage_watch":
-            _create_coverage_watch_issue(cov_action)
-        elif cov_action["action"] == "update_coverage_watch":
-            _update_coverage_watch_issue(cov_action)
-        else:
-            _close_coverage_watch_issue(cov_action["number"])
+        if cov_action["action"] == "create_coverage_watch": _create_coverage_watch_issue(cov_action)
+        elif cov_action["action"] == "update_coverage_watch": _update_coverage_watch_issue(cov_action)
+        else: _close_coverage_watch_issue(cov_action["number"])
 ```
 
-- [ ] **Step 4: Run tests + full sentinel suite**
-
-Run: `.venv/bin/python -m pytest tests/test_source_health_sentinel.py -q`
-Expected: PASS (existing + new).
-
+- [ ] **Step 4: Run — expect PASS (full sentinel suite)** `.venv/bin/python -m pytest tests/test_source_health_sentinel.py -q`
 - [ ] **Step 5: Commit**
-
 ```bash
 git add scripts/source_health_sentinel.py tests/test_source_health_sentinel.py
 git commit -m "feat(coverage): reconcile coverage-watch advisory issue"
@@ -698,57 +563,46 @@ git commit -m "feat(coverage): reconcile coverage-watch advisory issue"
 
 ---
 
-### Task 7: Dashboard JS mirror
+### Task 7: Dashboard mirror + render
 
-**Files:**
-- Modify: `dashboard/lib/source-health.js` (add `coverageWatch` + constants; surface in the payload)
-- Test: `dashboard/tests/source-health.test.js` (add cases)
+**Files:** Modify `dashboard/lib/source-health.js`, `dashboard/app/health/page.js`, `dashboard/app/components/SourcesView.js`; Test `dashboard/tests/source-health.test.js`.
+**Produces:** `coverageWatch(coverageLog, runHistory, now)` (same shape as Python); `coverage` in `buildSourceHealthPayload`; a one-line coverage indicator on the health page.
 
-**Interfaces:**
-- Consumes: `state.coverage_log`, `state.run_history`.
-- Produces: `coverageWatch(coverageLog, runHistory, now)` returning the same finding shape as the Python classifier; surfaced via `buildSourceHealthPayload`.
-
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Failing test**
 
 ```javascript
-// in dashboard/tests/source-health.test.js
+// dashboard/tests/source-health.test.js
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { coverageWatch } from "../lib/source-health.js"
 
 const NOW = new Date("2026-06-25T00:00:00Z")
-const log = (country, continent, n) =>
-  Array.from({ length: n }, (_, i) => ({ cls: "heat", event_id: `${country}-${i}`,
-    country, continent, date: "2026-06-25" }))
-const alertsRun = () => [{ id: "r", mode: "alerts", started_at: "2026-06-25T00:00:00Z" }]
+const log = (country, continent, n) => Array.from({ length: n }, (_, i) =>
+  ({ cls: "heat", event_id: `${country}-${i}`, country, continent, date: "2026-06-25" }))
+const alerts = () => [{ id: "r", mode: "alerts", started_at: "2026-06-25T00:00:00Z" }]
 
 test("coverageWatch flags US-only heat", () => {
-  const out = coverageWatch(log("United States", "North America", 22), alertsRun(), NOW)
-  assert.equal(out.length, 1)
-  assert.equal(out[0].kind, "mono_regional")
-  assert.ok(out[0].share >= 0.85)
+  const out = coverageWatch(log("United States", "North America", 22), alerts(), NOW)
+  assert.equal(out.length, 1); assert.equal(out[0].kind, "mono_regional"); assert.ok(out[0].share >= 0.85)
 })
-
 test("coverageWatch ignores diversified heat", () => {
-  const out = coverageWatch([...log("United States", "North America", 8),
-    ...log("Spain", "Europe", 7), ...log("India", "Asia", 7)], alertsRun(), NOW)
-  assert.deepEqual(out, [])
+  assert.deepEqual(coverageWatch([...log("United States", "North America", 8),
+    ...log("Spain", "Europe", 7), ...log("India", "Asia", 7)], alerts(), NOW), [])
 })
-
+test("coverageWatch reports insufficient_data, not silent", () => {
+  assert.equal(coverageWatch(log("United States", "North America", 10), alerts(), NOW)[0].kind, "insufficient_data")
+})
 test("coverageWatch flags no-data while drafting", () => {
-  assert.equal(coverageWatch([], alertsRun(), NOW)[0].kind, "no_data")
+  assert.equal(coverageWatch([], alerts(), NOW)[0].kind, "no_data")
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 2: Run — expect FAIL** `coverageWatch is not exported`
+Run: `cd dashboard && node --test 2>&1 | grep -iA3 coverage`
 
-Run: `cd dashboard && node --test 2>&1 | grep -i coverage`
-Expected: FAIL — `coverageWatch` is not exported.
-
-- [ ] **Step 3: Implement** (mirror the Python; identical constants)
+- [ ] **Step 3: Implement** the mirror in `dashboard/lib/source-health.js` (identical constants + the `insufficient_data`/`no_data` branches):
 
 ```javascript
-// dashboard/lib/source-health.js
 // MUST match scripts/source_health_sentinel.py
 export const COVERAGE_WINDOW_DAYS = 21
 export const COVERAGE_MIN_EVENTS = 20
@@ -761,26 +615,26 @@ function botIsDrafting(runHistory) {
 }
 
 export function coverageWatch(coverageLog, runHistory, now = new Date()) {
-  const cutoff = new Date(now.getTime() - COVERAGE_WINDOW_DAYS * 86400000)
-    .toISOString().slice(0, 10)
+  const cutoff = new Date(now.getTime() - COVERAGE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10)
   const drafting = botIsDrafting(runHistory)
   const findings = []
   for (const cls of COVERAGE_WATCHED_CLASSES) {
-    const recs = (coverageLog || []).filter(
-      (r) => r && r.cls === cls && String(r.date || "") >= cutoff)
+    const recs = (coverageLog || []).filter((r) => r && r.cls === cls && String(r.date || "") >= cutoff)
     const n = recs.length
     if (n < COVERAGE_DATA_FLOOR) {
       if (drafting) findings.push({ cls, kind: "no_data", dominant: "—", share: 0, events: n, distribution: {} })
       continue
     }
-    if (n < COVERAGE_MIN_EVENTS) continue
+    if (n < COVERAGE_MIN_EVENTS) {
+      findings.push({ cls, kind: "insufficient_data", dominant: "—", share: 0, events: n, distribution: {} })
+      continue
+    }
     for (const axis of ["country", "continent"]) {
       const counts = {}
       for (const r of recs) { const k = String(r[axis] || "Unknown"); counts[k] = (counts[k] || 0) + 1 }
       const [dominant, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
-      const share = top / n
-      if (dominant !== "Unknown" && share >= COVERAGE_CONCENTRATION) {
-        findings.push({ cls, kind: "mono_regional", dominant, share: Math.round(share * 1000) / 1000,
+      if (dominant !== "Unknown" && top / n >= COVERAGE_CONCENTRATION) {
+        findings.push({ cls, kind: "mono_regional", dominant, share: Math.round((top / n) * 1000) / 1000,
           events: n, distribution: counts })
         break
       }
@@ -790,25 +644,27 @@ export function coverageWatch(coverageLog, runHistory, now = new Date()) {
 }
 ```
 
-Then surface it in `buildSourceHealthPayload` (add `coverage: coverageWatch(state.coverage_log, state.run_history, new Date())` to the returned object so the dashboard can render it).
+- [ ] **Step 4: Surface + render.** In `dashboard/lib/source-health.js` `buildSourceHealthPayload`, add `coverage: coverageWatch(state.coverage_log, state.run_history, new Date())` to the returned object. In `dashboard/app/health/page.js` (:55 mapping), add `coverage: Array.isArray(payload?.coverage) ? payload.coverage : []` and pass `coverage` to `SourcesView`. In `dashboard/app/components/SourcesView.js`, render one line above the sources list:
+```javascript
+  coverage.length === 0
+    ? h("div", { className: "stat-label", key: "cov" }, "coverage: heat ok")
+    : h("div", { className: "stat-label", key: "cov", style: { color: "#FF5A1F" } },
+        `coverage: ${coverage.map((c) => `${c.cls} ${c.kind === "mono_regional" ? Math.round(c.share * 100) + "% " + c.dominant : c.kind}`).join(", ")}`)
+```
+(Read `SourcesView.js:46`/`180` for the exact prop list + `h()` helper before wiring.)
 
-- [ ] **Step 4: Run tests to verify pass**
-
-Run: `cd dashboard && node --test 2>&1 | tail -5`
-Expected: PASS (existing + 3 new).
-
-- [ ] **Step 5: Commit**
-
+- [ ] **Step 5: Run — expect PASS** `cd dashboard && node --test 2>&1 | tail -5` and `cd dashboard && npx next build` unaffected.
+- [ ] **Step 6: Commit**
 ```bash
-git add dashboard/lib/source-health.js dashboard/tests/source-health.test.js
-git commit -m "feat(coverage): dashboard mirror of the coverage watch"
+git add dashboard/lib/source-health.js dashboard/app/health/page.js dashboard/app/components/SourcesView.js dashboard/tests/source-health.test.js
+git commit -m "feat(coverage): dashboard mirror + render of the coverage watch"
 ```
 
 ---
 
 ## Self-Review
 
-- **Spec coverage:** persistent tally (T3) ✓; record at source (T4) ✓; heat-only scope (T5 `COVERAGE_WATCHED_CLASSES`) ✓; country+continent dual check (T5) ✓; no-data alarm (T5) ✓; realistic thresholds (Global Constraints) ✓; advisory issue (T6) ✓; JS mirror (T7) ✓; country_continent artifact (T1) + resolve (T2) ✓; realistic regression test (T5 `test_us_only_heat_flags_mono_regional` with 22 records) ✓.
-- **Placeholder scan:** Task 6 names a `_find_marker_issue` refactor with an explicit fallback (mirror the title-search) — not a placeholder, a decision with a concrete default. All other steps carry real code.
-- **Type consistency:** `record_coverage_observation` keyword args match between T3 (def) and T4 (calls); finding dict shape matches between T5 (producer), T6 (consumer), T7 (mirror); constants identical across T5/T7.
-- **Open risk for the reviewer:** Task 6 depends on the exact yield-watch helper names (`_open_issue_body`, `_open_issue_number`, the gh issue create/edit/close shape). The implementer must read `scripts/source_health_sentinel.py:457-686` and mirror precisely; if the yield-watch issue lookup is title-based, use `COVERAGE_WATCH_TITLE`, not a body-marker search.
+- **Spec coverage:** persistent tally (T3) ✓; sqlite persistence (T3 f/g + round-trip) ✓; record at all heat sites incl. streak (T4) ✓; heat-only scope (T5) ✓; country+continent dual check (T5) ✓; insufficient_data not-silent (T5/T6/T7) ✓; no-data alarm (T5) ✓; advisory issue, insufficient_data not issue-worthy (T6) ✓; JS mirror + render (T7) ✓; artifact+resolve (T1/T2) ✓; realistic regression (T5 22-record US case) ✓.
+- **Codex P1s closed:** state_schema parity (T3 f), sqlite `_METADATA_JSON_KEYS` (T3 g) + round-trip test (T3 step 2), real title-based issue lookup (T6 `_open_coverage_watch_issue`), insufficient_data not silent (T5/T7). **P2s:** record-streak recorded (T4), dashboard render (T7 step 4), stale anchors corrected (434/483/735).
+- **Type consistency:** `record_coverage_observation` kwargs identical T3↔T4; finding shape identical T5(producer)↔T6(consumer)↔T7(mirror); constants identical T5↔T7; `CoverageRecord` fields match the recorded dict (T3 e↔f).
+- **Reviewer note:** the `_create/_update/_close_coverage_watch_issue` functions are described as "mirror the yield-watch verbatim" rather than fully inlined — the implementer must open `scripts/source_health_sentinel.py:581-625` and copy the exact `_run_gh` shapes. This is the one place to double-check during implementation.
