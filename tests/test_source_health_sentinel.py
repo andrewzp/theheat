@@ -446,3 +446,50 @@ class TestServedViaBackupLeg:
         report = run_sentinel({"firms": _src(statuses=["degraded"] * 5, last_error="served via noaa_hms")})
         assert report["has_failures"] is False
         assert [v["source"] for v in report["degraded"]] == ["firms"]
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — coverage_watch classifier
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import coverage_watch  # noqa: E402
+
+
+def _log(country: str, continent: str, n: int, cls: str = "heat") -> list[dict]:
+    return [
+        {"cls": cls, "event_id": f"{country}-{i}", "country": country,
+         "continent": continent, "date": "2026-06-25"}
+        for i in range(n)
+    ]
+
+
+def _alerts() -> list[dict]:
+    return [{"id": "r", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z"}]
+
+
+class TestCoverageWatch:
+    NOW = datetime(2026, 6, 25, tzinfo=timezone.utc)
+
+    def test_us_only_flags_mono_regional(self):
+        out = coverage_watch(_log("United States", "North America", 22), _alerts(), now=self.NOW)
+        assert len(out) == 1 and out[0]["kind"] == "mono_regional"
+        assert out[0]["dominant"] in ("United States", "North America") and out[0]["share"] >= 0.85
+
+    def test_diversified_does_not_flag(self):
+        log = (
+            _log("United States", "North America", 8)
+            + _log("Spain", "Europe", 6)
+            + _log("India", "Asia", 4)
+            + _log("Brazil", "South America", 4)
+        )
+        assert coverage_watch(log, _alerts(), now=self.NOW) == []
+
+    def test_thin_window_is_insufficient_not_silent(self):
+        out = coverage_watch(_log("United States", "North America", 10), _alerts(), now=self.NOW)
+        assert len(out) == 1 and out[0]["kind"] == "insufficient_data"
+
+    def test_no_data_while_drafting_flags(self):
+        out = coverage_watch([], _alerts(), now=self.NOW)
+        assert len(out) == 1 and out[0]["kind"] == "no_data"
+
+    def test_no_data_quiet_bot_does_not_flag(self):
+        assert coverage_watch([], [], now=self.NOW) == []

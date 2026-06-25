@@ -624,6 +624,92 @@ def _close_yield_watch_issue(number: int) -> None:
     print(f"[sentinel] closed yield-watch issue #{number}")
 
 
+COVERAGE_WINDOW_DAYS = 21
+COVERAGE_MIN_EVENTS = 20
+COVERAGE_CONCENTRATION = 0.85
+COVERAGE_DATA_FLOOR = 5
+COVERAGE_WATCHED_CLASSES = ("heat",)  # extend per source instrumentation (Future)
+COVERAGE_WATCH_TITLE = "Coverage watch: a global source may be blind to a region"
+COVERAGE_WATCH_MARKER = "<!-- source-health-coverage-watch -->"
+
+
+def _bot_is_drafting(run_history: list[dict] | None) -> bool:
+    return any(
+        str(r.get("mode") or "") in ("alerts", "both")
+        for r in (run_history or [])
+        if isinstance(r, Mapping)
+    )
+
+
+def coverage_watch(
+    coverage_log: list[dict] | None,
+    run_history: list[dict] | None,
+    *,
+    now: datetime,
+) -> list[dict]:
+    """Classify geographic concentration of events in the coverage_log.
+
+    Returns a list of findings, each with shape:
+        {cls, kind, dominant, share, events, distribution}
+
+    Kinds:
+      - ``no_data``          — bot is drafting but zero events (< DATA_FLOOR)
+      - ``insufficient_data``— too few events to judge (>= DATA_FLOOR, < MIN_EVENTS)
+      - ``mono_regional``    — >= MIN_EVENTS and one country or continent dominates
+    """
+    cutoff = (now - timedelta(days=COVERAGE_WINDOW_DAYS)).date().isoformat()
+    drafting = _bot_is_drafting(run_history)
+    findings: list[dict] = []
+    for cls in COVERAGE_WATCHED_CLASSES:
+        recs = [
+            r for r in (coverage_log or [])
+            if isinstance(r, Mapping)
+            and r.get("cls") == cls
+            and str(r.get("date") or "") >= cutoff
+        ]
+        n = len(recs)
+        if n < COVERAGE_DATA_FLOOR:
+            if drafting:
+                findings.append({
+                    "cls": cls,
+                    "kind": "no_data",
+                    "dominant": "—",
+                    "share": 0.0,
+                    "events": n,
+                    "distribution": {},
+                })
+            continue
+        if n < COVERAGE_MIN_EVENTS:
+            findings.append({
+                "cls": cls,
+                "kind": "insufficient_data",
+                "dominant": "—",
+                "share": 0.0,
+                "events": n,
+                "distribution": {},
+            })
+            continue
+        for axis in ("country", "continent"):  # country takes precedence
+            counts: dict[str, int] = {}
+            for r in recs:
+                key = str(r.get(axis) or "Unknown")
+                counts[key] = counts.get(key, 0) + 1
+            dominant, top = max(counts.items(), key=lambda kv: kv[1])
+            if dominant != "Unknown" and top / n >= COVERAGE_CONCENTRATION:
+                findings.append({
+                    "cls": cls,
+                    "kind": "mono_regional",
+                    "dominant": dominant,
+                    "share": round(top / n, 3),
+                    "events": n,
+                    "distribution": dict(
+                        sorted(counts.items(), key=lambda kv: -kv[1])
+                    ),
+                })
+                break
+    return findings
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
