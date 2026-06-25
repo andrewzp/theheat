@@ -1,141 +1,154 @@
-# Design — Source-health coverage watch (geographic representativeness)
+# Design — Heat coverage watch (geographic representativeness)
 
 - **Date:** 2026-06-25
-- **Status:** Proposed (awaiting Andrew's review)
-- **Surface:** `scripts/source_health_sentinel.py` + `dashboard/lib/source-health.js`
-- **Type:** Additive monitoring — no change to drafting/bot behavior
+- **Status:** Proposed v2 (revised after codex adversarial review — awaiting Andrew's review)
+- **Surface:** `src/state.py` + `src/orchestrator/sources/open_meteo.py` (record) ·
+  `scripts/source_health_sentinel.py` + `dashboard/lib/source-health.js` (check)
+- **Type:** Additive monitoring — no change to drafting/scoring behavior
 
 ## Problem
 
-On 2026-06-25 we found the heat detector had been **100% US-only for ~7 weeks**
-(since the GHCN cutover, PR #33, 2026-05-05) — 21/21 heat events US — and was
-structurally blind to every other continent. It only surfaced when a deadly
-European heatwave made the gap obvious. Fixed the symptom in PR #332
-(`THEHEAT_SIGNALS_PROVIDER=both`), but the *monitoring* blind spot remains.
+The heat detector silently ran US-only for ~7 weeks (GHCN cutover, PR #33) and was
+blind to a deadly European heatwave — 21/21 heat events US. Every health check
+measures **liveness** ("is the source up / yielding >0?"), never **coverage** ("does
+output match the *global* mission?"). A US-only heat feed was green by every metric.
+Fixed the symptom (PR #332, `provider=both`); this closes the *monitoring* gap so it
+can't recur unseen.
 
-**Root cause:** every health check measures **liveness** ("is the source up?
-is it yielding >0 observations?"), never **coverage** ("does our output match
-the mission of *global* climate awareness?"). A US-only heat feed was green by
-every existing metric. Nothing watches the map.
+## Decision log
 
-## Goal
+- **v1 (shadow_slate proxy) REJECTED** after codex adversarial review (2026-06-25).
+  Codex verified, and I confirmed: `run_history` is capped at **20 runs**
+  (`_merge_run_history(max_items=20)`, state.py:404) ≈ a **<1.5-day window with ~4–7
+  alert slates**, so a `MIN_EVENTS=15` per-class rule would have *skipped* the very
+  incident it targets. And `shadow_slate.summary = bundle.where or city` (funnel.py:27)
+  is **not** "City, Country" for non-heat classes (fire=`nearest_city`, quake=USGS
+  `place`, cyclone=`"storm, basin"`), so parsing country from it fails → Unknown →
+  silence. The proxy is a monitor that mostly wouldn't fire.
+- **v2 (this doc):** record canonical per-event geography **at the source** (heat's
+  clean `country`) into a **persistent rolling tally** decoupled from the run_history
+  cap; **scope to heat only** (the class with reliable geography); add a **no-data
+  alarm**. Other classes are deferred to per-source instrumentation (Future).
 
-A representativeness check that would have caught this: alert when a source/signal
-that is *supposed* to be global has gone **mono-regional** over the recent window.
-Advisory (a human investigates), not a hard gate. Mirrors the existing yield-watch.
+## Scope
 
-## Non-goals
-
-- Not a hard failure / not a drafting gate — advisory only, like yield-watch.
-- No change to the bot, the providers, or scoring.
-- v1 does not instrument every source for raw observed geography (see Future).
+**Heat only.** Heat events carry a clean `country` on the event object
+(`ev.country` in run_extreme_signals). Fire/air_quality/precip/quake/ocean/disaster
+do **not** expose per-event country uniformly today; watching them would false-positive
+on physical geography (faults, reefs, basins, monsoons) and mostly parse to Unknown.
+They are a Future item, instrumented one source at a time.
 
 ## Design
 
-### Data basis — `shadow_slate` (decided 2026-06-25)
+### 1. Persistent coverage tally (`coverage_log` in state)
 
-Only the heat source writes per-event geography to `run_history`; the rest record
-counts (`details: None`). The one **source-agnostic** geographic signal retained
-across the window is **`shadow_slate`** — the top-scored events *per run*, each with
-a `type` and a `summary` ending in the location (`"Mauna Loa, Hawaii, United States"`,
-`"Riyadh, Saudi Arabia"`). The check therefore measures **coverage of what the bot
-surfaced** — a strong proxy for true coverage, not every raw observation. The issue
-body states this proxy nature plainly. (The fully-accurate raw-observed version is a
-Future item.)
+A new append-only state list, pruned to a rolling window — **independent of the
+20-run run_history cap**, which is what makes the window long enough to be reliable.
 
-### Continent resolution
+```
+state["coverage_log"] = [
+  { "cls": "heat", "event_id": "monthly_high_USC00092159_06_2026-06-20",
+    "country": "United States", "continent": "North America", "date": "2026-06-25" },
+  ...
+]
+```
 
-A committed `data/country_continent.json` maps country → continent, **derived from
-`data/cities.csv`** lat/lon (each tracked country bucketed to its cities' continent;
-generator `scripts/build_country_continent.py`, re-runnable). Python and the JS
-mirror read the **same JSON** so they cannot drift.
+- Pruned to `COVERAGE_WINDOW_DAYS = 21` on each write (and defensively on read).
+- Merged via a dedicated merge-spec entry (append + prune + dedup on **`event_id`**,
+  so concurrent gist writers / reruns don't double-count — but two *distinct* heat
+  events in the same country on the same day correctly count as two).
+- One record per surfaced heat event (see §2). At a few heat drafts/day this
+  accumulates **dozens of events over 21 days** — comfortably above the minimum,
+  unlike the <1.5-day run_history window.
 
-Resolving a `shadow_slate` entry to a continent:
-1. Parse the country = the substring after the last comma in `summary`.
-2. If it reads as US (`"United States"`, `"… [United States]"`, `"US"`) → `North America`.
-3. Else look it up in `country_continent.json` (full names match cities.csv for non-US).
-4. Else (coord-only fire summaries like `"63.2N, 81.4E"`) → bucket by lat/lon.
-5. Else → `Unknown`.
+### 2. Recording site (canonical geography, no parsing)
 
-### Signal classes
+In `run_extreme_signals` (src/orchestrator/sources/open_meteo.py), at each point a
+**heat** signal is enqueued (the per-city `strongest_signal` enqueue and the
+`country_record` enqueue), call:
 
-`shadow_slate.type` maps to a signal **class** (`COVERAGE_CLASS_FOR_TYPE`):
-`heat` (monthly/all_time high+low, absolute_extreme, calendar, anomaly, country, streak),
-`fire`, `air_quality` (dust_event, air_quality_hazard, pm25), `precip`, `quake`,
-`ocean` (sst_anomaly, coral), `disaster` (gdacs, copernicus_ems).
+```
+state.record_coverage_observation(bot_state, cls="heat",
+    country=<ev.country>, continent=resolve_continent(ev.country), when=<signal_date>)
+```
 
-`COVERAGE_GLOBAL_CLASSES` (the opt-in declaration — the actual fix) = the classes
-whose sources Andrew declared global-ambition: `heat, fire, air_quality, precip,
-quake, ocean, disaster`. Only these are checked. Everything else (US-only
-`nws_alerts`/drought/water sources, basin-scoped `nhc`/`jtwc`, polar ice/ozone) is
-absent from the list and never flagged — false positives are excluded *by
-construction*.
+The country comes straight off the typed event — **no summary parsing, no Unknown
+guessing.** The exact heat enqueue sites are enumerated in the plan; the recorded
+`cls` is the literal `"heat"`, not a parsed type, so new heat *kinds*
+(`monthly_high`, `all_time_high`, `absolute_extreme`, `anomaly_hot`, `country_high`,
+`record_streak`, calendar records, …) all record uniformly.
 
-### The rule — `coverage_watch_classes(run_history)`
+### 3. Continent + country resolution
 
-For each declared-global class, across all `shadow_slate` entries in the window
-(**deduplicated by `event_id`** — a high-scoring event persists across consecutive
-runs' slates and must count once, or concentration inflates):
-- Resolve each entry to a continent; tally per class (`assessable` = entries that
-  resolve to a real continent, i.e. excluding `Unknown`).
-- **Skip** if `assessable < MIN_EVENTS` (too small a sample) or if `Unknown` is the
-  majority (can't assess — e.g. ocean events at sea).
-- **Flag** if any single continent holds `≥ CONCENTRATION_THRESHOLD` of the
-  assessable events. Record the class, the dominant continent, its share, and the
-  full distribution.
+`data/country_continent.json` (committed, derived from cities.csv lat/lon by
+`scripts/build_country_continent.py`) maps country → continent. `resolve_continent`:
+US name-forms (`"United States"`, `"… [United States]"`, `"US"`) → `North America`;
+else the map; else `Unknown`. Transcontinental countries (Russia, Turkey, …) get a
+single best-effort continent — acceptable because the **country** is also recorded and
+checked directly (below), so US-only is caught precisely even though it's inside
+"North America".
 
-### Tunables (constants)
+### 4. The check — `coverage_watch(coverage_log, now)`
 
-- `COVERAGE_MIN_EVENTS = 15`
-- `COVERAGE_CONCENTRATION_THRESHOLD = 0.85`
-- `COVERAGE_UNKNOWN_SKIP_FRACTION = 0.5`
+Over the heat records in the window (deduped):
+- **No-data alarm:** if the bot has been drafting but heat coverage records are
+  `< COVERAGE_DATA_FLOOR` (e.g. 5) → flag `coverage instrumentation may be broken`
+  (do **not** silently skip — this is the codex "missing data = silence" fix).
+- **Concentration:** flag if **either** a single **continent** holds
+  `≥ COVERAGE_CONCENTRATION` of records **or** a single **country** holds
+  `≥ COVERAGE_CONCENTRATION`, over `≥ COVERAGE_MIN_EVENTS` records. The country check
+  catches "US-only" precisely; the continent check catches "all-Europe" drift.
+- Below `MIN_EVENTS` (and above the data floor) → "insufficient data this window",
+  reported as a soft note, not silent.
 
-### Output
+### 5. Tunables (validated against the real heat rate)
 
-One advisory issue, sibling to yield-watch:
-- `COVERAGE_WATCH_TITLE = "Coverage watch: global sources gone mono-regional"`
-- `COVERAGE_WATCH_MARKER = "<!-- source-health-coverage-watch -->"`
-- Body lists each flagged class with its dominant continent + share + distribution,
-  the proxy caveat, and an investigate hint. Labeled advisory (`source-health-sentinel`,
-  `unknown`), auto-closes when no class is mono-regional. Same create/update/close
-  reconciliation as `plan_yield_watch_action`.
+- `COVERAGE_WINDOW_DAYS = 21`
+- `COVERAGE_MIN_EVENTS = 20`   (reachable: heat drafts multiple/day over 21 days)
+- `COVERAGE_CONCENTRATION = 0.85`
+- `COVERAGE_DATA_FLOOR = 5`
 
-### Wiring
+### 6. Output
 
-- `scripts/source_health_sentinel.py`: add `coverage_watch_classes` + `build_coverage_watch_body`
-  + `plan_coverage_watch_action` + `_open/_create/_update/_close_coverage_watch_issue`,
-  reconciled in `main()` alongside yield-watch (it already has `run_history`).
-- `dashboard/lib/source-health.js`: mirror `coverageWatchClasses` so the dashboard can
-  surface it; keep Python/JS in sync (shared JSON + identical thresholds).
+One advisory issue (sibling to yield-watch): `COVERAGE_WATCH_TITLE`,
+`COVERAGE_WATCH_MARKER`, body naming the dominant country/continent + share +
+distribution + the no-data state, auto-closing when coverage diversifies. Codex flagged
+advisory-may-be-ignored: the body leads with "the bot may be blind to a region" and the
+issue is **not** auto-closed merely because the sample shrank (only when coverage is
+actually diverse), so a real blind spot stays open.
 
-## Testing
+## Wiring
 
-Pure classifier, unit-tested both sides (`tests/test_source_health_sentinel.py` +
-`dashboard/tests/source-health.test.js`):
-- the heat-100%-US case **flags** (regression for the actual incident);
-- a class spread across continents does **not** flag;
-- a declared-regional source (`nws_alerts`) is never considered;
-- below `MIN_EVENTS` → skipped; majority-`Unknown` → skipped;
-- continent resolver: `"United States"`/territory/`"US"` → North America; `"…, Spain"`
-  → Europe; coord-only → lat/lon bucket; junk → Unknown.
+- `src/state.py` — `coverage_log` in DEFAULT_STATE + merge-spec; `record_coverage_observation`; prune helper.
+- `src/orchestrator/sources/open_meteo.py` — record at the two heat enqueue sites.
+- `scripts/source_health_sentinel.py` — `coverage_watch` + issue reconciliation (mirrors yield-watch).
+- `dashboard/lib/source-health.js` — read `coverage_log`, show the distribution + flag (mirror; thresholds shared via constants kept identical, with mirror tests).
+- `data/country_continent.json` + `scripts/build_country_continent.py` — new.
+- tests both sides.
 
-## Files touched
+## Testing (realistic, not toy)
 
-- `data/country_continent.json` — new (derived artifact)
-- `scripts/build_country_continent.py` — new (generator)
-- `scripts/source_health_sentinel.py` — coverage classifier + issue reconciliation
-- `tests/test_source_health_sentinel.py` — coverage tests
-- `dashboard/lib/source-health.js` — JS mirror
-- `dashboard/tests/source-health.test.js` — JS mirror tests
+- Replay a `coverage_log` shaped like the **actual incident** (≥20 heat records, ~100%
+  `United States`) → **flags** (country-concentration). Regression for the outage.
+- A diversified log (US, Spain, India, Australia, Brazil…) → **no flag**.
+- Below `MIN_EVENTS` → "insufficient data" note, not silent, not flagged.
+- Below `DATA_FLOOR` while the bot is drafting → **no-data alarm**.
+- `resolve_continent`: US forms → North America; `"…, Spain"` → Europe; junk → Unknown.
+- Prune drops records older than 21 days; merge dedups concurrent writers.
 
-## Rollout
+## How v2 addresses the codex P1s
 
-Runs hourly inside the existing `source-health-sentinel` workflow (no new workflow,
-no secrets). Advisory issue only. Rollback: remove the reconciliation call (the
-classifier is pure and inert otherwise).
+| Codex P1 | v2 fix |
+|---|---|
+| 20-run window too short → skips the outage | persistent `coverage_log`, 21-day window, not run_history |
+| shadow_slate = scored top-10 sample, not coverage | record **every** surfaced heat event at source |
+| summary not "City, Country" for non-heat | record clean `ev.country`; **heat-only** scope |
+| Unknown-majority skip = silence | no-data alarm + country recorded directly (not parsed) |
+| broad watched set physically regional | scope to heat only; others deferred |
+| continent too coarse (US vs NA) | also record + check **country** concentration |
 
 ## Future
 
-Option B — instrument fire/air_quality/precip/quake/ocean to write per-event
-`country` into `run_history` (like heat), then check **raw observed** coverage
-instead of the surfaced-output proxy. Higher fidelity; a separate multi-source change.
+Instrument fire/air_quality/precip/quake/ocean/disaster to call
+`record_coverage_observation` with their own clean geography (from each bundle's facts),
+extending the same tally + check per-class. One source at a time.
