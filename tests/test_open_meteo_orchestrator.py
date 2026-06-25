@@ -303,3 +303,45 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
     assert "absextreme_Phoenix_2026-06-25" in event_ids  # US sourced from GHCN
     assert "absextreme_Seville_2026-06-25" in event_ids  # Europe sourced from Open-Meteo
     assert current_run["sources"][0]["note"].startswith("provider:both")
+
+
+def test_surfaced_heat_event_records_coverage(monkeypatch):
+    from datetime import date
+    from src.data.open_meteo import AbsoluteExtremeEvent, ExtremeSignalBundle
+    from src.orchestrator.sources import open_meteo as runner
+    from src.state import _fresh_state
+
+    ev = AbsoluteExtremeEvent(city="Seville", country="Spain", today_temp_c=45.1,
+        band_label="Temperate", threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
+        event_id="absextreme_Seville_2026-06-25", signal_date=date(2026, 6, 25))
+    bundle = ExtremeSignalBundle(city="Seville", country="Spain", absolute_extreme=ev, signal_date=date(2026, 6, 25))
+    bot_state = _fresh_state()
+    current_run = {"id": "r1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, m: ([bundle], []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+    recs = [r for r in bot_state["coverage_log"] if r["event_id"] == "absextreme_Seville_2026-06-25"]
+    assert recs and recs[0]["cls"] == "heat" and recs[0]["continent"] == "Europe"
+
+
+def test_cold_extreme_is_not_recorded_as_heat(monkeypatch):
+    from datetime import date
+    from src.data.open_meteo import AbsoluteExtremeEvent, ExtremeSignalBundle
+    from src.orchestrator.sources import open_meteo as runner
+    from src.state import _fresh_state
+
+    cold = AbsoluteExtremeEvent(city="Nw Michigan", country="United States", today_temp_c=0.6,
+        band_label="Temperate", threshold_c=2.0, kind="cold", lat=45.0, lon=-85.0,
+        event_id="absextreme_cold_NwMichigan_2026-06-25", signal_date=date(2026, 6, 25))
+    bundle = ExtremeSignalBundle(city="Nw Michigan", country="United States", absolute_extreme=cold,
+                                 signal_date=date(2026, 6, 25))
+    bot_state = _fresh_state()
+    current_run = {"id": "r1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, m: ([bundle], []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+    assert bot_state["coverage_log"] == []  # cold extreme must not pollute the heat tally
