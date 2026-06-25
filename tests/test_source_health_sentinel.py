@@ -493,3 +493,37 @@ class TestCoverageWatch:
 
     def test_no_data_quiet_bot_does_not_flag(self):
         assert coverage_watch([], [], now=self.NOW) == []
+
+
+# ---------------------------------------------------------------------------
+# Task 6 — coverage-watch issue reconciliation
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    build_coverage_watch_body,
+    plan_coverage_watch_action,
+    COVERAGE_WATCH_MARKER,
+)
+
+
+class TestCoverageWatchIssue:
+    MONO = [{"cls": "heat", "kind": "mono_regional", "dominant": "United States",
+             "share": 0.95, "events": 22, "distribution": {"United States": 21, "Spain": 1}}]
+    INSUF = [{"cls": "heat", "kind": "insufficient_data", "dominant": "—",
+              "share": 0.0, "events": 10, "distribution": {}}]
+
+    def test_body_has_marker_and_share(self):
+        body = build_coverage_watch_body(self.MONO)
+        assert COVERAGE_WATCH_MARKER in body and "United States" in body and "95" in body
+
+    def test_create_when_mono_and_no_issue(self):
+        assert plan_coverage_watch_action(self.MONO, None)["action"] == "create_coverage_watch"
+
+    def test_insufficient_data_does_not_open_issue(self):
+        assert plan_coverage_watch_action(self.INSUF, None) is None
+
+    def test_close_when_clear_and_issue_open(self):
+        assert plan_coverage_watch_action([], {"number": 7, "body": COVERAGE_WATCH_MARKER}) == {
+            "action": "close_coverage_watch", "number": 7}
+
+    def test_noop_when_clear_no_issue(self):
+        assert plan_coverage_watch_action([], None) is None

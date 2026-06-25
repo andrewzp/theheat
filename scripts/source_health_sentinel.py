@@ -710,6 +710,102 @@ def coverage_watch(
     return findings
 
 
+def build_coverage_watch_body(findings: list[dict]) -> str:
+    lines = [
+        COVERAGE_WATCH_MARKER,
+        "**A global source may be blind to a region.**",
+        "",
+        "A signal class the bot covers globally has gone mono-regional (or stopped "
+        "recording geography) — the class of failure that hid the US-only heat blind "
+        "spot. Advisory; check whether a provider/source regressed. Auto-closes only "
+        "when coverage actually diversifies.",
+        "",
+    ]
+    for f in findings:
+        if f["kind"] == "no_data":
+            lines.append(
+                f"- `{f['cls']}`: NO coverage data in {COVERAGE_WINDOW_DAYS}d while "
+                f"drafting ({f['events']} records) — recording may be broken."
+            )
+        elif f["kind"] == "mono_regional":
+            dist = ", ".join(f"{k}:{v}" for k, v in f["distribution"].items())
+            lines.append(
+                f"- `{f['cls']}`: {int(f['share'] * 100)}% concentrated in "
+                f"**{f['dominant']}** over {f['events']} events. Distribution: {dist}"
+            )
+    lines += ["", "_Auto-maintained by the source-health sentinel coverage watch._"]
+    return "\n".join(lines)
+
+
+def _issue_worthy(findings: list[dict]) -> list[dict]:
+    return [f for f in findings if f.get("kind") in ("mono_regional", "no_data")]
+
+
+def _open_coverage_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list coverage-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == COVERAGE_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_coverage_watch_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    worthy = _issue_worthy(findings)
+    if worthy:
+        body = build_coverage_watch_body(worthy)
+        if open_issue is None:
+            return {"action": "create_coverage_watch", "body": body, "labels": [LABEL, "unknown"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_coverage_watch",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "unknown"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_coverage_watch", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_coverage_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", COVERAGE_WATCH_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened coverage-watch issue: {COVERAGE_WATCH_TITLE}")
+
+
+def _update_coverage_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    for label in action.get("remove_labels") or []:
+        args.extend(["--remove-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated coverage-watch issue #{action['number']}")
+
+
+def _close_coverage_watch_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "Coverage watch is clear. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed coverage-watch issue #{number}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
@@ -767,6 +863,19 @@ def main(argv: list[str] | None = None) -> int:
             _update_yield_watch_issue(yield_action)
         else:
             _close_yield_watch_issue(yield_action["number"])
+    cov = coverage_watch(
+        state.get("coverage_log"),
+        state.get("run_history"),
+        now=datetime.now(timezone.utc),
+    )
+    cov_action = plan_coverage_watch_action(cov, _open_coverage_watch_issue())
+    if cov_action:
+        if cov_action["action"] == "create_coverage_watch":
+            _create_coverage_watch_issue(cov_action)
+        elif cov_action["action"] == "update_coverage_watch":
+            _update_coverage_watch_issue(cov_action)
+        else:
+            _close_coverage_watch_issue(cov_action["number"])
     return 0
 
 
