@@ -281,9 +281,13 @@ jobs:
           # weeks-long bleaching event's drafts aren't discarded as "stale".
           THEHEAT_PENDING_TTL_DAYS: ${{ vars.THEHEAT_PENDING_TTL_DAYS }}
           THEHEAT_PENDING_TTL_DAYS_SLOW: ${{ vars.THEHEAT_PENDING_TTL_DAYS_SLOW }}
-          # "ghcn" = NOAA GHCN-Daily via superghcnd_diff + SQLite threshold cache (11,907 stations).
-          # Rollback: set back to "open_meteo" and push — next cycle reverts instantly.
-          THEHEAT_SIGNALS_PROVIDER: ghcn
+          # "both" = GHCN (deep US NOAA station records) + Open-Meteo (curated
+          # world cities incl. Europe), partitioned US/non-US in run_extreme_signals.
+          # GHCN alone is blind outside the US (it missed the deadly June 2026
+          # European heatwave); "both" restores global coverage without losing US depth.
+          # "ghcn" = US-only stations; "open_meteo" = curated cities only.
+          # Rollback: set back to "ghcn" and push — next cycle reverts instantly.
+          THEHEAT_SIGNALS_PROVIDER: both
           TWEET_TEXT: ${{ github.event.inputs.tweet_text }}
           DRAFT_ID: ${{ github.event.inputs.draft_id }}
           PUBLISH_INTENT_ID: ${{ github.event.inputs.publish_intent_id }}

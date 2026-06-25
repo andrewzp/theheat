@@ -253,3 +253,53 @@ def test_streaks_not_pruned_on_fetch_failure(monkeypatch):
 
     assert prune_calls == []
     assert current_run["sources"][0]["status"] == "failed"
+
+
+def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 6, 25)
+    us_event = AbsoluteExtremeEvent(
+        city="Phoenix", country="United States", today_temp_c=48.0,
+        band_label="Desert", threshold_c=46.0, kind="hot", lat=33.4, lon=-112.0,
+        event_id="absextreme_Phoenix_2026-06-25", signal_date=signal_date,
+    )
+    us_bundle = ExtremeSignalBundle(
+        city="Phoenix", country="United States", absolute_extreme=us_event,
+        signal_date=signal_date, station_id="USW00023183",
+        station_name="PHOENIX SKY HARBOR INTL AP",
+    )
+    eu_event = AbsoluteExtremeEvent(
+        city="Seville", country="Spain", today_temp_c=45.1,
+        band_label="Temperate", threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
+        event_id="absextreme_Seville_2026-06-25", signal_date=signal_date,
+    )
+    eu_bundle = ExtremeSignalBundle(
+        city="Seville", country="Spain", absolute_extreme=eu_event,
+        signal_date=signal_date,
+    )
+    bot_state = _fresh_state()
+    current_run = {"id": "run_1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+    enqueued: list[dict] = []
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
+    monkeypatch.setattr(
+        runner.ghcn, "check_extreme_signals_for_stations",
+        lambda *args, **kwargs: ([us_bundle], []),
+    )
+    monkeypatch.setattr(
+        runner, "_check_city_extreme_signals",
+        lambda cities, metrics_out: ([eu_bundle], []),
+    )
+    monkeypatch.setattr(runner, "_should_draft", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        runner, "_enqueue_story_candidate",
+        lambda *args, **kwargs: enqueued.append(kwargs) or True,
+    )
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    event_ids = {e["event_id"] for e in enqueued}
+    assert "absextreme_Phoenix_2026-06-25" in event_ids  # US sourced from GHCN
+    assert "absextreme_Seville_2026-06-25" in event_ids  # Europe sourced from Open-Meteo
+    assert current_run["sources"][0]["note"].startswith("provider:both")
