@@ -1,4 +1,6 @@
-# Heat Coverage Watch Implementation Plan (v2 — post codex review)
+# Heat Coverage Watch Implementation Plan (v3 — post 2× codex review)
+
+> Codex round 1 (design/codebase) closed 4 P1s: state_schema parity, SQLite `_METADATA_JSON_KEYS`, real issue lookup, insufficient-data-not-silent. Codex round 2 closed 3 more: hot-only recording (cold extremes were being tallied as heat), ruff `F841` (unused `flagged`), and dashboard render scoped to mirror+payload (UI render deferred — wrong component wiring). All prior P1s were re-verified correct by round 2.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -278,12 +280,12 @@ git commit -m "feat(coverage): persistent coverage_log (schema, sqlite, merge, r
 **Files:** Modify `src/orchestrator/sources/open_meteo.py`; Test `tests/test_open_meteo_orchestrator.py`.
 **Consumes:** `state.record_coverage_observation`. (`state` is in scope via `from src.orchestrator.common import *`.)
 
-Record sites (verified current line numbers; `bundle`/`cr`/`ev_cd` and the event_id vars are all in scope at each):
-- **per-city** strongest signal: top of `if candidate_queued:` (**:434**) — `country=bundle.country`, `event_id=strongest_event_id`, `when=bundle.signal_date`.
-- **record-streak**: inside the streak enqueue success (**:483**, `legacy_type="record_streak"`) — `country=ev_cd.country`, `event_id=streak_event_id`, `when=bundle.signal_date`.
-- **country record**: after `country_count += 1` (**:735**) — `country=cr.country`, `event_id=cr.event_id`, `when=cr.signal_date`.
+Record sites (verified current line numbers; vars in scope at each). **HOT events only** — the strongest-signal cascade includes cold types (`all_time_low`, `monthly_low`, `record_low`, `anomaly_cold`, cold `absolute_extreme`); recording those as `cls="heat"` would dilute the tally with cold-record geography and could mask a mono-regional HOT failure. Gate to hot:
+- **per-city** strongest signal: top of `if candidate_queued:` (**:434**), only when the type is hot — `country=bundle.country`, `event_id=strongest_event_id`, `when=bundle.signal_date`.
+- **record-streak**: inside the streak enqueue success (**:483**, from `calendar_date_high`, always hot) — `country=ev_cd.country`, `event_id=streak_event_id`, `when=bundle.signal_date`.
+- **country record**: after `country_count += 1` (**:735**), only when `cr.kind == "high"` — `country=cr.country`, `event_id=cr.event_id`, `when=cr.signal_date`.
 
-(wet_bulb/simultaneous are lower-volume heat signals; deferred — per-city alone surfaces multiple cities/day, comfortably exceeding MIN_EVENTS over 21 days, and Task 5's `insufficient_data` finding covers thin windows.)
+(wet_bulb/simultaneous deferred — per-city alone surfaces multiple hot cities/day, exceeding MIN_EVENTS over 21 days, and Task 5's `insufficient_data` covers thin windows.)
 
 - [ ] **Step 1: Failing test** (append to `tests/test_open_meteo_orchestrator.py`)
 
@@ -307,27 +309,51 @@ def test_surfaced_heat_event_records_coverage(monkeypatch):
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
     recs = [r for r in bot_state["coverage_log"] if r["event_id"] == "absextreme_Seville_2026-06-25"]
     assert recs and recs[0]["cls"] == "heat" and recs[0]["continent"] == "Europe"
+
+
+def test_cold_extreme_is_not_recorded_as_heat(monkeypatch):
+    from datetime import date
+    from src.data.open_meteo import AbsoluteExtremeEvent, ExtremeSignalBundle
+    from src.orchestrator.sources import open_meteo as runner
+    from src.state import _fresh_state
+
+    cold = AbsoluteExtremeEvent(city="Nw Michigan", country="United States", today_temp_c=0.6,
+        band_label="Temperate", threshold_c=2.0, kind="cold", lat=45.0, lon=-85.0,
+        event_id="absextreme_cold_NwMichigan_2026-06-25", signal_date=date(2026, 6, 25))
+    bundle = ExtremeSignalBundle(city="Nw Michigan", country="United States", absolute_extreme=cold,
+                                 signal_date=date(2026, 6, 25))
+    bot_state = _fresh_state()
+    current_run = {"id": "r1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, m: ([bundle], []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+    assert bot_state["coverage_log"] == []  # cold extreme must not pollute the heat tally
 ```
 
 - [ ] **Step 2: Run — expect FAIL** (`coverage_log` has no matching record)
 Run: `.venv/bin/python -m pytest tests/test_open_meteo_orchestrator.py::test_surfaced_heat_event_records_coverage -q`
 
-- [ ] **Step 3: Implement** — insert at the three sites above. Per-city (top of the `:434` `if candidate_queued:` block):
+- [ ] **Step 3: Implement** — insert at the three sites above, gated to hot. Per-city (top of the `:434` `if candidate_queued:` block):
 ```python
-                if candidate_queued:
+                _hot = strongest_type in ("all_time_high", "monthly_high", "record", "anomaly_hot") or (
+                    strongest_type == "absolute_extreme" and getattr(strongest_signal, "kind", "") == "hot")
+                if candidate_queued and _hot:
                     state.record_coverage_observation(bot_state, cls="heat",
                         event_id=strongest_event_id, country=bundle.country, when=bundle.signal_date)
 ```
-Record-streak (after its `_enqueue_story_candidate(...)` returns truthy, alongside `signal_counts["streak"] += 1`):
+Record-streak (after its `_enqueue_story_candidate(...)` returns truthy, alongside `signal_counts["streak"] += 1`; calendar_date_high is always hot):
 ```python
                                         state.record_coverage_observation(bot_state, cls="heat",
                                             event_id=streak_event_id, country=ev_cd.country, when=bundle.signal_date)
 ```
-Country record (after `country_count += 1` at :735):
+Country record (after `country_count += 1` at :735), hot only:
 ```python
                 country_count += 1
-                state.record_coverage_observation(bot_state, cls="heat",
-                    event_id=cr.event_id, country=cr.country, when=cr.signal_date)
+                if cr.kind == "high":
+                    state.record_coverage_observation(bot_state, cls="heat",
+                        event_id=cr.event_id, country=cr.country, when=cr.signal_date)
 ```
 
 - [ ] **Step 4: Run — expect PASS (all, incl. new + existing)** `.venv/bin/python -m pytest tests/test_open_meteo_orchestrator.py -q`
@@ -424,8 +450,7 @@ def coverage_watch(coverage_log: list[dict] | None, run_history: list[dict] | No
             findings.append({"cls": cls, "kind": "insufficient_data", "dominant": "—",
                              "share": 0.0, "events": n, "distribution": {}})
             continue
-        flagged = False
-        for axis in ("country", "continent"):
+        for axis in ("country", "continent"):  # country takes precedence
             counts: dict[str, int] = {}
             for r in recs:
                 key = str(r.get(axis) or "Unknown")
@@ -435,8 +460,7 @@ def coverage_watch(coverage_log: list[dict] | None, run_history: list[dict] | No
                 findings.append({"cls": cls, "kind": "mono_regional", "dominant": dominant,
                                  "share": round(top / n, 3), "events": n,
                                  "distribution": dict(sorted(counts.items(), key=lambda kv: -kv[1]))})
-                flagged = True
-                break  # country axis takes precedence
+                break
     return findings
 ```
 
@@ -536,7 +560,8 @@ def plan_coverage_watch_action(findings: list[dict], open_issue: Mapping[str, An
         if open_issue is None:
             return {"action": "create_coverage_watch", "body": body, "labels": [LABEL, "unknown"]}
         if _open_issue_body(open_issue).strip() != body.strip():
-            return {"action": "update_coverage_watch", "number": _open_issue_number(open_issue), "body": body}
+            return {"action": "update_coverage_watch", "number": _open_issue_number(open_issue),
+                    "body": body, "labels": [LABEL, "unknown"]}
         return None
     if open_issue is not None:
         return {"action": "close_coverage_watch", "number": _open_issue_number(open_issue)}
@@ -563,10 +588,11 @@ git commit -m "feat(coverage): reconcile coverage-watch advisory issue"
 
 ---
 
-### Task 7: Dashboard mirror + render
+### Task 7: Dashboard mirror + payload
 
-**Files:** Modify `dashboard/lib/source-health.js`, `dashboard/app/health/page.js`, `dashboard/app/components/SourcesView.js`; Test `dashboard/tests/source-health.test.js`.
-**Produces:** `coverageWatch(coverageLog, runHistory, now)` (same shape as Python); `coverage` in `buildSourceHealthPayload`; a one-line coverage indicator on the health page.
+**Files:** Modify `dashboard/lib/source-health.js`; Test `dashboard/tests/source-health.test.js`.
+**Produces:** `coverageWatch(coverageLog, runHistory, now)` (same shape as Python); `coverage` exposed in `buildSourceHealthPayload`.
+**Render is a deferred follow-up:** `SourcesView` renders from `dashboard/app/page.js`, which threads only `sources`/`sourcesStats`; wiring a `coverage` line through there is a separate small UI task. The GitHub issue is the primary surface (the sentinel's "operator never has to watch the dashboard" design); the payload makes coverage available for when the render lands.
 
 - [ ] **Step 1: Failing test**
 
@@ -644,20 +670,13 @@ export function coverageWatch(coverageLog, runHistory, now = new Date()) {
 }
 ```
 
-- [ ] **Step 4: Surface + render.** In `dashboard/lib/source-health.js` `buildSourceHealthPayload`, add `coverage: coverageWatch(state.coverage_log, state.run_history, new Date())` to the returned object. In `dashboard/app/health/page.js` (:55 mapping), add `coverage: Array.isArray(payload?.coverage) ? payload.coverage : []` and pass `coverage` to `SourcesView`. In `dashboard/app/components/SourcesView.js`, render one line above the sources list:
-```javascript
-  coverage.length === 0
-    ? h("div", { className: "stat-label", key: "cov" }, "coverage: heat ok")
-    : h("div", { className: "stat-label", key: "cov", style: { color: "#FF5A1F" } },
-        `coverage: ${coverage.map((c) => `${c.cls} ${c.kind === "mono_regional" ? Math.round(c.share * 100) + "% " + c.dominant : c.kind}`).join(", ")}`)
-```
-(Read `SourcesView.js:46`/`180` for the exact prop list + `h()` helper before wiring.)
+- [ ] **Step 4: Surface in the payload.** In `dashboard/lib/source-health.js` `buildSourceHealthPayload`, add `coverage: coverageWatch(state.coverage_log, state.run_history, new Date())` to the returned object so the dashboard/API can consume it. (UI render deferred — see the render note above.)
 
 - [ ] **Step 5: Run — expect PASS** `cd dashboard && node --test 2>&1 | tail -5` and `cd dashboard && npx next build` unaffected.
 - [ ] **Step 6: Commit**
 ```bash
-git add dashboard/lib/source-health.js dashboard/app/health/page.js dashboard/app/components/SourcesView.js dashboard/tests/source-health.test.js
-git commit -m "feat(coverage): dashboard mirror + render of the coverage watch"
+git add dashboard/lib/source-health.js dashboard/tests/source-health.test.js
+git commit -m "feat(coverage): dashboard mirror + payload of the coverage watch"
 ```
 
 ---
