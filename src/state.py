@@ -10,6 +10,7 @@ import requests
 
 from src.state_schema import (
     BotState,
+    CoverageRecord,  # noqa: F401 — re-exported for callers
     CycloneWindObservation,
     DroughtSnapshot,
     MemoryState,
@@ -32,6 +33,7 @@ MAX_SHIPPED_TWEETS = 200
 MAX_SUPPRESSIONS = 100
 STATE_SIZE_WARNING_BYTES = 800_000
 SOURCE_HEALTH_MAX_RUNS = 10
+COVERAGE_WINDOW_DAYS = 21
 RECENT_RECORD_TTL_DAYS = 90
 RECORD_STORE_RETENTION_YEARS = 10
 REJECTED_DRAFT_RETENTION_DAYS = 30
@@ -73,6 +75,7 @@ DEFAULT_STATE: BotState = {
     "air_quality_dust_tiers": {},
     "drafts": [],
     "run_history": [],
+    "coverage_log": [],  # rolling per-surfaced-event geography for the coverage watch
     "errors": [],
     # Suppressed signals: events the bot observed but the editorial gate killed
     # before they could become drafts. Populated by _record_suppression() in
@@ -431,6 +434,23 @@ def _merge_run_history(current: list[dict], incoming: list[dict], max_items: int
         reverse=True,
     )
     return ordered[:max_items]
+
+
+def _merge_coverage_log(current: list[dict], incoming: list[dict]) -> list[dict]:
+    """Merge two coverage_log lists, deduplicating on event_id.
+
+    Records without an event_id (anonymous) are appended without dedup.
+    The merged list preserves the last-writer value for each event_id.
+    """
+    by_id: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for rec in [*(current or []), *(incoming or [])]:
+        rec_id = rec.get("event_id")
+        if not rec_id:
+            anonymous.append(dict(rec))
+        else:
+            by_id[rec_id] = dict(rec)
+    return [*by_id.values(), *anonymous]
 
 
 def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50) -> list[dict]:
@@ -1781,7 +1801,49 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "fire_footprint_last_run": _merge_fire_footprint_last_run,
     "synthesis_components": _merge_synthesis_components,
     "synthesis_cooldown": _merge_synthesis_cooldown,
+    "coverage_log": _merge_coverage_log,
 }
+
+
+def record_coverage_observation(
+    state: BotState,
+    *,
+    cls: str,
+    event_id: str,
+    country: str | None,
+    when: "str | date | None",
+    now: datetime | None = None,
+) -> None:
+    """Append one surfaced-event geography record; dedup on event_id; prune window.
+
+    Never raises — bad inputs (None country, unparseable date) degrade gracefully.
+    Consumes src.coverage.resolve_continent to fill the continent field.
+    """
+    try:
+        from src.coverage import resolve_continent
+
+        now = now or datetime.now(UTC)
+        if isinstance(when, date) and not isinstance(when, datetime):
+            date_str = when.isoformat()
+        elif isinstance(when, str) and when:
+            date_str = when[:10]
+        else:
+            date_str = now.date().isoformat()
+        log = state.setdefault("coverage_log", [])
+        log[:] = [r for r in log if r.get("event_id") != event_id]
+        log.append(
+            {
+                "cls": cls,
+                "event_id": event_id,
+                "country": country or "",
+                "continent": resolve_continent(country),
+                "date": date_str,
+            }
+        )
+        cutoff = (now - timedelta(days=COVERAGE_WINDOW_DAYS)).date().isoformat()
+        state["coverage_log"] = [r for r in log if str(r.get("date") or "") >= cutoff]
+    except Exception:
+        pass
 
 
 def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> BotState:
