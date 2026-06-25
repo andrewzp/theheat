@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
+from src.orchestrator.signal_partition import is_us_location, partition_us_world
 
 
 def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
@@ -35,19 +36,37 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
     # whether it ended up as a draft, rejection, duplicate, or no-signal.
     ghcn_event_log: list[dict] = []
     try:
-        if _signals_provider not in {"open_meteo", "ghcn"}:
+        if _signals_provider not in {"open_meteo", "ghcn", "both"}:
             raise ValueError(
-                "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo' or 'ghcn', "
+                "THEHEAT_SIGNALS_PROVIDER must be 'open_meteo', 'ghcn', or 'both', "
                 f"got {_signals_provider!r}"
             )
         if _signals_provider == "ghcn":
             bundles, country_records = ghcn.check_extreme_signals_for_stations(
                 metrics_out=ghcn_pipeline_metrics,
             )
-        else:
+        elif _signals_provider == "open_meteo":
             bundles, country_records = _check_city_extreme_signals(
                 cities,
                 open_meteo_pipeline_metrics,
+            )
+        else:
+            # "both": GHCN owns the US (deep NOAA station coverage); Open-Meteo
+            # owns the rest of the world (curated cities, incl. Europe). Run both
+            # and partition by country so every place is sourced from exactly one
+            # provider — no overlap, no fragile name/geo matching.
+            ghcn_bundles, ghcn_country = ghcn.check_extreme_signals_for_stations(
+                metrics_out=ghcn_pipeline_metrics,
+            )
+            # Open-Meteo only needs the non-US cities — the US comes from GHCN —
+            # so skip the US city fetches entirely.
+            world_cities = [c for c in cities if not is_us_location(c.get("country"))]
+            om_bundles, om_country = _check_city_extreme_signals(
+                world_cities,
+                open_meteo_pipeline_metrics,
+            )
+            bundles, country_records = partition_us_world(
+                ghcn_bundles, ghcn_country, om_bundles, om_country,
             )
         source_promoted = 0
         for bundle in bundles:
@@ -344,7 +363,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     )
                 _signal_source_label = (
                     f"NOAA GHCN-Daily (station {bundle.station_id})"
-                    if _signals_provider == "ghcn"
+                    if bundle.station_id
                     else "Open-Meteo forecast + archive"
                 )
                 review_context = _review_context(
@@ -418,7 +437,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     # Old city-name entries prune naturally via prune_stale_record_streaks.
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
-                        streak_key = bundle.station_id if _signals_provider == "ghcn" and bundle.station_id else ev_cd.city
+                        streak_key = bundle.station_id if bundle.station_id else ev_cd.city
                         state.update_record_streak(
                             bot_state,
                             streak_key,
@@ -476,7 +495,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # show "X considered, Y drafted, Z rejected, W no-signal".
             # Only the GHCN provider exposes station_id; rows from the
             # Open-Meteo provider get an empty station_id and the city instead.
-            if _signals_provider == "ghcn":
+            if _signals_provider in ("ghcn", "both"):
                 if strongest_event_id and not candidate_queued:
                     decision = "rejected"
                 elif candidate_queued:
@@ -558,6 +577,12 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         # Two formats available; flat summary is the default. Roll-call (per-station list with
         # elevations) fires only when the cluster shape qualifies — same country with a
         # meaningful elevation spread. See src/editorial/simultaneous_format.py.
+        if _signals_provider == "both":
+            _simultaneous_source = "NOAA GHCN-Daily + Open-Meteo"
+        elif _signals_provider == "ghcn":
+            _simultaneous_source = "NOAA GHCN-Daily"
+        else:
+            _simultaneous_source = "open_meteo_extreme_signals"
         simultaneous_groups: dict[str, list[dict]] = {}
         for station_row in simultaneous_record_stations:
             sim_date = station_row.get("signal_date") or date.today().isoformat()
@@ -592,11 +617,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                                 )
                             )
                         sim_ctx = _review_context(
-                            source=(
-                                "NOAA GHCN-Daily"
-                                if _signals_provider == "ghcn"
-                                else "open_meteo_extreme_signals"
-                            ),
+                            source=_simultaneous_source,
                             source_key="simultaneous_records",
                             headline=(
                                 f"{len(roll_call_subset)} stations across {rc_country} "
@@ -608,11 +629,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                         sim_stations = roll_call_subset
                     else:
                         sim_ctx = _review_context(
-                            source=(
-                                "NOAA GHCN-Daily"
-                                if _signals_provider == "ghcn"
-                                else "open_meteo_extreme_signals"
-                            ),
+                            source=_simultaneous_source,
                             source_key="simultaneous_records",
                             headline=f"{len(city_names)} cities broke records on same day",
                             current_run=current_run,
@@ -652,11 +669,18 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 continue
             source_promoted += 1
             descriptor = "hottest" if cr.kind == "high" else "coldest"
-            country_source_label = (
-                "NOAA GHCN-Daily station aggregate"
-                if _signals_provider == "ghcn"
-                else "Open-Meteo archive (country-wide aggregate)"
-            )
+            if _signals_provider == "both":
+                # Country records are partitioned by country, so provenance
+                # follows the same US-from-GHCN / world-from-Open-Meteo rule.
+                country_source_label = (
+                    "NOAA GHCN-Daily station aggregate"
+                    if is_us_location(cr.country)
+                    else "Open-Meteo archive (country-wide aggregate)"
+                )
+            elif _signals_provider == "ghcn":
+                country_source_label = "NOAA GHCN-Daily station aggregate"
+            else:
+                country_source_label = "Open-Meteo archive (country-wide aggregate)"
             cr_ctx = _review_context(
                 source=country_source_label,
                 source_key="country_record",
@@ -723,7 +747,29 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
         )
         source_status = "success"
         details: dict | None = None
-        if _signals_provider == "ghcn" and ghcn_pipeline_metrics:
+        if _signals_provider == "both":
+            ghcn_funnel = (
+                f"active:{ghcn_pipeline_metrics.get('stations_active', '-')} "
+                f"obs:{ghcn_pipeline_metrics.get('stations_with_obs', '-')} "
+                f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
+                f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')}"
+            )
+            om_readings = int(open_meteo_pipeline_metrics.get("city_readings", 0) or 0)
+            om_failures = int(open_meteo_pipeline_metrics.get("city_fetch_failures", 0) or 0)
+            note = (
+                f"provider:both ghcn[{ghcn_funnel}] "
+                f"world[readings:{om_readings} failures:{om_failures}] | {signal_breakdown}"
+            )
+            if om_failures and not om_readings:
+                # The US half (GHCN) still ran; only the world half degraded.
+                source_status = "degraded"
+            details = {
+                "provider": "both",
+                "ghcn_pipeline_metrics": dict(ghcn_pipeline_metrics),
+                "open_meteo_pipeline_metrics": dict(open_meteo_pipeline_metrics),
+                "events": ghcn_event_log[:200],
+            }
+        elif _signals_provider == "ghcn" and ghcn_pipeline_metrics:
             source_status = _classify_ghcn_source_status(ghcn_pipeline_metrics)
             diff_attempted = ghcn_pipeline_metrics.get("diff_dates_attempted", "-")
             diff_fetched = ghcn_pipeline_metrics.get("diff_dates_fetched", "-")
