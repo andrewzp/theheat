@@ -63,6 +63,16 @@ class MemoryState(TypedDict, total=False):
     shipped_tweets: list[dict]
 
 
+class CoverageRecord(TypedDict):
+    """Single surfaced-event geography record for the rolling coverage watch."""
+
+    cls: str
+    event_id: str
+    country: str
+    continent: str
+    date: str
+
+
 class CityRecord(TypedDict):
     """Single extreme reading for a city — all-time or per-month."""
 
@@ -266,3 +276,4 @@ class BotState(TypedDict, total=False):
     fire_footprint_last_run: str | None
     synthesis_components: SynthesisComponents
     synthesis_cooldown: dict[str, dict[str, str]]
+    coverage_log: list[CoverageRecord]

@@ -624,6 +624,188 @@ def _close_yield_watch_issue(number: int) -> None:
     print(f"[sentinel] closed yield-watch issue #{number}")
 
 
+COVERAGE_WINDOW_DAYS = 21
+COVERAGE_MIN_EVENTS = 20
+COVERAGE_CONCENTRATION = 0.85
+COVERAGE_DATA_FLOOR = 5
+COVERAGE_WATCHED_CLASSES = ("heat",)  # extend per source instrumentation (Future)
+COVERAGE_WATCH_TITLE = "Coverage watch: a global source may be blind to a region"
+COVERAGE_WATCH_MARKER = "<!-- source-health-coverage-watch -->"
+
+
+def _bot_is_drafting(run_history: list[dict] | None) -> bool:
+    return any(
+        str(r.get("mode") or "") in ("alerts", "both")
+        for r in (run_history or [])
+        if isinstance(r, Mapping)
+    )
+
+
+def coverage_watch(
+    coverage_log: list[dict] | None,
+    run_history: list[dict] | None,
+    *,
+    now: datetime,
+) -> list[dict]:
+    """Classify geographic concentration of events in the coverage_log.
+
+    Returns a list of findings, each with shape:
+        {cls, kind, dominant, share, events, distribution}
+
+    Kinds:
+      - ``no_data``          — bot is drafting but zero events (< DATA_FLOOR)
+      - ``insufficient_data``— too few events to judge (>= DATA_FLOOR, < MIN_EVENTS)
+      - ``mono_regional``    — >= MIN_EVENTS and one country or continent dominates
+    """
+    cutoff = (now - timedelta(days=COVERAGE_WINDOW_DAYS)).date().isoformat()
+    drafting = _bot_is_drafting(run_history)
+    findings: list[dict] = []
+    for cls in COVERAGE_WATCHED_CLASSES:
+        recs = [
+            r for r in (coverage_log or [])
+            if isinstance(r, Mapping)
+            and r.get("cls") == cls
+            and str(r.get("date") or "") >= cutoff
+        ]
+        n = len(recs)
+        if n < COVERAGE_DATA_FLOOR:
+            if drafting:
+                findings.append({
+                    "cls": cls,
+                    "kind": "no_data",
+                    "dominant": "—",
+                    "share": 0.0,
+                    "events": n,
+                    "distribution": {},
+                })
+            continue
+        if n < COVERAGE_MIN_EVENTS:
+            findings.append({
+                "cls": cls,
+                "kind": "insufficient_data",
+                "dominant": "—",
+                "share": 0.0,
+                "events": n,
+                "distribution": {},
+            })
+            continue
+        for axis in ("country", "continent"):  # country takes precedence
+            counts: dict[str, int] = {}
+            for r in recs:
+                key = str(r.get(axis) or "Unknown")
+                counts[key] = counts.get(key, 0) + 1
+            dominant, top = max(counts.items(), key=lambda kv: kv[1])
+            if dominant != "Unknown" and top / n >= COVERAGE_CONCENTRATION:
+                findings.append({
+                    "cls": cls,
+                    "kind": "mono_regional",
+                    "dominant": dominant,
+                    "share": round(top / n, 3),
+                    "events": n,
+                    "distribution": dict(
+                        sorted(counts.items(), key=lambda kv: -kv[1])
+                    ),
+                })
+                break
+    return findings
+
+
+def build_coverage_watch_body(findings: list[dict]) -> str:
+    lines = [
+        COVERAGE_WATCH_MARKER,
+        "**A global source may be blind to a region.**",
+        "",
+        "A signal class the bot covers globally has gone mono-regional (or stopped "
+        "recording geography) — the class of failure that hid the US-only heat blind "
+        "spot. Advisory; check whether a provider/source regressed. Auto-closes only "
+        "when coverage actually diversifies.",
+        "",
+    ]
+    for f in findings:
+        if f["kind"] == "no_data":
+            lines.append(
+                f"- `{f['cls']}`: NO coverage data in {COVERAGE_WINDOW_DAYS}d while "
+                f"drafting ({f['events']} records) — recording may be broken."
+            )
+        elif f["kind"] == "mono_regional":
+            dist = ", ".join(f"{k}:{v}" for k, v in f["distribution"].items())
+            lines.append(
+                f"- `{f['cls']}`: {int(f['share'] * 100)}% concentrated in "
+                f"**{f['dominant']}** over {f['events']} events. Distribution: {dist}"
+            )
+    lines += ["", "_Auto-maintained by the source-health sentinel coverage watch._"]
+    return "\n".join(lines)
+
+
+def _issue_worthy(findings: list[dict]) -> list[dict]:
+    return [f for f in findings if f.get("kind") in ("mono_regional", "no_data")]
+
+
+def _open_coverage_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list coverage-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == COVERAGE_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_coverage_watch_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    worthy = _issue_worthy(findings)
+    if worthy:
+        body = build_coverage_watch_body(worthy)
+        if open_issue is None:
+            return {"action": "create_coverage_watch", "body": body, "labels": [LABEL, "unknown"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_coverage_watch",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "unknown"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_coverage_watch", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_coverage_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", COVERAGE_WATCH_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened coverage-watch issue: {COVERAGE_WATCH_TITLE}")
+
+
+def _update_coverage_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    for label in action.get("remove_labels") or []:
+        args.extend(["--remove-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated coverage-watch issue #{action['number']}")
+
+
+def _close_coverage_watch_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "Coverage watch is clear. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed coverage-watch issue #{number}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
@@ -681,6 +863,19 @@ def main(argv: list[str] | None = None) -> int:
             _update_yield_watch_issue(yield_action)
         else:
             _close_yield_watch_issue(yield_action["number"])
+    cov = coverage_watch(
+        state.get("coverage_log"),
+        state.get("run_history"),
+        now=datetime.now(timezone.utc),
+    )
+    cov_action = plan_coverage_watch_action(cov, _open_coverage_watch_issue())
+    if cov_action:
+        if cov_action["action"] == "create_coverage_watch":
+            _create_coverage_watch_issue(cov_action)
+        elif cov_action["action"] == "update_coverage_watch":
+            _update_coverage_watch_issue(cov_action)
+        else:
+            _close_coverage_watch_issue(cov_action["number"])
     return 0
 
 

@@ -828,3 +828,29 @@ test("source-health: stale served-via cleared once primary recovers to healthy",
   assert.equal(firms.health, "healthy")
   assert.equal(firms.served_via, null)
 })
+
+// ---------------------------------------------------------------------------
+// coverageWatch: JS mirror of scripts/source_health_sentinel.py coverage_watch
+// ---------------------------------------------------------------------------
+
+import { coverageWatch } from "../lib/source-health.js"
+
+const CW_NOW = new Date("2026-06-25T00:00:00Z")
+const cwLog = (country, continent, n) => Array.from({ length: n }, (_, i) =>
+  ({ cls: "heat", event_id: `${country}-${i}`, country, continent, date: "2026-06-25" }))
+const cwAlerts = () => [{ id: "r", mode: "alerts", started_at: "2026-06-25T00:00:00Z" }]
+
+test("coverageWatch flags US-only heat", () => {
+  const out = coverageWatch(cwLog("United States", "North America", 22), cwAlerts(), CW_NOW)
+  assert.equal(out.length, 1); assert.equal(out[0].kind, "mono_regional"); assert.ok(out[0].share >= 0.85)
+})
+test("coverageWatch ignores diversified heat", () => {
+  assert.deepEqual(coverageWatch([...cwLog("United States", "North America", 8),
+    ...cwLog("Spain", "Europe", 7), ...cwLog("India", "Asia", 7)], cwAlerts(), CW_NOW), [])
+})
+test("coverageWatch reports insufficient_data, not silent", () => {
+  assert.equal(coverageWatch(cwLog("United States", "North America", 10), cwAlerts(), CW_NOW)[0].kind, "insufficient_data")
+})
+test("coverageWatch flags no-data while drafting", () => {
+  assert.equal(coverageWatch([], cwAlerts(), CW_NOW)[0].kind, "no_data")
+})

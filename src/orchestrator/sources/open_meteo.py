@@ -431,6 +431,21 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     cooldown_exempt=elite,
                 )
 
+                _hot = strongest_type in (
+                    "all_time_high", "monthly_high", "record", "anomaly_hot"
+                ) or (
+                    strongest_type == "absolute_extreme"
+                    and getattr(strongest_signal, "kind", "") == "hot"
+                )
+                if candidate_queued and _hot:
+                    state.record_coverage_observation(
+                        bot_state,
+                        cls="heat",
+                        event_id=strongest_event_id,
+                        country=bundle.country,
+                        when=bundle.signal_date,
+                    )
+
                 if candidate_queued:
                     # Streak tracking — update on any calendar-date high record.
                     # Key: station_id on GHCN path; city name on Open-Meteo path.
@@ -489,6 +504,13 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                                     ):
                                         signal_counts["streak"] += 1
                                         source_promoted += 1
+                                        state.record_coverage_observation(
+                                            bot_state,
+                                            cls="heat",
+                                            event_id=streak_event_id,
+                                            country=ev_cd.country,
+                                            when=bundle.signal_date,
+                                        )
 
             # Append a per-bundle row to the dashboard event log. Captured
             # for every bundle iterated regardless of decision so the UI can
@@ -733,6 +755,14 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 on_draft_success=_on_success,
             ):
                 country_count += 1
+                if cr.kind == "high":
+                    state.record_coverage_observation(
+                        bot_state,
+                        cls="heat",
+                        event_id=cr.event_id,
+                        country=cr.country,
+                        when=cr.signal_date,
+                    )
 
         total_observed = sum(signal_counts.values()) + country_count
         # Build a structured note. For GHCN: surface the funnel

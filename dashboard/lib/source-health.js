@@ -284,6 +284,51 @@ function aggregateFromRunHistory(history) {
   })).map(addDerivedFields)
 }
 
+// ---------------------------------------------------------------------------
+// coverageWatch — JS mirror of scripts/source_health_sentinel.py coverage_watch
+// Constants MUST stay in sync with the Python implementation.
+// ---------------------------------------------------------------------------
+
+// MUST match scripts/source_health_sentinel.py
+export const COVERAGE_WINDOW_DAYS = 21
+export const COVERAGE_MIN_EVENTS = 20
+export const COVERAGE_CONCENTRATION = 0.85
+export const COVERAGE_DATA_FLOOR = 5
+const COVERAGE_WATCHED_CLASSES = ["heat"]
+
+function botIsDrafting(runHistory) {
+  return (runHistory || []).some((r) => r && (r.mode === "alerts" || r.mode === "both"))
+}
+
+export function coverageWatch(coverageLog, runHistory, now = new Date()) {
+  const cutoff = new Date(now.getTime() - COVERAGE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10)
+  const drafting = botIsDrafting(runHistory)
+  const findings = []
+  for (const cls of COVERAGE_WATCHED_CLASSES) {
+    const recs = (coverageLog || []).filter((r) => r && r.cls === cls && String(r.date || "") >= cutoff)
+    const n = recs.length
+    if (n < COVERAGE_DATA_FLOOR) {
+      if (drafting) findings.push({ cls, kind: "no_data", dominant: "—", share: 0, events: n, distribution: {} })
+      continue
+    }
+    if (n < COVERAGE_MIN_EVENTS) {
+      findings.push({ cls, kind: "insufficient_data", dominant: "—", share: 0, events: n, distribution: {} })
+      continue
+    }
+    for (const axis of ["country", "continent"]) {
+      const counts = {}
+      for (const r of recs) { const k = String(r[axis] || "Unknown"); counts[k] = (counts[k] || 0) + 1 }
+      const [dominant, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+      if (dominant !== "Unknown" && top / n >= COVERAGE_CONCENTRATION) {
+        findings.push({ cls, kind: "mono_regional", dominant, share: Math.round((top / n) * 1000) / 1000,
+          events: n, distribution: counts })
+        break
+      }
+    }
+  }
+  return findings
+}
+
 export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   const durableHealth = state?.source_health && Object.keys(state.source_health).length > 0
   const history = durableHealth
@@ -311,5 +356,6 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
       healthy_count: sources.filter((s) => s.health === "healthy").length,
       idle_count: sources.filter((s) => s.health === "idle").length,
     },
+    coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date()),
   }
 }
