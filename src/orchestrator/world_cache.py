@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 
+import requests
+
 from src.data.world_thresholds import CityThresholds
+from src.state import GIST_ID, GITHUB_TOKEN, STATE_SIZE_WARNING_BYTES, _headers
 
 WORLD_CACHE_FILENAME = "world_threshold_cache.json"
 _META_KEY = "_meta"
@@ -136,3 +140,44 @@ def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
     if wa > 0 and cached <= prev_cached_count:
         return "degraded"
     return "success"
+
+
+def read_cache() -> dict:
+    if not GIST_ID or not GITHUB_TOKEN:
+        return {}
+    try:
+        resp = requests.get(f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15)
+        resp.raise_for_status()
+        meta = resp.json().get("files", {}).get(WORLD_CACHE_FILENAME)
+        if not meta:
+            return {}
+        if meta.get("truncated"):
+            raw = requests.get(meta["raw_url"], headers=_headers(), timeout=30)
+            raw.raise_for_status()
+            content = raw.text
+        else:
+            content = meta["content"]
+        data = json.loads(content)
+        return data if isinstance(data, dict) else {}
+    except (requests.RequestException, ValueError, KeyError):
+        return {}
+
+
+def write_cache(cache: dict) -> bool:
+    if not GIST_ID or not GITHUB_TOKEN:
+        return False
+    try:
+        merged = merge_caches(read_cache(), cache)
+        if _META_KEY in cache:
+            merged[_META_KEY] = cache[_META_KEY]
+        payload = json.dumps(merged, separators=(",", ":"))
+        if len(payload) > STATE_SIZE_WARNING_BYTES:
+            print(f"[world_cache] WARNING size {len(payload)}B approaching gist inline cliff")
+        resp = requests.patch(
+            f"https://api.github.com/gists/{GIST_ID}", headers=_headers(),
+            json={"files": {WORLD_CACHE_FILENAME: {"content": payload}}}, timeout=15,
+        )
+        resp.raise_for_status()
+        return True
+    except (requests.RequestException, TypeError, ValueError):
+        return False

@@ -3,9 +3,157 @@
 from __future__ import annotations
 
 # ruff: noqa: F403,F405
+import requests
+
 from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
-from src.data.open_meteo import select_world_budget_cities
+from src.data import open_meteo
+from src.orchestrator import world_cache
+from src.data.world_thresholds import CityThresholds, compute_city_thresholds, evaluate_city
+from src.data.openmeteo_budget import OpenMeteoBudget, OpenMeteoSaturated
+
+
+WORLD_WARM_BUDGET = 8
+WORLD_CACHE_TTL_DAYS = 30
+WORLD_LEADERBOARD_RESERVE = 120
+
+
+def _fetch_city_archive(city: dict) -> dict | None:
+    today = date.today()
+    try:
+        start = today.replace(year=today.year - 30)
+    except ValueError:
+        start = today.replace(year=today.year - 30, day=28)
+    end = date.fromordinal(today.toordinal() - 1)
+    try:
+        resp = open_meteo.fetch_with_retry(
+            f"{open_meteo.ARCHIVE_URL}/archive",
+            params={
+                "latitude": city["lat"], "longitude": city["lon"],
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                "start_date": start.isoformat(), "end_date": end.isoformat(), "timezone": "auto",
+            },
+            timeout=30, attempts=3, backoff_base=1.0,
+        )
+    except requests.HTTPError as exc:
+        if getattr(exc.response, "status_code", None) == 429:
+            raise OpenMeteoSaturated("archive 429") from exc
+        return None
+    except requests.RequestException:
+        return None
+    try:
+        return resp.json().get("daily", {})
+    except ValueError:
+        return None
+
+
+def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
+    today = date.today()
+    iso = today.isoformat()
+    cache = world_cache.read_cache()
+    prev_cached = int((cache.get("_meta") or {}).get("cached_count", 0) or 0)
+    budget = OpenMeteoBudget(
+        per_minute=600, per_hour=5000, per_day=10000,
+        reserve=WORLD_LEADERBOARD_RESERVE, clock=time.monotonic, sleep=time.sleep,
+    )
+    saturated = False
+    warm_attempted = 0
+    warm_failures = 0
+
+    stale = world_cache.select_stale_cities(
+        cache, world_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=WORLD_WARM_BUDGET,
+        today=iso, urgent_order=open_meteo.URGENT_WORLD_HEAT_CITIES,
+    )
+    for c in stale:
+        try:
+            budget.wait_until_can_spend(43)
+        except OpenMeteoSaturated:
+            saturated = True
+            break
+        warm_attempted += 1
+        try:
+            archive = _fetch_city_archive(c)
+        except OpenMeteoSaturated:
+            saturated = True
+            break
+        budget.spend(43)
+        if not archive or not archive.get("time"):
+            warm_failures += 1
+            continue
+        cache[c["city"]] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
+
+    cached_cities = [c for c in world_cities if c.get("city") in cache]
+    all_readings = []
+    om_bundles = []
+    forecast_attempted = 0
+    forecast_failures = 0
+    i = 0
+    while i < len(cached_cities) and not saturated:
+        size = budget.forecast_batch_size(len(cached_cities) - i)
+        if size <= 0:
+            try:
+                budget.wait_until_can_spend(1)
+            except OpenMeteoSaturated:
+                saturated = True
+                break
+            continue
+        batch = cached_cities[i:i + size]
+        try:
+            budget.wait_until_can_spend(len(batch))
+            forecasts = open_meteo.fetch_forecasts_batch(batch)
+        except OpenMeteoSaturated:
+            saturated = True
+            break
+        budget.spend(len(batch))
+        for c in batch:
+            forecast_attempted += 1
+            fc = forecasts.get(c["city"])
+            if not fc or (fc.get("max_c") is None and fc.get("min_c") is None):
+                forecast_failures += 1
+                continue
+            cached_t = CityThresholds.from_dict(cache[c["city"]])
+            bundle = evaluate_city(
+                c["city"], c["country"], fc, cached_t,
+                lat=float(c["lat"]), lon=float(c["lon"]), today=today,
+            )
+            abs_ev = open_meteo.detect_absolute_extreme(
+                float(c["lat"]), float(c["lon"]), fc.get("max_c"), fc.get("min_c"),
+                c["city"], c["country"],
+            )
+            if abs_ev is not None:
+                bundle.absolute_extreme = abs_ev
+            world_cache.apply_provisional(cache, bundle, today=iso)
+            all_readings.append(bundle)
+            if any([
+                bundle.all_time_high, bundle.all_time_low, bundle.monthly_high,
+                bundle.monthly_low, bundle.anomaly_hot, bundle.anomaly_cold,
+                bundle.absolute_extreme, bundle.wet_bulb_extreme,
+            ]):
+                om_bundles.append(bundle)
+        i += size
+
+    eligibility: dict[str, int] = {}
+    for c in world_cities:
+        co = c.get("country")
+        eligibility[co] = eligibility.get(co, 0) + 1
+    om_country = open_meteo.detect_country_records(
+        all_readings, country_eligibility=eligibility, record_date=today,
+    )
+
+    cached_count = len([k for k in cache if k != "_meta"])
+    evaluated_ok = forecast_attempted - forecast_failures
+    coverage_ratio = round(evaluated_ok / len(world_cities), 3) if world_cities else 1.0
+    cache["_meta"] = {"cached_count": cached_count, "as_of": iso}
+    world_cache.write_cache(cache)
+
+    metrics_out.update({
+        "world_total": len(world_cities), "cached_count": cached_count,
+        "forecast_attempted": forecast_attempted, "forecast_failures": forecast_failures,
+        "warm_attempted": warm_attempted, "warm_failures": warm_failures,
+        "coverage_ratio": coverage_ratio, "saturated": saturated,
+    })
+    metrics_out["status"] = world_cache.classify_world_status(metrics_out, prev_cached_count=prev_cached)
+    return om_bundles, om_country
 
 
 def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
@@ -62,14 +210,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
-            # Interim: cap the live archive scan to a budget-sized, urgent-first
-            # slice so Open-Meteo's minutely rate limit can't 429 the acute heat
-            # event out of coverage (handoff 2026-06-25). Superseded by the world
-            # threshold cache.
-            world_cities = select_world_budget_cities(world_cities)
-            om_bundles, om_country = _check_city_extreme_signals(
-                world_cities,
-                open_meteo_pipeline_metrics,
+            om_bundles, om_country = _run_world_cached_half(
+                world_cities, open_meteo_pipeline_metrics,
             )
             bundles, country_records = partition_us_world(
                 ghcn_bundles, ghcn_country, om_bundles, om_country,
@@ -791,15 +933,15 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"checked:{ghcn_pipeline_metrics.get('stations_checked', '-')} "
                 f"bundles:{ghcn_pipeline_metrics.get('bundles_after_dedup', '-')}"
             )
-            om_readings = int(open_meteo_pipeline_metrics.get("city_readings", 0) or 0)
-            om_failures = int(open_meteo_pipeline_metrics.get("city_fetch_failures", 0) or 0)
+            m = open_meteo_pipeline_metrics
             note = (
                 f"provider:both ghcn[{ghcn_funnel}] "
-                f"world[readings:{om_readings} failures:{om_failures}] | {signal_breakdown}"
+                f"world[cached:{m.get('cached_count', 0)}/{m.get('world_total', 0)} "
+                f"cov:{m.get('coverage_ratio', 0)} fc_fail:{m.get('forecast_failures', 0)} "
+                f"warm:{m.get('warm_attempted', 0)}/{m.get('warm_failures', 0)}f "
+                f"sat:{m.get('saturated', False)}] | {signal_breakdown}"
             )
-            if om_failures and not om_readings:
-                # The US half (GHCN) still ran; only the world half degraded.
-                source_status = "degraded"
+            source_status = m.get("status", "success")
             details = {
                 "provider": "both",
                 "ghcn_pipeline_metrics": dict(ghcn_pipeline_metrics),

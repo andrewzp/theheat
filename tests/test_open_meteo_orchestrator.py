@@ -57,37 +57,6 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
     assert source_run["drafted"] == 2
 
 
-def test_both_mode_caps_open_meteo_world_half_to_budget(monkeypatch):
-    """In `both` mode the Open-Meteo world half must fetch only a budget-sized,
-    urgent-first slice — otherwise the archive minutely rate limit 429s the run
-    and the acute heat event goes unobserved (handoff 2026-06-25)."""
-    from src.orchestrator.sources import open_meteo as runner
-    from src.data import open_meteo as om
-
-    captured = {}
-
-    def fake_world(cities, metrics_out):
-        captured["world"] = list(cities)
-        return ([], [])
-
-    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
-    monkeypatch.setattr(runner, "_check_city_extreme_signals", fake_world)
-    monkeypatch.setattr(
-        runner.ghcn, "check_extreme_signals_for_stations",
-        lambda metrics_out: ([], []),
-    )
-
-    cities = [{"city": f"C{i}", "country": "Brazil", "lat": "0", "lon": "0"} for i in range(60)]
-    cities.append({"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"})
-    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
-
-    runner.run_extreme_signals(_fresh_state(), current_run, cities, {}, {})
-
-    assert "world" in captured
-    assert len(captured["world"]) <= om.WORLD_FETCH_BUDGET
-    assert any(c["city"] == "Madrid" for c in captured["world"])
-
-
 def test_absolute_extreme_is_queued_when_it_is_strongest(monkeypatch):
     from src.orchestrator.sources import open_meteo as runner
 
@@ -300,39 +269,36 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
         signal_date=signal_date, station_id="USW00023183",
         station_name="PHOENIX SKY HARBOR INTL AP",
     )
-    eu_event = AbsoluteExtremeEvent(
-        city="Seville", country="Spain", today_temp_c=45.1,
-        band_label="Temperate", threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
-        event_id="absextreme_Seville_2026-06-25", signal_date=signal_date,
-    )
-    eu_bundle = ExtremeSignalBundle(
-        city="Seville", country="Spain", absolute_extreme=eu_event,
-        signal_date=signal_date,
-    )
     bot_state = _fresh_state()
     current_run = {"id": "run_1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
     enqueued: list[dict] = []
+    world_cities = [{"city": "Seville", "country": "Spain", "lat": "37.4", "lon": "-6.0"}]
 
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
     monkeypatch.setattr(
         runner.ghcn, "check_extreme_signals_for_stations",
         lambda *args, **kwargs: ([us_bundle], []),
     )
-    monkeypatch.setattr(
-        runner, "_check_city_extreme_signals",
-        lambda cities, metrics_out: ([eu_bundle], []),
-    )
+    # The world half is sourced from the cached warm+hot path now, not the
+    # superseded _check_city_extreme_signals seam: warm seeds Seville's
+    # thresholds from the archive, then the forecast (46.0 > cached 40.0)
+    # fires an all-time-high via evaluate_city.
+    monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
+        "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
+        "wet_bulb_temperature_2m_max": [24.0]})
+    monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
+        lambda cities: {c["city"]: {"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0} for c in cities})
     monkeypatch.setattr(runner, "_should_draft", lambda *args, **kwargs: True)
     monkeypatch.setattr(
         runner, "_enqueue_story_candidate",
         lambda *args, **kwargs: enqueued.append(kwargs) or True,
     )
 
-    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+    runner.run_extreme_signals(bot_state, current_run, world_cities, {}, {})
 
     event_ids = {e["event_id"] for e in enqueued}
     assert "absextreme_Phoenix_2026-06-25" in event_ids  # US sourced from GHCN
-    assert "absextreme_Seville_2026-06-25" in event_ids  # Europe sourced from Open-Meteo
+    assert any("Seville" in e.get("event_id", "") for e in enqueued)  # Europe sourced from Open-Meteo
     assert current_run["sources"][0]["note"].startswith("provider:both")
 
 
@@ -398,4 +364,28 @@ def test_world_path_emits_no_calendar_streak_or_simultaneous():
                             all_time_max=(40.0, 2019), monthly_max={"06": (39.0, 2019)})
     b = evaluate_city("Lyon", "France", {"max_c": 45.0, "min_c": 20.0, "tw_max_c": 10.0},
                       cached, lat=45.7, lon=4.8, today=date(2026, 6, 26))
-    assert b.calendar_date_high is None and b.calendar_date_low is None
+    assert b.calendar_date_high is None
+    assert b.calendar_date_low is None
+
+
+def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
+    from src.orchestrator.sources import open_meteo as runner
+    from src.orchestrator import world_cache
+    from src.state import _fresh_state
+    store = {}
+    monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
+    monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
+    monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", lambda metrics_out: ([], []))
+    monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
+        "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
+        "wet_bulb_temperature_2m_max": [24.0]})
+    monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
+        lambda cities: {c["city"]: {"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0} for c in cities})
+    cities = [{"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"}]
+    run = {"id": "r", "mode": "alerts", "started_at": "2026-06-26T00:00:00Z", "sources": []}
+    runner.run_extreme_signals(_fresh_state(), run, cities, {}, {})
+    assert "Madrid" in store
+    src = [s for s in run["sources"] if s["source"] == "open_meteo_extreme_signals"][0]
+    om = src["details"]["open_meteo_pipeline_metrics"]
+    assert "coverage_ratio" in om and "cached_count" in om
