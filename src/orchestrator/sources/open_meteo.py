@@ -135,7 +135,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     eligibility: dict[str, int] = {}
     for c in world_cities:
         co = c.get("country")
-        eligibility[co] = eligibility.get(co, 0) + 1
+        if co:
+            eligibility[co] = eligibility.get(co, 0) + 1
     om_country = open_meteo.detect_country_records(
         all_readings, country_eligibility=eligibility, record_date=today,
     )
