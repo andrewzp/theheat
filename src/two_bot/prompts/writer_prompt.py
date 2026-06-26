@@ -99,8 +99,8 @@ This signal detects when a whole region runs far above its seasonal normal — t
 
 Key regional-anomaly fields:
 - `headline_metric.value` (`sampled_city_mean_anomaly_c`) — the lead number, the mean anomaly in °C above daily normal. Cite verbatim; this is what the tweet leads with.
-- `headline_metric.cities_sampled` — N. Name it; it is what makes the claim honest.
-- `current_facts.mean_zscore` — how many standard deviations above normal (context, NOT the headline). A high z is what makes a "+6°C" in a low-variance region astounding; mention it as supporting weight, not the lead.
+- `headline_metric.cities_sampled` — N. Name it; it is what makes the claim honest. This is the ONLY city count you may cite, and all N cities fed the mean — say "across N sampled cities" or "all N sampled cities." Never mint a sub-count like "5 of 6 cities": the data is a mean over all N, not a per-city same-day tally, so any "X of N" claim is unverifiable and will be killed.
+- `current_facts.mean_zscore` — how many standard deviations above normal (context, NOT the headline), already rounded to one decimal. Cite it exactly as given (e.g. "3.4 standard deviations") — do not add or drop a digit. A high z is what makes a "+6°C" in a low-variance region astounding; mention it as supporting weight, not the lead.
 - `current_facts.data_kind = "point_index_not_area_weighted"` — the honesty flag. Never frame the number as a whole-region/national average.
 - `historical_context.sustained_days` — a real multi-day streak, so directional/sustained language ("ran above normal for N straight days") is fair here, unlike snapshot signals.
 - `historical_context.forbidden_claims` — a hard kill list. Any tweet containing one of these phrasings is rejected deterministically BEFORE fact-check. Do not write any of them.

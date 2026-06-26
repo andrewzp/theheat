@@ -308,6 +308,36 @@ class TestBuildRegionalAnomalyBundle:
         assert facts["data_kind"] == "point_index_not_area_weighted"
         assert facts["cities_sampled"] == 6
 
+    def test_fraction_exceeding_is_not_a_current_fact(self) -> None:
+        # fraction_exceeding is a fraction of city-DAYS over the window, not a
+        # same-day count of cities. Exposing it as a fact let the writer mint a
+        # false "5 of 6 cities" claim (which the fact-check rightly killed), so it
+        # is kept out of current_facts and preserved only in the raw dump.
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        b = build_regional_anomaly_bundle(_sample_event())
+        labels = {f["label"] for f in b.current_facts}
+        assert "fraction_exceeding_plus6c" not in labels
+        assert b.raw_signal_dump["fraction_exceeding"] == 0.83
+
+    def test_mean_zscore_published_at_one_decimal(self) -> None:
+        # The raw z-score (e.g. 3.42) is rounded to 1 dp so the writer's natural
+        # "3.4 standard deviations" citation matches the bundle exactly and is not
+        # killed as a rounded-precision mismatch by the strict BUNDLE_FACT check.
+        from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        ev = RegionalAnomalyEvent(
+            region="France", region_slug="France", cities_sampled=6,
+            mean_anomaly_c=11.9, mean_zscore=3.42, fraction_exceeding=0.93,
+            sustained_days=7, window_start="2026-06-20", window_end="2026-06-26",
+            event_id="reganom_France_2026-06-26",
+        )
+        b = build_regional_anomaly_bundle(ev)
+        facts = {f["label"]: f["value"] for f in b.current_facts}
+        assert facts["mean_zscore"] == 3.4
+        assert b.historical_context["mean_zscore"] == 3.4
+
     def test_forbidden_claims_present_and_honest_form_safe(self) -> None:
         from src.two_bot.intern import build_regional_anomaly_bundle
 
