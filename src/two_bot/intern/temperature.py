@@ -383,6 +383,11 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
     """
     region = ev.region
     anomaly_f = round(ev.mean_anomaly_c * 1.8, 1)  # an anomaly is a DELTA — no +32 offset
+    # Publish the z-score at 1-decimal precision. It is supporting context, not the
+    # lead; exposing the raw float (e.g. 3.42) makes the writer's natural "3.4
+    # standard deviations" citation read as a rounded-precision mismatch to the
+    # strict BUNDLE_FACT fact-check, which kills the whole draft.
+    zscore_1dp = round(ev.mean_zscore, 1)
     return StoryBundle(
         signal_kind="regional_anomaly",
         where=f"{ev.cities_sampled} sampled cities in {region}",
@@ -400,8 +405,12 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
             {"label": "cities_sampled", "value": ev.cities_sampled},
             {"label": "mean_anomaly_c", "value": ev.mean_anomaly_c},
             {"label": "mean_anomaly_f", "value": anomaly_f},
-            {"label": "mean_zscore", "value": ev.mean_zscore},
-            {"label": "fraction_exceeding_plus6c", "value": ev.fraction_exceeding},
+            {"label": "mean_zscore", "value": zscore_1dp},
+            # fraction_exceeding is a fraction of city-DAYS over the window, NOT a
+            # same-day count of cities — exposing it as a fact invited the writer to
+            # mint a false "5 of 6 cities" claim that the fact-check (rightly) killed.
+            # It survives in raw_signal_dump for the record; the only honest, citable
+            # city count is cities_sampled, and all of them fed the mean.
             {"label": "sustained_days", "value": ev.sustained_days},
             # ``region`` is retained ONLY to feed _audience_unit_facts; the writer
             # prompt forbids citing it as a bare aggregate.
@@ -412,7 +421,7 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
             "scope": "sampled_city_daily_era5_anomaly",
             "anomaly_floor_c": 6.0,
             "zscore_floor": 2.0,
-            "mean_zscore": ev.mean_zscore,
+            "mean_zscore": zscore_1dp,
             "sustained_days": ev.sustained_days,
             "window_start": ev.window_start,
             "window_end": ev.window_end,
