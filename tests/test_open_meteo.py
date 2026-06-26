@@ -441,3 +441,12 @@ def test_fetch_forecasts_batch_raises_saturated_on_429():
         json={"error": True, "reason": "Minutely API request limit exceeded"}, status=429)
     with pytest.raises(OpenMeteoSaturated):
         _open_meteo_module.fetch_forecasts_batch([{"city": "Madrid", "lat": "40.4", "lon": "-3.7"}])
+
+
+def test_country_record_below_floor_suppressed_and_counts_populated():
+    from src.data.open_meteo import detect_country_records, ExtremeSignalBundle
+    r1 = [ExtremeSignalBundle(city="Madrid", country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023)]
+    assert detect_country_records(r1, country_eligibility={"Spain": 3}) == []   # 1 of 3
+    r3 = [ExtremeSignalBundle(city=c, country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023) for c in ["Madrid", "Sevilla", "Zaragoza"]]
+    out = detect_country_records(r3, country_eligibility={"Spain": 3})
+    assert out and out[0].eligible == 3 and out[0].cached == 3

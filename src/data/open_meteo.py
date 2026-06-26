@@ -209,6 +209,9 @@ class CountryRecord:
     cities_sampled: int
     event_id: str
     signal_date: date | None = None
+    eligible: int = 0
+    cached: int = 0
+    forecast_read: int = 0
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
@@ -892,6 +895,8 @@ def detect_country_records(
     archive_years: int = 30,
     min_cities_per_country: int = 2,
     record_date: date | None = None,
+    country_eligibility: dict[str, int] | None = None,
+    country_forecast_read: dict[str, int] | None = None,
 ) -> list[CountryRecord]:
     """Aggregate per-city readings into country-level records.
 
@@ -914,6 +919,8 @@ def detect_country_records(
     records: list[CountryRecord] = []
     for country, group in by_country.items():
         if len(group) < min_cities_per_country:
+            continue
+        if country_eligibility is not None and len(group) < country_eligibility.get(country, len(group)):
             continue
 
         # Highs
@@ -940,6 +947,9 @@ def detect_country_records(
                     cities_sampled=len(group),
                     event_id=f"country_high_{country_key}_{today_iso}",
                     signal_date=record_date,
+                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
+                    cached=len(group),
+                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
                 ))
 
         # Lows
@@ -966,6 +976,9 @@ def detect_country_records(
                     cities_sampled=len(group),
                     event_id=f"country_low_{country_key}_{today_iso}",
                     signal_date=record_date,
+                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
+                    cached=len(group),
+                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
                 ))
 
     return records
