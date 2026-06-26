@@ -11,6 +11,150 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-06-26 — Daily corpus grading (3 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 3 pending drafts — all
+fresh, all precipitation_extreme, all created 2026-06-26. **Infrastructure note:** All 3 drafts
+cite "previous 3-day record of 150.0 mm" — this is the detection threshold value (150.0 mm for
+3-day accumulation) being passed as the prior record when no authenticated station historical record
+exists in the bundle (`previous_record_year: null` in all 3 bundles). Threshold artifact: the
+bundle uses the triage floor as the "record" comparator. Operator should verify whether authentic
+station records exist before publishing any of these as "record-breaking."
+
+**Staleness review as of 2026-06-26 ~15:00 UTC:** `gh` CLI absent — **29th consecutive skip**
+(May 13 → Jun 26). All 3 drafts < 48h old (tweet_date 2026-06-24; created Jun 26T04:00–07:59Z).
+No real-time-baked language ("today"/"tonight"/"forecast") — 0 staleness candidates. **Operator
+note:** All 3 Jun 26 drafts approach 48h threshold ~Jun 28T04:00–07:59Z — post or reject before
+then.
+
+**Grade distribution (3 fresh drafts):** 0 A / 1 B / 2 C+ / 0 D-F.
+**A-rate: 0% (0/3).** Gap from resumption bar: 50 pp.
+
+**Headline finding:** P9 6th cycle — all 3 drafts use "[City] received/logged X mm in 3 days —
+[comparison]" opener template; Amsterdam + Aktobe have restate-math; Anchorage restate-math also
+present. P_close 9th cycle: Anchorage mechanism-only failing; Amsterdam implied-consequence
+failing; Aktobe half-year ratio (borderline — ratio form correct, setup too thin). All 3 cite
+"previous 3-day record of 150.0 mm" — threshold artifact confirmed across the batch.
+
+### B drafts
+
+#### [3] Anchorage, Alaska, US — precipitation_extreme — 183.8 mm/3-day — **B**
+
+> *Anchorage received 183.8 mm of rain in 3 days — 33.8 mm above the previous 3-day record of
+> 150.0 mm. The city sits at the head of Cook Inlet, where storms tracking up from the Gulf of
+> Alaska can stall against the Chugach Range and wring out moisture in compressed bursts.*
+
+**Score:** 80 (threshold 70; passes). Created 2026-06-26T07:59Z. Margin: 33.8/150.0 = **22.5%** above record.
+
+Humor lens:
+- **Violation:** 183.8 mm in 3 days — strongest margin in the batch (22.5%). Fact-checked clean.
+- **Benign?** Yes — factual, no human loss language.
+- **Setup→Punchline?** Setup: 183.8 mm, margin named (33.8 mm above record). System clause:
+  Cook Inlet head + Gulf of Alaska storm tracks + Chugach Range orographic stall + "wring out
+  moisture in compressed bursts." Close ends on the mechanism description — does not name the
+  consequence of those compressed bursts. Mechanism-only P_close form (the weakest).
+- **Named mechanic?** Orographic stall (Gulf of Alaska → Cook Inlet → Chugach Range stall →
+  moisture compression) — specific, load-bearing, correct topographic geography. Best system
+  clause in the batch.
+- **Wodehouse rule?** No effort signal. "Compressed bursts" is precise. "Stall against the
+  Chugach Range" is the right verb.
+
+**P9 observed (6th cycle).** "[City] received X mm of rain in N days — [comparison]" opener
+template. Also restate-math: "33.8 mm above the previous 3-day record of 150.0 mm" — margin +
+prior record both stated (derivable arithmetic).
+
+**P_close FAILING (9th cycle, mechanism-only).** "Wring out moisture in compressed bursts" ends
+on the mechanism, not the consequence. Weakest P_close form — does not even reach implied-
+consequence. Compare: Red Dog Mine Jun 13 (mechanism-only, C+); here the 22.5% margin saves to B.
+Declarative-consequence form: "The Chugach holds these systems long enough to saturate Cook Inlet
+drainages" or similar.
+
+**Threshold artifact.** "Previous 3-day record of 150.0 mm" = the 3-day detection threshold.
+`previous_record_year: null` in bundle. The 22.5% margin above the threshold is real; whether a
+station-authenticated 3-day record of 150.0 mm exists for Anchorage is unverified.
+
+**Why not B+?** P_close mechanism-only close + restate-math + P9 template. To reach B+: drop
+restate-math (ratio or period-and-restate), name a consequence in the close.
+
+### C+ drafts
+
+#### [1] Amsterdam, The Netherlands — precipitation_extreme — 157.1 mm/3-day — **C+**
+
+> *Amsterdam received 157.1 mm of rain in 3 days — 7.1 mm above the previous 3-day record of
+> 150.0 mm. The Netherlands sits at the mouth of the Rhine-Meuse delta; the city's canal network
+> was built to manage gradual accumulation, not to absorb a month's rain in 72 hours.*
+
+**Score:** 74 (threshold 70; passes). Created 2026-06-26T04:00Z. Margin: 7.1/150.0 = **4.73%** above record.
+
+Humor lens:
+- **Violation:** 157.1 mm in 3 days; narrow 4.73% margin. Fact-checked clean.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: margin stated (restate-math). System clause: Rhine-Meuse delta +
+  canal network design-capacity framing. Close: "not to absorb a month's rain in 72 hours" —
+  contrast structure (built for gradual accumulation, NOT for 72h total) implies the canal system
+  was overwhelmed but does not name the consequence. Implied-consequence P_close form.
+- **Named mechanic?** Rhine-Meuse delta geography + canal network design capacity — strong
+  infrastructure-incongruity framing. "A month's rain in 72 hours" is accurate (Amsterdam
+  average June rainfall ~60mm → 157mm ≈ 2.6 months; "a month's rain" understates). The delta-
+  drainage engineering angle is the right specificity vehicle.
+- **Wodehouse rule?** No effort signal. "Not to absorb a month's rain in 72 hours" is precise.
+
+**P9 observed (6th cycle).** "[City] received X mm in N days — [comparison]" opener template.
+Restate-math: "7.1 mm above the previous 3-day record of 150.0 mm" — three numbers where two
+suffice. Compare Jun 18 Amsterdam B: "14.4 mm above a previous record of 300.0 mm" — same
+pattern, same slot, different event data.
+
+**P_close FAILING (9th cycle, implied-consequence).** "Not to absorb a month's rain in 72 hours"
+implies the canal system was overwhelmed but does not name the consequence. Declarative form:
+"The delta's canal network backs up" or "Amsterdam's drainage saturates." The canal-capacity
+clause is the strongest system clause in a C+-graded precipitation_extreme draft — the gap is
+entirely in the LANDING, not the mechanism identification.
+
+**Threshold artifact.** "Previous 3-day record of 150.0 mm" = detection threshold. See above.
+
+**Why C+ and not B?** Narrow margin (4.73%) + implied-consequence close. Jun 18 Amsterdam B had
+4.8% margin + same implied-consequence form — functionally the same grade. Infrastructure
+specificity (canal design capacity) is slightly stronger here but not enough to lift.
+
+#### [2] Aktobe, Kazakhstan — precipitation_extreme — 150.8 mm/3-day — **C+**
+
+> *Aktobe, Kazakhstan logged 150.8 mm of rain over 3 days — just edging the previous 3-day record
+> of 150.0 mm. Aktobe sits on the dry Kazakh steppe, where annual rainfall totals rarely exceed
+> 300 mm; three days here matched half a year's average.*
+
+**Score:** 73 (threshold 70; passes). Created 2026-06-26T04:03Z. Margin: 0.8/150.0 = **0.53%** above record.
+
+Humor lens:
+- **Violation:** 0.8 mm margin — narrowest in precipitation_extreme corpus. Barely a record.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: "just edging" hedge immediately signals thin margin. System clause:
+  Kazakh steppe aridity + annual rainfall context. Close: "three days here matched half a year's
+  average" — declarative ratio (150.8 mm ≈ 300 mm × 0.5). The ratio close is the strongest
+  element of the draft; comparable structure to Barrow Jun 25 "nearly twice that total" (P_close
+  POSITIVE). But the setup (hedge + thin margin) undercuts the ratio's impact.
+- **Named mechanic?** Kazakh steppe aridity calibration — correct and specific. Annual
+  precipitation <300 mm is accurate for Aktobe latitude (~50°N, semi-arid steppe).
+- **Wodehouse rule?** "Just edging" is the violation — signals awareness of how thin the margin
+  is. The writer is apologizing for the number. Wodehouse would not hedge. "Logged 150.8 mm of
+  rain over 3 days" is fine; "just edging the previous 3-day record of 150.0 mm" is the mistake.
+
+**P9 observed (6th cycle).** "[City] logged X mm in N days — [comparison]" opener template. Verb
+varies ("logged" vs. "received") but structure is identical. Restate-math: "just edging the
+previous 3-day record of 150.0 mm" — both values present.
+
+**P_close borderline (9th cycle).** "Three days here matched half a year's average" — declarative
+ratio, structurally similar to Barrow Jun 25 "nearly twice that total" (P_close POSITIVE). But
+Barrow's ratio followed a 22.5% margin with no hedge; Aktobe's ratio follows a 0.53% margin with
+"just edging." The ratio form is correct; the setup is too weak to carry it to POSITIVE.
+
+**Threshold artifact.** "Previous 3-day record of 150.0 mm" = detection threshold. Also: 0.8 mm
+above a threshold value raises the question of whether this event qualifies as a genuine record if
+authenticated station data were available.
+
+**Why C+ and not B?** 0.53% margin is nearly invalidating. "Just edging" hedge is a Wodehouse
+violation. Without the hedge and with a stronger margin, the steppe-aridity + half-year ratio
+close would reach B.
+
 ---
 
 ## 2026-06-25 — Daily corpus grading (5 fresh drafts)
