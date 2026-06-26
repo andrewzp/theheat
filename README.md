@@ -34,8 +34,10 @@ writer replays call paid APIs and are run only by the voice-regression workflow.
 ## State
 
 Production uses a GitHub Gist `state.json`; the SQLite backend remains a dormant
-escape hatch and test target. Do not edit the production gist by hand. State
-changes should flow through bot code and the normal merge/write path.
+escape hatch and test target. The same gist also holds `world_threshold_cache.json`
+— the non-US world temperature half's cached 30-year thresholds (derived/regenerable,
+kept out of `state.json` so core state stays lean). Do not edit the production gist by
+hand. State changes should flow through bot code and the normal merge/write path.
 
 ## Project Map
 
@@ -58,6 +60,12 @@ changes should flow through bot code and the normal merge/write path.
 
 ## Current Operations
 
+- The non-US world temperature half (`provider=both`) is backed by an in-run
+  threshold cache (`world_threshold_cache.json`) since 2026-06-26, mirroring the US
+  GHCN cache: a warm path caches each city's 30-year thresholds (paced under
+  Open-Meteo's rate limit), a hot path does a cheap daily forecast compare, and an
+  Open-Meteo 429 marks the source `degraded` instead of failing silently. The cache
+  warms over ~10 days after deploy. See `PIPELINE.md` and the 2026-06-26 handoff.
 - Source redundancy is live for the major flaky feeds that have verified backup
   legs. Backup-served runs record `status="degraded"` plus
   `served via <leg>`, never green, so outages stay visible while drafts can still

@@ -1,11 +1,12 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-06-23 (release 0.9.81.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-23.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-23.md).
+**Last updated:** 2026-06-26 (release 0.9.81.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-26.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-26.md).
 The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
-and the dashboard now exposes per-source troubleshooting logs for current
-problem rows. The editorial pipeline shape described below is unchanged; the
-source layer is more resilient and more observable.
+the non-US world temperature half is now backed by a threshold cache (see below),
+and the dashboard exposes per-source troubleshooting logs. The editorial pipeline
+shape described below is unchanged; the source layer is more resilient and more
+observable.
 
 **Production drafting no longer gates on the full unit-test suite since 2026-06-23**
 ([#326](https://github.com/andrewzp/theheat/pull/326)). A flaky time-bomb unit test
@@ -25,6 +26,24 @@ now decodes the `exp` claim from JWT credentials each run (only the derived date
 written to state under `credential_expiry`; the token never leaves the bot) and the
 dashboard shows a **CREDENTIALS** card (days-until-expiry, green/amber/red). Adding
 the next credential is one row in `TRACKED_CREDENTIALS`.
+
+**The world temperature half is cache-backed since 2026-06-26** ([#338](https://github.com/andrewzp/theheat/pull/338)).
+In `provider=both`, the US half has always used a precomputed GHCN threshold cache; the
+non-US world half used to do a **live 30-year Open-Meteo archive pull per city every run**,
+which 429'd after ~12 cities (the free archive endpoint's minutely limit) — observing ~2%
+of the world while monitoring read green (failures were a silent counter). The world half now
+mirrors the GHCN model: a **warm path** caches each city's 30-yr thresholds (paced by an
+Open-Meteo weight budget, stored in a separate gist file `world_threshold_cache.json`, with a
+concurrency-safe field/month-wise merge), and a **hot path** does a cheap daily forecast
+compare. An Open-Meteo 429 now raises `OpenMeteoSaturated` and marks the source `degraded` —
+silent saturation is structurally impossible. A short-lived interim cap
+([#337](https://github.com/andrewzp/theheat/pull/337)) bridged the gap. Anti-re-fire writes a
+provisional threshold on a fired record; a per-country coverage floor blocks false national
+records during warm-up; `calendar_date` / `record_streak` / `simultaneous_records` are now
+**US-only** for the world (gist-prohibitive to cache). Code: `src/data/world_thresholds.py`,
+`src/orchestrator/world_cache.py`, `src/data/openmeteo_budget.py`. The cache warms over ~10
+days after deploy (watch `cached_count` / `coverage_ratio` / `saturated` in the
+`open_meteo_extreme_signals` source details).
 
 **Known integrity gap — claim & warrant (design reviewed 2026-06-22, awaiting Andrew).**
 The evidence contract validates that a bundle's facts are *present*, not that its
@@ -142,7 +161,7 @@ flowchart TD
 
     subgraph RAW["RAW MATERIALS — public climate and disaster sources"]
         direction TB
-        OM["GHCN (US) + Open-Meteo (world)<br/>temperature records<br/>provider=both, partitioned by country"]:::source
+        OM["GHCN (US) + Open-Meteo (world)<br/>temperature records<br/>provider=both, partitioned by country<br/>both halves threshold-cached (US: GHCN · world: Open-Meteo warm/hot)"]:::source
         FIRMS["NASA FIRMS<br/>satellite wildfires"]:::source
         NIFC["NIFC WFIGS<br/>US fire complexes<br/>(tier dedup)"]:::source
         NOAACO2["NOAA GML<br/>Mauna Loa CO2<br/>(12/yr cap)"]:::source
@@ -160,7 +179,7 @@ flowchart TD
 
     OISST --> SCORE
 
-    RAW --> EXTRACT["Extreme Signals Extraction<br/>(per-city unified bundle)<br/>• all-time records<br/>• monthly records<br/>• anomaly (15°C+ above/below mean)<br/>• calendar-date records<br/>• record streaks (3+ consecutive days)<br/>• simultaneous events (5+ cities/day)<br/>Picks strongest signal per city"]:::gen
+    RAW --> EXTRACT["Extreme Signals Extraction<br/>(per-city unified bundle)<br/>• all-time records<br/>• monthly records<br/>• anomaly (15°C+ above/below mean)<br/>• wet-bulb extremes<br/>• calendar-date records (US-only)<br/>• record streaks 3+ days (US-only)<br/>• simultaneous events 5+ cities/day (US-only)<br/>Picks strongest signal per city"]:::gen
 
     EXTRACT --> DEDUP{"Deduplicate<br/>against last 500 events"}:::gate
 
