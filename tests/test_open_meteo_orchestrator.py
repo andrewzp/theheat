@@ -57,6 +57,37 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
     assert source_run["drafted"] == 2
 
 
+def test_both_mode_caps_open_meteo_world_half_to_budget(monkeypatch):
+    """In `both` mode the Open-Meteo world half must fetch only a budget-sized,
+    urgent-first slice — otherwise the archive minutely rate limit 429s the run
+    and the acute heat event goes unobserved (handoff 2026-06-25)."""
+    from src.orchestrator.sources import open_meteo as runner
+    from src.data import open_meteo as om
+
+    captured = {}
+
+    def fake_world(cities, metrics_out):
+        captured["world"] = list(cities)
+        return ([], [])
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", fake_world)
+    monkeypatch.setattr(
+        runner.ghcn, "check_extreme_signals_for_stations",
+        lambda metrics_out: ([], []),
+    )
+
+    cities = [{"city": f"C{i}", "country": "Brazil", "lat": "0", "lon": "0"} for i in range(60)]
+    cities.append({"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"})
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+
+    runner.run_extreme_signals(_fresh_state(), current_run, cities, {}, {})
+
+    assert "world" in captured
+    assert len(captured["world"]) <= om.WORLD_FETCH_BUDGET
+    assert any(c["city"] == "Madrid" for c in captured["world"])
+
+
 def test_absolute_extreme_is_queued_when_it_is_strongest(monkeypatch):
     from src.orchestrator.sources import open_meteo as runner
 

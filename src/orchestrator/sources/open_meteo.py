@@ -5,6 +5,7 @@ from __future__ import annotations
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
+from src.data.open_meteo import select_world_budget_cities
 
 
 def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: list[dict], us_city_state_map: dict[str, str], city_elevations: dict[tuple[str, str], int]) -> None:
@@ -61,6 +62,11 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
+            # Interim: cap the live archive scan to a budget-sized, urgent-first
+            # slice so Open-Meteo's minutely rate limit can't 429 the acute heat
+            # event out of coverage (handoff 2026-06-25). Superseded by the world
+            # threshold cache.
+            world_cities = select_world_budget_cities(world_cities)
             om_bundles, om_country = _check_city_extreme_signals(
                 world_cities,
                 open_meteo_pipeline_metrics,

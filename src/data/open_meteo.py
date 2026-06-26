@@ -410,6 +410,73 @@ def prioritize_cities(cities: list[dict]) -> list[dict]:
     return priority + rest
 
 
+# --- Interim Open-Meteo world-coverage budget (handoff 2026-06-25) -----------
+# Open-Meteo's free archive endpoint enforces a per-minute request-weight limit
+# that a 30-year daily pull saturates after ~12 cities (observed in prod:
+# world[readings:12 failures:584]). `both` mode hands ~595 non-US cities to the
+# live archive scan, so all but the first ~12 get 429'd ("Minutely API request
+# limit exceeded") and the acute heat event — e.g. the 2026 European heatwave —
+# goes unobserved. Until the world threshold cache lands (mirroring the GHCN
+# SQLite threshold cache so per-run cost is a cheap forecast call, not a live
+# 30-year archive pull), fetch only a budget-sized, deliberately-ordered slice
+# so the event is seen instead of starved by the random tail of
+# prioritize_cities(). Remove this cap when the cache ships.
+WORLD_FETCH_BUDGET = 10
+
+# Ordered, interim curation (most urgent first). Interleaves the 2026 NH-summer
+# European heatwave cities (the regression this cap fixes) with the perennial
+# global hot-spots so neither is starved by the budget. Spellings must match
+# data/cities.csv exactly. Revert/replace when the cache removes the budget.
+URGENT_WORLD_HEAT_CITIES = [
+    "Madrid", "Jacobabad", "Sevilla", "Kuwait City", "Lyon", "Mecca",
+    "Zaragoza", "Delhi", "Paris", "Ahvaz", "Rome", "Khartoum",
+    "Athens", "Naples", "Karachi", "Lisbon",
+]
+
+
+def select_world_budget_cities(
+    world_cities: list[dict],
+    *,
+    budget: int = WORLD_FETCH_BUDGET,
+) -> list[dict]:
+    """Return an ordered, deduped slice of ``world_cities`` of length <= budget.
+
+    Urgent heat cities (those present in the input) come first, in
+    ``URGENT_WORLD_HEAT_CITIES`` order; any remaining budget is backfilled from
+    ``prioritize_cities()`` order. Interim guard for the Open-Meteo archive
+    minutely rate limit; superseded by the world threshold cache.
+    """
+    by_name: dict[str, dict] = {}
+    for city in world_cities:
+        name = city.get("city")
+        if name not in by_name:
+            by_name[name] = city
+
+    selected: list[dict] = []
+    seen: set[str] = set()
+
+    for name in URGENT_WORLD_HEAT_CITIES:
+        if len(selected) >= budget:
+            break
+        city = by_name.get(name)
+        if city is None or name in seen:
+            continue
+        selected.append(city)
+        seen.add(name)
+
+    if len(selected) < budget:
+        for city in prioritize_cities(world_cities):
+            if len(selected) >= budget:
+                break
+            name = city.get("city")
+            if name in seen:
+                continue
+            selected.append(city)
+            seen.add(name)
+
+    return selected[:budget]
+
+
 # Thresholds for elite signal categories
 ANOMALY_HOT_THRESHOLD_C = 15.0  # today is 15°C+ above historical mean for this month
 ANOMALY_COLD_THRESHOLD_C = 15.0  # today is 15°C+ below historical mean for this month
