@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from src.data.world_thresholds import CityThresholds
+
 WORLD_CACHE_FILENAME = "world_threshold_cache.json"
 _META_KEY = "_meta"
 
@@ -81,3 +83,23 @@ def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_
         if len(out) >= budget:
             break
     return out
+
+
+def _year(today: str) -> int:
+    return date.fromisoformat(today).year
+
+
+def apply_provisional(cache: dict, bundle, *, today: str) -> None:
+    city = bundle.city
+    entry = cache.get(city)
+    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=city, as_of=today, years_of_data=0)
+    if bundle.all_time_high is not None:
+        t.all_time_max = (bundle.all_time_high.new_temp_c, _year(today))
+    if bundle.all_time_low is not None:
+        t.all_time_min = (bundle.all_time_low.new_temp_c, _year(today))
+    if bundle.monthly_high is not None:
+        t.monthly_max[f"{bundle.monthly_high.month:02d}"] = (bundle.monthly_high.new_temp_c, _year(today))
+    if bundle.monthly_low is not None:
+        t.monthly_min[f"{bundle.monthly_low.month:02d}"] = (bundle.monthly_low.new_temp_c, _year(today))
+    t.as_of = today
+    cache[city] = t.to_dict()
