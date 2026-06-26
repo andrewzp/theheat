@@ -48,6 +48,24 @@ def _fetch_city_archive(city: dict) -> dict | None:
 
 
 def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
+    """Cached-threshold world half, mirroring the GHCN/US model.
+
+    Two passes under one shared ``OpenMeteoBudget`` (paced under Open-Meteo's
+    600/min weight limit, with a reserve held back for the Hot 10 leaderboard):
+
+    1. **Warm path** — refresh the ~``WORLD_WARM_BUDGET`` stalest/missing cities
+       (urgent-first) by pulling each one's 30-yr archive and recomputing its
+       thresholds into the gist-backed cache. Bounded so a cold cache warms over
+       ~10 days rather than 429-ing on a single run.
+    2. **Hot path** — for every cached city, a cheap batched forecast compare
+       against the cached thresholds; no archive calls.
+
+    Any Open-Meteo 429 raises ``OpenMeteoSaturated``, which flips ``saturated``
+    and stops the run with degraded status — silent rate-limit starvation (the
+    original world-half bug) is structurally impossible. Populates ``metrics_out``
+    (incl. ``cached_count``/``coverage_ratio``/``warm_failures``/``saturated`` and
+    a classified ``status``) and returns ``(om_bundles, om_country)``.
+    """
     today = date.today()
     iso = today.isoformat()
     cache = world_cache.read_cache()

@@ -46,10 +46,32 @@ def test_pacing_spends_595_forecasts_plus_warm_under_minute_ceiling():
     assert b._spent_within(60) <= 360
 
 
-def test_wait_raises_when_daily_ceiling_blocks():
-    """A single weight that exceeds the daily ceiling must raise OpenMeteoSaturated."""
+def test_wait_raises_when_hourly_ceiling_blocks():
+    """Spending past the hourly ceiling in one window raises OpenMeteoSaturated.
+
+    ``next_available_delay`` checks the hourly ceiling before the daily one, so a
+    single oversized spend trips the *hourly* guard first (this is the case the
+    old ``..._daily_ceiling_blocks`` test actually exercised — it was misnamed).
+    """
     b = _make_budget(per_minute=600, per_hour=5_000, per_day=10_000, reserve=0)
-    # Exhaust the daily budget
-    b.spend(10_000)
-    with pytest.raises(OpenMeteoSaturated):
+    b.spend(5_000)  # fill the hour window (also < per_day, so day ceiling is clear)
+    with pytest.raises(OpenMeteoSaturated, match="hourly ceiling"):
+        b.wait_until_can_spend(1)
+
+
+def test_wait_raises_on_daily_ceiling_without_tripping_hourly():
+    """Isolate the daily ceiling: stay under the hourly window but exceed the
+    rolling 24h budget across two hours, so the daily guard — not the hourly one
+    — is what raises.
+    """
+    b = _make_budget(per_minute=600, per_hour=600, per_day=1_000, reserve=0)
+    # Hour 1: spend the full hourly budget.
+    b.spend(600)
+    # Advance past the 1h window (but inside the 24h window) via the injected
+    # fake sleep, so the hourly accountant clears while the daily total persists.
+    b._sleep(3_601)
+    # Hour 2: spend up to the daily ceiling. The rolling-hour spend is now 400
+    # (< per_hour=600), so the hourly check cannot fire on the next request.
+    b.spend(400)  # daily total now 1_000 == per_day
+    with pytest.raises(OpenMeteoSaturated, match="daily ceiling"):
         b.wait_until_can_spend(1)

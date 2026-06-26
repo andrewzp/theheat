@@ -908,6 +908,20 @@ def detect_country_records(
     archive-wide high.
 
     Same logic for lows with the sign flipped.
+
+    Coverage accounting on each emitted record (the country-record honesty
+    floor — a national record must rest on enough of that country's cities,
+    not one bootstrap city):
+
+    - ``eligible`` — cities curated for the country (from ``country_eligibility``);
+      a record only fires when the sampled group is at least this size.
+    - ``cached`` — cities in the group with cached thresholds this run.
+    - ``forecast_read`` — cities whose live forecast was actually read this run
+      (from ``country_forecast_read``). NOTE: ``_run_world_cached_half`` does not
+      yet thread ``country_forecast_read``, so it currently defaults to the group
+      size — i.e. ``forecast_read`` is a placeholder equal to ``cached`` until
+      threaded. The coverage-floor *gate* above is unaffected; only this recorded
+      fact is approximate.
     """
     today = record_date or date.today()
     today_iso = today.isoformat()
