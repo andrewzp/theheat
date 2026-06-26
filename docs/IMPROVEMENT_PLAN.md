@@ -2,6 +2,15 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 26: 3 fresh drafts (0% A-rate).** All precipitation_extreme. Anchorage B (183.8 mm/3d,
+> 22.5% margin, orographic stall mechanism, P_close mechanism-only failing). Amsterdam C+ (157.1
+> mm, 4.73% margin, canal-capacity incongruity, P_close implied-consequence failing). Aktobe C+
+> (150.8 mm, 0.53% margin, steppe-aridity + half-year ratio, P_close borderline). **Infrastructure
+> alert:** all 3 cite "previous 3-day record of 150.0 mm" — detection threshold used as prior
+> record (`previous_record_year: null`); operator must verify authentic station records before
+> publishing as "record-breaking." P9 6th cycle: all 3 use opener template + restate-math. P_close
+> 9th cycle: 2 failing + 1 borderline. `gh` CLI absent (29th consecutive skip).
+>
 > **Jun 25: 5 fresh drafts (0% A-rate).** P_close 8th cycle: 3 failing (Taiz dust_event ×2 + Michigan monthly_low), 2 positive (Siberia fire "burns deep" + Barrow "nearly twice that total"). P_dust 3rd cycle: both Taiz dust_event drafts lack WHO anchor; all 4 dust_event corpus drafts template-converged. P9 5th precipitation_extreme (Barrow, same opener template + restate-math). First companion-fire peer comparison in fire corpus. "Roughly"/"nearly" hedges cost Barrow A-; date-baking ("today"/"same day") costs Siberia A-. `gh` CLI absent (28th consecutive skip).
 >
 > **Jun 24: 2 fresh drafts (0% A-rate).** Randolph UT monthly_high (B+): ecosystem specificity "normally blunts" = P_close 7th cycle failing (implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard (B): 10.1× WHO ratio stated (P_dust POSITIVE), closes on system resolution "by evening" = P_close 7th cycle failing (resolution-close subtype). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. Mediterranean SST `draft_20260622_171200_17` crosses 48h at ~Jun 24T17:12 UTC — operator must post/reject within ~2h of this run. `gh` CLI absent (27th consecutive skip).
@@ -37,12 +46,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/5, Jun 25)** — Siberia fire B+, Barrow AK B+, Michigan monthly_low B, Taiz Jun 25 B-, Taiz Jun 24 C+. Prior: 0% Jun 24 [0/2]; 33% Jun 23 [1/3]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
+| Last cycle A-rate | **0% (0/3, Jun 26)** — Amsterdam C+, Aktobe C+, Anchorage B. Prior: 0% Jun 25 [0/5]; 0% Jun 24 [0/2]; 33% Jun 23 [1/3]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=5 Jun 25); Jun 24: 50 pp (0/2); Jun 23: 17 pp (33%) |
+| Gap | **50 pp** (50% − 0%, n=3 Jun 26); Jun 25: 50 pp (0/5); Jun 24: 50 pp (0/2); Jun 23: 17 pp (33%) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **5 pending** (Taiz Jun 24 C+ created Jun 24T21:30Z — date-baked, stale by Jun 26T21:30Z ⚠️; Nw Michigan Rsch Farm B created Jun 25T03:46Z; Taiz Jun 25 B- created Jun 25T07:48Z — date-baked, stale by Jun 27T07:48Z ⚠️; Siberia fire B+ created Jun 25T10:46Z — date-baked, stale by Jun 27T10:46Z ⚠️; Barrow AK B+ created Jun 25T14:45Z). Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **3 pending** (Amsterdam C+ created Jun 26T04:00Z; Aktobe C+ created Jun 26T04:03Z; Anchorage B created Jun 26T07:59Z). No staleness risk (no real-time-baked language); all approach 48h threshold ~Jun 28T04:00–07:59Z. Threshold artifact: all 3 cite "previous 3-day record of 150.0 mm" — verify authentic station records before publishing. Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -261,10 +270,12 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 8 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+**Cycles observed:** 9 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
 Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
 Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing; Jun 25 Taiz ×2 +
-Michigan monthly_low failing, Siberia fire + Barrow precip positive).
+Michigan monthly_low failing, Siberia fire + Barrow precip positive; Jun 26 Amsterdam
+implied-consequence failing + Anchorage mechanism-only failing + Aktobe half-year ratio
+borderline).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -285,8 +296,14 @@ POSITIVE). Michigan monthly_low B ("cold air finds less land friction to slow it
 only, failing). Taiz Jun 24 C+ ("pushing it into the terrain" = weakest mechanism close in corpus,
 failing). Taiz Jun 25 B- ("push it upslope into the city basin" = transport mechanism, failing).
 P_close now confirmed across 8 signal types (adding dust_event to the prior 7).
-**Last seen:** Jun 25 (Siberia "burns deep" + Barrow "nearly twice that total" = positive; Taiz
-×2 + Michigan = failing. Jun 23 Cope Rch TX "push extremes fast" = most recent prior positive).
+Jun 26: Amsterdam C+ ("not to absorb a month's rain in 72 hours" = implied-consequence, failing).
+Anchorage B ("wring out moisture in compressed bursts" = mechanism-only, failing — weakest form).
+Aktobe C+ ("three days here matched half a year's average" = declarative ratio, borderline — correct
+form, setup too thin at 0.53% margin + "just edging" hedge). P_close now confirmed across 9 signal
+types via Jun 26 (precipitation_extreme ×3 same cycle).
+**Last seen:** Jun 26 (Amsterdam implied-consequence + Anchorage mechanism-only = failing; Aktobe
+half-year ratio = borderline. Jun 25 Siberia "burns deep" + Barrow "nearly twice that total" =
+most recent positives).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -371,9 +388,17 @@ record of 300.0 mm" — P9 restate-math; template convergence confirmed: all 3 p
 precipitation_extreme corpus drafts share the "[City] received/recorded X mm in [timeframe] —
 [comparison]" structure); Jun 25 (Barrow AK 213.8 mm/3-day B+: "beating the previous 3-day record
 by 63.8 mm" = restate-math; opener "Barrow, Alaska accumulated 213.8 mm of rain in 3 days" —
-same structure, verb varies "accumulated" vs. prior "received/recorded").
-**Last seen:** 2026-06-25. 5 of 5 precipitation_extreme corpus drafts share the opener template;
-4 of 5 have restate-math. Same-event regeneration (Barrow Jun 7 B+ and Jun 25 B+, identical data).
+same structure, verb varies "accumulated" vs. prior "received/recorded");
+Jun 26 (Amsterdam "received 157.1 mm in 3 days" + Aktobe "logged 150.8 mm over 3 days" +
+Anchorage "received 183.8 mm in 3 days" — all 3 use template; verb varies "received"/"logged";
+all 3 have restate-math: Amsterdam "7.1 mm above the previous 3-day record of 150.0 mm," Aktobe
+"just edging the previous 3-day record of 150.0 mm," Anchorage "33.8 mm above the previous 3-day
+record of 150.0 mm." Threshold artifact: all 3 cite 150.0 mm as the prior record — the detection
+threshold. First 3-draft P9 batch in a single cycle.)
+**Last seen:** 2026-06-26. 8 of 8 precipitation_extreme corpus drafts share the opener template;
+7 of 8 have restate-math (Barrow Jun 7 has restate-math; Barrow Jun 22 retroactive has restate-math;
+Amsterdam Jun 18, Barrow Jun 25, Amsterdam Jun 26, Aktobe Jun 26, Anchorage Jun 26 all have it;
+Barrow daily Jun 18 "any of it" — no restate-math, hence 7/8).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 precipitation_extreme framing section (or general record guidance): burn the default opener. Name
@@ -408,10 +433,16 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 25 (partial: Siberia fire B+ deployed peatland carbon as named mechanic
-organically + companion-fire peer comparison; Barrow B+ used annual-precipitation ratio as
-consequence framing without explicit prompting. Michigan monthly_low B and Taiz dust_event ×2
-show no named humor moves beyond mechanism explanation. Same pattern as prior cycles: fire/precip
+**Last seen:** Jun 26 (weak: Anchorage B chose orographic-stall mechanism as system clause
+organically; Aktobe C+ deployed half-year aridity ratio as close naturally. No fire/coral drafts
+in batch — cannot assess whether fire/coral categories continue to self-select named mechanics.
+All 3 drafts are precipitation_extreme; all 3 used system-clause specificity without prompting,
+consistent with prior pattern. No draft shows a named humor move beyond mechanism/ratio. Same
+pattern as Jun 25: categories with available geographic mechanics self-select them; the gap is
+in the CLOSE not the mechanism identification.
+Prior: Jun 25 partial: Siberia fire B+ deployed peatland carbon as named mechanic organically +
+companion-fire peer comparison; Barrow B+ used annual-precipitation ratio. Michigan monthly_low B
+and Taiz dust_event ×2 showed no named humor moves. Same pattern as prior cycles: fire/precip
 categories self-select mechanics; dust_event/monthly_low categories do not.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple

@@ -48,6 +48,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-23 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | 3 fresh drafts (created Jun 22T17–19Z, after prior grading window). Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence; accelerating-warming + ecosystem specificity. Columbus GA all_time_high (B): 1°F margin, dual-mechanism second sentence, P_close 6th cycle failing. Mediterranean SST regional_sst_anomaly (B): comparative-implied close ("retains heat faster than open-ocean basins"), "today" staleness risk at Jun 24T17:12Z, unexplained NOAA 2.5°C threshold (A3 filed). 26th consecutive staleness skip. |
 | 2026-06-24 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh drafts. Randolph UT monthly_high B+ (134yr archive, ecosystem specificity "normally blunts" — P_close 7th cycle failing, implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard B (10.1× WHO stated, shamal mechanism — P_close 7th cycle failing, resolution-close subtype "by evening"; P_dust positive: WHO ratio present unlike dust_event drafts). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. 27th consecutive staleness skip. |
 | 2026-06-25 | 5 | 0 | 4 | 1 | 0 | **0%** | ✗ | 5 fresh drafts. Siberia fire B+ (965.6 MW, highest in corpus; companion-fire peer comparison + "burns deep" = P_close positive). Barrow precip B+ (ratio-to-annual-precip P_close positive; P9 template 5th). Michigan monthly_low B (lake-effect, P_close failing). Taiz Yemen dust_event ×2 (C+/B-): P_dust 3rd cycle, all 4 dust_event corpus drafts template-converged. P_close 8th cycle: 3 failing, 2 positive. 28th consecutive staleness skip. |
+| 2026-06-26 | 3 | 0 | 1 | 2 | 0 | **0%** | ✗ | 3 fresh drafts (all precipitation_extreme). Anchorage B (183.8 mm/3d, 22.5% margin, orographic stall mechanism, P_close mechanism-only failing). Amsterdam C+ (157.1 mm, 4.73% margin, canal-capacity incongruity, P_close implied-consequence failing). Aktobe C+ (150.8 mm, 0.53% margin, steppe-aridity + half-year ratio, P_close borderline). Threshold artifact: all 3 cite "previous 3-day record of 150.0 mm" — detection threshold used as prior record (`previous_record_year: null`). P9 6th cycle: all 3 use opener template; all 3 have restate-math. P_close 9th cycle: Anchorage mechanism-only + Amsterdam implied-consequence failing; Aktobe half-year ratio borderline. 29th consecutive staleness skip. |
 | 2026-06-21 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty (~2.5d since last resolved drafts Jun 18). P_new archived (2nd time) — 3 consecutive cycles without cold-record: Jun 15/17/18. No evidence updates for P_close/P9/P_dust/P5. 24th consecutive staleness skip. |
 
 **Trend interpretation:**
@@ -58,6 +59,14 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-26 — Staleness bulk-reject: 0 candidates; gh CLI absent (29th consecutive skip)
+
+**Status:** 3 pending drafts reviewed (Amsterdam, Aktobe, Anchorage — all created
+2026-06-26T04:00–07:59Z, < 48h old at grading time ~15:00 UTC). No real-time-baked language
+("today"/"tonight"/"forecast") in any draft. **0 staleness candidates.** Operator note: all 3
+Jun 26 drafts approach the 48h threshold ~Jun 28T04:00–07:59Z — post or reject before then.
+`gh` CLI absent — 29th consecutive skip (May 13 → Jun 26).
 
 ### 2026-06-24 — Staleness bulk-reject: 0 qualifying candidates; gh CLI absent (27th consecutive skip)
 
