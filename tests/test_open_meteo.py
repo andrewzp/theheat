@@ -145,6 +145,46 @@ class TestPrioritizeCities:
         assert len(PRIORITY_COLD_CITIES) >= 15
 
 
+class TestSelectWorldBudgetCities:
+    """Interim Open-Meteo world budget: cap + urgent-first ordering so the
+    archive minutely rate limit can't starve the acute heat event of coverage
+    (handoff 2026-06-25: world[readings:12 failures:584])."""
+
+    def _world(self, *names):
+        return [{"city": n, "country": "X", "lat": "0", "lon": "0"} for n in names]
+
+    def test_caps_to_budget(self):
+        world = self._world(*[f"City{i}" for i in range(100)])
+        out = _open_meteo_module.select_world_budget_cities(world, budget=10)
+        assert len(out) == 10
+
+    def test_urgent_heat_cities_lead_even_when_buried(self):
+        # Non-urgent noise first; urgent European cities buried at the very end.
+        # A naive prioritize_cities()[:budget] would miss them — the budget
+        # selector must pull them to the front.
+        world = self._world(*[f"Noise{i}" for i in range(40)])
+        world += [
+            {"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"},
+            {"city": "Lyon", "country": "France", "lat": "45.7", "lon": "4.8"},
+        ]
+        out = _open_meteo_module.select_world_budget_cities(world, budget=10)
+        names = [c["city"] for c in out]
+        assert "Madrid" in names
+        assert "Lyon" in names
+
+    def test_excludes_cities_not_in_input(self):
+        out = _open_meteo_module.select_world_budget_cities(self._world("Madrid", "Zzz"), budget=10)
+        assert {c["city"] for c in out} <= {"Madrid", "Zzz"}
+
+    def test_dedups_repeated_city_names(self):
+        out = _open_meteo_module.select_world_budget_cities(self._world("Madrid", "Madrid", "Zzz"), budget=10)
+        assert [c["city"] for c in out].count("Madrid") == 1
+
+    def test_default_budget_stays_under_the_archive_minutely_wall(self):
+        # The interim's whole purpose: stay at/under the observed ~12-call wall.
+        assert 1 <= _open_meteo_module.WORLD_FETCH_BUDGET <= 12
+
+
 class TestCheckExtremeSignalsForCitiesTelemetry:
     def test_metrics_count_per_city_fetch_failures(self, monkeypatch):
         cities = [
