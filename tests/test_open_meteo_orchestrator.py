@@ -376,3 +376,13 @@ def test_cold_extreme_is_not_recorded_as_heat(monkeypatch):
     monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
     assert bot_state["coverage_log"] == []  # cold extreme must not pollute the heat tally
+
+
+def test_classify_world_status_rules():
+    from src.orchestrator.world_cache import classify_world_status as cls
+    base = {"world_total": 595, "forecast_attempted": 595, "forecast_failures": 0, "warm_attempted": 8, "warm_failures": 0, "saturated": False}
+    assert cls({**base, "cached_count": 595, "coverage_ratio": 0.2}, prev_cached_count=595) == "degraded"   # steady low coverage
+    assert cls({**base, "cached_count": 595, "coverage_ratio": 0.98}, prev_cached_count=595) == "success"
+    assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=20) == "success"      # bootstrap climbing
+    assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=40) == "degraded"     # bootstrap STALLED
+    assert cls({**base, "cached_count": 595, "coverage_ratio": 0.98, "saturated": True}, prev_cached_count=595) == "degraded"

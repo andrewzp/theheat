@@ -103,3 +103,36 @@ def apply_provisional(cache: dict, bundle, *, today: str) -> None:
         t.monthly_min[f"{bundle.monthly_low.month:02d}"] = (bundle.monthly_low.new_temp_c, _year(today))
     t.as_of = today
     cache[city] = t.to_dict()
+
+
+WORLD_COVERAGE_FLOOR = 0.85
+WORLD_FORECAST_FAIL_FLOOR = 0.25
+WORLD_WARM_FAILURE_FLOOR = 0.5
+
+
+def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
+    total = int(metrics.get("world_total", 0) or 0)
+    cached = int(metrics.get("cached_count", 0) or 0)
+    fa = int(metrics.get("forecast_attempted", 0) or 0)
+    ff = int(metrics.get("forecast_failures", 0) or 0)
+    wa = int(metrics.get("warm_attempted", 0) or 0)
+    wf = int(metrics.get("warm_failures", 0) or 0)
+
+    if bool(metrics.get("saturated", False)):
+        return "degraded"
+    if wa > 0 and wf / wa > WORLD_WARM_FAILURE_FLOOR:
+        return "degraded"
+
+    if total > 0 and cached >= total:
+        # steady-state: the cache is fully warmed
+        if float(metrics.get("coverage_ratio", 1.0)) < WORLD_COVERAGE_FLOOR:
+            return "degraded"
+        if fa > 0 and ff / fa > WORLD_FORECAST_FAIL_FLOOR:
+            return "degraded"
+        return "success"
+
+    # bootstrap: cache still warming. Degraded only if it has STALLED
+    # (warming was attempted but cached_count is not growing run-over-run).
+    if wa > 0 and cached <= prev_cached_count:
+        return "degraded"
+    return "success"
