@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import requests
 
 from src.data._http import fetch_with_retry
+from src.data.openmeteo_budget import OpenMeteoSaturated
 
 BASE_URL = "https://api.open-meteo.com/v1"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
@@ -209,6 +210,9 @@ class CountryRecord:
     cities_sampled: int
     event_id: str
     signal_date: date | None = None
+    eligible: int = 0
+    cached: int = 0
+    forecast_read: int = 0
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
@@ -892,6 +896,8 @@ def detect_country_records(
     archive_years: int = 30,
     min_cities_per_country: int = 2,
     record_date: date | None = None,
+    country_eligibility: dict[str, int] | None = None,
+    country_forecast_read: dict[str, int] | None = None,
 ) -> list[CountryRecord]:
     """Aggregate per-city readings into country-level records.
 
@@ -914,6 +920,8 @@ def detect_country_records(
     records: list[CountryRecord] = []
     for country, group in by_country.items():
         if len(group) < min_cities_per_country:
+            continue
+        if country_eligibility is not None and len(group) < country_eligibility.get(country, len(group)):
             continue
 
         # Highs
@@ -940,6 +948,9 @@ def detect_country_records(
                     cities_sampled=len(group),
                     event_id=f"country_high_{country_key}_{today_iso}",
                     signal_date=record_date,
+                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
+                    cached=len(group),
+                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
                 ))
 
         # Lows
@@ -966,6 +977,9 @@ def detect_country_records(
                     cities_sampled=len(group),
                     event_id=f"country_low_{country_key}_{today_iso}",
                     signal_date=record_date,
+                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
+                    cached=len(group),
+                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
                 ))
 
     return records
@@ -1105,3 +1119,43 @@ def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = No
         if record:
             records.append(record)
     return records
+
+
+def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
+    """Fetch forecast data for multiple cities in one Open-Meteo request.
+
+    Returns a mapping of city name to {max_c, min_c, tw_max_c}. Raises
+    OpenMeteoSaturated on HTTP 429; returns {} on any other failure.
+    """
+    if not cities:
+        return {}
+    lats = ",".join(str(c["lat"]) for c in cities)
+    lons = ",".join(str(c["lon"]) for c in cities)
+    try:
+        resp = fetch_with_retry(
+            f"{BASE_URL}/forecast",
+            params={"latitude": lats, "longitude": lons,
+                    "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                    "timezone": "auto", "forecast_days": 1},
+            timeout=30, attempts=3, backoff_base=1.0,
+        )
+    except requests.HTTPError as exc:
+        if getattr(exc.response, "status_code", None) == 429:
+            raise OpenMeteoSaturated("forecast 429") from exc
+        return {}
+    except requests.RequestException:
+        return {}
+    try:
+        payload = resp.json()
+    except ValueError:
+        return {}
+    blocks = payload if isinstance(payload, list) else [payload]
+    out: dict[str, dict] = {}
+    for city, block in zip(cities, blocks):
+        daily = (block or {}).get("daily", {}) or {}
+        out[city["city"]] = {
+            "max_c": (daily.get("temperature_2m_max") or [None])[0],
+            "min_c": (daily.get("temperature_2m_min") or [None])[0],
+            "tw_max_c": (daily.get("wet_bulb_temperature_2m_max") or [None])[0],
+        }
+    return out

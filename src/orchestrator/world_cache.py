@@ -1,0 +1,183 @@
+from __future__ import annotations
+
+import json
+from datetime import date, timedelta
+
+import requests
+
+from src.data.world_thresholds import CityThresholds
+from src.state import GIST_ID, GITHUB_TOKEN, STATE_SIZE_WARNING_BYTES, _headers
+
+WORLD_CACHE_FILENAME = "world_threshold_cache.json"
+_META_KEY = "_meta"
+
+
+def _as_of(e):
+    return str((e or {}).get("as_of") or "")
+
+
+def _pick_pair(a, b, *, more_extreme_is_max):
+    if a is None:
+        return b
+    if b is None:
+        return a
+    return (a if a[0] >= b[0] else b) if more_extreme_is_max else (a if a[0] <= b[0] else b)
+
+
+def _merge_entry_fields(a: dict, b: dict) -> dict:
+    """Equal-as_of field-wise merge: more-extreme per field; richer mean wins."""
+    out = dict(a)
+    out["all_time_max"] = _pick_pair(a.get("all_time_max"), b.get("all_time_max"), more_extreme_is_max=True)
+    out["all_time_min"] = _pick_pair(a.get("all_time_min"), b.get("all_time_min"), more_extreme_is_max=False)
+    out["wetbulb_max"] = _pick_pair(a.get("wetbulb_max"), b.get("wetbulb_max"), more_extreme_is_max=True)
+    for key, is_max in (("monthly_max", True), ("monthly_min", False)):
+        merged = dict(a.get(key) or {})
+        for mm, v in (b.get(key) or {}).items():
+            merged[mm] = _pick_pair(merged.get(mm), v, more_extreme_is_max=is_max)
+        out[key] = merged
+    mm_mean = dict(a.get("monthly_mean") or {})
+    for mm, v in (b.get("monthly_mean") or {}).items():
+        cur = mm_mean.get(mm)
+        if cur is None or (v[2] > cur[2]):   # higher sample_count wins
+            mm_mean[mm] = v
+    out["monthly_mean"] = mm_mean
+    return out
+
+
+def merge_caches(base: dict, nxt: dict) -> dict:
+    base = base or {}
+    nxt = nxt or {}
+    out: dict = {}
+    for city in sorted((set(base) | set(nxt)) - {_META_KEY}):
+        b = base.get(city)
+        n = nxt.get(city)
+        if b is None:
+            out[city] = n
+        elif n is None:
+            out[city] = b
+        elif _as_of(n) > _as_of(b):
+            out[city] = n
+        elif _as_of(b) > _as_of(n):
+            out[city] = b
+        else:
+            out[city] = _merge_entry_fields(b, n)
+    return out
+
+
+def _is_stale(entry, *, ttl_days, today):
+    if not entry or not entry.get("as_of"):
+        return True
+    try:
+        return date.fromisoformat(entry["as_of"]) < date.fromisoformat(today) - timedelta(days=ttl_days)
+    except (ValueError, TypeError):
+        return True
+
+
+def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_order):
+    rank = {name: i for i, name in enumerate(urgent_order)}
+    stale = [c for c in world_cities if _is_stale(cache.get(c.get("city")), ttl_days=ttl_days, today=today)]
+    stale.sort(key=lambda c: (rank.get(c.get("city"), len(urgent_order)), _as_of(cache.get(c.get("city"))), c.get("city")))
+    out, seen = [], set()
+    for c in stale:
+        name = c.get("city")
+        if name in seen:
+            continue
+        seen.add(name)
+        out.append(c)
+        if len(out) >= budget:
+            break
+    return out
+
+
+def _year(today: str) -> int:
+    return date.fromisoformat(today).year
+
+
+def apply_provisional(cache: dict, bundle, *, today: str) -> None:
+    city = bundle.city
+    entry = cache.get(city)
+    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=city, as_of=today, years_of_data=0)
+    if bundle.all_time_high is not None:
+        t.all_time_max = (bundle.all_time_high.new_temp_c, _year(today))
+    if bundle.all_time_low is not None:
+        t.all_time_min = (bundle.all_time_low.new_temp_c, _year(today))
+    if bundle.monthly_high is not None:
+        t.monthly_max[f"{bundle.monthly_high.month:02d}"] = (bundle.monthly_high.new_temp_c, _year(today))
+    if bundle.monthly_low is not None:
+        t.monthly_min[f"{bundle.monthly_low.month:02d}"] = (bundle.monthly_low.new_temp_c, _year(today))
+    t.as_of = today
+    cache[city] = t.to_dict()
+
+
+WORLD_COVERAGE_FLOOR = 0.85
+WORLD_FORECAST_FAIL_FLOOR = 0.25
+WORLD_WARM_FAILURE_FLOOR = 0.5
+
+
+def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
+    total = int(metrics.get("world_total", 0) or 0)
+    cached = int(metrics.get("cached_count", 0) or 0)
+    fa = int(metrics.get("forecast_attempted", 0) or 0)
+    ff = int(metrics.get("forecast_failures", 0) or 0)
+    wa = int(metrics.get("warm_attempted", 0) or 0)
+    wf = int(metrics.get("warm_failures", 0) or 0)
+
+    if bool(metrics.get("saturated", False)):
+        return "degraded"
+    if wa > 0 and wf / wa > WORLD_WARM_FAILURE_FLOOR:
+        return "degraded"
+
+    if total > 0 and cached >= total:
+        # steady-state: the cache is fully warmed
+        if float(metrics.get("coverage_ratio", 1.0)) < WORLD_COVERAGE_FLOOR:
+            return "degraded"
+        if fa > 0 and ff / fa > WORLD_FORECAST_FAIL_FLOOR:
+            return "degraded"
+        return "success"
+
+    # bootstrap: cache still warming. Degraded only if it has STALLED
+    # (warming was attempted but cached_count is not growing run-over-run).
+    if wa > 0 and cached <= prev_cached_count:
+        return "degraded"
+    return "success"
+
+
+def read_cache() -> dict:
+    if not GIST_ID or not GITHUB_TOKEN:
+        return {}
+    try:
+        resp = requests.get(f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15)
+        resp.raise_for_status()
+        meta = resp.json().get("files", {}).get(WORLD_CACHE_FILENAME)
+        if not meta:
+            return {}
+        if meta.get("truncated"):
+            raw = requests.get(meta["raw_url"], headers=_headers(), timeout=30)
+            raw.raise_for_status()
+            content = raw.text
+        else:
+            content = meta["content"]
+        data = json.loads(content)
+        return data if isinstance(data, dict) else {}
+    except (requests.RequestException, ValueError, KeyError):
+        return {}
+
+
+def write_cache(cache: dict) -> bool:
+    if not GIST_ID or not GITHUB_TOKEN:
+        return False
+    try:
+        merged = merge_caches(read_cache(), cache)
+        if _META_KEY in cache:
+            merged[_META_KEY] = cache[_META_KEY]
+        payload = json.dumps(merged, separators=(",", ":"))
+        if len(payload) > STATE_SIZE_WARNING_BYTES:
+            print(f"[world_cache] WARNING size {len(payload)}B approaching gist inline cliff")
+        resp = requests.patch(
+            f"https://api.github.com/gists/{GIST_ID}", headers=_headers(),
+            json={"files": {WORLD_CACHE_FILENAME: {"content": payload}}}, timeout=15,
+        )
+        resp.raise_for_status()
+        return True
+    except (requests.RequestException, TypeError, ValueError):
+        return False

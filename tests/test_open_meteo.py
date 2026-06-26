@@ -419,3 +419,34 @@ class TestFetchCityTemp:
         )
         result = fetch_city_temp(33.45, -112.07)
         assert result is None
+
+
+import pytest
+from src.data.openmeteo_budget import OpenMeteoSaturated
+
+
+@responses.activate
+def test_fetch_forecasts_batch_maps_cities():
+    responses.add(responses.GET, "https://api.open-meteo.com/v1/forecast",
+        json=[{"daily": {"temperature_2m_max": [44.0], "temperature_2m_min": [20.0], "wet_bulb_temperature_2m_max": [26.0]}},
+              {"daily": {"temperature_2m_max": [39.0], "temperature_2m_min": [18.0], "wet_bulb_temperature_2m_max": [24.0]}}], status=200)
+    cities = [{"city": "Madrid", "lat": "40.4", "lon": "-3.7"}, {"city": "Lyon", "lat": "45.7", "lon": "4.8"}]
+    out = _open_meteo_module.fetch_forecasts_batch(cities)
+    assert out["Madrid"]["max_c"] == 44.0 and out["Lyon"]["min_c"] == 18.0
+
+
+@responses.activate
+def test_fetch_forecasts_batch_raises_saturated_on_429():
+    responses.add(responses.GET, "https://api.open-meteo.com/v1/forecast",
+        json={"error": True, "reason": "Minutely API request limit exceeded"}, status=429)
+    with pytest.raises(OpenMeteoSaturated):
+        _open_meteo_module.fetch_forecasts_batch([{"city": "Madrid", "lat": "40.4", "lon": "-3.7"}])
+
+
+def test_country_record_below_floor_suppressed_and_counts_populated():
+    from src.data.open_meteo import detect_country_records, ExtremeSignalBundle
+    r1 = [ExtremeSignalBundle(city="Madrid", country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023)]
+    assert detect_country_records(r1, country_eligibility={"Spain": 3}) == []   # 1 of 3
+    r3 = [ExtremeSignalBundle(city=c, country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023) for c in ["Madrid", "Sevilla", "Zaragoza"]]
+    out = detect_country_records(r3, country_eligibility={"Spain": 3})
+    assert out and out[0].eligible == 3 and out[0].cached == 3
