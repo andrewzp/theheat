@@ -386,3 +386,16 @@ def test_classify_world_status_rules():
     assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=20) == "success"      # bootstrap climbing
     assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=40) == "degraded"     # bootstrap STALLED
     assert cls({**base, "cached_count": 595, "coverage_ratio": 0.98, "saturated": True}, prev_cached_count=595) == "degraded"
+
+
+def test_world_path_emits_no_calendar_streak_or_simultaneous():
+    """World evaluate_city bundles never carry calendar_date_high, so the
+    streak + simultaneous-records lanes stay empty for non-US cities
+    (calendar-date is US/GHCN-only — handoff 2026-06-26)."""
+    from src.data.world_thresholds import evaluate_city, CityThresholds
+    from datetime import date
+    cached = CityThresholds(city="Lyon", as_of="2026-06-01", years_of_data=30,
+                            all_time_max=(40.0, 2019), monthly_max={"06": (39.0, 2019)})
+    b = evaluate_city("Lyon", "France", {"max_c": 45.0, "min_c": 20.0, "tw_max_c": 10.0},
+                      cached, lat=45.7, lon=4.8, today=date(2026, 6, 26))
+    assert b.calendar_date_high is None and b.calendar_date_low is None

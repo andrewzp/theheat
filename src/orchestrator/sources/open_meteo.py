@@ -456,6 +456,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     # Streak tracking — update on any calendar-date high record.
                     # Key: station_id on GHCN path; city name on Open-Meteo path.
                     # Old city-name entries prune naturally via prune_stale_record_streaks.
+                    # World (both-mode) cities come from evaluate_city, which emits no calendar_date_high; this lane is US/GHCN-only.
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
                         streak_key = bundle.station_id if bundle.station_id else ev_cd.city
