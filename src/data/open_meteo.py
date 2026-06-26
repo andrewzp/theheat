@@ -1105,3 +1105,46 @@ def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = No
         if record:
             records.append(record)
     return records
+
+
+from src.data.openmeteo_budget import OpenMeteoSaturated  # noqa: E402
+
+
+def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
+    """Fetch forecast data for multiple cities in one Open-Meteo request.
+
+    Returns a mapping of city name to {max_c, min_c, tw_max_c}. Raises
+    OpenMeteoSaturated on HTTP 429; returns {} on any other failure.
+    """
+    if not cities:
+        return {}
+    lats = ",".join(str(c["lat"]) for c in cities)
+    lons = ",".join(str(c["lon"]) for c in cities)
+    try:
+        resp = fetch_with_retry(
+            f"{BASE_URL}/forecast",
+            params={"latitude": lats, "longitude": lons,
+                    "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                    "timezone": "auto", "forecast_days": 1},
+            timeout=30, attempts=3, backoff_base=1.0,
+        )
+    except requests.HTTPError as exc:
+        if getattr(exc.response, "status_code", None) == 429:
+            raise OpenMeteoSaturated("forecast 429") from exc
+        return {}
+    except requests.RequestException:
+        return {}
+    try:
+        payload = resp.json()
+    except ValueError:
+        return {}
+    blocks = payload if isinstance(payload, list) else [payload]
+    out: dict[str, dict] = {}
+    for city, block in zip(cities, blocks):
+        daily = (block or {}).get("daily", {}) or {}
+        out[city["city"]] = {
+            "max_c": (daily.get("temperature_2m_max") or [None])[0],
+            "min_c": (daily.get("temperature_2m_min") or [None])[0],
+            "tw_max_c": (daily.get("wet_bulb_temperature_2m_max") or [None])[0],
+        }
+    return out
