@@ -110,3 +110,93 @@ def compute_city_thresholds(city, archive_daily, *, as_of, years_of_data=30):
         all_time_max=at_max, all_time_min=at_min,
         monthly_max=m_max, monthly_min=m_min, monthly_mean=m_mean, wetbulb_max=wb_max,
     )
+
+
+from src.data.open_meteo import (  # noqa: E402
+    AllTimeRecord,
+    MonthlyRecord,
+    AnomalyEvent,
+    WetBulbEvent,
+    ExtremeSignalBundle,
+    WETBULB_TIERS,
+    ANOMALY_HOT_THRESHOLD_C,
+    ANOMALY_COLD_THRESHOLD_C,
+)
+
+
+def evaluate_city(city, country, forecast, cached, *, lat, lon, today):
+    today_max = forecast.get("max_c")
+    today_min = forecast.get("min_c")
+    tw_max = forecast.get("tw_max_c")
+    iso = today.isoformat()
+    key = city.replace(" ", "_")
+    mm = f"{today.month:02d}"
+    yrs = cached.years_of_data
+
+    b = ExtremeSignalBundle(
+        city=city, country=country, today_max_c=today_max, today_min_c=today_min,
+    )
+    if cached.all_time_max is not None:
+        b.archive_max_c, b.archive_max_year = cached.all_time_max
+    if cached.all_time_min is not None:
+        b.archive_min_c, b.archive_min_year = cached.all_time_min
+
+    if today_max is not None and cached.all_time_max is not None and today_max > cached.all_time_max[0]:
+        b.all_time_high = AllTimeRecord(
+            city=city, country=country, kind="high", new_temp_c=today_max,
+            old_record_c=cached.all_time_max[0], old_record_year=cached.all_time_max[1],
+            years_of_data=yrs, event_id=f"alltime_high_{key}_{iso}", lat=lat, lon=lon,
+        )
+    if today_min is not None and cached.all_time_min is not None and today_min < cached.all_time_min[0]:
+        b.all_time_low = AllTimeRecord(
+            city=city, country=country, kind="low", new_temp_c=today_min,
+            old_record_c=cached.all_time_min[0], old_record_year=cached.all_time_min[1],
+            years_of_data=yrs, event_id=f"alltime_low_{key}_{iso}", lat=lat, lon=lon,
+        )
+
+    mhi = cached.monthly_max.get(mm)
+    if today_max is not None and mhi is not None and today_max > mhi[0]:
+        b.monthly_high = MonthlyRecord(
+            city=city, country=country, kind="high", month=today.month, new_temp_c=today_max,
+            old_record_c=mhi[0], old_record_year=mhi[1], years_of_data=yrs,
+            event_id=f"monthly_high_{key}_{today.year}_{today.month:02d}", lat=lat, lon=lon,
+        )
+    mlo = cached.monthly_min.get(mm)
+    if today_min is not None and mlo is not None and today_min < mlo[0]:
+        b.monthly_low = MonthlyRecord(
+            city=city, country=country, kind="low", month=today.month, new_temp_c=today_min,
+            old_record_c=mlo[0], old_record_year=mlo[1], years_of_data=yrs,
+            event_id=f"monthly_low_{key}_{today.year}_{today.month:02d}", lat=lat, lon=lon,
+        )
+
+    mean = cached.monthly_mean.get(mm)
+    if today_max is not None and mean is not None and mean[2] >= MIN_MEAN_SAMPLES:
+        anom = today_max - mean[0]
+        if anom >= ANOMALY_HOT_THRESHOLD_C:
+            b.anomaly_hot = AnomalyEvent(
+                city=city, country=country, today_temp_c=today_max, historical_mean_c=mean[0],
+                anomaly_c=anom, years_of_data=yrs, event_id=f"anomaly_hot_{key}_{iso}", lat=lat, lon=lon,
+            )
+    if today_min is not None and mean is not None and mean[2] >= MIN_MEAN_SAMPLES:
+        anom = today_min - mean[1]
+        if anom <= -ANOMALY_COLD_THRESHOLD_C:
+            b.anomaly_cold = AnomalyEvent(
+                city=city, country=country, today_temp_c=today_min, historical_mean_c=mean[1],
+                anomaly_c=anom, years_of_data=yrs, event_id=f"anomaly_cold_{key}_{iso}", lat=lat, lon=lon,
+            )
+
+    if tw_max is not None:
+        for tier_index, threshold_c, tier_label in WETBULB_TIERS:
+            if tw_max < threshold_c:
+                continue
+            amx = cached.wetbulb_max
+            b.wet_bulb_extreme = WetBulbEvent(
+                city=city, country=country, daily_max_tw_c=tw_max, tier=tier_index,
+                tier_label=tier_label, tier_threshold_c=threshold_c,
+                event_id=f"wetbulb_{key}_{iso}_tier{tier_index}", signal_date=today, lat=lat, lon=lon,
+                archive_max_tw_c=(amx[0] if amx else None),
+                archive_max_year=(amx[1] if amx else None), archive_years=yrs,
+            )
+            break
+
+    return b
