@@ -3,6 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from src.data.open_meteo import (
+    AllTimeRecord,
+    MonthlyRecord,
+    AnomalyEvent,
+    WetBulbEvent,
+    ExtremeSignalBundle,
+    WETBULB_TIERS,
+    ANOMALY_HOT_THRESHOLD_C,
+    ANOMALY_COLD_THRESHOLD_C,
+)
+
 MIN_MEAN_SAMPLES = 30  # below this, a monthly mean is too sparse to fire an anomaly
 
 
@@ -110,18 +121,6 @@ def compute_city_thresholds(city, archive_daily, *, as_of, years_of_data=30):
         all_time_max=at_max, all_time_min=at_min,
         monthly_max=m_max, monthly_min=m_min, monthly_mean=m_mean, wetbulb_max=wb_max,
     )
-
-
-from src.data.open_meteo import (  # noqa: E402
-    AllTimeRecord,
-    MonthlyRecord,
-    AnomalyEvent,
-    WetBulbEvent,
-    ExtremeSignalBundle,
-    WETBULB_TIERS,
-    ANOMALY_HOT_THRESHOLD_C,
-    ANOMALY_COLD_THRESHOLD_C,
-)
 
 
 def evaluate_city(city, country, forecast, cached, *, lat, lon, today):

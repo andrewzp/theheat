@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import requests
 
 from src.data._http import fetch_with_retry
+from src.data.openmeteo_budget import OpenMeteoSaturated
 
 BASE_URL = "https://api.open-meteo.com/v1"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1"
@@ -1118,9 +1119,6 @@ def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = No
         if record:
             records.append(record)
     return records
-
-
-from src.data.openmeteo_budget import OpenMeteoSaturated  # noqa: E402
 
 
 def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
