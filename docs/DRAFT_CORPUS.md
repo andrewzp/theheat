@@ -1722,6 +1722,99 @@ None. Queue empty.
 
 ---
 
+## 2026-06-27 — Daily corpus grading (2 fresh drafts)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 2 pending drafts — both fresh, not previously graded. First multi-draft cycle since 2026-05-19 (39 days). Bot at 0.9.81.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` active (best-of-2 drafts + critic rewrite pass, per 2026-06-13 Thirty-Loop completion).
+
+**Staleness review as of 2026-06-27 ~15:00 UTC:** Draft [1] (fire, created 2026-06-27T06:57Z, ~8h old) contains "today" — real-time-baked. Under 48h threshold; not a staleness candidate yet, but stale after ~2026-06-28T06:57Z if unpublished. Draft [2] (precipitation_extreme, created 2026-06-27T10:17Z, ~5h old) uses past-tense framing ("received") — no real-time-baked content. Neither draft triggers the bulk-reject policy.
+
+Bulk-reject: 0 candidates. `gh` CLI absent — **13th consecutive skip** (May 13 → Jun 27).
+
+**Grade distribution (2 fresh drafts):** 0 A / 1 B+ / 0 B / 1 C+ / 0 D-F.
+**A-rate: 0% (0/2).** Gap from resumption bar: 50 pp (n=2; not statistically meaningful).
+
+**Headline finding:** Fire draft (Canadian Prairies + BC, three fires above 1,500 MW) earns B+ via comic triple and a clean period-form closer. The BC fires (~3,000 MW each) are individually extraordinary but buried as escalation detail — the closer's threshold framing understates peak severity. Precipitation draft (Amsterdam, 157.1 mm, 4.7% above record) earns C+ — ecosystem specificity deployed correctly, signal editorially thin (score 74, maritime city, 7.1 mm margin). P6 fire template fix holding. New proposal P_precip_floor added: writer over-passes shallow-margin precipitation records (parallel to P_new cold-record floor).
+
+### B-grade drafts
+
+#### [1] Canadian Prairies / British Columbia — fire — 1,517.9 / 2,979.4 / 2,812.4 MW — **B+**
+
+> *1,517.9 MW of radiative heat in the Canadian Prairies today — very-high-intensity fire, satellite-confirmed at 100% confidence. Two fires in British Columbia registered 2,979.4 and 2,812.4 MW the same day. Three signals above 1,500 MW in one country, one afternoon.*
+
+**Score:** 83. Created 2026-06-27T06:57:25Z.
+
+Humor lens:
+- **Violation:** 1,517.9 MW (Prairies), 2,979.4 and 2,812.4 MW (BC). All three in the very-high-intensity tier. The BC fires are each individually extreme — ~3,000 MW is near the top of the FIRMS detection range.
+- **Benign?** Yes — calm observational register throughout. No panic.
+- **Setup→Punchline?** Three-sentence structure: S1 (Prairies fire as hook), S2 (BC fires, escalating pair, exact values), S3 ("Three signals above 1,500 MW in one country, one afternoon" — period-form closer). The closer compresses geographic scope (one country) and temporal coincidence (one afternoon) into a clean count summary. Works.
+- **Named mechanic?** Comic triple — three fire signals stacked, closed with scope statement. S3 uses the period-and-restate form with new information (count + scope), not redundant restate.
+- **Wodehouse rule?** Clean. Exact values throughout. No approximation, no restate-padding, no poetry attempt. "One country, one afternoon" is tight compression, not straining.
+
+Not A- because: The BC fires at 2,979.4 and 2,812.4 MW are each nearly twice the Prairies fire — each close to 3 GW, individually extraordinary. The draft buries them as pair detail in the escalation sentence. "Three signals above 1,500 MW" uses a minimum threshold (the Prairies fire barely clears it at 1,517.9) while the BC values are nearly 2× that floor. The A- version names the peak: "The Prairies fire: 1,517.9 MW. Two fires in BC: 2,979.4 and 2,812.4. Three above 1,500 MW in one country, one afternoon." Or re-leads with the BC fires. Also: "satellite-confirmed at 100% confidence" — bureaucratic qualifier mid-sentence; echoes the P6 formula tone; cuttable without loss.
+
+**P6 fire formula check (positive):** Opener leads with FRP value + intensity tier, not the banned "A fire in [location] is radiating X MW of heat, detected by satellite." P6 fix holding for the 3rd post-ship fire draft.
+
+### C-grade drafts
+
+#### [2] Amsterdam — precipitation_extreme — 157.1 mm / 3 days — **C+**
+
+> *Amsterdam received 157.1 mm of rain in 3 days, breaking the previous 3-day record of 150.0 mm by 7.1 mm. The city sits on drained peat below sea level; its canals and pumps move water out continuously, but the system is sized for typical loads, not compressed extremes.*
+
+**Score:** 74. Created 2026-06-27T10:17:07Z.
+
+Humor lens:
+- **Violation:** 157.1 mm in 3 days, 7.1 mm (4.7%) above the prior record of 150.0 mm. Margin is thin. Compare Barrow (Jun 7): 63.8 mm (42.5%) above record, score 81.
+- **Benign?** Yes — factual, no alarm.
+- **Setup→Punchline?** S1: data + margin (setup). S2: peat drainage + below sea level + canal/pump infrastructure + "sized for typical loads, not compressed extremes" (mechanism + implicit close). Implies consequence (canals stressed when overwhelmed) without naming it — same implied-vs-declarative gap as Barrow's "sheets across the surface instead."
+- **Named mechanic?** Ecosystem specificity: peat drainage, below sea level, canal/pump infrastructure. Mechanic is real and load-bearing — directly explains why Amsterdam's drainage has a bounded ceiling. "Compressed extremes" is evocative but lightly coined; intuitive, minor effort-signal.
+- **Wodehouse rule?** Restate-math: "breaking the previous 3-day record of 150.0 mm by 7.1 mm" — derivable margin stated after both values are given. Same minor violation as Barrow (Jun 7). Pattern recurs for the precipitation_extreme category.
+
+C+ (not B-) because: signal is editorially thin. 4.7% above a precipitation record in Amsterdam — maritime Europe, ~820 mm annual rainfall — is not extraordinary by the editorial bar Andrew established for cold records (Mankato reject: "weak signal"). Score 74 confirms marginal signal strength. Voice execution is competent; it cannot rescue a weak underlying signal. The declarative consequence is also missing: "sized for typical loads, not compressed extremes" implies the system fails without naming what happens. B- form names it: "Amsterdam's canals have moved storm water since the 1600s. Not built for 157 mm in 72 hours." Current form earns C+.
+
+Signal comparison — precipitation_extreme corpus to date:
+
+| Draft | Location | Margin | % above | Score | Grade |
+|---|---|---|---|---|---|
+| Barrow, AK (Jun 7) | Arctic, permafrost drainage | 63.8 mm | 42.5% | 81 | B+ |
+| Amsterdam (Jun 27) | Maritime Europe, canal drainage | 7.1 mm | 4.7% | 74 | C+ |
+
+The margin gap accounts almost entirely for the grade gap, not voice execution.
+
+### Patterns named in this batch
+
+1. **Multi-fire combo signal — corpus first.** Draft [1] is the first example of a multi-fire framing (three fires in one draft). Comic triple works naturally: hook fire → escalating pair → scope closer. Valid signal type when fires cluster nationally on the same afternoon. Individual BC fires (~3,000 MW) are each extreme enough to stand alone; the combo framing is structurally stronger, but the peak values are undersold in the closer's threshold framing.
+
+2. **Precipitation_extreme quality floor — emerging.** Amsterdam's 4.7% margin (score 74) is editorially thin. Ecosystem specificity is correctly deployed but can't compensate for a weak signal. Two precipitation_extreme drafts in corpus: Barrow (42.5%, B+) and Amsterdam (4.7%, C+). Margin gap accounts for the grade gap, not voice. New proposal P_precip_floor added: parallel to P_new cold-record floor.
+
+3. **Restate-math: recurring in precipitation_extreme.** Both precipitation drafts (Barrow Jun 7, Amsterdam Jun 27) use "breaking the previous record of X by Y mm" — derivable margin stated after both values. Fix for the category: ratio form ("4.7% above the prior record") or plain period-and-restate ("157.1 mm in 3 days. The prior record was 150.0 mm.").
+
+4. **P6 fire formula negative (positive).** Draft [1] does not use the banned "A fire in [location] is radiating X MW" opener. P6 fix holding for 3rd consecutive post-ship fire draft.
+
+5. **P5 natural mechanic deployment — 2nd consecutive cycle.** Comic triple (fire) and ecosystem specificity (precipitation) both appeared without explicit prompt naming. Jun 7 (Barrow, ecosystem specificity) was the first. Two consecutive fresh-draft cycles now show named mechanics deployed naturally without P5's proposed fix. P5's core concern (convergence to default mechanics without naming the full palette) has not appeared in either cycle — but n=3 fresh-draft cycles total is too small to conclude variety is structurally guaranteed. P5 urgency reduced but not retired.
+
+6. **`THEHEAT_WRITER_SAMPLES=2` + critic rewrite context.** Both drafts reached pending under the best-of-2 + critic-rewrite configuration (live since Jun 13 Thirty-Loop). No visibility into pre-rewrite variants. The fire draft's comic-triple structure looks like a strong writer choice; "compressed extremes" in the precipitation draft may be critic-contributed.
+
+### Followups
+
+1. **P_precip_floor threshold.** Score 74 + 4.7% margin passed the writer/critic filter. Operator should verify whether the precipitation_extreme score threshold is calibrated appropriately for wet-climate locations — the same margin on an arid station would carry different editorial weight.
+
+2. **BC fire peak values.** 2,979.4 MW is individually extraordinary; the best-of-2 writer configuration might have produced a stronger single-fire draft. The combo framing was the right structural choice, but the A- version names the BC peak explicitly.
+
+3. **Fire draft shelf life.** Draft [1] contains "today" — stale by policy after ~2026-06-28T06:57Z. Operator should track.
+
+### Numbers
+
+- Pending drafts in queue: 2 (2 fresh; 0 carry-overs)
+- Fresh drafts graded: 2 (fire, precipitation_extreme)
+- A-rate: 0% (0/2); n=2 — not statistically meaningful
+- Grade distribution: 0 A / 1 B+ / 0 B / 1 C+ / 0 D-F
+- First multi-fire combo in corpus (Canadian Prairies + BC)
+- Active proposals: P6 fire template negative (holding); P5 partial negative (2nd natural-mechanic cycle); P_precip_floor new proposal added; P7/P8/P_new — no applicable signal types this cycle
+- Staleness bulk-reject: 0 candidates (both fresh, under 48h); `gh` CLI absent (13th consecutive skip, May 13 → Jun 27)
+- Most recent A-grade in corpus: May 19, 2026 (3/14, coral_bleaching batch)
+
+---
+
 ## 2026-06-08 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft

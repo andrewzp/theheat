@@ -46,12 +46,12 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/3, Jun 26)** — Amsterdam C+, Aktobe C+, Anchorage B. Prior: 0% Jun 25 [0/5]; 0% Jun 24 [0/2]; 33% Jun 23 [1/3]; prior meaningful: 67% retroactive Jun 15 [6/9, first above 50% bar] |
+| Last cycle A-rate | **0% (0/2, Jun 27)** — fire B+ (Canadian Prairies/BC, comic triple, BC fires ~3,000 MW each), Amsterdam precipitation_extreme C+ (4.7% margin). Prior: 0% Jun 26 [0/3]; prior meaningful: 67% retroactive Jun 15 [6/9] |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=3 Jun 26); Jun 25: 50 pp (0/5); Jun 24: 50 pp (0/2); Jun 23: 17 pp (33%) |
+| Gap | **50 pp** (50% − 0%, n=2 Jun 27); Jun 26: 50 pp (0/3); Jun 23: 17 pp (33%) |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **3 pending** (Amsterdam C+ created Jun 26T04:00Z; Aktobe C+ created Jun 26T04:03Z; Anchorage B created Jun 26T07:59Z). No staleness risk (no real-time-baked language); all approach 48h threshold ~Jun 28T04:00–07:59Z. Threshold artifact: all 3 cite "previous 3-day record of 150.0 mm" — verify authentic station records before publishing. Pipeline active at 0.9.67.0+; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **2 pending (Jun 27)** (fire: Canadian Prairies/BC, B+, created 2026-06-27T06:57Z — "today" language, stale after ~Jun 28T06:57Z; precipitation_extreme: Amsterdam, C+, created 2026-06-27T10:17Z, no real-time-baked language). **Note:** Prior Jun 26 queue (Amsterdam C+, Aktobe C+, Anchorage B) may still be pending — operator must post or reject before ~Jun 28T04–08Z. Pipeline active; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
@@ -433,17 +433,22 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 26 (weak: Anchorage B chose orographic-stall mechanism as system clause
-organically; Aktobe C+ deployed half-year aridity ratio as close naturally. No fire/coral drafts
-in batch — cannot assess whether fire/coral categories continue to self-select named mechanics.
-All 3 drafts are precipitation_extreme; all 3 used system-clause specificity without prompting,
-consistent with prior pattern. No draft shows a named humor move beyond mechanism/ratio. Same
-pattern as Jun 25: categories with available geographic mechanics self-select them; the gap is
-in the CLOSE not the mechanism identification.
-Prior: Jun 25 partial: Siberia fire B+ deployed peatland carbon as named mechanic organically +
-companion-fire peer comparison; Barrow B+ used annual-precipitation ratio. Michigan monthly_low B
-and Taiz dust_event ×2 showed no named humor moves. Same pattern as prior cycles: fire/precip
-categories self-select mechanics; dust_event/monthly_low categories do not.)
+**Last seen:** Jun 27 (weak: fire [Canadian Prairies/BC] deployed comic triple organically —
+three-fire national cluster structure without explicit naming; Amsterdam precip deployed
+canal-drainage ecosystem specificity organically. Same pattern as Jun 25/26: categories with
+available geographic mechanics self-select them; named humor moves beyond mechanism/structural
+choice are absent; the gap is in the CLOSE not the mechanism identification.
+Prior Jun 26 note: Anchorage B chose orographic-stall mechanism as system clause organically;
+Aktobe C+ deployed half-year aridity ratio as close naturally. All 3 precipitation_extreme;
+all 3 used system-clause specificity without prompting. No named humor move beyond mechanism/ratio.
+Prior Jun 25 note: Siberia fire B+ deployed peatland carbon + companion-fire peer comparison;
+Barrow B+ used annual-precipitation ratio. Michigan monthly_low B and Taiz dust_event ×2 showed
+no named humor moves. Same pattern across cycles: fire/precip categories self-select mechanics;
+dust_event/monthly_low categories do not.
+Negative evidence accumulating: 3 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27)
+show named mechanics deploying naturally without the P5 fix. P5 urgency reduced but not retired:
+sample sizes too small (3 total fresh-draft cycles post-May-19) to confirm variety is
+structurally guaranteed.)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -464,6 +469,47 @@ extends evidence to fire/hot10/dust categories; coral/record categories may not 
 ~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
 ~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
+
+### P_precip_floor — Precipitation quality floor: writer over-passes shallow-margin signals
+
+**Observed:** 2026-06-27 — Amsterdam precipitation_extreme (score 74, 157.1 mm / 3-day
+record, 7.1 mm / 4.7% above prior record of 150.0 mm) reached pending with competent
+ecosystem specificity (peat drainage, canal/pump infrastructure) but weak underlying
+signal. The margin is editorially thin: a 4.7% improvement on a 3-day precipitation record
+in a maritime European city (~820 mm annual rainfall) is not extraordinary by the bar
+Andrew established for cold records (Mankato reject, May 2026: "weak signal, defensive
+closer"). The writer and critic both passed this draft; voice execution quality did not
+compensate for signal weakness. Same failure class as P_new: writer lacks a self-kill gate
+for the marginally-above-threshold precipitation record in a wet-climate location.
+
+Corpus comparison: Barrow, Alaska (Jun 7, 42.5% above record, Arctic permafrost drainage,
+score 81) = B+; Amsterdam (Jun 27, 4.7% above record, maritime Europe, score 74) = C+.
+The margin gap accounts for the grade gap, not voice execution.
+
+**Cycles observed:** 1 (Jun 27).
+**Last seen:** 2026-06-27.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+precipitation framing section:
+
+> For `precipitation_extreme` signals: self-kill when ALL of the following are true:
+> (a) margin above prior record is less than 10% (ratio < 1.10), (b) location is in a
+> wet climate (>800 mm annual rainfall, maritime, or tropical). A 4.7% improvement on a
+> 3-day precipitation record in Amsterdam — maritime Europe, ~820 mm/year, prior record
+> 150.0 mm — is not extraordinary; archive depth is shallow relative to the signal's
+> marginal nature. Use kill_reason: "shallow-margin precipitation record: insufficient
+> editorial weight (< 10% improvement, wet-climate location)." Example that clears the
+> bar: Barrow, Alaska (42.5% above record, Arctic permafrost drainage, score 81). Example
+> that fails: Amsterdam (4.7% above record, maritime Europe, score 74).
+
+**Expected impact:** Prevents the class of precipitation_extreme drafts that pass the
+score gate but fail the human editorial bar. Mirrors P_new's cold-record quality floor.
+Scoped to wet-climate locations only — does not affect arid or semi-arid stations where
+any precipitation record may carry higher editorial weight.
+
+**Status:** Drafted. Single-cycle evidence. Watch for whether the pattern recurs in next
+precipitation_extreme drafts. Signal types most at risk: European maritime cities,
+tropical coastal cities, Pacific Northwest.
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
