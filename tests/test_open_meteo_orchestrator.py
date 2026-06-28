@@ -269,6 +269,9 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
         signal_date=signal_date, station_id="USW00023183",
         station_name="PHOENIX SKY HARBOR INTL AP",
     )
+    from src.orchestrator import world_cache
+    from src.data.world_thresholds import CityThresholds
+
     bot_state = _fresh_state()
     current_run = {"id": "run_1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
     enqueued: list[dict] = []
@@ -279,10 +282,15 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
         runner.ghcn, "check_extreme_signals_for_stations",
         lambda *args, **kwargs: ([us_bundle], []),
     )
-    # The world half is sourced from the cached warm+hot path now, not the
-    # superseded _check_city_extreme_signals seam: warm seeds Seville's
-    # thresholds from the archive, then the forecast (46.0 > cached 40.0)
-    # fires an all-time-high via evaluate_city.
+    # The world half is the cached eval->warm->consolidate path. Under eval-first a
+    # MISSING city is only warmed this run (1-run lag), so Seville must be PRE-SEEDED
+    # (fresh-cached) to be evaluated THIS run: the forecast (46.0 > cached 40.0) fires an
+    # all-time-high via evaluate_city in CONSOLIDATE.
+    store = {"Seville": CityThresholds(
+        city="Seville", as_of=date.today().isoformat(), years_of_data=30,
+        all_time_max=(40.0, 2000)).to_dict()}
+    monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
+    monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
     monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
         "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
         "wet_bulb_temperature_2m_max": [24.0]})
@@ -352,6 +360,39 @@ def test_classify_world_status_rules():
     assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=20) == "success"      # bootstrap climbing
     assert cls({**base, "cached_count": 40, "coverage_ratio": 0.07}, prev_cached_count=40) == "degraded"     # bootstrap STALLED
     assert cls({**base, "cached_count": 595, "coverage_ratio": 0.98, "saturated": True}, prev_cached_count=595) == "degraded"
+    # The 5 cases above carry only legacy `saturated` (-> eval_sat fallback, warm_sat absent),
+    # and their steady cases use prev_cached_count == total, so the pre-run-fullness rekey is
+    # behavior-preserving. The split-flag semantics are pinned in the next test.
+
+
+def test_classify_world_status_split_flags():
+    from src.orchestrator.world_cache import classify_world_status as cls
+    boot = {"world_total": 595, "forecast_attempted": 100, "forecast_failures": 0,
+            "warm_attempted": 5, "warm_failures": 0, "cached_count": 40}
+    # (a) warm saturation alone, bootstrap growing -> tolerated (the headline decouple)
+    assert cls({**boot, "warm_saturated": True}, prev_cached_count=20) == "success"
+    # (b) eval saturation always wins
+    assert cls({**boot, "eval_saturated": True, "warm_saturated": True}, prev_cached_count=20) == "degraded"
+    # (c) warm saturation in steady state (full at run start) -> degraded
+    assert cls({**boot, "cached_count": 595, "warm_saturated": True, "coverage_ratio": 0.98},
+               prev_cached_count=595) == "degraded"
+    # (d) warm saturation + stalled bootstrap -> degraded
+    assert cls({**boot, "cached_count": 40, "warm_saturated": True}, prev_cached_count=40) == "degraded"
+    # (e) legacy `saturated` maps to eval -> degraded
+    assert cls({**boot, "saturated": True}, prev_cached_count=20) == "degraded"
+    # (f) forecast-fail floor fires even with warm_sat True during healthy growth
+    assert cls({**boot, "forecast_failures": 30, "warm_saturated": True}, prev_cached_count=20) == "degraded"
+    # (g) forecast-fail floor unmasked by growth, warm_sat False
+    assert cls({**boot, "forecast_failures": 30}, prev_cached_count=20) == "degraded"
+    # (h) warm-failure floor fires during healthy growth
+    assert cls({**boot, "warm_failures": 3}, prev_cached_count=20) == "degraded"
+    # (i) clean steady state -> success
+    assert cls({**boot, "cached_count": 595, "coverage_ratio": 0.98, "saturated": False},
+               prev_cached_count=595) == "success"
+    # (j) cold 0->total first-fill is bootstrap (pre-run fullness), NOT a steady coverage miss
+    assert cls({"world_total": 595, "cached_count": 595, "forecast_attempted": 0,
+                "forecast_failures": 0, "warm_attempted": 5, "warm_failures": 0,
+                "coverage_ratio": 0.0}, prev_cached_count=0) == "success"
 
 
 def test_world_path_emits_no_calendar_streak_or_simultaneous():
@@ -371,8 +412,12 @@ def test_world_path_emits_no_calendar_streak_or_simultaneous():
 def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
     from src.orchestrator.sources import open_meteo as runner
     from src.orchestrator import world_cache
+    from src.data.world_thresholds import CityThresholds
     from src.state import _fresh_state
-    store = {}
+    # Eval-first: one fresh-cached city (Cairo, eval'd this run) + one missing city
+    # (Madrid, warmed this run only — 1-run lag before it is eval'd).
+    store = {"Cairo": CityThresholds(city="Cairo", as_of=date.today().isoformat(),
+                                     years_of_data=30, all_time_max=(40.0, 2000)).to_dict()}
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
     monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
@@ -382,10 +427,15 @@ def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
         "wet_bulb_temperature_2m_max": [24.0]})
     monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
         lambda cities: {c["city"]: {"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0} for c in cities})
-    cities = [{"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"}]
+    cities = [{"city": "Cairo", "country": "Egypt", "lat": "30.0", "lon": "31.2"},
+              {"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"}]
     run = {"id": "r", "mode": "alerts", "started_at": "2026-06-26T00:00:00Z", "sources": []}
     runner.run_extreme_signals(_fresh_state(), run, cities, {}, {})
-    assert "Madrid" in store
+    assert "Madrid" in store                         # missing city warmed this run
     src = [s for s in run["sources"] if s["source"] == "open_meteo_extreme_signals"][0]
     om = src["details"]["open_meteo_pipeline_metrics"]
-    assert "coverage_ratio" in om and "cached_count" in om
+    assert om["forecast_attempted"] == 1             # only pre-cached Cairo eval'd (Madrid 1-run lag)
+    assert om["coverage_ratio"] == round(1 / 2, 3)   # 1 evaluated / 2 world cities
+    assert om["cached_count"] == 2                    # Cairo + warmed Madrid
+    assert "eval_saturated" in om and "warm_saturated" in om
+    assert "esat:" in src["note"] and "sat:" in src["note"]
