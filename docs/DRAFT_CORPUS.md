@@ -11,6 +11,135 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-06-28 — Daily corpus grading (5 fresh drafts; 2 Jun-27 carry-overs not re-graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending — 2 carry-overs from Jun 27 (Canadian Prairies/BC fire B+, Amsterdam precipitation_extreme C+ — grades stand from Jun 27), plus 5 fresh (created after Jun 27's 15:00 UTC grading window). Fresh mix: dust_event (Taiz), regional_sst_anomaly (Mediterranean), precipitation_extreme (Astana), all_time_high (Beaver Dams UT), monthly_low (Casper WY).
+
+**Staleness review as of 2026-06-28 ~15:00 UTC:** `gh` CLI absent — **30th consecutive skip** (May 13 → Jun 28, continuing from Jun 26's confirmed count; Jun 27's "13th" was a tracking bug). Carry-over [1] (fire, "today" baked, ~32h old) — under 48h; watch flag: crosses threshold at ~Jun 29T07:00Z. Carry-over [2] (Amsterdam, no date-bake) — ~29h, clear. Fresh [3] (Taiz, "June 27" baked, ~22h) — under 48h; crosses at ~Jun 29T17:00Z. All other fresh drafts <12h old. 0 staleness candidates.
+
+**Grade distribution (5 fresh drafts only):** 0 A / 4 B / 1 C / 0 D-F.
+**A-rate (fresh): 0% (0/5).** Gap from resumption bar: 50 pp.
+
+**Headline finding:** Zero A-grades for the 5th consecutive graded cycle. P_close is 10th cycle and accounts for the ceiling: [4] Mediterranean is the closest to A- ("nowhere fast to go" = borderline declarative), but [6] Beaver Dams and [7] Casper both land implied-consequence closes that cap at B+/B. New failure mode observed: **compound-qualifier syndrome** — [6] and [7] both state archive depth AND margin in the same opener clause, producing double-qualification that dilutes both. P_dust 4th cycle: Taiz [3] again lacks WHO anchor, template-converges with all 5 prior dust_event corpus drafts. P9 7th cycle: Astana [5] uses the precipitation_extreme opener template. No Wodehouse violations (7th consecutive clean cycle).
+
+### Carry-overs (Jun 27 grades stand; not re-graded)
+
+| Draft | Type | Grade (Jun 27) | Notes |
+|---|---|---|---|
+| [1] Canadian Prairies/BC fire (1,517.9–2,979.4 MW) | fire | **B+** | Comic triple; "today" baked; stale by ~Jun 29T07Z |
+| [2] Amsterdam (157.1 mm / 3d, 4.7% margin) | precipitation_extreme | **C+** | Thin margin, canal ecosystem specificity; P_precip_floor |
+
+### B-grade drafts (fresh)
+
+#### [4] Mediterranean — regional_sst_anomaly — 3.54°C above seasonal normal — **B+**
+
+> *The Mediterranean Sea is running 3.54°C above its seasonal normal today — just past the 3.5°C tier threshold in the NOAA Coral Reef Watch basin average. The Mediterranean is a semi-enclosed sea with limited deep-water exchange; heat absorbed at the surface has nowhere fast to go.*
+
+**Score:** 82. Created 2026-06-28T04:01:30Z (~11h old; "today" baked; fresh).
+
+Humor lens:
+- **Violation:** 3.54°C above seasonal normal — fractionally past the 3.5°C tier threshold.
+- **Benign?** Yes — calm factual register.
+- **Setup→Punchline?** Setup: 3.54°C anomaly. Punchline: semi-enclosed sea + "heat absorbed at the surface has nowhere fast to go." Structure echoes Costa Rica's A- ("nowhere to drain") — same conceptual frame.
+- **Named mechanic?** Ecosystem specificity (semi-enclosed, no deep exchange). Understatement closer.
+- **P_close:** Borderline positive. "Has nowhere fast to go" is close to declarative consequence but "fast" introduces a mild hedge ("fast" implies there is somewhere slow to go). Compare: "nowhere to drain" (Costa Rica A-) is unhedged. This close is the B+/A- boundary case.
+- **Why B+ not A-:** First sentence is jargon-dense ("just past the 3.5°C tier threshold in the NOAA Coral Reef Watch basin average") — threshold attribution is opaque without a referent. Strip that clause and the draft is A- territory. "Nowhere fast to go" is nearly declarative but not quite.
+
+---
+
+#### [5] Astana, Kazakhstan — precipitation_extreme — 51.1 mm / 3.9 mm prior record — **B+**
+
+> *Astana, Kazakhstan recorded 51.1 mm of rain on June 26 — against a previous daily record of 3.9 mm, set earlier this same year. Aktobe and Almaty logged 50.2 mm and 43.2 mm the same day. Astana sits in the driest interior of the Eurasian steppe.*
+
+**Score:** 76. Created 2026-06-28T04:04:31Z (~11h old; fresh).
+
+Humor lens:
+- **Violation:** 51.1 mm against a prior record of 3.9 mm — implicit 13× ratio. "Set earlier this same year" is a temporal twist.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 51.1/3.9 mm contrast. Escalation: geographic spread. Punchline: steppe ecosystem-incongruity closer.
+- **Named mechanic?** Ecosystem incongruity (driest steppe interior receiving 51.1 mm). The 3.9 mm prior record defines the violation's scale.
+- **P9 (opener template):** "[City] recorded X mm on [date] — against a previous [daily] record of Y mm" — 7th precipitation_extreme using the template. P9 evidence confirmed.
+- **P_close:** Not traditional P_close territory — the steppe closer is an ecosystem-incongruity punchline, not a mechanism close. Steppe line = location fact as punchline. Distinct pattern (no mechanism, no consequence — just the irony of the location). P_close not directly applicable.
+- **Why B+ not A-:** The 13× ratio goes unnamed — ratio-as-punchline opportunity missed. The Aktobe/Almaty catalog (sentence 2) dilutes the 51.1/3.9 contrast before the steppe closer lands. "Astana sits in the driest interior of the Eurasian steppe" is correct but slightly flat — it names the location's character without naming a consequence ("13 mm of rain per year on average; this was 51" would be more pointed). Borderline B+/A-.
+
+---
+
+#### [6] Beaver Dams, Utah — all_time_high — 104°F / 15°F above 2020 mark — **B+**
+
+> *Beaver Dams, Utah hit 104°F (39.9°C) on June 25 — hottest daily maximum in 23 years of records, 15°F above the 2020 mark. The Colorado Plateau's canyon topography locks in continental heat with little moisture overhead to blunt the afternoon peak.*
+
+**Score:** 92. Created 2026-06-28T07:59:21Z (~7h old; "June 25" = data date; fresh).
+
+Humor lens:
+- **Violation:** 104°F, 15°F above the previous all-time record. 15°F is an extraordinary margin.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 104°F, 15°F margin. Second sentence: canyon topography locks heat + "blunt the afternoon peak."
+- **Named mechanic?** Ecosystem specificity (canyon lock-in, low moisture). Load-bearing.
+- **P_close:** Failing — "little moisture overhead to blunt the afternoon peak" is implied-consequence (the negation of blunting → the peak is extreme). Not stated directly. Compare: "lock in heat" is mechanism; "blunt" framed as negation is implied.
+- **P_compound (NEW):** First-sentence compound-qualifier: "hottest daily maximum in 23 years of records, 15°F above the 2020 mark." Two qualifier clauses state the same fact in different framings (archive + margin). Choose one. **New failure mode.**
+- **Why B+ not A-:** P_compound (double-qualifier opener) + P_close (implied-consequence). The prior Beaver Dams all_time_high (Jun 15 retroactive, different event) earned A-; this one's opener is heavier.
+
+---
+
+#### [7] Casper, Wyoming — monthly_low — 27°F / 3°F below 2018 mark — **B**
+
+> *Casper, Wyoming hit 27°F (-2.8°C) on June 25 — coldest June low in 26 years of records, 3°F below the 2018 mark. The North Platte River valley drains cold air down from the Laramie Range on clear nights, pushing lows well below what June air masses would otherwise deliver.*
+
+**Score:** 82. Created 2026-06-28T14:00:34Z (~1h old; "June 25" = data date; fresh).
+
+Humor lens:
+- **Violation:** 27°F below freezing in late June. 3°F below the June record in a 26-year archive.
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: 27°F, record margin. Second sentence: cold-air drainage (North Platte valley + Laramie Range). Close: "what June air masses would otherwise deliver."
+- **Named mechanic?** Ecosystem specificity (cold-air drainage basin). Load-bearing.
+- **P_close:** Failing — "well below what June air masses would otherwise deliver" is implied-consequence (implies temperatures should be higher in June; doesn't state the consequence). "Freezing on June 25" is the consequence and should be stated.
+- **P_compound (2nd obs this cycle):** "coldest June low in 26 years of records, 3°F below the 2018 mark" — same double-qualifier pattern as [6]. Archive depth + margin in same clause.
+- **P_new floor check:** 26-year archive (> 20yr), 3°F ≈ 1.67°C margin (> 1°C threshold) — passes both criteria. P_new not triggered.
+- **Why B not B+:** P_close failing (implied-consequence close). P_compound first sentence. "What June air masses would otherwise deliver" is wordy where "Below freezing. In June." would be more pointed. The below-freezing irony is the joke and the draft doesn't let it land.
+
+---
+
+### C-grade drafts (fresh)
+
+#### [3] Taiz, Yemen — dust_event — 728 μg/m³ — **C+**
+
+> *Taiz, Yemen: model-estimated dust daily maximum of 728 μg/m³ on June 27 — aerosol optical depth at 0.77. Taiz sits at the southwest corner of the Arabian Peninsula where the summer monsoon low pulls Red Sea and Arabian dust inland through the Tihama coastal plain.*
+
+**Score:** 71. Created 2026-06-27T17:21:33Z (~22h old; "June 27" date-baked; not stale by policy; crosses 48h at ~Jun 29T17Z).
+
+Humor lens:
+- **Violation:** 728 μg/m³. WHO PM₁₀ guideline is 45 μg/m³ — this is ~16× the limit. But the draft doesn't name the ratio, a prior maximum, or any calibrating reference.
+- **P_dust (4th cycle):** "[City]: model-estimated dust daily maximum of X μg/m³ on [date] — aerosol optical depth at Y" — **identical opener template** to Riyadh (Jun 13), Urumqi (Jun 17), Taiz Jun 24, Taiz Jun 25. All 5 dust_event corpus drafts share this template. AOD metric unstated for lay reader. Proposal confirmed across 5 drafts.
+- **P_close:** Failing — "pulls Red Sea and Arabian dust inland through the Tihama coastal plain" = mechanism-only. Transport mechanism described; no consequence named.
+- **Why C+:** No WHO anchor (P_dust), mechanism-only close (P_close). Reader cannot feel the violation. Tihama coastal plain geography is accurate and specific — that's the only positive element. C+ (not C) for the genuine geographic specificity.
+
+---
+
+### Patterns named
+
+1. **P_close 10th cycle** — 3 failing in fresh batch ([3] Taiz mechanism-only; [6] Beaver Dams implied; [7] Casper implied), 1 borderline positive ([4] Mediterranean "nowhere fast to go"), 1 ecosystem-incongruity form that isn't P_close ([5] Astana steppe punchline). Pattern: implied-consequence and mechanism-only forms continue to cap drafts at B/B+.
+
+2. **P_compound (new, 2 obs in one cycle)** — [6] Beaver Dams and [7] Casper both state archive depth AND margin in the same opener sentence. Choose one. New proposal.
+
+3. **P_dust 4th cycle** — 5th consecutive dust_event draft lacks WHO calibration anchor. Template convergence: all 5 corpus dust_event drafts share "[City]: model-estimated dust daily maximum of X μg/m³ on [date] — aerosol optical depth at Y" structure.
+
+4. **P9 7th cycle** — [5] Astana uses the precipitation_extreme opener template. 9 of 9 precipitation_extreme corpus drafts share the template structure.
+
+5. **No Wodehouse violations** (7th consecutive clean cycle). P4 fix holding.
+
+6. **Mediterranean draft revisited** — Jun 23 Mediterranean SST was graded B ("retains heat faster than open-ocean basins"). Jun 28 Mediterranean SST is a new draft, same basin; "nowhere fast to go" is a stronger close form (borderline positive P_close). B+ assigned — demonstrating measurable close-quality variation within the same signal type.
+
+### Numbers
+
+- Pending: 7 (2 carry-overs, 5 fresh)
+- Fresh drafts graded: 5
+- A-rate (fresh): **0%** (0/5). Gap from bar: 50 pp.
+- New proposals: P_compound (compound-qualifier opener; 2 instances this cycle)
+- Evidence updates: P_close (10th cycle), P_dust (4th cycle), P9 (7th cycle)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (30th consecutive skip, May 13 → Jun 28)
+
+---
+
 ## 2026-06-26 — Daily corpus grading (3 fresh drafts)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 3 pending drafts — all
