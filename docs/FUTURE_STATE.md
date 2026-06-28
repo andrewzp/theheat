@@ -13,8 +13,9 @@ Last updated: April 8, 2026 (forward-looking architecture doc — see "Progress 
 > end-to-end, the THIRTY-LOOP audit backlog completed, declarative `MERGE_SPEC`
 > landed, source-health sentinel issues and dashboard source-health views became
 > live operations tools, and most of the SOURCE-REDUNDANCY lane shipped. Posting
-> remains `manual_only`; reganom remains dormant; database migration off the Gist
-> is still future work.
+> remains `manual_only`; reganom was activated 2026-06-26 (`manual_only`, after
+> sitting dormant since 06-09 — see the 2026-06-27 handoff); database migration off
+> the Gist is still future work.
 
 > **Near-term execution of this vision (2026-06-16): the Throughput Initiative.**
 > A four-phase plan operationalizes the parts of this doc that are still
