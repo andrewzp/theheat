@@ -1167,7 +1167,10 @@ def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for city, block in zip(cities, blocks):
         daily = (block or {}).get("daily", {}) or {}
-        out[city["city"]] = {
+        # Key by "<city>|<country>" (matches world_cache.world_key) so genuinely-distinct
+        # cities that share a name (e.g. Barcelona ES vs VE) don't overwrite each other.
+        # Sole caller is the world half (_run_world_cached_half), which looks up the same key.
+        out[f'{city["city"]}|{city["country"]}'] = {
             "max_c": (daily.get("temperature_2m_max") or [None])[0],
             "min_c": (daily.get("temperature_2m_min") or [None])[0],
             "tw_max_c": (daily.get("wet_bulb_temperature_2m_max") or [None])[0],

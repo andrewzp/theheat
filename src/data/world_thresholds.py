@@ -128,7 +128,9 @@ def evaluate_city(city, country, forecast, cached, *, lat, lon, today):
     today_min = forecast.get("min_c")
     tw_max = forecast.get("tw_max_c")
     iso = today.isoformat()
-    key = city.replace(" ", "_")
+    # Include country so genuinely-distinct same-name cities (e.g. Barcelona ES vs VE)
+    # get distinct event_ids and dedup doesn't suppress the second city's real record.
+    key = f"{city}_{country}".replace(" ", "_")
     mm = f"{today.month:02d}"
     yrs = cached.years_of_data
 
