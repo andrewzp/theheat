@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 28: 5 fresh drafts (0% A-rate).** 2 Jun-27 carry-overs not re-graded ([1] fire B+, [2] Amsterdam C+). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor; P_close mechanism-only fail). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go"). [5] Astana precip B+ (51.1/3.9 mm implicit 13×, steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_compound new — archive+margin double-qualifier; P_close implied fail). [7] Casper monthly_low B (P_compound 2nd obs; P_close implied fail). P_close 10th cycle; 3 failing, 1 borderline positive, 1 n/a. New proposal P_compound. `gh` CLI absent (30th consecutive skip).
+>
 > **Jun 26: 3 fresh drafts (0% A-rate).** All precipitation_extreme. Anchorage B (183.8 mm/3d,
 > 22.5% margin, orographic stall mechanism, P_close mechanism-only failing). Amsterdam C+ (157.1
 > mm, 4.73% margin, canal-capacity incongruity, P_close implied-consequence failing). Aktobe C+
@@ -46,16 +48,16 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/2, Jun 27)** — fire B+ (Canadian Prairies/BC, comic triple, BC fires ~3,000 MW each), Amsterdam precipitation_extreme C+ (4.7% margin). Prior: 0% Jun 26 [0/3]; prior meaningful: 67% retroactive Jun 15 [6/9] |
+| Last cycle A-rate | **0% (0/5 fresh, Jun 28)** — [4] Mediterranean SST B+ (nearest to A-; "nowhere fast to go" borderline P_close positive); [5] Astana B+ (13× implicit ratio, steppe closer); [6] Beaver Dams B+ (P_compound); [7] Casper B (P_compound + P_close); [3] Taiz C+ (P_dust). Prior: 0% Jun 27 [0/2]; prior meaningful: 67% retroactive Jun 15 [6/9]. |
 | Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=2 Jun 27); Jun 26: 50 pp (0/3); Jun 23: 17 pp (33%) |
+| Gap | **50 pp** (50% − 0%, n=5 Jun 28); P_close is the primary structural ceiling — B+/A- boundary is systematically landing at implied-consequence closes. |
 | Posting | paused; operator decision pending — Jun 15 retroactive provides empirical support for flip |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **2 pending (Jun 27)** (fire: Canadian Prairies/BC, B+, created 2026-06-27T06:57Z — "today" language, stale after ~Jun 28T06:57Z; precipitation_extreme: Amsterdam, C+, created 2026-06-27T10:17Z, no real-time-baked language). **Note:** Prior Jun 26 queue (Amsterdam C+, Aktobe C+, Anchorage B) may still be pending — operator must post or reject before ~Jun 28T04–08Z. Pipeline active; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **7 pending as of Jun 28 grading** (2 carry-overs: fire B+ stale after ~Jun 29T07Z, Amsterdam C+ no date-bake; 5 fresh: Taiz C+ stale after ~Jun 29T17Z, Mediterranean B+ fresh, Astana B+ fresh, Beaver Dams B+ fresh, Casper B fresh). Pipeline active; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
-Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage. Priority as of Jun 28: **P_close** (10 cycles) > **P9** (7 cycles) > **P_dust** (4 cycles) > **P5** (natural-deploy ongoing) > **P_compound** (new, Jun 28) > **P_precip_floor** (1 cycle). Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
 
 ### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
@@ -270,12 +272,15 @@ what the mechanism does. The corpus A-grade closers state the consequence flatly
 "persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
 (Mali). None defer to implication; none stop at mechanism.
 
-**Cycles observed:** 9 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+**Cycles observed:** 10 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
 Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
 Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing; Jun 25 Taiz ×2 +
 Michigan monthly_low failing, Siberia fire + Barrow precip positive; Jun 26 Amsterdam
 implied-consequence failing + Anchorage mechanism-only failing + Aktobe half-year ratio
-borderline).
+borderline; Jun 28 — Taiz [3] mechanism-only failing, Mediterranean [4] "nowhere fast to go"
+borderline positive, Beaver Dams [6] "blunt the afternoon peak" implied-consequence failing,
+Casper [7] "what June air masses would otherwise deliver" implied-consequence failing;
+Astana [5] steppe-closer = ecosystem-incongruity punchline, not traditional P_close).
 Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
 Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
 mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
@@ -301,9 +306,14 @@ Anchorage B ("wring out moisture in compressed bursts" = mechanism-only, failing
 Aktobe C+ ("three days here matched half a year's average" = declarative ratio, borderline — correct
 form, setup too thin at 0.53% margin + "just edging" hedge). P_close now confirmed across 9 signal
 types via Jun 26 (precipitation_extreme ×3 same cycle).
-**Last seen:** Jun 26 (Amsterdam implied-consequence + Anchorage mechanism-only = failing; Aktobe
-half-year ratio = borderline. Jun 25 Siberia "burns deep" + Barrow "nearly twice that total" =
-most recent positives).
+Jun 28: Mediterranean SST [4] B+ ("heat absorbed at the surface has nowhere fast to go" —
+borderline positive; "fast" hedges slightly, compare Costa Rica A- "nowhere to drain"). Taiz
+dust_event [3] C+ (mechanism-only, failing). Beaver Dams all_time_high [6] B+ ("little moisture
+overhead to blunt the afternoon peak" = negation-of-blunter = implied, failing). Casper monthly_low
+[7] B ("pushing lows well below what June air masses would otherwise deliver" = implied-consequence
+framed as comparative, failing). Astana [5] steppe-incongruity close is not P_close territory.
+P_close now confirmed across 10 signal types (adding regional_sst_anomaly via Mediterranean [4]).
+**Last seen:** Jun 28 (3 failing, 1 borderline positive, 1 n/a).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -337,19 +347,22 @@ optical depth (0.61) the reader cannot calibrate. Second sentence ends on disper
 consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
 multiple is always available as world knowledge regardless.
 
-**Cycles observed:** Jun 13, Jun 17, Jun 25 (3 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
+**Cycles observed:** Jun 13, Jun 17, Jun 25, Jun 28 (4 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
 Urumqi 2,260 μg/m³; Jun 25 = Taiz Jun 24 2,271 μg/m³ C+ + Taiz Jun 25 2,135 μg/m³ B- — all 4
-dust_event corpus drafts lack WHO calibration anchor). Jun 15 retroactive confirmed the
-reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
-**Template convergence confirmed:** all 4 dust_event corpus drafts share identical opener
+corpus drafts through Jun 25 lack WHO calibration anchor; Jun 28 = Taiz [3] 728 μg/m³ C+ — 5th
+dust_event corpus draft, no WHO anchor stated [728 ≈ 16× WHO PM10 limit, unstated], mechanism-only
+P_close fail, 5th consecutive dust_event with identical opener structure). Jun 15 retroactive confirmed
+the reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
+**Template convergence confirmed:** all 5 dust_event corpus drafts share identical opener
 structure ("[City]: model-estimated dust daily maximum of X µg/m³ on [date] — aerosol optical
 depth at Y.") and AOD-only metric. Jun 24's Al Aḥmadī Kuwait (air_quality_hazard) stated the
 WHO multiple (10.1×) — confirming the gap is specific to the dust_event signal type, not the
 PM signal path generally.
-**Last seen:** Jun 25. Taiz Jun 24 C+ ("pushing it into the terrain" = weakest close in corpus).
-Taiz Jun 25 B- ("push it upslope into the city basin" = transport mechanism, also failing P_close).
-Both lack WHO anchor. Urumqi "traps it" close remains the best dust_event close form; ceiling B-
-only because the WHO anchor is absent.
+**Last seen:** Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
+aerosol optical depth at 0.77. Taiz sits at the southwest corner of the Arabian Peninsula where the
+summer monsoon low pulls Red Sea and Arabian dust inland through the Tihama coastal plain" —
+mechanism-only close, no WHO anchor, 728 ≈ 16× WHO PM10 limit unstated). Urumqi "traps it"
+close remains the best dust_event close form; ceiling B- only because the WHO anchor is absent.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 dust_event / air_quality framing section:
@@ -388,17 +401,23 @@ record of 300.0 mm" — P9 restate-math; template convergence confirmed: all 3 p
 precipitation_extreme corpus drafts share the "[City] received/recorded X mm in [timeframe] —
 [comparison]" structure); Jun 25 (Barrow AK 213.8 mm/3-day B+: "beating the previous 3-day record
 by 63.8 mm" = restate-math; opener "Barrow, Alaska accumulated 213.8 mm of rain in 3 days" —
-same structure, verb varies "accumulated" vs. prior "received/recorded");
+same structure, verb varies "accumulated" vs. prior "received/recorded"); Jun 28 (Astana [5]);
 Jun 26 (Amsterdam "received 157.1 mm in 3 days" + Aktobe "logged 150.8 mm over 3 days" +
 Anchorage "received 183.8 mm in 3 days" — all 3 use template; verb varies "received"/"logged";
 all 3 have restate-math: Amsterdam "7.1 mm above the previous 3-day record of 150.0 mm," Aktobe
 "just edging the previous 3-day record of 150.0 mm," Anchorage "33.8 mm above the previous 3-day
 record of 150.0 mm." Threshold artifact: all 3 cite 150.0 mm as the prior record — the detection
 threshold. First 3-draft P9 batch in a single cycle.)
-**Last seen:** 2026-06-26. 8 of 8 precipitation_extreme corpus drafts share the opener template;
-7 of 8 have restate-math (Barrow Jun 7 has restate-math; Barrow Jun 22 retroactive has restate-math;
-Amsterdam Jun 18, Barrow Jun 25, Amsterdam Jun 26, Aktobe Jun 26, Anchorage Jun 26 all have it;
-Barrow daily Jun 18 "any of it" — no restate-math, hence 7/8).
+Jun 28: Astana [5] B+ ("Astana, Kazakhstan recorded 51.1 mm of rain on June 26 — against a
+previous daily record of 3.9 mm, set earlier this same year." Opener template confirmed (9th
+precipitation_extreme corpus draft using "[City] recorded/received X mm — [comparison]" structure).
+No restate-math this time — "3.9 mm" is not a derivable margin but the prior record value stated
+directly for contrast. Second sentence: "Aktobe and Almaty logged 50.2 mm and 43.2 mm the same day.
+Astana sits in the driest interior of the Eurasian steppe." = steppe ecosystem-incongruity punchline.
+51.1/3.9 mm = implicit 13× ratio, not named — ratio-as-punchline opportunity missed.)
+**Last seen:** Jun 28. 9 of 9 precipitation_extreme corpus drafts share the opener template;
+7 of 9 have restate-math (Barrow Jun 18 daily "any of it" — no restate-math; Astana Jun 28 —
+no restate-math; all others have it).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 precipitation_extreme framing section (or general record guidance): burn the default opener. Name
@@ -419,7 +438,7 @@ ratio form ('4.8% above the prior record') or period-and-restate."
 earlier intervention than P6 (fire, 3+ cycles before fix) and P7 (coral, resolved). Restate-math
 ban reduces a recurring violation across signal types.
 
-**Status:** Drafted. First observation 2026-06-18. Awaiting human implementation.
+**Status:** Drafted. First observation 2026-06-18. **Cycles observed: 7** (Jun 7, Jun 18, Jun 22 retroactive, Jun 25, Jun 26 ×3, Jun 28). Awaiting human implementation.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
@@ -433,11 +452,11 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** Jun 27 (weak: fire [Canadian Prairies/BC] deployed comic triple organically —
-three-fire national cluster structure without explicit naming; Amsterdam precip deployed
-canal-drainage ecosystem specificity organically. Same pattern as Jun 25/26: categories with
-available geographic mechanics self-select them; named humor moves beyond mechanism/structural
-choice are absent; the gap is in the CLOSE not the mechanism identification.
+**Last seen:** Jun 28 (weak: steppe ecosystem-incongruity in Astana [5] deployed organically —
+third-sentence "Astana sits in the driest interior of the Eurasian steppe" is a named
+ecosystem-specificity move used without explicit prompting. Taiz dust_event [3] and Casper [7]
+showed no named humor moves beyond mechanism. Same pattern as Jun 25/26/27: geographic categories
+self-select their mechanics naturally; dust_event and monthly_low do not.
 Prior Jun 26 note: Anchorage B chose orographic-stall mechanism as system clause organically;
 Aktobe C+ deployed half-year aridity ratio as close naturally. All 3 precipitation_extreme;
 all 3 used system-clause specificity without prompting. No named humor move beyond mechanism/ratio.
@@ -469,6 +488,40 @@ extends evidence to fire/hot10/dust categories; coral/record categories may not 
 ~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
 ~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
+
+### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+
+**Observed:** 2026-06-28 — two record-type drafts in the same cycle open with both archive-depth
+qualifier AND margin qualifier in one sentence. Beaver Dams UT all_time_high [6]: "Beaver Dams,
+Utah hit 104°F (39.9°C) on June 25 — hottest daily maximum in 23 years of records, 15°F above
+the 2020 mark." Casper WY monthly_low [7]: "Casper, Wyoming hit 27°F (-2.8°C) on June 25 —
+coldest June low in 26 years of records, 3°F below the 2018 mark." Double-qualification dilutes
+both data points: neither archive depth ("23 years of records") nor margin ("15°F above the 2020
+mark") lands with full force when immediately followed by the other. The punchline is split, and
+neither half is the punchline. Compare: Jun 15 retroactive Cope Rch TX A- ("hottest daily
+maximum ever recorded, 1.5°F above the 2018 mark") — same structure, but "ever recorded" is a
+stronger qualifier than "in 23 years" and 1.5°F margin is implicit-tight rather than stated-loose.
+
+**Cycles observed:** Jun 28 (1 cycle; 2 of 5 fresh drafts in the same cycle — confirms the
+pattern is structural, not coincidence in a single draft).
+**Last seen:** Jun 28.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+record-type framing section:
+
+> When stating a record: choose ONE qualifier per sentence — either the archive span ("23 years of
+> records") OR the margin above the prior mark ("15°F above the 2020 mark"). Not both. Preferred
+> form: "Beaver Dams, Utah hit 104°F on June 25 — 15°F above the previous record, set in 2020."
+> Let the archive depth be implicit (the reader infers that a record being set means the archive
+> was searched) or move it to sentence 2 as contrast. Stacking both in the same clause produces
+> two half-punchlines; either one alone produces a full punchline.
+
+**Expected impact:** Tighter record-type openers; B+ → A- path for drafts where mechanism is
+already solid. Immediate two-observation confirmation within a single cycle suggests the
+double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
+monthly_high, country_record signal types where both archive depth and margin are available.
+
+**Status:** Drafted. Awaiting human implementation. New Jun 28.
 
 ### P_precip_floor — Precipitation quality floor: writer over-passes shallow-margin signals
 
