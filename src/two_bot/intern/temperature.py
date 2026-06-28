@@ -388,6 +388,41 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
     # standard deviations" citation read as a rounded-precision mismatch to the
     # strict BUNDLE_FACT fact-check, which kills the whole draft.
     zscore_1dp = round(ev.mean_zscore, 1)
+    # Recency: the spell may have ENDED within the detector's recency window (window_end
+    # before the latest complete ERA5 day). Surface ended_days_ago so the writer frames an
+    # ended spell in the PAST tense; when ended, forbid present/ongoing phrasings so the
+    # deterministic §F honesty gate kills "is running / currently / right now" framings.
+    ended_days_ago = 0
+    if ev.latest_complete_day and ev.window_end:
+        try:
+            ended_days_ago = max(0, (
+                date.fromisoformat(ev.latest_complete_day) - date.fromisoformat(ev.window_end)
+            ).days)
+        except ValueError:
+            ended_days_ago = 0
+    forbidden = [
+        "national mean", "national average", "area-weighted", "area weighted",
+        "country-wide average", "countrywide average", "nationwide average",
+        "country-wide mean",
+        f"{region}'s average", f"{region}'s temperature",
+        f"all of {region}", f"the whole of {region}",
+        f"entire {region}", f"{region} as a whole",
+    ]
+    if ended_days_ago > 0:
+        # Present/ongoing framings of an ENDED spell. Deterministic backstop; the
+        # fact-check §j2 recency rule (keyed on ended_days_ago > 0) is the catch-all for
+        # current-state verbs not enumerated here. All forms are unambiguously present
+        # tense, so an honest PAST-tense draft ("ran … through {window_end}") trips none.
+        forbidden += [
+            "is running", "are running", "currently", "right now", "as we speak",
+            "still running", "still sweltering",
+            "is baking", "are baking", "bakes",
+            "is roasting", "are roasting", "roasts",
+            "is scorching", "are scorching", "scorches",
+            "is sweltering", "are sweltering", "swelters",
+            "is gripping", "are gripping", "grips",
+            "is sizzling", "is simmering", "sizzles", "simmers",
+        ]
     return StoryBundle(
         signal_kind="regional_anomaly",
         where=f"{ev.cities_sampled} sampled cities in {region}",
@@ -412,6 +447,11 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
             # It survives in raw_signal_dump for the record; the only honest, citable
             # city count is cities_sampled, and all of them fed the mean.
             {"label": "sustained_days", "value": ev.sustained_days},
+            # Window + recency: when ended_days_ago > 0 the spell has ENDED (peaked then
+            # eased) — the writer must use past tense and cite the window, never "currently".
+            {"label": "window_start", "value": ev.window_start},
+            {"label": "window_end", "value": ev.window_end},
+            {"label": "ended_days_ago", "value": ended_days_ago},
             # ``region`` is retained ONLY to feed _audience_unit_facts; the writer
             # prompt forbids citing it as a bare aggregate.
             {"label": "region", "value": region},
@@ -425,23 +465,11 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
             "sustained_days": ev.sustained_days,
             "window_start": ev.window_start,
             "window_end": ev.window_end,
-            # Honest-form-safe dishonest phrasings (substring-matched by the §F gate).
-            "forbidden_claims": [
-                "national mean",
-                "national average",
-                "area-weighted",
-                "area weighted",
-                "country-wide average",
-                "countrywide average",
-                "nationwide average",
-                "country-wide mean",
-                f"{region}'s average",
-                f"{region}'s temperature",
-                f"all of {region}",
-                f"the whole of {region}",
-                f"entire {region}",
-                f"{region} as a whole",
-            ],
+            "latest_complete_day": ev.latest_complete_day,
+            "ended_days_ago": ended_days_ago,
+            # Honest-form-safe dishonest phrasings (substring-matched, case-insensitive, by
+            # the §F gate). When the spell has ENDED, present/ongoing framings are appended.
+            "forbidden_claims": forbidden,
         },
         raw_signal_dump=asdict(ev),
     )

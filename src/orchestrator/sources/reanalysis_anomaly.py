@@ -105,6 +105,13 @@ def run_reanalysis_anomaly(bot_state: BotState, current_run: dict | None) -> Non
                         ),
                         _fact("Mean z-score", f"{ev.mean_zscore:.1f}"),
                         _fact("Sustained", f"{ev.sustained_days} consecutive days"),
+                        _fact("Window", f"{ev.window_start} to {ev.window_end}"),
+                        _fact(
+                            "Recency",
+                            "ongoing as of latest data"
+                            if ev.window_end == ev.latest_complete_day
+                            else f"ENDED — last qualifying day {ev.window_end}, latest data {ev.latest_complete_day} (write past tense)",
+                        ),
                         _fact(
                             "Signal type",
                             "Point index over N sampled cities; NOT an area-weighted national mean",

@@ -224,25 +224,53 @@ class TestDetectRegionalAnomaly:
         assert ev.window_end == "2026-06-05"  # last COMPLETE day, not 06-07
         assert ev.sustained_days == 3
 
-    def test_only_counts_run_ending_at_most_recent_complete_day(self) -> None:
-        # A qualifying spell that ENDED days ago (anomaly since dropped) must NOT fire —
-        # the signal is "ongoing as of the most-recent complete day".
+    def test_fires_on_spell_that_ended_within_recency_window(self) -> None:
+        # A sustained spell that ended within RECENCY_DAYS (2) of the most-recent complete
+        # day STILL fires (the France/UK case: a week of +13C that eased yesterday).
         pts = [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)]
         region = _region(pts)
-        clim = _clim(
-            region,
-            mmdds=["06-01", "06-02", "06-03", "06-04", "06-05"],
-            mean_c=20.0,
-            std_c=2.0,
-        )
+        clim = _clim(region, mmdds=["06-01", "06-02", "06-03", "06-04", "06-05"], mean_c=20.0, std_c=2.0)
         rows = [
-            ("2026-06-01", 27.0),  # hot
+            ("2026-06-01", 27.0),  # hot (+7)
             ("2026-06-02", 27.0),  # hot
-            ("2026-06-03", 27.0),  # hot
-            ("2026-06-04", 21.0),  # cooled off (+1)
-            ("2026-06-05", 21.0),  # still cool — most-recent complete day does NOT qualify
+            ("2026-06-03", 27.0),  # hot — spell ends here
+            ("2026-06-04", 21.0),  # eased (+1)
+            ("2026-06-05", 21.0),  # eased — latest complete day; spell ended 2 days ago
+        ]
+        ev = detect_regional_anomaly(region, clim, _live(pts, rows))
+        assert ev is not None
+        assert ev.window_start == "2026-06-01"
+        assert ev.window_end == "2026-06-03"   # the spell's last day, not the latest day
+        assert ev.latest_complete_day == "2026-06-05"  # spell ended 2 days before latest
+        assert ev.sustained_days == 3
+
+    def test_does_not_fire_on_spell_older_than_recency_window(self) -> None:
+        # A spell that ended 3 days before the latest complete day (> RECENCY_DAYS) is stale
+        # news and must NOT fire.
+        pts = [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)]
+        region = _region(pts)
+        clim = _clim(region, mmdds=["06-01", "06-02", "06-03", "06-04", "06-05", "06-06"], mean_c=20.0, std_c=2.0)
+        rows = [
+            ("2026-06-01", 27.0), ("2026-06-02", 27.0), ("2026-06-03", 27.0),  # spell ends 06-03
+            ("2026-06-04", 21.0), ("2026-06-05", 21.0), ("2026-06-06", 21.0),  # eased; latest 06-06
         ]
         assert detect_regional_anomaly(region, clim, _live(pts, rows)) is None
+
+    def test_recent_isolated_spike_does_not_mask_sustained_spell(self) -> None:
+        # An isolated 1-day qualifying spike after the real spell eased must not anchor the
+        # detection and drop the genuine sustained run; the sustained spell fires.
+        pts = [(0.0, 0.0), (0.0, 1.0), (0.0, 2.0)]
+        region = _region(pts)
+        clim = _clim(region, mmdds=["06-01", "06-02", "06-03", "06-04", "06-05"], mean_c=20.0, std_c=2.0)
+        rows = [
+            ("2026-06-01", 27.0), ("2026-06-02", 27.0), ("2026-06-03", 27.0),  # sustained spell
+            ("2026-06-04", 21.0),  # eased (breaks the run)
+            ("2026-06-05", 27.0),  # isolated 1-day spike (latest complete day)
+        ]
+        ev = detect_regional_anomaly(region, clim, _live(pts, rows))
+        assert ev is not None
+        assert ev.window_start == "2026-06-01" and ev.window_end == "2026-06-03"
+        assert ev.sustained_days == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -355,6 +383,53 @@ class TestBuildRegionalAnomalyBundle:
         fc = build_regional_anomaly_bundle(_sample_event()).historical_context["forbidden_claims"]
         dishonest = "France's national mean ran 7C above normal"
         assert any(x.lower() in dishonest.lower() for x in fc)
+
+    def test_ended_spell_marks_recency_and_forbids_present_tense(self) -> None:
+        # A spell that ended within the recency window (window_end before the latest
+        # complete day) must surface ended_days_ago AND forbid present/ongoing framings,
+        # so the writer cannot say "France is running +X" for a spell that already eased.
+        from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        ev = RegionalAnomalyEvent(
+            region="France", region_slug="France", cities_sampled=6,
+            mean_anomaly_c=11.5, mean_zscore=2.8, fraction_exceeding=0.9,
+            sustained_days=8, window_start="2026-06-20", window_end="2026-06-27",
+            event_id="reganom_France_2026-06-27", latest_complete_day="2026-06-29",
+        )
+        b = build_regional_anomaly_bundle(ev)
+        facts = {f["label"]: f["value"] for f in b.current_facts}
+        assert facts["ended_days_ago"] == 2
+        assert facts["window_end"] == "2026-06-27"
+        fc = [x.lower() for x in b.historical_context["forbidden_claims"]]
+        assert {"is running", "currently", "right now", "bakes", "is baking"} <= set(fc)
+        assert b.historical_context["ended_days_ago"] == 2
+        # An honest PAST-tense draft trips none of the forbidden phrasings.
+        honest = "6 sampled cities in France ran +11.5C above the daily normal for 8 days through June 27"
+        assert not any(x in honest.lower() for x in fc)
+        # Present-tense drafts for the ended spell ARE killed (deterministic backstop;
+        # the fact-check §j2 recency rule catches verbs beyond this list).
+        for dishonest in (
+            "6 sampled cities in France are currently running +11.5C above normal",
+            "6 sampled cities in France bakes +11.5C above the daily normal",
+        ):
+            assert any(x in dishonest.lower() for x in fc)
+
+    def test_ongoing_spell_has_zero_ended_days_and_no_present_tense_forbidden(self) -> None:
+        from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        ev = RegionalAnomalyEvent(
+            region="France", region_slug="France", cities_sampled=6,
+            mean_anomaly_c=11.5, mean_zscore=2.8, fraction_exceeding=0.9,
+            sustained_days=8, window_start="2026-06-20", window_end="2026-06-27",
+            event_id="reganom_France_2026-06-27", latest_complete_day="2026-06-27",  # ongoing
+        )
+        b = build_regional_anomaly_bundle(ev)
+        facts = {f["label"]: f["value"] for f in b.current_facts}
+        assert facts["ended_days_ago"] == 0
+        fc = [x.lower() for x in b.historical_context["forbidden_claims"]]
+        assert "is running" not in fc and "currently" not in fc  # present tense allowed when ongoing
 
 
 class TestHonestyGateLayer0:

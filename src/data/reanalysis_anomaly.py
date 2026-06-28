@@ -55,6 +55,11 @@ MIN_DAYS = 3
 MIN_ZSCORE = 2.0
 MIN_FRACTION = 0.5
 MIN_POINTS = 3
+# A sustained spell that ENDED within this many days of the most-recent complete day
+# still fires (not only one ongoing on the latest day) — so a major heatwave that just
+# eased (e.g. France/UK peaking for a week then dropping yesterday) is still drafted.
+# The magnitude bar (+6C / >=2sigma / >=50% support) is unchanged; this only widens recency.
+RECENCY_DAYS = 2
 DATE_RANGE_DAYS = 12  # covers min_days + ~5-day ERA5 lag + margin
 _STD_FLOOR = 0.1  # guards z-score against a zero/near-zero per-day sigma
 
@@ -221,9 +226,10 @@ class RegionalAnomalyEvent:
     fraction_exceeding: float  # window-wide fraction of point-days exceeding +6C
     sustained_days: int  # length of the qualifying consecutive run
     window_start: str  # ISO date of the run's first day
-    window_end: str  # ISO date of the run's last *complete* day (the event date)
+    window_end: str  # ISO date of the run's last qualifying day (the event date)
     event_id: str  # reganom_<region_slug>_<window_end>
     signal_date: date | None = None
+    latest_complete_day: str = ""  # most-recent complete ERA5 day this run; ended_days_ago = it - window_end
 
 
 # --------------------------------------------------------------------------- #
@@ -336,10 +342,13 @@ def detect_regional_anomaly(
     min_zscore: float = MIN_ZSCORE,
     min_fraction: float = MIN_FRACTION,
     min_points: int = MIN_POINTS,
+    recency_days: int = RECENCY_DAYS,
 ) -> RegionalAnomalyEvent | None:
     """Fire when a region's sampled points sustain a +6C / >=2sigma / >=50%-support
-    anomaly for >= min_days consecutive complete days ending at the most-recent
-    complete day. Returns None otherwise (and on any defensive cache miss)."""
+    anomaly for >= min_days consecutive complete days, where the spell's last day is
+    within ``recency_days`` of the most-recent complete day (so a just-ended heatwave
+    still fires, not only one ongoing on the latest day). Returns None otherwise (and on
+    any defensive cache miss)."""
     region_clim = climatology.get(region.slug)
     if not region_clim:
         return None
@@ -382,24 +391,42 @@ def detect_regional_anomaly(
         return qualifies, mean_anom, mean_z, frac
 
     complete_dates = sorted(per_date)  # ascending ISO == chronological
-    # Walk backward from the most-recent complete day, collecting the trailing
-    # run of calendar-consecutive qualifying days (the "ongoing as of now" spell).
-    run: list[str] = []
-    prev: date | None = None
-    for date_iso in reversed(complete_dates):
-        qualifies, *_ = _day_stats(per_date[date_iso])
-        if not qualifies:
-            break
-        d = date.fromisoformat(date_iso)
-        if prev is not None and (prev - d).days != 1:
-            break  # calendar gap -> the trailing run ends here
-        run.append(date_iso)
-        prev = d
+    if not complete_dates:
+        return None
+    latest = date.fromisoformat(complete_dates[-1])
 
-    if len(run) < min_days:
+    # Build every maximal run of calendar-consecutive qualifying days.
+    runs: list[list[str]] = []
+    cur: list[str] = []
+    prev: date | None = None
+    for date_iso in complete_dates:
+        d = date.fromisoformat(date_iso)
+        qualifies = _day_stats(per_date[date_iso])[0]
+        if qualifies and cur and prev is not None and (d - prev).days == 1:
+            cur.append(date_iso)            # extend the current consecutive run
+        elif qualifies:
+            if cur:
+                runs.append(cur)            # a gap (or first qualifying day) starts a new run
+            cur = [date_iso]
+        else:
+            if cur:
+                runs.append(cur)            # a non-qualifying day breaks the run
+            cur = []
+        prev = d
+    if cur:
+        runs.append(cur)
+
+    # Eligible spells: sustained (>= min_days) AND ended within ``recency_days`` of the
+    # most-recent complete day. Fire on the MOST-RECENT eligible spell (so an isolated
+    # recent spike can't mask a genuine sustained spell that just eased).
+    eligible = [
+        r for r in runs
+        if len(r) >= min_days and (latest - date.fromisoformat(r[-1])).days <= recency_days
+    ]
+    if not eligible:
         return None
 
-    run_dates = sorted(run)  # chronological
+    run_dates = max(eligible, key=lambda r: r[-1])  # already chronological (ascending)
     window_cells = [cell for d in run_dates for cell in per_date[d]]
     window_mean_anom = mean(a for a, _ in window_cells)
     window_mean_z = mean(z for _, z in window_cells)
@@ -428,4 +455,5 @@ def detect_regional_anomaly(
         window_end=window_end,
         event_id=f"reganom_{region.slug}_{window_end}",
         signal_date=date.fromisoformat(window_end),
+        latest_complete_day=complete_dates[-1],
     )
