@@ -50,69 +50,73 @@ def _fetch_city_archive(city: dict) -> dict | None:
 def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     """Cached-threshold world half, mirroring the GHCN/US model.
 
-    Two passes under one shared ``OpenMeteoBudget`` (paced under Open-Meteo's
-    600/min weight limit, with a reserve held back for the Hot 10 leaderboard):
+    Three phases under one shared ``OpenMeteoBudget`` (paced under Open-Meteo's
+    600/min weight limit, with a reserve held back for the Hot 10 leaderboard),
+    over a snapshot of the PRE-warm cache:
 
-    1. **Warm path** — refresh the ~``WORLD_WARM_BUDGET`` stalest/missing cities
-       (urgent-first) by pulling each one's 30-yr archive and recomputing its
-       thresholds into the gist-backed cache. Bounded so a cold cache warms over
-       ~10 days rather than 429-ing on a single run.
-    2. **Hot path** — for every cached city, a cheap batched forecast compare
-       against the cached thresholds; no archive calls.
+    1. **EVAL** (forecast endpoint, weight-cheap) — for every already-cached city,
+       fetch a batched forecast and collect ``(city, forecast)`` only. No cache
+       mutation, no signal evaluation. Gated on ``not eval_saturated`` ONLY.
+    2. **WARM** (archive endpoint, request-count-limited) — refresh the
+       ~``WORLD_WARM_BUDGET`` stalest/missing cities by pulling each 30-yr archive
+       and recomputing thresholds into the cache. Gated on ``not warm_saturated``
+       ONLY. Decoupling the two flags is what stops archive saturation from
+       starving forecast evaluation (the original world-half bug).
+    3. **CONSOLIDATE** (no network) — re-evaluate every pending city against the
+       FRESHEST thresholds (warm-fresh if warmed this run, else the pre-existing
+       cached entry), finalize ``om_bundles``/``all_readings``, and stamp
+       provisional records via ``apply_provisional_preserving_as_of`` so a fresh
+       archive can refute a stale-cache record before it is emitted or stamped.
 
-    Any Open-Meteo 429 raises ``OpenMeteoSaturated``, which flips ``saturated``
-    and stops the run with degraded status — silent rate-limit starvation (the
-    original world-half bug) is structurally impossible. Populates ``metrics_out``
-    (incl. ``cached_count``/``coverage_ratio``/``warm_failures``/``saturated`` and
-    a classified ``status``) and returns ``(om_bundles, om_country)``.
+    A previously-missing city is warmed but not evaluated until the next run
+    (bounded, intentional 1-run lag); a previously-cached city warmed this run is
+    re-evaluated against its fresh archive in CONSOLIDATE (no lag). Populates
+    ``metrics_out`` (incl. ``cached_count``/``coverage_ratio``/``warm_failures``/
+    ``eval_saturated``/``warm_saturated``/``saturated`` and a classified
+    ``status``) and returns ``(om_bundles, om_country)``.
     """
     today = date.today()
     iso = today.isoformat()
     cache = world_cache.read_cache()
-    prev_cached = int((cache.get("_meta") or {}).get("cached_count", 0) or 0)
+    # True pre-warm entry count, on the SAME basis as the post-run cached_count below
+    # (non-_meta keys). Do NOT trust _meta.cached_count: write_cache merges a fresh
+    # remote read, so a prior run's _meta can lag the persisted entry set and mis-key
+    # the steady-state-vs-bootstrap decision in classify_world_status.
+    prev_cached = len([k for k in cache if k != "_meta"])
     budget = OpenMeteoBudget(
         per_minute=600, per_hour=5000, per_day=10000,
         reserve=WORLD_LEADERBOARD_RESERVE, clock=time.monotonic, sleep=time.sleep,
     )
-    saturated = False
+    eval_saturated = False
+    warm_saturated = False
     warm_attempted = 0
     warm_failures = 0
+    forecast_attempted = 0
+    forecast_failures = 0
 
+    # Snapshot eval targets + the stale set off the PRE-mutation cache. ``cached_cities``
+    # is stable because EVAL never adds cache entries (only WARM does); ``stale`` must be
+    # selected BEFORE the provisional stamp in CONSOLIDATE, which sets as_of=today and
+    # would otherwise hide a stale city from select_stale_cities.
+    cached_cities = [c for c in world_cities if c.get("city") in cache]
     stale = world_cache.select_stale_cities(
         cache, world_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=WORLD_WARM_BUDGET,
         today=iso, urgent_order=open_meteo.URGENT_WORLD_HEAT_CITIES,
     )
-    for c in stale:
-        try:
-            budget.wait_until_can_spend(43)
-        except OpenMeteoSaturated:
-            saturated = True
-            break
-        warm_attempted += 1
-        try:
-            archive = _fetch_city_archive(c)
-        except OpenMeteoSaturated:
-            saturated = True
-            break
-        budget.spend(43)
-        if not archive or not archive.get("time"):
-            warm_failures += 1
-            continue
-        cache[c["city"]] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
 
-    cached_cities = [c for c in world_cities if c.get("city") in cache]
-    all_readings = []
-    om_bundles = []
-    forecast_attempted = 0
-    forecast_failures = 0
+    # PHASE 1 — EVAL (forecast endpoint): fetch + collect ONLY. No cache mutation and no
+    # signal evaluation here; records/anomalies/abs-extreme are detected in CONSOLIDATE
+    # against post-warm thresholds. Gated on ``not eval_saturated`` ONLY, so archive
+    # saturation in WARM can never starve forecast evaluation (the original defect).
+    pending: list[tuple[dict, dict]] = []
     i = 0
-    while i < len(cached_cities) and not saturated:
+    while i < len(cached_cities) and not eval_saturated:
         size = budget.forecast_batch_size(len(cached_cities) - i)
         if size <= 0:
             try:
                 budget.wait_until_can_spend(1)
             except OpenMeteoSaturated:
-                saturated = True
+                eval_saturated = True
                 break
             continue
         batch = cached_cities[i:i + size]
@@ -120,7 +124,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
             budget.wait_until_can_spend(len(batch))
             forecasts = open_meteo.fetch_forecasts_batch(batch)
         except OpenMeteoSaturated:
-            saturated = True
+            eval_saturated = True
             break
         budget.spend(len(batch))
         for c in batch:
@@ -129,26 +133,68 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
             if not fc or (fc.get("max_c") is None and fc.get("min_c") is None):
                 forecast_failures += 1
                 continue
-            cached_t = CityThresholds.from_dict(cache[c["city"]])
-            bundle = evaluate_city(
-                c["city"], c["country"], fc, cached_t,
-                lat=float(c["lat"]), lon=float(c["lon"]), today=today,
-            )
-            abs_ev = open_meteo.detect_absolute_extreme(
-                float(c["lat"]), float(c["lon"]), fc.get("max_c"), fc.get("min_c"),
-                c["city"], c["country"],
-            )
-            if abs_ev is not None:
-                bundle.absolute_extreme = abs_ev
-            world_cache.apply_provisional(cache, bundle, today=iso)
-            all_readings.append(bundle)
-            if any([
-                bundle.all_time_high, bundle.all_time_low, bundle.monthly_high,
-                bundle.monthly_low, bundle.anomaly_hot, bundle.anomaly_cold,
-                bundle.absolute_extreme, bundle.wet_bulb_extreme,
-            ]):
-                om_bundles.append(bundle)
+            pending.append((c, fc))    # forecast carried into CONSOLIDATE (single carrier)
         i += size
+
+    # PHASE 2 — WARM (archive endpoint): refresh climatology for the stale/missing set.
+    # Gated on ``not warm_saturated`` ONLY (the decouple). ``warmed_now`` records which
+    # cities got fresh archive thresholds this run so CONSOLIDATE evaluates them fresh.
+    warmed_now: set[str] = set()
+    for c in stale:
+        try:
+            budget.wait_until_can_spend(43)
+        except OpenMeteoSaturated:
+            warm_saturated = True
+            break
+        warm_attempted += 1
+        try:
+            archive = _fetch_city_archive(c)
+        except OpenMeteoSaturated:
+            warm_saturated = True
+            break
+        budget.spend(43)
+        if not archive or not archive.get("time"):
+            warm_failures += 1
+            continue
+        cache[c["city"]] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
+        warmed_now.add(c["city"])
+
+    # PHASE 3 — CONSOLIDATE (no network): evaluate every pending city against the FRESHEST
+    # available thresholds (warm-fresh if warmed this run, else the pre-existing cached
+    # entry), finalize om_bundles/all_readings, and stamp provisional records with
+    # freshness honesty. Finalizing after WARM lets a fresh archive refute a stale-cache
+    # record before it is ever emitted or stamped.
+    all_readings = []
+    om_bundles = []
+    for c, fc in pending:
+        name = c["city"]
+        cur = cache.get(name)
+        if cur is None:                # defensive; eval-snapshot cities are always cached
+            continue
+        cached_t = CityThresholds.from_dict(cur)
+        bundle = evaluate_city(
+            name, c["country"], fc, cached_t,
+            lat=float(c["lat"]), lon=float(c["lon"]), today=today,
+        )
+        abs_ev = open_meteo.detect_absolute_extreme(
+            float(c["lat"]), float(c["lon"]), fc.get("max_c"), fc.get("min_c"),
+            name, c["country"],
+        )
+        if abs_ev is not None:
+            bundle.absolute_extreme = abs_ev
+        all_readings.append(bundle)    # ALWAYS append: country aggregation needs every reading
+        if any([
+            bundle.all_time_high, bundle.all_time_low, bundle.monthly_high,
+            bundle.monthly_low, bundle.anomaly_hot, bundle.anomaly_cold,
+            bundle.absolute_extreme, bundle.wet_bulb_extreme,
+        ]):
+            om_bundles.append(bundle)
+        if any([bundle.all_time_high, bundle.all_time_low,
+                bundle.monthly_high, bundle.monthly_low]):
+            world_cache.apply_provisional_preserving_as_of(
+                cache, bundle, today=iso, advance_as_of=(name in warmed_now),
+                ttl_days=WORLD_CACHE_TTL_DAYS,
+            )
 
     eligibility: dict[str, int] = {}
     for c in world_cities:
@@ -169,7 +215,10 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         "world_total": len(world_cities), "cached_count": cached_count,
         "forecast_attempted": forecast_attempted, "forecast_failures": forecast_failures,
         "warm_attempted": warm_attempted, "warm_failures": warm_failures,
-        "coverage_ratio": coverage_ratio, "saturated": saturated,
+        "coverage_ratio": coverage_ratio,
+        "eval_saturated": eval_saturated,
+        "warm_saturated": warm_saturated,
+        "saturated": eval_saturated or warm_saturated,   # backward-compatible OR
     })
     metrics_out["status"] = world_cache.classify_world_status(metrics_out, prev_cached_count=prev_cached)
     return om_bundles, om_country
@@ -958,7 +1007,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"world[cached:{m.get('cached_count', 0)}/{m.get('world_total', 0)} "
                 f"cov:{m.get('coverage_ratio', 0)} fc_fail:{m.get('forecast_failures', 0)} "
                 f"warm:{m.get('warm_attempted', 0)}/{m.get('warm_failures', 0)}f "
-                f"sat:{m.get('saturated', False)}] | {signal_breakdown}"
+                f"esat:{m.get('eval_saturated', False)} sat:{m.get('saturated', False)}] | {signal_breakdown}"
             )
             source_status = m.get("status", "success")
             details = {

@@ -109,6 +109,27 @@ def apply_provisional(cache: dict, bundle, *, today: str) -> None:
     cache[city] = t.to_dict()
 
 
+def apply_provisional_preserving_as_of(cache, bundle, *, today, advance_as_of, ttl_days) -> None:
+    """Stamp today's provisional record fields, with freshness honesty on ``as_of``.
+
+    Advance ``as_of`` to today when the city was warmed this run (``advance_as_of``) OR
+    its prior entry is non-stale; otherwise (stale AND not warmed) keep the prior
+    ``as_of`` so a record fired against still-stale climatology stays eligible for
+    re-warming next run. ``advance_as_of`` is the caller's "warmed this run" signal;
+    staleness is recomputed here so a fresh-cached, non-warmed record keeps
+    ``as_of=today`` (the dominant production path). A stale, not-warmed entry whose
+    prior ``as_of`` is falsy (missing/empty) is kept stale (``as_of=""``), NOT advanced
+    to today — advancing would mark unconfirmed climatology fresh (false freshness).
+    """
+    city = bundle.city
+    prior = cache.get(city)
+    prior_as_of = (prior or {}).get("as_of")
+    prior_stale = _is_stale(prior, ttl_days=ttl_days, today=today)
+    apply_provisional(cache, bundle, today=today)        # writes record fields + as_of=today
+    if not advance_as_of and prior_stale:
+        cache[city]["as_of"] = prior_as_of or ""         # keep stale + not-warmed warm-eligible
+
+
 WORLD_COVERAGE_FLOOR = 0.85
 WORLD_FORECAST_FAIL_FLOOR = 0.25
 WORLD_WARM_FAILURE_FLOOR = 0.5
@@ -122,22 +143,39 @@ def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
     wa = int(metrics.get("warm_attempted", 0) or 0)
     wf = int(metrics.get("warm_failures", 0) or 0)
 
-    if bool(metrics.get("saturated", False)):
-        return "degraded"
+    # Split saturation flags. Legacy single-flag callers/tests (only ``saturated``) map
+    # to ``eval_sat`` so the existing "saturated -> degraded" contract is preserved.
+    eval_sat = bool(metrics.get("eval_saturated", metrics.get("saturated", False)))
+    warm_sat = bool(metrics.get("warm_saturated", False))
+
+    if eval_sat:
+        return "degraded"                          # records could not be evaluated -> hard fail
     if wa > 0 and wf / wa > WORLD_WARM_FAILURE_FLOOR:
+        return "degraded"                          # archive systematically failing (unconditional)
+
+    # Steady-state is keyed to PRE-RUN fullness, not post-run ``cached``: under eval-first
+    # the cache that eval saw is the pre-warm one, so a cold 0->total first-fill (post-run
+    # cached==total but coverage_ratio==0.0) is bootstrap, not a steady-state coverage miss.
+    bootstrap = not (total > 0 and prev_cached_count >= total)
+    growing = cached > prev_cached_count
+
+    # Archive (warm) saturation is tolerated ONLY during healthy bootstrap growth; in
+    # steady state OR a stalled bootstrap it means climatology is going stale -> degraded.
+    if warm_sat and not (bootstrap and growing):
         return "degraded"
 
-    if total > 0 and cached >= total:
-        # steady-state: the cache is fully warmed
+    # Forecast-failure floor is unconditional (both phases): a real non-429 forecast-payload
+    # failure rate degrades even while warm is still growing the cache.
+    if fa > 0 and ff / fa > WORLD_FORECAST_FAIL_FLOOR:
+        return "degraded"
+
+    if not bootstrap:                              # steady state (cache full at run start)
         if float(metrics.get("coverage_ratio", 1.0)) < WORLD_COVERAGE_FLOOR:
-            return "degraded"
-        if fa > 0 and ff / fa > WORLD_FORECAST_FAIL_FLOOR:
             return "degraded"
         return "success"
 
-    # bootstrap: cache still warming. Degraded only if it has STALLED
-    # (warming was attempted but cached_count is not growing run-over-run).
-    if wa > 0 and cached <= prev_cached_count:
+    # bootstrap: degraded only if warming was attempted but the cache STALLED.
+    if wa > 0 and not growing:
         return "degraded"
     return "success"
 

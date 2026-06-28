@@ -45,3 +45,47 @@ def test_provisional_suppresses_all_time_and_monthly_re_fire():
     b2 = evaluate_city("Madrid", "Spain", fc, CityThresholds.from_dict(cache["Madrid"]), lat=40.4, lon=-3.7, today=_date(2026, 6, 27))
     assert b2.all_time_high is None and b2.monthly_high is None
     assert cache["Madrid"]["all_time_max"][0] == 45.5 and cache["Madrid"]["monthly_max"]["06"][0] == 45.5
+
+
+def test_apply_provisional_preserving_as_of_branches():
+    from src.orchestrator.world_cache import apply_provisional_preserving_as_of
+    today = "2026-06-27"
+    today_d = _date(2026, 6, 27)
+    stale = "2026-04-01"          # > 30 days before today -> stale
+    fc = {"max_c": 50.0, "min_c": 20.0, "tw_max_c": 10.0}
+
+    def base(as_of):
+        return CityThresholds(city="C", as_of=as_of, years_of_data=30,
+                              all_time_max=(40.0, 2000)).to_dict()
+
+    def bundle(entry):  # forecast 50.0 beats cached 40.0 -> all_time_high
+        return evaluate_city("C", "Spain", fc, CityThresholds.from_dict(entry),
+                             lat=40.0, lon=-3.0, today=today_d)
+
+    # (a) warmed -> as_of advances regardless of prior staleness
+    cache = {"C": base(stale)}
+    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+                                       advance_as_of=True, ttl_days=30)
+    assert cache["C"]["as_of"] == today and cache["C"]["all_time_max"] == [50.0, 2026]
+
+    # (b) not warmed + prior STALE -> as_of rolled back, record still stamped
+    cache = {"C": base(stale)}
+    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+                                       advance_as_of=False, ttl_days=30)
+    assert cache["C"]["as_of"] == stale and cache["C"]["all_time_max"] == [50.0, 2026]
+
+    # (c) not warmed + prior FRESH -> as_of advances (dominant production path)
+    cache = {"C": base(today)}
+    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+                                       advance_as_of=False, ttl_days=30)
+    assert cache["C"]["as_of"] == today and cache["C"]["all_time_max"] == [50.0, 2026]
+
+    # (d) not warmed + prior as_of falsy -> stays stale (as_of=""), NOT advanced to today.
+    # Advancing would mark unconfirmed climatology fresh (false freshness); keeping it
+    # stale leaves the city eligible for re-warming so the archive confirms the record.
+    entry = base(stale)
+    entry["as_of"] = ""
+    cache = {"C": entry}
+    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+                                       advance_as_of=False, ttl_days=30)
+    assert cache["C"]["as_of"] == "" and cache["C"]["all_time_max"] == [50.0, 2026]
