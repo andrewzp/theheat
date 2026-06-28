@@ -69,7 +69,9 @@ hand. State changes should flow through bot code and the normal merge/write path
 - The regional-heatwave signal (`reanalysis_anomaly`) is **active** since 2026-06-26
   (`THEHEAT_REGANOM_ENABLED=1`, `manual_only`): it fires when a curated region's
   sampled cities run far above their 1991–2020 daily ERA5 normal for 3+ days — the
-  heatwave class single-station records miss. See `PIPELINE.md` and the 2026-06-27 handoff.
+  heatwave class single-station records miss. Since [#347](https://github.com/andrewzp/theheat/pull/347)
+  (2026-06-28) it also fires on a *just-ended* spell (within 2 days of the latest ERA5
+  day), framed honestly in the past tense. See `PIPELINE.md` and the 2026-06-28 handoff.
 - Source redundancy is live for the major flaky feeds that have verified backup
   legs. Backup-served runs record `status="degraded"` plus
   `served via <leg>`, never green, so outages stay visible while drafts can still
