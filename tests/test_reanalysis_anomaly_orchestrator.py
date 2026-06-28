@@ -163,3 +163,28 @@ class TestRunReanalysisAnomaly:
         # France raised, but Sahel still enqueued and the run recorded success.
         assert ev.event_id in enq
         assert rec.get("status") == "success"
+
+    def test_ended_spell_fires_once_then_onset_guard_skips_repeat(self, monkeypatch) -> None:
+        # An ENDED spell (window_end before the latest complete day) fires once and sets the
+        # onset marker; on the NEXT run the same ended spell (same window_start, still inside
+        # the recency window) is skipped — a just-ended heatwave is not re-drafted every run.
+        monkeypatch.setenv("THEHEAT_REGANOM_ENABLED", "1")
+        monkeypatch.setattr(ra, "load_daily_climatology", lambda *a, **k: {})
+        monkeypatch.setattr(ra, "fetch_all_reganom_t2m", lambda *a, **k: {(13.51, 2.11): [("2026-06-08", 40.0)]})
+        ev = RegionalAnomalyEvent(
+            region="Sahel", region_slug="Sahel", cities_sampled=6, mean_anomaly_c=7.5,
+            mean_zscore=3.2, fraction_exceeding=0.83, sustained_days=3,
+            window_start="2026-06-05", window_end="2026-06-06",
+            event_id="reganom_Sahel_2026-06-06", latest_complete_day="2026-06-08",  # ended 2d ago
+        )
+        monkeypatch.setattr(ra, "detect_regional_anomaly", _detect_for("Sahel", ev))
+        monkeypatch.setattr(runner, "_record_source_run", lambda *a, **k: None)
+        enq: list[str] = []
+        monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda bs, **k: enq.append(k["event_id"]) or True)
+        st = _fresh_state()
+        runner.run_reanalysis_anomaly(st, None)   # run 1: ended spell fires
+        assert ev.event_id in enq
+        assert st["reganom_last_fired"]["Sahel"] == "2026-06-05"
+        enq.clear()
+        runner.run_reanalysis_anomaly(st, None)   # run 2: same ended spell -> onset guard skips
+        assert enq == []
