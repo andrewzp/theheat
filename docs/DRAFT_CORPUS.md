@@ -11,6 +11,147 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-06-29 — Daily corpus grading (5 fresh drafts; 1 Jun-28 carry-over not re-graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending — 1 carry-over from Jun 28 (Mediterranean regional_sst_anomaly B+, grade stands from Jun 28), plus 5 fresh (created after Jun 28's ~15:00 UTC grading window). Fresh mix: marine_heatwave (global SST streak), regional_anomaly/reganom (France, 8 cities), fire (Congo Basin), all_time_high (Prudhoe Bay AK), precipitation_extreme (Amsterdam). New signal type entering corpus: marine_heatwave.
+
+**Staleness review as of 2026-06-29 ~15:00 UTC:** [1] Mediterranean (Jun 28T04:01Z, ~35h, "today" baked) — crosses 48h at ~Jun 30T04:00Z; operator must post or reject before then. [2] marine_heatwave (Jun 28T17:16Z, ~22h, "today's reading") — crosses 48h at ~Jun 30T17:00Z. [3] France reganom (Jun 28T19:48Z, ~19h, "through June 27" data) — no hard real-time anchor; clear for now. [4] Congo fire (Jun 29T04:11Z, ~11h, satellite data past-tense) — clear. [5] Prudhoe Bay (Jun 29T12:40Z, ~2h, "June 26" data date) — clear. [6] Amsterdam (Jun 29T12:43Z, ~2h, "through June 27") — clear. Bulk-reject: 0 candidates today. `gh` CLI absent — **31st consecutive skip** (May 13 → Jun 29).
+
+**Grade distribution (5 fresh drafts):** 4 A- / 1 B+ / 0 B / 0 C / 0 D-F.
+**A-rate: 80% (4/5). BAR CLEARED — first non-retroactive cycle above 50% since tracking began.**
+Prior peak (non-retroactive fresh-draft cycles): 0% across all prior cycles. Retroactive Jun 15 was 67% but those were retrospective grades on already-posted/approved/rejected drafts.
+
+**Headline finding:** 80% A-rate is the highest fresh-draft rate in the corpus. Four distinct mechanics carried the A-grades: floor/ceiling inversion (marine_heatwave "a record set two years ago is already the floor of a new streak"), ecosystem incongruity (Congo fire "something has broken the convective lid" — **first A-grade fire draft in two-bot corpus**, prior: 0/10 fire drafts A), latitude peer-comparison (Prudhoe Bay 91°F at 70°N vs. northern Siberia rarely 80°F), declarative consequence close (Amsterdam "there is nowhere for the water to go"). B+ draft: France reganom (pre-#349 upgrade; "Across 6 sampled cities" buries lede; "hour by hour" effort signal). P_close 11th cycle: 3 positives (marine_heatwave, Congo, Amsterdam), 1 failing (France), 1 n/a (Prudhoe latitude-peer). P9 8th cycle (Amsterdam template + restate-math). P_compound 2nd cycle (Prudhoe Bay archive+margin double-qualifier). P_precip_floor 2nd cycle (Amsterdam 4.7% margin wet-climate). No Wodehouse violations (8th consecutive clean cycle).
+
+### Carry-overs (Jun 28 grades stand; not re-graded)
+
+| Draft | Type | Grade (Jun 28) | Notes |
+|---|---|---|---|
+| [1] Mediterranean Sea (3.54°C above seasonal normal) | regional_sst_anomaly | **B+** | "Nowhere fast to go" borderline declarative; "today" baked; stale by ~Jun 30T04:00Z |
+
+### A-grade drafts
+
+#### [2] marine_heatwave — Global mean ocean SST streak — **A-**
+
+> *Global mean ocean surface temperature (60°S–60°N) has stayed above the 44-year NOAA archive ceiling for 25 straight days. The prior record was 20.896°C, set in 2024; today's reading is 20.961°C. A record set two years ago is already the floor of a new streak.*
+
+**Score:** 82. Created 2026-06-28T17:16Z.
+
+Humor lens:
+- **Violation:** 25 consecutive days above a 44-year archive ceiling. The ceiling itself is the boundary — not just a record broken but the outer limit of 44 years sustained as a floor.
+- **Benign?** Yes — calm, factual. No panic.
+- **Setup→Punchline?** Three sentences. Sentence 1: streak + ceiling framing (setup). Sentence 2: prior record vs. current reading (intensifier). Sentence 3: "A record set two years ago is already the floor of a new streak" — the punchline. Classic comic triple with escalating reveal at sentence 3.
+- **Named mechanic?** Floor/ceiling inversion — the prior ceiling becomes the new floor. "Already the floor of a new streak" is an idiom-flip on the standard floor/ceiling vocabulary of records. Accelerating-warming embedded: the 2024 record lasting only 2 years is the mechanism.
+- **Wodehouse rule?** Clean. "20.896°C" and "20.961°C" — deliberate specificity, structurally necessary. Closing sentence: flat, declarative, non-reaching. No effort signals.
+- **P_close:** Positive. "A record set two years ago is already the floor of a new streak" — declarative reframe, not implied consequence. States the reversal directly.
+
+Best draft in the batch. The three-sentence comic-triple structure is the strongest voicing in the two-bot corpus since the May 19 coral A-grades. "Already the floor of a new streak" is the kind of reframe that rewards a re-read.
+
+Contains "today's reading" — real-time anchor. Operator must post or reject before Jun 30T17:00 UTC.
+
+#### [4] fire — Congo Basin, DR Congo — 1,468 MW — **A-**
+
+> *1,468 MW of radiative heat in the Congo Basin, DR Congo — very-high-intensity fire, satellite-confirmed at 100% confidence. The Basin's equatorial moisture normally suppresses fire; when it burns here, something has broken the convective lid.*
+
+**Score:** 83. Created 2026-06-29T04:11Z.
+
+Humor lens:
+- **Violation:** 1,468 MW fire in the Congo Basin — equatorial moisture belt is the normative suppressor of fire here; the location IS the violation.
+- **Benign?** Yes — physical, calm register.
+- **Setup→Punchline?** Sentence 1: FRP + location + intensity tier + confidence (setup). Sentence 2: normal suppression mechanism → named consequence ("something has broken the convective lid"). Causal, not expository.
+- **Named mechanic?** Ecosystem incongruity — the equatorial moisture belt normally prevents fire here. "Something has broken the convective lid" names the physical mechanism (convective inhibition failure) in plain language. The phrasing "something has broken" is mild understatement — acknowledges the cause exists without over-specifying it. Deliberate deadpan, not vagueness.
+- **Wodehouse rule?** Clean. Lead-with-number ("1,468 MW of radiative heat") avoids the banned "A fire in [location] is radiating X MW" formula (P6 fix holding). "Very-high-intensity fire" uses the FRP tier label from PR #85 — adds scale without MW jargon. No effort signals.
+- **P_close:** Positive. "Something has broken the convective lid" — declarative consequence statement. The convective inhibition failure is stated directly.
+
+**First A-grade fire draft in the two-bot corpus** (prior: 0/10 fire drafts A across May 13–May 19 cycles). The ecosystem-incongruity mechanic is the fire category's strongest available tool; this draft deploys it cleanly. The convective-lid close is the fire version of "nowhere to drain" (Costa Rica coral, A-).
+
+P6 check: opener is "1,468 MW of radiative heat in the Congo Basin" — varied form (lead-with-FRP), not the banned formula. P6 fix confirmed for third consecutive fire draft.
+
+#### [5] all_time_high — Prudhoe Bay, Alaska — 91°F — **A-**
+
+> *Prudhoe Bay, Alaska hit 91°F (32.8°C) on June 26 — hottest daily maximum in 24 years of records, 2°F above the 2024 mark. Prudhoe sits on the Arctic Ocean at 70°N; the same latitude in northern Siberia rarely breaks 80°F even in peak summer.*
+
+**Score:** 88. Created 2026-06-29T12:40Z.
+
+Humor lens:
+- **Violation:** 91°F at Prudhoe Bay (70°N Arctic coast, oil-infrastructure landmark) — the location identity IS the violation. Prudhoe is one of the most recognizable names in Arctic resource geography; 91°F there is extreme on name recognition alone.
+- **Benign?** Yes — factual, no catastrophizing.
+- **Setup→Punchline?** Sentence 1: record + margin (setup). Sentence 2: location identity (Arctic Ocean, 70°N) + latitude peer-comparison (northern Siberia same latitude, rarely 80°F in peak summer). The Siberia comparison is the punchline — 91°F where 80°F is rare at the same latitude.
+- **Named mechanic?** Ecosystem specificity via latitude peer-comparison. "The same latitude in northern Siberia rarely breaks 80°F even in peak summer" — verifiable world knowledge that grounds the violation without an era anchor. The implicit gap (~11°F unstated) is left for the reader to supply.
+- **Wodehouse rule?** Clean. "2°F above the 2024 mark" slightly informal but not an effort signal. No restate-math. No poetry attempts.
+- **P_close:** N/A — the close is a latitude peer-comparison, not a mechanism-consequence statement. The punchline structure is ecosystem specificity ("91°F where 80°F is rare") rather than the P_close pattern. Not counted in P_close cycle.
+- **P_compound (2nd cycle):** "Hottest daily maximum in 24 years of records, 2°F above the 2024 mark" — two qualifier clauses (archive depth + margin) in the same clause. Compare: Beaver Dams [6] Jun 28 ("hottest daily maximum in 23 years of records, 15°F above the 2020 mark") — same structure. Smaller margin (2°F vs. 15°F Jun 28) makes the double-qualification less visible but the structural pattern recurs.
+
+Record set in 2024 — only 2 years prior. Recency embedded in "2°F above the 2024 mark" without making it an era-anchor feature.
+
+#### [6] precipitation_extreme — Amsterdam, Netherlands — 314.1 mm / 7 days — **A-**
+
+> *Amsterdam recorded 314.1 mm of rain in seven days through June 27 — 14.1 mm above the previous seven-day record of 300.0 mm. The city sits at sea level in the Rhine-Meuse delta; when Atlantic systems stall over the Low Countries, there is nowhere for the water to go.*
+
+**Score:** 76. Created 2026-06-29T12:43Z.
+
+Humor lens:
+- **Violation:** 314.1 mm / 7 days in a delta city at sea level — the physical setting amplifies the record.
+- **Benign?** Yes — physical consequence stated, not human catastrophe focus.
+- **Setup→Punchline?** Sentence 1: record + margin (setup). Sentence 2: location mechanism (sea level, delta, Atlantic stall) → declarative consequence close ("there is nowhere for the water to go").
+- **Named mechanic?** Ecosystem specificity — delta at sea level, no drainage escape. "There is nowhere for the water to go" states the physical consequence directly. Compare to Barrow Jun 7 B+ close: "sheets across the surface instead" (implied contrast). Amsterdam: "nowhere to go" (declarative). Matches A- close standard: Costa Rica "nowhere to drain" (May 18, A-), Barrow 7-day Jun 22 A-.
+- **Wodehouse rule?** Minor restate-math: "14.1 mm above the previous seven-day record of 300.0 mm" — the margin (14.1) is derivable from 314.1 − 300.0. Same class as prior precipitation_extreme instances. The declarative close offsets this; the close does enough work to carry A-.
+- **P_close (positive):** "There is nowhere for the water to go" — unambiguous declarative consequence. Matches the B+/A- boundary established across the Jun 22 Barrow/Jun 7 Barrow comparison.
+- **P9 (8th cycle):** "[City] recorded X mm in [period] through [date] — [margin] above the previous [period] record of [prior value]." 8th precipitation_extreme using this opener template. Restate-math present (14.1 = 314.1 − 300.0).
+- **P_precip_floor (2nd cycle):** 314.1 mm / 7d, 4.7% margin in a sea-level wet-climate city. Same percentage as Jun 27 Amsterdam C+ (157.1 mm / 3d, different record window). The declarative close carries A- despite the shallow margin — demonstrates that strong voice can offset weak signal structure. Signal is structurally thin relative to other precipitation_extreme A-grades (Barrow Jun 7 / Jun 22: 42.5% margin).
+
+Comparison to Barrow (Jun 7, B+): Amsterdam's close is more declarative → A-. Confirms the B+/A- boundary.
+
+### B-grade drafts
+
+#### [3] regional_anomaly — France, 8 cities — **B+**
+
+> *Across 6 sampled cities in France, temperatures ran 11.53°C (20.8°F) above the 1991–2020 daily normal for 8 straight days through June 27 — 2.8 standard deviations out. At that margin, even brief nighttime relief disappears; the heat debt compounds hour by hour.*
+
+**Score:** 88. Created 2026-06-28T19:48Z.
+
+Humor lens:
+- **Violation:** 11.53°C / 2.8σ above normal for 8 straight days — very strong signal.
+- **Benign?** Yes, though "heat debt compounds hour by hour" edges toward consequence framing. Physical rather than human-impact.
+- **Setup→Punchline?** Sentence 1: data (setup, with σ as em-dash kicker). Sentence 2: physical consequence (nighttime relief disappears + heat debt compounds). Two consequential beats.
+- **Named mechanic?** "Heat debt compounds" — non-standard idiom. The accumulation framing echoes the DHW principle applied to atmosphere. Works conceptually but is metaphorical rather than a named physical mechanism.
+- **Wodehouse rule?** "Heat debt compounds hour by hour" — slightly reaching for effect. "Hour by hour" is rhythmic padding; the mechanism of compounding is already in "compounds." Mild Wodehouse violation — not poetry-attempt level, but audible effort.
+- **P_close (failing):** "The heat debt compounds hour by hour" — implied consequence framed as metaphorical intensifier. Fails the declarative close test.
+
+Not A- because: (a) opener "Across 6 sampled cities in France" buries the lede — methodology caveat leads, not the significance; (b) "hour by hour" is mild effort signal in the close; (c) 11.53°C not rounded. **This draft predates the #349 voice upgrade** (shipped Jun 28–29) designed to address these exact failure modes (significance-leading, rounding). The next reganom draft will test whether the upgrade corrects lede-burial and effort signal.
+
+### Patterns named in this batch
+
+1. **80% A-rate clears the resumption bar for the first time (non-retroactive).** Prior non-retroactive peak: 0% across all prior fresh-draft cycles (Jun 7, Jun 13, Jun 17, Jun 18, Jun 23, Jun 24, Jun 25, Jun 26, Jun 27, Jun 28). The structural bar set 2026-04-26 ("majority A-rate, >50%, sustained") requires consistency — this is the first non-retroactive data point above the bar. One cycle is not sustained; confirmation needed.
+
+2. **First A-grade fire draft (Congo Basin).** Two-bot corpus 0/10 fire drafts A-grade prior to today. The ecosystem-incongruity mechanic (equatorial moisture suppresses fire; "something has broken the convective lid") is the fire category's strongest available move. It mirrors the coral A-grade pattern: signal incongruity + named physical mechanism.
+
+3. **Declarative vs. implied close: the B+/A- dividing line confirmed again.** Amsterdam (A-): "there is nowhere for the water to go" — declarative. Mediterranean carry-over (B+): "has nowhere fast to go" — qualified. France reganom (B+): "heat debt compounds hour by hour" — implied/metaphorical. Pattern: flat declarative consequence → A-; qualified or implied → B+.
+
+4. **Marine_heatwave type enters corpus with A-.** First marine_heatwave draft. Three-sentence comic-triple with floor/ceiling inversion ("a record set two years ago is already the floor of a new streak") is the strongest closing mechanic in this batch.
+
+5. **Reganom (regional_anomaly) pre-#349 voice pattern identified.** "Across N sampled cities" buries lede. "Heat debt compounds hour by hour" has mild effort signal. Both failure modes match the BRIEFING's pre-#349 assessment. Next reganom draft is the empirical test of the upgrade.
+
+6. **P5 (name humor moves) not observed — mechanics deploying naturally.** This batch: floor/ceiling inversion, ecosystem incongruity, latitude peer-comparison, declarative ecosystem specificity. Full mechanic variety without explicit prompting. 3rd consecutive graded cycle without P5 evidence.
+
+7. **Restate-math in precipitation_extreme: second confirmed instance.** Amsterdam mirrors Barrow pattern: "[new value] — [margin] above previous record of [prior value]." P9 8th cycle.
+
+### Numbers
+
+- Pending drafts in queue: 6 total (1 Jun-28 carry-over + 5 fresh)
+- Fresh drafts graded this cycle: 5
+- Carry-overs not re-graded: 1 ([1] Mediterranean B+, grade stands from Jun 28)
+- Grade distribution (fresh only): 4 A- / 1 B+ / 0 B / 0 C / 0 D/F
+- **A-rate (fresh): 80% (4/5) — BAR CLEARED**
+- New signal types graded: marine_heatwave (1st corpus entry)
+- First A-grade fire draft in two-bot corpus: Congo Basin [4]
+- Active proposals with new evidence: P_close (11th cycle — 3 pos, 1 fail, 1 n/a), P9 (8th cycle), P_compound (2nd cycle), P_precip_floor (2nd cycle)
+- P_dust: Not observed this cycle (no dust_event drafts)
+- Staleness bulk-reject: 0 candidates; `gh` CLI absent (31st consecutive skip)
+- Real-time anchors to watch: [1] "today" (~35h → stale Jun 30T04:00 UTC), [2] "today's reading" (~22h → stale Jun 30T17:00 UTC)
+
+---
+
 ## 2026-06-28 — Daily corpus grading (5 fresh drafts; 2 Jun-27 carry-overs not re-graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending — 2 carry-overs from Jun 27 (Canadian Prairies/BC fire B+, Amsterdam precipitation_extreme C+ — grades stand from Jun 27), plus 5 fresh (created after Jun 27's 15:00 UTC grading window). Fresh mix: dust_event (Taiz), regional_sst_anomaly (Mediterranean), precipitation_extreme (Astana), all_time_high (Beaver Dams UT), monthly_low (Casper WY).
