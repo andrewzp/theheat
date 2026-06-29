@@ -567,3 +567,29 @@ class TestFetchAllReganomT2m:
         monkeypatch.setattr(ra, "fetch_with_retry", lambda *a, **k: _FakeResp(payload))
         out = fetch_all_reganom_t2m(coords)
         assert out[(48.86, 2.35)] == [("2026-06-05", 30.0)]
+
+
+class TestReganomRoundingExampleConsistency:
+    """codex P2 regression lock: the prompt examples that bless the rounded
+    headline must match value_rounded_c semantics. The canonical France case
+    (raw mean 11.53) rounds to 12, so the headline is "~12°C" — an example
+    showing "~11°C" would teach the writer a figure that is neither the bundle
+    field nor within fact-check's ±0.5°C raw tolerance, a fact-check loophole."""
+
+    def test_eleven_point_five_three_rounds_to_twelve(self) -> None:
+        # The semantic the prompts document. If this ever changes, every
+        # "~12°C" example below must change with it.
+        assert round(11.53) == 12
+
+    def test_prompts_carry_no_contradictory_tilde_eleven_example(self) -> None:
+        from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
+        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+
+        for prompt in (WRITER_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT):
+            assert "~11°C" not in prompt, (
+                "A reganom example shows '~11°C', but the documented France case "
+                "(11.53) rounds to value_rounded_c=12. Use '~12°C' or make the "
+                "example's raw value round to 11."
+            )
+        # The corrected exemplar is present in the writer prompt.
+        assert "~12°C" in WRITER_SYSTEM_PROMPT
