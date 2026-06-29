@@ -383,6 +383,15 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
     """
     region = ev.region
     anomaly_f = round(ev.mean_anomaly_c * 1.8, 1)  # an anomaly is a DELTA — no +32 offset
+    # Lead figure rounded to a WHOLE degree. A sampled-city point-index mean is not
+    # precise to 0.01C, so citing "11.53C" is false precision — and reads as a stats
+    # bulletin, not the story. Publishing the rounded value lets the writer lead with
+    # a clean "about 12C" by citing a bundle field VERBATIM, rather than rounding the
+    # raw mean itself (which the strict BUNDLE_FACT fact-check would kill as a
+    # precision mismatch). Same rationale as zscore_1dp below; the raw ``value`` is
+    # still published so the fact-check can verify a finer decimal citation
+    # (±0.1C of raw) and for the record.
+    anomaly_rounded_c = round(ev.mean_anomaly_c)
     # Publish the z-score at 1-decimal precision. It is supporting context, not the
     # lead; exposing the raw float (e.g. 3.42) makes the writer's natural "3.4
     # standard deviations" citation read as a rounded-precision mismatch to the
@@ -433,6 +442,9 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
             "value": ev.mean_anomaly_c,
             "unit": "C",
             "value_f": anomaly_f,
+            # The whole-degree figure the writer LEADS with ("about 12C"); raw
+            # ``value`` stays for fact-check tolerance + the record.
+            "value_rounded_c": anomaly_rounded_c,
             "cities_sampled": ev.cities_sampled,
         },
         current_facts=[

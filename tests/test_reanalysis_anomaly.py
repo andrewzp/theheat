@@ -329,6 +329,26 @@ class TestBuildRegionalAnomalyBundle:
         assert h["value"] == 7.2
         assert h["cities_sampled"] == 6
 
+    def test_headline_carries_whole_degree_rounded_anomaly(self) -> None:
+        # The writer leads with a CLEAN figure, not the raw 2-decimal mean: an
+        # 11.53C sampled-city point index reads as false precision. The bundle
+        # pre-rounds to a whole degree (mirroring the zscore_1dp pattern) so the
+        # writer cites a bundle value VERBATIM — no writer arithmetic for the
+        # strict BUNDLE_FACT fact-check to flag as a rounded-precision mismatch.
+        from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        ev = RegionalAnomalyEvent(
+            region="France", region_slug="France", cities_sampled=6,
+            mean_anomaly_c=11.53, mean_zscore=2.8, fraction_exceeding=0.9,
+            sustained_days=8, window_start="2026-06-20", window_end="2026-06-27",
+            event_id="reganom_France_2026-06-27",
+        )
+        h = build_regional_anomaly_bundle(ev).headline_metric
+        assert h["value"] == 11.53          # raw mean preserved (fact-check ±0.1 decimal tolerance + record)
+        assert h["value_rounded_c"] == 12   # whole-degree figure the tweet actually cites
+        assert isinstance(h["value_rounded_c"], int)
+
     def test_current_facts_flag_point_index_not_area_weighted(self) -> None:
         from src.two_bot.intern import build_regional_anomaly_bundle
 
@@ -547,3 +567,29 @@ class TestFetchAllReganomT2m:
         monkeypatch.setattr(ra, "fetch_with_retry", lambda *a, **k: _FakeResp(payload))
         out = fetch_all_reganom_t2m(coords)
         assert out[(48.86, 2.35)] == [("2026-06-05", 30.0)]
+
+
+class TestReganomRoundingExampleConsistency:
+    """codex P2 regression lock: the prompt examples that bless the rounded
+    headline must match value_rounded_c semantics. The canonical France case
+    (raw mean 11.53) rounds to 12, so the headline is "~12°C" — an example
+    showing "~11°C" would teach the writer a whole degree that is not
+    value_rounded_c (which fact-check rule g rejects), a fact-check loophole."""
+
+    def test_eleven_point_five_three_rounds_to_twelve(self) -> None:
+        # The semantic the prompts document. If this ever changes, every
+        # "~12°C" example below must change with it.
+        assert round(11.53) == 12
+
+    def test_prompts_carry_no_contradictory_tilde_eleven_example(self) -> None:
+        from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
+        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+
+        for prompt in (WRITER_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT):
+            assert "~11°C" not in prompt, (
+                "A reganom example shows '~11°C', but the documented France case "
+                "(11.53) rounds to value_rounded_c=12. Use '~12°C' or make the "
+                "example's raw value round to 11."
+            )
+        # The corrected exemplar is present in the writer prompt.
+        assert "~12°C" in WRITER_SYSTEM_PROMPT

@@ -1,0 +1,81 @@
+name: reganom-dryrun
+
+# On-demand LIVE dry-run of the regional-anomaly ("reganom") writer voice.
+#
+# Runs scripts/reganom_writer_dryrun.py inside Actions — where ANTHROPIC_API_KEY
+# and GEMINI_API_KEY live as repo secrets — so a reganom draft is regenerated
+# through the REAL writer → safety → §F → fact-check → critic chain without any
+# key ever leaving the runner. Every candidate draft + gate verdict is printed
+# to the job log (read with `gh run view --log`). This is the missing piece that
+# lets us iterate the reganom voice without a prod gist reset or an alerts run.
+#
+# workflow_dispatch ONLY — never scheduled (it makes paid Anthropic + Gemini
+# calls). It POSTS NOTHING: a dry-run only prints drafts; the live posting path
+# is untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Region (must match a REGION_WATCHLIST name)'
+        default: 'France'
+      samples:
+        description: 'Number of candidate drafts'
+        default: '3'
+      cities:
+        description: 'cities_sampled (N)'
+        default: '6'
+      anomaly:
+        description: 'mean_anomaly_c (raw, 2dp)'
+        default: '11.53'
+      zscore:
+        description: 'mean z-score'
+        default: '2.8'
+      days:
+        description: 'sustained days'
+        default: '8'
+      window_start:
+        description: 'window start (ISO)'
+        default: '2026-06-20'
+      window_end:
+        description: 'window end / event date (ISO)'
+        default: '2026-06-27'
+      latest_day:
+        description: 'latest complete ERA5 day (drives ended_days_ago)'
+        default: '2026-06-28'
+
+concurrency:
+  group: reganom-dryrun
+  cancel-in-progress: false
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Run reganom writer dry-run (live writer → fact-check → critic)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # `|| true`: a clean kill is informative, not a job failure — we want the
+        # drafts + verdicts in the log regardless of how many would ship.
+        run: |
+          python scripts/reganom_writer_dryrun.py \
+            --region "${{ inputs.region }}" \
+            --samples "${{ inputs.samples }}" \
+            --cities "${{ inputs.cities }}" \
+            --anomaly "${{ inputs.anomaly }}" \
+            --zscore "${{ inputs.zscore }}" \
+            --days "${{ inputs.days }}" \
+            --window-start "${{ inputs.window_start }}" \
+            --window-end "${{ inputs.window_end }}" \
+            --latest-day "${{ inputs.latest_day }}" || true
