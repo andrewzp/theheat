@@ -389,7 +389,8 @@ def build_regional_anomaly_bundle(ev: RegionalAnomalyEvent) -> StoryBundle:
     # a clean "about 12C" by citing a bundle field VERBATIM, rather than rounding the
     # raw mean itself (which the strict BUNDLE_FACT fact-check would kill as a
     # precision mismatch). Same rationale as zscore_1dp below; the raw ``value`` is
-    # still published for the fact-check's ±0.5C tolerance.
+    # still published so the fact-check can verify a finer decimal citation
+    # (±0.1C of raw) and for the record.
     anomaly_rounded_c = round(ev.mean_anomaly_c)
     # Publish the z-score at 1-decimal precision. It is supporting context, not the
     # lead; exposing the raw float (e.g. 3.42) makes the writer's natural "3.4

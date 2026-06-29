@@ -345,7 +345,7 @@ class TestBuildRegionalAnomalyBundle:
             event_id="reganom_France_2026-06-27",
         )
         h = build_regional_anomaly_bundle(ev).headline_metric
-        assert h["value"] == 11.53          # raw mean preserved (fact-check ±0.5 tolerance)
+        assert h["value"] == 11.53          # raw mean preserved (fact-check ±0.1 decimal tolerance + record)
         assert h["value_rounded_c"] == 12   # whole-degree figure the tweet actually cites
         assert isinstance(h["value_rounded_c"], int)
 
@@ -573,8 +573,8 @@ class TestReganomRoundingExampleConsistency:
     """codex P2 regression lock: the prompt examples that bless the rounded
     headline must match value_rounded_c semantics. The canonical France case
     (raw mean 11.53) rounds to 12, so the headline is "~12°C" — an example
-    showing "~11°C" would teach the writer a figure that is neither the bundle
-    field nor within fact-check's ±0.5°C raw tolerance, a fact-check loophole."""
+    showing "~11°C" would teach the writer a whole degree that is not
+    value_rounded_c (which fact-check rule g rejects), a fact-check loophole."""
 
     def test_eleven_point_five_three_rounds_to_twelve(self) -> None:
         # The semantic the prompts document. If this ever changes, every
