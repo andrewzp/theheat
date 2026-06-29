@@ -329,6 +329,26 @@ class TestBuildRegionalAnomalyBundle:
         assert h["value"] == 7.2
         assert h["cities_sampled"] == 6
 
+    def test_headline_carries_whole_degree_rounded_anomaly(self) -> None:
+        # The writer leads with a CLEAN figure, not the raw 2-decimal mean: an
+        # 11.53C sampled-city point index reads as false precision. The bundle
+        # pre-rounds to a whole degree (mirroring the zscore_1dp pattern) so the
+        # writer cites a bundle value VERBATIM — no writer arithmetic for the
+        # strict BUNDLE_FACT fact-check to flag as a rounded-precision mismatch.
+        from src.data.reanalysis_anomaly import RegionalAnomalyEvent
+        from src.two_bot.intern import build_regional_anomaly_bundle
+
+        ev = RegionalAnomalyEvent(
+            region="France", region_slug="France", cities_sampled=6,
+            mean_anomaly_c=11.53, mean_zscore=2.8, fraction_exceeding=0.9,
+            sustained_days=8, window_start="2026-06-20", window_end="2026-06-27",
+            event_id="reganom_France_2026-06-27",
+        )
+        h = build_regional_anomaly_bundle(ev).headline_metric
+        assert h["value"] == 11.53          # raw mean preserved (fact-check ±0.5 tolerance)
+        assert h["value_rounded_c"] == 12   # whole-degree figure the tweet actually cites
+        assert isinstance(h["value_rounded_c"], int)
+
     def test_current_facts_flag_point_index_not_area_weighted(self) -> None:
         from src.two_bot.intern import build_regional_anomaly_bundle
 
