@@ -2085,6 +2085,402 @@ The margin gap accounts almost entirely for the grade gap, not voice execution.
 
 ---
 
+## 2026-06-30 — Daily corpus grading (10 pending; 9 fresh-graded, 1 stale)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 10 pending drafts —
+all fresh (no previously-graded carry-overs; prior Barrow precip draft cleared from queue).
+**Four new signal types in corpus:** `regional_sst_anomaly` (Mediterranean), `marine_heatwave`
+(GMST streak), `regional_anomaly` (France — first reganom draft post-PR #347),
+`dust_event` (Phalodi India, Taiz Yemen). Pipeline context: reganom enabled with 2-day recency
+window for just-ended heatwaves (PR #347); world-half eval-gating defect fixed (PR #345).
+Bot at 0.9.81.0.
+
+**Staleness review as of 2026-06-30 ~15:00 UTC:**
+- Draft [1] (Mediterranean regional_sst_anomaly, `draft_20260628_040130_32`, created
+  2026-06-28T04:01Z): ~59h at grading. Contains "running 3.54°C above its seasonal normal
+  **today**" — explicit real-time-baked language past 48h threshold. **STALE.**
+  Excluded from A-rate denominator.
+- Draft [2] (GMST marine_heatwave, `draft_20260628_171634_36`, created 2026-06-28T17:16Z):
+  ~46h at grading. Contains "**today's** reading is 20.961°C" — approaching 48h threshold.
+  Not stale by policy at grading time; publish promptly or update with current NOAA OISST value.
+- Drafts [3]–[10]: all created 2026-06-29–2026-06-30, under 30h old. Past-tense or
+  date-anchored framing throughout; no "today" language.
+
+Bulk-reject attempted: `gh` CLI absent — **13th consecutive skip** (May 13 → Jun 30).
+Draft [1] is the one qualifying stale candidate; operator should reject via dashboard.
+
+**Grade distribution (9 non-stale fresh drafts):** 2 A- / 3 B+ / 1 B / 1 B- / 2 C+ / 0 D-F.
+**A-rate: 22% (2/9).** Gap from resumption bar: 28 pp.
+
+**Headline finding:** Four new signal types in a single cycle — the richest category variety
+since the May 19 coral batch. The two A- drafts come from opposite ends of the draft pool:
+GMST marine_heatwave earns A- on a reframe punchline ("a record set two years ago is already
+the floor of a new streak") and Prudhoe Bay all_time_high earns A- on signal weight (score 92,
+101°F at 70°N) with ecosystem specificity. Dust_event debuts at C+ on both drafts: ecosystem
+mechanism is present and specific, but the closes are expository conditions rather than
+consequences. Precipitation_extreme continues the restate-math pattern (3 of 3 drafts state
+the arithmetic margin above the prior record even when both raw values are given). P5 confirmed
+in new categories (dust and fire deploy no named mechanics).
+
+### A-grade drafts
+
+#### [2] Global mean ocean surface temperature — marine_heatwave — **A-**
+
+> *Global mean ocean surface temperature (60°S–60°N) has stayed above the 44-year NOAA archive
+> ceiling for 25 straight days. The prior record was 20.896°C, set in 2024; today's reading is
+> 20.961°C. A record set two years ago is already the floor of a new streak.*
+
+**Score:** 82. Created 2026-06-28T17:16Z.
+
+Humor lens:
+- **Violation:** 25 consecutive days above the 44-year archive ceiling. Real signal with measurable
+  magnitude (20.961°C vs 20.896°C prior record).
+- **Benign?** Yes — factual register, no panic.
+- **Setup→Punchline?** Sentence 1: establishes the 25-day streak above the archive ceiling.
+  Sentence 2: prior record + current reading (comparison data for sentence 3). Sentence 3:
+  "A record set two years ago is already the floor of a new streak." — the punchline.
+- **Named mechanic?** Status inversion: the prior record (the ceiling, the highest value in the
+  44-year archive) is reframed as the floor (the minimum of the current streak). "Floor" does
+  the work — the 2024 record has been demoted from extraordinary to ordinary. This is the
+  HUMOR_RESEARCH §2.1 misdirection pattern: setup frames the 2024 record as an achievement;
+  punchline reframes it as a baseline.
+- **Wodehouse rule?** Clean. Sentence 3 is declarative and economical — no approximation,
+  no restate-padding. "Two years ago" adds precision without adding words.
+
+The punchline is in the corpus's A-grade family: "A record set two years ago is already the
+floor of a new streak" joins "persistence is what kills" (Madagascar) and "nowhere to drain"
+(Costa Rica Pacific) as a short, declarative inversion that stops cold. Three-sentence structure
+earns its length because each sentence loads the next. "Today's reading" in sentence 2 is
+approaching 48h staleness; publish soon or update the NOAA OISST figure.
+
+#### [9] Prudhoe Bay, Alaska — all_time_high — **A-**
+
+> *Prudhoe Bay, Alaska hit 101°F (38.3°C) on June 27 — hottest daily maximum in 24 years of
+> records, 12°F above the 2024 mark. At 70°N on the Arctic Ocean, the tundra offers no shade
+> and no sea breeze; there is nothing to blunt the heat.*
+
+**Score:** 92. Created 2026-06-30T03:47Z.
+
+First all_time_high in the two-bot corpus (all-time records were graded in the v2 era, Apr 24–29;
+this is the first under Sonnet 4.6 two-bot).
+
+Humor lens:
+- **Violation:** 101°F (38.3°C) at 70°N latitude on the Arctic Ocean coast. 24-year record.
+  12°F above the 2024 mark. Score 92.
+- **Benign?** Yes — calm, factual.
+- **Setup→Punchline?** Setup: 101°F, Prudhoe Bay, 24-year record, 12°F above 2024.
+  System clause: "At 70°N on the Arctic Ocean, the tundra offers no shade and no sea breeze"
+  — names both cooling mechanisms that are absent. Close: "there is nothing to blunt the heat"
+  — consequence of both absences stated declaratively.
+- **Named mechanic?** Ecosystem specificity + named absences. "No shade and no sea breeze" is
+  specific: the two physical relief mechanisms that normally moderate extreme heat are both absent
+  at the Arctic tundra coast. "Nothing to blunt the heat" is the declarative consequence.
+- **Wodehouse rule?** Clean. "12°F above the 2024 mark" is specific without restate-math (the
+  2024 value isn't given, so the margin is informative rather than derivable). "Nothing to blunt
+  the heat" is direct — not a poetry attempt, not a vague adverb.
+
+Grades A- because the signal (score 92, 101°F at 70°N) carries the grade even with a slightly
+soft close. The gap from A-: "nothing to blunt" states absence, not consequence. The A-grade
+version names what happens when there's nothing to blunt it: "there is nothing to blunt the heat,
+and nothing to drain it." Or: "nothing moderates it; nothing ends it until the wind shifts."
+As written, the reader infers the consequence rather than receiving it.
+
+### B-grade drafts
+
+#### [1] Mediterranean Sea — regional_sst_anomaly — **B+ (STALE: "today" baked, ~59h old)**
+
+> *The Mediterranean Sea is running 3.54°C above its seasonal normal today — just past the 3.5°C
+> tier threshold in the NOAA Coral Reef Watch basin average. The Mediterranean is a semi-enclosed
+> sea with limited deep-water exchange; heat absorbed at the surface has nowhere fast to go.*
+
+**Score:** 82. Created 2026-06-28T04:01Z. **Stale at grading (~59h, "today" language).
+Excluded from A-rate denominator.**
+
+First `regional_sst_anomaly` in corpus. Voice quality assessed independently of staleness:
+
+Humor lens:
+- **Violation:** 3.54°C above seasonal normal, past the 3.5°C tier threshold. Real signal.
+- **Named mechanic?** Ecosystem specificity (semi-enclosed sea, limited deep-water exchange) +
+  consequence. "Heat absorbed at the surface has nowhere fast to go" directly echoes the
+  Costa Rica Pacific A- closer ("heat that builds has nowhere to drain").
+- **Wodehouse rule?** Nearly clean. "nowhere fast to go" — the adverb "fast" is the soft point.
+  "Nowhere to drain" (Costa Rica A-) is more physically precise — "drain" is a specific verb;
+  "nowhere fast to go" is idiomatic ("going nowhere fast") and slightly blunts the physical
+  image. Remove "fast" and it matches A- territory on voice alone.
+
+B+ for voice quality: structure is right (ecosystem specificity + declarative consequence close),
+close is one word from A-. **STALE: operator should reject via dashboard.** First
+`regional_sst_anomaly` — if the anomaly persists, refile with past-tense or
+threshold framing and remove "today."
+
+#### [3] France — regional_anomaly (reganom) — **B+**
+
+> *Across 6 sampled cities in France, temperatures ran 11.53°C (20.8°F) above the 1991–2020
+> daily normal for 8 straight days through June 27 — 2.8 standard deviations out. At that
+> margin, even brief nighttime relief disappears; the heat debt compounds hour by hour.*
+
+**Score:** 88. Created 2026-06-28T19:48Z.
+
+First `regional_anomaly` (reganom) in corpus. BRIEFING notes this draft is in the `manual_only`
+queue; the reganom writer-prompt voice upgrade is P1 for the operator.
+
+Humor lens:
+- **Violation:** 11.53°C above normal, 2.8σ, 8 days consecutive through June 27. Score 88.
+  Strong signal.
+- **Benign?** Yes — calm, factual.
+- **Setup→Punchline?** Setup: 11.53°C, 2.8σ, 8 days. System clause: "At that margin, even
+  brief nighttime relief disappears." Close: "the heat debt compounds hour by hour."
+- **Named mechanic?** Ecosystem specificity via named absence (nighttime relief, the body's
+  recovery mechanism, disappears at this margin). "Heat debt compounds hour by hour" applies
+  a financial metaphor to thermal load — "compounds" implies exponential accumulation, "hour
+  by hour" adds cadenced rhythm.
+- **Wodehouse rule?** Borderline. "compounds hour by hour" — "hour by hour" is rhythm-padding
+  redundant to "compounds" (compounding implies duration). The A-grade version is starker:
+  "At that margin, nighttime no longer cools. The body has no recovery window." Declarative,
+  consequence-named, no cadenced metaphor.
+
+B+ because the signal (score 88, 2.8σ) is strong and the system clause ("even brief nighttime
+relief disappears") is specific and earns its place. The close is the B+/A- boundary: slightly
+literary where a starker declarative would grade A-. This is the operator's reganom voice-upgrade
+target — direction is right, close needs tightening toward consequence.
+
+#### [5] Astana, Kazakhstan — precipitation_extreme — **B+**
+
+> *Astana, Kazakhstan recorded 308.1 mm of rainfall in 7 days — 8.1 mm above the previous 7-day
+> record. The same week, Aktobe logged 301.5 mm. Astana sits on the dry Kazakh steppe, where
+> annual precipitation rarely exceeds 300 mm total.*
+
+**Score:** 75. Created 2026-06-29T16:03Z.
+
+Humor lens:
+- **Violation:** 308.1 mm in 7 days on a steppe where annual precipitation rarely exceeds
+  300 mm. One week's rain exceeded the full-year average — that's the actual violation.
+- **Named mechanic?** Ecosystem specificity deployed as implicit ratio: 7-day total > full-year
+  average. The reader compares 308.1 mm (7 days) to "rarely exceeds 300 mm" (year) and supplies
+  the ratio. The punchline is in sentence 3, not sentence 2.
+- **Wodehouse rule?** "8.1 mm above the previous 7-day record" — mild restate-math (pattern
+  recurring across all precip drafts). The Aktobe sentence ("The same week, Aktobe logged 301.5
+  mm") adds regional breadth but delays the punchline by one sentence.
+
+B+ because the annual-precipitation punchline is genuinely strong — the most surprising number
+in the batch lands as the final fact. The Aktobe sentence is the one expendable element.
+Without it: "Astana, Kazakhstan recorded 308.1 mm of rainfall in 7 days. Astana sits on the
+dry Kazakh steppe, where annual precipitation rarely exceeds 300 mm total." Period-and-restate
+variant; the annual figure as the kicker is A- territory.
+
+#### [10] Antwerpen, Belgium — precipitation_extreme — **B+**
+
+> *Antwerpen, Belgium logged 358.8 mm of rain in 7 days — 58.8 mm above the previous 7-day
+> record of 300.0 mm. The city sits where the Scheldt estuary meets the North Sea's weather
+> track; slow-moving Atlantic systems have little topographic barrier to stall and unload against.*
+
+**Score:** 81. Created 2026-06-30T03:50Z.
+
+Humor lens:
+- **Violation:** 358.8 mm in 7 days, 19.6% above the prior record of 300.0 mm. Substantial margin.
+- **Named mechanic?** Ecosystem specificity (Scheldt estuary, North Sea weather track, low
+  relief). Close explains why Antwerpen accumulates extreme 7-day totals.
+- **Wodehouse rule?** "58.8 mm above the previous 7-day record of 300.0 mm" — restate-math:
+  358.8 − 300.0 = 58.8; both values are given; the margin is arithmetic. "Slow-moving Atlantic
+  systems have little topographic barrier to stall and unload against" — the preposition-ending
+  is slightly awkward; the close is explanatory rather than consequential.
+
+B+ for signal strength (19.6% margin) and mechanism specificity. Close is right in type but
+more expository than Amsterdam's simpler "nowhere for the water to go." Restate-math is
+the main Wodehouse concern — same pattern as Amsterdam and Barrow (Jun 7).
+
+#### [4] Amsterdam, Netherlands — precipitation_extreme — **B**
+
+> *Amsterdam recorded 314.1 mm of rain in seven days through June 27 — 14.1 mm above the
+> previous seven-day record of 300.0 mm. The city sits at sea level in the Rhine-Meuse delta;
+> when Atlantic systems stall over the Low Countries, there is nowhere for the water to go.*
+
+**Score:** 76. Created 2026-06-29T12:43Z.
+
+Humor lens:
+- **Violation:** 314.1 mm in 7 days, 4.7% above the prior record of 300.0 mm. Modest margin.
+- **Named mechanic?** Ecosystem specificity (sea level, Rhine-Meuse delta). "There is nowhere
+  for the water to go" is in the declarative family of corpus A-grade closers.
+- **Wodehouse rule?** "14.1 mm above the previous seven-day record of 300.0 mm" — restate-math:
+  same pattern. Close "there is nowhere for the water to go" is cleanly declarative but slightly
+  generic vs. "has nowhere to drain" (Costa Rica Pacific) — "drain" is more physically precise
+  than "go."
+
+B rather than B+ because the signal margin is modest (4.7%, score 76) and the restate-math is
+the same violation as Antwerpen and Barrow (Jun 7). The close is right in direction; the signal
+doesn't carry past B.
+
+### C-grade drafts
+
+#### [8] Rocky Mountains, Colorado — fire — **B-**
+
+> *595.3 MW of radiative heat in the Rocky Mountains, Colorado — very-high-intensity fire,
+> satellite-confirmed at 95% confidence. The southern Rockies shed winter snowpack early in
+> drought years; exposed, dry slopes ignite fast once summer heating sets in.*
+
+**Score:** 70. Created 2026-06-29T21:37Z.
+
+Humor lens:
+- **Violation:** 595.3 MW — very-high-intensity tier. Score 70 at threshold. Strong signal.
+- **Setup→Punchline?** Leads with number (P6 fix maintained — not "A fire in [location] is
+  radiating X MW"). Second sentence: snowpack mechanism + timing close.
+- **Named mechanic?** Timing element embedded in mechanism close: "exposed, dry slopes ignite
+  fast once summer heating sets in." Compare Siberia B+ (May 19): "May fires here ignite before
+  the understory has greened enough to resist" — that timing surprise named the specific
+  biological resistance mechanism not yet activated. Here "once summer heating sets in" is June:
+  summer heating in late June is expected, not incongruous.
+- **Wodehouse rule?** "ignite fast" — same weak adverb pattern as "totals compound fast" in
+  Stahl Peak B-. "Early snowpack shed in drought years" is specific and causal; "once summer
+  heating sets in" is the muted close.
+
+B- because the timing close lacks the Siberia draft's incongruity. "Once summer heating sets
+in" states a present condition rather than a gap (vegetation not yet resistant; monsoon not
+yet arrived). P6 fix is maintained; the opener structure is correct. Failure mode is the
+close's missing edge, not the category template.
+
+#### [6] Phalodi, India — dust_event — **C+**
+
+> *Phalodi, India: model-estimated dust daily maximum of 956 μg/m³ on June 29 — aerosol optical
+> depth at 0.86. Phalodi sits at the edge of the Thar Desert; summer heat-low pressure over the
+> subcontinent pulls dry northwestern air across exposed dunes before the monsoon arrives.*
+
+**Score:** 71. Created 2026-06-29T21:33Z.
+
+First `dust_event` in corpus. Signal level: 956 μg/m³, AOD 0.86, score 71 (low end).
+
+Humor lens:
+- **Violation:** 956 μg/m³ dust daily maximum. No corpus baseline for this category. Score 71
+  suggests moderate threshold exceedance.
+- **Named mechanic?** Ecosystem specificity (Thar Desert, heat-low pressure, exposed dunes,
+  monsoon timing). P5 failure mode: all mechanics named are physical explanations; none deployed
+  as a punchline.
+- **Wodehouse rule?** The mechanism sentence is explanatory throughout. "Before the monsoon
+  arrives" is the closest thing to a punch but lands as timing context (the monsoon will end
+  this), not a consequence (what the concentration means right now).
+
+C+ — first dust_event in corpus. Ecosystem specificity earns partial credit. Close needs a
+named consequence: visibility reduction, health threshold crossed, respirable particle count —
+something that states what 956 μg/m³ means for people in Phalodi, not how the dust got there.
+
+#### [7] Taiz, Yemen — dust_event — **C+**
+
+> *Taiz, Yemen: model-estimated dust daily maximum of 1,302 μg/m³ on June 29 — aerosol optical
+> depth at 0.71. Yemen sits at the southern end of the Red Sea corridor, where summer monsoon
+> winds lift fine sediment off the Tihama coastal plain before topography stalls it inland.*
+
+**Score:** 71. Created 2026-06-29T21:36Z.
+
+Same grade as Phalodi (C+). Score 71, dust_event debut.
+
+Humor lens:
+- **Violation:** 1,302 μg/m³ — higher than Phalodi. AOD 0.71.
+- **Named mechanic?** More layered geographic mechanism than Phalodi: monsoon winds lift sediment
+  off the Tihama plain → topography stalls it inland. Two-step mechanism (lift → stall) is more
+  interesting than Phalodi's single-step close. "Before topography stalls it inland" is specific
+  geography — the barrier ridgeline forcing the sediment plume down.
+- **Wodehouse rule?** Complex sentence with no declarative close. "Stalls it inland" is physical
+  but abstract — the nameless topography is the agent. 1,302 μg/m³ is higher than Phalodi's;
+  the mechanism is more geographically layered; both deficiencies are parallel: physical
+  explanation without naming the consequence.
+
+C+ on parity with Phalodi. The lift-stall two-step is the more sophisticated of the two dust
+drafts, but neither closes with a consequence. The category needs: "visibility drops below
+[threshold] m" or "at [N] μg/m³, the WHO hourly guideline is exceeded by [X]×" or similar —
+something that tells the reader what the number means at ground level, not just how it got
+there.
+
+### Patterns named in this batch
+
+1. **Four new signal types in one cycle.** `regional_sst_anomaly` (Mediterranean), `marine_heatwave`
+   (GMST), `regional_anomaly` / reganom (France), `dust_event` (Phalodi, Taiz). Marine_heatwave
+   produced the cycle's cleanest punchline; regional_anomaly produced the highest-score draft (88);
+   dust_event debuted at C+ on both drafts. First all_time_high in the two-bot corpus (Prudhoe Bay,
+   score 92).
+
+2. **Restate-math recurring across precipitation_extreme.** Amsterdam [4], Astana [5], Antwerpen [10]
+   — all three 7-day precipitation drafts — state the margin above the prior record ("X mm above the
+   previous record of Y mm") even though both raw values are given and the margin is arithmetic. Same
+   pattern flagged in the Jun 7 Barrow B+ note ("63.8 mm above the previous 3-day record of 150.0 mm").
+   Four consecutive precipitation_extreme drafts with the same Wodehouse violation. Fix: "state the two
+   values plainly and stop: '[new value] in [N] days. The previous record was [prior value].' Do NOT
+   add the arithmetic margin."
+
+3. **Dust_event: ecosystem specificity without consequence.** Both dust drafts use mechanism sentences
+   that explain the physical cause (pressure systems, topography, monsoon timing) but close on a condition
+   rather than a consequence. "Before the monsoon arrives" and "before topography stalls it inland" are
+   conditions — the category needs a closer that names what the concentration means at ground level
+   (visibility, health threshold, respiratory impact).
+
+4. **P5 confirmed in new categories.** Dust_event (both drafts) and fire (Colorado) — three drafts —
+   use expository mechanism sentences without named humor mechanics. GMST [2] and Prudhoe Bay [9]
+   deployed mechanics (status inversion, named absences) without explicit prompting. The writer prompt's
+   mechanic guidance works for some categories and not for others. Dust_event and the general fire
+   template are the current gap categories.
+
+5. **GMST marine_heatwave: status inversion is the mechanic.** "A record set two years ago is already
+   the floor of a new streak" — the prior record (ceiling) is reframed as the current baseline (floor).
+   HUMOR_RESEARCH §2.1 misdirection pattern. The 2024 record is well-known context; the reframe is
+   immediately available to a climate-aware reader without explanation. Clean execution.
+
+6. **Reganom first draft lands B+.** France (score 88, 2.8σ, 8 days) earns B+ — reasonable baseline
+   for a first reganom draft. BRIEFING identifies voice upgrade as P1 for the operator. Gap: "the heat
+   debt compounds hour by hour" → needs a named consequence ("no nighttime recovery window," cumulative
+   deficit stated flatly, or: "At 2.8 standard deviations. Even the nights offer no relief.").
+
+7. **Mediterranean regional_sst_anomaly: staleness from "today."** Draft [1] is the 13th consecutive
+   staleness skip (gh CLI absent). B+ voice quality; "today" is the only blocker. Operator: reject and
+   refile without "today" if the anomaly persists at the current tier.
+
+8. **Prudhoe Bay first all_time_high in two-bot corpus.** Score 92, 101°F at 70°N. Writer deployed
+   ecosystem specificity (no shade, no sea breeze) with a declarative close. The all_time_high category
+   should produce the clearest punchlines; "nothing to blunt" states absence rather than consequence.
+   Next all_time_high: the consequence should be named explicitly.
+
+### Followups
+
+1. **Reganom voice upgrade (BRIEFING P1 for operator):** France draft [3] close — "the heat debt
+   compounds hour by hour" → replace with consequence: "At this margin, the body cannot recover
+   overnight. Eight days of no relief." Or period-and-restate on the σ reading: "2.8 standard
+   deviations. No summer spell in the NOAA archive reached 8 days at this margin." The direction:
+   declarative, consequence-named, no cadenced metaphor.
+
+2. **Restate-math in precipitation_extreme (→ new P_precipitation_restate proposal):** 3/3 drafts
+   in this cycle + Barrow Jun 7 = 4 consecutive precipitation_extreme drafts with the inline margin
+   statement. Add to writer_prompt.py precipitation section: prefer period-and-restate on the two
+   raw values; do not state the arithmetic margin when both values are present.
+
+3. **Dust_event: add consequence guidance to writer_prompt.py.** First appearance of category.
+   Both drafts earn C+ because mechanism explains causation without naming consequence. Add: "For
+   dust_event, the close should state what the concentration means at ground level — visibility
+   threshold, WHO guideline exceedance, health threshold — not only how the dust arrived."
+
+4. **Mediterranean SST [1]: STALE.** Operator should reject. First `regional_sst_anomaly` in corpus.
+   Good B+ voice quality once "today" is removed; refile with past-tense or ongoing-anomaly framing.
+
+5. **GMST marine_heatwave [2]: approaching 48h.** "Today's reading is 20.961°C" — publish promptly
+   or update with current NOAA OISST value before the draft crosses 48h.
+
+6. **Prudhoe Bay all_time_high [9]: publish-ready.** A-, score 92, June 27 observation date
+   (past-tense, not "today"). Clean for posting.
+
+### Numbers
+
+- Pending drafts in queue: 10 (10 fresh; 0 carry-overs from prior cycles)
+- Fresh drafts graded: 9 (1 stale excluded: Mediterranean regional_sst_anomaly — "today" baked, ~59h)
+- A-rate: 22% (2/9)
+- Grade distribution: 2 A- / 3 B+ / 1 B / 1 B- / 2 C+ / 0 D-F
+- New signal types in corpus: regional_sst_anomaly (1), marine_heatwave (1), regional_anomaly (1),
+  dust_event (2); first all_time_high in two-bot corpus (Prudhoe Bay, score 92)
+- Active proposals: P5 confirmed (dust_event + fire categories, 5th cycle); P7/P8 not observed
+  (no coral/snow); P_new archived (3+ consecutive fresh-draft cycles without observation);
+  new P_precipitation_restate proposed
+- Staleness bulk-reject: 1 candidate (Mediterranean "today"); gh CLI absent (13th consecutive
+  skip, May 13 → Jun 30); operator must reject via dashboard
+- Queue gap since Jun 8 carry-over: 22 days; 10 fresh drafts is the largest single-cycle
+  fresh batch since May 19 (14 drafts)
+
+---
+
 ## 2026-06-08 — Daily corpus grading (0 fresh drafts; 1 carry-over, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 1 pending draft

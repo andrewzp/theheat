@@ -2,6 +2,8 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jun 30: 10 pending, 9 graded, 22% A-rate (bar cleared Jun 29 still stands).** 1 stale excl.: Mediterranean regional_sst_anomaly (~59h, "today" baked). 2 A-: GMST marine_heatwave A- (floor/ceiling inversion "already the floor of a new streak"); Prudhoe Bay all_time_high A- (score 92, 101°F at 70°N, latitude peer-comparison). 5 B: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. 2 C+: Phalodi + Taiz dust_event (P_dust 5th+6th cycle, zero named mechanics, no WHO anchor). P9 9th cycle: 3/3 fresh precip drafts (Astana/Antwerpen/Colorado) show opener template + restate-math. P5: dust_event continues to deploy zero named mechanics (2nd cycle confirming gap category). regional_anomaly corpus debut: France reganom B+ (score 88, 6-city +8.4°C avg, 2.8σ — first reganom in corpus post-#349). P_compound: Prudhoe Bay shows archive+margin double-qualifier (3rd cycle). 22% A-rate reflects different signal mix vs. Jun 29 — fewer A-grade-prone signal types in queue. GMST marine_heatwave approaching 48h staleness (~45.7h at grading) — publish promptly. 32nd consecutive staleness skip.
+>
 > **Jun 29: 5 fresh drafts (80% A-rate — BAR CLEARED).** 1 Jun-28 carry-over (Mediterranean B+, grade stands). [2] marine_heatwave A- (floor/ceiling inversion; "already the floor of a new streak"; P_close positive). [3] France reganom B+ (pre-#349; "Across 6 sampled cities" buries lede; "hour by hour" Wodehouse mild; P_close failing). [4] Congo fire A- (first A-grade fire in two-bot corpus; ecosystem incongruity "something has broken the convective lid"; P_close positive). [5] Prudhoe Bay all_time_high A- (latitude peer-comparison 91°F at 70°N vs. northern Siberia rarely 80°F; P_compound 2nd cycle — archive+margin double-qualifier). [6] Amsterdam precipitation_extreme A- (declarative close "there is nowhere for the water to go"; P_close positive; P9 8th cycle; P_precip_floor 2nd cycle — 4.7% margin wet-climate). P_close 11th cycle: 3 positives, 1 failing, 1 n/a. New signal type in corpus: marine_heatwave. No Wodehouse violations (8th consecutive clean). `gh` CLI absent (31st consecutive skip).
 >
 > **Jun 28: 5 fresh drafts (0% A-rate).** 2 Jun-27 carry-overs not re-graded ([1] fire B+, [2] Amsterdam C+). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor; P_close mechanism-only fail). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go"). [5] Astana precip B+ (51.1/3.9 mm implicit 13×, steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_compound new — archive+margin double-qualifier; P_close implied fail). [7] Casper monthly_low B (P_compound 2nd obs; P_close implied fail). P_close 10th cycle; 3 failing, 1 borderline positive, 1 n/a. New proposal P_compound. `gh` CLI absent (30th consecutive skip).
@@ -50,16 +52,16 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.67.0` (R-02 NOAA HMS independent fire witness for firms; main HEAD 2026-06-13. 30-item audit backlog complete [S-01..S-35, PRs #222–#265, self-merged]; source-redundancy lane R-00..R-09 executing [PRs #222–#271]; 0.9.22.0–0.9.47.0 infra/source/dashboard sprint Jun 9–12: record-store caps, slow-mover cache, publish-ledger idempotency, sqlite backend, dashboard project state — all non-voice; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; **`THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live 2026-06-13** — best-of-2 drafts + one critic rewrite per cycle; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **80% (4/5 fresh, Jun 29) — BAR CLEARED** — [2] marine_heatwave A- (floor/ceiling inversion); [4] Congo fire A- (first A-grade fire in corpus; ecosystem incongruity); [5] Prudhoe Bay A- (latitude peer-comparison); [6] Amsterdam A- (declarative close; P9; P_precip_floor). [3] France reganom B+ (pre-#349; P_close failing). [1] Mediterranean carry-over B+ (grade stands from Jun 28). Prior: 0% Jun 28 [0/5]. |
-| Resumption bar | majority A (>50%) sustained |
-| Gap | **+30 pp above bar** (80% − 50%, n=5 Jun 29); first non-retroactive cycle above bar. P_close structural ceiling loosening: 3/5 fresh drafts hit positive P_close; 1 failing (France reganom); 1 n/a (Prudhoe latitude-peer). |
-| Posting | paused; operator decision pending — Jun 29 provides first non-retroactive bar-clearing cycle; immediate attention required on staleness (Mediterranean stale Jun 30T04Z, marine_heatwave stale Jun 30T17Z) |
+| Last cycle A-rate | **22% (2/9 non-stale, Jun 30)** — GMST marine_heatwave A- (floor/ceiling inversion); Prudhoe Bay A- (latitude peer-comparison, score 92). France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. Phalodi + Taiz dust_event C+ (P_dust). 1 stale excl. (Mediterranean regional_sst_anomaly ~59h). Prior: 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22% on different signal mix** |
+| Gap | **28 pp below bar** (50% − 22%, Jun 30); Jun 29 was +30 pp above bar — signal-mix variation, not regression in writer quality. Dust_event and monthly_low categories structurally underperform; A-grade rate is signal-type dependent. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30 below (22%) on dust+precip-heavy queue; Mediterranean stale (operator reject); marine_heatwave approaching 48h — publish promptly |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **6 pending as of Jun 29 grading** (1 Jun-28 carry-over: Mediterranean B+ stale ~Jun 30T04Z; 5 fresh: marine_heatwave A- stale ~Jun 30T17Z, France reganom B+, Congo fire A-, Prudhoe Bay A-, Amsterdam A-). Pipeline active; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **10 pending as of Jun 30 grading** (1 stale: Mediterranean regional_sst_anomaly; 9 graded: marine_heatwave A- [publish promptly ~48h], France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-, Prudhoe Bay A-, Phalodi C+, Taiz C+). Bot at 0.9.81.0; reganom enabled post-PR #347; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jun 29: **P_close** (11 cycles) > **P9** (8 cycles) > **P_dust** (4 cycles) > **P5** (natural-deploy ongoing, 3rd consecutive) > **P_compound** (2 cycles) > **P_precip_floor** (2 cycles). Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage. Priority as of Jun 30: **P_close** (11+ cycles) > **P9** (9 cycles, Jun 30) > **P_dust** (6 cycles, Jun 30 ×2) > **P5** (dust_event gap confirmed Jun 30) > **P_compound** (3 cycles, Jun 30) > **P_precip_floor** (2 cycles). Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
 
 ### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
@@ -393,7 +395,10 @@ archive needed. One paragraph addition; no architectural change. Also applies to
 (PM2.5/dust) signal type from the @extremetemps coverage lane. Verify whether
 `writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
 
-**Status:** Drafted. 4 cycles confirmed (Jun 13/17/25/28); template convergence 5 of 5. Not observed Jun 29 (no dust_event drafts in queue). Awaiting human implementation.
+Jun 30: Phalodi, India dust_event C+ + Taiz, Yemen dust_event C+ — both lack WHO anchor; both use identical opener structure. 6th and 7th consecutive dust_event corpus drafts without the calibrating comparison. No named humor mechanics deployed in either draft (P5 gap confirmed). Template convergence: all 7 dust_event corpus drafts share the opener structure. Phalodi: model-estimated PM2.5, aerosol optical depth stated without calibration. Taiz: same pattern, 3rd Taiz draft in corpus.
+**Last seen:** Jun 30 (6 cycles: Jun 13/17/25/28/30 ×2; template convergence 7 of 7).
+
+**Status:** Drafted. **6 cycles confirmed** (Jun 13/17/25/28/30 ×2); template convergence 7 of 7. Awaiting human implementation.
 
 ### P9 — precipitation_extreme opener template convergence + restate-math
 
@@ -453,7 +458,10 @@ ratio form ('4.8% above the prior record') or period-and-restate."
 earlier intervention than P6 (fire, 3+ cycles before fix) and P7 (coral, resolved). Restate-math
 ban reduces a recurring violation across signal types.
 
-**Status:** Drafted. First observation 2026-06-18. **Cycles observed: 8** (Jun 7, Jun 18, Jun 22 retroactive, Jun 25, Jun 26 ×3, Jun 28, Jun 29). Awaiting human implementation.
+Jun 30: 3/3 fresh precipitation_extreme drafts (Astana B+, Antwerpen B+, Colorado B-) use the opener template and show restate-math. Astana: "Astana, Kazakhstan recorded 51.1 mm of rain on June 26 — against a previous daily record of 3.9 mm" (template confirmed; Astana previously appeared in Jun 28 without restate-math; Jun 30 Astana draft used margin arithmetic). Antwerpen: opener template + restate-math. Colorado: same pattern. 13 of 13 precipitation_extreme corpus drafts now on opener template; 10–11 of 13 have restate-math.
+**Last seen:** Jun 30. 13 of 13 precipitation_extreme corpus drafts share the opener template.
+
+**Status:** Drafted. First observation 2026-06-18. **Cycles observed: 9** (Jun 7, Jun 18, Jun 22 retroactive, Jun 25, Jun 26 ×3, Jun 28, Jun 29, Jun 30). Awaiting human implementation.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
@@ -483,10 +491,9 @@ Jun 29: Full mechanic variety across 5 fresh drafts — floor/ceiling inversion 
 ecosystem incongruity (Congo fire), latitude peer-comparison (Prudhoe Bay), declarative ecosystem
 specificity (Amsterdam). Not one draft needed explicit P5 prompting; mechanics deployed organically.
 3rd consecutive graded cycle where all deployed mechanics appeared without explicit naming.
-Negative evidence accumulating: 4 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27 / Jun 29)
-show named mechanics deploying naturally without the P5 fix. P5 urgency reduced but not retired:
-confirmation that dust_event and monthly_low categories still underutilize named mechanics
-(those categories absent from Jun 29 cycle).)
+Jun 30: 2 dust_event drafts (Phalodi + Taiz) graded C+ — both deploy zero named humor mechanics. Mechanism-only second sentences, no period-and-restate, no idiom-flip, no comic triple. 2nd consecutive dust_event cycle without a named mechanic across all corpus drafts in this category. Precipitation drafts (Astana/Antwerpen/Colorado) also show no named moves beyond mechanism-as-system-clause. Pattern confirmed: dust_event is the current gap category for P5; precipitation_extreme continues self-selecting mechanism without named humor moves.
+Negative evidence accumulating: 5 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27 / Jun 29 / Jun 30) show precipitation/fire named mechanics deploying naturally. P5 urgency split: fire/precip/record — organically deploying, low urgency; dust_event/monthly_low — confirmed gap, higher urgency.
+**Last seen:** Jun 30 (dust_event confirming gap; precipitation + record categories deploying organically).)
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -525,8 +532,11 @@ stronger qualifier than "in 23 years" and 1.5°F margin is implicit-tight rather
 pattern is structural, not coincidence in a single draft); Jun 29 (Prudhoe Bay [5] A-:
 "hottest daily maximum in 24 years of records, 2°F above the 2024 mark" — same archive+margin
 double-qualifier structure. Smaller margin (2°F) makes double-qualification less visible but
-the structural pattern recurs in record-type openers. 2nd consecutive cycle with P_compound.)
-**Last seen:** Jun 29.
+the structural pattern recurs in record-type openers. 2nd consecutive cycle with P_compound.);
+Jun 30 (Prudhoe Bay all_time_high carry-over — same double-qualifier structure observed again
+in the 3rd grading cycle where this draft appears. Pattern holds across grading cycles:
+archive+margin double-qualifier is the default form for record-type openers.)
+**Last seen:** Jun 30 (3 cycles; 3rd consecutive cycle where P_compound observed in record-type drafts).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 record-type framing section:

@@ -53,6 +53,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-27 | 2 | 0 | 1 | 1 | 0 | **0%** | ✗ | Fire + precipitation_extreme. Fire (Canadian Prairies/BC, 1,517.9–2,979.4 MW): B+ — comic triple, three-fire national cluster, period-form closer; BC fires at ~3,000 MW undersold by minimum-threshold framing in S3. Precipitation (Amsterdam, 157.1 mm, 4.7% above record): C+ — ecosystem specificity correct, signal too thin (score 74, 7.1 mm margin, maritime climate). P6 fire formula fix holding (3rd post-ship fire draft). P5 natural mechanic deployment 2nd consecutive cycle (comic triple + ecosystem specificity deployed without explicit naming). P_precip_floor new proposal: writer over-passes shallow-margin precipitation records in wet-climate locations. n=2, not statistically meaningful. 13th consecutive gh staleness skip. |
 | 2026-06-29 | 5 | 4 | 1 | 0 | 0 | **80%** | ✓ | 5 fresh (1 Jun-28 carry-over not re-graded). [2] marine_heatwave A- (floor/ceiling inversion; "already the floor of a new streak" — first marine_heatwave in corpus). [4] Congo fire A- (first A-grade fire in two-bot corpus; ecosystem incongruity "convective lid"). [5] Prudhoe Bay A- (91°F at 70°N; latitude peer-comparison; P_compound 2nd cycle). [6] Amsterdam A- (declarative close "nowhere for the water to go"; P9 8th cycle; P_precip_floor 2nd cycle). [3] France reganom B+ (pre-#349; P_close failing). P_close 11th cycle: 3 pos/1 fail/1 n/a. **BAR CLEARED: 80% > 50% resumption bar.** 31st consecutive staleness skip. Immediate operator attention: [1] Mediterranean stale ~Jun 30T04Z, [2] marine_heatwave stale ~Jun 30T17Z. |
 | 2026-06-28 | 5 | 0 | 4 | 1 | 0 | **0%** | ✗ | 5 fresh (2 Jun-27 carry-overs not re-graded). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor, mechanism-only P_close fail; 5th consecutive dust_event template-converged). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go" — closest to declarative in batch). [5] Astana precip B+ (51.1/3.9 mm = 13× implicit; steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_close implied fail; P_compound new — archive+margin double-qualifier). [7] Casper monthly_low B (P_close implied fail; P_compound 2nd obs). P_close 10th cycle. New proposal P_compound. No Wodehouse violations (7th consecutive clean cycle). 30th consecutive staleness skip. |
+| 2026-06-30 | 9 | 2 | 5 | 2 | 0 | **22%** | ✗ | 10 pending (1 stale excl.: Mediterranean regional_sst_anomaly "today" ~59h). 2 A-: GMST marine_heatwave (floor/ceiling inversion "already the floor of a new streak" — first marine_heatwave graded this cycle); Prudhoe Bay all_time_high (92 score, 101°F at 70°N, latitude peer-comparison). 5 B: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. 2 C+: Phalodi + Taiz dust_event (P_dust 5th+6th cycle, zero named mechanics, WHO anchor absent). P9 9th cycle: 3/3 fresh precip drafts (Astana/Antwerpen/Colorado) show opener template + restate-math. P5: dust_event still no named mechanics (2nd consecutive cycle). regional_anomaly debut: France reganom B+ (score 88, 6-city +8.4°C avg, 2.8σ — first reganom in corpus post-#349). A-rate: 22% (below bar cleared Jun 29; different signal mix, fewer A-prone types). 32nd consecutive staleness skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -62,6 +63,16 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-06-30 — Staleness bulk-reject: 1 stale identified; gh CLI absent (32nd consecutive skip)
+
+**Status:** 10 pending drafts reviewed. 1 stale candidate: Mediterranean regional_sst_anomaly
+(created 2026-06-28T04:01Z, ~59h old at grading time ~15:00 UTC Jun 30, contains "today"
+language — staleness positive). Excluded from A-rate denominator. GMST marine_heatwave
+(created 2026-06-28T17:16Z, ~45.7h old) contains "today's reading" — approaching 48h threshold;
+operator should publish promptly. `gh` CLI absent in remote execution environment; 32nd
+consecutive skip (May 13 → Jun 30). Mediterranean draft flagged for operator manual rejection
+via dashboard.
 
 ### 2026-06-27 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
 
