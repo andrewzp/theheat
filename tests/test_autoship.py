@@ -357,3 +357,50 @@ class TestProcessDueGuards:
         posts = _run_due(bot_state, monkeypatch, "posted")
         assert posts == 1
         assert bot_state["drafts"][0]["status"] == "posted"
+
+
+class TestRecordsAutoshipExpansion:
+    """Expand the autoship allowlist to verifiable RECORD types (low human-harm,
+    high accuracy, low volume) so strong records stop dying in an unwatched manual
+    queue. Anomalies + human-impact events stay manual (fail-closed)."""
+
+    def _arm(self, monkeypatch, tweet_type):
+        monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
+        bot_state = _fresh_state()
+        _save(bot_state, tweet_type=tweet_type, event_id=f"e_{tweet_type}",
+              review_context=_critic_ctx())
+        return _only_draft(bot_state)
+
+    def test_all_time_high_arms(self, monkeypatch):
+        assert self._arm(monkeypatch, "all_time_high").get("autoship_on_critic_pass") is True
+
+    def test_all_time_low_arms(self, monkeypatch):
+        assert self._arm(monkeypatch, "all_time_low").get("autoship_on_critic_pass") is True
+
+    def test_monthly_high_arms(self, monkeypatch):
+        assert self._arm(monkeypatch, "monthly_high").get("autoship_on_critic_pass") is True
+
+    def test_monthly_low_arms(self, monkeypatch):
+        assert self._arm(monkeypatch, "monthly_low").get("autoship_on_critic_pass") is True
+
+    def test_marine_heatwave_arms(self, monkeypatch):
+        assert self._arm(monkeypatch, "marine_heatwave").get("autoship_on_critic_pass") is True
+
+    def test_regional_anomaly_stays_manual(self, monkeypatch):
+        # Honesty-sensitive (bare-region attribution) + voice in active iteration.
+        d = self._arm(monkeypatch, "regional_anomaly")
+        assert d["approval_mode"] == "manual"
+        assert "autoship_on_critic_pass" not in d
+
+    def test_calendar_record_stays_manual(self, monkeypatch):
+        # 'record' = calendar-day record: high-volume, fires routinely. Excluded so
+        # auto-ship can't flood the feed; stays manual.
+        assert self._arm(monkeypatch, "record")["approval_mode"] == "manual"
+
+    def test_allowlist_membership(self):
+        from src.editorial.approval import AUTOSHIP_ALLOWLIST
+        assert {"all_time_high", "all_time_low", "monthly_high", "monthly_low",
+                "marine_heatwave"} <= AUTOSHIP_ALLOWLIST
+        for excluded in ("regional_anomaly", "record", "record_low", "fire",
+                         "anomaly_hot", "absolute_extreme", "coral_bleaching"):
+            assert excluded not in AUTOSHIP_ALLOWLIST
