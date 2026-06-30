@@ -10,10 +10,29 @@ from dataclasses import dataclass
 # auto-shipping on a critic PASS — NOT inferred from policy mode / can_auto_approve
 # (the default policy returns suggested_auto + can_auto_approve=True for ANY unknown
 # type, and suggested_auto also covers country records / ozone / ice mass / generic
-# synthesis_*). Scoped to the smallest, lowest-sensitivity set: the recurring
-# leaderboard + the two global atmospheric milestones, none of which carry a
-# human-impact framing or a geography qualifier the human gate would need to fix.
-AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({"hot10", "co2_milestone", "ch4_milestone"})
+# synthesis_*).
+#
+# The set is governed by one principle: **auto-ship verifiable RECORDS; keep
+# anomalies and human-impact events in manual review.** Records are factual,
+# archive-/dataset-backed, low human-harm, and low-volume, so a critic PASS is
+# sufficient confidence to post unattended (still on a guarded, delayed window) —
+# and leaving them to die in an unwatched manual queue is the failure this fixes.
+#   - leaderboard + global atmospheric milestones: hot10, co2_milestone, ch4_milestone
+#   - station/all-time + monthly temperature records: all_time_high/low, monthly_high/low
+#   - ocean SST streak record: marine_heatwave (single well-known dataset, low-harm)
+# DELIBERATELY EXCLUDED (stay manual): calendar-day records ("record"/"record_low" —
+# high-volume, fire routinely → would flood); regional_anomaly + anomaly_* +
+# absolute_extreme (interpretive framing / bare-region honesty risk); country_high/low
+# (national records — rare but elite enough to keep a human polish window); and every
+# human-impact type (fire, cyclone_*, coral_bleaching, dust, air_quality, wet_bulb,
+# synthesis_*). The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
+# kill-switches; flag OFF is byte-for-byte the manual behavior.
+AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
+    "hot10", "co2_milestone", "ch4_milestone",
+    "all_time_high", "all_time_low",
+    "monthly_high", "monthly_low",
+    "marine_heatwave",
+})
 
 _DEFAULT_AUTOSHIP_MAX_AGE_H = 36
 
