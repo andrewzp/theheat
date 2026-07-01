@@ -98,7 +98,10 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     # is stable because EVAL never adds cache entries (only WARM does); ``stale`` must be
     # selected BEFORE the provisional stamp in CONSOLIDATE, which sets as_of=today and
     # would otherwise hide a stale city from select_stale_cities.
-    cached_cities = [c for c in world_cities if c.get("city") in cache]
+    cached_cities = [
+        c for c in world_cities
+        if world_cache.world_key(c.get("city"), c.get("country")) in cache
+    ]
     stale = world_cache.select_stale_cities(
         cache, world_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=WORLD_WARM_BUDGET,
         today=iso, urgent_order=open_meteo.URGENT_WORLD_HEAT_CITIES,
@@ -129,7 +132,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         budget.spend(len(batch))
         for c in batch:
             forecast_attempted += 1
-            fc = forecasts.get(c["city"])
+            fc = forecasts.get(world_cache.world_key(c["city"], c["country"]))
             if not fc or (fc.get("max_c") is None and fc.get("min_c") is None):
                 forecast_failures += 1
                 continue
@@ -156,8 +159,9 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         if not archive or not archive.get("time"):
             warm_failures += 1
             continue
-        cache[c["city"]] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
-        warmed_now.add(c["city"])
+        wk = world_cache.world_key(c["city"], c["country"])
+        cache[wk] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
+        warmed_now.add(wk)
 
     # PHASE 3 — CONSOLIDATE (no network): evaluate every pending city against the FRESHEST
     # available thresholds (warm-fresh if warmed this run, else the pre-existing cached
@@ -168,7 +172,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     om_bundles = []
     for c, fc in pending:
         name = c["city"]
-        cur = cache.get(name)
+        wk = world_cache.world_key(c["city"], c["country"])
+        cur = cache.get(wk)
         if cur is None:                # defensive; eval-snapshot cities are always cached
             continue
         cached_t = CityThresholds.from_dict(cur)
@@ -192,7 +197,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         if any([bundle.all_time_high, bundle.all_time_low,
                 bundle.monthly_high, bundle.monthly_low]):
             world_cache.apply_provisional_preserving_as_of(
-                cache, bundle, today=iso, advance_as_of=(name in warmed_now),
+                cache, bundle, today=iso, advance_as_of=(wk in warmed_now),
                 ttl_days=WORLD_CACHE_TTL_DAYS,
             )
 
