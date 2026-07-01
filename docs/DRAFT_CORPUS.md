@@ -11,6 +11,266 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-01 — Daily corpus grading (4 fresh drafts; 10 carry-overs from Jun 28–30, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 14 pending drafts.
+Cross-checked against the `daily-plan-current` rolling branch (not yet merged to `main` —
+main's copies of these three docs are stale back to 2026-06-08; the rolling branch carries
+continuous grading through Jun 30). 10 of 14 pending drafts exactly match drafts already
+graded Jun 28–30 (same `draft_id`, score, and text) — carried over, not re-graded. **4 fresh:**
+Basrah, Iraq (`absolute_extreme`, created Jun30T21:38Z — pre-dates this cycle's ~15:00 UTC
+window but wasn't in queue at Jun 30 grading), Morrill Fire, Nebraska (`fire_footprint`,
+first of this signal type in corpus), Al Baṣrah al Qadīmah, Iraq (`absolute_extreme`, second
+Basra-area draft in 3 days), Wadi Halfa, Sudan (`dust_event`). Bot per BRIEFING.md at 0.9.81.0+.
+
+**Staleness review as of 2026-07-01 ~15:00 UTC:**
+- [1] Mediterranean SST (`draft_20260628_040130_32`, created Jun28T04:01Z): ~83h old, contains
+  "running 3.54°C above its seasonal normal **today**." Flagged stale at Jun 30 grading (~59h)
+  and still sitting in the queue unactioned. **STALE — bulk-reject candidate.**
+- [2] GMST marine_heatwave (`draft_20260628_171634_36`, created Jun28T17:16Z): ~70h old,
+  contains "**today's** reading is 20.961°C." Was "approaching 48h" at Jun 30 grading (~46h);
+  now clearly over the line. **Newly STALE — bulk-reject candidate.**
+- [3]–[10]: no "today"/"tonight"/forecast-for-today language; past-tense or explicitly dated
+  ("through June 27", "on June 25/26/27"). Not stale by policy despite some being 2–3 days old.
+- [11] Basrah forecast (`draft_20260630_213852_50`, created Jun30T21:38Z): "is forecast to hit
+  47.2°C ... on June 30" — the forecast target date has already elapsed (grading is Jul 1).
+  Only ~17h old, so it does NOT cross the 48h mechanical threshold, but the claim is now
+  temporally false if posted as-is (a forecast for a day that's over). Flagging as a freshness
+  risk distinct from the 48h rule — see Followups.
+- [12]–[14]: under 12h old, dated to today or yesterday. Clear.
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` for [1] and [2] — `gh` CLI absent in this
+remote execution environment. **33rd consecutive skip** (May 13 → Jul 1). Operator must reject
+both via dashboard.
+
+**Grade distribution (4 fresh drafts):** 0 A / 2 B / 1 B- / 1 C+ / 0 D-F.
+**A-rate: 0% (0/4).** Gap from resumption bar: 50 pp. Most recent A-rate: 22% (2/9, Jun 30, on
+the rolling branch not yet merged).
+
+**Headline finding:** All 4 fresh drafts, plus carry-over [1], plus one carry-over from the Jun
+30 cycle, share a pattern the prior three cycles graded around but never named directly: **the
+writer states its own internal tier/threshold bucket name in the tweet text.** "The 47°C
+absolute-extreme threshold for the Northern Subtropical band" (Basrah ×2), "the 250,000-hectare
+tier that marks a continent-scale footprint" (Morrill Fire), "the 3.5°C tier threshold in the
+NOAA Coral Reef Watch basin average" (Mediterranean, carry-over) — four drafts across three
+signal types name a classification bucket verbatim instead of describing the world. This is
+`docs/IMPROVEMENT_PLAN.md`'s **A3** (filed Jun 23, one Mediterranean SST observation, marked
+"promote if 2+ cycles observed") — today's batch clears that bar on its own (3 fresh instances
+in one cycle, across 2 signal types). Promoted to active proposal **P_tier** below.
+
+### B-grade drafts
+
+#### [11] Basrah, Iraq — absolute_extreme — **B**
+
+> *Basrah, Iraq is forecast to hit 47.2°C (117°F) on June 30 — above the 47°C absolute-extreme
+> threshold for the Northern Subtropical band. Basrah sits at the head of the Shatt al-Arab;
+> the shallow estuary offers no evaporative relief when the land is already this hot.*
+
+**Score:** 83. Created 2026-06-30T21:38:52Z.
+
+First `absolute_extreme` in corpus.
+
+Humor lens:
+- **Violation:** 47.2°C (117°F) forecast, above the category's absolute-extreme line. Real,
+  strong signal.
+- **Benign?** Yes — calm, factual.
+- **Setup→Punchline?** Setup: forecast value + threshold framing. Close: "offers no evaporative
+  relief when the land is already this hot" — a named-absence consequence, same family as
+  Prudhoe Bay's "there is nothing to blunt the heat" (Jun 30, A-).
+- **Named mechanic?** Ecosystem specificity via named-absence (Shatt al-Arab estuary, no
+  evaporative relief). Structurally sound — the close does the same job as the corpus's best
+  closes.
+- **Wodehouse rule?** Violated in sentence 1: "above the 47°C absolute-extreme threshold for the
+  Northern Subtropical band" reads as the bot quoting its own scoring rubric, not describing
+  weather. Compare Prudhoe Bay's clean sentence 1 (no internal category name) — same all-time/
+  extreme-tier signal class, no jargon leak, graded A-.
+
+B rather than A-/B+ solely because of the tier-jargon leak — the closer is genuinely strong,
+the mechanism is real, but sentence 1 sounds like a data label instead of the bot's voice.
+Fix in P_tier below unlocks this draft toward A-.
+
+#### [12] Morrill Fire, Nebraska — fire_footprint — **B**
+
+> *The Morrill Fire in Nebraska has burned 259,820 hectares since March 13 — past the
+> 250,000-hectare tier that marks a continent-scale footprint. The Nebraska Sandhills sit on a
+> grass-stabilized dune field; when that cover burns away, the underlying sand can begin to
+> shift.*
+
+**Score:** 73. Created 2026-07-01T04:09:36Z.
+
+First `fire_footprint` in corpus (footprint/acreage framing, distinct from the FRP/MW-based
+`fire` signal type already in corpus).
+
+Humor lens:
+- **Violation:** 259,820 hectares burned since March 13 — a months-long, landscape-scale fire.
+  Genuinely unusual framing (duration + area rather than instantaneous radiative power).
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: hectares burned + duration. Close: "the underlying sand can begin
+  to shift" — a forward-looking, declarative physical consequence (dune destabilization once
+  the stabilizing grass cover is gone). This is close to the corpus's best form (Nauru's "no
+  adjacent reef system to reseed it" — declarative structural consequence, no hedge).
+- **Named mechanic?** Ecosystem specificity + causal chain (grass stabilizes dunes → fire removes
+  grass → sand moves). The most specific, least generic mechanism close in this batch.
+- **Wodehouse rule?** Violated in sentence 1 for the same reason as Basrah: "the 250,000-hectare
+  tier that marks a continent-scale footprint" names an internal classification bucket
+  ("continent-scale footprint" reads like an invented severity label, not a natural description)
+  instead of just stating the number and letting it stand.
+
+B rather than A- for the identical reason as Basrah: the closer is arguably the strongest single
+sentence in today's batch, but the tier-jargon opener caps the grade. Without "the 250,000-hectare
+tier that marks a continent-scale footprint" — e.g. "The Morrill Fire in Nebraska has burned
+259,820 hectares since March 13" — this reads clean and the draft is A- territory.
+
+### B- / C-grade drafts
+
+#### [13] Al Baṣrah al Qadīmah, Iraq — absolute_extreme — **B-**
+
+> *Al Baṣrah al Qadīmah, Iraq: forecast high of 47°C (117°F) on July 1 — at the absolute extreme
+> threshold for the Northern Subtropics. Basra sits at the head of the Gulf, where the shallow
+> coastal sea recycles heat back into an already superheated air column.*
+
+**Score:** 83. Created 2026-07-01T14:52:46Z.
+
+Second Basra-area `absolute_extreme` draft in 3 days (see [11], Jun 30, same city under a
+different gazetteer name — "Basrah" vs. "Al Baṣrah al Qadīmah" — likely two separate station/
+city records for the same metro area). Same score (83) as [11].
+
+Humor lens:
+- **Violation:** 47°C forecast, "at" (not clearly above) the absolute-extreme threshold —
+  right at the boundary rather than past it. Slightly weaker framing than [11]'s "above."
+- **Named mechanic?** Ecosystem specificity (Gulf heat-recycling). Physically apt but the close
+  describes a present state ("recycles heat back into an already superheated air column") rather
+  than naming a forward consequence — mechanism-only, not declarative-consequence.
+- **Wodehouse rule?** Same tier-jargon leak as [11]: "the absolute extreme threshold for the
+  Northern Subtropics." Third occurrence of this near-identical phrase across 2 drafts.
+
+B- rather than B: same jargon violation as [11] and [12], compounded by a softer close
+(descriptive state vs. declarative consequence) and a boundary-line ("at" vs "above") framing
+that's less forceful than [11]'s.
+
+#### [14] Wadi Halfa, Sudan — dust_event — **C+**
+
+> *Wadi Halfa, Sudan: model-estimated dust daily maximum of 559 μg/m³ on July 1 — aerosol
+> optical depth at 0.87. The city sits on the Nile at the edge of the Sahara, where summer
+> haboobs push Nubian Desert sediment south before lake-effect moisture from Nasser dampens
+> the column.*
+
+**Score:** 71. Created 2026-07-01T14:56:45Z.
+
+8th `dust_event` corpus draft (Riyadh, Urumqi, Taiz ×3, Phalodi, Taiz [Jun 30], Wadi Halfa).
+
+Humor lens:
+- **Violation:** 559 μg/m³, AOD 0.87 — lower peak concentration than every other dust_event
+  draft in corpus (Riyadh 2,083; Urumqi 2,260; Taiz 1,302/2,271/2,135; Phalodi 956), but no
+  reference point is given so the reader can't calibrate low-vs-high either way.
+- **Named mechanic?** Two-step ecosystem mechanism — haboob winds lift Nubian Desert sediment
+  south, then Lake Nasser's moisture dampens (settles) it. This is the same "lift → stall/settle"
+  two-step structure the Jun 30 grading called "the more sophisticated of the two dust drafts"
+  for Taiz — the most specific dust mechanism in the batch.
+- **Wodehouse rule?** Clean of tier-jargon (unlike [11]/[12]/[13]) — no internal category name.
+  But same P_dust gap as every prior dust_event draft: no WHO PM2.5/PM10 multiple, and the close
+  ("dampens the column") is a resolution/dispersal beat — describing how the dust clears, not
+  what the concentration means to someone breathing it. Same subtype as Al Aḥmadī Kuwait's
+  "before sea breezes suppress them by evening" and Taiz's "before topography stalls it inland."
+
+C+, same ceiling as every dust_event draft to date. 8th consecutive corpus draft sharing the
+identical opener template ("[City], [Country]: model-estimated dust daily maximum of X μg/m³ on
+[date] — aerosol optical depth at Y.") and the same missing-consequence gap. Template convergence
+is now total (8 of 8).
+
+### Carry-over inventory (Jun 28–30 grades stand; not re-graded)
+
+| # | Draft | Type | Grade (cycle graded) | Status this cycle |
+|---|---|---|---|---|
+| [1] | Mediterranean Sea, 3.54°C above seasonal normal | regional_sst_anomaly | B+ (Jun 28) | **STALE — bulk-reject candidate** |
+| [2] | Global mean ocean surface temp, 25-day streak | marine_heatwave | A- (Jun 29) | **Newly STALE — bulk-reject candidate** |
+| [3] | France, 6 cities, 11.53°C above normal (reganom) | regional_anomaly | B+ (Jun 29) | Clear; operator's reganom voice-upgrade P1 target per BRIEFING.md |
+| [4] | Amsterdam, 314.1 mm / 7 days | precipitation_extreme | B (Jun 30) | Clear |
+| [5] | Astana, Kazakhstan, 308.1 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+| [6] | Phalodi, India, 956 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [7] | Taiz, Yemen, 1,302 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [8] | Rocky Mountains, Colorado, 595.3 MW fire | fire | B- (Jun 30) | Clear |
+| [9] | Prudhoe Bay, Alaska, 101°F all-time high | all_time_high | A- (Jun 30) | Clear |
+| [10] | Antwerpen, Belgium, 358.8 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+
+### Patterns named in this batch
+
+1. **Tier/threshold jargon leak — new pattern, promoted to P_tier (was A3, awaiting evidence).**
+   4 of 14 pending drafts (1 carry-over + 3 fresh) state an internal classification bucket name
+   verbatim: "3.5°C tier threshold," "47°C absolute-extreme threshold for the Northern Subtropical
+   band" (×2), "250,000-hectare tier that marks a continent-scale footprint." All four are
+   otherwise structurally sound — real signal, correct ecosystem mechanism, several with genuinely
+   strong closes (Morrill Fire's dune-destabilization consequence is the best single closer in
+   today's batch) — but the tier-naming reads as the bot quoting its own scoring rubric. This is a
+   Wodehouse violation of a kind not previously named: not approximation, not restate-padding, but
+   **citing methodology**. Full writeup in `docs/IMPROVEMENT_PLAN.md` P_tier.
+
+2. **Duplicate near-identical drafts for the same location 3 days apart.** [11] Basrah (Jun 30,
+   47.2°C) and [13] Al Baṣrah al Qadīmah (Jul 1, 47°C) are almost certainly the same metro area
+   under two different gazetteer names, both `absolute_extreme`, both at ~47°C, 3 days apart, both
+   carrying the identical tier-jargon phrase. This reads as a possible city-dedup gap (two entries
+   for one place in `cities.csv`) rather than a voice issue — logging as an observation, not a
+   voice proposal, since it's a data/pipeline question out of this routine's scope. Operator:
+   BRIEFING.md already tracks a related issue (#346, duplicate-city `city|country` re-key, held
+   pending 5 same-place country aliases).
+
+3. **Basrah [11] forecast has gone stale in truth-value, not just in age.** Created for a
+   same-day (June 30) forecast; by grading time (July 1) the forecast date has passed without the
+   draft being posted or updated to past tense. Under 48h old, so it doesn't trip the mechanical
+   staleness rule, but if shipped today it would misstate the date. Distinct from the reganom
+   honesty-gating fix (PR #347, which handles *ended heatwave spells*, not single-day extreme-heat
+   forecasts) — flagging as an observation for the operator, not proposing a code fix (out of
+   scope for a surgical voice/prompt proposal).
+
+4. **Two more A-grade closer references confirmed against P_close.** [11] Basrah ("offers no
+   evaporative relief when the land is already this hot") and [12] Morrill Fire ("the underlying
+   sand can begin to shift") are both P_close POSITIVE — declarative, named consequences, not
+   implied. [13] Al Baṣrah ("recycles heat back into an already superheated air column") and [14]
+   Wadi Halfa ("dampens the column") are both P_close FAILING — mechanism/resolution-only closes.
+   2 positive / 2 failing this cycle; P_close now 12 cycles evidenced.
+
+5. **P_dust — 8th consecutive dust_event draft, still no WHO/consequence anchor.** Wadi Halfa
+   continues the unbroken pattern: real signal, decent (even two-step) ecosystem mechanism, no
+   calibration for the reader, resolution-style close. 7th grading cycle with this observation.
+
+### Followups (in priority order)
+
+1. **P_tier is ready for implementation.** 4 corroborating instances across `regional_sst_anomaly`
+   and `absolute_extreme` (×2) and `fire_footprint`, spanning Jun 23 (A3's original filing) through
+   Jul 1. The fix is a one-paragraph addition to `writer_prompt.py`: state the raw number, never
+   the bucket name.
+2. **Operator: reject [1] Mediterranean and [2] GMST marine_heatwave via dashboard.** Both stale
+   by policy (>48h + "today" language); `gh` CLI unavailable for automated bulk-reject (33rd
+   consecutive skip).
+3. **Operator: decide on [11] Basrah before it goes further stale.** The forecast date (June 30)
+   has already passed; post now with corrected tense, or reject and let [13] (the fresher,
+   same-area July 1 draft) stand in its place.
+4. **P_dust and P_tier fixes are complementary and could ship together** — both are one-paragraph
+   `writer_prompt.py` additions targeting the same underlying issue (numbers presented without a
+   reader-facing reference frame: WHO multiples for dust, plain values for tier thresholds).
+
+### Numbers
+
+- Pending drafts in queue: 14 (4 fresh; 10 carry-overs from Jun 28–30, not re-graded)
+- Fresh drafts graded: 4 (absolute_extreme ×2, fire_footprint, dust_event)
+- A-rate: 0% (0/4); n=4 — not statistically meaningful
+- Grade distribution (fresh): 0 A / 2 B / 1 B- / 1 C+ / 0 D-F
+- New signal types in corpus: `absolute_extreme`, `fire_footprint`
+- Active proposals: P_close 12th cycle (2 positive, 2 failing); P_dust 7th cycle (8th corpus
+  draft, template convergence total); P_tier promoted from A3 (awaiting-evidence) to active,
+  4 corroborating instances across 3 signal types; P9/P_compound/P_precip_floor — no applicable
+  drafts this cycle, counts unchanged; P5 — dust_event gap continues (Wadi Halfa: real mechanism,
+  no named humor move)
+- Staleness bulk-reject: 2 candidates ([1] Mediterranean, [2] GMST marine_heatwave); `gh` CLI
+  absent — 33rd consecutive skip (May 13 → Jul 1)
+- Operational note: `main` branch's copies of these three docs are stale since 2026-06-08 (23
+  daily cycles' worth of grading — Jun 9 through Jun 30 — live only on the unmerged
+  `daily-plan-current` rolling branch). This cycle continues that branch rather than restarting
+  from `main`'s stale copies, per the runbook's rolling-branch instructions. Operator should merge
+  soon; the longer the branch goes unmerged, the larger the gap between `main` and ground truth.
+
+---
+
 ## 2026-06-29 — Daily corpus grading (5 fresh drafts; 1 Jun-28 carry-over not re-graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending — 1 carry-over from Jun 28 (Mediterranean regional_sst_anomaly B+, grade stands from Jun 28), plus 5 fresh (created after Jun 28's ~15:00 UTC grading window). Fresh mix: marine_heatwave (global SST streak), regional_anomaly/reganom (France, 8 cities), fire (Congo Basin), all_time_high (Prudhoe Bay AK), precipitation_extreme (Amsterdam). New signal type entering corpus: marine_heatwave.
