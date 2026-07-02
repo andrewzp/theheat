@@ -11,6 +11,253 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-02 — Daily corpus grading (3 fresh drafts; 14 carry-overs from Jun 28–Jul 1, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 17 pending drafts.
+Continuing to grade on the unmerged `daily-plan-current` rolling branch — `main`'s copies of
+these three docs are still stale back to 2026-06-08 (24+ days of cycles now live only on this
+branch; see Jul 1's operational note, repeated below). 14 of 17 pending drafts exactly match
+drafts already graded Jun 28–Jul 1 (same `draft_id`, score, text) — carried over, not re-graded.
+**3 fresh**, all created after Jul 1's ~15:00 UTC grading window: Ft Green, Florida (`all_time_high`,
+created Jul1T21:48Z, 102°F/June 28), Basrah, Iraq (`absolute_extreme`, created Jul1T21:49Z, 48°C/July
+1 — third Basra-area draft in the corpus in 3 days), Ft Green, Florida again (`all_time_high`,
+created Jul2T03:47Z, 102°F/June 29 — same city, same temperature, same record margin as the first
+Ft Green draft, one day later). Bot per BRIEFING.md at 0.9.81.0+ (no newer handoff confirmed this
+cycle).
+
+**Staleness review as of 2026-07-02 ~15:00 UTC:**
+- [1] Mediterranean SST (`draft_20260628_040130_32`, created Jun28T04:01Z): ~107h old, "running
+  3.54°C above its seasonal normal **today**." Flagged stale Jun 30, flagged again Jul 1, still
+  sitting in the queue unactioned. **3rd consecutive cycle STALE — bulk-reject candidate.**
+- [2] GMST marine_heatwave (`draft_20260628_171634_36`, created Jun28T17:16Z): ~94h old, "**today's**
+  reading is 20.961°C." Flagged newly-stale Jul 1, still unactioned. **2nd consecutive cycle
+  STALE — bulk-reject candidate.**
+- [3]–[10], [12], [14]: no "today"/"tonight"/forecast-for-today language; past-tense or explicitly
+  dated ("through June 27", "since March 13", "on June 29"). Not stale by policy.
+- [8] Rocky Mountains, Colorado fire (`draft_20260629_213734_47`): ~65h old, first cycle crossing
+  48h. Text has no explicit "today"/"is radiating" language (unlike the May 2026 Mali/Campeche
+  fires that were flagged on that basis) — reads as a static satellite-detection statement without
+  a present-tense verb. Does not meet the mechanical bulk-reject criterion (no real-time-baked
+  phrase), but fire signals are inherently point-in-time; flagging as a freshness-risk observation,
+  not a reject candidate.
+- [11], [13], [16] — all three Basra-area `absolute_extreme` forecast drafts: each cites a forecast
+  date that has now **elapsed** (June 30, July 1, and July 1 respectively; grading is July 2). None
+  has crossed the 48h mechanical threshold yet (~41h, ~24h, ~17h), so none is a strict bulk-reject
+  candidate under the policy as written, but all three are now temporally false if posted as
+  same-day forecasts. This is the same risk flagged for [11] alone on Jul 1 ("forecast has gone
+  stale in truth-value, not just in age") — now recurring on 3 drafts instead of 1. See Followups.
+- [15], [17] (fresh): under 18h old, dated to a specific past day (June 28 / June 29), no "today"
+  language. Clear.
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` for [1] and [2] — `gh` command not found in
+this remote execution environment. **34th consecutive skip** (May 13 → Jul 2). Operator must reject
+both via dashboard.
+
+**Grade distribution (3 fresh drafts):** 0 A / 2 B / 1 C+ / 0 D-F.
+**A-rate: 0% (0/3).** Gap from resumption bar: 50 pp. Most recent above-bar cycle: 80% (Jun 29,
+n=5); Jun 30 was 22%, Jul 1 was 0% (n=4).
+
+**Headline finding:** Two duplicate-location clusters dominate this cycle's fresh batch. Ft Green,
+Florida produced two nearly-identical `all_time_high` drafts one day apart — same 102°F reading,
+same "26 years of records, 1°F above the 2025 mark" double-qualifier, and both close on a
+convective-lid/ceiling metaphor ("the lid lifts fast" vs. "overcome that convective ceiling"),
+suggesting either the same underlying event reported on consecutive observation days or a dedup
+gap. Basrah, Iraq produced its third `absolute_extreme` draft in 3 days (47.2°C Jun 30 → 47°C Jul 1
+→ 48°C Jul 1, this one graded today), again carrying the P_tier internal-threshold-jargon leak
+first promoted to active-proposal status yesterday. Both duplicate clusters are logged as
+operational/data observations, not voice failures — the writing quality on each individual draft
+is assessed independently below.
+
+### B-grade drafts
+
+#### [15] Ft Green, Florida — all_time_high — 102°F, June 28 — **B**
+
+> *Ft Green, Florida hit 102°F (38.9°C) on June 28 — hottest daily maximum in 26 years of records,
+> 1°F above the 2025 mark. In Florida's sea-breeze zone, Atlantic and Gulf moisture normally cap
+> afternoon heat; when both sea breezes fail to converge, the lid lifts fast.*
+
+**Score:** 87. Created 2026-07-01T21:48:00Z.
+
+Humor lens:
+- **Violation:** 102°F, 26-year record, but only 1°F above the prior mark — thin margin for the
+  category (compare Prudhoe Bay's 12°F margin, also A-).
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: "hottest daily maximum in 26 years of records, 1°F above the 2025
+  mark" — states both archive depth AND margin in one clause (P_compound). Close: dual-sea-breeze
+  convergence mechanism, ending "the lid lifts fast."
+- **Named mechanic?** Ecosystem specificity, genuinely distinctive: Florida's afternoon heat cap
+  depends on BOTH Atlantic and Gulf sea breezes converging; when they fail to meet, the cap lifts.
+  This is a more specific mechanism than most sea-breeze framings in the corpus (which usually cite
+  a single coastal effect).
+- **Wodehouse rule?** P_compound violation in sentence 1 (archive + margin double-qualifier — same
+  pattern as Beaver Dams, Casper, Prudhoe Bay). "The lid lifts fast" is borderline P_close: it
+  names a physical event (the cap lifting) rather than stopping at pure mechanism description, but
+  it's abstract/metaphorical rather than a plain declarative consequence — closer in kind to Congo
+  fire's "broken convective lid" (graded A- Jun 29) than to a mechanism-only close.
+
+B rather than B+/A- because the 1°F margin is thin (same class as Columbus GA, graded B on Jun 23
+for the same reason) and the double-qualifier opener dilutes the punch before the mechanism gets a
+chance to land. The mechanism itself is the strongest part of the draft.
+
+#### [16] Basrah, Iraq — absolute_extreme — 48°C (118°F), July 1 — **B**
+
+> *Basrah, Iraq is forecast to reach 48°C (118°F) on July 1 — above the 47°C threshold marking
+> absolute extremes for this latitude band. The Mesopotamian lowlands offer no terrain to break the
+> dry continental air mass that builds over the surrounding desert in summer.*
+
+**Score:** 84. Created 2026-07-01T21:49:13Z.
+
+Third Basra-area `absolute_extreme` draft in the corpus in 3 days (see [11] Jun 30 47.2°C, [13] Jul
+1 47°C — both graded B/B- on Jul 1). Highest single-day forecast of the three (48°C vs. 47.2°C /
+47°C).
+
+Humor lens:
+- **Violation:** 48°C forecast, above the 47°C absolute-extreme line — the clearest "above" framing
+  of the three Basra drafts (vs. [13]'s boundary-line "at").
+- **Benign?** Yes.
+- **Setup→Punchline?** Setup: forecast value + threshold framing. Close: "no terrain to break the
+  dry continental air mass" — named-absence consequence, same family as [11]'s "no evaporative
+  relief" and Prudhoe Bay's "nothing to blunt the heat."
+- **Named mechanic?** Ecosystem specificity via named-absence — solid, same tier as [11]'s.
+- **Wodehouse rule?** Same P_tier violation as [11] and [13]: "above the 47°C threshold marking
+  absolute extremes for this latitude band" reads as the bot quoting its own scoring rubric. Third
+  near-identical instance of this exact phrase family in 3 days.
+
+B for the same reason as [11]: strong named-absence close, capped by the tier-jargon leak in
+sentence 1. Without "above the 47°C threshold marking absolute extremes for this latitude band" —
+e.g. "Basrah, Iraq is forecast to reach 48°C (118°F) on July 1" — this reads clean and the draft is
+A- territory, same assessment as [11] and [12] on Jul 1.
+
+### C-grade drafts
+
+#### [17] Ft Green, Florida — all_time_high — 102°F, June 29 — **C+**
+
+> *Ft Green, Florida hit 102°F (38.9°C) on June 29 — hottest daily maximum in 26 years of records,
+> 1°F above the 2025 mark. In the Florida sea-breeze zone, Atlantic and Gulf moisture loads the
+> afternoon air; days that beat 102°F have overcome that convective ceiling.*
+
+**Score:** 87. Created 2026-07-02T03:47:58Z.
+
+Same city, same reading (102°F), same record margin (1°F above the 2025 mark), same "26 years of
+records" as [15] — one day later. Near-verbatim sentence 1 (differs only in the date). Sentence 2
+reuses the convective-lid/ceiling image from [15] but in a weaker, more confusing form.
+
+Humor lens:
+- **Violation:** Identical to [15] — 102°F, 26-year record, 1°F margin. Same P_compound
+  double-qualifier in sentence 1.
+- **Benign?** Yes.
+- **Setup→Punchline?** Close: "days that beat 102°F have overcome that convective ceiling" —
+  restates the exact number (102°F) that sentence 1 already gave, then describes the day as having
+  "overcome" its own ceiling in circular phrasing (the ceiling IS 102°F; the day IS 102°F; saying
+  the day "beat" and "overcame" its own value is confusing rather than declarative).
+- **Named mechanic?** Same sea-breeze mechanism as [15], reused with less specificity ("moisture
+  loads the afternoon air" vs. [15]'s "normally cap afternoon heat... fail to converge").
+- **Wodehouse rule?** Violated — the closer restates the headline number instead of adding new
+  information, a mild form of restate-padding, worsened by the confusing self-referential framing
+  ("days that beat 102°F" when 102°F IS this day's reading).
+
+C+, below [15]'s B for the identical underlying signal, because the close is weaker and more
+confusing rather than declarative, and because reusing [15]'s "lid/ceiling" image one day later
+with less precision reads as the writer echoing its own recent output rather than finding a fresh
+angle on a (likely) duplicate event.
+
+### Carry-over inventory (Jun 28–Jul 1 grades stand; not re-graded)
+
+| # | Draft | Type | Grade (cycle graded) | Status this cycle |
+|---|---|---|---|---|
+| [1] | Mediterranean Sea, 3.54°C above seasonal normal | regional_sst_anomaly | B+ (Jun 28) | **STALE — bulk-reject candidate (3rd cycle)** |
+| [2] | Global mean ocean surface temp, 25-day streak | marine_heatwave | A- (Jun 29) | **STALE — bulk-reject candidate (2nd cycle)** |
+| [3] | France, 6 cities, 11.53°C above normal (reganom) | regional_anomaly | B+ (Jun 29) | Clear |
+| [4] | Amsterdam, 314.1 mm / 7 days | precipitation_extreme | B (Jun 30) | Clear |
+| [5] | Astana, Kazakhstan, 308.1 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+| [6] | Phalodi, India, 956 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [7] | Taiz, Yemen, 1,302 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [8] | Rocky Mountains, Colorado, 595.3 MW fire | fire | B- (Jun 30) | Freshness risk (~65h, no explicit today-language) |
+| [9] | Prudhoe Bay, Alaska, 101°F all-time high | all_time_high | A- (Jun 30) | Clear |
+| [10] | Antwerpen, Belgium, 358.8 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+| [11] | Basrah, Iraq, 47.2°C forecast (Jun 30) | absolute_extreme | B (Jul 1) | Forecast date elapsed — operator call needed |
+| [12] | Morrill Fire, Nebraska, 259,820 ha | fire_footprint | B (Jul 1) | Clear |
+| [13] | Al Baṣrah al Qadīmah, Iraq, 47°C forecast (Jul 1) | absolute_extreme | B- (Jul 1) | Forecast date elapsed — operator call needed |
+| [14] | Wadi Halfa, Sudan, 559 μg/m³ dust | dust_event | C+ (Jul 1) | Clear |
+
+### Patterns named in this batch
+
+1. **P_tier — 6th instance, 4th cycle.** [16] repeats the exact tier-jargon leak identified
+   yesterday: "above the 47°C threshold marking absolute extremes for this latitude band." This is
+   the 3rd Basra-area draft to carry a near-identical version of this phrase (after [11] and [13]).
+   The pattern is now observed across 4 distinct grading cycles (Jun 23 origin as A3, Jun 28
+   Mediterranean, Jul 1 ×3, Jul 2 ×1) and 3 signal types (`regional_sst_anomaly`, `absolute_extreme`,
+   `fire_footprint`). Full proposal unchanged in `docs/IMPROVEMENT_PLAN.md` P_tier — today's evidence
+   increments the cycle/instance count, no new fix needed.
+
+2. **P_compound — 4th cycle.** [15] and [17] both open with the archive-depth + margin
+   double-qualifier ("hottest daily maximum in 26 years of records, 1°F above the 2025 mark").
+   Same structural default as Beaver Dams (Jun 28), Casper (Jun 28), and Prudhoe Bay (Jun 29/30).
+   4 consecutive cycles now confirm this is the default record-type opener form, not a one-off.
+
+3. **P_close — 14th cycle, 1 positive / 1 failing / 1 borderline.** [16] positive (declarative
+   named-absence, "no terrain to break... the air mass"). [17] failing (restates the headline
+   number rather than adding a consequence; confusing comparative framing). [15] borderline —
+   "the lid lifts fast" names a physical event but stays metaphorical/abstract rather than a plain
+   declarative consequence, similar in kind to Congo fire's A- "broken convective lid" but less
+   sharp.
+
+4. **Duplicate-location clustering, now 2 distinct clusters.** Ft Green, FL (this cycle) and Basrah,
+   Iraq (spanning Jun 30–Jul 2) each produced near-identical drafts for the same location within
+   1–3 days, several sharing near-verbatim phrasing. This continues the observation logged Jul 1 for
+   Basrah/Al Baṣrah al Qadīmah (likely two gazetteer entries for the same metro area) — worth
+   flagging with more urgency now that a second location (Ft Green) shows the same pattern with an
+   *exact* repeated reading (102°F, same margin, same archive depth) one day apart. Logging as a
+   data/pipeline observation, not a voice proposal — out of this routine's scope per the hard
+   constraints (no architectural or data-source proposals). Operator: worth checking whether these
+   are genuinine independent daily records or a city/station dedup gap producing repeat signals.
+
+5. **Forecast-date-elapsed pattern now affects 3 drafts, not 1.** [11] (flagged Jul 1), [13], and
+   [16] all cite same-day forecasts for dates that have since passed (June 30, July 1, July 1
+   respectively; grading is July 2). None crosses the 48h mechanical staleness threshold, so none
+   is a strict bulk-reject candidate — but all three would misstate the date if posted as-is. This
+   is now a recurring pattern across the `absolute_extreme` signal type specifically (3 of 3 corpus
+   drafts of this type share it), not an isolated Basrah incident. See Followups.
+
+### Followups (in priority order)
+
+1. **Operator: the forecast-date-elapsed issue now affects all 3 `absolute_extreme` drafts in
+   queue** ([11], [13], [16]) — none crosses the 48h mechanical threshold but all three would read
+   as factually wrong if posted (forecast for a day that's already passed). Recommend the operator
+   pick at most one Basra-area draft to post (with corrected tense) and reject the other two as
+   redundant/stale-in-truth-value, rather than waiting for the 48h rule to catch up.
+2. **Operator: reject [1] Mediterranean and [2] GMST marine_heatwave via dashboard.** Both stale by
+   policy for a 2nd–3rd consecutive cycle now; `gh` CLI unavailable for automated bulk-reject (34th
+   consecutive skip).
+3. **P_tier and P_compound are both ready for implementation** — one-paragraph `writer_prompt.py`
+   additions, both drafted in full in `docs/IMPROVEMENT_PLAN.md`, both with 4+ cycles of evidence
+   and no counter-evidence.
+4. **Operator: verify whether Ft Green, FL and the Basrah/Al Baṣrah cluster are genuine independent
+   signals or a location-dedup gap** producing near-identical repeat drafts. Not a voice-quality
+   issue; flagging because it affects queue signal-to-noise and grading efficiency (this routine is
+   now grading the same underlying event 2–3 times under slightly different draft IDs).
+
+### Numbers
+
+- Pending drafts in queue: 17 (3 fresh; 14 carry-overs from Jun 28–Jul 1)
+- Fresh drafts graded: 3 (2 all_time_high, 1 absolute_extreme)
+- A-rate: 0% (0/3); n=3 — not statistically meaningful
+- Grade distribution: 0 A / 2 B / 1 C+ / 0 D-F
+- Active proposals: P_tier 4th cycle (6th instance); P_compound 4th cycle; P_close 13th cycle (1
+  positive/1 failing/1 borderline); P9/P_dust/P5 — no new evidence this cycle (no
+  precipitation_extreme or dust_event drafts in today's fresh batch). **P_precip_floor archived**
+  (3 consecutive fresh-draft cycles — Jun 30/Jul 1/Jul 2 — without a qualifying wet-climate
+  thin-margin observation; see `docs/IMPROVEMENT_PLAN.md` Resolved section)
+- Staleness bulk-reject: 2 candidates identified ([1] Mediterranean, [2] GMST marine_heatwave); `gh`
+  CLI absent (34th consecutive skip, May 13 → Jul 2)
+- New operational observation: 2 duplicate-location clusters (Ft Green FL ×2, Basrah/Al Baṣrah
+  Iraq ×3); forecast-date-elapsed pattern now affects all 3 `absolute_extreme` corpus drafts
+- Operational note (unchanged from Jul 1): `main`'s copies of these docs remain stale since Jun 8;
+  this cycle continues grading on the unmerged `daily-plan-current` rolling branch, which now
+  carries ~25 days of cycles (Jun 9–Jul 1) `main` doesn't have yet. Operator should merge soon.
+
+---
+
 ## 2026-07-01 — Daily corpus grading (4 fresh drafts; 10 carry-overs from Jun 28–30, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 14 pending drafts.
