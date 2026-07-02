@@ -33,6 +33,29 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-05-26 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 13 carry-overs (same queue as May 25). **6th consecutive no-fresh-draft cycle**; queue static since May 18T15:52Z (8 days, ~48 cron cycles). No bulk-reject candidates by policy; `gh` CLI absent (10th consecutive skip). Coral drafts now 8–11 days old; operator must verify NOAA CRW DHW values before publishing. Evidence contract gate most likely suppression bottleneck — operator should check `evidence_contract` kill counts in suppression ledger for May 22–26. No proposal evidence updates. |
 | 2026-06-07 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | First fresh draft in 19 days. Barrow, Alaska precipitation_extreme (213.8 mm/3d, 42.5% above record): B+ (permafrost drainage ecosystem specificity; "sheets across the surface instead" — implied contrast, soft close vs. A-grade declaratives). Restate-math minor violation (63.8 mm above the record of 150.0 mm). n=1; not statistically meaningful. 0.9.15.0 gpm S3 feed appears to have unlocked precipitation_extreme type. TTL sweep cleared 13 carry-overs including 3 A-/B+ coral drafts. P5 not observed (ecosystem specificity deployed naturally). |
 | 2026-06-08 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 1 carry-over (Barrow Alaska precipitation_extreme, B+ from Jun 7 — not re-graded). Queue static since Jun 7T04:07Z (~35h). No proposal evidence updates. Staleness check: draft ~35h old, no real-time-baked language — clear. |
+| 2026-06-09 | 0 | — | — | — | — | **—** | — | No fresh drafts. Queue now empty (0 pending; Barrow AK precipitation_extreme draft cleared between Jun 8 ~15:00 UTC and Jun 9 ~15:00 UTC — likely published or operator-rejected). No proposal evidence updates. P_new (cold record quality floor) moved to Resolved: 6 consecutive fresh-draft cycles without observation (May 15–19 + Jun 7). `gh` CLI absent (13th consecutive staleness skip). |
+| 2026-06-10 | 0 | — | — | — | — | **—** | — | No fresh drafts. Queue confirmed empty (0 pending; verified Jun 9 clear still holds). No proposal evidence updates. P_new archived in Jun 9 run; P5/P7/P8 at last-known counts. Pipeline healthy (0.9.22.0+). `gh` CLI absent (14th consecutive staleness skip). |
+| 2026-06-11 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue confirmed empty (3rd consecutive no-fresh-draft cycle since Jun 7). Barrow Alaska B+ carry-over cleared between Jun 8–9 by operator (under 7d TTL, not auto-expired; likely published). No new drafts since Jun 7T04:07Z (4 days). No proposal evidence updates; P_new archived Jun 9. `gh` CLI absent (15th consecutive staleness skip). |
+| 2026-06-12 | 0 | — | — | — | — | **N/A** | — | No pending drafts. Jun 7 Barrow draft confirmed posted. 1 approved draft (Chesnee SC monthly_low, Jun 10, score 86) graded B+ as voice observation (not pending). Same B+/A- implied-close gap as Barrow Jun 7: "threaten gardens well into early summer" implies frost vs. declarative form. New proposal P_close added. P_new not triggered — Chesnee counter-evidence (35yr archive, 7°F margin, SE US — fails all kill criteria). Bot at 0.9.47.0 (voice engine unchanged). `gh` CLI absent (16th consecutive staleness skip). |
+| 2026-06-13 | 2 | 0 | 0 | 2 | 0 | **0%** | ✗ | 2 fresh drafts: monthly_low (Red Dog Mine AK — P_new re-activated, 17yr/1°F/Arctic Circle, C+); dust_event debut (Riyadh — 2,083 μg/m³ flat without WHO ref, C). P_close 3rd cycle (Red Dog Mine: mechanism-only close — most concrete evidence yet). P_dust new proposal added. Supply flags WRITER_SAMPLES=2+CRITIC_REVISE now live. No Wodehouse violations. Bot at 0.9.67.0. |
+| 2026-06-14 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 2 carry-overs from Jun 13 (Red Dog Mine C+, Riyadh C — not re-graded). Both ~31h old; neither stale by policy. No proposal evidence updates. P_close/P_new/P_dust unchanged from Jun 13 counts. |
+| 2026-06-15 | 9 retro | 6 | 2 | 1 | 0 | **67%** | ✓ | Retroactive grades: 9 drafts posted/approved/rejected Jun 2–15; 0 pending. **First cycle above 50% bar (retroactive caveat).** Suppression-failure + ecosystem isolation mechanics driving A-range. P_new confirmed (Red Dog Mine rejected — 17yr, 1°F, Arctic; 2nd cycle). P7 counter-evidence (2 coral drafts used alt opener forms → Resolved). New types: hot10 (B+), dust_event (B). Chesnee SC (approved Jun 10) missing posted_at — possible posting failure. |
+| 2026-06-16 | 0 | — | — | — | — | **N/A** | — | 0 pending drafts. No new evidence for any active proposal. Pipeline active (triage_cap + critic + writer + fact_check kills observed in Jun 15 22:27 suppression log). Chesnee SC posting flag from Jun 15 unresolved — operator verify. 20th consecutive staleness-skip. |
+| 2026-06-17 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | 1 new draft: Urumqi China dust_event (B- — "traps it" declarative close vs Riyadh's "disperses it"; better close, same WHO-calibration gap). 4 of 5 gist drafts since Jun 8 already graded in Jun 12–15 entries (Chesnee A-, Beaver Dams A-, Riyadh C/B, Red Dog Mine C+). P_dust 2nd cycle confirmed (Urumqi: 2,260 μg/m³ = 151× WHO PM2.5 daily; unstated). P8 retired (4 fresh-draft cycles without snow_extreme since May 19). 21st consecutive staleness skip. |
+| 2026-06-18 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh precipitation_extreme drafts. Barrow AK (71.2 mm single-day, prior record 0.0 mm — B+): elite signal, over-packed sentence 2, P_close implied close ("any of it"). Amsterdam (314.4 mm / 7d, 4.8% above prior — B): thin margin, restate-math, P_close implied close ("stack up faster than they drain"). Opener template convergence across all 3 precipitation_extreme corpus drafts → P9 added. P_close 5th cycle. 22nd consecutive staleness skip. n=2. |
+| 2026-06-19 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty. All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z after prior grading window]). First operator rejection of a B+ graded draft (Barrow 71.2mm/prior 0.0mm). No proposal evidence updates. 23rd consecutive staleness skip. |
+| 2026-06-22 | 1 retro | 1 | 0 | 0 | 0 | **100%** | (n=1) | Retroactive grade: Barrow 7-day precip (A-) — flagged ungraded in Jun 19/21. "Has nowhere to go" = first precipitation_extreme declarative-consequence close (P_close positive evidence). Restate-math confirmed (P9 3rd cycle). Queue empty (4th consecutive day). 25th staleness skip. |
+| 2026-06-23 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | 3 fresh drafts (created Jun 22T17–19Z, after prior grading window). Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence; accelerating-warming + ecosystem specificity. Columbus GA all_time_high (B): 1°F margin, dual-mechanism second sentence, P_close 6th cycle failing. Mediterranean SST regional_sst_anomaly (B): comparative-implied close ("retains heat faster than open-ocean basins"), "today" staleness risk at Jun 24T17:12Z, unexplained NOAA 2.5°C threshold (A3 filed). 26th consecutive staleness skip. |
+| 2026-06-24 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 2 fresh drafts. Randolph UT monthly_high B+ (134yr archive, ecosystem specificity "normally blunts" — P_close 7th cycle failing, implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard B (10.1× WHO stated, shamal mechanism — P_close 7th cycle failing, resolution-close subtype "by evening"; P_dust positive: WHO ratio present unlike dust_event drafts). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. 27th consecutive staleness skip. |
+| 2026-06-25 | 5 | 0 | 4 | 1 | 0 | **0%** | ✗ | 5 fresh drafts. Siberia fire B+ (965.6 MW, highest in corpus; companion-fire peer comparison + "burns deep" = P_close positive). Barrow precip B+ (ratio-to-annual-precip P_close positive; P9 template 5th). Michigan monthly_low B (lake-effect, P_close failing). Taiz Yemen dust_event ×2 (C+/B-): P_dust 3rd cycle, all 4 dust_event corpus drafts template-converged. P_close 8th cycle: 3 failing, 2 positive. 28th consecutive staleness skip. |
+| 2026-06-26 | 3 | 0 | 1 | 2 | 0 | **0%** | ✗ | 3 fresh drafts (all precipitation_extreme). Anchorage B (183.8 mm/3d, 22.5% margin, orographic stall mechanism, P_close mechanism-only failing). Amsterdam C+ (157.1 mm, 4.73% margin, canal-capacity incongruity, P_close implied-consequence failing). Aktobe C+ (150.8 mm, 0.53% margin, steppe-aridity + half-year ratio, P_close borderline). Threshold artifact: all 3 cite "previous 3-day record of 150.0 mm" — detection threshold used as prior record (`previous_record_year: null`). P9 6th cycle: all 3 use opener template; all 3 have restate-math. P_close 9th cycle: Anchorage mechanism-only + Amsterdam implied-consequence failing; Aktobe half-year ratio borderline. 29th consecutive staleness skip. |
+| 2026-06-21 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue empty (~2.5d since last resolved drafts Jun 18). P_new archived (2nd time) — 3 consecutive cycles without cold-record: Jun 15/17/18. No evidence updates for P_close/P9/P_dust/P5. 24th consecutive staleness skip. |
+| 2026-06-27 | 2 | 0 | 1 | 1 | 0 | **0%** | ✗ | Fire + precipitation_extreme. Fire (Canadian Prairies/BC, 1,517.9–2,979.4 MW): B+ — comic triple, three-fire national cluster, period-form closer; BC fires at ~3,000 MW undersold by minimum-threshold framing in S3. Precipitation (Amsterdam, 157.1 mm, 4.7% above record): C+ — ecosystem specificity correct, signal too thin (score 74, 7.1 mm margin, maritime climate). P6 fire formula fix holding (3rd post-ship fire draft). P5 natural mechanic deployment 2nd consecutive cycle (comic triple + ecosystem specificity deployed without explicit naming). P_precip_floor new proposal: writer over-passes shallow-margin precipitation records in wet-climate locations. n=2, not statistically meaningful. 13th consecutive gh staleness skip. |
+| 2026-06-29 | 5 | 4 | 1 | 0 | 0 | **80%** | ✓ | 5 fresh (1 Jun-28 carry-over not re-graded). [2] marine_heatwave A- (floor/ceiling inversion; "already the floor of a new streak" — first marine_heatwave in corpus). [4] Congo fire A- (first A-grade fire in two-bot corpus; ecosystem incongruity "convective lid"). [5] Prudhoe Bay A- (91°F at 70°N; latitude peer-comparison; P_compound 2nd cycle). [6] Amsterdam A- (declarative close "nowhere for the water to go"; P9 8th cycle; P_precip_floor 2nd cycle). [3] France reganom B+ (pre-#349; P_close failing). P_close 11th cycle: 3 pos/1 fail/1 n/a. **BAR CLEARED: 80% > 50% resumption bar.** 31st consecutive staleness skip. Immediate operator attention: [1] Mediterranean stale ~Jun 30T04Z, [2] marine_heatwave stale ~Jun 30T17Z. |
+| 2026-06-28 | 5 | 0 | 4 | 1 | 0 | **0%** | ✗ | 5 fresh (2 Jun-27 carry-overs not re-graded). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor, mechanism-only P_close fail; 5th consecutive dust_event template-converged). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go" — closest to declarative in batch). [5] Astana precip B+ (51.1/3.9 mm = 13× implicit; steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_close implied fail; P_compound new — archive+margin double-qualifier). [7] Casper monthly_low B (P_close implied fail; P_compound 2nd obs). P_close 10th cycle. New proposal P_compound. No Wodehouse violations (7th consecutive clean cycle). 30th consecutive staleness skip. |
+| 2026-06-30 | 9 | 2 | 5 | 2 | 0 | **22%** | ✗ | 10 pending (1 stale excl.: Mediterranean regional_sst_anomaly "today" ~59h). 2 A-: GMST marine_heatwave (floor/ceiling inversion "already the floor of a new streak" — first marine_heatwave graded this cycle); Prudhoe Bay all_time_high (92 score, 101°F at 70°N, latitude peer-comparison). 5 B: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. 2 C+: Phalodi + Taiz dust_event (P_dust 5th+6th cycle, zero named mechanics, WHO anchor absent). P9 9th cycle: 3/3 fresh precip drafts (Astana/Antwerpen/Colorado) show opener template + restate-math. P5: dust_event still no named mechanics (2nd consecutive cycle). regional_anomaly debut: France reganom B+ (score 88, 6-city +8.4°C avg, 2.8σ — first reganom in corpus post-#349). A-rate: 22% (below bar cleared Jun 29; different signal mix, fewer A-prone types). 32nd consecutive staleness skip. |
+| 2026-07-01 | 4 | 0 | 3 | 1 | 0 | **0%** | ✗ | 14 pending (10 carry-overs from Jun 28–30, unchanged; 4 fresh). Basrah, Iraq absolute_extreme B (83 score, "offers no evaporative relief" P_close positive, but sentence 1 names its own internal tier — "the 47°C absolute-extreme threshold for the Northern Subtropical band"). Morrill Fire, Nebraska fire_footprint B (first of type; "the underlying sand can begin to shift" is the batch's best closer; same tier-jargon cap — "the 250,000-hectare tier that marks a continent-scale footprint"). Al Baṣrah al Qadīmah, Iraq absolute_extreme B- (same Basra metro area as the Jun-30 draft, 3 days later; same tier-jargon; softer mechanism-only close). Wadi Halfa, Sudan dust_event C+ (8th consecutive dust_event draft, still no WHO/consequence anchor; two-step lift/settle mechanism is the best-constructed dust mechanism yet). **New pattern promoted to active proposal P_tier** (was A3, awaiting-evidence since Jun 23): 4 of 14 pending drafts across 3 signal types state an internal scoring-tier name verbatim instead of describing the world. 2 stale carry-overs newly flagged: [1] Mediterranean SST (~83h, "today") and [2] GMST marine_heatwave (~70h, "today's reading") — both bulk-reject candidates, `gh` unavailable. **Operational note:** `main`'s copies of these docs are stale since Jun 8; this cycle continues grading on the unmerged `daily-plan-current` rolling branch, which carries 23 days of cycles (Jun 9–Jun 30) main doesn't have yet. 33rd consecutive staleness skip. |
+| 2026-07-02 | 3 | 0 | 2 | 1 | 0 | **0%** | ✗ | 17 pending (14 carry-overs from Jun 28–Jul 1, unchanged; 3 fresh). Ft Green, Florida all_time_high B ×2 (102°F, 26yr archive, 1°F margin — P_compound double-qualifier; same reading + margin on consecutive days, likely duplicate-location cluster; first draft "the lid lifts fast" B, second reused weaker "overcome that convective ceiling" close C+). Basrah, Iraq absolute_extreme B (48°C, 3rd Basra-area draft in 3 days; P_tier tier-jargon leak — "threshold marking absolute extremes for this latitude band" — same cap as Jul 1's two Basra drafts). P_tier 4th cycle / 6th instance. P_compound 4th cycle. P_close 13th cycle (1 positive, 1 failing, 1 borderline). No dust_event/precipitation_extreme drafts this cycle — P9/P_dust/P5 no new evidence; P_precip_floor archived (3 consecutive cycles without a qualifying observation). 2 carry-overs still stale and unactioned: Mediterranean SST (3rd cycle) and GMST marine_heatwave (2nd cycle). New: all 3 `absolute_extreme` corpus drafts ([11]/[13]/[16]) now have forecast dates that have elapsed by grading time — none crosses the mechanical 48h threshold but all misstate the date if posted. 34th consecutive staleness skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -42,6 +65,169 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-07-02 — Staleness bulk-reject: 2 stale identified; gh CLI absent (34th consecutive skip)
+
+**Status:** 17 pending drafts reviewed. 2 stale candidates (same 2 as Jul 1, now older and still
+unactioned):
+
+| Draft ID | Created | Age | Staleness flag |
+|---|---|---|---|
+| `draft_20260628_040130_32` (Mediterranean SST) | 2026-06-28T04:01Z | ~107h | "running 3.54°C above its seasonal normal **today**" — flagged Jun 30, Jul 1, still unactioned (3rd cycle) |
+| `draft_20260628_171634_36` (GMST marine_heatwave) | 2026-06-28T17:16Z | ~94h | "**today's** reading is 20.961°C" — flagged Jul 1, still unactioned (2nd cycle) |
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI not installed in this remote
+execution environment. 34th consecutive skip (May 13 → Jul 2). Operator must reject both via
+dashboard. Non-flagged but notable: [11]/[13]/[16] — all 3 `absolute_extreme` Basra-area drafts
+now reference forecast dates that have elapsed (June 30, July 1, July 1) but none is yet 48h old
+(~41h/~24h/~17h) — logged as a freshness observation in `docs/DRAFT_CORPUS.md`, not a bulk-reject
+candidate under the mechanical age rule. [8] Rocky Mountains, Colorado fire crossed 48h (~65h) for
+the first time this cycle but contains no explicit "today"/present-tense real-time language —
+also logged as an observation, not a reject candidate. All other pending drafts use past-tense or
+explicitly-dated framing with no "today"/"tonight"/forecast-for-today language.
+
+### 2026-07-01 — Staleness bulk-reject: 2 stale identified; gh CLI absent (33rd consecutive skip)
+
+**Status:** 14 pending drafts reviewed. 2 stale candidates:
+
+| Draft ID | Created | Age | Staleness flag |
+|---|---|---|---|
+| `draft_20260628_040130_32` (Mediterranean SST) | 2026-06-28T04:01Z | ~83h | "running 3.54°C above its seasonal normal **today**" — flagged stale at Jun 30 grading (~59h), still unactioned |
+| `draft_20260628_171634_36` (GMST marine_heatwave) | 2026-06-28T17:16Z | ~70h | "**today's** reading is 20.961°C" — was approaching 48h at Jun 30 grading (~46h), now over |
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI not installed in this remote
+execution environment. 33rd consecutive skip (May 13 → Jul 1). Operator must reject both via
+dashboard. Non-flagged drafts: [11] Basrah forecast (`draft_20260630_213852_50`) references a
+forecast date (June 30) that has already elapsed but is only ~17h old — does not meet the
+mechanical 48h threshold, logged as a freshness observation in `docs/DRAFT_CORPUS.md` rather
+than a bulk-reject candidate. All other pending drafts use past-tense or explicitly-dated
+framing with no "today"/"tonight"/forecast-for-today language.
+
+### 2026-06-30 — Staleness bulk-reject: 1 stale identified; gh CLI absent (32nd consecutive skip)
+
+**Status:** 10 pending drafts reviewed. 1 stale candidate: Mediterranean regional_sst_anomaly
+(created 2026-06-28T04:01Z, ~59h old at grading time ~15:00 UTC Jun 30, contains "today"
+language — staleness positive). Excluded from A-rate denominator. GMST marine_heatwave
+(created 2026-06-28T17:16Z, ~45.7h old) contains "today's reading" — approaching 48h threshold;
+operator should publish promptly. `gh` CLI absent in remote execution environment; 32nd
+consecutive skip (May 13 → Jun 30). Mediterranean draft flagged for operator manual rejection
+via dashboard.
+
+### 2026-06-27 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Draft [1] (fire, created 2026-06-27T06:57Z, ~8h old at grading) contains "today" — real-time-baked. Well under the 48h policy threshold; not a staleness candidate. Will cross the threshold ~2026-06-28T06:57Z if unpublished. Draft [2] (precipitation_extreme, created 2026-06-27T10:17Z) uses past-tense framing ("received") — no real-time-baked content; clear. 0 drafts trigger the staleness policy. `gh` CLI absent in remote execution environment; 13th consecutive skip (May 13 → Jun 27).
+
+### 2026-06-28 — Staleness bulk-reject: 0 candidates; gh CLI absent (30th consecutive skip)
+
+**Status:** 7 pending drafts reviewed; 0 candidates. Carry-over [1] (fire, "today" baked, ~32h old) not yet at 48h threshold — crosses at ~Jun 29T07:00Z; operator should verify/reject if not published. Carry-over [2] (Amsterdam, no date-bake, ~29h) clear. Fresh [3] (Taiz, "June 27" baked, ~22h) not yet at 48h — crosses at ~Jun 29T17:00Z. All other fresh drafts <12h old. `gh` CLI absent — 30th consecutive skip (May 13 → Jun 28; Jun 27 run's "13th" was a tracking bug; authoritative count from Jun 26 = 29th + 1).
+
+### 2026-06-26 — Staleness bulk-reject: 0 candidates; gh CLI absent (29th consecutive skip)
+
+**Status:** 3 pending drafts reviewed (Amsterdam, Aktobe, Anchorage — all created
+2026-06-26T04:00–07:59Z, < 48h old at grading time ~15:00 UTC). No real-time-baked language
+("today"/"tonight"/"forecast") in any draft. **0 staleness candidates.** Operator note: all 3
+Jun 26 drafts approach the 48h threshold ~Jun 28T04:00–07:59Z — post or reject before then.
+`gh` CLI absent — 29th consecutive skip (May 13 → Jun 26).
+
+### 2026-06-24 — Staleness bulk-reject: 0 qualifying candidates; gh CLI absent (27th consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Draft [1] (Randolph UT monthly_high, created
+2026-06-24T07:46:05Z) — "June 20" is a historical record date, no real-time-baked
+language. Not a staleness candidate. Draft [2] (Al Aḥmadī Kuwait air_quality_hazard,
+created 2026-06-24T14:50:41Z) — contains "June 24." < 48h old at grading time; not a
+staleness candidate yet. **Operator: Draft [2] crosses 48h threshold ~Jun 26T14:50 UTC
+— post or reject before then.** Mediterranean SST (`draft_20260622_171200_17`, status=
+approved) is ~46h old at grading time (~15:00 UTC), crossing 48h at ~Jun 24T17:12 UTC.
+**Operator: post or reject Mediterranean SST within ~2h of this run.** `gh` CLI absent —
+27th consecutive skip (May 13 → Jun 24).
+
+### 2026-06-23 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (26th consecutive skip)
+
+**Status:** 0 pending drafts at runtime — bulk-reject policy not triggered. Mediterranean SST (`draft_20260622_171200_17`, created Jun 22T17:12Z, status=approved) contains "today" anchor; crosses the 48h staleness threshold at Jun 24T17:12Z. Policy applies to pending drafts — operator should post or reject before Jun 24T17:12Z. Columbus GA (`draft_20260622_170931_16`) and Cope Rch TX (`draft_20260622_193302_18`) are status=posted — not candidates. Chesnee SC (`draft_20260610_155509_26`, status=approved) references "June 6" as historical date — no real-time-baked language, not a candidate. `gh` CLI absent in remote execution environment — 26th consecutive skip (May 13 → Jun 23). No operator action needed before Jun 24T17:12Z.
+
+### 2026-06-22 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (25th consecutive skip)
+
+**Status:** 0 pending drafts — queue empty (4th consecutive day). Retroactive Barrow 7-day draft (rejected Jun 18T19:42Z, ~4h after creation) well under 48h threshold. `gh` CLI absent — 25th consecutive skip (May 13 → Jun 22). No operator action needed.
+
+### 2026-06-21 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (24th consecutive skip)
+
+**Status:** 0 pending drafts — queue empty. Last resolved drafts were the 3 Jun 18 precipitation_extreme entries, all operator-rejected (logged in Jun 19 rejection event). No pending drafts to evaluate for staleness. `gh` CLI absent in remote execution environment — 24th consecutive skip (May 13 → Jun 21). No operator action needed.
+
+### 2026-06-19 — Staleness bulk-reject: 0 candidates; queue empty; gh CLI absent (23rd consecutive skip)
+
+**Status:** 0 pending drafts — queue empty. All 3 Jun 18 precipitation_extreme drafts are now
+status=rejected in gist: Barrow AK daily (71.2mm, Jun 18T04:14Z), Amsterdam 7-day (314.4mm,
+Jun 18T12:02Z), Barrow AK 7-day (427.5mm, Jun 18T15:43Z — never graded). Rejections appear
+operator-initiated (all < 24h old at time of rejection, TTL not reached). `gh` CLI absent in
+remote execution environment — 23rd consecutive staleness skip (May 13 → Jun 19). No operator
+action needed on staleness grounds; operator has already cleared the queue.
+
+### 2026-06-18 — Staleness bulk-reject: 0 candidates; gh CLI absent (22nd consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Draft [1] (Barrow Alaska, created 2026-06-18T04:14Z,
+10.8h old) references "June 16" as historical observation date — past-tense, no "today" or
+forecast language. Draft [2] (Amsterdam, created 2026-06-18T12:02Z, 3.0h old) uses past-tense
+"received" — no real-time-baked language. Neither qualifies under the staleness policy. `gh`
+CLI absent in remote execution environment — 22nd consecutive skip (May 13 → Jun 18). No
+operator action needed.
+
+### 2026-06-16 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (20th consecutive skip)
+
+**Status:** 0 pending drafts — staleness policy not triggered. `gh` CLI absent in remote
+execution environment; 20th consecutive skip (May 13 → Jun 16). No operator action needed.
+
+### 2026-06-15 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (19th consecutive skip)
+
+**Status:** 0 pending drafts — staleness policy not triggered. One draft in "approved" status
+(`draft_20260610_155509_26`, Chesnee SC monthly_low, created 2026-06-10T15:55Z, approved
+2026-06-10T16:17Z) lacks `posted_at` and tweet_id — possible posting failure not related to
+staleness policy. `gh` CLI absent in remote execution environment; 19th consecutive skip
+(May 13 → Jun 15). No operator dashboard action needed on staleness grounds; operator should
+verify whether Chesnee SC tweet was actually sent.
+
+### 2026-06-14 — Staleness bulk-reject: 0 candidates; gh CLI absent (18th consecutive skip)
+
+**Status:** 2 pending carry-over drafts reviewed. Draft [1] (Red Dog Mine monthly_low, created
+Jun 13T08:03Z) ~31h old — under 48h threshold; "on June 9" is historical observation date. Draft
+[2] (Riyadh dust_event, created Jun 13T08:05Z) ~31h old — "June 13" is historical measurement
+date reference, consistent with prior corpus rulings. Neither draft triggers the staleness
+policy. `gh` CLI absent; 18th consecutive skip (May 13 → Jun 14). No operator action needed.
+
+### 2026-06-13 — Staleness bulk-reject: 0 candidates; gh CLI absent (17th consecutive skip)
+
+**Status:** 2 pending drafts reviewed. Both created 2026-06-13T08:03-08:05Z (< 8h old at
+grading) — well under the 48h threshold. Draft [2] (Riyadh dust_event) bakes "June 13"
+in the text; not stale by policy (under threshold). Neither draft contains
+"today/tonight/forecast" language beyond the date reference in draft [2]. 0 candidates.
+`gh` CLI absent; 17th consecutive skip (May 13 → Jun 13). No operator action needed.
+
+### 2026-06-12 — Staleness bulk-reject: 0 candidates; gh CLI absent (16th consecutive skip)
+
+**Status:** 0 pending drafts — nothing to evaluate. Jun 7 Barrow draft is now status='posted'.
+No real-time-baked language in queue (queue is empty). `gh` CLI absent in remote execution
+environment; 16th consecutive skip (May 13 → Jun 12). No operator action needed.
+
+### 2026-06-11 — Staleness bulk-reject: 0 candidates; gh CLI absent (15th consecutive skip)
+
+**Status:** 0 pending drafts. Queue confirmed empty since Jun 9 run. No candidates. `gh` CLI
+absent; 15th consecutive skip (May 13 → Jun 11). No operator action needed.
+
+### 2026-06-10 — Staleness bulk-reject: 0 candidates; gh CLI absent (14th consecutive skip)
+
+**Status:** 0 pending drafts. Queue empty (Barrow AK draft cleared Jun 9). No candidates.
+`gh` CLI absent; 14th consecutive skip (May 13 → Jun 10). No operator action needed.
+
+### 2026-06-09 — Staleness bulk-reject: 0 candidates; gh CLI absent (13th consecutive skip)
+
+**Status:** 0 pending drafts — Barrow AK precipitation_extreme cleared between Jun 8 and Jun 9
+(~59h old at clearing; under 48h threshold was missed in Jun 8 review; cleared by operator).
+`gh` CLI absent; 13th consecutive skip (May 13 → Jun 9). No operator action needed.
+
+### 2026-06-17 — Staleness bulk-reject: 0 pending drafts; gh CLI absent (21st consecutive skip)
+
+**Status:** 0 pending drafts at runtime — staleness policy not triggered. Urumqi dust_event
+(posted Jun 17T12:27Z, no "today/forecast" language) was already posted before routine ran.
+`gh` CLI absent (21st consecutive skip, May 13 → Jun 17). No operator action needed.
 
 ### 2026-06-08 — Staleness bulk-reject: 0 candidates; gh CLI absent (12th consecutive skip)
 

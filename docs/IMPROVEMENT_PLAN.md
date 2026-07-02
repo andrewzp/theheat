@@ -2,7 +2,74 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
-> **Routine restored and grading.** First fresh draft in 19 days reached the queue 2026-06-07 (Barrow, Alaska precipitation_extreme — B+). Pipeline producing signals again post-0.9.15.0 gpm single-request grid migration. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system — it tracks data-fetch health, not voice quality.
+> **Jul 2: 17 pending, 3 fresh graded, 0% A-rate this cycle (bar cleared Jun 29 still stands as
+> the most recent above-bar cycle).** 14 of 17 pending are carry-overs from Jun 28–Jul 1, grades
+> unchanged. 3 fresh, all B-range or below, forming two duplicate-location clusters: Ft Green,
+> Florida all_time_high B (102°F, June 28, "the lid lifts fast" — P_close borderline positive) and
+> a second near-identical Ft Green draft one day later, all_time_high C+ (102°F, June 29, same
+> 26yr/1°F margin, weaker "overcome that convective ceiling" close that restates the headline
+> number); Basrah, Iraq absolute_extreme B (48°C forecast for July 1 — third Basra-area draft in 3
+> days, same P_tier tier-jargon leak as Jul 1's two Basra drafts, strong named-absence close).
+> **P_tier 4th cycle / 6th instance** (was promoted from A3 yesterday; today adds a 3rd near-verbatim
+> Basra-area repeat of the exact phrase family). **P_compound 4th cycle** (both Ft Green drafts open
+> with the archive-depth + margin double-qualifier, same pattern as Beaver Dams/Casper/Prudhoe Bay).
+> **P_close 13th cycle** (1 positive: Basrah; 1 failing: 2nd Ft Green; 1 borderline: 1st Ft Green).
+> No precipitation_extreme or dust_event drafts this cycle — P9/P_dust/P5 unchanged;
+> **P_precip_floor archived** (3 consecutive fresh-draft cycles without a qualifying wet-climate
+> thin-margin observation). 2 carry-overs still stale and unactioned for a 2nd–3rd consecutive cycle: Mediterranean
+> SST and GMST marine_heatwave. **New operational observation:** all 3 `absolute_extreme` corpus
+> drafts now cite forecast dates that have elapsed by grading time (none crosses the mechanical 48h
+> threshold, but all 3 would misstate the date if posted) — recommend the operator pick at most one
+> Basra-area draft to post and reject the other two. 34th consecutive staleness skip.
+>
+> **Jul 1: 14 pending, 4 fresh graded, 0% A-rate this cycle (bar cleared Jun 29 still stands as
+> the most recent above-bar cycle).** 10 of 14 pending are carry-overs from Jun 28–30, grades
+> unchanged. 4 fresh, all B-range or below: Basrah, Iraq absolute_extreme B (score 83, "offers
+> no evaporative relief" P_close positive); Morrill Fire, Nebraska fire_footprint B (first of
+> type; "the underlying sand can begin to shift" — best closer in the batch); Al Baṣrah al
+> Qadīmah, Iraq absolute_extreme B- (same Basra metro area as the Jun-30 Basrah draft, 3 days
+> later, softer close); Wadi Halfa, Sudan dust_event C+ (8th consecutive dust_event draft, no
+> WHO anchor, best two-step mechanism yet). **New: P_tier promoted from A3 (awaiting-evidence,
+> filed Jun 23) to active proposal** — 4 of today's 14 pending drafts across 3 signal types
+> (`regional_sst_anomaly`, `absolute_extreme` ×2, `fire_footprint`) state an internal scoring-tier
+> name verbatim ("the 47°C absolute-extreme threshold for the Northern Subtropical band," "the
+> 250,000-hectare tier that marks a continent-scale footprint") instead of describing the world —
+> a Wodehouse violation (citing methodology) distinct from the previously-named forms. P_close
+> 12th cycle (2 positive: Basrah, Morrill Fire; 2 failing: Al Baṣrah, Wadi Halfa). P_dust 7th
+> cycle (Wadi Halfa, 8th corpus draft, template convergence total). 2 carry-overs newly/still
+> stale: Mediterranean SST (~83h, unactioned since Jun 30's flag) and GMST marine_heatwave
+> (~70h, newly crossed 48h). **Operational note: `main` is stale since Jun 8 — this and the prior
+> ~23 daily cycles (Jun 9–Jun 30) live only on the unmerged `daily-plan-current` branch.**
+> Operator should merge soon. 33rd consecutive staleness skip.
+>
+> **Jun 30: 10 pending, 9 graded, 22% A-rate (bar cleared Jun 29 still stands).** 1 stale excl.: Mediterranean regional_sst_anomaly (~59h, "today" baked). 2 A-: GMST marine_heatwave A- (floor/ceiling inversion "already the floor of a new streak"); Prudhoe Bay all_time_high A- (score 92, 101°F at 70°N, latitude peer-comparison). 5 B: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. 2 C+: Phalodi + Taiz dust_event (P_dust 5th+6th cycle, zero named mechanics, no WHO anchor). P9 9th cycle: 3/3 fresh precip drafts (Astana/Antwerpen/Colorado) show opener template + restate-math. P5: dust_event continues to deploy zero named mechanics (2nd cycle confirming gap category). regional_anomaly corpus debut: France reganom B+ (score 88, 6-city +8.4°C avg, 2.8σ — first reganom in corpus post-#349). P_compound: Prudhoe Bay shows archive+margin double-qualifier (3rd cycle). 22% A-rate reflects different signal mix vs. Jun 29 — fewer A-grade-prone signal types in queue. GMST marine_heatwave approaching 48h staleness (~45.7h at grading) — publish promptly. 32nd consecutive staleness skip.
+>
+> **Jun 29: 5 fresh drafts (80% A-rate — BAR CLEARED).** 1 Jun-28 carry-over (Mediterranean B+, grade stands). [2] marine_heatwave A- (floor/ceiling inversion; "already the floor of a new streak"; P_close positive). [3] France reganom B+ (pre-#349; "Across 6 sampled cities" buries lede; "hour by hour" Wodehouse mild; P_close failing). [4] Congo fire A- (first A-grade fire in two-bot corpus; ecosystem incongruity "something has broken the convective lid"; P_close positive). [5] Prudhoe Bay all_time_high A- (latitude peer-comparison 91°F at 70°N vs. northern Siberia rarely 80°F; P_compound 2nd cycle — archive+margin double-qualifier). [6] Amsterdam precipitation_extreme A- (declarative close "there is nowhere for the water to go"; P_close positive; P9 8th cycle; P_precip_floor 2nd cycle — 4.7% margin wet-climate). P_close 11th cycle: 3 positives, 1 failing, 1 n/a. New signal type in corpus: marine_heatwave. No Wodehouse violations (8th consecutive clean). `gh` CLI absent (31st consecutive skip).
+>
+> **Jun 28: 5 fresh drafts (0% A-rate).** 2 Jun-27 carry-overs not re-graded ([1] fire B+, [2] Amsterdam C+). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor; P_close mechanism-only fail). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go"). [5] Astana precip B+ (51.1/3.9 mm implicit 13×, steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_compound new — archive+margin double-qualifier; P_close implied fail). [7] Casper monthly_low B (P_compound 2nd obs; P_close implied fail). P_close 10th cycle; 3 failing, 1 borderline positive, 1 n/a. New proposal P_compound. `gh` CLI absent (30th consecutive skip).
+>
+> **Jun 26: 3 fresh drafts (0% A-rate).** All precipitation_extreme. Anchorage B (183.8 mm/3d,
+> 22.5% margin, orographic stall mechanism, P_close mechanism-only failing). Amsterdam C+ (157.1
+> mm, 4.73% margin, canal-capacity incongruity, P_close implied-consequence failing). Aktobe C+
+> (150.8 mm, 0.53% margin, steppe-aridity + half-year ratio, P_close borderline). **Infrastructure
+> alert:** all 3 cite "previous 3-day record of 150.0 mm" — detection threshold used as prior
+> record (`previous_record_year: null`); operator must verify authentic station records before
+> publishing as "record-breaking." P9 6th cycle: all 3 use opener template + restate-math. P_close
+> 9th cycle: 2 failing + 1 borderline. `gh` CLI absent (29th consecutive skip).
+>
+> **Jun 25: 5 fresh drafts (0% A-rate).** P_close 8th cycle: 3 failing (Taiz dust_event ×2 + Michigan monthly_low), 2 positive (Siberia fire "burns deep" + Barrow "nearly twice that total"). P_dust 3rd cycle: both Taiz dust_event drafts lack WHO anchor; all 4 dust_event corpus drafts template-converged. P9 5th precipitation_extreme (Barrow, same opener template + restate-math). First companion-fire peer comparison in fire corpus. "Roughly"/"nearly" hedges cost Barrow A-; date-baking ("today"/"same day") costs Siberia A-. `gh` CLI absent (28th consecutive skip).
+>
+> **Jun 24: 2 fresh drafts (0% A-rate).** Randolph UT monthly_high (B+): ecosystem specificity "normally blunts" = P_close 7th cycle failing (implied-consequence form). Al Aḥmadī Kuwait air_quality_hazard (B): 10.1× WHO ratio stated (P_dust POSITIVE), closes on system resolution "by evening" = P_close 7th cycle failing (resolution-close subtype). First air_quality_hazard in corpus. Draft [2] "June 24" date-baked — stale by Jun 26T14:50. Mediterranean SST `draft_20260622_171200_17` crosses 48h at ~Jun 24T17:12 UTC — operator must post/reject within ~2h of this run. `gh` CLI absent (27th consecutive skip).
+>
+> **Jun 23: 3 fresh drafts (33% A-rate).** Cope Rch TX all_time_high (A-): "push extremes fast" = declarative-consequence, P_close positive evidence. Columbus GA all_time_high (B): 1°F margin, dual-mechanism. Mediterranean SST regional_sst_anomaly (B): comparative-implied close + unexplained NOAA 2.5°C threshold (A3 filed). P_close 6th cycle: Columbus + Mediterranean = failing; Cope Rch = positive. `gh` CLI absent (26th consecutive staleness skip). Mediterranean SST "today" anchor → staleness at Jun 24T17:12Z.
+>
+> **Jun 22: 0 pending; 1 retroactive grade.** Barrow 7-day precip (draft_20260618_154318_15, created Jun 18T15:43Z, flagged ungraded in Jun 19/21) graded A-. "Has nowhere to go" = first precipitation_extreme declarative-consequence close — P_close positive evidence (validates the fix, not a failing observation). Restate-math confirmed: P9 now 3 cycles (all 3 precipitation_extreme corpus drafts). Queue empty 4th consecutive day. `gh` CLI absent (25th consecutive staleness skip).
+>
+> **Jun 21: 0 fresh drafts; queue empty.** No new drafts since Jun 18T15:43Z (~2.5d gap). P_new archived (2nd time): 3 consecutive fresh-draft cycles without cold-record (Jun 15/17/18) meets the 3+ runbook threshold. No new evidence for P_close/P9/P_dust/P5. `gh` CLI absent (24th consecutive staleness skip).
+>
+> **Jun 19: 0 fresh drafts; queue empty.** All 3 Jun 18 precipitation_extreme drafts operator-rejected (Barrow daily B+, Amsterdam B, Barrow 7-day [ungraded, created Jun 18T15:43Z]). First operator rejection of a B+ graded draft. No proposal evidence updates this cycle.
+>
+> **Jun 18: 2 fresh drafts (both precipitation_extreme, both B-range).** P_close 5th cycle confirmed (Barrow "any of it" + Amsterdam "stack up faster than they drain" both implied-consequence closes). New proposal P9 added (precipitation_extreme opener template convergence + restate-math). No dust/coral/cold-record drafts this cycle. The *source-health* sentinel (0.9.12.0+, every 4h) is a separate system.
 
 **The agent does NOT implement code changes.** It accumulates evidence, sharpens proposals, and reorders priorities. The human operator decides what to actually ship and when.
 
@@ -23,18 +90,18 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.21.0` (voice engine unchanged since 0.9.8.0's fact-check claim-kind hardening; 0.9.9.0–0.9.21.0 work is source reliability + observability: gpm_imerg date walk-back/IPv4/fan-out-cap/walk-back-exhaustion, daily source-health sentinel [0.9.12–0.9.13; issue label/body sync tightened in 0.9.16.1], dashboard external/idle/recovery tiers [0.9.14.0/0.9.16.1], gpm single-request daily-grid fetch via datapool/s3 [0.9.15.0, PR #185, 2026-06-06], per-type pending TTL [0.9.16.0]; @extremetemps coverage lane complete [Wave 1 0.9.17.0, SST 0.9.18.0, Part B #203 0.9.19.0]; state-merge + gist-size + CI hardening + tech-stack review [0.9.20.0]; air_quality rate-limit recovery + sentinel degraded-handling [0.9.21.0]. all 23 sources on triage path + evidence contract live since 0.9.0.0; bot active since 2026-06-01) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; gpm_imerg 60s timeout + retry via 0.9.5.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0%** (0/1 fresh draft, 2026-06-07; n=1 — not statistically meaningful; prior: 21% on 2026-05-19 [3/14, first A-grades in two-bot era]) |
-| Resumption bar | majority A (>50%) sustained |
-| Gap | **50 pp** (50% − 0%, n=1); prior measure: 29 pp (50% − 21%, 2026-05-19) |
-| Posting | paused until bar cleared |
+| Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
+| Last cycle A-rate | **0% (0/3 fresh, Jul 2)** — Ft Green all_time_high B, Basrah absolute_extreme B, Ft Green all_time_high (2nd, near-duplicate) C+. All 3 capped below B+ by P_compound double-qualifier, P_tier jargon-leak, or a weak restate-heavy close. Prior: 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3, small sample)** |
+| Gap | **50 pp below bar** (50% − 0%, Jul 2 fresh batch, n=3 — not statistically meaningful); Jul 1 was also 50 pp below (n=4); Jun 30 was 28 pp below (22%); Jun 29 was +30 pp above (80%). Two consecutive small-n 0% cycles are consistent with signal-mix variation (extreme-heat/fire/dust-heavy queue, few of the historically A-prone types like marine_heatwave or coral) rather than a fresh regression — but P_tier and P_compound are now each capping grades in back-to-back cycles, which is a real, fixable ceiling worth prioritizing. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30/Jul 1/Jul 2 all below on dust/precip/extreme-heat-heavy queue mix; Mediterranean SST + GMST marine_heatwave both stale for 2nd–3rd consecutive cycle (operator reject); all 3 Basra-area `absolute_extreme` drafts now have elapsed forecast dates (operator call — pick at most one to post) |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **1 pending** (Barrow, Alaska precipitation_extreme, B+, created 2026-06-07T04:07:40Z, ~35h old as of Jun 8 run — not stale). 13 May fast-signal carry-overs auto-rejected by TTL sweep during June 1–6; 0.9.16.0 now gives slow coral/DHW drafts a 21d window. Pipeline active; gpm datapool migration (0.9.15.0) appears to have unlocked precipitation_extreme type. |
+| Queue status | **17 pending as of Jul 2 grading** (2 stale, grades stand but excluded from active posting: Mediterranean regional_sst_anomaly B+, GMST marine_heatwave A-; 15 non-stale graded: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B- [fire], Prudhoe Bay A-, Phalodi C+, Taiz C+, Basrah B [Jun 30 draft, 47.2°C], Morrill Fire B, Al Baṣrah al Qadīmah B-, Wadi Halfa C+, Ft Green B, Basrah B [Jul 1 draft, 48°C], Ft Green C+). Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
-Ordered by leverage. Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
+Ordered by leverage. Priority as of Jul 2: **P_close** (13 cycles) > **P_tier** (4 cycles/6 instances across 3 signal types, capped 2 of 3 fresh drafts this cycle) > **P9** (9 cycles, no new evidence since Jun 30) > **P_dust** (7 cycles, no new evidence since Jul 1) > **P_compound** (4 cycles, active again this cycle) > **P5** (dust_event gap ongoing, no dust_event drafts this cycle). P_tier moved ahead of P9/P_dust this cycle: it's actively capping grades in back-to-back cycles (higher recency) even though its raw cycle count is lower. P_precip_floor archived this cycle (3 consecutive fresh-draft cycles without a qualifying observation — see Resolved section). Each entry tracks: observation count (cycles where the failure mode appeared), last seen, proposed fix, expected impact, status.
 
 ### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
@@ -232,6 +299,295 @@ in either cycle. Fire drafts arrive clean; no defensive closers, no explicit gap
 no restate-padding. A-rate has not lifted yet; Wodehouse violations were not the current
 bottleneck — named mechanics and category-specific convergence are.**
 
+### P_close — Mechanism close defaults to implied consequence rather than declarative statement
+
+**Observed:** 2026-06-07 — Barrow, Alaska precipitation_extreme, B+: "sheets across the
+surface instead" — consequence implied by contrast ("instead"), not named. 2026-06-10 —
+Chesnee, South Carolina monthly_low, B+ (status=approved): "threaten gardens well into
+early summer" — frost implied, not stated. 2026-06-13 — Red Dog Mine, Alaska monthly_low,
+C+: "tundra terrain offers no shelter from cold air pooling on clear nights" — mechanism
+explanation only; no consequence named or implied (the coldest version: stops at mechanism
+before reaching even the implied-consequence stage). Three consecutive fresh-draft cycles
+from different signal categories (precipitation_extreme, monthly_low ×2), same gap to A-.
+
+All three had correct mechanism identification (ecosystem specificity operating). The gap
+is in the LANDING: the writer arrives at the physical mechanism but stops before naming
+what the mechanism does. The corpus A-grade closers state the consequence flatly:
+"persistence is what kills" (Madagascar), "nowhere to drain" (Costa Rica), "It is April"
+(Mali). None defer to implication; none stop at mechanism.
+
+**Cycles observed:** 11 active (Jun 7 pending; Jun 10 approved voice observation; Jun 13 Red Dog Mine;
+Jun 15 retroactive; Jun 18 Barrow + Amsterdam; Jun 23 Columbus GA + Mediterranean SST failing,
+Cope Rch TX positive; Jun 24 Randolph UT + Al Aḥmadī Kuwait both failing; Jun 25 Taiz ×2 +
+Michigan monthly_low failing, Siberia fire + Barrow precip positive; Jun 26 Amsterdam
+implied-consequence failing + Anchorage mechanism-only failing + Aktobe half-year ratio
+borderline; Jun 28 — Taiz [3] mechanism-only failing, Mediterranean [4] "nowhere fast to go"
+borderline positive, Beaver Dams [6] "blunt the afternoon peak" implied-consequence failing,
+Casper [7] "what June air masses would otherwise deliver" implied-consequence failing;
+Astana [5] steppe-closer = ecosystem-incongruity punchline, not traditional P_close;
+Jun 29 — marine_heatwave [2] "floor of a new streak" positive, France reganom [3] "hour by hour" failing,
+Congo fire [4] "convective lid" positive, Prudhoe Bay [5] latitude-peer n/a, Amsterdam [6] "nowhere for the water to go" positive).
+Jun 15 retroactive: 5 A- drafts (Loxahatchee NWR, Beaver Dams, Kapingamarangi, Gilbert Islands,
+Chesnee SC) each reached A- not A — consistent with P_close pattern (implied consequence or
+mechanism-only close). Loxahatchee: "water levels are still dropping" implies drought, doesn't
+name it. Beaver Dams: "stranding paddlers well into spring" implies low water, names the human
+consequence (strong A- form, closest to A). Kapingamarangi/Gilbert Islands/Chesnee: similar
+implied-consequence structure. Nauru (A): "no adjacent reef system to reseed it" — declarative
+structural consequence, no hedge. Validates P_close gap: Nauru's direct form earns A; the A-
+drafts stop one step short.
+Jun 24: Randolph UT monthly_high B+ ("normally blunts the heat" = implied-consequence form; new
+signal type confirms cross-category scope). Al Aḥmadī Kuwait air_quality_hazard B ("before sea
+breezes suppress them by evening" = resolution-close subtype — close actively defuses the
+violation by naming the system's natural recovery, not just implying consequence). P_close now
+confirmed across 7 signal types: precipitation_extreme, monthly_low, coral, fire, all_time_high,
+monthly_high, air_quality_hazard.
+Jun 25: Siberia fire B+ ("burns deep" = declarative-consequence, peatland-carbon close, P_close
+POSITIVE). Barrow AK B+ ("delivered nearly twice that total" = declarative annual-ratio, P_close
+POSITIVE). Michigan monthly_low B ("cold air finds less land friction to slow it down" = mechanism-
+only, failing). Taiz Jun 24 C+ ("pushing it into the terrain" = weakest mechanism close in corpus,
+failing). Taiz Jun 25 B- ("push it upslope into the city basin" = transport mechanism, failing).
+P_close now confirmed across 8 signal types (adding dust_event to the prior 7).
+Jun 26: Amsterdam C+ ("not to absorb a month's rain in 72 hours" = implied-consequence, failing).
+Anchorage B ("wring out moisture in compressed bursts" = mechanism-only, failing — weakest form).
+Aktobe C+ ("three days here matched half a year's average" = declarative ratio, borderline — correct
+form, setup too thin at 0.53% margin + "just edging" hedge). P_close now confirmed across 9 signal
+types via Jun 26 (precipitation_extreme ×3 same cycle).
+Jun 28: Mediterranean SST [4] B+ ("heat absorbed at the surface has nowhere fast to go" —
+borderline positive; "fast" hedges slightly, compare Costa Rica A- "nowhere to drain"). Taiz
+dust_event [3] C+ (mechanism-only, failing). Beaver Dams all_time_high [6] B+ ("little moisture
+overhead to blunt the afternoon peak" = negation-of-blunter = implied, failing). Casper monthly_low
+[7] B ("pushing lows well below what June air masses would otherwise deliver" = implied-consequence
+framed as comparative, failing). Astana [5] steppe-incongruity close is not P_close territory.
+P_close now confirmed across 10 signal types (adding regional_sst_anomaly via Mediterranean [4]).
+Jun 29: marine_heatwave [2] A- ("a record set two years ago is already the floor of a new streak" =
+declarative floor/ceiling reframe, POSITIVE). France reganom [3] B+ ("the heat debt compounds hour
+by hour" = implied-consequence metaphor, failing). Congo fire [4] A- ("something has broken the
+convective lid" = declarative physical consequence, POSITIVE). Prudhoe Bay [5] A- (latitude
+peer-comparison close — not P_close territory; n/a). Amsterdam [6] A- ("there is nowhere for the
+water to go" = declarative consequence, POSITIVE). P_close now confirmed across 11 signal types
+(adding marine_heatwave [2] and regional_anomaly/reganom [3] via Jun 29).
+Jul 1: Basrah, Iraq absolute_extreme [11] B ("offers no evaporative relief when the land is
+already this hot" = declarative named-absence consequence, POSITIVE — first absolute_extreme
+P_close observation). Morrill Fire, Nebraska fire_footprint [12] B ("the underlying sand can
+begin to shift" = forward-looking declarative physical consequence, POSITIVE — first
+fire_footprint P_close observation, close to Nauru-tier form). Al Baṣrah al Qadīmah, Iraq
+absolute_extreme [13] B- ("recycles heat back into an already superheated air column" =
+describes an ongoing state, not a forward consequence — mechanism-only, failing). Wadi Halfa,
+Sudan dust_event [14] C+ ("dampens the column" = resolution/dispersal close, same subtype as
+Al Aḥmadī Kuwait's "by evening" — failing). P_close now confirmed across 13 signal types
+(adding absolute_extreme and fire_footprint via Jul 1).
+Jul 2: Ft Green, Florida all_time_high [15] B ("the lid lifts fast" — names a physical event
+[the heat cap failing] but stays metaphorical/abstract rather than a plain declarative
+consequence, closer in kind to Congo fire's A- "broken convective lid" than to a mechanism-only
+close — BORDERLINE positive). Basrah, Iraq absolute_extreme [16] B ("no terrain to break the
+dry continental air mass that builds" = declarative named-absence consequence, same family as
+[11]'s "no evaporative relief," POSITIVE). Ft Green, Florida all_time_high [17] C+ ("days that
+beat 102°F have overcome that convective ceiling" — restates the headline number instead of
+adding a consequence, confusing self-referential framing, FAILING). 3rd consecutive cycle with
+both positive and failing instances in the same batch — the gap is stable, not closing on its own.
+**Last seen:** Jul 2 (1 positive, 1 failing, 1 borderline).
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+in the system-clause / second-sentence guidance section (near the "delete the system clause"
+test already present from PR #85):
+
+> When the second sentence closes on a mechanism, name the consequence directly — don't
+> imply it, and don't stop at the mechanism. "Drain heat fast enough to frost gardens in
+> June" beats "threaten gardens well into early summer." "Rain sheets across the surface"
+> beats "sheets across the surface instead." "Cold pools here on clear nights, breaking
+> June records" beats "tundra terrain offers no shelter from cold air pooling." The
+> consequence lands in ≤5 words. Test: can you state it as a verb phrase (frost / flood /
+> strand / kill / pool / fail)? If yes, do it. Mechanism without consequence is the C form;
+> implied consequence is the B+ form; declarative consequence is the A form.
+
+**Expected impact:** B+ → A- lift for ecosystem-specificity drafts where the mechanism is
+correct but the close is soft. Jun 15 retroactive confirms: the gap is consistent across 5 A-
+drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-suppression).
+The one A in the batch (Nauru) uses the declarative form directly.
+
+**Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal:
+4 cycles of evidence (Jun 7/10/13/15), 5+ drafts, same gap to A across signal types.
+
+### P_dust — Dust_event drafts lack calibrating comparison anchor
+
+**Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
+reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
+guideline (15 μg/m³) and ≈ 46× the WHO PM10 guideline (45 μg/m³) — an extraordinary
+number that lands flat because the reference is unstated. Draft also includes aerosol
+optical depth (0.61) the reader cannot calibrate. Second sentence ends on dispersal
+("before heat-driven turbulence disperses it") — resolution of the mechanism, not
+consequence. "Model-estimated" qualifier correctly flags source uncertainty; the WHO
+multiple is always available as world knowledge regardless.
+
+**Cycles observed:** Jun 13, Jun 17, Jun 25, Jun 28 (4 cycles; Jun 13 = Riyadh 2,083 μg/m³; Jun 17 =
+Urumqi 2,260 μg/m³; Jun 25 = Taiz Jun 24 2,271 μg/m³ C+ + Taiz Jun 25 2,135 μg/m³ B- — all 4
+corpus drafts through Jun 25 lack WHO calibration anchor; Jun 28 = Taiz [3] 728 μg/m³ C+ — 5th
+dust_event corpus draft, no WHO anchor stated [728 ≈ 16× WHO PM10 limit, unstated], mechanism-only
+P_close fail, 5th consecutive dust_event with identical opener structure). Jun 15 retroactive confirmed
+the reference-frame gap is binding; WHO multiple transforms the grade from B/B- to A-.
+**Template convergence confirmed:** all 5 dust_event corpus drafts share identical opener
+structure ("[City]: model-estimated dust daily maximum of X µg/m³ on [date] — aerosol optical
+depth at Y.") and AOD-only metric. Jun 24's Al Aḥmadī Kuwait (air_quality_hazard) stated the
+WHO multiple (10.1×) — confirming the gap is specific to the dust_event signal type, not the
+PM signal path generally.
+**Last seen:** Jun 28. Taiz [3] C+ ("model-estimated dust daily maximum of 728 μg/m³ on June 27 —
+aerosol optical depth at 0.77. Taiz sits at the southwest corner of the Arabian Peninsula where the
+summer monsoon low pulls Red Sea and Arabian dust inland through the Tihama coastal plain" —
+mechanism-only close, no WHO anchor, 728 ≈ 16× WHO PM10 limit unstated). Urumqi "traps it"
+close remains the best dust_event close form; ceiling B- only because the WHO anchor is absent.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+dust_event / air_quality framing section:
+
+> For `dust_event` or `air_quality` signals, the WHO PM2.5 daily guideline (15 μg/m³) is
+> always available as world knowledge — it requires no archive data. State the multiple.
+> "Riyadh: 2,083 μg/m³ on June 13 — 139× the WHO daily limit" is the natural form. Do NOT
+> include aerosol optical depth as a standalone metric unless you state what it means to a
+> lay reader (>0.4 = hazy-to-hazardous; >1.0 = extreme). The second sentence should land
+> a consequence, not describe dispersal — describing how dust clears is anti-climactic.
+> Note: if the signal is model-estimated and no historical comparison is available, the WHO
+> multiple IS the comparison. Use it.
+
+**Expected impact:** Transforms dust_event drafts from opaque-number reports into
+calibrated-violation framing. The WHO multiple is derivable from any bundle value — no
+archive needed. One paragraph addition; no architectural change. Also applies to air_quality
+(PM2.5/dust) signal type from the @extremetemps coverage lane. Verify whether
+`writer_prompt.py` already has an air_quality framing section before adding a new paragraph.
+
+Jun 30: Phalodi, India dust_event C+ + Taiz, Yemen dust_event C+ — both lack WHO anchor; both use identical opener structure. 6th and 7th consecutive dust_event corpus drafts without the calibrating comparison. No named humor mechanics deployed in either draft (P5 gap confirmed). Template convergence: all 7 dust_event corpus drafts share the opener structure. Phalodi: model-estimated PM2.5, aerosol optical depth stated without calibration. Taiz: same pattern, 3rd Taiz draft in corpus.
+Jul 1: Wadi Halfa, Sudan dust_event [14] C+ — 8th consecutive corpus draft without WHO anchor, same opener template. Best-constructed mechanism yet (two-step: haboob winds lift Nubian Desert sediment, Lake Nasser moisture then dampens/settles it) — confirms the gap isn't a writer capability problem, it's an unprompted omission: the writer can build a sophisticated causal chain but still doesn't reach for a reader-facing calibration number. Template convergence now total: 8 of 8 dust_event corpus drafts share the identical opener.
+**Last seen:** Jul 1 (7 cycles: Jun 13/17/25/28/30 ×2/Jul 1; template convergence 8 of 8).
+
+**Status:** Drafted. **7 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1); template convergence 8 of 8. Awaiting human implementation.
+
+### P_tier — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3)
+
+**Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft states "exceeds the 2.5°C
+tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier
+means (filed as **A3**, awaiting-evidence, with an explicit "promote if 2+ cycles observed"
+condition). 2026-07-01 clears that bar in a single cycle: 3 fresh drafts across 2 signal types
+plus 1 carry-over across a 3rd signal type all name their own classification bucket verbatim
+instead of describing the world:
+- Mediterranean SST (carry-over, graded Jun 28): "just past the 3.5°C tier threshold in the NOAA
+  Coral Reef Watch basin average."
+- Basrah, Iraq `absolute_extreme` [11]: "above the 47°C absolute-extreme threshold for the
+  Northern Subtropical band."
+- Al Baṣrah al Qadīmah, Iraq `absolute_extreme` [13]: "at the absolute extreme threshold for the
+  Northern Subtropics" — near-verbatim repeat of [11]'s phrasing, 3 days later, same metro area.
+- Morrill Fire, Nebraska `fire_footprint` [12]: "past the 250,000-hectare tier that marks a
+  continent-scale footprint."
+
+All four are otherwise structurally sound drafts — real signal, correct ecosystem mechanism, two
+with genuinely strong closes (Morrill Fire's dune-destabilization consequence, Basrah's named-
+absence close) — but the tier-naming reads as the bot quoting its own internal scoring rubric
+rather than speaking in its voice. This is a Wodehouse violation of a kind not previously named
+in this doc: not approximation, not restate-padding, not a poetry attempt, but **citing your own
+methodology** — the prose equivalent of a comedian explaining the joke's premise before telling
+it. `absolute_extreme` and `fire_footprint` are both first-appearance signal types in the corpus,
+so this may be a structural feature of how their bundles are built (the tier/threshold label is
+probably a literal field the writer is echoing) rather than a one-off phrasing choice.
+
+**Cycles observed:** Jun 23 (A3 origin, 1 instance), Jul 1 (3 fresh instances across 2 new signal
+types, 1 carry-over instance in a 3rd type), Jul 2 (1 more instance, same phrase family, same
+signal type). **4 cycles / 6 instances / 3 signal types** once A3's Jun 23 and Jun 28's
+(unflagged-at-the-time) Mediterranean instance are counted alongside Jul 1–2.
+
+Jul 2: Basrah, Iraq `absolute_extreme` [16]: "above the 47°C threshold marking absolute extremes
+for this latitude band" — a third near-verbatim repeat of the [11]/[13] phrase family, this time
+on a 48°C reading (the highest of the three Basra-area drafts). All three Basra-area drafts now
+share both the tier-jargon leak and a duplicate-location concern (see `docs/DRAFT_CORPUS.md` Jul 2
+patterns). The proposal's core claim — that `absolute_extreme` structurally echoes an internal
+tier/threshold field — is now supported by 3 of 3 corpus drafts of that signal type.
+**Last seen:** Jul 2.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`,
+near the existing HARD RULES / bad-examples list:
+
+> Never name your own scoring machinery. If the bundle carries an internal category label like
+> "tier," "threshold," "band," or a named severity class ("continent-scale," "absolute-extreme"),
+> state the raw number and let it stand — do NOT quote the label back to the reader. "Basrah is
+> forecast to hit 47.2°C (117°F)" is voice. "Above the 47°C absolute-extreme threshold for the
+> Northern Subtropical band" is the bot reading its own rubric out loud. Bad: "past the
+> 250,000-hectare tier that marks a continent-scale footprint." Good: "has burned 259,820
+> hectares since March 13" — the number alone, at this scale, needs no label. Test: if the
+> phrase names a bucket rather than a place, time, or physical quantity, cut it.
+
+**Expected impact:** Unlocks two brand-new signal types (`absolute_extreme`, `fire_footprint`)
+from a B ceiling toward A-/B+ — both current instances have strong closes and would clear the
+cap immediately once sentence 1 stops citing methodology. Also fixes the still-open Mediterranean
+SST regression from A3. One paragraph addition; complements (does not duplicate) the P_dust fix,
+which addresses a related but distinct gap (dust_event's problem is a MISSING reader-facing
+reference; P_tier's problem is an UNWANTED internal-only reference already present).
+
+**Status:** Drafted. Promoted from "Awaiting evidence" (A3) to active proposal 2026-07-01 — the
+Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 4 cycles / 6 instances
+as of Jul 2. Awaiting human implementation.
+
+### P9 — precipitation_extreme opener template convergence + restate-math
+
+**Observed:** 2026-06-18 — 2 of 2 fresh precipitation_extreme drafts share the same sentence-1
+structure: "[City] received/recorded X mm in [timeframe] — [comparison]." Amsterdam draft
+compounds with restate-math ("14.4 mm above a previous record of 300.0 mm"; margin is derivable
+arithmetic). Jun 7 Barrow had the same restate-math ("63.8 mm above the previous 3-day record of
+150.0 mm"). Three precipitation_extreme corpus drafts across 2 cycles — all 3 share the opener
+template; 2 of 3 have restate-math. Same failure mode as P6 (fire) and P7 (coral, resolved),
+appearing after just 3 drafts.
+
+**Cycles observed:** Jun 7 (1 draft, restate-math; template baseline); Jun 18 (2 drafts, template
++ restate-math in Amsterdam); Jun 22 retroactive (Barrow 7-day: "127.5 mm above the previous 7-day
+record of 300.0 mm" — P9 restate-math; template convergence confirmed: all 3 prior
+precipitation_extreme corpus drafts share the "[City] received/recorded X mm in [timeframe] —
+[comparison]" structure); Jun 25 (Barrow AK 213.8 mm/3-day B+: "beating the previous 3-day record
+by 63.8 mm" = restate-math; opener "Barrow, Alaska accumulated 213.8 mm of rain in 3 days" —
+same structure, verb varies "accumulated" vs. prior "received/recorded"); Jun 28 (Astana [5]);
+Jun 26 (Amsterdam "received 157.1 mm in 3 days" + Aktobe "logged 150.8 mm over 3 days" +
+Anchorage "received 183.8 mm in 3 days" — all 3 use template; verb varies "received"/"logged";
+all 3 have restate-math: Amsterdam "7.1 mm above the previous 3-day record of 150.0 mm," Aktobe
+"just edging the previous 3-day record of 150.0 mm," Anchorage "33.8 mm above the previous 3-day
+record of 150.0 mm." Threshold artifact: all 3 cite 150.0 mm as the prior record — the detection
+threshold. First 3-draft P9 batch in a single cycle.)
+Jun 28: Astana [5] B+ ("Astana, Kazakhstan recorded 51.1 mm of rain on June 26 — against a
+previous daily record of 3.9 mm, set earlier this same year." Opener template confirmed (9th
+precipitation_extreme corpus draft using "[City] recorded/received X mm — [comparison]" structure).
+No restate-math this time — "3.9 mm" is not a derivable margin but the prior record value stated
+directly for contrast. Second sentence: "Aktobe and Almaty logged 50.2 mm and 43.2 mm the same day.
+Astana sits in the driest interior of the Eurasian steppe." = steppe ecosystem-incongruity punchline.
+51.1/3.9 mm = implicit 13× ratio, not named — ratio-as-punchline opportunity missed.)
+Jun 29: Amsterdam [6] A- ("Amsterdam recorded 314.1 mm of rain in seven days through June 27 —
+14.1 mm above the previous seven-day record of 300.0 mm." 10th precipitation_extreme corpus draft
+using the template. Restate-math present: 14.1 = 314.1 − 300.0. P_precip_floor 2nd cycle: 4.7%
+margin in wet-climate city. Despite shallow margin, declarative close "there is nowhere for the
+water to go" carries A-.)
+**Last seen:** Jun 29. 10 of 10 precipitation_extreme corpus drafts share the opener template;
+8 of 10 have restate-math (Barrow Jun 18 daily — no restate-math; Astana Jun 28 — no restate-math;
+all others have it).
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
+precipitation_extreme framing section (or general record guidance): burn the default opener. Name
+3 alternative sentence-1 forms:
+1. **Period-and-restate:** "Amsterdam received 314.4 mm in 7 days. The previous record was 300.0 mm."
+   (No margin arithmetic — let the two values speak.)
+2. **Lead with mechanism or context first:** "The Rhine-Meuse delta has nowhere to put 314.4 mm in
+   7 days. That is 14 mm past Amsterdam's previous record." (Context before number.)
+3. **Preserve punchline placement when the comparator IS the joke:** "Barrow, Alaska recorded 71.2 mm
+   of rain in a single day on June 16 — the previous daily record was 0.0 mm." (When the prior
+   record is extraordinary, keep sentence 1 tight and make sentence 2 one declarative consequence.)
+
+Also add explicit ban on restate-math form: "Do NOT state the derivable margin when both values are
+present: '14.4 mm above a previous record of 300.0 mm' is three numbers where two suffice. Use
+ratio form ('4.8% above the prior record') or period-and-restate."
+
+**Expected impact:** Breaks the default opener for precipitation_extreme after just 3 drafts —
+earlier intervention than P6 (fire, 3+ cycles before fix) and P7 (coral, resolved). Restate-math
+ban reduces a recurring violation across signal types.
+
+Jun 30: 3/3 fresh precipitation_extreme drafts (Astana B+, Antwerpen B+, Colorado B-) use the opener template and show restate-math. Astana: "Astana, Kazakhstan recorded 51.1 mm of rain on June 26 — against a previous daily record of 3.9 mm" (template confirmed; Astana previously appeared in Jun 28 without restate-math; Jun 30 Astana draft used margin arithmetic). Antwerpen: opener template + restate-math. Colorado: same pattern. 13 of 13 precipitation_extreme corpus drafts now on opener template; 10–11 of 13 have restate-math.
+**Last seen:** Jun 30. 13 of 13 precipitation_extreme corpus drafts share the opener template.
+
+**Status:** Drafted. First observation 2026-06-18. **Cycles observed: 9** (Jun 7, Jun 18, Jun 22 retroactive, Jun 25, Jun 26 ×3, Jun 28, Jun 29, Jun 30). Awaiting human implementation.
+
+~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
+
 ### P5 — Name humor moves as available tools in writer_prompt.py
 
 **Observed:** Apr 25-27 corpus — SYSTEM_PROMPT named only a subset of available moves;
@@ -242,10 +598,33 @@ palette is named.
 
 **Cycles observed:** Apr 25, Apr 27, May 13, May 19 (4 cycles; era anchor over-deployment
 + mechanic convergence in v2 era; no named mechanics in fire drafts in two-bot era).
-**Last seen:** May 19 (partial: fire Draft 6 has no named mechanic; fire Draft 18 has
-timing-incongruity embedded but not standalone. Coral drafts show moves without explicit
-naming — mixed evidence for the proposal's core claim, but fire-specific convergence
-holds.)
+**Last seen:** Jun 28 (weak: steppe ecosystem-incongruity in Astana [5] deployed organically —
+third-sentence "Astana sits in the driest interior of the Eurasian steppe" is a named
+ecosystem-specificity move used without explicit prompting. Taiz dust_event [3] and Casper [7]
+showed no named humor moves beyond mechanism. Same pattern as Jun 25/26/27: geographic categories
+self-select their mechanics naturally; dust_event and monthly_low do not.
+Prior Jun 26 note: Anchorage B chose orographic-stall mechanism as system clause organically;
+Aktobe C+ deployed half-year aridity ratio as close naturally. All 3 precipitation_extreme;
+all 3 used system-clause specificity without prompting. No named humor move beyond mechanism/ratio.
+Prior Jun 25 note: Siberia fire B+ deployed peatland carbon + companion-fire peer comparison;
+Barrow B+ used annual-precipitation ratio. Michigan monthly_low B and Taiz dust_event ×2 showed
+no named humor moves. Same pattern across cycles: fire/precip categories self-select mechanics;
+dust_event/monthly_low categories do not.
+Jun 29: Full mechanic variety across 5 fresh drafts — floor/ceiling inversion (marine_heatwave),
+ecosystem incongruity (Congo fire), latitude peer-comparison (Prudhoe Bay), declarative ecosystem
+specificity (Amsterdam). Not one draft needed explicit P5 prompting; mechanics deployed organically.
+3rd consecutive graded cycle where all deployed mechanics appeared without explicit naming.
+Jun 30: 2 dust_event drafts (Phalodi + Taiz) graded C+ — both deploy zero named humor mechanics. Mechanism-only second sentences, no period-and-restate, no idiom-flip, no comic triple. 2nd consecutive dust_event cycle without a named mechanic across all corpus drafts in this category. Precipitation drafts (Astana/Antwerpen/Colorado) also show no named moves beyond mechanism-as-system-clause. Pattern confirmed: dust_event is the current gap category for P5; precipitation_extreme continues self-selecting mechanism without named humor moves.
+Negative evidence accumulating: 5 consecutive fresh-draft cycles (Jun 7 / Jun 25-26 / Jun 27 / Jun 29 / Jun 30) show precipitation/fire named mechanics deploying naturally. P5 urgency split: fire/precip/record — organically deploying, low urgency; dust_event/monthly_low — confirmed gap, higher urgency.
+Jul 1: Mixed. Basrah [11] and Morrill Fire [12] both deploy real named-absence / causal-chain
+mechanics organically (no explicit prompting needed) — consistent with the "extreme-heat and
+fire-adjacent categories self-select" pattern. Wadi Halfa [14] dust_event again shows zero named
+humor mechanic despite a genuinely sophisticated two-step physical chain — 3rd consecutive
+dust_event cycle confirming the gap is category-specific, not writer-capability-limited (the
+writer clearly CAN build layered mechanisms; it just doesn't reach for a landing move in this
+category). Al Baṣrah al Qadīmah [13] similarly no named mechanic beyond mechanism description.
+**Last seen:** Jul 1 (dust_event confirming gap for the 3rd consecutive cycle; absolute_extreme/
+fire_footprint debuting with organic mechanic deployment, same as fire/precip/record).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -260,101 +639,60 @@ without explicit prompting (contrast-reveal, expectation-reversal, understatemen
 has a coral-specific named-moves section before implementing.
 
 **Status:** Drafted. Target updated from dead generator.py SYSTEM_PROMPT to
-`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation.
+`src/two_bot/prompts/writer_prompt.py`. Awaiting human implementation. Jun 15 retroactive
+extends evidence to fire/hot10/dust categories; coral/record categories may not need it.
 
-### P7 — Coral opener formula convergence
+~~### P7 — Coral opener formula convergence~~ → **[Resolved 2026-06-15 — see Resolved section]**
 
-**Observed:** 2026-05-19 — 8 of 9 coral_bleaching drafts use the same opener: "[Location]
-reefs have accumulated X°C-weeks of thermal stress — [threshold label]." Identical to the
-P6 fire template failure but in the new coral_bleaching category. All three A- coral
-drafts deviate from the formula: they use the shorter colon-lead form ("Galapagos, Ecuador
-reefs: 24.5°C-weeks...") or a named upwelling-failure angle rather than the accumulation
-sentence. The formula opener is a structural ceiling at B+.
+~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
 
-**Cycles observed:** May 19 (1 cycle; 8 of 9 coral drafts formula-identical).
-**Last seen:** May 19.
-**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` coral/DHW framing section
-(if it exists) or to the fire-variety-forms paragraph (same location as P6's fix in PR
-#85): burn the formula opener for coral. Name 3 alternative sentence-1 forms:
-(1) colon-lead with the ratio ("Galapagos reefs: 24.5°C-weeks — double the mortality tier.");
-(2) upwelling/buffering angle first ("The cold upwelling that normally buffers the Galápagos
-has failed; reefs there have accumulated 24.5°C-weeks of thermal stress.");
-(3) location + mechanism first ("Where Pacific moisture stalls before the Cascades blocks
-it, stress accumulates: 10.2°C-weeks in Western Madagascar."). Add Draft 7's second-sentence
-form as APPROVED EXEMPLAR for the DHW mechanism close: "Corals can survive brief spikes;
-DHW measures how long heat persists, and persistence is what kills."
+### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
 
-**Expected impact:** Same as P6 — breaks the writer's convergence on the stated opener
-form. Higher expected yield than P6 because the coral category is newer and the writer
-has had fewer corrections on it.
+**Observed:** 2026-06-28 — two record-type drafts in the same cycle open with both archive-depth
+qualifier AND margin qualifier in one sentence. Beaver Dams UT all_time_high [6]: "Beaver Dams,
+Utah hit 104°F (39.9°C) on June 25 — hottest daily maximum in 23 years of records, 15°F above
+the 2020 mark." Casper WY monthly_low [7]: "Casper, Wyoming hit 27°F (-2.8°C) on June 25 —
+coldest June low in 26 years of records, 3°F below the 2018 mark." Double-qualification dilutes
+both data points: neither archive depth ("23 years of records") nor margin ("15°F above the 2020
+mark") lands with full force when immediately followed by the other. The punchline is split, and
+neither half is the punchline. Compare: Jun 15 retroactive Cope Rch TX A- ("hottest daily
+maximum ever recorded, 1.5°F above the 2018 mark") — same structure, but "ever recorded" is a
+stronger qualifier than "in 23 years" and 1.5°F margin is implicit-tight rather than stated-loose.
 
-**Status:** Drafted. Awaiting human implementation.
-
-### P8 — Snow/extreme record: ratio-as-punchline unused
-
-**Observed:** 2026-05-19 — both snow_extreme drafts (Nooksack 2×, Stahl Peak 5×) state
-the ratio in the first sentence as setup context, then pivot to topographic explanation.
-Neither lands the ratio as a punchline. Stahl Peak's "nearly five times the previous
-blizzard record of 50.8 mm" is the most striking number in the queue; the draft continues
-to explain "the northern Rockies funnel Pacific moisture through low passes; when a storm
-stalls, totals compound fast." "Totals compound fast" restates what "five times the record"
-already shows. The period-and-restate mechanic from the voice spec is the right tool —
-"251.5 mm in 3 days. The previous record was 50.8 mm." — and is not used.
-
-**Cycles observed:** May 19 (1 cycle; 2 of 2 snow_extreme drafts miss the ratio-punchline).
-**Last seen:** May 19.
-**Proposed fix:** Add to `src/two_bot/prompts/writer_prompt.py` general record/extreme
-guidance (after the existing SIGNATURE MOVE section): "When a record is broken by a ratio
-(2×, 5×, 10×), the prior record stated plainly IS the punchline — do not over-explain
-with mechanism geography after stating it. The period-and-restate form: '[Current value].
-The previous record was [prior value].' is available. Test: if the ratio is more
-surprising than the mechanism, state the ratio last."
-
-**Expected impact:** Unlocks the "ratio landing" move for snow, fire, and any category
-where the new value is a multiple of the prior. Prevents the writer from diluting a
-naturally strong signal with topographic explanation.
-
-**Status:** Drafted. Awaiting human implementation.
-
-### P_new — Cold-record quality floor: writer over-passes shallow-archive cold signals
-
-**Observed:** 2026-05-14 — Bethel, Maine monthly_low (28°F / -2.2°C, May 9, score 80,
-threshold 76) reached pending with a 16-year archive and 1°F margin in a cold-climate
-bowl location. Voice execution is clean (topographic mechanism per PR #75, no Wodehouse
-violation). The signal fails the editorial bar Andrew established on 2026-05-11 when he
-manually rejected Mankato, Minnesota monthly_low (score 79, 16yr archive, 0°F effective
-margin, note: "weak signal, defensive closer"). Bethel matches the signal class — shallow
-archive, trivial margin, location where cold is architecturally expected — but with
-cleaner voice. The writer has no self-kill gate for weak cold records the way it now has
-strong self-kill instincts for low-confidence fire framings.
-
-**Cycles observed:** May 14 (1 cycle; + May 11 Andrew-reject precedent on same signal class).
-**Last seen:** May 14. Note: no new cold-record drafts appeared in 5 subsequent fresh-draft
-cycles (May 15–19), so the failure mode is dormant but not confirmed resolved. The absence
-is likely upstream (score-gate/triage), not a structural fix.
+**Cycles observed:** Jun 28 (1 cycle; 2 of 5 fresh drafts in the same cycle — confirms the
+pattern is structural, not coincidence in a single draft); Jun 29 (Prudhoe Bay [5] A-:
+"hottest daily maximum in 24 years of records, 2°F above the 2024 mark" — same archive+margin
+double-qualifier structure. Smaller margin (2°F) makes double-qualification less visible but
+the structural pattern recurs in record-type openers. 2nd consecutive cycle with P_compound.);
+Jun 30 (Prudhoe Bay all_time_high carry-over — same double-qualifier structure observed again
+in the 3rd grading cycle where this draft appears. Pattern holds across grading cycles:
+archive+margin double-qualifier is the default form for record-type openers.)
+Jul 2 (Ft Green, Florida all_time_high [15] and [17], near-duplicate drafts one day apart — both
+open "hottest daily maximum in 26 years of records, 1°F above the 2025 mark," identical phrasing
+in both. A gap of 1 cycle since Jun 30 — the pattern was dormant Jul 1 [that cycle's 4 fresh
+drafts were monthly-record-free: 2 `absolute_extreme`, 1 `fire_footprint`, 1 `dust_event`, none of
+which use the archive+margin record-opener form] — but recurred immediately once an `all_time_high`
+draft reappeared, confirming the gap was signal-mix, not a resolving trend.)
+**Last seen:** Jul 2 (4 cycles: Jun 28, Jun 29, Jun 30, Jul 2).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-cold-record framing section:
+record-type framing section:
 
-> For `monthly_low` or `country_low` signals: self-kill when ALL of the following are true:
-> (a) archive depth < 20 years, (b) margin below prior record < 1°C / 2°F, (c) location
-> has a cold climate (high-latitude, subarctic, alpine, or in a documented cold-air
-> drainage bowl). A 16-year cold record in Maine with a 1°F margin in a frost-prone valley
-> is not extraordinary — archive is shallow, margin is trivial, cold is expected here. Use
-> kill_reason: "shallow archive cold record: insufficient editorial weight (< 20yr archive,
-> < 1°C margin, cold-climate location)." The writer self-kill on Mankato (May 2026) was
-> correct on the same grounds.
+> When stating a record: choose ONE qualifier per sentence — either the archive span ("23 years of
+> records") OR the margin above the prior mark ("15°F above the 2020 mark"). Not both. Preferred
+> form: "Beaver Dams, Utah hit 104°F on June 25 — 15°F above the previous record, set in 2020."
+> Let the archive depth be implicit (the reader infers that a record being set means the archive
+> was searched) or move it to sentence 2 as contrast. Stacking both in the same clause produces
+> two half-punchlines; either one alone produces a full punchline.
 
-**Expected impact:** Prevents the class of cold-record drafts that pass the score gate
-(threshold 76) but fail the human editorial bar Andrew established. Mirrors the fire
-drafts' existing self-kill instincts on low-confidence framings. Scoped to cold records
-only — does not affect monthly_high or other record types.
+**Expected impact:** Tighter record-type openers; B+ → A- path for drafts where mechanism is
+already solid. Immediate two-observation confirmation within a single cycle suggests the
+double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
+monthly_high, country_record signal types where both archive depth and margin are available.
 
-**Status:** Drafted. Awaiting human implementation. Note: Bethel, Maine (the exemplar
-case) remains in the pending queue as of 2026-05-24 — the failure mode is live, not
-theoretical. 5 fresh graded cycles have passed since the proposal was first observed
-(May 15/16/17/18/19) with no new cold-record evidence surfacing, but the original
-draft persists.
+**Status:** Drafted. Awaiting human implementation. 4 cycles (Jun 28, Jun 29, Jun 30, Jul 2).
+
+~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
 ### ~~P6~~ — Fire template convergence — **SHIPPED 2026-05-12 (PR #85)**
 
@@ -438,10 +776,70 @@ batch's A-grade-producing range. Whether Wodehouse violations re-emerge as more 
 are added. Whether the new critic stage (Gemini 2.5 Pro, PR #120) is contributing to or
 suppressing A-grade candidates before they reach pending.
 
+~~### A3 — Mediterranean SST threshold calibration gap (P_dust analog)~~ → **Promoted 2026-07-01 — see Active proposals, P_tier**
+
+Filed Jun 23 on a single Mediterranean SST instance ("exceeds the 2.5°C tier threshold..."), with
+an explicit promotion condition ("if 2+ cycles observed"). 2026-07-01 cleared that bar in one
+cycle: 3 fresh instances across `absolute_extreme` (×2) and `fire_footprint`, plus the
+already-graded Mediterranean SST carry-over. Broader than originally scoped — not just NOAA CRW
+SST tiers but any internal scoring-tier/threshold label leaking into copy across at least 3
+signal types. Full current writeup, evidence, and proposed fix now live under **P_tier** in
+Active proposals above.
+
 ## Resolved (archive)
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-07-02] P_precip_floor — Precipitation quality floor
+
+Last observed Jun 29 (Amsterdam [6] A-, 4.7% margin, wet-climate — voice execution offset the
+weak signal but the structural gap was logged). 3 consecutive fresh-draft grading cycles since
+without a qualifying observation: Jun 30 (2 precipitation_extreme drafts, but Astana's thin
+margin was in an explicitly arid steppe location — criterion (b) wet-climate not met); Jul 1 (no
+precipitation_extreme drafts at all); Jul 2 (no precipitation_extreme drafts at all) — meets the
+3+ runbook threshold. The fix (self-kill gate in writer_prompt.py) remains unimplemented; the
+absence reflects signal mix, not a resolved failure mode. Reopen if a `precipitation_extreme`
+draft with <10% margin above the prior record in a wet-climate location (>800mm/yr, maritime, or
+tropical) reappears in pending.
+
+### [Archived 2026-06-17] P8 — Snow/extreme record: ratio-as-punchline unused
+
+Last observed May 19 (1 cycle; 2/2 snow_extreme drafts). 4 fresh-draft grading cycles
+without snow_extreme in the queue (Jun 7, Jun 13, Jun 15, Jun 17) — exceeds 3-cycle
+threshold. No new snow_extreme drafts have appeared in the post-0.9.6.0 triage era;
+the absence may be seasonal or score-gate. Reopen if snow_extreme drafts with ≥2×
+ratio appear and still don't land the ratio as punchline.
+
+### [Archived 2026-06-15] P7 — Coral opener formula convergence
+
+Last observed: May 19 (8 of 9 coral drafts used accumulation formula). Jun 15 retroactive
+batch: 2 coral drafts (Gilbert Islands, Nauru) both used alternative opener forms — colon-lead
+and possession form respectively. Neither used the banned accumulation sentence. 3+ graded
+cycles (Jun 7 n/a, Jun 13 n/a, Jun 15 counter-evidence) without observation; resolved. If the
+formula reappears in future coral batches, re-open with the original fix spec (3 alternative
+sentence-1 forms + DHW persistence exemplar from the May 19 corpus).
+
+### [Archived 2026-06-21, 2nd archiving] P_new — Cold-record quality floor
+
+Re-activated Jun 13 (Red Dog Mine, Alaska: 17yr archive, 1°F margin, above Arctic Circle —
+all three kill criteria met; operator rejected). 3 consecutive fresh-draft cycles since then
+without cold-record drafts (Jun 15 retroactive: no cold-record; Jun 17: dust_event only;
+Jun 18: precipitation_extreme only) — meets the 3+ runbook threshold for archiving.
+Reopen if `monthly_low` or `country_low` drafts with (a) < 20yr archive, (b) < 2°F margin,
+(c) cold-climate location reappear in pending. The fix (self-kill gate in writer_prompt.py)
+remains unimplemented; the absence is seasonal/triage-upstream, not a resolved failure mode.
+Chesnee SC (35yr, 7°F, SE US) remains the counter-example: writer correctly passes strong signals.
+
+### [Archived 2026-06-09, Re-activated 2026-06-13] P_new — Cold-record quality floor
+
+Archived Jun 9 after 6 consecutive fresh-draft cycles without recurrence (May 15–19, Jun 7).
+Re-activated Jun 13: Red Dog Mine, Alaska monthly_low (19°F, score 80, 17yr archive, 1°F
+margin, above Arctic Circle) hit pending — all three kill criteria met. Archive note
+condition ("Reopen if cold-record drafts with shallow archive + trivial margin reappear")
+was satisfied. Full proposal text now in Active proposals section above. Chesnee SC
+monthly_low (Jun 10, 35yr archive, 7°F margin, SE US) remains the clear counter-example
+that the proposal correctly does NOT kill.
 
 ### [Archived 2026-05-12] P2 — Widen plant-comparison regex adjective allowlist
 
