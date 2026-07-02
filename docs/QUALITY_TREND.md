@@ -55,6 +55,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-06-28 | 5 | 0 | 4 | 1 | 0 | **0%** | ✗ | 5 fresh (2 Jun-27 carry-overs not re-graded). [3] Taiz dust_event C+ (P_dust 4th cycle, no WHO anchor, mechanism-only P_close fail; 5th consecutive dust_event template-converged). [4] Mediterranean SST B+ (P_close borderline positive "nowhere fast to go" — closest to declarative in batch). [5] Astana precip B+ (51.1/3.9 mm = 13× implicit; steppe closer; P9 7th cycle). [6] Beaver Dams all_time_high B+ (P_close implied fail; P_compound new — archive+margin double-qualifier). [7] Casper monthly_low B (P_close implied fail; P_compound 2nd obs). P_close 10th cycle. New proposal P_compound. No Wodehouse violations (7th consecutive clean cycle). 30th consecutive staleness skip. |
 | 2026-06-30 | 9 | 2 | 5 | 2 | 0 | **22%** | ✗ | 10 pending (1 stale excl.: Mediterranean regional_sst_anomaly "today" ~59h). 2 A-: GMST marine_heatwave (floor/ceiling inversion "already the floor of a new streak" — first marine_heatwave graded this cycle); Prudhoe Bay all_time_high (92 score, 101°F at 70°N, latitude peer-comparison). 5 B: France reganom B+, Astana B+, Antwerpen B+, Amsterdam B, Colorado B-. 2 C+: Phalodi + Taiz dust_event (P_dust 5th+6th cycle, zero named mechanics, WHO anchor absent). P9 9th cycle: 3/3 fresh precip drafts (Astana/Antwerpen/Colorado) show opener template + restate-math. P5: dust_event still no named mechanics (2nd consecutive cycle). regional_anomaly debut: France reganom B+ (score 88, 6-city +8.4°C avg, 2.8σ — first reganom in corpus post-#349). A-rate: 22% (below bar cleared Jun 29; different signal mix, fewer A-prone types). 32nd consecutive staleness skip. |
 | 2026-07-01 | 4 | 0 | 3 | 1 | 0 | **0%** | ✗ | 14 pending (10 carry-overs from Jun 28–30, unchanged; 4 fresh). Basrah, Iraq absolute_extreme B (83 score, "offers no evaporative relief" P_close positive, but sentence 1 names its own internal tier — "the 47°C absolute-extreme threshold for the Northern Subtropical band"). Morrill Fire, Nebraska fire_footprint B (first of type; "the underlying sand can begin to shift" is the batch's best closer; same tier-jargon cap — "the 250,000-hectare tier that marks a continent-scale footprint"). Al Baṣrah al Qadīmah, Iraq absolute_extreme B- (same Basra metro area as the Jun-30 draft, 3 days later; same tier-jargon; softer mechanism-only close). Wadi Halfa, Sudan dust_event C+ (8th consecutive dust_event draft, still no WHO/consequence anchor; two-step lift/settle mechanism is the best-constructed dust mechanism yet). **New pattern promoted to active proposal P_tier** (was A3, awaiting-evidence since Jun 23): 4 of 14 pending drafts across 3 signal types state an internal scoring-tier name verbatim instead of describing the world. 2 stale carry-overs newly flagged: [1] Mediterranean SST (~83h, "today") and [2] GMST marine_heatwave (~70h, "today's reading") — both bulk-reject candidates, `gh` unavailable. **Operational note:** `main`'s copies of these docs are stale since Jun 8; this cycle continues grading on the unmerged `daily-plan-current` rolling branch, which carries 23 days of cycles (Jun 9–Jun 30) main doesn't have yet. 33rd consecutive staleness skip. |
+| 2026-07-02 | 3 | 0 | 2 | 1 | 0 | **0%** | ✗ | 17 pending (14 carry-overs from Jun 28–Jul 1, unchanged; 3 fresh). Ft Green, Florida all_time_high B ×2 (102°F, 26yr archive, 1°F margin — P_compound double-qualifier; same reading + margin on consecutive days, likely duplicate-location cluster; first draft "the lid lifts fast" B, second reused weaker "overcome that convective ceiling" close C+). Basrah, Iraq absolute_extreme B (48°C, 3rd Basra-area draft in 3 days; P_tier tier-jargon leak — "threshold marking absolute extremes for this latitude band" — same cap as Jul 1's two Basra drafts). P_tier 4th cycle / 6th instance. P_compound 4th cycle. P_close 13th cycle (1 positive, 1 failing, 1 borderline). No dust_event/precipitation_extreme drafts this cycle — P9/P_dust/P5 no new evidence; P_precip_floor archived (3 consecutive cycles without a qualifying observation). 2 carry-overs still stale and unactioned: Mediterranean SST (3rd cycle) and GMST marine_heatwave (2nd cycle). New: all 3 `absolute_extreme` corpus drafts ([11]/[13]/[16]) now have forecast dates that have elapsed by grading time — none crosses the mechanical 48h threshold but all misstate the date if posted. 34th consecutive staleness skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -64,6 +65,26 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-07-02 — Staleness bulk-reject: 2 stale identified; gh CLI absent (34th consecutive skip)
+
+**Status:** 17 pending drafts reviewed. 2 stale candidates (same 2 as Jul 1, now older and still
+unactioned):
+
+| Draft ID | Created | Age | Staleness flag |
+|---|---|---|---|
+| `draft_20260628_040130_32` (Mediterranean SST) | 2026-06-28T04:01Z | ~107h | "running 3.54°C above its seasonal normal **today**" — flagged Jun 30, Jul 1, still unactioned (3rd cycle) |
+| `draft_20260628_171634_36` (GMST marine_heatwave) | 2026-06-28T17:16Z | ~94h | "**today's** reading is 20.961°C" — flagged Jul 1, still unactioned (2nd cycle) |
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI not installed in this remote
+execution environment. 34th consecutive skip (May 13 → Jul 2). Operator must reject both via
+dashboard. Non-flagged but notable: [11]/[13]/[16] — all 3 `absolute_extreme` Basra-area drafts
+now reference forecast dates that have elapsed (June 30, July 1, July 1) but none is yet 48h old
+(~41h/~24h/~17h) — logged as a freshness observation in `docs/DRAFT_CORPUS.md`, not a bulk-reject
+candidate under the mechanical age rule. [8] Rocky Mountains, Colorado fire crossed 48h (~65h) for
+the first time this cycle but contains no explicit "today"/present-tense real-time language —
+also logged as an observation, not a reject candidate. All other pending drafts use past-tense or
+explicitly-dated framing with no "today"/"tonight"/forecast-for-today language.
 
 ### 2026-07-01 — Staleness bulk-reject: 2 stale identified; gh CLI absent (33rd consecutive skip)
 
