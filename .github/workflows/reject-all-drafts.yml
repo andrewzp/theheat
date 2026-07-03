@@ -1,0 +1,35 @@
+name: reject-all-drafts
+
+# Operator tool: reject EVERY pending draft (clear the review queue). Runs in Actions
+# where the Gist state credentials live, via the bot's conflict-safe write_state.
+# workflow_dispatch ONLY, guarded by a typed confirmation so it can't fire by accident.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type REJECT-ALL to confirm rejecting EVERY pending draft'
+        required: true
+        default: ''
+
+concurrency:
+  group: reject-all-drafts
+  cancel-in-progress: false
+
+jobs:
+  reject:
+    if: ${{ inputs.confirm == 'REJECT-ALL' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - run: pip install -r requirements.txt
+      - name: Reject all pending drafts
+        env:
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GITHUB_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+        run: python scripts/reject_all_drafts.py
