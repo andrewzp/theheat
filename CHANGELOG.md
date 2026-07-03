@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Three-pillar upgrade plan + Bet A design complete + writer watch (2026-07-03 evening)
+
+The VISION.md mandate executed: whole-project assessment → prioritized upgrade plan across
+the three pillars (editorial excellence + sourced anecdotes; Bet A global newsworthy
+coverage; reliability/fail-loudly). Plan:
+[docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md)
+(codex-xhigh looped to clean across 4 rounds with the spec).
+
+- **reganom stakes-attribution fix MERGED** ([#361](https://github.com/andrewzp/theheat/pull/361)).
+  `main`'s exemplar personified France ("France was effectively living…"), which the
+  fact-check kills as a bare-region generalization — the prompt taught a phrasing that
+  fails its own gate. The stakes clause (and all didactic prose — codex caught the
+  exemplar-bleed channel) now keeps the sampled cities as the grammatical subject;
+  duration stated once; easing date = day after `window_end`. Live-verified 3/3 shipping
+  pre-merge; codex-xhigh 3 rounds → clean.
+- **Writer watch** ([#362](https://github.com/andrewzp/theheat/pull/362)): the 2026-07-03
+  silent failure made loud. `writer_watch` in the sentinel flags `budget_exhausted`
+  suppression rows (24h window, gated on the bot actually drafting) and opens/auto-closes
+  an advisory issue like the coverage/yield watches; JS mirror in
+  [dashboard/lib/source-health.js](/Users/andrewpuschel/Documents/Claude/theheat/dashboard/lib/source-health.js)
+  surfaces findings via `buildSourceHealthPayload`. Timestamps parsed strictly on both
+  sides (codex: lexical compare treated junk as recent; `Date.parse` normalizes invalid
+  calendar dates). First PR-sized move of the reliability pillar.
+- **Bet A design COMPLETE** (was mid-brainstorm): all five decisions resolved in
+  [docs/superpowers/specs/2026-07-03-newsworthiness-bet-a-design.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-07-03-newsworthiness-bet-a-design.md)
+  — hybrid NIFC+grounded-search source with a verification ladder and a deterministic
+  source/url/as_of floor; v1 = re-rank (flat +8 rescue boost, floor threshold−8,
+  fire-first) + enrich (`human_impact[]`, attribution-only citation, forced
+  `manual_only` by content) + a read-only news-gap flag. Awaiting Andrew's review
+  (decisions 4/5 flagged adopted-from-recommendation).
+- **Operational:** Andrew cleared the review queue via the new reject-all tool
+  ([#360](https://github.com/andrewzp/theheat/pull/360), parallel session) — the pre-#352
+  backlog note below is resolved by that action.
+
 ### reganom writer-voice upgrade + autoship record types + newsworthiness reckoning (2026-06-29 → 07-03)
 
 Picked up the "fix the boring reganom tweets" P1 and shipped the voice upgrade — but the
