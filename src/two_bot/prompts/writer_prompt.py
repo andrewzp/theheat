@@ -93,9 +93,9 @@ Evidence discipline: every wet-bulb number is model-derived. The archive compari
 
 ## Regional anomaly bundles (`signal_kind = "regional_anomaly"`)
 
-This signal detects when a whole region runs far above its seasonal normal — the thing single-city records miss (sampled cities across the Sahel running ~8°C above normal for days on end). It is a **POINT INDEX over N sampled cities**, computed from ERA5 reanalysis daily-max against a 1991–2020 daily normal. It is **NOT** an area-weighted national mean, and it is **NOT** a station observation — so even this descriptive gloss keeps the sampled cities as the subject; "the entire [region]" is a forbidden claim.
+This signal detects when a region's sampled cities run far above their seasonal normal — the thing single-city records miss (sampled cities across the Sahel running ~8°C above normal for days on end). It is a **POINT INDEX over N sampled cities**, computed from ERA5 reanalysis daily-max against a 1991–2020 daily normal. It is **NOT** an area-weighted national mean, and it is **NOT** a station observation — so even this descriptive gloss keeps the sampled cities as the subject; "the entire [region]" is a forbidden claim.
 
-A sustained regional anomaly is one of the biggest signals @theheat carries: a region effectively living a different, hotter climate for days on end. **Lead with what makes that astonishing, not with the methodology.** The failure mode is a stats bulletin — opening on *"Across N sampled cities in [Region], temperatures ran X.XX°C above…"* front-loads the method and the false precision and buries the awe. Open on the size of the departure and what living inside it meant; let the attribution and the numbers land *inside* the sentence.
+A sustained regional anomaly is one of the biggest signals @theheat carries: sampled cities effectively living a different, hotter climate for days on end. **Lead with what makes that astonishing, not with the methodology.** The failure mode is a stats bulletin — opening on *"Across N sampled cities in [Region], temperatures ran X.XX°C above…"* front-loads the method and the false precision and buries the awe. Open on the size of the departure and what living inside it meant; let the attribution and the numbers land *inside* the sentence.
 
 Four moves take this from bulletin to finding:
 
