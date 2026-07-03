@@ -216,5 +216,86 @@ the destination.
 
 ---
 
+---
+
+# ⭐ Requested — wanted, NOT parked
+
+> Added 2026-06-29 at the user's explicit request ("we need that"), after @theheat
+> missed two major deadly events in real time: the European heatwave (1,300+ excess
+> deaths per WHO; ~1,000 in France) and the Western US wildfire outbreak (3 firefighters
+> — Sydney Watson, Nick Hutcherson, Emily Barker — killed on the Knowles/Gore fires at
+> the CO–UT border; 100+ new fires in 72h; national Preparedness Level 4). Smoking gun:
+> the bot POSTED "1,468 MW in the Congo Basin, DR Congo" while SUPPRESSING the Colorado
+> fires (scored 62 < the 64 cutoff) the same evening. Root cause: editorial selection
+> ranks by raw sensor MAGNITUDE and is blind to newsworthiness + human stakes. These two
+> items fix that. They are priorities, not parking-lot ideas. The two share one grounded
+> retrieval + citation + verify-against-source core — build it once.
+
+## Weather-news scanner — "are we missing an obvious event?"
+
+**What:** A recurring job that scans weather/climate news for the biggest current events
+(heat death tolls, multi-state fire outbreaks, record landfalls…) and cross-checks them
+against what @theheat has actually detected/posted — then flags any "obvious event we're
+missing." A miss-detector / newsworthiness safety net.
+
+**Why needed:** The bot is structurally blind to newsworthiness — it suppressed the
+front-page Colorado fire (62<64) and posted a remote Congo Basin megawatt reading the
+same evening, and has no path to the 1,300 European heat deaths. Magnitude ≠ newsworthy.
+
+**Acceptance (working when):**
+- On a day with a major, widely-reported climate event, the scanner surfaces it
+  (dashboard banner and/or a GitHub issue) within a cycle or two, with the source.
+- It cross-references recent shipped tweets + detected signals, so it flags only
+  GENUINE gaps, not events already covered.
+- v2: the gap signal BOOSTS the matching internal signal's score (so the Colorado fire
+  clears the cutoff because the world says it matters), not just alerts.
+
+**Sketch:**
+- New lane `src/data/news_scan.py` / `src/editorial/newsworthiness.py`: query a
+  weather-news source → structured {event, where, when, magnitude/impact, source_url, as_of}.
+- Source of truth (decide first; same infra as the anecdotes entry): grounded search
+  (Gemini google_search grounding, already in-stack — broad but noisy) vs authoritative
+  feeds (NIFC fire, WHO/Santé publique France, NWS/NHC — clean but narrow). Likely both:
+  feeds for the big verticals + grounded search for the long tail.
+- Gap check: fuzzy-match scanned events vs `state.shipped_tweets` + the cycle's detected
+  signals (place + category + window); unmatched high-impact event → flag.
+- Surface via the existing auto-open/close source-health issue + dashboard machinery
+  (reuse it). Hourly / per-cycle.
+- Guard: never auto-POST from the scanner; it informs selection + alerts. Any text still
+  goes through writer → fact-check → critic → human gate.
+
+## Sourced anecdotes / human-impact with citations
+
+**What:** Let tweets carry real human-impact detail — death tolls, firefighter
+fatalities, "buses crashed, drivers passed out" — attached to a climate signal, each
+fact carrying a citation. So a France heat tweet can say "≥1,300 excess deaths across
+Europe, per WHO," and a Western-fire tweet can name the firefighters killed.
+
+**THE IRON CONSTRAINT:** every anecdote/impact figure MUST come from real, cited
+retrieval (grounded search / a named source), NEVER the model's imagination. Current news
+is past the writer model's knowledge cutoff, so an invented death toll is the one
+unforgivable error — far worse than a boring tweet. Citation + verify-against-source +
+human gate are non-negotiable.
+
+**Acceptance (working when):**
+- For a qualifying event the writer can cite a sourced impact fact WITH attribution
+  ("per WHO," "reported by NIFC"); the fact-checker verifies it against the attached
+  source and KILLS any impact claim with no source attached.
+- Hand-sourced proof-of-target tweets already drafted this session (heat deaths;
+  Knowles/Gore firefighter deaths) — the build automates producing those.
+
+**Sketch:**
+- Add optional `human_impact: [{claim, value, source_name, url, as_of}]` to StoryBundle,
+  populated by the same grounded-retrieval lane as the scanner.
+- Writer prompt: a section permitting impact citation ONLY from `bundle.human_impact`,
+  ONLY with attribution, never self-supplied; past-tense + as_of honesty like reganom.
+- Fact-check: a rule that an impact claim must match a `human_impact` entry and verify
+  against its source (fetch + compare); deterministic gate requires source+as_of; no
+  source → kill.
+- Editorial: life-safety-adjacent (like cyclones) — keep the human dashboard gate as the
+  final backstop; no alarmism, state the sourced figure plainly.
+
+---
+
 *Anything else gets parked here when it's worth remembering but not worth
 building now. Keep entries tight — problem, why not now, what would change.*
