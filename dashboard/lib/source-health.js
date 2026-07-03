@@ -339,12 +339,15 @@ export const WRITER_WATCH_WINDOW_HOURS = 24
 
 export function writerWatch(suppressions, runHistory, now = new Date()) {
   if (!botIsDrafting(runHistory)) return []
-  const cutoff = new Date(now.getTime() - WRITER_WATCH_WINDOW_HOURS * 3600000)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, "Z")
-  const rows = (suppressions || []).filter(
-    (r) => r && r.stage === "budget_exhausted" && String(r.ts || "") >= cutoff
-  )
+  // Parse timestamps rather than comparing strings — a malformed ts must be
+  // SKIPPED, not lexically treated as "recent" (mirrors the Python _parse_ts
+  // behavior and avoids string-format cutoff mismatches).
+  const cutoffMs = now.getTime() - WRITER_WATCH_WINDOW_HOURS * 3600000
+  const rows = (suppressions || []).filter((r) => {
+    if (!r || r.stage !== "budget_exhausted") return false
+    const t = Date.parse(String(r.ts || ""))
+    return !Number.isNaN(t) && t >= cutoffMs
+  })
   if (rows.length === 0) return []
   const lastTs = rows.map((r) => String(r.ts || "")).sort().at(-1)
   return [{ kind: "budget_exhausted", count: rows.length, last_ts: lastTs }]
@@ -378,5 +381,6 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
       idle_count: sources.filter((s) => s.health === "idle").length,
     },
     coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date()),
+    writer: writerWatch(state?.suppressions, state?.run_history, new Date()),
   }
 }

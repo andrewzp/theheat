@@ -575,6 +575,20 @@ class TestWriterWatch:
         assert writer_watch(None, self.ALERTS, now=self.NOW) == []
         assert writer_watch(["junk", {"ts": None}], self.ALERTS, now=self.NOW) == []
 
+    def test_malformed_budget_row_ts_is_skipped_not_recent(self):
+        # Lexically, "not-a-date" > "2026-..." — a string compare would count it
+        # as recent and false-open (or pin) the issue. It must be SKIPPED.
+        supps = [
+            _budget_supp("not-a-date"),
+            _budget_supp(""),
+            _budget_supp("2026-13-99T99:99:99Z"),
+        ]
+        assert writer_watch(supps, self.ALERTS, now=self.NOW) == []
+        # ...and a valid recent row still fires alongside junk.
+        supps.append(_budget_supp("2026-07-04T11:00:00Z"))
+        out = writer_watch(supps, self.ALERTS, now=self.NOW)
+        assert out[0]["count"] == 1
+
     def test_incident_replay_2026_07_03(self):
         # The real incident shape: a morning of budget_exhausted kills across
         # green alerts runs -> exactly one loud finding.

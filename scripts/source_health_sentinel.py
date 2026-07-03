@@ -832,23 +832,23 @@ def writer_watch(
     """
     if not _bot_is_drafting(run_history):
         return []
-    cutoff = (
-        (now - timedelta(hours=WRITER_WATCH_WINDOW_HOURS))
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
-    rows = [
-        r for r in (suppressions or [])
-        if isinstance(r, Mapping)
-        and r.get("stage") == "budget_exhausted"
-        and str(r.get("ts") or "") >= cutoff
-    ]
-    if not rows:
+    cutoff = now - timedelta(hours=WRITER_WATCH_WINDOW_HOURS)
+    # Parse timestamps (via _parse_ts) rather than comparing strings — a
+    # malformed ts must be SKIPPED, not lexically treated as "recent", or a
+    # junk row could false-open / pin the advisory issue forever.
+    recent: list[str] = []
+    for r in suppressions or []:
+        if not isinstance(r, Mapping) or r.get("stage") != "budget_exhausted":
+            continue
+        parsed = _parse_ts(str(r.get("ts") or ""))
+        if parsed is not None and parsed >= cutoff:
+            recent.append(str(r.get("ts")))
+    if not recent:
         return []
     return [{
         "kind": "budget_exhausted",
-        "count": len(rows),
-        "last_ts": max(str(r.get("ts") or "") for r in rows),
+        "count": len(recent),
+        "last_ts": max(recent),
     }]
 
 

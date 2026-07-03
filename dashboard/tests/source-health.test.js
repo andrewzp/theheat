@@ -880,3 +880,19 @@ test("writerWatch tolerates empty/malformed input", () => {
   assert.deepEqual(writerWatch(null, wwAlerts(), WW_NOW), [])
   assert.deepEqual(writerWatch([null, { ts: null }], wwAlerts(), WW_NOW), [])
 })
+test("writerWatch skips malformed budget-row timestamps (no lexical false-recent)", () => {
+  const junk = [wwSupp("not-a-date"), wwSupp(""), wwSupp("2026-13-99T99:99:99Z")]
+  assert.deepEqual(writerWatch(junk, wwAlerts(), WW_NOW), [])
+  const out = writerWatch([...junk, wwSupp("2026-07-04T11:00:00Z")], wwAlerts(), WW_NOW)
+  assert.equal(out[0].count, 1)
+})
+test("buildSourceHealthPayload surfaces writer findings alongside coverage", () => {
+  const state = {
+    source_health: { open_meteo: { runs: [] } },
+    run_history: [{ id: "r", mode: "alerts", started_at: "2026-07-04T00:00:00Z" }],
+    suppressions: [wwSupp(new Date(Date.now() - 3600000).toISOString())],
+  }
+  const payload = buildSourceHealthPayload(state)
+  assert.equal(payload.writer.length, 1)
+  assert.equal(payload.writer[0].kind, "budget_exhausted")
+})
