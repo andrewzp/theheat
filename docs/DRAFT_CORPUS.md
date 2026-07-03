@@ -11,6 +11,234 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-03 — Daily corpus grading (3 fresh drafts; 17 carry-overs from Jun 28–Jul 2, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 20 pending drafts.
+Continuing to grade on the unmerged `daily-plan-current` rolling branch — `main`'s copies of
+these three docs are still stale back to 2026-06-08 (now 25+ days of cycles live only on this
+branch; see Jul 1/Jul 2's operational note, repeated below with an update). 17 of 20 pending
+drafts exactly match drafts already graded Jun 28–Jul 2 (same `draft_id`, score, text) —
+carried over, not re-graded. **3 fresh**, all created after Jul 2's ~15:00 UTC grading window:
+Canadian Arctic fire (`fire`, created Jul2T21:14Z, 792 MW, permafrost-carbon close), a
+near-duplicate Canadian Arctic fire draft (`fire`, created Jul2T21:15Z, same 792 MW reading, 68
+seconds after the first), and Typhoon Bavi (`cyclone_rapid_intensification`, created
+Jul3T10:41Z, 55 kt/24h rapid intensification — first of this signal type in the corpus). Bot
+per BRIEFING.md at 0.9.81.0+ (no newer handoff confirmed this cycle).
+
+**Operational note (carried forward, now acute):** `main` has not merged this branch since
+2026-06-08 — **25 consecutive daily cycles** (Jun 9 through Jul 3) exist only here. Recommend
+the operator merge this PR soon regardless of A-rate state; the rolling-PR pattern was designed
+to accumulate a few days of edits between merges, not nearly a month. A colleague picking up
+`main` today would see a 0% Jun 7 A-rate and miss that the bar was cleared 80% on Jun 29.
+
+**Staleness review as of 2026-07-03 ~15:15 UTC:**
+- [1] Mediterranean SST (`draft_20260628_040130_32`, created Jun28T04:01Z): ~131h old, "running
+  3.54°C above its seasonal normal **today**." **4th consecutive cycle STALE, still unactioned.**
+- [2] GMST marine_heatwave (`draft_20260628_171634_36`, created Jun28T17:16Z): ~118h old,
+  "**today's** reading is 20.961°C." **3rd consecutive cycle STALE, still unactioned.**
+- [11] Basrah, Iraq 47.2°C (`draft_20260630_213852_50`): ~66h old — **newly crosses the 48h
+  mechanical threshold this cycle**, compounding the forecast-date-elapsed issue flagged Jul 1/2
+  (forecast was for June 30; today is July 3). **Promoted to a strict bulk-reject candidate.**
+- [13] Al Baṣrah al Qadīmah, Iraq 47°C (`draft_20260701_145246_52`): ~48h old — **also newly
+  crosses the 48h threshold this cycle**, same compounding issue (forecast was for July 1).
+  **Promoted to a strict bulk-reject candidate.**
+- [16] Basrah, Iraq 48°C (`draft_20260701_214913_55`): ~41h old — still under the 48h mechanical
+  threshold, but the forecast date (July 1) elapsed two days ago. Not yet a strict bulk-reject
+  candidate on age alone; will cross 48h within the next grading cycle. Same
+  forecast-gone-stale-in-truth-value situation as [11]/[13].
+- [3]–[10], [12], [14], [15], [17]: no "today"/"tonight"/forecast-for-today language; past-tense
+  or explicitly dated. Not stale by policy.
+- [18], [19] (fresh): ~18h old, no date/tense language at all (bare MW readings). Clear on
+  staleness grounds, though fire signals are inherently point-in-time — same freshness-risk
+  caveat as [8] Colorado (flagged Jun 30/Jul 2), not a mechanical staleness violation.
+- [20] (fresh): ~4.6h old. Clear.
+
+Bulk-reject attempted via `gh api -X PATCH gists/...` for [1], [2], [11], [13] — `gh` command
+not found in this remote execution environment. **35th consecutive skip** (May 13 → Jul 3).
+Operator must reject all four via dashboard; recommend also proactively rejecting [16] rather
+than waiting one more cycle for its clock to catch up to what's already true.
+
+**Grade distribution (3 fresh drafts):** 1 A- / 1 B+ / 1 C+ / 0 D-F.
+**A-rate: 33% (1/3).** Small n; gap from resumption bar (if it held at this rate): 17 pp. Most
+recent above-bar cycle remains Jun 29 (80%, n=5); Jun 30 was 22%, Jul 1 was 0%, Jul 2 was 0%.
+
+**Headline finding:** The Canadian Arctic fire pair ([18]/[19]) is the second and third `fire`
+draft to reach a P_close-positive declarative close via a carbon-release consequence — after
+Jun 25's Siberia fire ("burns deep") — confirming that mechanic as a recurring, reliable move
+for boreal/permafrost fires specifically, not a one-off. [18]'s "reaches carbon the frozen
+ground has held for millennia" is the strongest version yet. The two drafts are near-identical
+text for the same underlying signal, fired 68 seconds apart — see Patterns §1 for the
+duplicate-generation observation this adds to. Typhoon Bavi ([20]), the corpus's first
+`cyclone_rapid_intensification` draft, opens a **4th signal type for P_tier**: "the
+rapid-intensification threshold is 30 kt in 24 hours" quotes the bot's own classification
+criterion nearly as directly as the Basrah/Mediterranean/Morrill Fire instances — evidence this
+failure mode generalizes across every signal type with an internal severity/threshold field,
+not just the three already documented.
+
+### A-grade drafts
+
+#### [18] Canadian Arctic fire — 792 MW, permafrost carbon — **A-**
+
+> *792 MW of radiative heat in the Canadian Arctic — very-high-intensity fire,
+> satellite-confirmed at 95% confidence. At 60°N, boreal organic soils sit over permafrost;
+> when fire penetrates the surface layer, it reaches carbon the frozen ground has held for
+> millennia.*
+
+**Score:** 74. Created 2026-07-02T21:14:02Z.
+
+Humor lens:
+- **Violation:** 792 MW very-high-intensity Arctic fire. "Very-high-intensity" is the
+  bundle-supplied `frp_tier` label (PR #85) converting an opaque MW reading into a reader-facing
+  scale word — this is the intended, already-shipped use of tier language, **not** a P_tier
+  violation (P_tier targets citing the classification *machinery* — "threshold," "band," "tier
+  that marks" — not a plain adjective derived from one).
+- **Benign?** Yes.
+- **Setup→Punchline?** Opens on the raw number (P6 template avoided). Close: "reaches carbon the
+  frozen ground has held for millennia" — declarative, specific, no hedge.
+- **Named mechanic?** P_close POSITIVE — declarative consequence via carbon-release, third
+  instance of this specific mechanic in the corpus (after Jun 25 Siberia "burns deep," and
+  Jun 29 Congo fire's convective-lid consequence in the same declarative-close family).
+  "Millennia" does real specificity work, the way era anchors did in the v2 corpus, without
+  needing an actual era anchor.
+- **Wodehouse rule?** Clean. No hedge on the strongest claim in the sentence.
+
+Best single line in this batch, and arguably in the corpus's fire category to date. A- rather
+than a bare A (reserved so far for Nauru's "no adjacent reef system to reseed it" — a slightly
+starker, more airtight structural-absence form) but comparable in quality to Jun 29's Congo fire
+A-.
+
+### B-grade drafts
+
+#### [19] Canadian Arctic fire — 792 MW, organic soil (duplicate of [18]) — **B+**
+
+> *792 MW of radiative heat in the Canadian Arctic — very-high-intensity fire,
+> satellite-confirmed at 95% confidence. At 60°N, this is boreal forest and muskeg country; when
+> fire reaches very-high intensity here, it burns into organic soil layers that took centuries to
+> accumulate.*
+
+**Score:** 74. Created 2026-07-02T21:15:10Z — **68 seconds after [18]**, same 792 MW reading,
+same location. See Patterns §1.
+
+Same signal, same `frp_tier` label, same underlying event as [18] — graded independently on
+text merit. P_close POSITIVE here too (declarative, "took centuries to accumulate"), but a
+weaker version than [18]: "centuries" is a smaller, less surprising timescale than "millennia,"
+and "organic soil layers" is more clinical than [18]'s "carbon" — carbon ties directly to the
+climate-feedback stakes (this fire is releasing sequestered carbon), where "organic soil layers"
+just describes composition. B+, one notch below its twin, same grade relationship observed the
+last time this exact pair of drafts was seen (2026-07-03, first grading).
+
+#### [20] Typhoon Bavi — cyclone_rapid_intensification — 55 kt in 24h — **C+**
+
+> *Typhoon Bavi intensified 55 kt in 24 hours in the Western Pacific — from 50 kt (tropical
+> storm) to 105 kt (Category 3). The rapid-intensification threshold is 30 kt in 24 hours; Bavi
+> crossed it by nearly double.*
+> *(followed in the raw draft text by a bare URL — see below)*
+
+**Score:** 81. Created 2026-07-03T10:40:59Z. First `cyclone_rapid_intensification` in the
+corpus.
+
+Humor lens:
+- **Violation:** 55 kt intensification in 24h, nearly double the 30 kt RI threshold. Real,
+  well-quantified signal.
+- **Benign?** Yes. No cyclone-alarmism banned words.
+- **Setup→Punchline?** Sentence 1 states the jump cleanly (50 kt → 105 kt). Sentence 2: **"The
+  rapid-intensification threshold is 30 kt in 24 hours"** — this states the bot's own
+  classification criterion nearly verbatim, the same shape as Basrah's "above the 47°C
+  absolute-extreme threshold for the Northern Subtropical band" and Morrill Fire's "the
+  250,000-hectare tier that marks a continent-scale footprint." **P_tier violation, 4th signal
+  type** (after `regional_sst_anomaly`, `absolute_extreme`, `fire_footprint`).
+- **Named mechanic?** "Crossed it by nearly double" is a real ratio-as-punchline move (P8's
+  mechanic, resolved 2026-06-17) — but it's built on top of the threshold-citation, so the
+  punchline and the violation share the same clause. No P_close-positive consequence beyond the
+  ratio itself: no stakes, no physical/human impact named (unlike, say, Basrah's "no evaporative
+  relief" or [18]'s carbon-release close) — this is closer to pure data delivery than a landed
+  consequence.
+- **Wodehouse rule?** The P_tier violation is the Wodehouse issue here — citing methodology
+  rather than describing the world.
+
+C+ rather than B: the P_tier pattern has now demonstrably capped every other signal type it's
+appeared in at B even with a strong close ([11], [16]); Bavi doesn't have a compensating strong
+close the way those drafts did, so it lands lower. Without the threshold-citation clause — e.g.
+"Typhoon Bavi intensified 55 kt in 24 hours in the Western Pacific — from 50 kt (tropical storm)
+to 105 kt (Category 3), nearly double the pace meteorologists call rapid intensification" — this
+reads clean and the ratio does real work.
+
+**Flagging separately, not folded into the grade:** the draft's raw text in the gist is followed
+by a bare URL — `https://www.metoc.navy.mil/jtwc/products/wp0926prog.txt` — appended directly to
+the tweet body (confirmed present in the `text` field, not a citation metadata field). No other
+draft in corpus history has ever carried a raw URL in-text. Likely a bundle/citation-leak bug
+specific to the new `cyclone_rapid_intensification` path, not a voice issue. Total length with
+the URL is 267 chars (still under 280), so it would not be blocked by the length gate — flagging
+for the engineer who owns this signal path before it ships anything for real.
+
+### Carry-over inventory (Jun 28–Jul 2 grades stand; not re-graded)
+
+| # | Draft | Type | Grade (cycle graded) | Status this cycle |
+|---|---|---|---|---|
+| [1] | Mediterranean Sea, 3.54°C above seasonal normal | regional_sst_anomaly | B+ (Jun 28) | **STALE — 4th consecutive cycle** |
+| [2] | Global mean ocean surface temp, 25-day streak | marine_heatwave | A- (Jun 29) | **STALE — 3rd consecutive cycle** |
+| [3] | France, 6 cities, 11.53°C above normal (reganom) | regional_anomaly | B+ (Jun 29) | Clear |
+| [4] | Amsterdam, 314.1 mm / 7 days | precipitation_extreme | B (Jun 30) | Clear |
+| [5] | Astana, Kazakhstan, 308.1 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+| [6] | Phalodi, India, 956 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [7] | Taiz, Yemen, 1,302 μg/m³ dust | dust_event | C+ (Jun 30) | Clear |
+| [8] | Rocky Mountains, Colorado, 595.3 MW fire | fire | B- (Jun 30) | Freshness risk (~90h, no explicit today-language) |
+| [9] | Prudhoe Bay, Alaska, 101°F all-time high | all_time_high | A- (Jun 30) | Clear |
+| [10] | Antwerpen, Belgium, 358.8 mm / 7 days | precipitation_extreme | B+ (Jun 30) | Clear |
+| [11] | Basrah, Iraq, 47.2°C forecast (Jun 30) | absolute_extreme | B (Jul 1) | **STALE — newly crosses 48h + forecast date long elapsed** |
+| [12] | Morrill Fire, Nebraska, 259,820 ha | fire_footprint | B (Jul 1) | Clear |
+| [13] | Al Baṣrah al Qadīmah, Iraq, 47°C forecast (Jul 1) | absolute_extreme | B- (Jul 1) | **STALE — newly crosses 48h + forecast date elapsed** |
+| [14] | Wadi Halfa, Sudan, 559 μg/m³ dust | dust_event | C+ (Jul 1) | Clear |
+| [15] | Ft Green, Florida, 102°F all-time high (Jun 28) | all_time_high | B (Jul 2) | Clear |
+| [16] | Basrah, Iraq, 48°C forecast (Jul 1) | absolute_extreme | B (Jul 2) | Forecast date elapsed, ~41h old — will cross 48h next cycle |
+| [17] | Ft Green, Florida, 102°F all-time high (Jun 29) | all_time_high | C+ (Jul 2) | Clear |
+
+### Patterns named in this batch
+
+1. **Duplicate-generation within a single event, now a third instance.** [18]/[19] are the same
+   792 MW Canadian Arctic fire reading, drafted 68 seconds apart with near-identical text. This
+   joins the Ft Green (Jul 1/2) and Basrah triplicate (Jun 30–Jul 1) clusters already logged —
+   third distinct instance of the same underlying-event duplication pattern in a week, now
+   spanning 3 different signal types (`all_time_high`, `absolute_extreme`, `fire`). Continuing to
+   log as a data/pipeline observation, not a voice proposal, per the hard constraints — but the
+   pattern is now broad enough (3 signal types, 5+ affected drafts) that it's worth the operator's
+   attention independent of any single day's grading.
+
+2. **P_tier's 4th signal type.** Typhoon Bavi confirms the tier-jargon-leak pattern isn't scoped
+   to record/threshold-style signals (`regional_sst_anomaly`, `absolute_extreme`,
+   `fire_footprint`) — it now appears in a rate-of-change signal type
+   (`cyclone_rapid_intensification`) too. The common thread across all 4 types: each has an
+   internal severity/classification field the writer can see and is echoing verbatim instead of
+   just using the underlying number. See `docs/IMPROVEMENT_PLAN.md` P_tier for the updated
+   instance count.
+
+3. **P_close's carbon-release fire mechanic, now 2-for-2 clean executions.** [18] and [19] both
+   land a declarative carbon-release consequence for a permafrost/boreal fire, joining Jun 25's
+   Siberia fire. Worth naming explicitly if `writer_prompt.py`'s fire framing section gets an
+   update: for high-latitude fires, the "burns into old carbon" mechanic is a reliable A-/B+ move,
+   distinct from the mid-latitude "drought → fast ignition" mechanism-only form that capped [8]
+   Colorado at B-.
+
+### Followups (in priority order)
+
+1. **Operator: merge the `daily-plan-current` rolling PR.** 25 consecutive daily cycles (Jun 9 →
+   Jul 3) are stranded off `main`, including the Jun 29 bar-clearing cycle (80% A-rate) that a
+   `main`-only view would never see.
+2. **Operator: reject [1] Mediterranean, [2] GMST marine_heatwave, [11] Basrah 47.2°C, and [13]
+   Al Baṣrah 47°C via dashboard** — all four are now mechanically stale (>48h + real-time-baked
+   or forecast-date-elapsed content); `gh` CLI still unavailable for automated bulk-reject (35th
+   consecutive skip). Recommend also proactively rejecting [16] (48°C forecast, ~41h, forecast
+   date already elapsed) rather than waiting one more cycle.
+3. **P_tier and P_compound remain ready for implementation** — one-paragraph `writer_prompt.py`
+   additions, both drafted in full in `docs/IMPROVEMENT_PLAN.md`. P_tier now has evidence across
+   4 distinct signal types and is capping otherwise-strong drafts at B or lower in every instance
+   observed.
+4. **Operator: same duplicate-generation question as Jul 1/2, now extended to fire.** Verify
+   whether the Canadian Arctic fire pair, Ft Green pair, and Basrah triplicate are genuine
+   independent signals or a dedup gap. Flagging for the third time because the pattern keeps
+   recurring across new signal types, not because the routine has new information about the root
+   cause.
+
 ## 2026-07-02 — Daily corpus grading (3 fresh drafts; 14 carry-overs from Jun 28–Jul 1, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 17 pending drafts.
