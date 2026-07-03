@@ -27,16 +27,23 @@ def test_run_co2_writes_last_good_on_success(monkeypatch):
 
 
 def test_run_co2_serves_last_good_as_degraded_without_enqueue(monkeypatch):
+    from datetime import date, timedelta
+
     from src.orchestrator.sources import co2 as runner
 
     bot_state = _fresh_state()
     current_run = {"sources": []}
+    # RECENT last-good (yesterday) so it stays inside the runner's 21-day
+    # degraded-serve window (co2.py `max_age_days=21`, checked against real "now")
+    # as time advances. A hardcoded date rots: this was "2026-06-10", which aged
+    # past 21 days on 2026-07-03 and started returning "failed" instead of "degraded".
+    recent = (date.today() - timedelta(days=1)).isoformat()
     last_good.write(
         bot_state,
         "co2",
-        "2026-06-10",
-        {"date": "2026-06-10", "ppm": 429.8},
-        captured_at="2026-06-11T00:00:00Z",
+        recent,
+        {"date": recent, "ppm": 429.8},
+        captured_at=f"{recent}T00:00:00Z",
     )
 
     def boom(**_kwargs):
@@ -56,7 +63,7 @@ def test_run_co2_serves_last_good_as_degraded_without_enqueue(monkeypatch):
 
     source_run = current_run["sources"][0]
     assert source_run["status"] == "degraded"
-    assert source_run["error"] == "served last-good (2026-06-10)"
+    assert source_run["error"] == f"served last-good ({recent})"
 
 
 def test_run_co2_does_not_serve_cache_after_successful_fetch_detector_error(monkeypatch):
