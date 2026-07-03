@@ -806,6 +806,134 @@ def _close_coverage_watch_issue(number: int) -> None:
     print(f"[sentinel] closed coverage-watch issue #{number}")
 
 
+# ---------------------------------------------------------------------------
+# Writer watch — the writer silently down while runs stay green
+# ---------------------------------------------------------------------------
+
+WRITER_WATCH_WINDOW_HOURS = 24
+WRITER_WATCH_TITLE = "Writer watch: the Anthropic writer is down (budget exhausted)"
+WRITER_WATCH_MARKER = "<!-- source-health-writer-watch -->"
+
+
+def writer_watch(
+    suppressions: list[dict] | None,
+    run_history: list[dict] | None,
+    *,
+    now: datetime,
+) -> list[dict]:
+    """Flag recent budget_exhausted kills — the writer down while runs stay green.
+
+    The 2026-07-03 incident class: the Anthropic credit balance hit zero, every
+    draft died with a graceful BudgetExhaustedError, bot runs kept reporting
+    ``success``, and nothing alerted for hours. The suppression ledger already
+    records each kill with ``stage="budget_exhausted"`` — this watch is the loud
+    consumer of those rows. Gated on the bot actually drafting so a paused bot
+    cannot false-alarm on stale rows.
+    """
+    if not _bot_is_drafting(run_history):
+        return []
+    cutoff = now - timedelta(hours=WRITER_WATCH_WINDOW_HOURS)
+    # Parse timestamps (via _parse_ts) rather than comparing strings — a
+    # malformed ts must be SKIPPED, not lexically treated as "recent", or a
+    # junk row could false-open / pin the advisory issue forever.
+    recent: list[str] = []
+    for r in suppressions or []:
+        if not isinstance(r, Mapping) or r.get("stage") != "budget_exhausted":
+            continue
+        parsed = _parse_ts(str(r.get("ts") or ""))
+        if parsed is not None and parsed >= cutoff:
+            recent.append(str(r.get("ts")))
+    if not recent:
+        return []
+    return [{
+        "kind": "budget_exhausted",
+        "count": len(recent),
+        "last_ts": max(recent),
+    }]
+
+
+def build_writer_watch_body(findings: list[dict]) -> str:
+    f = findings[0]
+    return "\n".join([
+        WRITER_WATCH_MARKER,
+        "**The writer is down: the Anthropic credit balance is exhausted.**",
+        "",
+        f"{f['count']} draft(s) died with `budget_exhausted` in the last "
+        f"{WRITER_WATCH_WINDOW_HOURS}h (latest `{f['last_ts']}`). Bot runs keep "
+        "reporting success while nothing drafts — this issue is the loud version.",
+        "",
+        "**Fix:** top up Anthropic API credits (the writer is the metered Anthropic "
+        "API, separate from the operator's Claude Code plan), then confirm the next "
+        "voice-regression run is green and fresh drafts appear.",
+        "",
+        "_Auto-maintained by the source-health sentinel writer watch. Auto-closes "
+        "when no budget_exhausted kill lands in the window._",
+    ])
+
+
+def _open_writer_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list writer-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == WRITER_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_writer_watch_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if findings:
+        body = build_writer_watch_body(findings)
+        if open_issue is None:
+            return {"action": "create_writer_watch", "body": body, "labels": [LABEL, "ours"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_writer_watch",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "ours"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_writer_watch", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_writer_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", WRITER_WATCH_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened writer-watch issue: {WRITER_WATCH_TITLE}")
+
+
+def _update_writer_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated writer-watch issue #{action['number']}")
+
+
+def _close_writer_watch_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "No budget_exhausted kills in the window — the writer is drafting again. "
+         "Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed writer-watch issue #{number}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
@@ -876,6 +1004,24 @@ def main(argv: list[str] | None = None) -> int:
             _update_coverage_watch_issue(cov_action)
         else:
             _close_coverage_watch_issue(cov_action["number"])
+    ww = writer_watch(
+        state.get("suppressions"),
+        state.get("run_history"),
+        now=datetime.now(timezone.utc),
+    )
+    if ww:
+        print(
+            f"[sentinel] writer-watch: {ww[0]['count']} budget_exhausted kill(s) "
+            f"in {WRITER_WATCH_WINDOW_HOURS}h (latest {ww[0]['last_ts']})"
+        )
+    ww_action = plan_writer_watch_action(ww, _open_writer_watch_issue())
+    if ww_action:
+        if ww_action["action"] == "create_writer_watch":
+            _create_writer_watch_issue(ww_action)
+        elif ww_action["action"] == "update_writer_watch":
+            _update_writer_watch_issue(ww_action)
+        else:
+            _close_writer_watch_issue(ww_action["number"])
     return 0
 
 

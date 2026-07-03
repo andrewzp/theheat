@@ -854,3 +854,45 @@ test("coverageWatch reports insufficient_data, not silent", () => {
 test("coverageWatch flags no-data while drafting", () => {
   assert.equal(coverageWatch([], cwAlerts(), CW_NOW)[0].kind, "no_data")
 })
+
+// ---------------------------------------------------------------------------
+// writerWatch: JS mirror of scripts/source_health_sentinel.py writer_watch
+// ---------------------------------------------------------------------------
+import { writerWatch } from "../lib/source-health.js"
+
+const WW_NOW = new Date("2026-07-04T12:00:00Z")
+const wwSupp = (ts, stage = "budget_exhausted") => ({ id: `supp_${ts}`, ts, stage })
+const wwAlerts = () => [{ id: "r", mode: "alerts", started_at: "2026-07-04T00:00:00Z" }]
+
+test("writerWatch flags recent budget_exhausted kills (2026-07-03 incident shape)", () => {
+  const out = writerWatch(
+    [wwSupp("2026-07-04T10:00:00Z"), wwSupp("2026-07-04T11:00:00Z")], wwAlerts(), WW_NOW)
+  assert.deepEqual(out, [{ kind: "budget_exhausted", count: 2, last_ts: "2026-07-04T11:00:00Z" }])
+})
+test("writerWatch ignores old rows and other stages", () => {
+  assert.deepEqual(writerWatch(
+    [wwSupp("2026-07-02T10:00:00Z"), wwSupp("2026-07-04T10:00:00Z", "critic")], wwAlerts(), WW_NOW), [])
+})
+test("writerWatch silent when not drafting", () => {
+  assert.deepEqual(writerWatch([wwSupp("2026-07-04T10:00:00Z")], [], WW_NOW), [])
+})
+test("writerWatch tolerates empty/malformed input", () => {
+  assert.deepEqual(writerWatch(null, wwAlerts(), WW_NOW), [])
+  assert.deepEqual(writerWatch([null, { ts: null }], wwAlerts(), WW_NOW), [])
+})
+test("writerWatch skips malformed budget-row timestamps (no lexical false-recent)", () => {
+  const junk = [wwSupp("not-a-date"), wwSupp(""), wwSupp("2026-13-99T99:99:99Z"), wwSupp("2026-02-31T00:00:00Z")]
+  assert.deepEqual(writerWatch(junk, wwAlerts(), WW_NOW), [])
+  const out = writerWatch([...junk, wwSupp("2026-07-04T11:00:00Z")], wwAlerts(), WW_NOW)
+  assert.equal(out[0].count, 1)
+})
+test("buildSourceHealthPayload surfaces writer findings alongside coverage", () => {
+  const state = {
+    source_health: { open_meteo: { runs: [] } },
+    run_history: [{ id: "r", mode: "alerts", started_at: "2026-07-04T00:00:00Z" }],
+    suppressions: [wwSupp(new Date(Date.now() - 3600000).toISOString())],
+  }
+  const payload = buildSourceHealthPayload(state)
+  assert.equal(payload.writer.length, 1)
+  assert.equal(payload.writer[0].kind, "budget_exhausted")
+})

@@ -527,3 +527,105 @@ class TestCoverageWatchIssue:
 
     def test_noop_when_clear_no_issue(self):
         assert plan_coverage_watch_action([], None) is None
+
+
+# ---------------------------------------------------------------------------
+# Writer watch — budget_exhausted kills while runs stay green (2026-07-03 class)
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    WRITER_WATCH_MARKER,
+    build_writer_watch_body,
+    plan_writer_watch_action,
+    writer_watch,
+)
+
+
+def _budget_supp(ts: str, stage: str = "budget_exhausted") -> dict:
+    return {"id": f"supp_{ts}", "ts": ts, "stage": stage}
+
+
+class TestWriterWatch:
+    NOW = datetime(2026, 7, 4, 12, 0, 0, tzinfo=timezone.utc)
+    ALERTS = [{"mode": "alerts"}]
+
+    def test_flags_recent_budget_exhausted(self):
+        supps = [
+            _budget_supp("2026-07-04T10:00:00Z"),
+            _budget_supp("2026-07-04T11:00:00Z"),
+        ]
+        assert writer_watch(supps, self.ALERTS, now=self.NOW) == [{
+            "kind": "budget_exhausted",
+            "count": 2,
+            "last_ts": "2026-07-04T11:00:00Z",
+        }]
+
+    def test_ignores_old_rows_and_other_stages(self):
+        supps = [
+            _budget_supp("2026-07-02T10:00:00Z"),  # outside the 24h window
+            _budget_supp("2026-07-04T10:00:00Z", stage="critic"),
+        ]
+        assert writer_watch(supps, self.ALERTS, now=self.NOW) == []
+
+    def test_silent_when_not_drafting(self):
+        # a paused bot must not false-alarm on stale rows
+        supps = [_budget_supp("2026-07-04T10:00:00Z")]
+        assert writer_watch(supps, [], now=self.NOW) == []
+
+    def test_empty_and_malformed_inputs(self):
+        assert writer_watch(None, self.ALERTS, now=self.NOW) == []
+        assert writer_watch(["junk", {"ts": None}], self.ALERTS, now=self.NOW) == []
+
+    def test_malformed_budget_row_ts_is_skipped_not_recent(self):
+        # Lexically, "not-a-date" > "2026-..." — a string compare would count it
+        # as recent and false-open (or pin) the issue. It must be SKIPPED.
+        supps = [
+            _budget_supp("not-a-date"),
+            _budget_supp(""),
+            _budget_supp("2026-13-99T99:99:99Z"),
+            _budget_supp("2026-02-31T00:00:00Z"),  # invalid calendar date
+        ]
+        assert writer_watch(supps, self.ALERTS, now=self.NOW) == []
+        # ...and a valid recent row still fires alongside junk.
+        supps.append(_budget_supp("2026-07-04T11:00:00Z"))
+        out = writer_watch(supps, self.ALERTS, now=self.NOW)
+        assert out[0]["count"] == 1
+
+    def test_incident_replay_2026_07_03(self):
+        # The real incident shape: a morning of budget_exhausted kills across
+        # green alerts runs -> exactly one loud finding.
+        supps = [
+            _budget_supp(f"2026-07-04T0{h}:15:00.123456Z") for h in range(6, 10)
+        ]
+        out = writer_watch(supps, self.ALERTS, now=self.NOW)
+        assert len(out) == 1
+        assert out[0]["count"] == 4
+        assert out[0]["last_ts"].startswith("2026-07-04T09:15")
+
+
+class TestWriterWatchIssue:
+    FINDING = [{"kind": "budget_exhausted", "count": 3, "last_ts": "2026-07-04T11:00:00Z"}]
+
+    def test_body_names_the_failure_and_the_fix(self):
+        body = build_writer_watch_body(self.FINDING)
+        assert WRITER_WATCH_MARKER in body
+        assert "Anthropic" in body
+        assert "credit" in body.lower()
+        assert "3 draft(s)" in body
+
+    def test_create_when_finding_and_no_issue(self):
+        action = plan_writer_watch_action(self.FINDING, None)
+        assert action["action"] == "create_writer_watch"
+        assert "ours" in action["labels"]
+
+    def test_update_when_body_changed(self):
+        stale = {"number": 9, "body": WRITER_WATCH_MARKER + "\nold"}
+        action = plan_writer_watch_action(self.FINDING, stale)
+        assert action["action"] == "update_writer_watch"
+        assert action["number"] == 9
+
+    def test_close_when_clear_and_issue_open(self):
+        assert plan_writer_watch_action([], {"number": 4, "body": WRITER_WATCH_MARKER}) == {
+            "action": "close_writer_watch", "number": 4}
+
+    def test_noop_when_clear_no_issue(self):
+        assert plan_writer_watch_action([], None) is None
