@@ -582,6 +582,7 @@ class TestWriterWatch:
             _budget_supp("not-a-date"),
             _budget_supp(""),
             _budget_supp("2026-13-99T99:99:99Z"),
+            _budget_supp("2026-02-31T00:00:00Z"),  # invalid calendar date
         ]
         assert writer_watch(supps, self.ALERTS, now=self.NOW) == []
         # ...and a valid recent row still fires alongside junk.

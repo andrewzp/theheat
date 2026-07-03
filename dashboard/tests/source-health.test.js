@@ -881,7 +881,7 @@ test("writerWatch tolerates empty/malformed input", () => {
   assert.deepEqual(writerWatch([null, { ts: null }], wwAlerts(), WW_NOW), [])
 })
 test("writerWatch skips malformed budget-row timestamps (no lexical false-recent)", () => {
-  const junk = [wwSupp("not-a-date"), wwSupp(""), wwSupp("2026-13-99T99:99:99Z")]
+  const junk = [wwSupp("not-a-date"), wwSupp(""), wwSupp("2026-13-99T99:99:99Z"), wwSupp("2026-02-31T00:00:00Z")]
   assert.deepEqual(writerWatch(junk, wwAlerts(), WW_NOW), [])
   const out = writerWatch([...junk, wwSupp("2026-07-04T11:00:00Z")], wwAlerts(), WW_NOW)
   assert.equal(out[0].count, 1)

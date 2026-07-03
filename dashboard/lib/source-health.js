@@ -337,6 +337,21 @@ export function coverageWatch(coverageLog, runHistory, now = new Date()) {
 // MUST match scripts/source_health_sentinel.py
 export const WRITER_WATCH_WINDOW_HOURS = 24
 
+// Strict ISO timestamp parse mirroring Python's _parse_ts rejections: full
+// ISO shape required, and invalid calendar/clock parts are REJECTED — bare
+// Date.parse silently normalizes them (2026-02-31 -> Mar 3), which would make
+// the JS mirror count a malformed row Python skips. Returns epoch ms or NaN.
+const TS_SHAPE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/
+function parseTsStrict(ts) {
+  const m = TS_SHAPE.exec(String(ts || ""))
+  if (!m) return NaN
+  const [y, mo, d, h, mi, s] = m.slice(1).map(Number)
+  const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate()
+  if (mo < 1 || mo > 12 || d < 1 || d > daysInMonth) return NaN
+  if (h > 23 || mi > 59 || s > 59) return NaN
+  return Date.parse(m[0])
+}
+
 export function writerWatch(suppressions, runHistory, now = new Date()) {
   if (!botIsDrafting(runHistory)) return []
   // Parse timestamps rather than comparing strings — a malformed ts must be
@@ -345,7 +360,7 @@ export function writerWatch(suppressions, runHistory, now = new Date()) {
   const cutoffMs = now.getTime() - WRITER_WATCH_WINDOW_HOURS * 3600000
   const rows = (suppressions || []).filter((r) => {
     if (!r || r.stage !== "budget_exhausted") return false
-    const t = Date.parse(String(r.ts || ""))
+    const t = parseTsStrict(r.ts)
     return !Number.isNaN(t) && t >= cutoffMs
   })
   if (rows.length === 0) return []
