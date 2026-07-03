@@ -84,7 +84,14 @@ export default function Dashboard() {
         runs: payload.runs || [],
         runsError: payload.runsError,
       })
-      setDrafts(payload.drafts?.drafts || [])
+      // Show the review queue in time order (newest first) — the API returns
+      // drafts in insertion order, which reads as jumbled. created_at is ISO 8601,
+      // so a string compare is chronological.
+      setDrafts(
+        [...(payload.drafts?.drafts || [])].sort((a, b) =>
+          (b.created_at || "").localeCompare(a.created_at || "")
+        )
+      )
       setSuppressions(payload.suppressions?.suppressions || [])
       setSuppressionsStats(payload.suppressions?.stats || null)
       setModelConfig(payload.config || null)
