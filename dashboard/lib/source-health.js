@@ -329,6 +329,27 @@ export function coverageWatch(coverageLog, runHistory, now = new Date()) {
   return findings
 }
 
+// ---------------------------------------------------------------------------
+// writerWatch — JS mirror of scripts/source_health_sentinel.py writer_watch
+// Constants MUST stay in sync with the Python implementation.
+// ---------------------------------------------------------------------------
+
+// MUST match scripts/source_health_sentinel.py
+export const WRITER_WATCH_WINDOW_HOURS = 24
+
+export function writerWatch(suppressions, runHistory, now = new Date()) {
+  if (!botIsDrafting(runHistory)) return []
+  const cutoff = new Date(now.getTime() - WRITER_WATCH_WINDOW_HOURS * 3600000)
+    .toISOString()
+    .replace(/\.\d{3}Z$/, "Z")
+  const rows = (suppressions || []).filter(
+    (r) => r && r.stage === "budget_exhausted" && String(r.ts || "") >= cutoff
+  )
+  if (rows.length === 0) return []
+  const lastTs = rows.map((r) => String(r.ts || "")).sort().at(-1)
+  return [{ kind: "budget_exhausted", count: rows.length, last_ts: lastTs }]
+}
+
 export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   const durableHealth = state?.source_health && Object.keys(state.source_health).length > 0
   const history = durableHealth
