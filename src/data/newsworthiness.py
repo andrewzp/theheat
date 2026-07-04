@@ -272,8 +272,14 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
         kept_entries: list[dict] = []
         entry_drops = 0
         page_cache: dict[str, str] = {}
+        failed_urls: set[str] = set()
         for entry in ev.get("impact") or []:
             url = str(entry.get("url") or "")
+            if url in failed_urls:
+                # A dead URL must not burn the fetch budget once per entry —
+                # later entries with DIFFERENT URLs still deserve their try.
+                entry_drops += 1
+                continue
             try:
                 if url not in page_cache:
                     if fetches >= MAX_VERIFY_FETCHES:
@@ -295,6 +301,10 @@ def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[di
                     continue
             except Exception as exc:  # noqa: BLE001 — any failure means NOT verified
                 result.notes.append(f"verify failed ({ev.get('headline')}): {exc}")
+                if url not in page_cache:
+                    # The FETCH failed (a Flash failure on a good page must not
+                    # poison siblings that cite the same, fetchable URL).
+                    failed_urls.add(url)
             entry_drops += 1
         if kept_entries:
             # Event survives with only its verified entries; count the shed ones.

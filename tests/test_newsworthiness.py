@@ -168,6 +168,35 @@ class TestVerificationLadder:
         assert [i["claim"] for i in out[0]["impact"]] == ["3 firefighters killed"]
         assert result.dropped_unverified == 1
 
+    def test_dead_url_does_not_burn_budget_per_entry(self):
+        # codex r2 P2 regression: three entries citing the same dead URL must
+        # consume ONE fetch, leaving budget for a later, distinct, good URL.
+        result = nw.NewsRetrievalResult()
+        ev = _event(confidence="unverified", impact=[
+            _impact(claim="a", url="https://dead.example.org/x"),
+            _impact(claim="b", url="https://dead.example.org/x"),
+            _impact(claim="c", url="https://dead.example.org/x"),
+            _impact(claim="3 firefighters killed", url="https://good.example.org/y"),
+        ])
+
+        class _Page:
+            text = "page"
+
+            def raise_for_status(self):
+                return None
+
+        def _fetch(url, timeout=None, **kw):
+            if "dead" in url:
+                raise RuntimeError("dead url")
+            return _Page()
+
+        with patch.object(nw, "fetch_with_retry", side_effect=_fetch), \
+             patch.object(nw, "_call_verify_flash", return_value='{"supported": true}'):
+            out = nw._verify_grounded([ev], result)
+        assert len(out) == 1
+        assert [i["claim"] for i in out[0]["impact"]] == ["3 firefighters killed"]
+        assert result.dropped_unverified == 3
+
     def test_hostile_page_text_is_delimited_as_untrusted(self):
         # The prompt-injection guard: page text rides inside UNTRUSTED markers
         # with an explicit ignore-instructions instruction.
