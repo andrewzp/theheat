@@ -176,6 +176,10 @@ _METADATA_JSON_KEYS = (
     # in run_alerts.py + absence from this list. See spec § 6.
     # Rolling per-surfaced-event geography for the coverage watch (Task 3).
     "coverage_log",
+    # Newsworthiness lane (Bet A phase 0): retrieved cited world events + the
+    # enqueued-candidate registry the news-gap watch matches against.
+    "news_events",
+    "candidates_log",
 )
 
 

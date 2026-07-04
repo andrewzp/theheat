@@ -262,6 +262,11 @@ jobs:
           # the repo variable. Activate: gh variable set THEHEAT_REGANOM_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_REGANOM_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_REGANOM_ENABLED: ${{ vars.THEHEAT_REGANOM_ENABLED || '0' }}
+          # Newsworthiness lane (Bet A phase 0) — default OFF; zero editorial
+          # surface when ON (retrieval + state + gap watch only).
+          # Activate: gh variable set THEHEAT_NEWSWORTHINESS_ENABLED --body 1 --repo andrewzp/theheat
+          # Rollback: gh variable set THEHEAT_NEWSWORTHINESS_ENABLED --body 0 --repo andrewzp/theheat
+          THEHEAT_NEWSWORTHINESS_ENABLED: ${{ vars.THEHEAT_NEWSWORTHINESS_ENABLED || '0' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.

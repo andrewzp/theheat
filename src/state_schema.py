@@ -277,3 +277,7 @@ class BotState(TypedDict, total=False):
     synthesis_components: SynthesisComponents
     synthesis_cooldown: dict[str, dict[str, str]]
     coverage_log: list[CoverageRecord]
+    # Newsworthiness lane (Bet A phase 0): retrieved cited world events + the
+    # rolling enqueued-candidate registry the news-gap watch matches against.
+    news_events: list[dict]
+    candidates_log: list[dict]
