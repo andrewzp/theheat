@@ -316,18 +316,22 @@ def test_surfaced_heat_event_records_coverage(monkeypatch):
     from src.orchestrator.sources import open_meteo as runner
     from src.state import _fresh_state
 
+    # signal_date must be TODAY-relative or the 21-day coverage_log prune
+    # discards the record as soon as the calendar moves on (time-travel canary).
+    sig_date = date.today()
+    event_id = f"absextreme_Seville_{sig_date.isoformat()}"
     ev = AbsoluteExtremeEvent(city="Seville", country="Spain", today_temp_c=45.1,
         band_label="Temperate", threshold_c=42.0, kind="hot", lat=37.4, lon=-6.0,
-        event_id="absextreme_Seville_2026-06-25", signal_date=date(2026, 6, 25))
-    bundle = ExtremeSignalBundle(city="Seville", country="Spain", absolute_extreme=ev, signal_date=date(2026, 6, 25))
+        event_id=event_id, signal_date=sig_date)
+    bundle = ExtremeSignalBundle(city="Seville", country="Spain", absolute_extreme=ev, signal_date=sig_date)
     bot_state = _fresh_state()
-    current_run = {"id": "r1", "mode": "alerts", "started_at": "2026-06-25T00:00:00Z", "sources": []}
+    current_run = {"id": "r1", "mode": "alerts", "started_at": f"{sig_date.isoformat()}T00:00:00Z", "sources": []}
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
     monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, m: ([bundle], []))
     monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
     monkeypatch.setattr(runner, "_enqueue_story_candidate", lambda *a, **k: True)
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
-    recs = [r for r in bot_state["coverage_log"] if r["event_id"] == "absextreme_Seville_2026-06-25"]
+    recs = [r for r in bot_state["coverage_log"] if r["event_id"] == event_id]
     assert recs and recs[0]["cls"] == "heat" and recs[0]["continent"] == "Europe"
 
 

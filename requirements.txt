@@ -13,6 +13,7 @@ h5py>=3.10
 netCDF4>=1.7,<2
 pytest>=8.0
 pytest-mock>=3.12
+freezegun>=1.5
 responses>=0.25
 ruff>=0.7
 mypy>=1.13

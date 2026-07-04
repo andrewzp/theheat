@@ -6,15 +6,35 @@ import responses
 
 from src.data.enso import ENSOReading, fetch_enso_data, detect_transition
 
-SAMPLE_YEAR = date.today().year
-SAMPLE_ONI_TEXT = f"""SEAS    YR   TOTAL   APTS   ANOM
-DJF    {SAMPLE_YEAR}    -0.8   26.1   -0.8
-JFM    {SAMPLE_YEAR}    -0.6   26.3   -0.6
-FMA    {SAMPLE_YEAR}    -0.3   26.8   -0.3
-MAM    {SAMPLE_YEAR}     0.1   27.5    0.1
-AMJ    {SAMPLE_YEAR}     0.3   28.0    0.3
-MJJ    {SAMPLE_YEAR}     0.6   28.5    0.6
-"""
+# The ONI fixture must always END at a season fresh enough for enso.py's
+# 45-day gate, no matter when the suite runs — a FIXED season list rots
+# every year once its last season ages out (the time-travel canary caught
+# the old MJJ-terminated fixture detonating each ~August). Generate the 6
+# most recent seasons relative to today, oldest first.
+_SEASONS = ["DJF", "JFM", "FMA", "MAM", "AMJ", "MJJ",
+            "JJA", "JAS", "ASO", "SON", "OND", "NDJ"]
+_ONI_VALUES = [-0.8, -0.6, -0.3, 0.1, 0.3, 0.6]
+
+
+def _recent_seasons(n: int = 6) -> list[tuple[str, int]]:
+    today = date.today()
+    m, y = today.month, today.year
+    rows: list[tuple[str, int]] = []
+    for _ in range(n):
+        season = _SEASONS[(m - 2) % 12]
+        # NDJ ends in January; its ONI row is labeled with the PRIOR year.
+        rows.append((season, y - 1 if season == "NDJ" else y))
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return list(reversed(rows))
+
+
+_ROWS = _recent_seasons()
+SAMPLE_ONI_TEXT = "SEAS    YR   TOTAL   APTS   ANOM\n" + "\n".join(
+    f"{season}    {year}    {oni:.1f}   26.1   {oni:.1f}"
+    for (season, year), oni in zip(_ROWS, _ONI_VALUES)
+) + "\n"
 
 
 class TestFetchEnsoData:
@@ -64,9 +84,9 @@ class TestFetchEnsoData:
             status=200,
         )
         readings = fetch_enso_data()
-        # MAM 2024 has ONI 0.1 (between -0.5 and 0.5)
-        mam = [r for r in readings if r.season == "MAM"][0]
-        assert mam.status == "Neutral"
+        # Position 3 carries ONI 0.1 (between -0.5 and 0.5)
+        assert readings[3].oni_value == 0.1
+        assert readings[3].status == "Neutral"
 
     @responses.activate
     def test_api_error_returns_empty(self):
@@ -86,7 +106,8 @@ class TestFetchEnsoData:
             status=200,
         )
         readings = fetch_enso_data()
-        assert readings[0].event_id == f"enso_DJF_{SAMPLE_YEAR}"
+        season0, year0 = _ROWS[0]
+        assert readings[0].event_id == f"enso_{season0}_{year0}"
 
 
 class TestDetectTransition:

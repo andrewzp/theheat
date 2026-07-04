@@ -1,12 +1,35 @@
-"""Shared test fixtures and hermeticity gate."""
+"""Shared test fixtures, hermeticity gate, and the time-travel canary hook."""
 
+import os
 import socket
 from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
 from src.state import DEFAULT_STATE
+
+# ---------------------------------------------------------------------------
+# Time-travel canary
+#
+# A calendar time bomb is a test that passes today and fails at today+N — a
+# hardcoded date rotting past a freshness window (the class that broke main
+# CI on 2026-07-03: the CO2 last-good fixture aged past its 21-day window,
+# fixed in #356). Static grepping for the pattern false-positives wildly —
+# hundreds of hardcoded test dates are fine because they are compared against
+# other fixed dates — so the guard is BEHAVIORAL: the time-travel-canary
+# workflow runs this whole suite with the clock shifted forward. Any test
+# that would rot within the horizon fails THERE first, weeks before it
+# detonates on main.
+#
+# Activate with THEHEAT_TIME_TRAVEL_DAYS=<int>. The freeze starts in
+# pytest_configure so module-level `date.today()` fixture computations are
+# shifted too; tick=True keeps time flowing from the shifted point so
+# timeout/backoff logic behaves normally.
+# ---------------------------------------------------------------------------
+
+_TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
 
 @pytest.fixture
@@ -67,6 +90,21 @@ def pytest_configure(config):
         "markers",
         "real_backoff: opt out of the no-op backoff fixture and run real retry sleeps",
     )
+    days_raw = os.environ.get(_TIME_TRAVEL_ENV, "")
+    if days_raw:
+        from freezegun import freeze_time
+
+        target = datetime.now(timezone.utc) + timedelta(days=int(days_raw))
+        freezer = freeze_time(target, tick=True)
+        freezer.start()
+        config._theheat_time_travel_freezer = freezer
+        print(f"[time-travel] clock shifted +{days_raw}d to {target.isoformat()}")
+
+
+def pytest_unconfigure(config):
+    freezer = getattr(config, "_theheat_time_travel_freezer", None)
+    if freezer is not None:
+        freezer.stop()
 
 
 @pytest.fixture(autouse=True)

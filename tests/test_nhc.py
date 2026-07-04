@@ -1,6 +1,7 @@
 """Tests for NHC tropical-cyclone ingestion and detection."""
 
 import responses
+from datetime import datetime, timedelta, timezone
 
 from src.data import nhc
 from src.data.cyclones import CycloneAdvisory, saffir_simpson_category
@@ -54,7 +55,12 @@ class TestFetchActiveCyclones:
                         "name": "Beryl",
                         "basin": "Atlantic",
                         "advisoryNumber": "12",
-                        "lastUpdate": "2026-07-01T12:00:00Z",
+                        # Must sit inside nhc.py's 2-day freshness gate whenever
+                        # the suite runs (time-travel canary: a fixed date here
+                        # rots within days of being written).
+                        "lastUpdate": (
+                            datetime.now(timezone.utc) - timedelta(hours=6)
+                        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "intensity": "115",
                         "pressure": "950",
                         "latitudeNumeric": "15.0N",
