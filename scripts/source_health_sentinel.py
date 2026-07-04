@@ -943,18 +943,20 @@ QUEUE_WATCH_TITLE = "Review-queue watch: manual drafts are aging unreviewed"
 QUEUE_WATCH_MARKER = "<!-- source-health-queue-watch -->"
 
 
-def _policy_mode(draft: Mapping[str, Any]) -> str:
-    """Extract the approval-policy mode; missing/malformed reads as ''.
+def _is_auto_owned(draft: Mapping[str, Any]) -> bool:
+    """True only when the auto-post path actively owns this draft.
 
-    ``draft["approval_policy"]`` is a dict (``ApprovalPolicy.as_dict()``) with a
-    ``mode`` key; be defensive about older/foreign shapes.
+    The runnable state is ``approval_mode == "auto"`` AND ``auto_approve_at``
+    present — ``process_due_drafts`` requires BOTH, and every demotion path
+    clears them (posting.py). ``approval_policy.mode`` is only the
+    RECOMMENDATION: an armed_auto-policy draft that failed closed to manual
+    (no critic PASS, or demoted) must count as human-gated, or it ages out
+    silently — exactly the blind spot this watch exists to close.
     """
-    policy = draft.get("approval_policy")
-    if isinstance(policy, Mapping):
-        return str(policy.get("mode") or "")
-    if isinstance(policy, str):
-        return policy
-    return ""
+    return (
+        draft.get("approval_mode") == "auto"
+        and bool(draft.get("auto_approve_at"))
+    )
 
 
 def queue_watch(
@@ -968,16 +970,16 @@ def queue_watch(
     high, a marine-heatwave record) sat unreviewed in an unwatched manual queue
     until they went stale. The per-type TTL sweep eventually auto-rejects them
     (7d fast / 21d slow), so the un-alerted gap is the days in between — this
-    watch closes it. Human-gated = any mode other than ``armed_auto`` (a
-    missing/unknown mode counts as human-gated: the pillar's bias is that
-    nothing ages silently).
+    watch closes it. Human-gated = anything the auto-post path does not
+    actively own (see ``_is_auto_owned``); missing/unknown state counts as
+    human-gated — nothing ages silently.
     """
     cutoff = now - timedelta(hours=QUEUE_WATCH_HOURS)
     stale: list[tuple[str, datetime]] = []
     for d in drafts or []:
         if not isinstance(d, Mapping) or d.get("status") != "pending":
             continue
-        if _policy_mode(d) == "armed_auto":
+        if _is_auto_owned(d):
             continue
         parsed = _parse_ts(str(d.get("created_at") or ""))
         if parsed is not None and parsed < cutoff:

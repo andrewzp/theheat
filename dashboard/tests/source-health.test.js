@@ -911,12 +911,19 @@ test("queueWatch flags aged human-gated drafts with types and oldest age", () =>
     [qwDraft("2026-07-03T06:00:00Z", "manual_only", "pending", "all_time_high")], QW_NOW)
   assert.deepEqual(out, [{ kind: "stale_reviews", count: 1, oldest_age_h: 30, types: { all_time_high: 1 } }])
 })
-test("queueWatch ignores fresh, posted, and armed_auto drafts", () => {
+test("queueWatch ignores fresh, posted, and auto-owned drafts", () => {
+  const autoOwned = { ...qwDraft("2026-07-01T06:00:00Z", "armed_auto"),
+    approval_mode: "auto", auto_approve_at: "2026-07-04T13:00:00Z" }
   assert.deepEqual(queueWatch([
     qwDraft("2026-07-04T06:00:00Z"),
     qwDraft("2026-07-01T06:00:00Z", "manual_only", "posted"),
-    qwDraft("2026-07-01T06:00:00Z", "armed_auto"),
+    autoOwned,
   ], QW_NOW), [])
+})
+test("queueWatch counts a failed-closed armed_auto-policy draft as human-gated", () => {
+  // policy says armed_auto, but runnable state is manual (no auto_approve_at)
+  const out = queueWatch([qwDraft("2026-07-01T06:00:00Z", "armed_auto")], QW_NOW)
+  assert.equal(out[0].count, 1)
 })
 test("queueWatch counts suggested_auto and missing-mode as human-gated, skips junk timestamps", () => {
   const out = queueWatch([

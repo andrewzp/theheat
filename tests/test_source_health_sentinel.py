@@ -665,13 +665,26 @@ class TestQueueWatch:
             "types": {"all_time_high": 1},
         }]
 
-    def test_fresh_posted_and_armed_auto_do_not_count(self):
+    def test_fresh_posted_and_auto_owned_do_not_count(self):
+        auto_owned = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        auto_owned["approval_mode"] = "auto"
+        auto_owned["auto_approve_at"] = "2026-07-04T13:00:00Z"
         drafts = [
             _draft("2026-07-04T06:00:00Z"),                      # fresh (6h)
             _draft("2026-07-01T06:00:00Z", status="posted"),     # not pending
-            _draft("2026-07-01T06:00:00Z", mode="armed_auto"),   # auto path
+            auto_owned,                                          # auto path owns it
         ]
         assert queue_watch(drafts, now=self.NOW) == []
+
+    def test_failed_closed_armed_auto_policy_counts_as_human_gated(self):
+        # approval_policy.mode is only the RECOMMENDATION. A draft whose policy
+        # says armed_auto but that failed closed to manual (no critic PASS, or
+        # demoted: approval_mode="manual", no auto_approve_at) is human-gated —
+        # excluding it would recreate the silent-aging blind spot (codex P1).
+        d = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        assert d.get("approval_mode") is None  # fixture models the demoted shape
+        out = queue_watch([d], now=self.NOW)
+        assert out[0]["count"] == 1
 
     def test_suggested_auto_and_missing_mode_count_as_human_gated(self):
         drafts = [

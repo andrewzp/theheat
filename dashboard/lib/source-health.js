@@ -376,11 +376,13 @@ export function writerWatch(suppressions, runHistory, now = new Date()) {
 // MUST match scripts/source_health_sentinel.py
 export const QUEUE_WATCH_HOURS = 24
 
-function policyMode(draft) {
-  const policy = draft?.approval_policy
-  if (policy && typeof policy === "object") return String(policy.mode || "")
-  if (typeof policy === "string") return policy
-  return ""
+// True only when the auto-post path actively owns this draft: runnable state
+// is approval_mode === "auto" AND auto_approve_at present (process_due_drafts
+// requires both; demotion clears them). approval_policy.mode is only the
+// RECOMMENDATION — an armed_auto-policy draft that failed closed to manual
+// must count as human-gated or it ages out silently.
+function isAutoOwned(draft) {
+  return draft?.approval_mode === "auto" && Boolean(draft?.auto_approve_at)
 }
 
 export function queueWatch(drafts, now = new Date()) {
@@ -388,7 +390,7 @@ export function queueWatch(drafts, now = new Date()) {
   const stale = []
   for (const d of drafts || []) {
     if (!d || d.status !== "pending") continue
-    if (policyMode(d) === "armed_auto") continue
+    if (isAutoOwned(d)) continue
     const t = parseTsStrict(d.created_at)
     if (!Number.isNaN(t) && t < cutoffMs) stale.push({ type: String(d.type || "unknown"), t })
   }
