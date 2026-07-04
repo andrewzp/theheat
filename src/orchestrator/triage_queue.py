@@ -110,6 +110,18 @@ def _enqueue_story_candidate(
             annual_cap_check=annual_cap_check,
         ),
     )
+    # Rolling registry of everything the bot detected, for the news-gap watch
+    # ("the world reported X — did our sensors even see it?"). Never raises.
+    from src import state as _state
+
+    _state.record_candidate_observation(
+        bot_state,
+        event_id=event_id,
+        category=str(getattr(bundle, "signal_kind", "") or ""),
+        legacy_type=legacy_type,
+        city=city,
+        where=str(getattr(bundle, "where", "") or ""),
+    )
     return True
 
 

@@ -76,6 +76,12 @@ DEFAULT_STATE: BotState = {
     "drafts": [],
     "run_history": [],
     "coverage_log": [],  # rolling per-surfaced-event geography for the coverage watch
+    # Newsworthiness lane (Bet A phase 0, flag-gated): what the world reports.
+    "news_events": [],
+    # Rolling {event_id, category, type, city, where, date} for every enqueued
+    # candidate — the news-gap watch's "what did we detect?" side. There is no
+    # other durable candidate registry (suppressions hold near-misses only).
+    "candidates_log": [],
     "errors": [],
     # Suppressed signals: events the bot observed but the editorial gate killed
     # before they could become drafts. Populated by _record_suppression() in
@@ -451,6 +457,23 @@ def _merge_coverage_log(current: list[dict], incoming: list[dict]) -> list[dict]
         else:
             by_id[rec_id] = dict(rec)
     return [*by_id.values(), *anonymous]
+
+
+def _news_event_key(ev: dict) -> tuple:
+    return (
+        str(ev.get("kind") or ""),
+        str(ev.get("headline") or ""),
+        str(ev.get("window_start") or ""),
+    )
+
+
+def _merge_news_events(current: list[dict], incoming: list[dict]) -> list[dict]:
+    """Dedup on (kind, headline, window_start); last writer wins."""
+    by_key: dict[tuple, dict] = {}
+    for rec in [*(current or []), *(incoming or [])]:
+        if isinstance(rec, dict):
+            by_key[_news_event_key(rec)] = dict(rec)
+    return list(by_key.values())
 
 
 def _merge_errors(current: list[dict], incoming: list[dict], max_items: int = 50) -> list[dict]:
@@ -1802,7 +1825,72 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "synthesis_components": _merge_synthesis_components,
     "synthesis_cooldown": _merge_synthesis_cooldown,
     "coverage_log": _merge_coverage_log,
+    "news_events": _merge_news_events,
+    # Same contract as coverage_log: dedup on event_id, last writer wins.
+    "candidates_log": _merge_coverage_log,
 }
+
+
+NEWS_WINDOW_DAYS = 7
+CANDIDATES_WINDOW_DAYS = 7
+
+
+def record_news_events(
+    state: BotState,
+    events: list[dict],
+    *,
+    now: datetime | None = None,
+) -> None:
+    """Replace-and-prune the rolling news_events window. Never raises."""
+    try:
+        now = now or datetime.now(UTC)
+        cutoff = (now - timedelta(days=NEWS_WINDOW_DAYS)).date().isoformat()
+        stamped = [
+            {**ev, "retrieved_at": now.isoformat().replace("+00:00", "Z")}
+            for ev in events
+            if isinstance(ev, dict)
+        ]
+        existing = [
+            e for e in (state.get("news_events") or [])
+            if isinstance(e, dict) and str(e.get("window_end") or "") >= cutoff
+        ]
+        state["news_events"] = _merge_news_events(existing, stamped)
+    except Exception as exc:  # noqa: BLE001 — recording must never break a cycle
+        print(f"[state] record_news_events failed: {exc}")
+
+
+def record_candidate_observation(
+    state: BotState,
+    *,
+    event_id: str,
+    category: str,
+    legacy_type: str,
+    city: str,
+    where: str,
+    now: datetime | None = None,
+) -> None:
+    """Append one enqueued-candidate record; dedup on event_id; prune window.
+
+    Mirrors record_coverage_observation's contract: never raises.
+    """
+    try:
+        now = now or datetime.now(UTC)
+        log = state.setdefault("candidates_log", [])
+        log[:] = [r for r in log if r.get("event_id") != event_id]
+        log.append({
+            "event_id": event_id,
+            "category": category or "",
+            "type": legacy_type or "",
+            "city": city or "",
+            "where": where or "",
+            "date": now.date().isoformat(),
+        })
+        cutoff = (now - timedelta(days=CANDIDATES_WINDOW_DAYS)).date().isoformat()
+        state["candidates_log"] = [
+            r for r in log if str(r.get("date") or "") >= cutoff
+        ]
+    except Exception as exc:  # noqa: BLE001 — recording must never break a cycle
+        print(f"[state] record_candidate_observation failed: {exc}")
 
 
 def record_coverage_observation(

@@ -1085,6 +1085,207 @@ def _close_queue_watch_issue(number: int) -> None:
     print(f"[sentinel] closed queue-watch issue #{number}")
 
 
+
+# ---------------------------------------------------------------------------
+# News-gap watch — the world reported an event; did our sensors even see it?
+# (Bet A phase 0 miss-detector: read-only, zero editorial surface.)
+# ---------------------------------------------------------------------------
+
+NEWS_GAP_WINDOW_DAYS = 3
+NEWS_GAP_TITLE = "News-gap watch: the world reported an event the bot may have missed"
+NEWS_GAP_MARKER = "<!-- source-health-news-gap-watch -->"
+# Candidate categories/types each news kind may match. Conservative on purpose:
+# a WRONG match hides a real gap, an over-flag is one advisory issue.
+_NEWS_KIND_FAMILIES = {
+    "fire": ("fire",),
+    "heat_mortality": ("heat", "temp", "anomaly", "extreme"),
+}
+# Static US state-code -> name map for matching WFIGS admin1 codes against
+# candidate `where` strings (which carry expanded state names). Kept in sync
+# by hand with src/data/ghcn.py _US_STATE_NAMES — the sentinel stays
+# dependency-free, and state names do not drift.
+_STATE_NAMES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska",
+    "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina",
+    "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+
+
+def _news_match_tokens(ev: Mapping[str, Any]) -> list[str]:
+    place = ev.get("place") if isinstance(ev.get("place"), Mapping) else {}
+    tokens: list[str] = []
+    name = str(place.get("name") or "")
+    if len(name) >= 4:
+        tokens.append(name.lower())
+    admin1 = str(place.get("admin1") or "")
+    state_name = _STATE_NAMES.get(admin1.upper())
+    if state_name:
+        tokens.append(state_name.lower())
+    country = str(place.get("country") or "")
+    if country and country != "United States":
+        tokens.append(country.lower())
+    return tokens
+
+
+def _news_event_matched(
+    ev: Mapping[str, Any],
+    candidates: list[Mapping[str, Any]],
+    drafts: list[Mapping[str, Any]],
+) -> bool:
+    kind = str(ev.get("kind") or "")
+    families = _NEWS_KIND_FAMILIES.get(kind, ())
+    tokens = _news_match_tokens(ev)
+    if not tokens:
+        # No usable place token — cannot match responsibly; treat as matched
+        # rather than flag noise on an unmatchable event.
+        return True
+    for row in candidates:
+        hay = f"{row.get('city') or ''} {row.get('where') or ''}".lower()
+        cat = f"{row.get('category') or ''} {row.get('type') or ''}".lower()
+        if any(f in cat for f in families) and any(t in hay for t in tokens):
+            return True
+    for d in drafts:
+        hay = f"{d.get('text') or ''} {d.get('type') or ''}".lower()
+        if any(t in hay for t in tokens):
+            return True
+    return False
+
+
+def news_gap_watch(
+    news_events: list[dict] | None,
+    candidates_log: list[dict] | None,
+    drafts: list[dict] | None,
+    *,
+    now: datetime,
+) -> list[dict]:
+    """Flag recent sourced world events with no matching detected candidate.
+
+    Only ``structured``/``verified`` events can flag (the retrieval lane's
+    verification ladder is upstream); matching is conservative — no match
+    beats a wrong match, because a wrong match hides a real coverage gap.
+    """
+    cutoff = (now - timedelta(days=NEWS_GAP_WINDOW_DAYS)).date().isoformat()
+    cands = [r for r in (candidates_log or []) if isinstance(r, Mapping)]
+    live_drafts = [
+        d for d in (drafts or [])
+        if isinstance(d, Mapping) and d.get("status") in ("pending", "posted")
+    ]
+    findings: list[dict] = []
+    for ev in news_events or []:
+        if not isinstance(ev, Mapping):
+            continue
+        if ev.get("confidence") not in ("structured", "verified"):
+            continue
+        if str(ev.get("window_end") or "") < cutoff:
+            continue
+        if _news_event_matched(ev, cands, live_drafts):
+            continue
+        findings.append({
+            "kind": str(ev.get("kind") or ""),
+            "headline": str(ev.get("headline") or ""),
+            "sources": [
+                str(i.get("source_name") or "")
+                for i in (ev.get("impact") or [])
+                if isinstance(i, Mapping)
+            ][:3],
+        })
+    return findings
+
+
+def build_news_gap_body(findings: list[dict]) -> str:
+    lines = [
+        NEWS_GAP_MARKER,
+        "**The world is reporting events the bot has not detected.**",
+        "",
+        "Each entry below is a sourced, verified news event from the "
+        "newsworthiness lane with NO matching candidate in the bot's recent "
+        "detection log, pending queue, or posts — the miss-detector for the "
+        "class of failure where @theheat was silent on the European heat "
+        "deaths. Advisory; check whether a sensor, threshold, or coverage "
+        "gap is hiding the story.",
+        "",
+    ]
+    for f in findings:
+        sources = ", ".join(s for s in f.get("sources", []) if s) or "sourced"
+        lines.append(f"- `{f['kind']}`: {f['headline']} (per {sources})")
+    lines += ["", "_Auto-maintained by the source-health sentinel news-gap watch._"]
+    return "\n".join(lines)
+
+
+def _open_news_gap_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list news-gap issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == NEWS_GAP_TITLE:
+            return item
+    return None
+
+
+def plan_news_gap_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if findings:
+        body = build_news_gap_body(findings)
+        if open_issue is None:
+            return {"action": "create_news_gap", "body": body, "labels": [LABEL, "unknown"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_news_gap",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "unknown"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_news_gap", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_news_gap_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", NEWS_GAP_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened news-gap issue: {NEWS_GAP_TITLE}")
+
+
+def _update_news_gap_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated news-gap issue #{action['number']}")
+
+
+def _close_news_gap_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "Every recent sourced news event matches a detected candidate or post. "
+         "Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed news-gap issue #{number}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
@@ -1190,6 +1391,22 @@ def main(argv: list[str] | None = None) -> int:
             _update_queue_watch_issue(qw_action)
         else:
             _close_queue_watch_issue(qw_action["number"])
+    ng = news_gap_watch(
+        state.get("news_events"),
+        state.get("candidates_log"),
+        state.get("drafts"),
+        now=datetime.now(timezone.utc),
+    )
+    if ng:
+        print(f"[sentinel] news-gap watch: {len(ng)} unmatched sourced event(s)")
+    ng_action = plan_news_gap_action(ng, _open_news_gap_issue())
+    if ng_action:
+        if ng_action["action"] == "create_news_gap":
+            _create_news_gap_issue(ng_action)
+        elif ng_action["action"] == "update_news_gap":
+            _update_news_gap_issue(ng_action)
+        else:
+            _close_news_gap_issue(ng_action["number"])
     return 0
 
 

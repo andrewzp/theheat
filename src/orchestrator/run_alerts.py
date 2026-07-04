@@ -27,6 +27,7 @@ from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 from src.orchestrator.sources.air_quality import run_air_quality
 from src.orchestrator.sources.ozone_hole import run_ozone_hole
 from src.orchestrator.sources.open_meteo import run_extreme_signals
+from src.orchestrator.sources.newsworthiness import run_newsworthiness
 from src.orchestrator.sources.reanalysis_anomaly import run_reanalysis_anomaly
 from src.orchestrator.sources.river_gauges import run_river_gauges
 from src.orchestrator.sources.sea_ice import run_sea_ice
@@ -167,6 +168,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
                 SourceRunner("nsidc_snow", lambda: run_nsidc_snow(bot_state, current_run)),
                 SourceRunner("ozone_hole", lambda: run_ozone_hole(bot_state, current_run)),
                 SourceRunner("reanalysis_anomaly", lambda: run_reanalysis_anomaly(bot_state, current_run)),
+                SourceRunner("newsworthiness", lambda: run_newsworthiness(bot_state, current_run)),
             ],
             synthesis_runner=SourceRunner(
                 "synthesis_fire_drought_heat",
@@ -221,6 +223,7 @@ def run_alerts(bot_state: BotState, current_run: dict | None = None) -> BotState
         run_nsidc_snow(bot_state, current_run)
         run_ozone_hole(bot_state, current_run)
         run_reanalysis_anomaly(bot_state, current_run)
+        run_newsworthiness(bot_state, current_run)
         run_synthesis(bot_state, current_run)
 
     # Drain the triage queue: rank + cap survivors, then call writer for each.

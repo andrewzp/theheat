@@ -744,3 +744,97 @@ class TestQueueWatchIssue:
         assert plan_queue_watch_action([], {"number": 3, "body": QUEUE_WATCH_MARKER}) == {
             "action": "close_queue_watch", "number": 3}
         assert plan_queue_watch_action([], None) is None
+
+
+# ---------------------------------------------------------------------------
+# News-gap watch — the Bet A phase 0 miss-detector
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    NEWS_GAP_MARKER,
+    build_news_gap_body,
+    news_gap_watch,
+    plan_news_gap_action,
+)
+
+
+def _news_ev(kind, country, name=None, admin1=None, *, confidence="verified",
+             window_end=None, headline="ev", sources=("WHO",)):
+    from datetime import date as _date
+    return {
+        "kind": kind,
+        "headline": headline,
+        "place": {"country": country, "admin1": admin1, "name": name},
+        "window_start": (window_end or _date.today().isoformat()),
+        "window_end": (window_end or _date.today().isoformat()),
+        "impact": [{"claim": "c", "value": 1, "source_name": s,
+                    "url": "https://x", "as_of": "d"} for s in sources],
+        "confidence": confidence,
+    }
+
+
+class TestNewsGapWatch:
+    NOW = datetime(2026, 7, 4, 12, 0, 0, tzinfo=timezone.utc)
+
+    def test_europe_heat_deaths_with_no_candidate_flags(self):
+        # The incident that motivated Bet A: WHO-verified mortality, nothing
+        # detected anywhere -> exactly one finding naming the source.
+        ev = _news_ev("heat_mortality", "France", headline="Europe heat deaths",
+                      window_end="2026-07-03")
+        out = news_gap_watch([ev], [], [], now=self.NOW)
+        assert len(out) == 1
+        assert out[0]["headline"] == "Europe heat deaths"
+        assert out[0]["sources"] == ["WHO"]
+
+    def test_matching_heat_candidate_suppresses_the_flag(self):
+        ev = _news_ev("heat_mortality", "France", window_end="2026-07-03")
+        cand = {"event_id": "reganom_France", "category": "regional_anomaly",
+                "type": "regional_anomaly", "city": "", "where": "France (6 sampled cities)",
+                "date": "2026-07-03"}
+        assert news_gap_watch([ev], [cand], [], now=self.NOW) == []
+
+    def test_colorado_fire_matches_by_state_name(self):
+        ev = _news_ev("fire", "United States", name="Knowles", admin1="CO",
+                      window_end="2026-07-03")
+        cand = {"event_id": "fire_x", "category": "fire", "type": "fire",
+                "city": "Grand Junction", "where": "near Grand Junction, Colorado",
+                "date": "2026-07-03"}
+        assert news_gap_watch([ev], [cand], [], now=self.NOW) == []
+
+    def test_wrong_family_candidate_does_not_suppress(self):
+        # A France PRECIP candidate must not swallow a heat-mortality gap.
+        ev = _news_ev("heat_mortality", "France", window_end="2026-07-03")
+        cand = {"event_id": "precip_x", "category": "precipitation", "type": "precip",
+                "city": "Paris", "where": "Paris, France", "date": "2026-07-03"}
+        out = news_gap_watch([ev], [cand], [], now=self.NOW)
+        assert len(out) == 1
+
+    def test_pending_or_posted_draft_text_suppresses(self):
+        ev = _news_ev("heat_mortality", "France", window_end="2026-07-03")
+        draft = {"status": "posted", "type": "regional_anomaly",
+                 "text": "Six French cities ran ~12C above their normal... France"}
+        assert news_gap_watch([ev], [], [draft], now=self.NOW) == []
+
+    def test_unverified_old_and_unmatchable_events_never_flag(self):
+        unverified = _news_ev("heat_mortality", "France", confidence="unverified",
+                              window_end="2026-07-03")
+        old = _news_ev("heat_mortality", "France", window_end="2026-06-20")
+        no_tokens = _news_ev("fire", "United States", window_end="2026-07-03")
+        assert news_gap_watch([unverified, old, no_tokens], [], [], now=self.NOW) == []
+
+
+class TestNewsGapIssue:
+    FINDING = [{"kind": "heat_mortality", "headline": "Europe heat deaths",
+                "sources": ["WHO"]}]
+
+    def test_body_names_event_and_source(self):
+        body = build_news_gap_body(self.FINDING)
+        assert NEWS_GAP_MARKER in body
+        assert "Europe heat deaths" in body and "WHO" in body
+
+    def test_lifecycle_create_update_close_noop(self):
+        assert plan_news_gap_action(self.FINDING, None)["action"] == "create_news_gap"
+        stale = {"number": 5, "body": NEWS_GAP_MARKER + "\nold"}
+        assert plan_news_gap_action(self.FINDING, stale)["action"] == "update_news_gap"
+        assert plan_news_gap_action([], {"number": 5, "body": NEWS_GAP_MARKER}) == {
+            "action": "close_news_gap", "number": 5}
+        assert plan_news_gap_action([], None) is None
