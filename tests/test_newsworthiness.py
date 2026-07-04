@@ -27,12 +27,17 @@ def _impact(**overrides):
 
 
 def _event(confidence="verified", kind="fire", **overrides):
+    # window dates are TODAY-relative: record_news_events prunes on window_end,
+    # so a fixed date here would rot against the time-travel canary.
+    from datetime import date, timedelta
+
+    today = date.today()
     ev = {
         "kind": kind,
         "headline": "Knowles fire (CO)",
         "place": {"country": "United States", "admin1": "CO", "name": "Knowles"},
-        "window_start": "2026-07-01",
-        "window_end": "2026-07-03",
+        "window_start": (today - timedelta(days=2)).isoformat(),
+        "window_end": today.isoformat(),
         "impact": [_impact()],
         "retrieved_via": "grounded_search",
         "confidence": confidence,
