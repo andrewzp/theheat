@@ -11,6 +11,340 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-04 — Daily corpus grading (10 fresh drafts; queue fully turned over)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **10 pending,
+all created 2026-07-04, zero carry-overs.** This is a complete queue turnover from Jul
+3's 20 pending (17 carry-overs + 3 fresh) — every one of Jul 3's drafts, including the 4
+strict bulk-reject candidates ([1] Mediterranean SST, [2] GMST marine_heatwave, [11]
+Basrah 47.2°C, [13] Al Baṣrah al Qadīmah 47°C) and the 13 clean carry-overs (France
+reganom, Astana 308.1mm, Phalodi/Taiz dust ×2, Rocky Mountains CO 595.3 MW, Prudhoe Bay,
+Antwerpen 358.8mm, Basrah 48°C, Morrill Fire, Wadi Halfa, Ft Green ×2, Canadian Arctic
+fire ×2, Typhoon Bavi C+), are gone from the pending queue as of this pull. **Operator
+action of some kind clearly happened between Jul 3 ~15:15 UTC and Jul 4 ~14:00 UTC** —
+whether bulk-reject, bulk-publish, or a TTL sweep is not observable from the gist alone.
+Continuing to grade on the unmerged `daily-plan-current` rolling branch (still stale on
+`main` since 2026-06-08; see repeated operational notes on Jul 1–3).
+
+**Staleness review as of 2026-07-04 ~14:00 UTC:** all 10 drafts created same-day (oldest
+~11h, newest ~15min at grading). None cross 48h; the two `absolute_extreme` drafts
+forecast "July 4," which is today — accurate, not stale. 0 bulk-reject candidates.
+`gh` CLI absent — 36th consecutive skip (May 13 → Jul 4).
+
+**Grade distribution (10 fresh drafts):** 2 A- / 2 B+ / 6 B / 0 C / 0 D-F.
+**A-rate: 20% (2/10).** Gap from resumption bar: 30 pp. Largest fresh-draft sample since
+Jun 29's bar-clearing cycle (n=5) — more statistically meaningful than the small-n cycles
+since (Jun 30 n=9, Jul 1 n=4, Jul 2 n=3, Jul 3 n=3).
+
+**Headline finding:** Typhoon Bavi reappears ([9], Category 3→5 in 24h, 40 kt jump) as
+the corpus's **2nd `cyclone_rapid_intensification` draft** — the same storm continuing
+to intensify past Jul 3's TS→Cat3 instance. This time the draft **avoids the P_tier
+violation entirely** (no "the rapid-intensification threshold is X kt" citation) and
+lands the **first P_close-positive close for this signal type** ("storms... can
+intensify faster than forecasters or ships can react" — a genuine stakes-consequence,
+not a ratio restatement). Graded A-, up from Jul 3's C+ for the same storm. This is the
+first same-storm, same-signal-type re-draft in the corpus that improves rather than
+repeats a known failure mode — worth watching whether it's a fluke or the
+`WRITER_SAMPLES=2`/critic-revise flags occasionally filtering the violation out.
+Meanwhile the Basra-area `absolute_extreme` cluster adds a 4th and 5th instance ([4]/[6])
+and both still carry the tier-jargon leak, so P_tier's overall pattern is intact — this
+cycle is mixed evidence, not a resolution.
+
+**Second operational note:** [8] Antwerpen (358.8 mm / 7 days, 58.8 mm above record) is
+**value-identical** to Jul 3's carry-over Antwerpen draft (graded B+ on Jun 30, still
+listed "Clear" in Jul 3's carry-over table) — same city, same mm figures, same margin —
+but with a new `draft_id`/timestamp dated 2026-07-04. This is a new variant of the
+duplicate-generation pattern already tracked 3× in this doc (Ft Green, Basrah-area,
+Canadian Arctic fire): those were same-cycle duplicates seconds apart; this one is a
+value-identical re-issue after a multi-day gap and a full queue turnover. Graded
+consistent with the Jun 30 precedent (B+), not as a fresh signal.
+
+### A-grade drafts
+
+#### [9] Typhoon Bavi — cyclone_rapid_intensification — Cat 3→5, 40 kt in 24h — **A-**
+
+> *Typhoon Bavi jumped from Category 3 to Category 5 in 24 hours — winds climbing 40 kt,
+> from 105 to 145 kt. The Western Pacific's warm upper ocean provides deep thermal fuel;
+> storms that cross it in July can intensify faster than forecasters or ships can react.*
+
+**Score:** 77. Created 2026-07-04T13:50:29Z. 2nd `cyclone_rapid_intensification` draft in
+corpus (1st: Jul 3, TS→Cat3, 55 kt jump, graded C+).
+
+Humor lens:
+- **Violation:** Category 3 to Category 5 in 24 hours — a second, more extreme escalation
+  of the same storm past Jul 3's instance.
+- **Benign?** Yes — no alarm boilerplate.
+- **Setup→Punchline?** Sentence 1 states the category jump + raw wind numbers cleanly.
+  Sentence 2: warm-ocean-fuel mechanism → **"storms... can intensify faster than
+  forecasters or ships can react."**
+- **P_tier check:** Clean. No internal threshold/tier language cited this time — contrast
+  with Jul 3's "the rapid-intensification threshold is 30 kt in 24 hours," which capped
+  that draft at C+. This is the first `cyclone_rapid_intensification` instance without
+  the violation.
+- **P_close check:** POSITIVE — first clean instance for this signal type. Names a real
+  consequence (forecasters and ships unable to keep pace) rather than restating the ratio.
+  Earned editorial weight per `brand/VOICE.md`'s calibration, not a banned "you should be
+  worried" tell.
+- **Wodehouse rule?** Nearly clean. "Winds climbing 40 kt, from 105 to 145 kt" restates a
+  derivable difference (145−105=40) — the recurring minor restate-math tic, present but
+  not disqualifying (same tolerance as prior A-grade instances elsewhere in the corpus).
+
+Best-executed draft in the batch, and a genuinely encouraging signal: the same signal
+type that tripped both known active-proposal traps on its debut avoids one and clears
+the other on its second appearance. Not proof P_tier or P_close are self-resolving —
+Basra-area `absolute_extreme` drafts below repeat their violation for a 4th/5th time in
+the same cycle — but worth flagging as the first counter-instance.
+
+#### [3] Loxahatchee NWR, Florida — all_time_high — 99°F (37.2°C) — **A-**
+
+> *Loxahatchee NWR, Florida hit 99°F (37.2°C) on June 30 — hottest daily maximum in 37
+> years of records, 1°F above the 2002 mark. In the Florida sea-breeze zone, Atlantic and
+> Gulf moisture normally caps afternoon heat; when that convection stalls, the column
+> runs free.*
+
+**Score:** 88. Created 2026-07-04T06:52:30Z.
+
+Humor lens:
+- **Violation:** All-time daily-max record, 37-year archive, 1°F margin.
+- **P_compound check:** Sentence 1 states both archive depth ("37 years of records") AND
+  margin ("1°F above the 2002 mark") in one clause — the double-qualifier pattern (4
+  prior cycles: Jun 28, 29, 30, Jul 2). This is a 5th instance/cycle.
+- **P_close check:** POSITIVE. "The column runs free" states an actual atmospheric
+  consequence of the missing convective cap — not just the mechanism. Same family as
+  Jun 29's Congo fire A- ("something has broken the convective lid") — a capping
+  mechanism failing, stated declaratively.
+- **Wodehouse rule?** Clean. Four words, physical, no restatement of the temperature or
+  margin already given.
+
+Graded A- despite the P_compound double-qualifier because the close overcomes it, the
+same way Jun 29's Prudhoe Bay A- overcame P_compound with a strong latitude
+peer-comparison close. P_compound softens a draft; it doesn't cap it the way P_tier does.
+
+### B+-grade drafts
+
+#### [1] Island Pond, Vermont — all_time_high — 92°F (33.3°C) — **B+**
+
+> *Island Pond, Vermont hit 92°F (33.3°C) on July 2 — hottest daily maximum in 37 years of
+> records, 1°F above the 1991 mark. The Androscoggin valley sits near the White
+> Mountains, where terrain that normally drains cold air down-slope can just as easily
+> trap heat under a ridge.*
+
+**Score:** 89. Created 2026-07-04T03:22:13Z.
+
+Near-identical opener to Loxahatchee ([3], above) — same construction, same 37-year
+archive depth, same 1°F margin. Both are P_compound instances (5th cycle, 2 instances in
+one batch). The terrain-inversion mechanism (normally drains cold air, but here traps
+heat) is the same contrast-reveal family as Loxahatchee, but the close hedges ("can just
+as easily trap heat") rather than stating a consequence — P_close FAILING (implied form,
+weaker than mechanism-only since it doesn't even commit to the mechanism happening, just
+that it *can*). B+ over Loxahatchee's A- because Loxahatchee's close is unconditional and
+this one is conditional.
+
+#### [8] Antwerpen, Belgium — precipitation_extreme — 358.8 mm / 7 days — **B+ (value-identical re-issue of the Jun 30 draft)**
+
+> *Antwerpen, Belgium: 358.8 mm of rain in 7 days — 58.8 mm above the previous 7-day
+> record. Belgium sits at the mouth of the Rhine-Scheldt delta; low-gradient terrain
+> moves that volume slowly, keeping flood risk elevated long after rain stops.*
+
+**Score:** 81. Created 2026-07-04T13:48:32Z — but the mm figures, margin, and full text
+match Jul 3's carry-over Antwerpen draft (graded B+ Jun 30, still "Clear" as of the Jul 3
+grading) exactly. See Operational note above. Graded B+ for consistency with the prior
+grading of this same text, not as independent fresh evidence. The close ("keeping flood
+risk elevated long after rain stops") is a genuine P_close POSITIVE — declarative,
+names an actual named risk — same assessment as it earned Jun 30.
+
+### B-grade drafts
+
+#### [6] Al Başrah al Qadīmah, Iraq — absolute_extreme — 47.4°C (117°F) forecast — **B**
+
+> *Al Başrah al Qadīmah, Iraq: forecast high of 47.4°C (117°F) on July 4 — above the 47°C
+> absolute-extreme threshold for the Northern Subtropics. Basrah sits at the head of the
+> Shatt al-Arab, where the Gulf traps heat with little maritime relief.*
+
+**Score:** 83. Created 2026-07-04T10:16:28Z. 5th Basra-area `absolute_extreme` draft in
+the corpus (after Jun 30's 47.2°C, Jul 1's 47°C and 48°C).
+
+- **P_tier check:** VIOLATION — "above the 47°C absolute-extreme threshold for the
+  Northern Subtropics" is a near-verbatim repeat of the same phrase family as all 4 prior
+  Basra-area instances. 6th cycle / now 9 instances / still the same 4 signal types (no
+  new type this cycle).
+- **P_close check:** POSITIVE — "little maritime relief" is a named-absence form, the
+  same shape as [11]'s "no evaporative relief" and [16]'s "no terrain to break" (both
+  previously graded B despite the positive close). Consistent with the established
+  pattern: P_tier caps at B even when P_close is positive.
+
+Graded B, matching the precedent set by [11]/[16] — P_tier's cap holds regardless of
+close quality.
+
+#### [4] Basrah, Iraq — absolute_extreme — 47°C (117°F) forecast — **B**
+
+> *Basrah, Iraq is forecast to hit 47°C (117°F) on July 4 — the absolute extreme threshold
+> for the Northern Subtropics. Basrah sits at the head of the Shatt al-Arab, where the
+> Persian Gulf's humidity loads the air before continental heat arrives from the Syrian
+> Desert.*
+
+**Score:** 83. Created 2026-07-04T06:55:16Z. Same city/metro area as [6] (see Second
+operational note — this pairing continues the Basra-area duplicate-location cluster
+first logged Jun 30–Jul 1, now a 4th distinct forecast-date instance).
+
+- **P_tier check:** VIOLATION — same phrase family ("the absolute extreme threshold for
+  the Northern Subtropics").
+- **P_close check:** FAILING — "loads the air before continental heat arrives" describes
+  mechanism sequencing, not a consequence (weaker than [6]'s named-absence close).
+
+Graded B on the same P_tier-caps precedent as [6], even though this instance's close is
+weaker (mechanism-only vs. [6]'s named-absence form) — both land at the same ceiling.
+
+#### [2] Barrow, Alaska — precipitation_extreme — 498.8 mm / 7 days — **B+**
+
+> *Barrow, Alaska recorded 498.8 mm of rain in 7 days — 198.8 mm above the previous 7-day
+> record of 300.0 mm. Barrow sits on the Arctic coast, where permafrost blocks
+> infiltration; rain sheets across frozen ground rather than soaking in.*
+
+**Score:** 82. Created 2026-07-04T03:25:59Z.
+
+**P9 reopened.** Archived Jul 3 with an explicit note: "reopen immediately if any
+`precipitation_extreme` draft reappears... given 13-of-13 prior confirmation, the
+pattern is very likely to recur on the very next instance." It did, on the very next
+instance: opener template ("[City] recorded X mm in 7 days — Y mm above the previous
+7-day record of Z mm") plus restate-math (198.8 is arithmetic from 498.8−300.0, both
+already stated). P_close FAILING — "rain sheets across frozen ground rather than soaking
+in" describes the physical process but names no downstream consequence (flooding,
+pooling, damage). Same permafrost mechanism, same station, same gap to A- as every prior
+Barrow precipitation draft in the corpus.
+
+#### [7] Astana, Kazakhstan — precipitation_extreme — 358.1 mm / 7 days — **B**
+
+> *Astana, Kazakhstan received 358.1 mm of rain in seven days ending July 2 — 58.1 mm
+> above the previous 7-day record of 300.0 mm. The same week, Aktobe logged 351.8 mm and
+> Almaty 302.8 mm. Astana sits in the continental steppe, where annual rainfall averages
+> roughly 300 mm total.*
+
+**Score:** 81. Created 2026-07-04T10:19:08Z.
+
+**P9 reopened, 2nd confirming instance this cycle** — same opener template + restate-math
+as [2]. First multi-station roll-call in the two-bot corpus (Aktobe + Almaty corroborate
+the signal as regional, not a single-station outlier) — a genuine format break
+(`brand/HUMOR_RESEARCH.md` §7.1) worth noting on its own merits. But the close ("Astana
+sits in the continental steppe, where annual rainfall averages roughly 300 mm total") is
+**P_close FAILING at a level below even the usual mechanism-only form** — it states a
+bare comparative fact with no causal mechanism and no consequence. The draft's best
+material — 358.1 mm in 7 days against a ~300 mm *annual* average, i.e., more than a
+year's typical rainfall in a week — sits unstated two sentences apart; the reader has to
+notice the two "~300" figures are suspiciously close and do the connection themselves.
+Graded B: real signal, genuine format-break novelty, but the weakest close form in the
+batch.
+
+#### [5] Rocky Mountains, Colorado — fire — 1,103.9 MW — **B**
+
+> *1,103.9 MW of radiative heat in the Rocky Mountains, Colorado — very-high-intensity
+> fire, satellite-confirmed at 100% confidence. The Southern Rockies hold ponderosa and
+> spruce stands stressed by decades of warming winters; when ignition finds them dry,
+> intensity scales fast.*
+
+**Score:** 82. Created 2026-07-04T06:58:15Z.
+
+Same class as Jun 30's Colorado fire (595.3 MW, graded B-) — the "mid-latitude
+drought/dry-fuel mechanism-only" fire form the Jul 3 corpus explicitly contrasted with
+the high-latitude carbon-release mechanic ([18]/[19] Canadian Arctic, both A-/B+). P_close
+FAILING: "intensity scales fast" is a vague velocity/intensity closer that restates
+already-implied magnitude (1,103.9 MW, 100% confidence, very-high tier) rather than
+naming what the fire actually does. "Very-high-intensity" is the shipped `frp_tier` label
+(not a P_tier violation, per the Jul 3 corpus's explicit clarification on this exact
+phrase). Graded B rather than the Jun 30 precedent's B- — the ponderosa/spruce
+species-level ecosystem specificity is a notch more specific than the Jun 30 draft's
+generic drought framing, but the closer weakness is the same failure mode.
+
+#### [10] Urumqi, China — dust_event — 2,454 μg/m³ / AOD 1.21 — **B**
+
+> *Urumqi, China: model-estimated dust daily maximum of 2,454 μg/m³ on July 4 — aerosol
+> optical depth at 1.21. The Junggar Basin's encircling ranges concentrate lofted
+> Taklamakan and Gobi sediment; topographic containment does the rest.*
+
+**Score:** 75. Created 2026-07-04T13:51:31Z.
+
+P_dust confirmed again (no WHO PM anchor stated; 2,454 μg/m³ ≈ 163× the WHO PM2.5 daily
+guideline, ≈ 55× the PM10 guideline, both unstated). "Topographic containment does the
+rest" is functionally the same resolution-form close as Jun 17's Urumqi "traps it" (that
+draft's ceiling was B- for the same reason: a decent close capped by the missing
+calibration number). Graded B — two-source mechanism (Taklamakan + Gobi sediment via
+encircling ranges) is a touch more developed than the Jun 17 instance, but the underlying
+gap (no reader-facing scale) is identical.
+
+### Patterns named in this batch
+
+1. **Second-instance improvement for `cyclone_rapid_intensification`.** Typhoon Bavi's 2nd
+   corpus draft avoids the P_tier violation and lands the signal type's first P_close
+   positive. First evidence the two known traps for a signal type aren't
+   deterministic-per-bundle-field — worth watching whether this holds on a 3rd instance.
+
+2. **P_tier still capping absolute_extreme at B regardless of close quality.** [4]/[6] are
+   the 4th and 5th Basra-area instances; both repeat the tier-jargon phrase; both cap at B
+   even though [6]'s close is a genuine P_close positive. The pattern from [11]/[16] holds.
+
+3. **P9 reopened exactly as its archive note predicted.** Both precipitation_extreme
+   drafts this cycle ([2] Barrow, [7] Astana) repeat the opener template + restate-math
+   pattern on their very first reappearance after a 3-cycle absence.
+
+4. **Duplicate-generation, new variant: cross-day value-identical re-issue.** [8] Antwerpen
+   matches Jul 3's carry-over Antwerpen (graded B+ Jun 30) exactly, but under a new
+   `draft_id` dated Jul 4, after the full queue turnover. Distinct from the same-cycle,
+   seconds-apart duplicates already tracked (Ft Green, Basrah, Canadian Arctic fire) —
+   this one spans a multi-day gap and a queue-clearing event.
+
+5. **Astana's stranded punchline is a new low-water-mark for P_close FAILING.** Most
+   failing instances at least attempt a mechanism; Astana's close states a bare fact
+   with no causal or consequential content at all, while sitting on the batch's best
+   unstated joke (a year of rain in a week).
+
+6. **Complete queue turnover, cause unconfirmed.** All 20 of Jul 3's pending drafts —
+   including 4 flagged stale/reject-candidates and 13 clean carry-overs going back to
+   Jun 28 — are absent from today's pull. See Context above; operator should confirm
+   whether this was bulk-reject, bulk-publish, or TTL/other automated clearing.
+
+### Followups (in priority order)
+
+1. **Operator: confirm what happened to Jul 3's 20 pending drafts.** All are gone as of
+   this pull. If bulk-published, several were still stale (Mediterranean SST, GMST
+   marine_heatwave) and should not have gone out with "today" language intact — worth
+   checking what actually posted. If bulk-rejected or TTL-swept, no action needed beyond
+   confirming.
+2. **P_tier and P_compound remain ready for implementation** — both are one-paragraph
+   `writer_prompt.py` additions, drafted in full in `docs/IMPROVEMENT_PLAN.md`, both with
+   fresh confirming evidence this cycle.
+3. **P9's reopening argues for shipping its fix alongside P_tier/P_compound** rather than
+   treating precipitation_extreme's template convergence as resolved — the archive was
+   correct that it was absence-of-opportunity, not a fixed failure mode.
+4. **Watch whether Typhoon Bavi's clean 2nd instance holds on a 3rd** — if the storm
+   continues intensifying and generates another draft, that would distinguish "lucky
+   sample" from "the violation is intermittent for reasons worth understanding."
+
+### Numbers
+
+- Pending drafts in queue: 10 (10 fresh; 0 carry-overs — full queue turnover from Jul 3's 20)
+- Fresh drafts graded: 10
+- A-rate: 20% (2/10) — largest statistically-meaningful sample since Jun 29 (n=5, 80%)
+- Grade distribution: 0 A / 2 A- / 2 B+ / 6 B / 0 C / 0 D-F
+- New signal types debuted: none (all 5 signal types this cycle — all_time_high,
+  precipitation_extreme, absolute_extreme, fire, cyclone_rapid_intensification, dust_event
+  — have prior corpus instances; `cyclone_rapid_intensification` is only on its 2nd)
+- Active proposals: P_close 15th cycle (3 positive: Loxahatchee, Typhoon Bavi [1st clean
+  cyclone_rapid_intensification instance], Al Başrah al Qadīmah; 1 positive repeat:
+  Antwerpen [not fresh evidence]; 6 failing: Island Pond, Barrow, Astana, Basrah, Rocky
+  Mountains, Urumqi); P_tier 6th cycle / 9 instances / still 4 signal types (2 new
+  absolute_extreme instances, both violating; 1 clean cyclone_rapid_intensification
+  counter-instance); P_compound 5th cycle (Island Pond + Loxahatchee); **P9 reopened**
+  (2 confirming instances on its first reappearance); P_dust continues (Urumqi, no WHO
+  anchor); P5 no shift (extreme-heat/absolute_extreme self-select mechanics; dust_event
+  remains the confirmed gap category)
+- Staleness bulk-reject: 0 candidates — all 10 drafts same-day fresh. `gh` CLI absent,
+  36th consecutive skip (May 13 → Jul 4)
+- Operational anomalies: (a) complete queue turnover, cause unconfirmed; (b) Antwerpen
+  cross-day value-identical re-issue; (c) Basra-area duplicate-location cluster now at
+  5 total instances across 3 forecast dates
+
+---
+
 ## 2026-07-03 — Daily corpus grading (3 fresh drafts; 17 carry-overs from Jun 28–Jul 2, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 20 pending drafts.
