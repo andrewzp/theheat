@@ -368,6 +368,42 @@ export function writerWatch(suppressions, runHistory, now = new Date()) {
   return [{ kind: "budget_exhausted", count: rows.length, last_ts: lastTs }]
 }
 
+// ---------------------------------------------------------------------------
+// queueWatch — JS mirror of scripts/source_health_sentinel.py queue_watch
+// Constants MUST stay in sync with the Python implementation.
+// ---------------------------------------------------------------------------
+
+// MUST match scripts/source_health_sentinel.py
+export const QUEUE_WATCH_HOURS = 24
+
+function policyMode(draft) {
+  const policy = draft?.approval_policy
+  if (policy && typeof policy === "object") return String(policy.mode || "")
+  if (typeof policy === "string") return policy
+  return ""
+}
+
+export function queueWatch(drafts, now = new Date()) {
+  const cutoffMs = now.getTime() - QUEUE_WATCH_HOURS * 3600000
+  const stale = []
+  for (const d of drafts || []) {
+    if (!d || d.status !== "pending") continue
+    if (policyMode(d) === "armed_auto") continue
+    const t = parseTsStrict(d.created_at)
+    if (!Number.isNaN(t) && t < cutoffMs) stale.push({ type: String(d.type || "unknown"), t })
+  }
+  if (stale.length === 0) return []
+  const oldest = Math.min(...stale.map((s) => s.t))
+  const types = {}
+  for (const s of stale) types[s.type] = (types[s.type] || 0) + 1
+  return [{
+    kind: "stale_reviews",
+    count: stale.length,
+    oldest_age_h: Math.floor((now.getTime() - oldest) / 3600000),
+    types: Object.fromEntries(Object.entries(types).sort((a, b) => b[1] - a[1])),
+  }]
+}
+
 export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
   const durableHealth = state?.source_health && Object.keys(state.source_health).length > 0
   const history = durableHealth
@@ -397,5 +433,6 @@ export function buildSourceHealthPayload(state, { runsLimit = 20 } = {}) {
     },
     coverage: coverageWatch(state?.coverage_log, state?.run_history, new Date()),
     writer: writerWatch(state?.suppressions, state?.run_history, new Date()),
+    queue: queueWatch(state?.drafts, new Date()),
   }
 }

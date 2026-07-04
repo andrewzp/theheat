@@ -934,6 +934,150 @@ def _close_writer_watch_issue(number: int) -> None:
     print(f"[sentinel] closed writer-watch issue #{number}")
 
 
+# ---------------------------------------------------------------------------
+# Queue watch — human-gated drafts aging unreviewed in the pending queue
+# ---------------------------------------------------------------------------
+
+QUEUE_WATCH_HOURS = 24
+QUEUE_WATCH_TITLE = "Review-queue watch: manual drafts are aging unreviewed"
+QUEUE_WATCH_MARKER = "<!-- source-health-queue-watch -->"
+
+
+def _policy_mode(draft: Mapping[str, Any]) -> str:
+    """Extract the approval-policy mode; missing/malformed reads as ''.
+
+    ``draft["approval_policy"]`` is a dict (``ApprovalPolicy.as_dict()``) with a
+    ``mode`` key; be defensive about older/foreign shapes.
+    """
+    policy = draft.get("approval_policy")
+    if isinstance(policy, Mapping):
+        return str(policy.get("mode") or "")
+    if isinstance(policy, str):
+        return policy
+    return ""
+
+
+def queue_watch(
+    drafts: list[dict] | None,
+    *,
+    now: datetime,
+) -> list[dict]:
+    """Flag pending human-gated drafts older than the window.
+
+    The 2026-06-29→07-03 incident class: good drafts (a Prudhoe Bay all-time
+    high, a marine-heatwave record) sat unreviewed in an unwatched manual queue
+    until they went stale. The per-type TTL sweep eventually auto-rejects them
+    (7d fast / 21d slow), so the un-alerted gap is the days in between — this
+    watch closes it. Human-gated = any mode other than ``armed_auto`` (a
+    missing/unknown mode counts as human-gated: the pillar's bias is that
+    nothing ages silently).
+    """
+    cutoff = now - timedelta(hours=QUEUE_WATCH_HOURS)
+    stale: list[tuple[str, datetime]] = []
+    for d in drafts or []:
+        if not isinstance(d, Mapping) or d.get("status") != "pending":
+            continue
+        if _policy_mode(d) == "armed_auto":
+            continue
+        parsed = _parse_ts(str(d.get("created_at") or ""))
+        if parsed is not None and parsed < cutoff:
+            stale.append((str(d.get("type") or "unknown"), parsed))
+    if not stale:
+        return []
+    oldest = min(ts for _, ts in stale)
+    types: dict[str, int] = {}
+    for t, _ in stale:
+        types[t] = types.get(t, 0) + 1
+    return [{
+        "kind": "stale_reviews",
+        "count": len(stale),
+        "oldest_age_h": int((now - oldest).total_seconds() // 3600),
+        "types": dict(sorted(types.items(), key=lambda kv: -kv[1])),
+    }]
+
+
+def build_queue_watch_body(findings: list[dict]) -> str:
+    f = findings[0]
+    types = ", ".join(f"{k}:{v}" for k, v in f["types"].items())
+    return "\n".join([
+        QUEUE_WATCH_MARKER,
+        "**Human-gated drafts are aging unreviewed in the pending queue.**",
+        "",
+        f"{f['count']} pending draft(s) have waited longer than {QUEUE_WATCH_HOURS}h "
+        f"for review (oldest ≈ {f['oldest_age_h']}h). By type: {types}.",
+        "",
+        "**Fix:** review them on the dashboard — Approve+Post the good ones, Reject "
+        "the rest. If nothing is done, the per-type TTL sweep auto-rejects them "
+        "(default 7d; slow signals 21d), which silently discards any good story.",
+        "",
+        "_Auto-maintained by the source-health sentinel queue watch. Auto-closes "
+        "when no human-gated pending draft is older than the window._",
+    ])
+
+
+def _open_queue_watch_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list queue-watch issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == QUEUE_WATCH_TITLE:
+            return item
+    return None
+
+
+def plan_queue_watch_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if findings:
+        body = build_queue_watch_body(findings)
+        if open_issue is None:
+            return {"action": "create_queue_watch", "body": body, "labels": [LABEL, "ours"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_queue_watch",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "ours"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_queue_watch", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_queue_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", QUEUE_WATCH_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened queue-watch issue: {QUEUE_WATCH_TITLE}")
+
+
+def _update_queue_watch_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated queue-watch issue #{action['number']}")
+
+
+def _close_queue_watch_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "No human-gated pending draft is older than the review window. "
+         "Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed queue-watch issue #{number}")
+
+
 def main(argv: list[str] | None = None) -> int:
     """Read state.json, classify, and reconcile per-source issues via gh.
 
@@ -1022,6 +1166,23 @@ def main(argv: list[str] | None = None) -> int:
             _update_writer_watch_issue(ww_action)
         else:
             _close_writer_watch_issue(ww_action["number"])
+    qw = queue_watch(
+        state.get("drafts"),
+        now=datetime.now(timezone.utc),
+    )
+    if qw:
+        print(
+            f"[sentinel] queue-watch: {qw[0]['count']} human-gated draft(s) older "
+            f"than {QUEUE_WATCH_HOURS}h (oldest ≈ {qw[0]['oldest_age_h']}h)"
+        )
+    qw_action = plan_queue_watch_action(qw, _open_queue_watch_issue())
+    if qw_action:
+        if qw_action["action"] == "create_queue_watch":
+            _create_queue_watch_issue(qw_action)
+        elif qw_action["action"] == "update_queue_watch":
+            _update_queue_watch_issue(qw_action)
+        else:
+            _close_queue_watch_issue(qw_action["number"])
     return 0
 
 
