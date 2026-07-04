@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Reliability watches complete + Bet A phase 0 shipped dark (2026-07-04)
+
+Andrew approved the plan's recommendations ("follow your own recommendations and keep
+going") — the session executed the queue in order:
+
+- **Queue watch** ([#364](https://github.com/andrewzp/theheat/pull/364)): pending
+  human-gated drafts older than 24h open an advisory auto-closing issue (the
+  Prudhoe-Bay-aging class; the un-alerted gap before the TTL sweep silently discards).
+  codex caught the load-bearing subtlety twice: human-gated is classified by RUNNABLE
+  state (`auto_approve_at` + `approval_mode` in {auto, policy_auto}), never by the
+  policy recommendation — a failed-closed armed_auto draft counts.
+- **Time-travel canary** ([#365](https://github.com/andrewzp/theheat/pull/365)): the
+  calendar-bomb class fix. `THEHEAT_TIME_TRAVEL_DAYS` shifts the suite's clock
+  (freezegun, from pytest_configure); a weekly workflow runs +30d/+365d, registered
+  with workflow-health (five monitored workflows now). The first +90d run found FIVE
+  live bombs (ice_mass was 11 days from breaking main; **NHC detonated on #364's CI
+  mid-session, exactly as predicted**) — all fixtures made today-relative.
+- **Bet A phase 0** ([#366](https://github.com/andrewzp/theheat/pull/366)): the
+  newsworthiness retrieval lane + news-gap watch, **shipped dark**
+  (`THEHEAT_NEWSWORTHINESS_ENABLED=0`). NIFC leg with live-verified field contract;
+  grounded search verified-or-dropped per entry; iron floor (source/url/as_of or
+  dropped); `news_events` + `candidates_log` state; the miss-detector issue for the
+  European-heat-deaths class. codex round 1 was a BLOCK (P0: only impact[0] verified;
+  sqlite allowlist; Fort-de-France matcher; injection guard; prune horizon) — all
+  fixed, looped to clean APPROVE. **Activation awaits Andrew** (one flip, zero
+  editorial surface; rollout order in the spec).
+
 ### Three-pillar upgrade plan + Bet A design complete + writer watch (2026-07-03 evening)
 
 The VISION.md mandate executed: whole-project assessment → prioritized upgrade plan across
