@@ -1,0 +1,55 @@
+name: time-travel-canary
+
+# Runs the full test suite with the clock shifted forward to catch calendar
+# time bombs BEFORE they detonate on main — a hardcoded fixture date rotting
+# past a freshness window (the class that broke main CI on 2026-07-03: the
+# CO2 last-good fixture aged past its 21-day window, #356; the +90d run that
+# motivated this workflow found five more, including an ice_mass tail 11 days
+# from blowing and an NHC advisory 1 day out).
+#
+# The shift is applied by tests/conftest.py when THEHEAT_TIME_TRAVEL_DAYS is
+# set (freezegun, tick=True, active from pytest_configure so module-level
+# date.today() fixtures shift too). A red run here means some test will start
+# failing on main within the horizon — fix the fixture to be today-relative.
+#
+# Failure is surfaced by the existing workflow-health monitor (red scheduled
+# workflows get hourly health issues), so this needs no bespoke alerting.
+
+on:
+  schedule:
+    # Weekly, Mondays 08:17 UTC (off the hour to dodge cron congestion).
+    - cron: '17 8 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: time-travel-canary
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # +30d catches imminent detonations; +365d proves a full year of
+        # calendar (annual-cycle fixtures like ENSO seasons included).
+        days: [30, 365]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the suite at +${{ matrix.days }} days
+        env:
+          THEHEAT_TIME_TRAVEL_DAYS: ${{ matrix.days }}
+        run: python -m pytest -q

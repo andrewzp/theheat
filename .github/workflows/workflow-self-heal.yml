@@ -2,7 +2,7 @@ name: workflow-self-heal
 
 # The daily autonomous self-heal routine (Layer 3 of the workflow-self-heal
 # system). Runs Claude Code headless against docs/runbooks/workflow-self-heal.md:
-# it checks all four scheduled workflows, and for any red on main investigates and
+# it checks all five scheduled workflows, and for any red on main investigates and
 # fixes — auto-merging *mechanical* fixes and opening a PR-and-stop for
 # *judgment/destructive* ones — then writes the SELFHEAL_BEACON heartbeat so the
 # hourly observer can tell this routine is still alive.
@@ -93,7 +93,7 @@ jobs:
             - Dashboard deps are installed (`cd dashboard && npm test && npm run build`).
             - `gh` is authenticated; git identity is configured.
 
-            Do the full loop: detect red workflows across all four scheduled
+            Do the full loop: detect red workflows across all five scheduled
             workflows (and check source-health-sentinel's own liveness), fix red
             ones per the autonomy split (auto-merge MECHANICAL; open a PR and STOP
             for JUDGMENT/DESTRUCTIVE — anything touching tweet output or the

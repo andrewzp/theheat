@@ -61,13 +61,26 @@ class _FakeSession:
 
 
 def test_fetch_ch4_milestones_parses_noaa_text():
-    payload = """
-# year   month       decimal       average   average_unc         trend     trend_unc
-  2026       3      2026.208       1938.00          1.00       1938.50          1.00
-  2026       4      2026.292       1942.30          1.00       1941.90          1.00
-"""
+    # Rows must stay inside the 180-day freshness gate no matter when the
+    # suite runs (time-travel canary: the fixed 2026-04 tail rotted at +90d).
+    from datetime import date, timedelta
+
+    m1 = date.today().replace(day=1)           # current month
+    m0 = (m1 - timedelta(days=1)).replace(day=1)  # previous month
+
+    def _row(d: date, avg: float, trend: float) -> str:
+        dec = d.year + (d.month - 0.5) / 12
+        return f"  {d.year}       {d.month}      {dec:.3f}       {avg:.2f}          1.00       {trend:.2f}          1.00"
+
+    payload = "\n".join([
+        "",
+        "# year   month       decimal       average   average_unc         trend     trend_unc",
+        _row(m0, 1938.00, 1938.50),
+        _row(m1, 1942.30, 1941.90),
+        "",
+    ])
     with patch("src.data._http._get_session", return_value=_FakeSession(_FakeResponse(payload))):
         readings = fetch_ch4_milestones(strict=True)
 
-    assert [reading.date for reading in readings] == ["2026-03-01", "2026-04-01"]
+    assert [reading.date for reading in readings] == [m0.isoformat(), m1.isoformat()]
     assert readings[-1].ppb == 1942.3
