@@ -629,3 +629,118 @@ class TestWriterWatchIssue:
 
     def test_noop_when_clear_no_issue(self):
         assert plan_writer_watch_action([], None) is None
+
+
+# ---------------------------------------------------------------------------
+# Queue watch — human-gated drafts aging unreviewed (2026-06-29→07-03 class)
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    QUEUE_WATCH_MARKER,
+    build_queue_watch_body,
+    plan_queue_watch_action,
+    queue_watch,
+)
+
+
+def _draft(created_at, *, mode="manual_only", status="pending", dtype="regional_anomaly"):
+    return {
+        "id": f"draft_{created_at}",
+        "status": status,
+        "type": dtype,
+        "created_at": created_at,
+        "approval_policy": {"mode": mode},
+    }
+
+
+class TestQueueWatch:
+    NOW = datetime(2026, 7, 4, 12, 0, 0, tzinfo=timezone.utc)
+
+    def test_flags_aged_manual_draft(self):
+        drafts = [_draft("2026-07-03T06:00:00Z", dtype="all_time_high")]
+        out = queue_watch(drafts, now=self.NOW)
+        assert out == [{
+            "kind": "stale_reviews",
+            "count": 1,
+            "oldest_age_h": 30,
+            "types": {"all_time_high": 1},
+        }]
+
+    def test_fresh_posted_and_auto_owned_do_not_count(self):
+        auto_owned = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        auto_owned["approval_mode"] = "auto"
+        auto_owned["auto_approve_at"] = "2026-07-04T13:00:00Z"
+        drafts = [
+            _draft("2026-07-04T06:00:00Z"),                      # fresh (6h)
+            _draft("2026-07-01T06:00:00Z", status="posted"),     # not pending
+            auto_owned,                                          # auto path owns it
+        ]
+        assert queue_watch(drafts, now=self.NOW) == []
+
+    def test_live_policy_auto_draft_is_auto_owned(self):
+        # The legacy armed_auto path sets approval_mode="policy_auto" +
+        # auto_approve_at (draft_save.py); posting still owns it (codex r2 P2).
+        d = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        d["approval_mode"] = "policy_auto"
+        d["auto_approve_at"] = "2026-07-04T13:00:00Z"
+        assert queue_watch([d], now=self.NOW) == []
+
+    def test_failed_closed_armed_auto_policy_counts_as_human_gated(self):
+        # approval_policy.mode is only the RECOMMENDATION. A draft whose policy
+        # says armed_auto but that failed closed to manual (no critic PASS, or
+        # demoted: approval_mode="manual", no auto_approve_at) is human-gated —
+        # excluding it would recreate the silent-aging blind spot (codex P1).
+        d = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        assert d.get("approval_mode") is None  # fixture models the demoted shape
+        out = queue_watch([d], now=self.NOW)
+        assert out[0]["count"] == 1
+
+    def test_suggested_auto_and_missing_mode_count_as_human_gated(self):
+        drafts = [
+            _draft("2026-07-02T06:00:00Z", mode="suggested_auto"),
+            {"status": "pending", "type": "fire", "created_at": "2026-07-02T06:00:00Z"},
+        ]
+        out = queue_watch(drafts, now=self.NOW)
+        assert out[0]["count"] == 2
+        assert out[0]["types"] == {"regional_anomaly": 1, "fire": 1}
+
+    def test_malformed_created_at_skipped(self):
+        drafts = [
+            _draft("not-a-date"),
+            _draft(""),
+            _draft("2026-02-31T00:00:00Z"),  # invalid calendar date
+        ]
+        assert queue_watch(drafts, now=self.NOW) == []
+        assert queue_watch(None, now=self.NOW) == []
+
+    def test_incident_replay_prudhoe_class(self):
+        # The real shape: a strong record + a marine heatwave sitting for days
+        # while an old France reganom rots — one loud finding, typed.
+        drafts = [
+            _draft("2026-07-02T04:00:00Z", dtype="all_time_high"),
+            _draft("2026-07-02T10:00:00Z", dtype="marine_heatwave"),
+            _draft("2026-06-28T18:00:00Z", dtype="regional_anomaly"),
+        ]
+        out = queue_watch(drafts, now=self.NOW)
+        assert out[0]["count"] == 3
+        assert out[0]["oldest_age_h"] == 138
+        assert out[0]["types"]["all_time_high"] == 1
+
+
+class TestQueueWatchIssue:
+    FINDING = [{"kind": "stale_reviews", "count": 2, "oldest_age_h": 30,
+                "types": {"all_time_high": 1, "marine_heatwave": 1}}]
+
+    def test_body_names_counts_types_and_ttl(self):
+        body = build_queue_watch_body(self.FINDING)
+        assert QUEUE_WATCH_MARKER in body
+        assert "2 pending draft(s)" in body
+        assert "all_time_high:1" in body
+        assert "TTL" in body
+
+    def test_create_update_close_noop(self):
+        assert plan_queue_watch_action(self.FINDING, None)["action"] == "create_queue_watch"
+        stale = {"number": 3, "body": QUEUE_WATCH_MARKER + "\nold"}
+        assert plan_queue_watch_action(self.FINDING, stale)["action"] == "update_queue_watch"
+        assert plan_queue_watch_action([], {"number": 3, "body": QUEUE_WATCH_MARKER}) == {
+            "action": "close_queue_watch", "number": 3}
+        assert plan_queue_watch_action([], None) is None
