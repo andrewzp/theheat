@@ -1845,14 +1845,23 @@ def record_news_events(
     try:
         now = now or datetime.now(UTC)
         cutoff = (now - timedelta(days=NEWS_WINDOW_DAYS)).date().isoformat()
+        # A window_end may not sit meaningfully in the future (tomorrow at most,
+        # for timezone slack) — a malformed/far-future value would otherwise
+        # make an event immortal against the prune (codex P2).
+        horizon = (now + timedelta(days=1)).date().isoformat()
+
+        def _in_window(ev: dict) -> bool:
+            end = str(ev.get("window_end") or "")
+            return cutoff <= end <= horizon
+
         stamped = [
             {**ev, "retrieved_at": now.isoformat().replace("+00:00", "Z")}
             for ev in events
-            if isinstance(ev, dict)
+            if isinstance(ev, dict) and _in_window(ev)
         ]
         existing = [
             e for e in (state.get("news_events") or [])
-            if isinstance(e, dict) and str(e.get("window_end") or "") >= cutoff
+            if isinstance(e, dict) and _in_window(e)
         ]
         state["news_events"] = _merge_news_events(existing, stamped)
     except Exception as exc:  # noqa: BLE001 — recording must never break a cycle

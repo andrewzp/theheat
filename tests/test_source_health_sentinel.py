@@ -814,6 +814,16 @@ class TestNewsGapWatch:
                  "text": "Six French cities ran ~12C above their normal... France"}
         assert news_gap_watch([ev], [], [draft], now=self.NOW) == []
 
+    def test_fort_de_france_candidate_does_not_hide_a_france_gap(self):
+        # codex P1 regression: substring matching read 'Fort-de-France,
+        # Martinique' as covering a France heat-mortality event.
+        ev = _news_ev("heat_mortality", "France", window_end="2026-07-03")
+        cand = {"event_id": "heat_mq", "category": "heat", "type": "anomaly_hot",
+                "city": "Fort-de-France", "where": "Fort-de-France, Martinique",
+                "date": "2026-07-03"}
+        out = news_gap_watch([ev], [cand], [], now=self.NOW)
+        assert len(out) == 1
+
     def test_unverified_old_and_unmatchable_events_never_flag(self):
         unverified = _news_ev("heat_mortality", "France", confidence="unverified",
                               window_end="2026-07-03")

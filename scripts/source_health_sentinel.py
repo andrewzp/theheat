@@ -1138,6 +1138,16 @@ def _news_match_tokens(ev: Mapping[str, Any]) -> list[str]:
     return tokens
 
 
+def _token_in(token: str, hay: str) -> bool:
+    """Boundary-guarded token match. A bare substring check reads a France
+    heat event as matched by a 'Fort-de-France, Martinique' candidate (codex
+    P1) — the token must not be glued to a neighboring word by a letter,
+    digit, or hyphen on either side."""
+    return re.search(
+        rf"(?<![\w-]){re.escape(token)}(?![\w-])", hay
+    ) is not None
+
+
 def _news_event_matched(
     ev: Mapping[str, Any],
     candidates: list[Mapping[str, Any]],
@@ -1153,11 +1163,11 @@ def _news_event_matched(
     for row in candidates:
         hay = f"{row.get('city') or ''} {row.get('where') or ''}".lower()
         cat = f"{row.get('category') or ''} {row.get('type') or ''}".lower()
-        if any(f in cat for f in families) and any(t in hay for t in tokens):
+        if any(f in cat for f in families) and any(_token_in(t, hay) for t in tokens):
             return True
     for d in drafts:
         hay = f"{d.get('text') or ''} {d.get('type') or ''}".lower()
-        if any(t in hay for t in tokens):
+        if any(_token_in(t, hay) for t in tokens):
             return True
     return False
 
