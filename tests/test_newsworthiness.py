@@ -199,13 +199,32 @@ class TestGroundedParse:
 
 class TestStateRecording:
     def test_record_news_events_stamps_and_merges(self):
+        # Fully clock-relative: the _event fixture windows derive from
+        # date.today(), so the recording 'now' must be the same clock.
+        from datetime import date, datetime, timezone
+
         s = _fresh_state()
-        record_news_events(s, [_event()], now=NOW)
+        now = datetime.now(timezone.utc)
+        record_news_events(s, [_event()], now=now)
         assert len(s["news_events"]) == 1
-        assert s["news_events"][0]["retrieved_at"].startswith("2026-07-04")
+        assert s["news_events"][0]["retrieved_at"].startswith(date.today().isoformat())
         # same (kind, headline, window_start) replaces, not duplicates
-        record_news_events(s, [_event()], now=NOW)
+        record_news_events(s, [_event()], now=now)
         assert len(s["news_events"]) == 1
+
+    def test_record_news_events_rejects_stale_and_far_future_windows(self):
+        # codex P2 regression: incoming events outside [cutoff, now+1d] are
+        # filtered at write time — a stale event freshly retrieved, or a
+        # malformed far-future window_end, cannot enter or become immortal.
+        from datetime import date, datetime, timedelta, timezone
+
+        s = _fresh_state()
+        now = datetime.now(timezone.utc)
+        today = date.today()
+        stale = _event(window_end=(today - timedelta(days=30)).isoformat())
+        immortal = _event(headline="future", window_end=(today + timedelta(days=400)).isoformat())
+        record_news_events(s, [stale, immortal], now=now)
+        assert s["news_events"] == []
 
     def test_record_candidate_observation_dedups_and_prunes(self):
         s = _fresh_state()
