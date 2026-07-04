@@ -48,7 +48,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/source_health_sentinel.py /tmp/state.json
 
-      # Observe the four scheduled workflows themselves: turn any that are red on
+      # Observe the five scheduled workflows themselves: turn any that are red on
       # main into an auto-closing `workflow-health` issue (the signal the daily
       # self-heal routine consumes), and flag the self-heal routine if its
       # heartbeat is stale. Independent of the bot's gist state — reads the
