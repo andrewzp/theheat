@@ -187,7 +187,7 @@ test("getAutomationStatus composes workflows + routine + posting mode", async ()
   const { getAutomationStatus } = await importFresh("lib/automation.js")
   const status = await getAutomationStatus()
 
-  assert.equal(status.workflows.length, 4)
+  assert.equal(status.workflows.length, 5)
   assert.equal(status.workflows[0].file, "bot.yml")
   assert.equal(status.workflows[3].file, "source-health-sentinel.yml")
   assert.equal(status.routine.last_run_outcome, "graded")
@@ -281,7 +281,7 @@ test("GET /api/automation returns combined status with valid auth", async () => 
   const body = await res.json()
 
   assert.equal(res.status, 200)
-  assert.equal(body.workflows.length, 4)
+  assert.equal(body.workflows.length, 5)
   assert.equal(body.routine.last_run_outcome, "graded")
   assert.equal(body.posting_mode_summary.manual_only_count, 1)
 })
@@ -309,7 +309,7 @@ test("GET /api/automation degrades to 200 with workflow errors when GH API throw
   const body = await res.json()
 
   assert.equal(res.status, 200, "degraded — getAutomationStatus catches errors")
-  assert.equal(body.workflows.length, 4, "all 4 workflow rows present")
+  assert.equal(body.workflows.length, 5, "all 5 workflow rows present")
   for (const wf of body.workflows) {
     assert.ok(wf.error, `workflow ${wf.name} should have .error populated`)
     assert.match(wf.error, /ECONNREFUSED|fetch failed/i)
@@ -370,11 +370,11 @@ test("GET /api/automation reuses the short-lived status cache", async () => {
 
   assert.equal(first.status, 200)
   assert.equal(second.status, 200)
-  // 4 workflows × 2 calls (state + runs) = 8, but cache dedupes the second
+  // 5 workflows × 2 calls (state + runs) = 10, but cache dedupes the second
   // request entirely. The gist is hit once by readStateStore, and the variables
   // endpoint is hit twice on the first pass (ROUTINE_BEACON + SELFHEAL_BEACON).
   // The second GET is a cache hit on all.
-  assert.equal(actionCalls, 8)
+  assert.equal(actionCalls, 10)
   assert.equal(gistCalls, 1)
   assert.equal(beaconCalls, 2)
 })
