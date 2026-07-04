@@ -2,7 +2,7 @@
 
 Philosophy mirrors the source-health sentinel: a red scheduled workflow is OUR
 problem and must surface without a human watching. This observer reads the GitHub
-Actions API for the four scheduled workflows and turns any that are red on `main`
+Actions API for the five scheduled workflows and turns any that are red on `main`
 into a tracked, auto-closing `workflow-health` issue — the durable, de-duped
 signal the daily self-heal routine consumes. It also flags the self-heal routine
 itself if its heartbeat goes stale, so the watcher cannot silently die (the exact
@@ -290,7 +290,7 @@ class TestFetchRunsByWorkflow:
         # be flagged so downstream never auto-closes a still-failing issue.
         monkeypatch.setattr(wh, "_gh_api", lambda path: None)
         result = fetch_runs_by_workflow()
-        assert len(result) == 4
+        assert len(result) == 5
         for info in result.values():
             assert info["fetch_ok"] is False
             assert info["runs"] == []

@@ -69,14 +69,29 @@ from unittest.mock import patch
 import responses
 
 
-SAMPLE_GREENLAND = """HDR
+# The fixture's TAIL rows must stay inside ice_mass.py's 75-day freshness
+# gate no matter when the suite runs — fixed dates rot (the time-travel
+# canary caught the old 2026.292 tail set to detonate ~2026-07-14). GRACE
+# rows are mid-month decimal years: year + (month - 0.5) / 12.
+from datetime import date, timedelta  # noqa: E402
+
+
+def _mid_month_decimal(d: "date") -> str:
+    return f"{d.year + (d.month - 0.5) / 12:.4f}"
+
+
+_LATEST = date.today()
+_PREV = _LATEST.replace(day=1) - timedelta(days=1)
+_LATEST_MONTH = f"{_LATEST.year}-{_LATEST.month:02d}"
+
+SAMPLE_GREENLAND = f"""HDR
 HDR columns: time_decimal_year mass_gt uncertainty_gt
 HDR
 2002.0417   0.0    80.0
 2019.541   -3200.0 100.0
 2019.625   -3623.0 100.0
-2026.208   -5400.0 120.0
-2026.292   -5500.0 120.0
+{_mid_month_decimal(_PREV)}   -5400.0 120.0
+{_mid_month_decimal(_LATEST)}   -5500.0 120.0
 """
 
 # Dataset URL the CMR lookup is expected to return for greenland in the new
@@ -134,9 +149,9 @@ class TestFetchGraceMass:
         assert readings[0].region == "greenland"
         assert readings[0].month == "2002-01"
         assert readings[0].mass_gt == 0.0
-        assert readings[-1].month == "2026-04"
+        assert readings[-1].month == _LATEST_MONTH
         assert readings[-1].mass_gt == -5500.0
-        assert readings[-1].event_id == "ice_mass_greenland_2026-04"
+        assert readings[-1].event_id == f"ice_mass_greenland_{_LATEST_MONTH}"
         # Auth header must be set on the data fetch (the 2nd call; 1st is CMR).
         assert responses.calls[1].request.headers["Authorization"] == "Bearer fake-token"
 
@@ -187,7 +202,7 @@ class TestFetchGraceMass:
             "HDR columns: time mass unc\n"
             "2019.541   -3200.0   100.0\n"
             "not a number    bad    data\n"
-            "2026.292   -5500.0   120.0\n"
+            f"{_mid_month_decimal(_LATEST)}   -5500.0   120.0\n"
         )
         _mock_cmr("GREENLAND_MASS_TELLUS_MASCON_CRI_TIME_SERIES_RL06.3_V4", NEW_GREENLAND_URL)
         responses.add(
@@ -199,7 +214,7 @@ class TestFetchGraceMass:
         readings = fetch_grace_mass(region="greenland")
         assert len(readings) == 2
         assert readings[0].month == "2019-07"
-        assert readings[-1].month == "2026-04"
+        assert readings[-1].month == _LATEST_MONTH
 
     def test_unknown_region_returns_empty(self):
         assert fetch_grace_mass(region="mars") == []

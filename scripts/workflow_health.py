@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Scheduled-workflow health observer.
 
-Reads the GitHub Actions API for the four scheduled workflows and turns any that
+Reads the GitHub Actions API for the five scheduled workflows and turns any that
 are red on ``main`` into a tracked, auto-closing ``workflow-health`` issue. The
 governing idea matches the source-health sentinel: a red scheduled workflow is
 OUR problem (a thing the bot can no longer do), and it must surface WITHOUT a
@@ -31,13 +31,14 @@ import subprocess
 import sys
 from typing import Any
 
-# The four scheduled workflows. Keep in lockstep with dashboard/lib/automation.js
+# The five scheduled workflows. Keep in lockstep with dashboard/lib/automation.js
 # WORKFLOWS — both monitor the same set.
 MONITORED_WORKFLOWS: list[dict[str, str]] = [
     {"name": "theheat-bot", "file": "bot.yml"},
     {"name": "voice-regression", "file": "voice-regression.yml"},
     {"name": "refresh-thresholds", "file": "refresh-thresholds.yml"},
     {"name": "source-health-sentinel", "file": "source-health-sentinel.yml"},
+    {"name": "time-travel-canary", "file": "time-travel-canary.yml"},
 ]
 
 # Conclusions that mean the run produced a broken result. A single red run trips

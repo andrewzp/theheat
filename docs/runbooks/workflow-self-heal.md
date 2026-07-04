@@ -12,7 +12,9 @@ need is here or in the repo.
 - **Cadence:** daily.
 - **Monitored workflows:** `theheat-bot` (`bot.yml`), `voice-regression`
   (`voice-regression.yml`), `refresh-thresholds` (`refresh-thresholds.yml`),
-  `source-health-sentinel` (`source-health-sentinel.yml`).
+  `source-health-sentinel` (`source-health-sentinel.yml`), `time-travel-canary`
+  (`time-travel-canary.yml` — a red run means a test will start failing on main
+  within its horizon; the fix is making the offending fixture today-relative).
 
 ## 1. Detect what is red
 
@@ -99,7 +101,7 @@ routine is itself surfaced (the meta-guard). Write it at the **end of every run*
 
 ```bash
 gh variable set SELFHEAL_BEACON --body "$(cat <<JSON
-{"run_at":"<UTC ISO8601 now>","outcome":"ok","checked":4,"failing":<n>,"fixed":<n>}
+{"run_at":"<UTC ISO8601 now>","outcome":"ok","checked":5,"failing":<n>,"fixed":<n>}
 JSON
 )"
 ```

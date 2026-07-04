@@ -6,12 +6,13 @@ const ROUTINE_BEACON_VARIABLE = "ROUTINE_BEACON"
 const SELFHEAL_BEACON_VARIABLE = "SELFHEAL_BEACON"
 
 // Kept in lockstep with scripts/workflow_health.py MONITORED_WORKFLOWS — both
-// monitor the same four scheduled workflows.
+// monitor the same five scheduled workflows.
 const WORKFLOWS = [
   { name: "theheat-bot", file: "bot.yml" },
   { name: "voice-regression", file: "voice-regression.yml" },
   { name: "refresh-thresholds", file: "refresh-thresholds.yml" },
   { name: "source-health-sentinel", file: "source-health-sentinel.yml" },
+  { name: "time-travel-canary", file: "time-travel-canary.yml" },
 ]
 
 const ROUTINE = {
