@@ -943,18 +943,23 @@ QUEUE_WATCH_TITLE = "Review-queue watch: manual drafts are aging unreviewed"
 QUEUE_WATCH_MARKER = "<!-- source-health-queue-watch -->"
 
 
+AUTO_OWNED_MODES = frozenset({"auto", "policy_auto"})
+
+
 def _is_auto_owned(draft: Mapping[str, Any]) -> bool:
     """True only when the auto-post path actively owns this draft.
 
-    The runnable state is ``approval_mode == "auto"`` AND ``auto_approve_at``
-    present — ``process_due_drafts`` requires BOTH, and every demotion path
-    clears them (posting.py). ``approval_policy.mode`` is only the
+    The runnable state is ``auto_approve_at`` present AND an auto
+    ``approval_mode`` — ``"auto"`` (Phase-B autoship / operator-requested
+    suggested_auto) or ``"policy_auto"`` (the legacy armed_auto path, which
+    draft_save.py sets alongside ``auto_approve_at``). Every demotion path
+    clears both (posting.py). ``approval_policy.mode`` alone is only the
     RECOMMENDATION: an armed_auto-policy draft that failed closed to manual
     (no critic PASS, or demoted) must count as human-gated, or it ages out
     silently — exactly the blind spot this watch exists to close.
     """
     return (
-        draft.get("approval_mode") == "auto"
+        str(draft.get("approval_mode") or "") in AUTO_OWNED_MODES
         and bool(draft.get("auto_approve_at"))
     )
 

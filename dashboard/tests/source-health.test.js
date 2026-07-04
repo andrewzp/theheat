@@ -920,6 +920,11 @@ test("queueWatch ignores fresh, posted, and auto-owned drafts", () => {
     autoOwned,
   ], QW_NOW), [])
 })
+test("queueWatch excludes a live policy_auto draft (legacy armed_auto path)", () => {
+  const live = { ...qwDraft("2026-07-01T06:00:00Z", "armed_auto"),
+    approval_mode: "policy_auto", auto_approve_at: "2026-07-04T13:00:00Z" }
+  assert.deepEqual(queueWatch([live], QW_NOW), [])
+})
 test("queueWatch counts a failed-closed armed_auto-policy draft as human-gated", () => {
   // policy says armed_auto, but runnable state is manual (no auto_approve_at)
   const out = queueWatch([qwDraft("2026-07-01T06:00:00Z", "armed_auto")], QW_NOW)

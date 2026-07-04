@@ -377,12 +377,14 @@ export function writerWatch(suppressions, runHistory, now = new Date()) {
 export const QUEUE_WATCH_HOURS = 24
 
 // True only when the auto-post path actively owns this draft: runnable state
-// is approval_mode === "auto" AND auto_approve_at present (process_due_drafts
-// requires both; demotion clears them). approval_policy.mode is only the
-// RECOMMENDATION — an armed_auto-policy draft that failed closed to manual
-// must count as human-gated or it ages out silently.
+// is auto_approve_at present AND an auto approval_mode — "auto" (Phase-B
+// autoship / operator-requested suggested_auto) or "policy_auto" (the legacy
+// armed_auto path). Demotion clears both. approval_policy.mode alone is only
+// the RECOMMENDATION — an armed_auto-policy draft that failed closed to
+// manual must count as human-gated or it ages out silently.
+const AUTO_OWNED_MODES = new Set(["auto", "policy_auto"])
 function isAutoOwned(draft) {
-  return draft?.approval_mode === "auto" && Boolean(draft?.auto_approve_at)
+  return AUTO_OWNED_MODES.has(String(draft?.approval_mode || "")) && Boolean(draft?.auto_approve_at)
 }
 
 export function queueWatch(drafts, now = new Date()) {

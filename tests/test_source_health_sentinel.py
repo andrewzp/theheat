@@ -676,6 +676,14 @@ class TestQueueWatch:
         ]
         assert queue_watch(drafts, now=self.NOW) == []
 
+    def test_live_policy_auto_draft_is_auto_owned(self):
+        # The legacy armed_auto path sets approval_mode="policy_auto" +
+        # auto_approve_at (draft_save.py); posting still owns it (codex r2 P2).
+        d = _draft("2026-07-01T06:00:00Z", mode="armed_auto")
+        d["approval_mode"] = "policy_auto"
+        d["auto_approve_at"] = "2026-07-04T13:00:00Z"
+        assert queue_watch([d], now=self.NOW) == []
+
     def test_failed_closed_armed_auto_policy_counts_as_human_gated(self):
         # approval_policy.mode is only the RECOMMENDATION. A draft whose policy
         # says armed_auto but that failed closed to manual (no critic PASS, or
