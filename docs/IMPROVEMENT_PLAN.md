@@ -2,6 +2,32 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 5: 15 pending (10 carry-overs from Jul 4 + 5 fresh), 20% A-rate (small-n, consistent
+> with Jul 4's 20%/n=10).** 1 A-: **eastern Siberia fire** (556.1 MW, "doesn't just burn the
+> surface — it thaws the ground beneath it" — 4th corpus confirmation the permafrost-carbon
+> fire mechanic reliably clears P_close, joining Jun 25 Siberia + Jul 3 Canadian Arctic ×2).
+> 1 B+: Johannesburg air_quality_hazard (10.9× WHO stated, richer causal chain than Jun 24's
+> Al Aḥmadī — named season + source attribution — but P_close failing on an
+> accumulation-not-consequence close). 1 B: **Doha, Qatar absolute_extreme — P_tier confirmed
+> outside the Basra-area cluster for the first time** (same tier-jargon phrase on a city
+> 1,500+ km from Basrah, proving the violation is bundle-field-tied, not location-tied);
+> P_close positive with the sharpest close the signal type has produced ("closing off the
+> evaporative cooling that makes extreme dry heat survivable"), still capped at B — P_tier's
+> hard-ceiling behavior holds regardless of close quality. 1 B-: 3rd Urumqi dust_event draft —
+> same station, 3rd distinct reading, near-verbatim repeat of the same resolution-form close
+> for a 3rd time (new subtype: frozen mechanism, varying reading, distinct from the
+> exact-duplicate-generation pattern). 1 C+: Phalodi, India dust_event (10th dust_event corpus
+> draft, no WHO anchor, no named mechanic). **P_close 16th cycle** (2 positive, 3 failing).
+> **P_tier 7th cycle / 10 instances / 1st cross-location confirmation** — now the strongest
+> evidence yet that this is a structural bundle-field problem. **P_dust 9th cycle** (Phalodi +
+> Urumqi; 11 of 11 dust_event instances still without a WHO anchor, while the sibling
+> air_quality_hazard type keeps stating it unprompted — the cleanest existence-proof yet that
+> the fix is achievable without new architecture). P9 and P_compound not tested this cycle (no
+> precipitation_extreme or record-type draft among the 5 fresh). 0 stale drafts; 37th
+> consecutive `gh` staleness skip. **Operator: `main` remains unmerged since 2026-06-08 — now
+> 28 consecutive daily cycles (including the Jun 29 bar-clearing 80% cycle) live only on
+> `daily-plan-current`.**
+>
 > **Jul 4: complete queue turnover — 10 pending, all fresh, 0 carry-overs, 20% A-rate
 > (largest statistically-meaningful sample since Jun 29's bar-clearing n=5).** Every one
 > of Jul 3's 20 pending drafts — including the 4 strict bulk-reject candidates and 13
@@ -147,25 +173,25 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **20% (2/10 fresh, Jul 4)** — Typhoon Bavi A- (2nd `cyclone_rapid_intensification` draft, first to clear both P_tier and land P_close positive), Loxahatchee FL A-, 2 B+, 6 B. Largest statistically-meaningful sample since Jun 29 (n=5). Prior: 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10)** |
-| Gap | **30 pp below bar** (50% − 20%, Jul 4, n=10 — the most statistically meaningful gap measurement since Jun 29). Five cycles since the Jun 29 peak have ranged 0–33% depending on signal mix; Jul 4's larger sample (n=10 vs. n=3–4 the prior four cycles) makes this the more trustworthy current read. P_tier and P_close remain the two most active-capping levers — both got fresh confirming evidence this cycle. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 4 all below. **Complete queue turnover as of Jul 4 — every one of Jul 3's 20 pending drafts (including the 4 flagged stale/reject-candidates) is gone; cause unconfirmed.** If bulk-published, verify the stale Mediterranean SST / GMST marine_heatwave drafts (both had "today"-baked language) did not go out as-is. |
+| Last cycle A-rate | **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Small-n, consistent with Jul 4's 20% (n=10). Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5)** |
+| Gap | **30 pp below bar** (50% − 20%, Jul 5, n=5 — small sample, but consistent with Jul 4's larger n=10 read at the same rate). Six cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers — both got fresh confirming evidence this cycle, and P_tier's cross-location confirmation (Doha) is the strongest single data point yet that it's a structural bundle-field issue rather than a location artifact. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below. **Queue is back to 15 pending as of Jul 5** (10 carry-overs from Jul 4 + 5 fresh) — no repeat of Jul 4's complete-turnover event; the operator action that cleared Jul 3's queue remains unconfirmed (see Jul 4 note, unresolved). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **10 pending as of Jul 4 grading, all fresh, 0 carry-overs** (2 A-: Typhoon Bavi, Loxahatchee FL; 2 B+: Island Pond VT, Antwerpen [value-identical re-issue of the Jun 30 draft]; 6 B: Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi). Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **15 pending as of Jul 5 grading** (10 carry-overs from Jul 4, grades unchanged: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 fresh: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 4: **P_close** (15 cycles, 3 positive/6 failing this
-cycle) > **P_tier** (6 cycles/9 instances across 4 signal types, capped 2 of 2 absolute_extreme
-drafts this cycle) > **P9** (reopened this cycle after 1 archived cycle — 2 confirming instances
-on its very first reappearance) > **P_compound** (5 cycles, 2 instances this cycle) > **P_dust**
-(continues, Urumqi this cycle, no new evidence of resolution) > **P5** (dust_event gap ongoing).
-P9 moves back above P_compound/P_dust despite its 1-cycle gap because both `precipitation_extreme`
-drafts this cycle confirmed it immediately — the archive was explicit that this was
-absence-of-opportunity, not a resolved failure mode, and that call was correct. Each entry tracks:
-observation count (cycles where the failure mode appeared), last seen, proposed fix, expected
-impact, status.
+Ordered by leverage. Priority as of Jul 5: **P_close** (16 cycles, 2 positive/3 failing this
+cycle) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
+confirmation via Doha) > **P_dust** (9 cycles, 2 fresh instances this cycle, 11 of 11
+`dust_event` drafts still unconfirmed) > **P9** (reopened Jul 4, not tested this cycle — no
+`precipitation_extreme` draft among today's 5 fresh) > **P_compound** (5 cycles, not tested
+this cycle — no record-type draft among today's 5 fresh) > **P5** (dust_event gap ongoing).
+P_dust moves above P9/P_compound this cycle because it got fresh confirming evidence today
+while P9 and P_compound did not — same recency logic that moved P9 above P_dust on Jul 4.
+Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
+proposed fix, expected impact, status.
 
 ### ~~P1~~ — Era anchors parked at 1-in-10 — **SHIPPED 2026-04-29 (awaiting empirical confirmation)**
 
@@ -482,7 +508,20 @@ Urumqi dust_event ("topographic containment does the rest" — resolution-form, 
 dust_event closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle; `cyclone_rapid_intensification`'s positive instance is the 2nd confirmation of an
 already-counted type, not a new one).
-**Last seen:** Jul 4 (3 positive, 6 failing).
+Jul 5: eastern Siberia fire A- ("doesn't just burn the surface — it thaws the ground beneath
+it" = declarative physical consequence, POSITIVE — 4th corpus instance of the
+permafrost-carbon fire mechanic, all 4 grading B+ or A-, the single most reliable A-grade
+path for `fire` in the corpus). Doha, Qatar absolute_extreme ("closing off the evaporative
+cooling that makes extreme dry heat survivable" = declarative survivability-mechanism
+statement, POSITIVE — the sharpest `absolute_extreme` close yet, still capped at B by
+P_tier). Johannesburg air_quality_hazard ("concentrating it through the day" = accumulation
+trajectory, not a named consequence — FAILING, same resolution/trajectory subtype as Jun
+24's Al Aḥmadī "by evening"). Phalodi dust_event ("wash the column clean" = resolution-form,
+FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd instance
+("the topography traps it" = resolution-form, FAILING, near-verbatim repeat of its own prior
+two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
+cycle).
+**Last seen:** Jul 5 (2 positive, 3 failing).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -503,11 +542,13 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal in this
-plan: 15 cycles of evidence, 30+ drafts, same gap to A across every signal type it's been
+plan: 16 cycles of evidence, 35+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
-absolute_extreme, fire_footprint, cyclone_rapid_intensification — 14 confirmed types, now
-including a clean positive instance for the newest type).
+absolute_extreme, fire_footprint, cyclone_rapid_intensification — 14 confirmed types). The
+permafrost-carbon fire mechanic (4 instances, all B+/A-) is the clearest existence-proof in
+the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
+already sound.
 
 ### P_dust — Dust_event drafts lack calibrating comparison anchor
 
@@ -562,9 +603,23 @@ the PM10 guideline, both unstated). "Topographic containment does the rest" is f
 same resolution-form close as Jun 17's Urumqi "traps it" — same station, same gap, still no
 calibration number. No dust_event drafts appeared Jul 2/Jul 3, so this is the first re-test since
 Jul 1; the gap reproduces immediately.
-**Last seen:** Jul 4 (8 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4; template convergence 9 of 9).
+Jul 5: Phalodi, India dust_event [12] C+ (524 μg/m³ ≈ 11.6× the WHO PM10 daily guideline,
+unstated). Urumqi, China dust_event [13] B- — **3rd corpus instance of this exact station**
+(after Jun 17 and Jul 4), 1,766 μg/m³ ≈ 39× WHO PM10, unstated. Both continue the identical
+opener template and resolution-form close. Meanwhile Johannesburg air_quality_hazard [11]
+(same cycle) states its WHO multiple (10.9×) unprompted — 2nd consecutive air_quality_hazard
+corpus draft to do so (after Jun 24's Al Aḥmadī, 10.1×), while dust_event is now 11 for 11
+without it. The split between these two adjacent PM-signal types is the cleanest evidence in
+the corpus that the gap is specific to `dust_event`'s bundle construction, not a categorical
+"the writer doesn't reach for WHO multiples" problem — it demonstrably does, for a sibling
+signal type, unprompted.
+**Last seen:** Jul 5 (9 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence
+11 of 11).
 
-**Status:** Drafted. **8 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4); template convergence 9 of 9. Awaiting human implementation.
+**Status:** Drafted. **9 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5); template
+convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type doing this
+unprompted twice now is a useful existence-proof for how small the prompt change should need
+to be. Awaiting human implementation.
 
 ### P_tier — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3)
 
@@ -627,7 +682,18 @@ worth watching whether it's `WRITER_SAMPLES=2`/critic-revise occasionally filter
 model stochasticity, or something else. Does not change the proposal's core claim (9 of 10
 corpus instances across these 4 types still show it) but is worth tracking as a data point on
 implementation urgency vs. natural variance.
-**Last seen:** Jul 4 (6 cycles / 9 instances / 4 signal types; 1 clean counter-instance).
+Jul 5: Doha, Qatar `absolute_extreme` [15]: "the absolute extreme threshold for the northern
+subtropical band" — the same phrase family, but on a **brand-new city with no data-path
+relationship to the Basra-area cluster** (Basrah + Al Başrah al Qadīmah, both Iraq; Doha is
+~1,500 km away in Qatar). This is the single strongest data point yet that the violation is
+tied to the `absolute_extreme` bundle's internal tier field itself, not to one location's
+ingestion or a regional quirk. Doha's close is also the best `absolute_extreme` P_close
+instance in the corpus ("closing off the evaporative cooling that makes extreme dry heat
+survivable") and it still caps at B — reconfirms P_tier overrides close quality entirely,
+unlike P_close or P_compound which are soft caps.
+**Last seen:** Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
+confirmation within `absolute_extreme`; 1 clean counter-instance remains, from Jul 4's
+Typhoon Bavi).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`,
 near the existing HARD RULES / bad-examples list:
@@ -649,8 +715,9 @@ which addresses a related but distinct gap (dust_event's problem is a MISSING re
 reference; P_tier's problem is an UNWANTED internal-only reference already present).
 
 **Status:** Drafted. Promoted from "Awaiting evidence" (A3) to active proposal 2026-07-01 — the
-Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 6 cycles / 9 instances
-/ 4 signal types as of Jul 4 (plus 1 clean counter-instance). Awaiting human implementation.
+Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 7 cycles / 10
+instances / 4 signal types as of Jul 5, now including confirmation outside the Basra-area
+cluster (plus 1 clean counter-instance). Awaiting human implementation.
 
 ### P9 — precipitation_extreme opener template convergence + restate-math (reopened)
 
@@ -671,6 +738,9 @@ connecting the two numbers for the reader.
 **Cycles observed:** 10 cycles total across the proposal's full history (Jun 7, Jun 18, Jun 22
 retroactive, Jun 25, Jun 26 ×3, Jun 28, Jun 29, Jun 30, then reopened Jul 4). Confirmed pattern
 now stands at 15 of 15 corpus `precipitation_extreme` drafts sharing the opener structure.
+**Not tested Jul 5** — none of today's 5 fresh drafts were `precipitation_extreme` (the 10
+carry-overs include Barrow and Astana, both already counted at Jul 4's grading). One
+untested cycle does not meet the 3-consecutive-absence bar for re-archiving.
 **Last seen:** Jul 4.
 
 **Proposed fix (PROMPT LANGUAGE — surgical, unchanged from original filing):** Add to
@@ -746,6 +816,18 @@ deploys a clean stakes-consequence move without explicit prompting (see P_close)
 point that categories with strong physical stakes self-select even on their 2nd corpus instance.
 **Last seen:** Jul 4 (dust_event gap now 4 consecutive confirming cycles: Jun 30, Jul 1, and no
 dust_event Jul 2/Jul 3, then Jul 4).
+Jul 5: Urumqi dust_event (3rd corpus instance of this station) again shows zero named humor
+mechanic beyond mechanism/topography description — 5th cycle confirming the dust_event gap.
+Phalodi dust_event, same cycle, also zero named mechanic. Meanwhile eastern Siberia fire
+self-selects the permafrost-carbon mechanic cleanly (4th consecutive fire cycle confirming
+organic self-selection, no explicit prompting) and Johannesburg air_quality_hazard again
+builds a real causal chain unprompted (named season + source attribution — 2nd consecutive
+air_quality_hazard cycle confirming this type self-selects like fire/absolute_extreme, unlike
+its dust_event sibling). The fire/absolute_extreme/air_quality_hazard vs. dust_event split
+continues to sharpen with each cycle.
+**Last seen:** Jul 5 (dust_event gap now 5 consecutive confirming cycles: Jun 30, Jul 1, Jul 4,
+Jul 5, plus Jun 28; fire self-selection streak now 4 cycles; air_quality_hazard self-selection
+streak now 2 cycles).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -799,7 +881,10 @@ Jul 4 (Island Pond, Vermont [1] and Loxahatchee, Florida [3], both `all_time_hig
 depth and margin by coincidence, same double-qualifier construction. Notable split: Loxahatchee
 overcomes it with a strong P_close-positive close and grades A-; Island Pond doesn't and grades
 B+ — reconfirms P_compound softens rather than hard-caps a draft, unlike P_tier.)
-**Last seen:** Jul 4 (5 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4).
+**Last seen:** Jul 4 (5 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4). **Not tested Jul 5** — none
+of today's 5 fresh drafts were record-type (`all_time_high`/monthly_low/monthly_high); the
+2 carry-over `all_time_high` drafts (Island Pond, Loxahatchee) were already counted at Jul 4's
+grading. One untested cycle does not meet the 3-consecutive-absence bar for re-archiving.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 record-type framing section:

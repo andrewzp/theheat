@@ -11,6 +11,242 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-05 — Daily corpus grading (5 fresh drafts; 10 carry-overs from Jul 4, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts.
+10 of 15 exactly match Jul 4's fully-graded batch (same `draft_id`, score, text: Island Pond VT
+A-, Barrow AK B+, Loxahatchee FL A-, Basrah B, Rocky Mountains CO fire B, Al Başrah al Qadīmah
+B, Astana B, Antwerpen B+, Typhoon Bavi A-, Urumqi [Jul 4 reading] B) — carried over, not
+re-graded. **5 fresh**, all created 2026-07-05: Johannesburg air_quality_hazard (03:39 UTC),
+Phalodi dust_event (03:40 UTC), a 2nd Urumqi dust_event at a different reading (07:34 UTC),
+eastern Siberia fire (07:36 UTC), Doha absolute_extreme (13:53 UTC). Continuing to grade on
+the unmerged `daily-plan-current` rolling branch — `main`'s copies of these three docs remain
+stale back to 2026-06-08 (27+ consecutive cycles now stranded here; see repeated operator note
+below, unchanged from Jul 1–4).
+
+**Staleness review as of 2026-07-05 ~14:00 UTC:** all 5 fresh drafts created same-day (oldest
+~10h, newest ~15min at grading). The Doha `absolute_extreme` draft forecasts "July 5," which is
+today — accurate, not stale. 10 carry-overs are ~24h old (Jul 4 creation), well under 48h. 0
+bulk-reject candidates. `gh` CLI absent — 37th consecutive skip (May 13 → Jul 5).
+
+**Grade distribution (5 fresh drafts):** 1 A- / 1 B+ / 1 B / 1 B- / 1 C+ / 0 D-F.
+**A-rate: 20% (1/5).** Gap from resumption bar: 30 pp. Small-n cycle — not on its own more
+meaningful than Jul 1–3's small samples, but consistent with the 20% Jul 4 read.
+
+**Headline finding:** The eastern Siberia fire draft ([14]) delivers the batch's cleanest close
+and the corpus's 4th instance of the permafrost-carbon fire mechanic ("fire here doesn't just
+burn the surface — it thaws the ground beneath it") — a genuine negation-then-reveal
+misdirection (`brand/HUMOR_RESEARCH.md` §2.1), declarative, no restate-math. Graded A-, joining
+Jun 25 Siberia (B+), Jul 3 Canadian Arctic ×2 (A-/B+) as the 4th confirmation that this specific
+mechanic (permafrost/carbon-release close) reliably clears P_close. Meanwhile **P_tier extends
+beyond the Basra-area cluster for the first time**: Doha, Qatar ([15]) repeats the identical
+"absolute extreme threshold for the northern subtropical band" phrase family on a brand-new
+city, 1,500+ km from Basrah — direct evidence the violation is tied to the `absolute_extreme`
+bundle field itself, not to one metro region's data path. Doha's close ("closing off the
+evaporative cooling that makes extreme dry heat survivable") is arguably the sharpest P_close
+form the signal type has produced yet — an explicit survivability-mechanism statement, stronger
+than the prior "no evaporative relief"/"no maritime relief" named-absence forms — and it still
+caps at B, reconfirming P_tier's hard-cap behavior regardless of close quality.
+
+### A-grade drafts
+
+#### [14] Eastern Siberia, Russia — fire — 556.1 MW — **A-**
+
+> *556.1 MW of radiative heat in eastern Siberia, Russia — very-high-intensity fire,
+> satellite-confirmed at 95% confidence. At 68°N, this is permafrost country; fire here
+> doesn't just burn the surface — it thaws the ground beneath it.*
+
+**Score:** 69. Created 2026-07-05T07:36:10Z.
+
+Humor lens:
+- **Violation:** 556.1 MW, very-high-intensity tier, 95% confidence, at 68°N — genuinely
+  extreme and geographically specific.
+- **Benign?** Yes — flat, factual register throughout.
+- **Setup→Punchline?** Sentence 1: raw metric + confidence. Sentence 2: latitude-specific
+  framing ("permafrost country") → **negation-then-reveal**: "doesn't just burn the surface —
+  it thaws the ground beneath it."
+- **P_tier check:** Clean. "Very-high-intensity" is the shipped `frp_tier` display label, not
+  an internal-methodology citation — same precedent established in the Jul 3/Jul 4 corpus
+  entries distinguishing this exact phrase from a P_tier violation.
+- **P_close check:** POSITIVE, and the strongest form of the permafrost-carbon fire mechanic
+  to date. "Thaws the ground beneath it" is a direct declarative physical consequence, not an
+  implied one. 4th corpus instance of this specific mechanic (Jun 25 Siberia "burns deep" B+;
+  Jul 3 Canadian Arctic "reaches carbon... held for millennia" A- and "organic soil layers...
+  centuries" B+; now this). The mechanic reliably clears P_close every time it appears.
+- **Wodehouse rule?** Clean. No restate-math, no approximation, no defensive closer. The
+  "doesn't just X — it Y" construction is a real misdirection device, not a poetry attempt —
+  the grammar pins the referent (the ground beneath the surface) cleanly, unlike the Apr 24
+  "Except it's a forest" referent-failure counter-example in `brand/HUMOR_RESEARCH.md` §2.1.
+
+Not a full A because the draft doesn't introduce anything beyond the now-familiar
+permafrost-carbon mechanic — it executes it cleanly rather than extending it (compare Jul 3
+Canadian Arctic's "held for millennia," which reaches further into climate-feedback stakes).
+Same station-region as Jun 25's Siberia fire draft (different MW reading, no text overlap) —
+worth noting as a recurring-region pattern distinct from the exact-duplicate cases tracked
+below, since the text and figures differ meaningfully across appearances.
+
+### B+-grade drafts
+
+#### [11] Johannesburg, South Africa — air_quality_hazard — PM2.5 163.6 μg/m³ / 10.9× WHO — **B+**
+
+> *Johannesburg, South Africa: model-estimated 24-hour mean PM2.5 of 163.6 μg/m³ on July 5 —
+> 10.9× the WHO daily guideline. July is Highveld winter; cold overnight inversions trap smoke
+> from household coal and wood burning close to the surface, concentrating it through the day.*
+
+**Score:** 74. Created 2026-07-05T03:39:20Z.
+
+- **P_dust check (air_quality_hazard side):** WHO multiple stated (10.9×) — 2nd
+  `air_quality_hazard` corpus draft, 2nd to state the WHO anchor (after Jun 24's Al Aḥmadī
+  Kuwait, 10.1×). Continues to confirm the P_dust gap is specific to `dust_event`'s bundle
+  path, not the PM signal generally — `air_quality_hazard` drafts keep reaching for the WHO
+  ratio unprompted while `dust_event` drafts (11 of 11 corpus instances now) never do.
+- **Named mechanic:** Richer causal chain than Al Aḥmadī's: named regional season
+  ("Highveld winter"), specific source attribution ("household coal and wood burning"), and
+  a temporal-accumulation arc (traps → concentrates through the day). Ecosystem/seasonal
+  specificity operating cleanly, unprompted.
+- **P_close check:** FAILING — "concentrating it through the day" describes an accumulation
+  trajectory, not a named consequence (a health/visibility/warning outcome). Same subtype gap
+  as Al Aḥmadī's "before sea breezes suppress them by evening" (resolution/trajectory-close,
+  not declarative consequence) — just pointed in the worsening direction instead of the
+  clearing direction.
+- **Wodehouse rule?** Clean.
+
+Graded a notch above Al Aḥmadī's B on the strength of the causal chain (source attribution +
+named season), but capped short of A- by the same P_close gap that's now confirmed across
+both corpus `air_quality_hazard` instances.
+
+### B-grade drafts
+
+#### [15] Doha, Qatar — absolute_extreme — 47°C (117°F) forecast — **B**
+
+> *Doha, Qatar is forecast to hit 47°C (117°F) on July 5 — the absolute extreme threshold for
+> the northern subtropical band. Shallow Gulf waters load desert heat with humidity, closing
+> off the evaporative cooling that makes extreme dry heat survivable.*
+
+**Score:** 83. Created 2026-07-05T13:53:58Z. 6th `absolute_extreme` corpus instance, and the
+**first outside the Basra-area cluster** (Basrah + Al Başrah al Qadīmah, both Iraq).
+
+- **P_tier check:** VIOLATION — "the absolute extreme threshold for the northern subtropical
+  band" is the same phrase family as all 5 prior instances. This is the significant new data
+  point: the violation reproduces on a brand-new city (Doha, ~1,500 km from the Basra
+  cluster), confirming the pattern is tied to the `absolute_extreme` bundle's internal
+  tier field, not to a location-specific data path. 7th cycle / 10 instances / still 4
+  signal types, now demonstrated across 2 distinct locations within this one signal type.
+- **P_close check:** POSITIVE — and the sharpest form yet for this signal type. "Closing off
+  the evaporative cooling that makes extreme dry heat survivable" doesn't just name an
+  absence (cf. "no evaporative relief," "no maritime relief") — it states the actual
+  survivability mechanism and its shutdown directly. Best `absolute_extreme` close in the
+  corpus to date.
+- **Wodehouse rule?** Clean.
+
+Graded B on the same P_tier-caps-regardless-of-close-quality precedent as every prior
+`absolute_extreme` instance ([4]/[6]/[11]/[16] carry-overs) — this draft has arguably the best
+close of the six, and it still caps at B. Strongest evidence yet that P_tier is a hard
+ceiling, not a soft one like P_close or P_compound.
+
+### C+-grade drafts
+
+#### [12] Phalodi, India — dust_event — 524 μg/m³ / AOD 0.85 — **C+**
+
+> *Phalodi, India: model-estimated dust daily maximum of 524 μg/m³ on July 5 — aerosol optical
+> depth at 0.85. Phalodi sits at the edge of the Thar Desert; summer heat drives intense dry
+> convection that lofts fine sediment before the monsoon front arrives to wash the column
+> clean.*
+
+**Score:** 71. Created 2026-07-05T03:40:28Z. 10th `dust_event` corpus draft.
+
+P_dust confirmed again — no WHO anchor stated (524 μg/m³ ≈ 11.6× the WHO PM10 daily guideline
+of 45 μg/m³, unstated; AOD 0.85 also uncalibrated for the reader). Identical opener template
+to every prior `dust_event` draft ("[City]: model-estimated dust daily maximum of X μg/m³ on
+[date] — aerosol optical depth at Y."). Close ("before the monsoon front arrives to wash the
+column clean") is the resolution-form subtype — same family as Urumqi's "traps it"/Wadi
+Halfa's "dampens the column" — P_close FAILING. No named humor mechanic beyond the two-step
+mechanism (dry convection lofts sediment; monsoon eventually clears it) — P5 dust_event gap
+confirmed again.
+
+#### [13] Urumqi, China — dust_event — 1,766 μg/m³ / AOD 1.49 — **B-**
+
+> *Urumqi, China: model-estimated dust daily maximum of 1,766 μg/m³ on July 5 — aerosol
+> optical depth at 1.49. Urumqi sits in the Junggar Basin, ringed by the Tian Shan and Altai
+> ranges; when winds funnel desert sediment in, the topography traps it.*
+
+**Score:** 71. Created 2026-07-05T07:34:53Z. **3rd Urumqi `dust_event` draft in the corpus**
+(after Jun 17's 2,260 μg/m³ B- and Jul 4's 2,454 μg/m³ B) — same station, 3rd distinct
+concentration reading, and a **near-verbatim repeat of the same mechanism close for the 3rd
+time**: "the topography traps it" (this draft) ≈ "topographic containment does the rest" (Jul
+4) ≈ "traps it" (Jun 17). No WHO anchor stated (1,766 μg/m³ ≈ 39× the WHO PM10 guideline,
+unstated) — 11th consecutive `dust_event` draft without one. P_close FAILING (resolution-form,
+same as every prior Urumqi instance). Graded B-, a notch below Jul 4's B, reflecting that this
+is now the 3rd repetition of an identical mechanism-and-close pair on the same station with no
+variation — a new duplicate-location subtype distinct from the same-cycle/cross-day
+value-identical re-issues tracked below (this one varies the actual reading each time; only
+the mechanism and closing sentence are frozen).
+
+### Patterns named in this batch
+
+1. **P_tier confirmed outside the Basra-area cluster for the first time.** Doha, Qatar repeats
+   the exact phrase family on a city with no data-path relationship to Basrah/Al Başrah al
+   Qadīmah — strong evidence the violation is a property of the `absolute_extreme` bundle
+   field, not a single location's ingestion path.
+
+2. **A 4th confirmation that the permafrost-carbon fire mechanic reliably clears P_close.**
+   Every corpus instance of this mechanic (Jun 25 Siberia, Jul 3 Canadian Arctic ×2, Jul 5
+   Siberia) has graded B+ or A-. This is now the corpus's single most reliable A-grade path
+   for the `fire` signal type.
+
+3. **Urumqi `dust_event`: a new duplicate-location subtype — frozen mechanism, varying
+   reading.** 3 corpus instances (Jun 17, Jul 4, Jul 5) share the same station and
+   near-identical closing sentence ("traps it" / "topographic containment does the rest" /
+   "the topography traps it") while the actual μg/m³ reading changes each time. Distinct from
+   the exact-duplicate-generation pattern (Ft Green, Basrah, Canadian Arctic fire, Antwerpen)
+   because the underlying signal is genuinely fresh each time — only the writer's response to
+   it has converged.
+
+4. **`air_quality_hazard` continues to self-select mechanics and the WHO anchor; `dust_event`
+   continues not to.** 2nd `air_quality_hazard` corpus draft (Johannesburg), 2nd to state the
+   WHO multiple unprompted and build a real causal chain. Meanwhile `dust_event` is now 11 of
+   11 corpus drafts without the anchor. The split between these two adjacent signal types
+   remains the cleanest evidence that P_dust's gap is bundle-path-specific, not
+   category-general.
+
+### Followups (in priority order)
+
+1. **P_tier and P_compound remain ready for implementation** — both are one-paragraph
+   `writer_prompt.py` additions, drafted in full in `docs/IMPROVEMENT_PLAN.md`. P_tier now has
+   its strongest evidence yet (cross-location confirmation on `absolute_extreme`).
+2. **P_dust ready for implementation** — 9 cycles, 11 of 11 `dust_event` instances confirming,
+   zero counter-evidence. The `air_quality_hazard` side of the same signal family already does
+   what the fix asks for, which is a useful existence proof that the prompt change is
+   achievable without new architecture.
+3. **Operator: `main` remains unmerged since 2026-06-08** — now 28 consecutive daily cycles
+   (including the Jun 29 bar-clearing 80% cycle) live only on `daily-plan-current`. Recommend
+   merging soon so `main`'s copy of these three docs reflects reality.
+4. **Watch whether the permafrost-carbon fire mechanic holds on a 5th instance** — 4 for 4 so
+   far at B+/A-; worth confirming this isn't small-sample luck.
+
+### Numbers
+
+- Pending drafts in queue: 15 (5 fresh; 10 carry-overs from Jul 4, grades unchanged)
+- Fresh drafts graded: 5
+- A-rate: 20% (1/5) — small-n, consistent with Jul 4's 20% (n=10)
+- Grade distribution: 0 A / 1 A- / 1 B+ / 1 B / 1 B- / 1 C+ / 0 D-F
+- New signal types debuted: none (all 5 signal types this cycle have prior corpus instances)
+- Active proposals: P_close 16th cycle (2 positive: Siberia fire, Doha; 3 failing: Johannesburg,
+  Phalodi, Urumqi); P_tier 7th cycle / 10 instances / still 4 signal types (1st confirmation
+  outside the Basra-area cluster, via Doha); P_dust 9th cycle (Phalodi + Urumqi; 11 of 11
+  `dust_event` instances now without a WHO anchor); P9 not tested this cycle (no
+  `precipitation_extreme` draft among today's 5 fresh); P_compound not tested this cycle (no
+  record-type draft among today's 5 fresh); P5 continues (dust_event gap 5th consecutive
+  confirming cycle; air_quality_hazard self-selects for a 2nd consecutive instance; fire
+  self-selects for a 4th consecutive instance via the permafrost-carbon mechanic)
+- Staleness bulk-reject: 0 candidates — all 5 fresh drafts same-day, 10 carry-overs ~24h old.
+  `gh` CLI absent, 37th consecutive skip (May 13 → Jul 5)
+- Operational anomalies: (a) Urumqi dust_event now a 3rd-instance frozen-mechanism pattern
+  (new subtype, distinct from exact-duplicate generation); (b) `main` unmerged since Jun 8,
+  now 28 consecutive stranded cycles
+
+---
+
 ## 2026-07-04 — Daily corpus grading (10 fresh drafts; queue fully turned over)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: **10 pending,
