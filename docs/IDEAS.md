@@ -233,6 +233,11 @@ the destination.
 
 ## Weather-news scanner — "are we missing an obvious event?"
 
+> **STATUS: BUILT & SHIPPED DARK (2026-07-06) as Bet A A0** (#366) — the
+> newsworthiness retrieval lane + news-gap watch. Activation is
+> `THEHEAT_NEWSWORTHINESS_ENABLED` (Andrew's flag). See the Bet A design spec
+> and `docs/handoffs/2026-07-06-evening.md`.
+
 **What:** A recurring job that scans weather/climate news for the biggest current events
 (heat death tolls, multi-state fire outbreaks, record landfalls…) and cross-checks them
 against what @theheat has actually detected/posted — then flags any "obvious event we're
@@ -265,6 +270,12 @@ same evening, and has no path to the 1,300 European heat deaths. Magnitude ≠ n
   goes through writer → fact-check → critic → human gate.
 
 ## Sourced anecdotes / human-impact with citations
+
+> **STATUS: BUILT & SHIPPED DARK (2026-07-06) as Bet A A1 enrich** (#371) — the
+> exact `human_impact: [{claim, value, source_name, url, as_of}]` sketch below,
+> plus the writer/fact-check/§F gates and forced `manual_only`. Activation is
+> `THEHEAT_NEWS_ENRICH_ENABLED` (needs the master flag). See
+> `docs/handoffs/2026-07-06-evening.md`.
 
 **What:** Let tweets carry real human-impact detail — death tolls, firefighter
 fatalities, "buses crashed, drivers passed out" — attached to a climate signal, each
