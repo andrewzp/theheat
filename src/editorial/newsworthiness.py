@@ -577,23 +577,63 @@ def _fire_event_matches_identity(
     return _windows_overlap(ev_window, (fire_date, fire_date), MATCH_WINDOW_SLACK_DAYS)
 
 
-def apply_newsworthiness_boost(
-    score: Any,
+def plan_fire_boosts(
     news_events: list[dict] | None,
-    *,
-    country: str,
-    when: str,
-    lat: float | None = None,
-    lon: float | None = None,
-    us_state: str | None = None,
-    incident_name: str | None = None,
-) -> Any:
-    """Rescue a NEAR-miss fire score with a sourced newsworthiness match.
+    fires: list[dict],
+) -> dict[str, dict]:
+    """Plan which fire gets which news event's rescue — BATCH-scoped, so the
+    ambiguity discipline matches A1's enrich matcher exactly (codex P1, A2 r1).
+
+    ``fires``: one dict per detected fire in this runner pass —
+    ``{"id", "country", "when", "lat"?, "lon"?, "us_state"?, "incident_name"?}``.
+
+    Rules:
+    - a NAMELESS fire event matching more than one fire in the batch plans
+      NONE (two same-state fires cannot be told apart; rescuing both would
+      let one news report promote N different fires);
+    - a NAMED event only ever matches same-named fires (identity check);
+      several same-named hits are the same incident reported twice — the
+      first takes the plan;
+    - one fire takes at most ONE event (no boost stacking: +8 is the cap).
+    """
+    plan: dict[str, dict] = {}
+    for ev in news_events or []:
+        if not isinstance(ev, dict) or not _usable_impact_entries(ev):
+            continue
+        hits = [
+            f for f in fires
+            if _fire_event_matches_identity(
+                ev,
+                country=str(f.get("country") or ""),
+                when=str(f.get("when") or ""),
+                lat=f.get("lat"),
+                lon=f.get("lon"),
+                us_state=f.get("us_state"),
+                incident_name=f.get("incident_name"),
+            )
+        ]
+        if not hits:
+            continue
+        raw_place = ev.get("place")
+        place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+        if len(hits) > 1 and not _normalize_incident_name(place.get("name")):
+            # Nameless event, several plausible fires: ambiguous identity —
+            # rescue none rather than guess (A1 parity).
+            continue
+        fire_id = str(hits[0].get("id") or "")
+        if fire_id and fire_id not in plan:
+            plan[fire_id] = ev
+    return plan
+
+
+def apply_newsworthiness_boost(score: Any, matched_event: dict) -> Any:
+    """Rescue a NEAR-miss fire score with its planned newsworthiness match.
 
     Decision 3 made concrete (spec §4): flat +MAX_NEWS_BOOST, applied only
     when the score currently FAILS and sits within MAX_NEWS_BOOST of its
     threshold (the hard floor), only when the matched event carries ≥1
-    structured/verified impact entry (source-required). A passing score is
+    structured/verified impact entry (source-required — re-checked here as
+    the belt to :func:`plan_fire_boosts`' suspenders). A passing score is
     returned untouched — boost is a rescue, not a ranking inflator. The
     provenance rides ``score.reasons`` into the suppression ledger, dashboard,
     and triage, so an operator can always see why a signal cleared.
@@ -602,28 +642,19 @@ def apply_newsworthiness_boost(
         return score
     if score.total < score.threshold - MAX_NEWS_BOOST:
         return score
-    for ev in news_events or []:
-        if not isinstance(ev, dict):
-            continue
-        entries = _usable_impact_entries(ev)
-        if not entries:
-            continue
-        if not _fire_event_matches_identity(
-            ev, country=country, when=when, lat=lat, lon=lon,
-            us_state=us_state, incident_name=incident_name,
-        ):
-            continue
-        source_name = str(entries[0].get("source_name") or "")
-        url = str(entries[0].get("url") or "")
-        return replace(
-            score,
-            total=score.total + MAX_NEWS_BOOST,
-            reasons=[
-                *score.reasons,
-                f"news_boost=+{MAX_NEWS_BOOST} per {source_name} ({url})",
-            ],
-        )
-    return score
+    entries = _usable_impact_entries(matched_event) if isinstance(matched_event, dict) else []
+    if not entries:
+        return score
+    source_name = str(entries[0].get("source_name") or "")
+    url = str(entries[0].get("url") or "")
+    return replace(
+        score,
+        total=score.total + MAX_NEWS_BOOST,
+        reasons=[
+            *score.reasons,
+            f"news_boost=+{MAX_NEWS_BOOST} per {source_name} ({url})",
+        ],
+    )
 
 
 __all__ = [
@@ -637,4 +668,5 @@ __all__ = [
     "match_news_to_candidates",
     "news_boost_enabled",
     "news_enrich_enabled",
+    "plan_fire_boosts",
 ]

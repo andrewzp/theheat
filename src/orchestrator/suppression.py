@@ -155,6 +155,15 @@ def _record_downstream_suppression(
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
+    # Bet A A2: a rescued score's provenance must survive a downstream kill —
+    # the ledger row should read "killed in <stage>; was news_boost=+8 per
+    # NIFC (...)", or an operator can't tell a rescued near-miss from an
+    # organically-passing signal when triaging kills.
+    reasons = [kill_reason] if kill_reason else []
+    reasons.extend(
+        r for r in (getattr(score, "reasons", None) or [])
+        if isinstance(r, str) and r.startswith("news_boost=")
+    )
     suppressions.append({
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
@@ -165,7 +174,7 @@ def _record_downstream_suppression(
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),
         "threshold": _score_int(score, "threshold"),
-        "reasons": [kill_reason] if kill_reason else [],
+        "reasons": reasons,
         "summary": summary,
     })
     if len(suppressions) > MAX_SUPPRESSIONS:
