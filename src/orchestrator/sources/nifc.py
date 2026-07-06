@@ -25,6 +25,12 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
             boost_plan: dict[str, dict] = {}
             if _news.news_boost_enabled():
                 try:
+                    # NAMED crossings only: a nameless complex cannot be
+                    # identity-matched by ANY event (named events require name
+                    # equality; nameless events belong to the FIRMS namespace
+                    # — letting one in here would re-open the cross-runner
+                    # double-rescue, codex P1 A2-r3: an unnamed CO crossing +
+                    # a CO hotspot both rescued by one nameless event).
                     boost_plan = _news.plan_fire_boosts(
                         bot_state.get("news_events"),
                         [
@@ -34,6 +40,7 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                                 "incident_name": fc.name,
                             }
                             for fc in crossings
+                            if fc.name
                         ],
                     )
                 except Exception as boost_exc:  # noqa: BLE001

@@ -134,6 +134,43 @@ class TestPlanFireBoosts:
         assert awards == 1
         assert set(firms_plan) == {"hotspot"}
 
+    def test_nifc_seam_excludes_nameless_crossings_from_planning(self, monkeypatch):
+        # codex A2-r3 P1: an UNNAMED NIFC crossing must not re-open the
+        # cross-runner double-rescue — the runner filters nameless complexes
+        # out of the plan input entirely (they are identity-unmatchable).
+        from copy import deepcopy
+        from datetime import date as _date
+
+        from src.data.fire_footprint import FireComplex
+        from src.orchestrator.sources import nifc as nifc_runner
+        from src.state import DEFAULT_STATE
+
+        monkeypatch.setenv("THEHEAT_NEWSWORTHINESS_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_NEWS_BOOST_ENABLED", "1")
+        state = deepcopy(DEFAULT_STATE)
+        state["news_events"] = [_fire_event(name=None)]
+
+        unnamed = FireComplex(
+            complex_id="c1", name=None, country="United States", region="CO",
+            hectares=30_000.0, start_date=_date.today(), tier=2,
+            event_id="ff_unnamed_1",
+        )
+        monkeypatch.setattr(nifc_runner, "_fetch_strict", lambda fn: [unnamed])
+        monkeypatch.setattr(
+            nifc_runner.fire_footprint, "detect_tier_crossings",
+            lambda complexes, st: [unnamed],
+        )
+        monkeypatch.setattr(
+            nifc_runner, "score_fire_footprint", lambda **k: _score(62)
+        )
+        enqueued: list = []
+        monkeypatch.setattr(
+            nifc_runner, "_enqueue_story_candidate",
+            lambda bot_state, **kwargs: enqueued.append(kwargs) or True,
+        )
+        nifc_runner.run_fire_footprint(state, None)
+        assert enqueued == []  # 62 < 64, no boost for a nameless crossing
+
     def test_wrong_state_never_planned(self):
         vermont = {"id": "vt", "country": "United States", "when": _iso(0),
                    "lat": 44.0, "lon": -72.6}
