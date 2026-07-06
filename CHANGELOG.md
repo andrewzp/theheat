@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Bet A editorial consumers shipped dark: A1 enrich + A2 boost (2026-07-06)
+
+Queue rows 6 and 7 of the three-pillar plan — the retrieval lane's first two
+editorial consumers, both codex-xhigh-looped to clean APPROVE (4 rounds each,
+every BLOCK finding real and fixed), both byte-for-byte inert until their flags
+flip:
+
+- **A1 — enrich** ([#371](https://github.com/andrewzp/theheat/pull/371),
+  `THEHEAT_NEWS_ENRICH_ENABLED`, requires master): verified news events attach
+  `human_impact` facts to matched StoryBundles at the triage drain, so a fire
+  tweet can carry "3 firefighters killed, per NIFC" instead of only megawatts.
+  Conservative identity matching (kind families; country; US state agreement on
+  both sides via centroid-resolved bounding boxes; **named fire news requires a
+  same-named candidate; nameless fire news matching >1 candidate attaches to
+  NONE**). Honesty gates only strengthened: fact-check "no warrant, no claim"
+  rule (ordinary bundle-fact impact like GDACS `population_affected` unchanged),
+  evidence-contract error on any entry missing claim/value/source_name/url/as_of.
+  **Decision 4:** any draft whose text cites impact is FORCED `manual_only` —
+  including the #352 autoship allowlist — via two-signal fail-closed detection
+  (writer `cited_impact` self-report + a deterministic sweep: source names,
+  large values incl. string/money forms, casualty word stems). Live-verified via
+  the new `news-enrich-dryrun` workflow (fails RED on missing keys or zero
+  shipping candidates): 1/3 candidates shipped with correct attribution +
+  forced-manual routing; the 2 kills were the fact-checker refusing a fire name
+  the bundle can't support — the same identity rule the matcher enforces.
+- **A2 — boost** ([#373](https://github.com/andrewzp/theheat/pull/373),
+  `THEHEAT_NEWS_BOOST_ENABLED`, requires master): the Congo-vs-Colorado fix. A
+  sourced news match rescues a NEAR-miss fire score — flat +8, hard floor
+  threshold−8, ≥1 structured/verified impact entry, rescue-only (passing scores
+  untouched), `news_boost=+8 per <source> (<url>)` provenance in
+  `score.reasons` and preserved through downstream kills (object and serialized
+  dict scores). Boosts are **batch-planned per runner with a namespace
+  partition** (nameless events ↔ FIRMS hotspots, named events ↔ named NIFC
+  crossings; nameless crossings excluded) so one news event can never rescue
+  two different fires in a cycle. Fire-only in v1.
+- **[#372](https://github.com/andrewzp/theheat/issues/372) filed (found during a
+  queue-vs-world review):** gpm rolling-accumulation events present the static
+  300mm 7-day threshold as "the previous 7-day record" — a false-record
+  generator upstream of every gate; two pending drafts affected (do not post).
+
 ### Reliability watches complete + Bet A phase 0 shipped dark (2026-07-04)
 
 Andrew approved the plan's recommendations ("follow your own recommendations and keep
