@@ -160,9 +160,10 @@ def _record_downstream_suppression(
     # NIFC (...)", or an operator can't tell a rescued near-miss from an
     # organically-passing signal when triaging kills.
     reasons = [kill_reason] if kill_reason else []
+    # _score_reasons handles both EditorialScore objects and the serialized
+    # dicts that cycle-cap/finalize kills pass in (codex A2-r2 P2).
     reasons.extend(
-        r for r in (getattr(score, "reasons", None) or [])
-        if isinstance(r, str) and r.startswith("news_boost=")
+        r for r in _score_reasons(score) if r.startswith("news_boost=")
     )
     suppressions.append({
         "id": f"supp_{ts}_{rand}",

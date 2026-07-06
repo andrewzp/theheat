@@ -111,6 +111,29 @@ class TestPlanFireBoosts:
         plan = plan_fire_boosts([named], fires)
         assert set(plan) == {"alpine"}
 
+    def test_nameless_event_never_plans_a_named_complex(self):
+        # If the news is about a named complex, the NIFC retrieval leg emits a
+        # NAMED event for it — a nameless report is a weaker identity claim.
+        complex_fire = {"id": "alpine", "country": "United States",
+                        "when": _iso(0), "us_state": "CO",
+                        "incident_name": "Alpine Fire"}
+        assert plan_fire_boosts([_fire_event(name=None)], [complex_fire]) == {}
+
+    def test_cross_runner_double_rescue_is_structurally_impossible(self):
+        # codex A2-r2 P1: one nameless CO event, a FIRMS hotspot planned in one
+        # runner and a NIFC crossing planned in the other. The namespace
+        # partition (nameless↔nameless, named↔named) means the per-runner
+        # plans can never BOTH award the event.
+        ev = _fire_event(name=None)
+        firms_plan = plan_fire_boosts([ev], [_colorado_fire("hotspot")])
+        nifc_plan = plan_fire_boosts([ev], [{
+            "id": "crossing", "country": "United States", "when": _iso(0),
+            "us_state": "CO", "incident_name": "Alpine Fire",
+        }])
+        awards = len(firms_plan) + len(nifc_plan)
+        assert awards == 1
+        assert set(firms_plan) == {"hotspot"}
+
     def test_wrong_state_never_planned(self):
         vermont = {"id": "vt", "country": "United States", "when": _iso(0),
                    "lat": 44.0, "lon": -72.6}
@@ -207,6 +230,25 @@ class TestProvenanceSurvivesKills:
         )
         row = state["suppressions"][-1]
         assert "not extraordinary" in row["reasons"]
+        assert any(r.startswith("news_boost=") for r in row["reasons"])
+
+    def test_serialized_dict_score_keeps_news_boost_reason(self):
+        # codex A2-r2 P2: cycle-cap/finalize kills pass the DRAFT's serialized
+        # score dict, not the EditorialScore object — provenance must survive
+        # that shape too.
+        from copy import deepcopy
+
+        from src.orchestrator.suppression import _record_downstream_suppression
+        from src.state import DEFAULT_STATE
+
+        state = deepcopy(DEFAULT_STATE)
+        boosted = apply_newsworthiness_boost(_score(62), _fire_event())
+        _record_downstream_suppression(
+            bot_state=state, source="firms", run_id="r1", event_id="f1",
+            score=boosted.as_dict(), kill_stage="cycle_cap",
+            kill_reason="Pruned by cycle cap=3", summary="Colorado",
+        )
+        row = state["suppressions"][-1]
         assert any(r.startswith("news_boost=") for r in row["reasons"])
 
     def test_unboosted_kill_rows_are_unchanged(self):

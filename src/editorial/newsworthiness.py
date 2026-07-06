@@ -327,13 +327,23 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
 
     event_name = _normalize_incident_name(place.get("name"))
     candidate_name = _candidate_incident_name(bundle)
-    if event_name and str(ev.get("kind") or "") == "fire":
-        # A NAMED fire event is incident-scoped: its impact belongs to THAT
-        # fire and no other. Nameless FIRMS hotspots in the same state are not
-        # it — requiring the same name on the candidate (NIFC complexes carry
-        # one) is the only way a named death toll can never ride a different
-        # fire's tweet (codex P0, round 1).
-        if not candidate_name or event_name != candidate_name:
+    if str(ev.get("kind") or "") == "fire":
+        if event_name:
+            # A NAMED fire event is incident-scoped: its impact belongs to
+            # THAT fire and no other. Nameless FIRMS hotspots in the same
+            # state are not it — requiring the same name on the candidate
+            # (NIFC complexes carry one) is the only way a named death toll
+            # can never ride a different fire's tweet (codex P0, A1 round 1).
+            if not candidate_name or event_name != candidate_name:
+                return False
+        elif candidate_name:
+            # A NAMELESS fire event never matches a NAMED complex either: if
+            # the news is about that complex, the retrieval lane's NIFC leg
+            # produces a NAMED event for it — a nameless report matching a
+            # named entity is a weaker identity claim than the lane can
+            # already make. This also partitions fire events by candidate
+            # namespace (nameless↔FIRMS, named↔NIFC), which is what makes
+            # per-runner boost planning sound (codex P1, A2 round 2).
             return False
     elif event_name and candidate_name and event_name != candidate_name:
         return False
@@ -568,6 +578,15 @@ def _fire_event_matches_identity(
     if event_name and event_name != fire_name:
         # Named news is incident-scoped; a nameless fire (FIRMS hotspot) or a
         # differently-named complex is not it.
+        return False
+    if not event_name and fire_name:
+        # And a nameless report never matches a NAMED complex (see the enrich
+        # matcher's identical rule). Because FIRMS fires are nameless and NIFC
+        # crossings are named, this partitions events by runner — a nameless
+        # event can only ever be planned within the FIRMS batch, so the
+        # per-runner ambiguity guard is cycle-sound without shared state
+        # (codex P1, A2 round 2: one nameless CO event + a FIRMS hotspot +
+        # a NIFC crossing must not be rescued twice).
         return False
 
     ev_window = _event_window(ev)
