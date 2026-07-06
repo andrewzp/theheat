@@ -44,6 +44,13 @@ human toll of what it does detect.
 
 ## Your assignment (the next session)
 
+> **STATUS (2026-07-06): EXECUTED.** The assessment ran, the plan exists —
+> [docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md)
+> — and its rows 1–5 are merged (#361–#366: reganom fix, writer/queue watches,
+> time-travel canary, Bet A phase 0 dark). The mission and bars above remain the
+> north star; current state lives in the latest handoff. This section is kept as
+> the record of the mandate.
+
 Produce a **detailed, prioritized upgrade plan** across the three pillars below. For each:
 what's wrong today, what "good" looks like, the sequenced steps to get there, effort/risk, and
 the first PR-sized move. **Assess first** (read the pointers, read the code), **then plan** via

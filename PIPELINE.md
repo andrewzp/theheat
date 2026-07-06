@@ -1,12 +1,46 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-06-26 (release 0.9.81.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-26.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-06-26.md).
+**Last updated:** 2026-07-06 (version 0.9.81.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-06.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-06.md).
 The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
-the non-US world temperature half is now backed by a threshold cache (see below),
-and the dashboard exposes per-source troubleshooting logs. The editorial pipeline
-shape described below is unchanged; the source layer is more resilient and more
-observable.
+the non-US world temperature half is threshold-cached, and the dashboard exposes
+per-source troubleshooting logs. The editorial pipeline shape described below is
+unchanged; the source layer is more resilient and more observable, and the
+**three-pillar upgrade plan is executing** (see below).
+
+**The newsworthiness lane exists since 2026-07-04, SHIPPED DARK** ([#366](https://github.com/andrewzp/theheat/pull/366);
+Bet A phase 0 of the [three-pillar plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md),
+design [spec](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-07-03-newsworthiness-bet-a-design.md)).
+A flag-gated source runner (`THEHEAT_NEWSWORTHINESS_ENABLED`, unset=OFF) retrieves
+cited world events per alerts cycle — a NIFC/WFIGS leg (live-verified field
+contract: personnel/size/cost; **no fatality fields exist there**) plus one Gemini
+`google_search` grounded call whose events are **verified-or-dropped per impact
+entry** (independent fetch of the cited URL + a separate Flash support check, ≤3
+fetches/cycle). Deterministic floor: any impact entry missing
+`source_name`/`url`/`as_of` is dropped at parse time. Results land in
+`state["news_events"]` (7-day window); every enqueued candidate is registered in
+`state["candidates_log"]`; the sentinel's **news-gap watch** opens an advisory
+issue when a verified world event matches nothing we detected — the miss-detector
+for the European-heat-deaths class. Phase 0 has ZERO editorial surface; **A1
+(enrich: `human_impact` on bundles → sourced anecdotes) and A2 (rescue-capped
+score boost) are next**, each behind its own default-OFF flag. Code:
+`src/data/newsworthiness.py`, `src/orchestrator/sources/newsworthiness.py`.
+
+**The sentinel fails loudly on five fronts since 2026-07-03/04** (reliability
+pillar): per-source failing issues + yield watch + coverage watch (heat) +
+**writer watch** ([#362](https://github.com/andrewzp/theheat/pull/362) — recent
+`budget_exhausted` kills while the bot drafts → loud auto-closing issue; the
+2026-07-03 silent credits outage class) + **queue watch**
+([#364](https://github.com/andrewzp/theheat/pull/364) — pending human-gated
+drafts older than 24h; auto-owned means `auto_approve_at` + `approval_mode` ∈
+{auto, policy_auto}, never the policy recommendation) + the **news-gap watch**
+(above, flag-gated). JS mirrors live in `dashboard/lib/source-health.js`
+(`writerWatch`/`queueWatch` in `buildSourceHealthPayload`). A **time-travel
+canary** ([#365](https://github.com/andrewzp/theheat/pull/365)) runs the whole
+suite weekly at +30d/+365d (`THEHEAT_TIME_TRAVEL_DAYS` via `tests/conftest.py`)
+so calendar time-bombs fail there before they detonate on `main` — its first
++90d run found five live bombs (all fixed; fixtures are now today-relative).
+workflow-health monitors FIVE scheduled workflows (canary included).
 
 **Production drafting no longer gates on the full unit-test suite since 2026-06-23**
 ([#326](https://github.com/andrewzp/theheat/pull/326)). A flaky time-bomb unit test
