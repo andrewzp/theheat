@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any
 
-from src.editorial._regions import STATE_BOUNDING_BOXES
+from src.editorial._regions import lat_lon_to_state
 
 # Candidate legacy_type families per news kind (spec §3: fire↔fire,
 # heat_mortality↔heat classes). Hot-side only — attaching excess-mortality
@@ -172,30 +172,32 @@ def _normalize_us_state(raw: Any) -> str:
     return ""
 
 
-def _candidate_us_states(bundle: Any) -> frozenset[str]:
-    """The candidate's US state(s), canonical full names, lowercase.
+def _candidate_us_state(bundle: Any) -> str:
+    """The candidate's SINGLE US state, canonical full name lowercase; "" when
+    unresolvable.
 
     GHCN temperature bundles carry a full-name ``state`` fact; NIFC complexes
     carry a 2-letter ``region`` fact; FIRMS hotspots carry only lat/lon, which
-    resolve through the census bounding boxes (boxes overlap, so this returns
-    a SET — a match requires the news state to be in it).
+    resolve through ``lat_lon_to_state`` — the repo's bbox + nearest-centroid
+    resolver, single-valued by construction. A raw bbox-membership SET here let
+    a nameless New York event match a Vermont-border hotspot whose point sat
+    inside three overlapping boxes (codex P1, round 2); centroid tie-breaking
+    picks exactly one state, so a wrong-state event can no longer ride the
+    overlap.
     """
     explicit = _normalize_us_state(_fact_value(bundle, "state"))
     if explicit:
-        return frozenset({explicit})
+        return explicit
     region = _normalize_us_state(_fact_value(bundle, "region"))
     if region:
-        return frozenset({region})
+        return region
     lat = _fact_value(bundle, "lat")
     lon = _fact_value(bundle, "lon")
     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-        hits = {
-            name.lower()
-            for name, (lat_min, lat_max, lon_min, lon_max) in STATE_BOUNDING_BOXES.items()
-            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
-        }
-        return frozenset(hits)
-    return frozenset()
+        resolved = lat_lon_to_state(float(lat), float(lon))
+        if resolved:
+            return resolved.lower()
+    return ""
 
 
 def _normalize_incident_name(raw: Any) -> str:
@@ -303,7 +305,7 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
         # A country-wide US match is too coarse to pin an impact figure on one
         # station/hotspot — require state agreement on both sides.
         event_state = _normalize_us_state(place.get("admin1"))
-        if not event_state or event_state not in _candidate_us_states(bundle):
+        if not event_state or event_state != _candidate_us_state(bundle):
             return False
 
     event_name = _normalize_incident_name(place.get("name"))
@@ -410,20 +412,45 @@ class ImpactCitation:
         return self.writer_flag != self.regex_hit
 
 
-def _numeric_value_pattern(value: Any) -> str | None:
-    """A digit-boundary regex for a large numeric value, tolerant of thousands
+def _int_value_pattern(number: int) -> str | None:
+    """A digit-boundary regex for a large integer, tolerant of thousands
     separators ("1300" matches "1,300" and "1300")."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if isinstance(value, float) and not value.is_integer():
-        return None
-    number = int(value)
     if number < _MIN_REGEX_VALUE:
         return None
     digits = str(number)
     with_commas = f"{number:,}"
     alternatives = {re.escape(digits), re.escape(with_commas)}
     return rf"(?<![\d,.])(?:{'|'.join(sorted(alternatives))})(?![\d])"
+
+
+def _value_patterns(value: Any) -> list[str]:
+    """Regex patterns that detect this impact value in tweet text.
+
+    Ints/floats get the digit-boundary pattern. STRING values — the A1
+    contract allows "1,450" or "$2 million" (codex P1, round 2) — get (a) a
+    literal-echo pattern when the string is substantial (≥3 chars, contains a
+    digit), and (b) the digit-boundary pattern for their extracted integer, so
+    "1,450" in the text is caught however the entry spelled it.
+    """
+    if isinstance(value, bool):
+        return []
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and not value.is_integer():
+            return []
+        pattern = _int_value_pattern(int(value))
+        return [pattern] if pattern else []
+    if isinstance(value, str):
+        patterns: list[str] = []
+        trimmed = value.strip()
+        if len(trimmed) >= 3 and any(ch.isdigit() for ch in trimmed):
+            patterns.append(rf"(?<!\w){re.escape(trimmed)}(?!\w)")
+        digits = re.sub(r"\D", "", trimmed)
+        if digits:
+            int_pattern = _int_value_pattern(int(digits))
+            if int_pattern:
+                patterns.append(int_pattern)
+        return patterns
+    return []
 
 
 def _impact_regex_hit(text: str, entries: list[dict]) -> bool:
@@ -435,9 +462,9 @@ def _impact_regex_hit(text: str, entries: list[dict]) -> bool:
             rf"(?<!\w){re.escape(source)}(?!\w)", text, re.IGNORECASE
         ):
             return True
-        pattern = _numeric_value_pattern(entry.get("value"))
-        if pattern and re.search(pattern, text):
-            return True
+        for pattern in _value_patterns(entry.get("value")):
+            if re.search(pattern, text):
+                return True
     return bool(_IMPACT_WORD_RE.search(text or ""))
 
 

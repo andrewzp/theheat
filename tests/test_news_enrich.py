@@ -213,6 +213,17 @@ class TestMatcher:
         vermont = _firms_fire_cand(lat=44.0, lon=-72.6)
         assert match_news_to_candidates([ev], [vermont]) == []
 
+    def test_bbox_overlap_resolves_to_one_state(self):
+        # (43.5, -72.3) sits inside the VT/NH/NY census boxes; the centroid
+        # tie-break resolves it to New Hampshire — so a nameless New York
+        # event must NOT match it (codex P1, round 2), while a New Hampshire
+        # event does.
+        cand = _firms_fire_cand(lat=43.5, lon=-72.3)
+        ny = _news_event(admin1="NY", name=None)
+        nh = _news_event(admin1="NH", name=None)
+        assert match_news_to_candidates([ny], [cand]) == []
+        assert len(match_news_to_candidates([nh], [cand])) == 1
+
     def test_us_fire_event_without_state_never_matches(self):
         ev = _news_event(admin1=None, name=None)
         assert match_news_to_candidates([ev], [_firms_fire_cand()]) == []
@@ -468,6 +479,33 @@ class TestCitationDetection:
         # text on a non-enriched draft is fact-check's problem.
         rc = _review_context(entries=None, cited_impact=None)
         c = detect_impact_citation("Evacuations were ordered.", rc)
+        assert c.forced is False
+
+    def test_string_value_echo_forces(self):
+        # The A1 contract allows string values; a verbatim echo of "1,450"
+        # must trip the sweep even with no source name and no casualty word
+        # (codex P1, round 2).
+        rc = _review_context(
+            entries=[_impact(claim="1,450 personnel assigned", value="1,450",
+                             source_name="NIFC")],
+            cited_impact=False,
+        )
+        c = detect_impact_citation("1,450 personnel are assigned to the fire.", rc)
+        assert c.forced is True
+
+    def test_string_dollar_value_echo_forces(self):
+        rc = _review_context(
+            entries=[_impact(claim="damage estimated at $2 million",
+                             value="$2 million", source_name="Reuters")],
+            cited_impact=False,
+        )
+        c = detect_impact_citation("Early estimates put damage at $2 million.", rc)
+        assert c.forced is True
+
+    def test_bare_digit_string_value_does_not_false_positive(self):
+        # value="3" must not literal-match every "3" in the text.
+        rc = _review_context(entries=[_impact(value="3")], cited_impact=False)
+        c = detect_impact_citation("Verkhoyansk hit 14.8C on July 3.", rc)
         assert c.forced is False
 
     def test_missing_writer_flag_fails_closed(self):
