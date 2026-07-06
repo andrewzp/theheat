@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### gpm false-record class fixed + the Barrow stuck-sensor artifact (2026-07-06, late)
+
+- **[#376](https://github.com/andrewzp/theheat/pull/376)** (fixes the deterministic
+  halves of [#372](https://github.com/andrewzp/theheat/issues/372)): rolling
+  accumulations no longer present their static trigger as "the previous 7-day
+  record" (`alert_threshold_mm` is a distinct field; record fields stay `None`),
+  and a **stuck-sensor guard** skips any accumulation window of identical rounded
+  daily values. Root cause found live: Barrow logged exactly 71.25 mm eight days
+  running (~5.6 mm actually fell, per an independent Open-Meteo check) — the
+  constant minted 8 phantom drafts over a month, one of which POSTED on
+  2026-06-07. Open on the issue: daily-record-path guard, cross-source witness
+  plausibility, the ≤60° latitude-band coverage call, and the posted-tweet
+  delete/correct decision.
+- **[#375](https://github.com/andrewzp/theheat/issues/375)** filed: no cyclone
+  event class for a sustained land threat — Super Typhoon Bavi produced FIVE
+  intensification drafts July 3–4 (all aged out unreviewed) and then zero
+  coverage during its most newsworthy phase (135 kt, 54-ft seas, Taiwan/China
+  forecast). Interim: gate-checked hand-drafts from the live JTWC advisory.
+- Operator sweep: `reject-all-drafts` cleared the stale 8-draft queue (verified
+  pending=0 on the live gist), including two #372 false records and the Basrah
+  dup pair ([#346](https://github.com/andrewzp/theheat/pull/346)'s class).
+
 ### Bet A editorial consumers shipped dark: A1 enrich + A2 boost (2026-07-06)
 
 Queue rows 6 and 7 of the three-pillar plan — the retrieval lane's first two
