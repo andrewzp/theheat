@@ -45,8 +45,8 @@ Sonnet writer / Gemini Flash fact-check / Gemini 2.5 Pro critic, Next.js dashboa
 | 3 | **R2: manual-queue age watch** — **BUILT (#364; fired live 2026-07-06, issue #368)** | 3 | S | Low (read-only) | — |
 | 4 | **R3: time-travel canary** (behavioral, superseded the grep guard) — **BUILT (#365; 5 live bombs defused)** | 3 | M | Low | — |
 | 5 | **A0: Bet A phase 0** — **BUILT, SHIPPED DARK (#366; activation = Andrew's flag flip)** | 2 | M | Low (zero editorial surface) | Andrew approved 2026-07-03 ("follow your own recommendations") |
-| 6 | **A1: Bet A enrich** — `human_impact` on bundles + writer/fact-check/§F gates + forced manual_only | 2→1 | L | Med (editorial-gate diffs; codex mandatory) | A0 live-verified |
-| 7 | **A2: Bet A boost** — capped rescue at the fire score gate | 2 | M | Med | A0; A1 recommended first |
+| 6 | **A1: Bet A enrich** — `human_impact` on bundles + writer/fact-check/§F gates + forced manual_only — **BUILT, SHIPPED DARK (#371; codex-xhigh 4 rounds → clean APPROVE; live dryrun GREEN)** | 2→1 | L | Med (editorial-gate diffs; codex mandatory) | A0 live-verified |
+| 7 | **A2: Bet A boost** — capped rescue at the fire score gate — **BUILT, SHIPPED DARK (#373; codex-xhigh 4 rounds → clean APPROVE)** | 2 | M | Med | A0; A1 recommended first |
 | 8 | **E1: voice-floor iteration** — generalize the reganom four-moves + dryrun-harness pattern to the next signal type (fires) | 1 | M | Med | A1 (impact-carrying fire tweets are the richest test) |
 | 9 | R4: self-heal completion — `SELFHEAL_PAT` (operator: Andrew) + verify | 3 | XS (Andrew) | Low | — |
 | 10 | A3 (v2): new-coverage-trigger for sensor-less stories — gated on gap-flag evidence | 2 | L | High | A0-A2 live + gap-flag data |
