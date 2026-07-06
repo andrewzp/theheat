@@ -570,6 +570,36 @@ class TestPrecipDetection:
         assert rolling[0].period_days == 3
         assert rolling[0].mm_total == 165.0
 
+    def test_stuck_sensor_window_never_mints_an_accumulation(self):
+        # #372 regression, part 2: identical daily values across the whole
+        # window (the Barrow 71.25-mm-eight-days-running artifact) are a stuck
+        # retrieval — no event, however far past the threshold the sum lands.
+        state = {
+            "precip_recent_by_city": {
+                "france:paris": [
+                    {"date": "2026-05-12", "mm": 71.25},
+                    {"date": "2026-05-13", "mm": 71.25},
+                ]
+            }
+        }
+        events = detect_precip_records([_reading(mm=71.25)], state)
+        assert [e for e in events if e.kind == "multi_day_accumulation"] == []
+
+    def test_varied_window_still_mints_an_accumulation(self):
+        # The guard must not kill real storms: same total, varied dailies.
+        state = {
+            "precip_recent_by_city": {
+                "france:paris": [
+                    {"date": "2026-05-12", "mm": 80.0},
+                    {"date": "2026-05-13", "mm": 63.75},
+                ]
+            }
+        }
+        events = detect_precip_records([_reading(mm=70.0)], state)
+        rolling = [e for e in events if e.kind == "multi_day_accumulation"]
+        assert len(rolling) == 1
+        assert rolling[0].mm_total == 213.75
+
     def test_multi_day_accumulation_is_a_threshold_not_a_record(self):
         # #372 regression: the static trigger must ride alert_threshold_mm,
         # NEVER the record fields — "56.2 mm above the previous 7-day record

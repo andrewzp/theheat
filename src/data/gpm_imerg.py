@@ -1097,6 +1097,19 @@ def _detect_rolling_accumulations(
             window = rows[-period_days:]
             if len(window) != period_days or not _dates_are_consecutive([row["date"] for row in window]):
                 continue
+            # Stuck-sensor guard (#372): a window of IDENTICAL daily values is
+            # a stuck retrieval, not weather — Barrow logged exactly 71.25 mm
+            # eight days running (while ~5.6 mm actually fell) and minted a
+            # phantom "record" draft every few days for a month. Real daily
+            # satellite totals big enough to trip these thresholds are never
+            # equal to two decimals across a whole window.
+            if len({round(float(row["mm"]), 2) for row in window}) == 1:
+                print(
+                    f"[gpm] stuck-sensor guard: {reading.country}:{reading.city} "
+                    f"logged an identical {window[0]['mm']} mm for {period_days} "
+                    "consecutive days — skipping accumulation event"
+                )
+                continue
             total = sum(float(row["mm"]) for row in window)
             if total < threshold_mm:
                 continue
