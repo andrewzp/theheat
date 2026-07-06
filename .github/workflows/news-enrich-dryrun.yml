@@ -55,8 +55,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        # `|| true`: a clean kill is informative, not a job failure — we want the
-        # drafts + gate verdicts in the log regardless of how many would ship.
+        # NO `|| true` here (unlike reganom-dryrun, a voice-iteration tool):
+        # this workflow is THE live-verify gate before the flag flip, so
+        # missing keys (exit 2) or zero shipping candidates (exit 1) must be
+        # a RED run — a green run that verified nothing would greenlight the
+        # flip (codex P1, round 3).
         run: |
           EXTRA=""
           if [ "${{ inputs.no_impact }}" = "true" ]; then EXTRA="--no-impact"; fi
@@ -65,4 +68,4 @@ jobs:
             --frp "${{ inputs.frp }}" \
             --personnel "${{ inputs.personnel }}" \
             --fatalities "${{ inputs.fatalities }}" \
-            $EXTRA || true
+            $EXTRA

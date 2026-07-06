@@ -75,10 +75,12 @@ _MIN_REGEX_VALUE = 100
 # discussing impact without citing it properly is exactly what a human should
 # see anyway (fail-closed is the safe direction for death tolls). Stems are
 # word-boundary-anchored at the START (open-ended after, so fatalit→fatalities
-# but "atoll" never reads as "toll").
+# but "atoll" never reads as "toll"). Damage/cost stems cover rewritten money
+# figures ("2 million dollars" for a "$2 million" entry — codex P1, round 3).
 _IMPACT_WORD_RE = re.compile(
     r"\b(?:killed|dead|death|died|fatalit|casualt|injur|hospitaliz|missing|"
-    r"evacuat|displaced|perished|toll)",
+    r"evacuat|displaced|perished|toll|damag|destro)"
+    r"|\b(?:loss(?:es)?|costs?)\b",  # bounded: "Costa Rica" must not read as "cost"
     re.IGNORECASE,
 )
 
@@ -294,6 +296,16 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
     if not families or getattr(candidate, "legacy_type", "") not in families:
         return False
 
+    if getattr(candidate, "legacy_type", "") == "absolute_extreme":
+        # The ONE direction-ambiguous legacy type: its bundles are
+        # "absolute_extreme_hot" / "absolute_extreme_cold" with a matching
+        # ``kind`` fact. Heat mortality must never land on a cold extreme
+        # (codex P1, round 3 — probed and confirmed before this guard).
+        kind_fact = str(_fact_value(bundle, "kind") or "").lower()
+        signal_kind = str(getattr(bundle, "signal_kind", "") or "").lower()
+        if kind_fact != "hot" and not signal_kind.endswith("_hot"):
+            return False
+
     raw_place = ev.get("place")
     place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
     event_country = _normalize_country(place.get("country"))
@@ -444,6 +456,16 @@ def _value_patterns(value: Any) -> list[str]:
         trimmed = value.strip()
         if len(trimmed) >= 3 and any(ch.isdigit() for ch in trimmed):
             patterns.append(rf"(?<!\w){re.escape(trimmed)}(?!\w)")
+        # "$2 million" rewritten as "2 million dollars": pair the leading
+        # digit-run with its magnitude word, in either spelling order's reach.
+        magnitude = re.search(
+            r"([\d][\d,.]*)\s*(thousand|million|billion|trillion)",
+            trimmed, re.IGNORECASE,
+        )
+        if magnitude:
+            number = re.escape(magnitude.group(1).rstrip(",."))
+            word = magnitude.group(2)
+            patterns.append(rf"(?<![\d,.]){number}\s*{word}")
         digits = re.sub(r"\D", "", trimmed)
         if digits:
             int_pattern = _int_value_pattern(int(digits))

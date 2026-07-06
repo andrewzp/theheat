@@ -312,6 +312,24 @@ class TestMatcher:
                      facts=[{"label": "country", "value": "France"}])
         assert match_news_to_candidates([ev], [cold]) == []
 
+    def test_cold_absolute_extreme_never_hosts_heat_mortality(self):
+        # legacy_type "absolute_extreme" covers BOTH directions; the bundle's
+        # signal_kind/kind fact carries the direction (codex P1, round 3).
+        ev = _news_event(kind="heat_mortality", country="Norway", admin1=None,
+                         name=None, confidence="verified")
+        cold = _cand(event_id="ae_cold", legacy_type="absolute_extreme",
+                     signal_kind="absolute_extreme_cold",
+                     facts=[{"label": "country", "value": "Norway"},
+                            {"label": "kind", "value": "cold"}])
+        hot = _cand(event_id="ae_hot", legacy_type="absolute_extreme",
+                    signal_kind="absolute_extreme_hot",
+                    facts=[{"label": "country", "value": "Norway"},
+                           {"label": "kind", "value": "hot"}])
+        assert match_news_to_candidates([ev], [cold]) == []
+        matches = match_news_to_candidates([ev], [cold, hot])
+        assert len(matches) == 1
+        assert matches[0][1].event_id == "ae_hot"
+
     def test_kind_family_mismatch_never_matches(self):
         ev = _news_event(admin1="CO")  # fire
         heat = _cand(event_id="h1", legacy_type="all_time_high",
@@ -506,6 +524,23 @@ class TestCitationDetection:
         # value="3" must not literal-match every "3" in the text.
         rc = _review_context(entries=[_impact(value="3")], cited_impact=False)
         c = detect_impact_citation("Verkhoyansk hit 14.8C on July 3.", rc)
+        assert c.forced is False
+
+    def test_rewritten_money_value_forces(self):
+        # "$2 million" entry, text says "2 million dollars" — the magnitude
+        # pattern catches the rewrite (codex P1, round 3). Text avoids all
+        # casualty/damage stems so THIS layer is what's proven.
+        rc = _review_context(
+            entries=[_impact(claim="damage estimated at $2 million",
+                             value="$2 million", source_name="Reuters")],
+            cited_impact=False,
+        )
+        c = detect_impact_citation("Early estimates put it at 2 million dollars.", rc)
+        assert c.forced is True
+
+    def test_costa_rica_is_not_a_cost_hit(self):
+        rc = _review_context(entries=[_impact(value=250)], cited_impact=False)
+        c = detect_impact_citation("A fire near San José, Costa Rica is burning.", rc)
         assert c.forced is False
 
     def test_missing_writer_flag_fails_closed(self):
