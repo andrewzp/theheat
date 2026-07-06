@@ -2,6 +2,18 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
+> `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
+> No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
+> P_dust (9 cycles), P9/P_compound (not tested since Jul 4) all unchanged. **2 new strict
+> staleness bulk-reject candidates:** Basrah and Al Başrah al Qadīmah `absolute_extreme`
+> (both >48h old — 56.2h/52.8h — with a stated forecast date of July 4 now two days elapsed),
+> same Basra-area class flagged Jul 1–3; write skipped (`gh` CLI absent, no gist-write tool
+> available via the GitHub MCP server this session — 38th consecutive skip). Doha's forecast
+> date (July 5) has also elapsed but sits under 48h — watch for it crossing the threshold next
+> cycle. **Operator: `main` remains unmerged since 2026-06-08 — now 29 consecutive daily cycles
+> (including the Jun 29 bar-clearing 80% cycle) live only on `daily-plan-current`.**
+>
 > **Jul 5: 15 pending (10 carry-overs from Jul 4 + 5 fresh), 20% A-rate (small-n, consistent
 > with Jul 4's 20%/n=10).** 1 A-: **eastern Siberia fire** (556.1 MW, "doesn't just burn the
 > surface — it thaws the ground beneath it" — 4th corpus confirmation the permafrost-carbon
@@ -173,23 +185,24 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Small-n, consistent with Jul 4's 20% (n=10). Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5)** |
-| Gap | **30 pp below bar** (50% − 20%, Jul 5, n=5 — small sample, but consistent with Jul 4's larger n=10 read at the same rate). Six cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers — both got fresh confirming evidence this cycle, and P_tier's cross-location confirmation (Doha) is the strongest single data point yet that it's a structural bundle-field issue rather than a location artifact. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below. **Queue is back to 15 pending as of Jul 5** (10 carry-overs from Jul 4 + 5 fresh) — no repeat of Jul 4's complete-turnover event; the operator action that cleared Jul 3's queue remains unconfirmed (see Jul 4 note, unresolved). |
+| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
+| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 5 grading** (10 carry-overs from Jul 4, grades unchanged: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 fresh: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 5: **P_close** (16 cycles, 2 positive/3 failing this
-cycle) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
-confirmation via Doha) > **P_dust** (9 cycles, 2 fresh instances this cycle, 11 of 11
-`dust_event` drafts still unconfirmed) > **P9** (reopened Jul 4, not tested this cycle — no
-`precipitation_extreme` draft among today's 5 fresh) > **P_compound** (5 cycles, not tested
-this cycle — no record-type draft among today's 5 fresh) > **P5** (dust_event gap ongoing).
-P_dust moves above P9/P_compound this cycle because it got fresh confirming evidence today
-while P9 and P_compound did not — same recency logic that moved P9 above P_dust on Jul 4.
+Ordered by leverage. Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
+new evidence to reorder against): **P_close** (16 cycles, last evidence Jul 5: 2 positive/3
+failing) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
+confirmation via Doha, Jul 5) > **P_dust** (9 cycles, last evidence Jul 5, 11 of 11
+`dust_event` drafts still unconfirmed) > **P9** (reopened Jul 4, not tested Jul 5 or Jul 6 — no
+`precipitation_extreme` draft in either cycle) > **P_compound** (5 cycles, not tested Jul 5 or
+Jul 6 — no record-type draft in either cycle) > **P5** (dust_event gap ongoing, last evidence
+Jul 5). Ordering carried forward verbatim from Jul 5's recency logic; nothing to re-rank
+without fresh drafts.
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 

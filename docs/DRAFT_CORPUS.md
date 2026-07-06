@@ -11,6 +11,105 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
+**exact match** to Jul 5's fully-graded batch, same 15 `draft_id`s, same scores, same text
+(10 carry-overs from Jul 4 [Island Pond VT A-, Barrow AK B+, Loxahatchee FL A-, Basrah B, Rocky
+Mountains CO fire B, Al Başrah al Qadīmah B, Astana B, Antwerpen B+, Typhoon Bavi A-, Urumqi
+Jul4-reading B] + 5 fresh-as-of-Jul-5 [Johannesburg air_quality_hazard B+, Phalodi dust_event
+C+, Urumqi Jul5-reading B-, eastern Siberia fire A-, Doha absolute_extreme B]). Zero new drafts
+entered the queue between Jul 5's grading pull and this one — no re-grading performed; all 15
+grades stand on Jul 5's record. Continuing to grade on the unmerged `daily-plan-current` rolling
+branch — `main`'s copies of these three docs remain stale back to 2026-06-08 (now 29 consecutive
+cycles stranded here; see repeated operator note below).
+
+**Staleness review as of 2026-07-06 ~15:00 UTC:** Two drafts newly cross the strict bulk-reject
+bar established by the Jul 1–3 Basra-area precedent (>48h old **and** the draft's stated
+forecast date has elapsed):
+
+- **[4] Basrah, Iraq `absolute_extreme`** (created Jul4T06:55Z, ~56.2h old): "is forecast to hit
+  47°C (117°F) on **July 4**" — the forecast date is now 2 days past. Same class as the Jul
+  1–4 Basra-area carry-overs the corpus has repeatedly flagged.
+- **[6] Al Başrah al Qadīmah, Iraq `absolute_extreme`** (created Jul4T10:16Z, ~52.8h old):
+  "forecast high of 47.4°C (117°F) on **July 4**" — same elapsed-forecast-date class.
+
+Both are strict bulk-reject candidates: >48h old, and posting them now would misstate an
+already-passed forecast date as current. **Bulk-reject attempted:** the read path (`git clone`)
+succeeded, but the write path requires `gh api -X PATCH gists/...` or an equivalent
+authenticated call — `gh` CLI is absent in this environment (confirmed via `which gh` →
+`command not found`), and no gist-write tool is exposed via the GitHub MCP server available
+this session (only repo/PR/issue tools loaded — no gist scope). Skipped per the hard
+constraints; logging the skip rather than failing the cycle. **38th consecutive staleness-skip**
+(May 13 → Jul 6).
+
+The remaining 13 pending drafts (7 from Jul 4 at 49–60h old, 5 from Jul 5 at 25–36h old, plus
+[15] Doha at 25.2h) either use past-tense historical framing with no live-forecast language
+(Island Pond, Barrow, Loxahatchee, Astana, Antwerpen, Typhoon Bavi, Rocky Mountains fire — all
+report a completed measurement or event, not a still-pending forecast) or reference a same/
+adjacent-day "model-estimated" reading under the 48h threshold (Johannesburg, Phalodi, Urumqi
+×2, Doha) — none trigger the policy on their own. [15] Doha's forecast date (July 5) has also
+technically elapsed by one calendar day, same as [4]/[6], but at 25.2h it doesn't cross the
+48h mechanical threshold yet — worth flagging for the operator now so it doesn't require a
+same-day bulk-reject decision when it does cross 48h tomorrow.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **20%** (1/5, 2026-07-05).
+
+### Patterns / operational notes
+
+1. **Queue completely static for a full 24h cycle.** This is the first cycle since the Jul 4
+   queue-turnover event where the pending queue produced exactly zero new drafts — same 15
+   `draft_id`s pull-to-pull. Worth noting as a data point (not yet a pattern) after 8
+   consecutive fresh-draft cycles (Jun 29–Jul 5).
+
+2. **Basra-area / `absolute_extreme` forecast-date staleness is now a recurring operational
+   gap, distinct from the voice-quality P_tier proposal.** This is the same underlying signal
+   type P_tier tracks (verbatim tier-jargon leak), but the staleness angle is new: `absolute_
+   extreme` drafts carry a specific forecast date, and once that date passes, "is forecast to
+   hit 47°C on July 4" reads as wrong-day if posted on July 6. This is an infra/process
+   observation for the operator, not a new voice proposal — logged per the hard constraints
+   (no new proposal warranted; this is a staleness-policy application, not a fresh failure
+   mode).
+
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_tier, P_dust, P9, P_compound, or P5. All six retain their Jul 5
+   counts and "Last seen" dates unchanged.
+
+4. **`main` unmerged since 2026-06-08 — now 29 consecutive daily cycles** (including the Jun 29
+   bar-clearing 80% cycle) live only on `daily-plan-current`. Repeating the operator
+   recommendation from every cycle since Jul 1: merge soon so `main`'s copy of these three docs
+   reflects reality.
+
+### Followups (in priority order)
+
+1. **Operator: reject [4] Basrah and [6] Al Başrah al Qadīmah manually via dashboard** — both
+   are >48h old with an elapsed forecast date (July 4); the routine cannot write to the gist
+   this cycle (no `gh` CLI, no gist-write MCP tool available).
+2. **Operator: `main` remains unmerged since 2026-06-08** — 29 consecutive daily cycles stranded
+   on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle a `main`-only view
+   would never see.
+3. **P_tier, P_close, P_dust, P_compound all remain ready for implementation**, unchanged from
+   Jul 5's evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
+4. **Watch [15] Doha** — its forecast date (July 5) elapses today; if it's still pending at the
+   next grading pull and has crossed 48h by then, it becomes a third strict bulk-reject
+   candidate in the same Basra-area/`absolute_extreme` staleness class.
+
+### Numbers
+
+- Pending drafts in queue: 15 (0 fresh; 15 carry-overs, exact match to Jul 5's graded batch)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 20% on 2026-07-05)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 16 cycles, P_tier 7 cycles/10
+  instances, P_dust 9 cycles, P9 not tested since Jul 4, P_compound not tested since Jul 4, P5
+  unchanged — all counts stand at Jul 5's levels)
+- Staleness bulk-reject: **2 strict candidates identified** ([4] Basrah, [6] Al Başrah al
+  Qadīmah — both >48h old with elapsed forecast dates); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (38th consecutive skip, May 13 → Jul 6)
+- Operational anomalies: `main` unmerged since Jun 8, now 29 consecutive stranded cycles
+
+---
+
 ## 2026-07-05 — Daily corpus grading (5 fresh drafts; 10 carry-overs from Jul 4, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts.
