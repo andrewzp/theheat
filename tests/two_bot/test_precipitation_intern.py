@@ -32,6 +32,43 @@ def test_precipitation_bundle_includes_f2_context():
     assert bundle.headline_metric == {"label": "rainfall_mm", "value": 160.0, "unit": "mm"}
     assert labels["region_climate_system"] == "the Gulf Coast humid subtropical belt"
     assert bundle.raw_signal_dump["previous_record_year"] == 2017
+    # A REAL archive record keeps its record facts (the daily_record path).
+    assert labels["previous_record_mm"] == 115.0
+    assert labels["previous_record_year"] == 2017
+    assert "alert_threshold_mm" not in labels
+
+
+def test_accumulation_bundle_carries_threshold_never_record_facts():
+    # #372 regression: threshold-crossing events must offer the writer NO
+    # record fields — only the alert threshold — so "above the previous 7-day
+    # record of 300.0 mm" is unconstructable from the bundle.
+    event = PrecipExtremeEvent(
+        kind="multi_day_accumulation",
+        location="Barrow",
+        country="US",
+        date="2026-07-06",
+        mm_total=356.2,
+        period_days=7,
+        deviation_from_record_mm=None,
+        previous_record_mm=None,
+        previous_record_year=None,
+        lat=71.3,
+        lon=-156.8,
+        city_count=None,
+        sample_cities=[],
+        event_id="gpm_precip_7d_us_barrow_2026-07-06",
+        alert_threshold_mm=300.0,
+    )
+
+    bundle = build_precipitation_bundle(event)
+    labels = {fact["label"]: fact["value"] for fact in bundle.current_facts}
+
+    assert "previous_record_mm" not in labels
+    assert "previous_record_year" not in labels
+    assert "deviation_from_record_mm" not in labels
+    assert labels["alert_threshold_mm"] == 300.0
+    assert "previous_record_mm" not in bundle.historical_context
+    assert bundle.historical_context["alert_threshold_mm"] == 300.0
 
 
 def test_snow_extreme_bundle_includes_f2_snow_context():

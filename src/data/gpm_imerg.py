@@ -137,6 +137,12 @@ class PrecipExtremeEvent:
     sample_cities: list[str]
     event_id: str
     source_leg: str | None = None  # witness leg that served (R-03); None = primary
+    # Static trigger for threshold-crossing kinds (multi_day_accumulation).
+    # DISTINCT from previous_record_mm on purpose: a trigger threshold is not
+    # an archive record, and presenting one as the other is a false-record
+    # claim no downstream gate can catch (#372 — the tweet matches the
+    # bundle, so BUNDLE_FACT passes). Record fields stay None for these.
+    alert_threshold_mm: float | None = None
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
@@ -1091,6 +1097,19 @@ def _detect_rolling_accumulations(
             window = rows[-period_days:]
             if len(window) != period_days or not _dates_are_consecutive([row["date"] for row in window]):
                 continue
+            # Stuck-sensor guard (#372): a window of IDENTICAL daily values is
+            # a stuck retrieval, not weather — Barrow logged exactly 71.25 mm
+            # eight days running (while ~5.6 mm actually fell) and minted a
+            # phantom "record" draft every few days for a month. Real daily
+            # satellite totals big enough to trip these thresholds are never
+            # equal to two decimals across a whole window.
+            if len({round(float(row["mm"]), 2) for row in window}) == 1:
+                print(
+                    f"[gpm] stuck-sensor guard: {reading.country}:{reading.city} "
+                    f"logged an identical {window[0]['mm']} mm for {period_days} "
+                    "consecutive days — skipping accumulation event"
+                )
+                continue
             total = sum(float(row["mm"]) for row in window)
             if total < threshold_mm:
                 continue
@@ -1101,9 +1120,14 @@ def _detect_rolling_accumulations(
                 date=reading.date,
                 mm_total=total,
                 period_days=period_days,
-                deviation_from_record_mm=total - threshold_mm,
-                previous_record_mm=threshold_mm,
+                # A threshold crossing is NOT a record: record fields stay
+                # None so the writer can never mint "above the previous 7-day
+                # record of 300.0 mm" from a static trigger (#372). The
+                # threshold rides its own field.
+                deviation_from_record_mm=None,
+                previous_record_mm=None,
                 previous_record_year=None,
+                alert_threshold_mm=threshold_mm,
                 lat=reading.lat,
                 lon=reading.lon,
                 city_count=None,

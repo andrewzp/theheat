@@ -23,15 +23,36 @@ def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
         {"label": "date", "value": event.date},
         {"label": "rainfall_mm", "value": round(event.mm_total, 1), "unit": "mm"},
         {"label": "period_days", "value": event.period_days},
-        {"label": "deviation_from_record_mm", "value": _rounded(event.deviation_from_record_mm)},
-        {"label": "previous_record_mm", "value": _rounded(event.previous_record_mm)},
-        {"label": "previous_record_year", "value": event.previous_record_year},
         {"label": "city_count", "value": event.city_count},
         {"label": "sample_cities", "value": event.sample_cities},
         {"label": "lat", "value": event.lat},
         {"label": "lon", "value": event.lon},
         *_climate_context_facts(event.lat, event.lon, category="rain"),
     ]
+    # Record facts ONLY when a real archive record exists (the daily_record
+    # path). Threshold-crossing kinds (multi_day_accumulation) carry
+    # alert_threshold_mm instead — a static trigger presented as "the previous
+    # record" is a false-record claim no downstream gate can catch, because
+    # the tweet matches the bundle (#372).
+    if event.previous_record_mm is not None:
+        facts.append({
+            "label": "deviation_from_record_mm",
+            "value": _rounded(event.deviation_from_record_mm),
+        })
+        facts.append({
+            "label": "previous_record_mm",
+            "value": _rounded(event.previous_record_mm),
+        })
+        facts.append({
+            "label": "previous_record_year",
+            "value": event.previous_record_year,
+        })
+    if event.alert_threshold_mm is not None:
+        facts.append({
+            "label": "alert_threshold_mm",
+            "value": _rounded(event.alert_threshold_mm),
+            "unit": "mm",
+        })
     # R-03: precip served by the Open-Meteo model witness during a GPM outage is a
     # MODEL estimate, not a satellite observation. model_fallback tells the writer
     # + fact-check prompts to never write "observed/measured/recorded" (R-00).
@@ -40,6 +61,16 @@ def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
         facts.append(
             {"label": "data_source", "value": "Open-Meteo multi-model forecast (ICON/GFS/ECMWF) — GPM backup, model estimate"}
         )
+    historical_context: dict[str, Any] = {
+        "scope": event.kind,
+        "period_days": event.period_days,
+        "city_count": event.city_count,
+    }
+    if event.previous_record_mm is not None:
+        historical_context["previous_record_mm"] = event.previous_record_mm
+        historical_context["previous_record_year"] = event.previous_record_year
+    if event.alert_threshold_mm is not None:
+        historical_context["alert_threshold_mm"] = event.alert_threshold_mm
     return StoryBundle(
         signal_kind="precipitation_extreme",
         where=where,
@@ -51,13 +82,7 @@ def build_precipitation_bundle(event: PrecipExtremeEvent) -> StoryBundle:
             "unit": "mm",
         },
         current_facts=facts,
-        historical_context={
-            "scope": event.kind,
-            "period_days": event.period_days,
-            "previous_record_mm": event.previous_record_mm,
-            "previous_record_year": event.previous_record_year,
-            "city_count": event.city_count,
-        },
+        historical_context=historical_context,
         raw_signal_dump=asdict(event),
     )
 
