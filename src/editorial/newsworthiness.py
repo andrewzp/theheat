@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -60,6 +60,11 @@ MATCH_WINDOW_SLACK_DAYS = 2
 # Defensive ceiling on attached facts per bundle — the writer needs one good
 # anecdote, not a dossier; an unbounded list only bloats the prompt.
 MAX_IMPACT_FACTS_PER_BUNDLE = 4
+
+# A2 (spec §4): the flat rescue at the fire score gate. Also the hard floor's
+# width — news can rescue a NEAR-miss (Colorado at 62 < 64 clears), never
+# resurrect a far-miss; the sensor still has to have nearly cleared the bar.
+MAX_NEWS_BOOST = 8
 
 # Values below this never count as a regex citation hit on their own: small
 # integers collide with dates ("July 3") and temperatures. Source-name
@@ -511,12 +516,125 @@ def detect_impact_citation(text: str, review_context: dict | None) -> ImpactCita
     return ImpactCitation(forced=forced, writer_flag=writer_flag, regex_hit=regex_hit)
 
 
+# ---------------------------------------------------------------------------
+# A2 — boost (rescue, capped, fire-first; spec §4)
+# ---------------------------------------------------------------------------
+
+
+def news_boost_enabled() -> bool:
+    """True only when BOTH the Bet A master flag and the boost flag are "1".
+    Same one-flip-rollback property as :func:`news_enrich_enabled`."""
+    return (
+        os.environ.get("THEHEAT_NEWSWORTHINESS_ENABLED", "") == "1"
+        and os.environ.get("THEHEAT_NEWS_BOOST_ENABLED", "") == "1"
+    )
+
+
+def _fire_event_matches_identity(
+    ev: dict,
+    *,
+    country: str,
+    when: str,
+    lat: float | None,
+    lon: float | None,
+    us_state: str | None,
+    incident_name: str | None,
+) -> bool:
+    """The enrich matcher's identity rules, evaluated at the RUNNER (before a
+    candidate exists) against one fire's raw fields. Boost attaches NO claim
+    to any tweet — a wrong boost drafts a borderline fire that still faces the
+    writer/critic gates — but the identity discipline is kept identical to
+    enrich so the two consumers never disagree about what "a match" means."""
+    if str(ev.get("kind") or "") != "fire":
+        return False
+    raw_place = ev.get("place")
+    place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+
+    event_country = _normalize_country(place.get("country"))
+    if not event_country or event_country != _normalize_country(country):
+        return False
+
+    if event_country == "united states":
+        event_state = _normalize_us_state(place.get("admin1"))
+        candidate_state = _normalize_us_state(us_state)
+        if not candidate_state and isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            resolved = lat_lon_to_state(float(lat), float(lon))
+            candidate_state = resolved.lower() if resolved else ""
+        if not event_state or event_state != candidate_state:
+            return False
+
+    event_name = _normalize_incident_name(place.get("name"))
+    fire_name = _normalize_incident_name(incident_name)
+    if event_name and event_name != fire_name:
+        # Named news is incident-scoped; a nameless fire (FIRMS hotspot) or a
+        # differently-named complex is not it.
+        return False
+
+    ev_window = _event_window(ev)
+    fire_date = _parse_date(when)
+    if ev_window is None or fire_date is None:
+        return False
+    return _windows_overlap(ev_window, (fire_date, fire_date), MATCH_WINDOW_SLACK_DAYS)
+
+
+def apply_newsworthiness_boost(
+    score: Any,
+    news_events: list[dict] | None,
+    *,
+    country: str,
+    when: str,
+    lat: float | None = None,
+    lon: float | None = None,
+    us_state: str | None = None,
+    incident_name: str | None = None,
+) -> Any:
+    """Rescue a NEAR-miss fire score with a sourced newsworthiness match.
+
+    Decision 3 made concrete (spec §4): flat +MAX_NEWS_BOOST, applied only
+    when the score currently FAILS and sits within MAX_NEWS_BOOST of its
+    threshold (the hard floor), only when the matched event carries ≥1
+    structured/verified impact entry (source-required). A passing score is
+    returned untouched — boost is a rescue, not a ranking inflator. The
+    provenance rides ``score.reasons`` into the suppression ledger, dashboard,
+    and triage, so an operator can always see why a signal cleared.
+    """
+    if score.passes:
+        return score
+    if score.total < score.threshold - MAX_NEWS_BOOST:
+        return score
+    for ev in news_events or []:
+        if not isinstance(ev, dict):
+            continue
+        entries = _usable_impact_entries(ev)
+        if not entries:
+            continue
+        if not _fire_event_matches_identity(
+            ev, country=country, when=when, lat=lat, lon=lon,
+            us_state=us_state, incident_name=incident_name,
+        ):
+            continue
+        source_name = str(entries[0].get("source_name") or "")
+        url = str(entries[0].get("url") or "")
+        return replace(
+            score,
+            total=score.total + MAX_NEWS_BOOST,
+            reasons=[
+                *score.reasons,
+                f"news_boost=+{MAX_NEWS_BOOST} per {source_name} ({url})",
+            ],
+        )
+    return score
+
+
 __all__ = [
     "MATCH_WINDOW_SLACK_DAYS",
     "MAX_IMPACT_FACTS_PER_BUNDLE",
+    "MAX_NEWS_BOOST",
     "ImpactCitation",
+    "apply_newsworthiness_boost",
     "attach_human_impact",
     "detect_impact_citation",
     "match_news_to_candidates",
+    "news_boost_enabled",
     "news_enrich_enabled",
 ]

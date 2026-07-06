@@ -18,6 +18,24 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
             if state.is_duplicate(bot_state, fire.event_id):
                 continue
             score = score_fire_event(fire.confidence, fire.frp, region=fire.nearest_city)
+            # Bet A A2 (default OFF): a sourced newsworthiness match can rescue
+            # a NEAR-miss before the gate — the Congo-vs-Colorado fix. Applied
+            # between score construction and the passes check so a rescued (or
+            # still-failing boosted) score reaches the suppression ledger with
+            # its news_boost provenance visible. A boost error degrades to the
+            # original score; it must never kill the cycle.
+            from src.editorial import newsworthiness as _news
+
+            if _news.news_boost_enabled():
+                try:
+                    score = _news.apply_newsworthiness_boost(
+                        score, bot_state.get("news_events"),
+                        country=fire.country,
+                        when=date.today().isoformat(),
+                        lat=fire.lat, lon=fire.lon,
+                    )
+                except Exception as boost_exc:  # noqa: BLE001
+                    print(f"[news_boost] firms boost error (continuing): {boost_exc!r}")
             if not _should_draft(score, fire.event_id):
                 continue
             source_promoted += 1

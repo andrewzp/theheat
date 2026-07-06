@@ -273,6 +273,12 @@ jobs:
           # Activate: gh variable set THEHEAT_NEWS_ENRICH_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_NEWS_ENRICH_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_NEWS_ENRICH_ENABLED: ${{ vars.THEHEAT_NEWS_ENRICH_ENABLED || '0' }}
+          # Bet A phase A2 (boost) — default OFF; needs the master flag ON too.
+          # When ON: a sourced news match rescues NEAR-miss fire scores
+          # (flat +8, floor threshold-8, provenance in score.reasons).
+          # Activate: gh variable set THEHEAT_NEWS_BOOST_ENABLED --body 1 --repo andrewzp/theheat
+          # Rollback: gh variable set THEHEAT_NEWS_BOOST_ENABLED --body 0 --repo andrewzp/theheat
+          THEHEAT_NEWS_BOOST_ENABLED: ${{ vars.THEHEAT_NEWS_BOOST_ENABLED || '0' }}
           # Throughput Initiative (2026-06-16). All default "0"/safe in code;
           # production controls them via repo variables. Activate in order
           # A->B->C->D per docs/2026-06-16_throughput-activation-runbook.md.

@@ -26,6 +26,23 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                         region=fc.region,
                         has_name=bool(fc.name),
                     )
+                    # Bet A A2 (default OFF): sourced near-miss rescue at the
+                    # fire score gate — see the firms runner seam for the
+                    # placement rationale. NIFC complexes carry a name + a
+                    # 2-letter region, so named news events can match here.
+                    from src.editorial import newsworthiness as _news
+
+                    if _news.news_boost_enabled():
+                        try:
+                            score = _news.apply_newsworthiness_boost(
+                                score, bot_state.get("news_events"),
+                                country=fc.country,
+                                when=today_iso,
+                                us_state=fc.region,
+                                incident_name=fc.name,
+                            )
+                        except Exception as boost_exc:  # noqa: BLE001
+                            print(f"[news_boost] nifc boost error (continuing): {boost_exc!r}")
                     if not _should_draft(score, fc.event_id):
                         continue
                     source_promoted += 1
