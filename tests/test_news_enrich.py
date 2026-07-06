@@ -241,6 +241,22 @@ class TestMatcher:
         )
         assert len(match_news_to_candidates([ev], [cand])) == 1
 
+    def test_nameless_event_never_matches_named_complex(self):
+        # Namespace partition (codex A2-r2): a nameless fire report never
+        # attaches to a NAMED complex — the NIFC retrieval leg would have
+        # produced a named event if the news were about that complex.
+        ev = _news_event(admin1="CO", name=None)
+        cand = _cand(
+            event_id="fp1",
+            legacy_type="fire_footprint",
+            facts=[
+                {"label": "complex_name", "value": "Alpine"},
+                {"label": "region", "value": "CO"},
+                {"label": "country", "value": "United States"},
+            ],
+        )
+        assert match_news_to_candidates([ev], [cand]) == []
+
     def test_name_contradiction_blocks_match(self):
         # Same state, same window — but the incident names disagree. A death
         # toll must never ride a different fire's tweet.

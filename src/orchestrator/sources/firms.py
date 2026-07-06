@@ -14,10 +14,43 @@ def run_firms(bot_state: BotState, current_run: dict | None) -> None:
     try:
         fires = _fetch_strict(firms.fetch_fires)
         source_promoted = 0
+        # Bet A A2 (default OFF): a sourced newsworthiness match can rescue a
+        # NEAR-miss before the gate — the Congo-vs-Colorado fix. The plan is
+        # computed over the WHOLE batch first so a nameless news event that
+        # matches several same-state fires rescues NONE of them (identity
+        # ambiguity — same rule as A1's enrich matcher). A planner error
+        # degrades to no boosts; it must never kill the cycle.
+        from src.editorial import newsworthiness as _news
+
+        boost_plan: dict[str, dict] = {}
+        if _news.news_boost_enabled():
+            try:
+                today_iso = date.today().isoformat()
+                boost_plan = _news.plan_fire_boosts(
+                    bot_state.get("news_events"),
+                    [
+                        {
+                            "id": f.event_id, "country": f.country,
+                            "when": today_iso, "lat": f.lat, "lon": f.lon,
+                        }
+                        for f in fires
+                    ],
+                )
+            except Exception as boost_exc:  # noqa: BLE001
+                print(f"[news_boost] firms boost planning error (continuing): {boost_exc!r}")
         for fire in fires:
             if state.is_duplicate(bot_state, fire.event_id):
                 continue
             score = score_fire_event(fire.confidence, fire.frp, region=fire.nearest_city)
+            # Applied between score construction and the passes check so a
+            # rescued (or still-failing boosted) score reaches the suppression
+            # ledger with its news_boost provenance visible.
+            matched_news = boost_plan.get(fire.event_id)
+            if matched_news is not None:
+                try:
+                    score = _news.apply_newsworthiness_boost(score, matched_news)
+                except Exception as boost_exc:  # noqa: BLE001
+                    print(f"[news_boost] firms boost error (continuing): {boost_exc!r}")
             if not _should_draft(score, fire.event_id):
                 continue
             source_promoted += 1

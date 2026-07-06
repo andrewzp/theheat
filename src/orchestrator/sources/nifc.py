@@ -16,6 +16,35 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
         try:
             complexes = _fetch_strict(fire_footprint.fetch_active_fire_perimeters)
             crossings = fire_footprint.detect_tier_crossings(complexes, cast(dict, bot_state))
+            # Bet A A2 (default OFF): sourced near-miss rescue at the fire
+            # score gate — batch-planned first so identity ambiguity rescues
+            # none (see the firms runner seam). NIFC complexes carry a name +
+            # a 2-letter region, so named news events can match here.
+            from src.editorial import newsworthiness as _news
+
+            boost_plan: dict[str, dict] = {}
+            if _news.news_boost_enabled():
+                try:
+                    # NAMED crossings only: a nameless complex cannot be
+                    # identity-matched by ANY event (named events require name
+                    # equality; nameless events belong to the FIRMS namespace
+                    # — letting one in here would re-open the cross-runner
+                    # double-rescue, codex P1 A2-r3: an unnamed CO crossing +
+                    # a CO hotspot both rescued by one nameless event).
+                    boost_plan = _news.plan_fire_boosts(
+                        bot_state.get("news_events"),
+                        [
+                            {
+                                "id": fc.event_id, "country": fc.country,
+                                "when": today_iso, "us_state": fc.region,
+                                "incident_name": fc.name,
+                            }
+                            for fc in crossings
+                            if fc.name
+                        ],
+                    )
+                except Exception as boost_exc:  # noqa: BLE001
+                    print(f"[news_boost] nifc boost planning error (continuing): {boost_exc!r}")
             for fc in crossings:
                 try:
                     if state.is_duplicate(bot_state, fc.event_id):
@@ -26,6 +55,12 @@ def run_fire_footprint(bot_state: BotState, current_run: dict | None) -> None:
                         region=fc.region,
                         has_name=bool(fc.name),
                     )
+                    matched_news = boost_plan.get(fc.event_id)
+                    if matched_news is not None:
+                        try:
+                            score = _news.apply_newsworthiness_boost(score, matched_news)
+                        except Exception as boost_exc:  # noqa: BLE001
+                            print(f"[news_boost] nifc boost error (continuing): {boost_exc!r}")
                     if not _should_draft(score, fc.event_id):
                         continue
                     source_promoted += 1

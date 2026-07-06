@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -60,6 +60,11 @@ MATCH_WINDOW_SLACK_DAYS = 2
 # Defensive ceiling on attached facts per bundle — the writer needs one good
 # anecdote, not a dossier; an unbounded list only bloats the prompt.
 MAX_IMPACT_FACTS_PER_BUNDLE = 4
+
+# A2 (spec §4): the flat rescue at the fire score gate. Also the hard floor's
+# width — news can rescue a NEAR-miss (Colorado at 62 < 64 clears), never
+# resurrect a far-miss; the sensor still has to have nearly cleared the bar.
+MAX_NEWS_BOOST = 8
 
 # Values below this never count as a regex citation hit on their own: small
 # integers collide with dates ("July 3") and temperatures. Source-name
@@ -322,13 +327,23 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
 
     event_name = _normalize_incident_name(place.get("name"))
     candidate_name = _candidate_incident_name(bundle)
-    if event_name and str(ev.get("kind") or "") == "fire":
-        # A NAMED fire event is incident-scoped: its impact belongs to THAT
-        # fire and no other. Nameless FIRMS hotspots in the same state are not
-        # it — requiring the same name on the candidate (NIFC complexes carry
-        # one) is the only way a named death toll can never ride a different
-        # fire's tweet (codex P0, round 1).
-        if not candidate_name or event_name != candidate_name:
+    if str(ev.get("kind") or "") == "fire":
+        if event_name:
+            # A NAMED fire event is incident-scoped: its impact belongs to
+            # THAT fire and no other. Nameless FIRMS hotspots in the same
+            # state are not it — requiring the same name on the candidate
+            # (NIFC complexes carry one) is the only way a named death toll
+            # can never ride a different fire's tweet (codex P0, A1 round 1).
+            if not candidate_name or event_name != candidate_name:
+                return False
+        elif candidate_name:
+            # A NAMELESS fire event never matches a NAMED complex either: if
+            # the news is about that complex, the retrieval lane's NIFC leg
+            # produces a NAMED event for it — a nameless report matching a
+            # named entity is a weaker identity claim than the lane can
+            # already make. This also partitions fire events by candidate
+            # namespace (nameless↔FIRMS, named↔NIFC), which is what makes
+            # per-runner boost planning sound (codex P1, A2 round 2).
             return False
     elif event_name and candidate_name and event_name != candidate_name:
         return False
@@ -511,12 +526,166 @@ def detect_impact_citation(text: str, review_context: dict | None) -> ImpactCita
     return ImpactCitation(forced=forced, writer_flag=writer_flag, regex_hit=regex_hit)
 
 
+# ---------------------------------------------------------------------------
+# A2 — boost (rescue, capped, fire-first; spec §4)
+# ---------------------------------------------------------------------------
+
+
+def news_boost_enabled() -> bool:
+    """True only when BOTH the Bet A master flag and the boost flag are "1".
+    Same one-flip-rollback property as :func:`news_enrich_enabled`."""
+    return (
+        os.environ.get("THEHEAT_NEWSWORTHINESS_ENABLED", "") == "1"
+        and os.environ.get("THEHEAT_NEWS_BOOST_ENABLED", "") == "1"
+    )
+
+
+def _fire_event_matches_identity(
+    ev: dict,
+    *,
+    country: str,
+    when: str,
+    lat: float | None,
+    lon: float | None,
+    us_state: str | None,
+    incident_name: str | None,
+) -> bool:
+    """The enrich matcher's identity rules, evaluated at the RUNNER (before a
+    candidate exists) against one fire's raw fields. Boost attaches NO claim
+    to any tweet — a wrong boost drafts a borderline fire that still faces the
+    writer/critic gates — but the identity discipline is kept identical to
+    enrich so the two consumers never disagree about what "a match" means."""
+    if str(ev.get("kind") or "") != "fire":
+        return False
+    raw_place = ev.get("place")
+    place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+
+    event_country = _normalize_country(place.get("country"))
+    if not event_country or event_country != _normalize_country(country):
+        return False
+
+    if event_country == "united states":
+        event_state = _normalize_us_state(place.get("admin1"))
+        candidate_state = _normalize_us_state(us_state)
+        if not candidate_state and isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            resolved = lat_lon_to_state(float(lat), float(lon))
+            candidate_state = resolved.lower() if resolved else ""
+        if not event_state or event_state != candidate_state:
+            return False
+
+    event_name = _normalize_incident_name(place.get("name"))
+    fire_name = _normalize_incident_name(incident_name)
+    if event_name and event_name != fire_name:
+        # Named news is incident-scoped; a nameless fire (FIRMS hotspot) or a
+        # differently-named complex is not it.
+        return False
+    if not event_name and fire_name:
+        # And a nameless report never matches a NAMED complex (see the enrich
+        # matcher's identical rule). Because FIRMS fires are nameless and NIFC
+        # crossings are named, this partitions events by runner — a nameless
+        # event can only ever be planned within the FIRMS batch, so the
+        # per-runner ambiguity guard is cycle-sound without shared state
+        # (codex P1, A2 round 2: one nameless CO event + a FIRMS hotspot +
+        # a NIFC crossing must not be rescued twice).
+        return False
+
+    ev_window = _event_window(ev)
+    fire_date = _parse_date(when)
+    if ev_window is None or fire_date is None:
+        return False
+    return _windows_overlap(ev_window, (fire_date, fire_date), MATCH_WINDOW_SLACK_DAYS)
+
+
+def plan_fire_boosts(
+    news_events: list[dict] | None,
+    fires: list[dict],
+) -> dict[str, dict]:
+    """Plan which fire gets which news event's rescue — BATCH-scoped, so the
+    ambiguity discipline matches A1's enrich matcher exactly (codex P1, A2 r1).
+
+    ``fires``: one dict per detected fire in this runner pass —
+    ``{"id", "country", "when", "lat"?, "lon"?, "us_state"?, "incident_name"?}``.
+
+    Rules:
+    - a NAMELESS fire event matching more than one fire in the batch plans
+      NONE (two same-state fires cannot be told apart; rescuing both would
+      let one news report promote N different fires);
+    - a NAMED event only ever matches same-named fires (identity check);
+      several same-named hits are the same incident reported twice — the
+      first takes the plan;
+    - one fire takes at most ONE event (no boost stacking: +8 is the cap).
+    """
+    plan: dict[str, dict] = {}
+    for ev in news_events or []:
+        if not isinstance(ev, dict) or not _usable_impact_entries(ev):
+            continue
+        hits = [
+            f for f in fires
+            if _fire_event_matches_identity(
+                ev,
+                country=str(f.get("country") or ""),
+                when=str(f.get("when") or ""),
+                lat=f.get("lat"),
+                lon=f.get("lon"),
+                us_state=f.get("us_state"),
+                incident_name=f.get("incident_name"),
+            )
+        ]
+        if not hits:
+            continue
+        raw_place = ev.get("place")
+        place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+        if len(hits) > 1 and not _normalize_incident_name(place.get("name")):
+            # Nameless event, several plausible fires: ambiguous identity —
+            # rescue none rather than guess (A1 parity).
+            continue
+        fire_id = str(hits[0].get("id") or "")
+        if fire_id and fire_id not in plan:
+            plan[fire_id] = ev
+    return plan
+
+
+def apply_newsworthiness_boost(score: Any, matched_event: dict) -> Any:
+    """Rescue a NEAR-miss fire score with its planned newsworthiness match.
+
+    Decision 3 made concrete (spec §4): flat +MAX_NEWS_BOOST, applied only
+    when the score currently FAILS and sits within MAX_NEWS_BOOST of its
+    threshold (the hard floor), only when the matched event carries ≥1
+    structured/verified impact entry (source-required — re-checked here as
+    the belt to :func:`plan_fire_boosts`' suspenders). A passing score is
+    returned untouched — boost is a rescue, not a ranking inflator. The
+    provenance rides ``score.reasons`` into the suppression ledger, dashboard,
+    and triage, so an operator can always see why a signal cleared.
+    """
+    if score.passes:
+        return score
+    if score.total < score.threshold - MAX_NEWS_BOOST:
+        return score
+    entries = _usable_impact_entries(matched_event) if isinstance(matched_event, dict) else []
+    if not entries:
+        return score
+    source_name = str(entries[0].get("source_name") or "")
+    url = str(entries[0].get("url") or "")
+    return replace(
+        score,
+        total=score.total + MAX_NEWS_BOOST,
+        reasons=[
+            *score.reasons,
+            f"news_boost=+{MAX_NEWS_BOOST} per {source_name} ({url})",
+        ],
+    )
+
+
 __all__ = [
     "MATCH_WINDOW_SLACK_DAYS",
     "MAX_IMPACT_FACTS_PER_BUNDLE",
+    "MAX_NEWS_BOOST",
     "ImpactCitation",
+    "apply_newsworthiness_boost",
     "attach_human_impact",
     "detect_impact_citation",
     "match_news_to_candidates",
+    "news_boost_enabled",
     "news_enrich_enabled",
+    "plan_fire_boosts",
 ]
