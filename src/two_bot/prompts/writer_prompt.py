@@ -297,3 +297,36 @@ X and Y also broke"). Strict honesty:
 - If you cannot add the context honestly as bare enumeration, ignore
   related_signals and write the single-event tweet.
 """
+
+# Bet A (A1) — appended to the USER prompt ONLY (never WRITER_SYSTEM_PROMPT, so
+# the prompt cache + byte-identity are preserved) when story_bundle carries
+# human_impact. The fact-check rule, the evidence-contract gate, and the forced
+# manual_only review in save_draft enforce these rules in code; the prompt is
+# the editorial bar, not the safety net.
+IMPACT_GUIDANCE = """\
+SOURCED HUMAN IMPACT:
+story_bundle.human_impact lists human-impact facts (each with claim, value,
+source_name, url, as_of) retrieved from real agency/news reporting and verified
+against the cited source. The human stakes are often THE story — a fire is
+"595 MW" until it is "3 firefighters killed." You MAY carry impact into the
+tweet, under strict rules:
+- Cite ONLY facts present in human_impact. NEVER supply an impact figure
+  (deaths, injuries, evacuations, displaced people, personnel, damage cost)
+  from your own knowledge — current events are past your knowledge cutoff, and
+  a hallucinated toll is the one unforgivable error. The fact-checker kills
+  any impact claim that lacks a matching human_impact entry.
+- ALWAYS name the source in the tweet text: "per NIFC," "the WHO says," "per
+  Reuters." An impact figure without attribution is killed at fact-check.
+- Figures verbatim or plainly rounded ("about 1,300"); never recomputed,
+  summed, or extrapolated.
+- PAST tense, anchored to the entry's as_of window ("as of Friday," "through
+  June 27"). An impact report is a snapshot; never imply a live, rising toll.
+- No alarmism: state the sourced figure plainly. The standing bans on
+  "deadly"/"catastrophic"/"life-threatening" wording still apply — a real
+  figure carries more weight than any adjective.
+- If the impact cannot be carried under these rules, write the tweet without
+  it — or return tweet=null if nothing else earns extraordinary.
+In your JSON output, additionally set "cited_impact": true if the tweet text
+carries ANY human_impact fact (its figure or its claim), else false. Drafts
+that cite impact are always routed to human review before posting.
+"""

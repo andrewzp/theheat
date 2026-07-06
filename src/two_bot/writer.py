@@ -7,6 +7,7 @@ import os
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
+    IMPACT_GUIDANCE,
     MULTISIGNAL_GUIDANCE,
     WRITER_SYSTEM_PROMPT,
     WRITER_USER_PROMPT_TEMPLATE,
@@ -95,6 +96,7 @@ def _parse_writer_json(raw: str) -> WriterResult:
         raise ValueError("Writer returned invalid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Writer response must be a JSON object")
+    cited_impact = parsed.get("cited_impact")
     try:
         return WriterResult(
             tweet=parsed.get("tweet"),
@@ -103,6 +105,7 @@ def _parse_writer_json(raw: str) -> WriterResult:
             era_anchor_used=parsed.get("era_anchor_used"),
             peer_comparison_used=parsed.get("peer_comparison_used"),
             reasoning=parsed.get("reasoning") or "",
+            cited_impact=cited_impact if isinstance(cited_impact, bool) else None,
         )
     except TypeError as exc:
         raise ValueError("Writer response is missing required fields") from exc
@@ -236,6 +239,10 @@ def write_tweet(
     # this bundle actually carries related_signals.
     if getattr(bundle, "related_signals", None):
         base_user_prompt = f"{base_user_prompt}\n\n{MULTISIGNAL_GUIDANCE}"
+    # Bet A (A1): sourced-impact guidance rides the USER prompt (cache-safe)
+    # only when this bundle actually carries human_impact facts.
+    if getattr(bundle, "human_impact", None):
+        base_user_prompt = f"{base_user_prompt}\n\n{IMPACT_GUIDANCE}"
     if revision_constraint:
         base_user_prompt = (
             f"{base_user_prompt}\n\n"

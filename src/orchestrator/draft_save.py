@@ -8,9 +8,11 @@ from typing import Any
 from src.editorial.scheduling import defer_to_engagement_window
 from src.editorial.approval import (
     AUTOSHIP_ALLOWLIST,
+    ApprovalPolicy,
     autoship_on_critic_pass_enabled,
     recommend_approval_policy,
 )
+from src.editorial.newsworthiness import detect_impact_citation
 from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
@@ -268,10 +270,42 @@ def save_draft(
         signal_total=score.total if score is not None else 0,
         candidate_score=candidate_score,
     )
+
+    # Bet A decision 4: a draft whose TEXT cites a sourced human_impact fact is
+    # forced manual_only regardless of signal type — including the autoship
+    # allowlist types. Death tolls are life-safety-adjacent; a human stays in
+    # the loop for every impact-carrying tweet in v1. The rule keys on what the
+    # tweet says (writer self-report + regex sweep, fail-closed), not what lane
+    # produced it — an enriched draft that does NOT cite impact keeps its #352
+    # autoship eligibility.
+    citation = detect_impact_citation(tweet_text, review_context)
+    if citation.forced:
+        if citation.disagreement:
+            print(
+                "[draft] impact-citation signals disagree "
+                f"(writer={citation.writer_flag} regex={citation.regex_hit}) "
+                "— forcing manual review (fail-closed)"
+            )
+        policy = ApprovalPolicy(
+            key="impact_citation_manual",
+            mode="manual_only",
+            recommended_delay_minutes=None,
+            can_auto_approve=False,
+            reason=(
+                "Draft cites a sourced human-impact fact. Impact-carrying "
+                "tweets always get a human review (Bet A decision 4)."
+            ),
+        )
+        draft["forced_manual"] = "cited_impact"
+
     draft["approval_policy"] = policy.as_dict()
     draft.setdefault("approval_mode", "manual")
 
-    if autoship_on_critic_pass_enabled() and tweet_type in AUTOSHIP_ALLOWLIST:
+    if (
+        not citation.forced
+        and autoship_on_critic_pass_enabled()
+        and tweet_type in AUTOSHIP_ALLOWLIST
+    ):
         # Phase B: when the flag is ON, this branch governs ALL auto-shipping for the
         # HARD allowlist types — including the armed_auto-policy (strong) variants, so
         # they no longer bare-post around the critic/freshness/idempotency guards.
