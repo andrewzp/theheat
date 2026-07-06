@@ -378,6 +378,20 @@ def _drain_and_write_triage_queue(
         except Exception as exc:  # noqa: BLE001
             print(f"[multisignal] attach_related_signals error (continuing): {exc!r}")
 
+    # Bet A (A1, default OFF): match the retrieval lane's verified news events
+    # to this cycle's candidates and attach sourced human_impact facts. Same
+    # placement discipline as Phase D — once, before both drain paths; a
+    # matcher error degrades to un-enriched drafting, never a dead cycle.
+    from src.editorial import newsworthiness as _news
+
+    if _news.news_enrich_enabled():
+        try:
+            enriched = _news.attach_human_impact(queue, bot_state.get("news_events"))
+            if enriched:
+                print(f"[news_enrich] attached human_impact to {enriched} candidate(s)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"[news_enrich] attach_human_impact error (continuing): {exc!r}")
+
     # Phase A funnel telemetry: snapshot the shadow slate from the FULL ranked
     # queue BEFORE draining (codex must-fix #3 — end-of-cycle is too late to
     # reconstruct it). No-ops when funnel_sink is None (flag OFF).

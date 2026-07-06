@@ -56,6 +56,12 @@ class StoryBundle:
     # is preserved and single-event behavior is byte-identical when empty.
     country: str = ""
     related_signals: list["RelatedSignal"] = field(default_factory=list)
+    # Bet A (A1): sourced human-impact facts matched from the newsworthiness
+    # lane. Each entry carries claim/value/source_name/url/as_of — the iron
+    # constraint; the evidence contract blocks the writer on any entry missing
+    # its warrant. Rides the USER prompt via to_dict (never the cached system
+    # prompt); empty = today's behavior everywhere.
+    human_impact: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         data: dict[str, Any] = {
@@ -74,6 +80,8 @@ class StoryBundle:
             data["country"] = self.country
         if self.related_signals:
             data["related_signals"] = [r.to_dict() for r in self.related_signals]
+        if self.human_impact:
+            data["human_impact"] = self.human_impact
         return data
 
 
@@ -113,6 +121,12 @@ class WriterResult:
     era_anchor_used: str | None
     peer_comparison_used: str | None
     reasoning: str
+    # Bet A (A1): the writer's self-report — True iff the tweet text carries a
+    # bundle.human_impact fact. Requested only via the IMPACT_GUIDANCE user-
+    # prompt rider, so it is None for every non-enriched draft. Advisory: a
+    # regex sweep in save_draft cross-checks it (either signal forces
+    # manual_only; a missing field on an enriched draft fails closed).
+    cited_impact: bool | None = None
 
     def __post_init__(self):
         if (self.tweet is None) == (self.kill_reason is None):
@@ -122,7 +136,7 @@ class WriterResult:
             )
 
     def to_dict(self) -> dict:
-        return {
+        data: dict[str, Any] = {
             "tweet": self.tweet,
             "kill_reason": self.kill_reason,
             "angle_chosen": self.angle_chosen,
@@ -130,6 +144,10 @@ class WriterResult:
             "peer_comparison_used": self.peer_comparison_used,
             "reasoning": self.reasoning,
         }
+        # Omit when None so non-enriched drafts serialize byte-identically.
+        if self.cited_impact is not None:
+            data["cited_impact"] = self.cited_impact
+        return data
 
 
 @dataclass

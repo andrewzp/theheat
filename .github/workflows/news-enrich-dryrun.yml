@@ -1,0 +1,68 @@
+name: news-enrich-dryrun
+
+# On-demand LIVE dry-run of the Bet A phase A1 sourced-impact writer path.
+#
+# Runs scripts/news_enrich_writer_dryrun.py inside Actions — where
+# ANTHROPIC_API_KEY and GEMINI_API_KEY live as repo secrets — so a fire draft
+# with an attached human_impact fixture goes through the REAL evidence
+# contract → writer (IMPACT_GUIDANCE rider) → safety → §F → fact-check →
+# critic chain, and the decision-4 routing (forced manual_only when the text
+# cites impact) is printed per candidate. This is the required live-verify
+# BEFORE flipping THEHEAT_NEWS_ENRICH_ENABLED.
+#
+# workflow_dispatch ONLY — never scheduled (it makes paid Anthropic + Gemini
+# calls). It POSTS NOTHING and touches NO prod state: a dry-run only prints
+# drafts; the live posting path is untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      samples:
+        description: 'Number of candidate drafts'
+        default: '3'
+      no_impact:
+        description: 'Control run without human_impact (true/false)'
+        default: 'false'
+      frp:
+        description: 'Fire radiative power (MW)'
+        default: '595'
+      personnel:
+        description: 'NIFC personnel figure'
+        default: '1450'
+      fatalities:
+        description: 'Verified fatalities figure'
+        default: '3'
+
+concurrency:
+  group: news-enrich-dryrun
+  cancel-in-progress: false
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Run news-enrich writer dry-run (live writer → fact-check → critic)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # `|| true`: a clean kill is informative, not a job failure — we want the
+        # drafts + gate verdicts in the log regardless of how many would ship.
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.no_impact }}" = "true" ]; then EXTRA="--no-impact"; fi
+          python scripts/news_enrich_writer_dryrun.py \
+            --samples "${{ inputs.samples }}" \
+            --frp "${{ inputs.frp }}" \
+            --personnel "${{ inputs.personnel }}" \
+            --fatalities "${{ inputs.fatalities }}" \
+            $EXTRA || true

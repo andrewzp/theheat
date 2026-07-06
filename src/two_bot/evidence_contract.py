@@ -134,6 +134,29 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
             )
         )
 
+    # Bet A (A1): the iron constraint as a pre-writer gate. Every attached
+    # human-impact fact must carry its full warrant (claim + value +
+    # source_name + url + as_of) or the writer never runs — belt to the
+    # retrieval lane's parse-time suspenders. Errors, not warnings: a bundle
+    # offering an unwarranted impact claim is unusable, full stop.
+    for index, entry in enumerate(getattr(bundle, "human_impact", None) or []):
+        if not isinstance(entry, dict) or not (
+            all(
+                isinstance(entry.get(key), str) and entry.get(key)
+                for key in ("claim", "source_name", "url", "as_of")
+            )
+            and entry.get("value") not in (None, "")
+        ):
+            issues.append(
+                _issue(
+                    "error",
+                    "impact_entry_unwarranted",
+                    f"human_impact[{index}]",
+                    "human_impact entries require claim, value, source_name, "
+                    "url, and as_of",
+                )
+            )
+
     raw_signal_dump = bundle.raw_signal_dump
     if not isinstance(raw_signal_dump, dict) or not raw_signal_dump:
         issues.append(

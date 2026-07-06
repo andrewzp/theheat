@@ -1,0 +1,436 @@
+"""Bet A editorial consumers — matching sourced news events to detected signals.
+
+Phase A1 (enrich): at the triage drain, match ``state["news_events"]`` (the
+retrieval lane's structured/verified, cited world events) to the cycle's
+candidate queue and attach ``human_impact`` facts to the matched StoryBundles
+so the tweet can carry "3 firefighters killed, per NIFC" instead of only a
+megawatt figure. Design: docs/superpowers/specs/2026-07-03-newsworthiness-bet-a-design.md §5.
+
+Matching is deliberately conservative — **no match beats a wrong match**,
+because a wrong match risks attaching a death toll to the wrong event, which
+is worse than missing it (spec §3). Concretely:
+
+- kind families are strict: fire news ↔ fire candidates, heat-mortality news
+  ↔ hot-side temperature candidates (cold records never host a heat toll);
+- country must agree; US events additionally require state agreement (a
+  country-wide US match could pin a Texas toll on a Vermont record) — FIRMS
+  hotspots resolve their state from lat/lon via the census bounding boxes;
+- when BOTH sides carry an incident name and the names disagree, the match is
+  blocked (a fatality figure must never ride a different fire's tweet);
+- an event that matches several candidates attaches to the highest-scored one
+  only, so the same impact fact is never duplicated across a cycle's drafts.
+
+This module also owns the decision-4 citation detector used by ``save_draft``:
+any draft whose text cites a ``human_impact`` fact is forced ``manual_only``
+regardless of signal type — including the #352 autoship-eligible record types.
+Detection is two-signal (the writer's ``cited_impact`` JSON field + a regex
+sweep for the attached sources/values) and fails closed: either signal, or a
+missing writer field, forces manual review.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Any
+
+from src.editorial._regions import STATE_BOUNDING_BOXES
+
+# Candidate legacy_type families per news kind (spec §3: fire↔fire,
+# heat_mortality↔heat classes). Hot-side only — attaching excess-mortality
+# to a cold record would be a category error.
+_FIRE_TYPES: frozenset[str] = frozenset({"fire", "fire_footprint"})
+_HEAT_TYPES: frozenset[str] = frozenset({
+    "record", "monthly_high", "all_time_high", "anomaly_hot",
+    "absolute_extreme", "regional_anomaly", "wet_bulb_extreme",
+})
+_NEWS_KIND_TO_LEGACY_TYPES: dict[str, frozenset[str]] = {
+    "fire": _FIRE_TYPES,
+    "heat_mortality": _HEAT_TYPES,
+}
+
+# A news event spans [window_start, window_end]; a candidate is a point date
+# (or its own window for regional anomalies). Allow a small slack so a fire
+# detected the day before the feed row still matches — identity fields
+# (country/state/kind/name) carry the precision, the window carries recency.
+MATCH_WINDOW_SLACK_DAYS = 2
+
+# Defensive ceiling on attached facts per bundle — the writer needs one good
+# anecdote, not a dossier; an unbounded list only bloats the prompt.
+MAX_IMPACT_FACTS_PER_BUNDLE = 4
+
+# Values below this never count as a regex citation hit on their own: small
+# integers collide with dates ("July 3") and temperatures. Source-name
+# attribution is the load-bearing signal for small figures — the writer prompt
+# REQUIRES attribution, so a real citation always carries the source name.
+_MIN_REGEX_VALUE = 100
+
+_US_COUNTRY_TOKENS: frozenset[str] = frozenset({
+    "united states", "usa", "us", "u.s.", "u.s.a.", "united states of america",
+})
+
+# 2-letter USPS code -> full state name. Kept in sync by hand with
+# src/data/ghcn.py _US_STATE_NAMES and the sentinel's copy — state names do
+# not drift, and a local table keeps this module import-light.
+_US_STATE_NAMES: dict[str, str] = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
+    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
+    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska",
+    "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina",
+    "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon",
+    "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
+    "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+_US_STATE_NAMES_LOWER: frozenset[str] = frozenset(
+    name.lower() for name in _US_STATE_NAMES.values()
+)
+
+
+def news_enrich_enabled() -> bool:
+    """True only when BOTH the Bet A master flag and the enrich flag are "1".
+
+    Requiring the master keeps the one-flip rollback property: turning
+    ``THEHEAT_NEWSWORTHINESS_ENABLED`` off kills retrieval AND every consumer,
+    so a stale 6-day-old ``news_events`` window can never keep enriching after
+    the lane is shut down.
+    """
+    return (
+        os.environ.get("THEHEAT_NEWSWORTHINESS_ENABLED", "") == "1"
+        and os.environ.get("THEHEAT_NEWS_ENRICH_ENABLED", "") == "1"
+    )
+
+
+# ---------------------------------------------------------------------------
+# candidate/event field extraction
+# ---------------------------------------------------------------------------
+
+
+def _fact_value(bundle: Any, label: str) -> Any:
+    for fact in getattr(bundle, "current_facts", None) or []:
+        if isinstance(fact, dict) and fact.get("label") == label:
+            return fact.get("value")
+    return None
+
+
+def _normalize_country(raw: Any) -> str:
+    text = str(raw or "").strip().lower()
+    if text in _US_COUNTRY_TOKENS:
+        return "united states"
+    return text
+
+
+def _candidate_country(bundle: Any) -> str:
+    country = _normalize_country(getattr(bundle, "country", ""))
+    if country:
+        return country
+    country = _normalize_country(_fact_value(bundle, "country"))
+    if country:
+        return country
+    # Regional anomalies keep the region name only as a fact; when the region
+    # IS a country ("France"), it is the honest country signal. Multi-country
+    # regions ("Iberia") normalize to a token no news country equals — miss,
+    # not wrong match.
+    return _normalize_country(_fact_value(bundle, "region"))
+
+
+def _normalize_us_state(raw: Any) -> str:
+    """Canonicalize a state token (2-letter code or full name) to the full
+    lowercase name; empty string when it is not a recognizable US state."""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    full = _US_STATE_NAMES.get(text.upper())
+    if full:
+        return full.lower()
+    lowered = text.lower()
+    if lowered in _US_STATE_NAMES_LOWER:
+        return lowered
+    return ""
+
+
+def _candidate_us_states(bundle: Any) -> frozenset[str]:
+    """The candidate's US state(s), canonical full names, lowercase.
+
+    GHCN temperature bundles carry a full-name ``state`` fact; NIFC complexes
+    carry a 2-letter ``region`` fact; FIRMS hotspots carry only lat/lon, which
+    resolve through the census bounding boxes (boxes overlap, so this returns
+    a SET — a match requires the news state to be in it).
+    """
+    explicit = _normalize_us_state(_fact_value(bundle, "state"))
+    if explicit:
+        return frozenset({explicit})
+    region = _normalize_us_state(_fact_value(bundle, "region"))
+    if region:
+        return frozenset({region})
+    lat = _fact_value(bundle, "lat")
+    lon = _fact_value(bundle, "lon")
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        hits = {
+            name.lower()
+            for name, (lat_min, lat_max, lon_min, lon_max) in STATE_BOUNDING_BOXES.items()
+            if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max
+        }
+        return frozenset(hits)
+    return frozenset()
+
+
+def _normalize_incident_name(raw: Any) -> str:
+    """Lowercased incident name with fire/complex noise words stripped, so
+    "Alpine Fire" and "Alpine" compare equal."""
+    text = str(raw or "").strip().lower()
+    text = re.sub(r"\b(fire|complex|incident)\b", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _candidate_incident_name(bundle: Any) -> str:
+    for label in ("complex_name", "incident_name", "name"):
+        name = _normalize_incident_name(_fact_value(bundle, label))
+        if name:
+            return name
+    return ""
+
+
+def _parse_date(raw: Any) -> date | None:
+    text = str(raw or "")
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _candidate_window(bundle: Any) -> tuple[date, date] | None:
+    """The candidate's date span: its window facts when present (regional
+    anomalies), else the point date from ``when``."""
+    start = _parse_date(_fact_value(bundle, "window_start"))
+    end = _parse_date(_fact_value(bundle, "window_end"))
+    if start and end and start <= end:
+        return (start, end)
+    point = _parse_date(getattr(bundle, "when", ""))
+    if point:
+        return (point, point)
+    return None
+
+
+def _event_window(ev: dict) -> tuple[date, date] | None:
+    start = _parse_date(ev.get("window_start"))
+    end = _parse_date(ev.get("window_end"))
+    if start and end and start <= end:
+        return (start, end)
+    if start:
+        return (start, start)
+    if end:
+        return (end, end)
+    return None
+
+
+def _windows_overlap(a: tuple[date, date], b: tuple[date, date], slack_days: int) -> bool:
+    slack = timedelta(days=slack_days)
+    return a[0] - slack <= b[1] and b[0] - slack <= a[1]
+
+
+def _valid_impact_entry(entry: Any) -> bool:
+    """The deterministic floor, re-applied at the consumer boundary: claim +
+    value + source_name + url + as_of, or the entry does not exist here.
+    (The retrieval lane already floors at parse time; this is the belt for
+    state written by any other/older writer.)"""
+    if not isinstance(entry, dict):
+        return False
+    return all(
+        isinstance(entry.get(k), str) and entry.get(k)
+        for k in ("claim", "source_name", "url", "as_of")
+    ) and entry.get("value") not in (None, "")
+
+
+def _usable_impact_entries(ev: dict) -> list[dict]:
+    if ev.get("confidence") not in ("structured", "verified"):
+        return []
+    return [e for e in (ev.get("impact") or []) if _valid_impact_entry(e)]
+
+
+def _score_total(candidate: Any) -> int:
+    try:
+        return int(getattr(getattr(candidate, "score", None), "total", 0) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# matching (spec §3)
+# ---------------------------------------------------------------------------
+
+
+def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
+    bundle = getattr(candidate, "bundle", None)
+    if bundle is None:
+        return False
+
+    families = _NEWS_KIND_TO_LEGACY_TYPES.get(str(ev.get("kind") or ""))
+    if not families or getattr(candidate, "legacy_type", "") not in families:
+        return False
+
+    raw_place = ev.get("place")
+    place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+    event_country = _normalize_country(place.get("country"))
+    candidate_country = _candidate_country(bundle)
+    if not event_country or not candidate_country or event_country != candidate_country:
+        return False
+
+    if event_country == "united states":
+        # A country-wide US match is too coarse to pin an impact figure on one
+        # station/hotspot — require state agreement on both sides.
+        event_state = _normalize_us_state(place.get("admin1"))
+        if not event_state or event_state not in _candidate_us_states(bundle):
+            return False
+
+    event_name = _normalize_incident_name(place.get("name"))
+    candidate_name = _candidate_incident_name(bundle)
+    if event_name and candidate_name and event_name != candidate_name:
+        return False
+
+    ev_window = _event_window(ev)
+    cand_window = _candidate_window(bundle)
+    if ev_window is None or cand_window is None:
+        return False
+    return _windows_overlap(ev_window, cand_window, MATCH_WINDOW_SLACK_DAYS)
+
+
+def match_news_to_candidates(
+    news_events: list[dict] | None,
+    candidates: list[Any],
+) -> list[tuple[dict, Any]]:
+    """Match each structured/verified news event to at most ONE candidate.
+
+    Returns ``(event, candidate)`` pairs. The ambiguity rule (spec §3): an
+    event matching several candidates attaches to the highest-scored one only,
+    so the same impact fact never appears in two drafts of the same cycle.
+    """
+    pairs: list[tuple[dict, Any]] = []
+    for ev in news_events or []:
+        if not isinstance(ev, dict) or not _usable_impact_entries(ev):
+            continue
+        hits = [c for c in candidates if _event_matches_candidate(ev, c)]
+        if not hits:
+            continue
+        hits.sort(key=_score_total, reverse=True)
+        pairs.append((ev, hits[0]))
+    return pairs
+
+
+def attach_human_impact(queue: list[Any], news_events: list[dict] | None) -> int:
+    """Attach matched events' impact facts to their candidates' bundles, in
+    place. Returns the number of candidates that gained facts. Dedup on
+    (claim, url); total facts per bundle capped."""
+    enriched: set[int] = set()
+    for ev, candidate in match_news_to_candidates(news_events, queue):
+        bundle = candidate.bundle
+        existing = list(getattr(bundle, "human_impact", None) or [])
+        seen = {(e.get("claim"), e.get("url")) for e in existing}
+        for entry in _usable_impact_entries(ev):
+            if len(existing) >= MAX_IMPACT_FACTS_PER_BUNDLE:
+                break
+            key = (entry.get("claim"), entry.get("url"))
+            if key in seen:
+                continue
+            seen.add(key)
+            existing.append(dict(entry))
+        if existing:
+            bundle.human_impact = existing
+            enriched.add(id(candidate))
+    return len(enriched)
+
+
+# ---------------------------------------------------------------------------
+# decision 4 — impact-citation detection (used by save_draft)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImpactCitation:
+    """The two-signal verdict on whether a draft's text cites impact facts.
+
+    ``forced`` fails closed: it is False only when the writer explicitly said
+    cited_impact=false AND the regex sweep found no attached source/value in
+    the text. A missing writer field (contract violation) forces manual.
+    """
+
+    forced: bool
+    writer_flag: bool | None
+    regex_hit: bool
+
+    @property
+    def disagreement(self) -> bool:
+        if self.writer_flag is None:
+            return True
+        return self.writer_flag != self.regex_hit
+
+
+def _numeric_value_pattern(value: Any) -> str | None:
+    """A digit-boundary regex for a large numeric value, tolerant of thousands
+    separators ("1300" matches "1,300" and "1300")."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not value.is_integer():
+        return None
+    number = int(value)
+    if number < _MIN_REGEX_VALUE:
+        return None
+    digits = str(number)
+    with_commas = f"{number:,}"
+    alternatives = {re.escape(digits), re.escape(with_commas)}
+    return rf"(?<![\d,.])(?:{'|'.join(sorted(alternatives))})(?![\d])"
+
+
+def _impact_regex_hit(text: str, entries: list[dict]) -> bool:
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        source = str(entry.get("source_name") or "").strip()
+        if source and re.search(
+            rf"(?<!\w){re.escape(source)}(?!\w)", text, re.IGNORECASE
+        ):
+            return True
+        pattern = _numeric_value_pattern(entry.get("value"))
+        if pattern and re.search(pattern, text):
+            return True
+    return False
+
+
+def detect_impact_citation(text: str, review_context: dict | None) -> ImpactCitation:
+    """Decide whether this draft cites a human_impact fact (decision 4).
+
+    Reads the pipeline's ``review_context["two_bot"]`` — ``human_impact``
+    (the facts the writer was offered) and ``cited_impact`` (the writer's
+    self-report). A draft whose bundle carried no impact facts can never be
+    forced by this rule; impact-sounding text there is fact-check's problem.
+    """
+    two_bot = (review_context or {}).get("two_bot")
+    two_bot = two_bot if isinstance(two_bot, dict) else {}
+    entries = [e for e in (two_bot.get("human_impact") or []) if isinstance(e, dict)]
+    if not entries:
+        return ImpactCitation(forced=False, writer_flag=None, regex_hit=False)
+
+    raw_flag = two_bot.get("cited_impact")
+    writer_flag = raw_flag if isinstance(raw_flag, bool) else None
+    regex_hit = _impact_regex_hit(text or "", entries)
+    forced = writer_flag is not False or regex_hit
+    return ImpactCitation(forced=forced, writer_flag=writer_flag, regex_hit=regex_hit)
+
+
+__all__ = [
+    "MATCH_WINDOW_SLACK_DAYS",
+    "MAX_IMPACT_FACTS_PER_BUNDLE",
+    "ImpactCitation",
+    "attach_human_impact",
+    "detect_impact_citation",
+    "match_news_to_candidates",
+    "news_enrich_enabled",
+]

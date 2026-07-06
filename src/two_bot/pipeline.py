@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 import os
+from typing import Any
 
 from src import config
 from src.data.firms import FireEvent
@@ -393,7 +394,7 @@ def generate_draft(
                 return None
             _mark_stage("critic", "pass")
 
-        metadata = {
+        metadata: dict[str, Any] = {
             "signal_kind": bundle.signal_kind,
             "angle_chosen": writer_result.angle_chosen,
             "era_anchor_used": writer_result.era_anchor_used,
@@ -404,6 +405,13 @@ def generate_draft(
             "writer_model": writer.WRITER_MODEL,
             "fact_checker_model": fact_check.FACT_CHECKER_MODEL,
         }
+        # Bet A (A1): carry the offered impact facts + the writer's citation
+        # self-report into review_context, where save_draft's decision-4 gate
+        # (forced manual_only) and the dashboard reviewer read them.
+        human_impact = getattr(bundle, "human_impact", None)
+        if human_impact:
+            metadata["human_impact"] = human_impact
+            metadata["cited_impact"] = writer_result.cited_impact
         if critic_result is not None:
             metadata["critic"] = critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL

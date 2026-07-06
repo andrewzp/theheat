@@ -118,6 +118,12 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
 
 **j3) Regional anomalies are DAILY-MAX only — no overnight-low / nighttime claims.** A `regional_anomaly` index is built from ERA5 daily-MAXIMUM temperatures vs a daily-max normal. It carries NO overnight-low, nighttime, or diurnal-range evidence. REJECT any claim about what the nights did: "no nighttime relief," "no nighttime/overnight reset," "nights stayed hot," "even the overnight lows," "no cooling after dark," or any minimum-temperature assertion — these are UNVERIFIABLE (the bundle cannot see them), regardless of how plausible they sound for a heatwave. Likewise REJECT downstream human-impact specifics the bundle does not carry (health, mortality, hospitalizations, transport/infrastructure failures). The honest stakes are the size and persistence of the DAYTIME (daily-max) departure itself.
 
+**k) Human-impact claims — MECHANICAL RULE: no entry, no claim.** A human-impact claim is any death toll, casualty/injury count, excess-mortality figure, evacuation/displacement count, response-personnel count, or damage cost. The bundle MAY carry a `human_impact` list of independently verified, cited impact facts (each with claim, value, source_name, url, as_of). For EVERY impact claim in the tweet:
+   - ACCEPT only when it matches a `human_impact` entry — the figure equals the entry's `value` (verbatim or plainly rounded, e.g. "about 1,300" for 1300) AND the tweet names the entry's source ("per NIFC," "the WHO says").
+   - An impact claim with NO matching `human_impact` entry is UNVERIFIABLE — a FAILURE, even if you believe it from your own knowledge, even if it sounds plausible, even if the number is round. Current events are past the writer's knowledge cutoff; an unsourced toll is the one unforgivable error.
+   - A matching figure WITHOUT source attribution in the tweet text is a FAILURE — impact claims require named attribution, unlike ordinary world knowledge.
+   - When the bundle carries NO `human_impact` at all, EVERY impact claim in the tweet is UNVERIFIABLE. This was always the spirit of the rules; it is now mechanical: no entry, no claim.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
