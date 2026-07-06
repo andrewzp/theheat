@@ -67,6 +67,21 @@ MAX_IMPACT_FACTS_PER_BUNDLE = 4
 # REQUIRES attribution, so a real citation always carries the source name.
 _MIN_REGEX_VALUE = 100
 
+# Casualty/impact word stems. On an ENRICHED draft (impact facts were offered),
+# any of these in the text forces manual review even when the value is small
+# and the source name is absent — the deterministic net for "3 firefighters
+# killed" written with a lying/mistaken cited_impact=false. Scoped to enriched
+# drafts only, so ordinary fire/heat tweets are untouched; an enriched draft
+# discussing impact without citing it properly is exactly what a human should
+# see anyway (fail-closed is the safe direction for death tolls). Stems are
+# word-boundary-anchored at the START (open-ended after, so fatalit→fatalities
+# but "atoll" never reads as "toll").
+_IMPACT_WORD_RE = re.compile(
+    r"\b(?:killed|dead|death|died|fatalit|casualt|injur|hospitaliz|missing|"
+    r"evacuat|displaced|perished|toll)",
+    re.IGNORECASE,
+)
+
 _US_COUNTRY_TOKENS: frozenset[str] = frozenset({
     "united states", "usa", "us", "u.s.", "u.s.a.", "united states of america",
 })
@@ -293,7 +308,15 @@ def _event_matches_candidate(ev: dict, candidate: Any) -> bool:
 
     event_name = _normalize_incident_name(place.get("name"))
     candidate_name = _candidate_incident_name(bundle)
-    if event_name and candidate_name and event_name != candidate_name:
+    if event_name and str(ev.get("kind") or "") == "fire":
+        # A NAMED fire event is incident-scoped: its impact belongs to THAT
+        # fire and no other. Nameless FIRMS hotspots in the same state are not
+        # it — requiring the same name on the candidate (NIFC complexes carry
+        # one) is the only way a named death toll can never ride a different
+        # fire's tweet (codex P0, round 1).
+        if not candidate_name or event_name != candidate_name:
+            return False
+    elif event_name and candidate_name and event_name != candidate_name:
         return False
 
     ev_window = _event_window(ev)
@@ -312,6 +335,13 @@ def match_news_to_candidates(
     Returns ``(event, candidate)`` pairs. The ambiguity rule (spec §3): an
     event matching several candidates attaches to the highest-scored one only,
     so the same impact fact never appears in two drafts of the same cycle.
+
+    Fire tightening (codex P0, round 1): fire news is INCIDENT-scoped, so a
+    nameless fire event that matches more than one candidate attaches to NONE
+    — two same-state fires in-window cannot be told apart, and guessing by
+    score is exactly the wrong-fire death-toll failure. Heat-mortality news is
+    REGION-scoped (a country heatwave is one event), so the spec's
+    highest-score rule stands there.
     """
     pairs: list[tuple[dict, Any]] = []
     for ev in news_events or []:
@@ -320,6 +350,13 @@ def match_news_to_candidates(
         hits = [c for c in candidates if _event_matches_candidate(ev, c)]
         if not hits:
             continue
+        if len(hits) > 1 and str(ev.get("kind") or "") == "fire":
+            raw_place = ev.get("place")
+            place: dict[str, Any] = raw_place if isinstance(raw_place, dict) else {}
+            if not _normalize_incident_name(place.get("name")):
+                # Nameless fire event, several plausible hosts: ambiguous
+                # identity — attach to none rather than guess.
+                continue
         hits.sort(key=_score_total, reverse=True)
         pairs.append((ev, hits[0]))
     return pairs
@@ -401,7 +438,7 @@ def _impact_regex_hit(text: str, entries: list[dict]) -> bool:
         pattern = _numeric_value_pattern(entry.get("value"))
         if pattern and re.search(pattern, text):
             return True
-    return False
+    return bool(_IMPACT_WORD_RE.search(text or ""))
 
 
 def detect_impact_citation(text: str, review_context: dict | None) -> ImpactCitation:

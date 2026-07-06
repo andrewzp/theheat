@@ -195,14 +195,21 @@ class TestFlag:
 
 
 class TestMatcher:
-    def test_us_fire_matches_firms_candidate_by_state_bbox(self):
-        # NIFC event in Colorado ↔ FIRMS hotspot at a Colorado lat/lon.
-        ev = _news_event(admin1="CO", name="Alpine")
+    def test_nameless_us_fire_matches_firms_candidate_by_state_bbox(self):
+        # A nameless fire report in Colorado ↔ the single FIRMS hotspot at a
+        # Colorado lat/lon.
+        ev = _news_event(admin1="CO", name=None)
         matches = match_news_to_candidates([ev], [_firms_fire_cand()])
         assert len(matches) == 1
 
+    def test_named_fire_event_never_matches_nameless_hotspot(self):
+        # Incident-scoped identity: the "Alpine" death toll must not ride a
+        # nameless same-state FIRMS hotspot (codex P0, round 1).
+        ev = _news_event(admin1="CO", name="Alpine")
+        assert match_news_to_candidates([ev], [_firms_fire_cand()]) == []
+
     def test_us_fire_does_not_match_wrong_state(self):
-        ev = _news_event(admin1="CO")
+        ev = _news_event(admin1="CO", name=None)
         vermont = _firms_fire_cand(lat=44.0, lon=-72.6)
         assert match_news_to_candidates([ev], [vermont]) == []
 
@@ -303,20 +310,51 @@ class TestMatcher:
         assert match_news_to_candidates([ev], [heat]) == []
 
     def test_window_outside_slack_does_not_match(self):
-        ev = _news_event(admin1="CO", window_start=_iso(10), window_end=_iso(8))
+        ev = _news_event(admin1="CO", name=None, window_start=_iso(10), window_end=_iso(8))
         cand = _firms_fire_cand(when=_iso(0))
         assert match_news_to_candidates([ev], [cand]) == []
 
-    def test_ambiguous_event_attaches_to_highest_score_only(self):
+    def test_nameless_fire_event_with_two_hosts_attaches_to_none(self):
+        # Two same-state fires in-window cannot be told apart — guessing by
+        # score is the wrong-fire failure. Attach to none.
         ev = _news_event(admin1="CO", name=None)
         weak = _firms_fire_cand(event_id="weak", total=66)
         strong = _firms_fire_cand(event_id="strong", total=90)
+        assert match_news_to_candidates([ev], [weak, strong]) == []
+
+    def test_ambiguous_heat_event_attaches_to_highest_score_only(self):
+        # Heat mortality is region-scoped: a country heatwave is ONE event, so
+        # the spec's highest-score ambiguity rule stands.
+        ev = _news_event(kind="heat_mortality", country="France", admin1=None,
+                         name=None, confidence="verified")
+        weak = _cand(event_id="weak", legacy_type="regional_anomaly", total=66,
+                     facts=[{"label": "region", "value": "France"}])
+        strong = _cand(event_id="strong", legacy_type="all_time_high",
+                       signal_kind="all_time_record", total=90,
+                       facts=[{"label": "country", "value": "France"}])
         matches = match_news_to_candidates([ev], [weak, strong])
         assert len(matches) == 1
         assert matches[0][1].event_id == "strong"
 
+    def test_named_fire_event_matches_same_named_complex_among_hotspots(self):
+        ev = _news_event(admin1="CO", name="Alpine")
+        hotspot = _firms_fire_cand(event_id="hotspot", total=95)
+        complex_cand = _cand(
+            event_id="alpine",
+            legacy_type="fire_footprint",
+            total=70,
+            facts=[
+                {"label": "complex_name", "value": "Alpine Fire"},
+                {"label": "region", "value": "CO"},
+                {"label": "country", "value": "United States"},
+            ],
+        )
+        matches = match_news_to_candidates([ev], [hotspot, complex_cand])
+        assert len(matches) == 1
+        assert matches[0][1].event_id == "alpine"
+
     def test_unverified_event_never_matches(self):
-        ev = _news_event(admin1="CO", confidence="unverified")
+        ev = _news_event(admin1="CO", name=None, confidence="unverified")
         assert match_news_to_candidates([ev], [_firms_fire_cand()]) == []
 
 
@@ -328,7 +366,7 @@ class TestMatcher:
 class TestAttach:
     def test_attaches_impact_to_matched_bundle(self):
         cand = _firms_fire_cand()
-        n = attach_human_impact([cand], [_news_event(admin1="CO")])
+        n = attach_human_impact([cand], [_news_event(admin1="CO", name=None)])
         assert n == 1
         assert cand.bundle.human_impact[0]["source_name"] == "NIFC"
 
@@ -340,7 +378,7 @@ class TestAttach:
 
     def test_unwarranted_entries_are_dropped_at_attach(self):
         bad = {"claim": "10 dead", "value": 10, "source_name": "", "url": "", "as_of": ""}
-        ev = _news_event(admin1="CO", impact=[bad, _impact()])
+        ev = _news_event(admin1="CO", name=None, impact=[bad, _impact()])
         cand = _firms_fire_cand()
         attach_human_impact([cand], [ev])
         assert [e["source_name"] for e in cand.bundle.human_impact] == ["NIFC"]
@@ -357,7 +395,7 @@ class TestAttach:
             _impact(claim=f"fact {i}", value=100 + i, url=f"https://example.test/{i}")
             for i in range(MAX_IMPACT_FACTS_PER_BUNDLE + 3)
         ]
-        ev = _news_event(admin1="CO", impact=impacts)
+        ev = _news_event(admin1="CO", name=None, impact=impacts)
         cand = _firms_fire_cand()
         attach_human_impact([cand], [ev])
         assert len(cand.bundle.human_impact) == MAX_IMPACT_FACTS_PER_BUNDLE
@@ -416,6 +454,20 @@ class TestCitationDetection:
         # load-bearing regex signal for small figures.
         rc = _review_context(entries=[_impact(value=3)], cited_impact=False)
         c = detect_impact_citation("Verkhoyansk hit 14.8C on July 3.", rc)
+        assert c.forced is False
+
+    def test_casualty_wording_forces_even_without_source_or_value(self):
+        # The deterministic net for a lying/mistaken cited_impact=false: an
+        # enriched draft whose TEXT talks casualties always gets a human.
+        rc = _review_context(entries=[_impact(value=3)], cited_impact=False)
+        c = detect_impact_citation("Three firefighters died battling the blaze.", rc)
+        assert c.forced is True
+
+    def test_casualty_wording_in_plain_draft_is_out_of_scope(self):
+        # No impact facts offered → decision 4 never fires; impact-sounding
+        # text on a non-enriched draft is fact-check's problem.
+        rc = _review_context(entries=None, cited_impact=None)
+        c = detect_impact_citation("Evacuations were ordered.", rc)
         assert c.forced is False
 
     def test_missing_writer_flag_fails_closed(self):
@@ -598,7 +650,17 @@ class TestPromptRiders:
         from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
 
         assert "human_impact" in FACT_CHECK_SYSTEM_PROMPT
-        assert "no entry, no claim" in FACT_CHECK_SYSTEM_PROMPT
+        assert "no warrant, no claim" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_fact_check_prompt_preserves_bundle_fact_impact_claims(self):
+        # codex P0 (round 1): GDACS floods cite population_affected from
+        # ordinary bundle facts — the new rule must keep those BUNDLE_FACT,
+        # not kill them for lacking a human_impact entry.
+        from src.two_bot.prompts.fact_check_prompt import FACT_CHECK_SYSTEM_PROMPT
+
+        assert "ordinary bundle fact" in FACT_CHECK_SYSTEM_PROMPT
+        assert "population_affected" in FACT_CHECK_SYSTEM_PROMPT
+        assert "Nothing changed for these" in FACT_CHECK_SYSTEM_PROMPT
 
     def test_writer_result_parses_cited_impact(self):
         from src.two_bot.writer import _parse_writer_json
@@ -633,7 +695,7 @@ class TestDrainWiring:
 
         state = deepcopy(DEFAULT_STATE)
         state["drafts"] = []
-        state["news_events"] = [_news_event(admin1="CO")]
+        state["news_events"] = [_news_event(admin1="CO", name=None)]
         return state
 
     def test_flag_off_leaves_bundles_untouched(self, monkeypatch):
