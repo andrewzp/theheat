@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 14 (PR-A) — fire geocode nearest-city fallback: no more unplaceable coordinate labels (2026-07-07)
+
+- **(program row 14, PR-A)**: `reverse_geocode_simple` (`src/data/firms.py`)
+  gained a second fallback step. Previously, a FIRMS hotspot outside all
+  ~80 `_GEO_BOXES` entries degraded straight to a coordinate string
+  (`"22.3N, 88.1E"`) with `country="Unknown"` — a label a reader can't
+  place and the writer can't qualify. Now, on a box miss, the geocoder
+  finds the nearest `data/cities.csv` place (638 rows, `load_cities()`,
+  `_haversine_km`) within `GEOCODE_NEAR_CITY_MAX_KM = 200.0`: if found,
+  `region=f"near {city}"` with that city's country; only beyond 200 km of
+  every curated city does the old coordinate-string + "Unknown" fallback
+  remain (open ocean, deep polar — honest and rare). Boxes are still
+  checked first and always win when they match — curated editorial names
+  like "the Amazon Basin" beat "near Manaus." The city list loads lazily
+  into a module-level `_CITIES_CACHE`, with a try/except degrading to the
+  old fallback if the CSV is unreadable — geocoding must never break the
+  fire fetch. Paired writer-prompt touch: the fire section's Key fire
+  fields list now notes `nearest_region` may read `"near <city>"` — cite
+  it verbatim, never upgrade it into a claim the fire is IN that city (an
+  honesty tightening; additions only). TDD: three new tests in
+  `TestReverseGeocodeNearestCityFallback` (fixture point verified against
+  all 638 cities.csv rows — Karachi at 103.69 km is the confirmed nearest
+  to (25.76, 67.28), outside every box) confirmed FAIL-for-the-right-reason
+  before the implementation, then GREEN; a paired prompt-content test
+  (`TestFireNearestRegionNearCityClause`) pins the new clause the same way.
+
 ### Row 7 — precipitation four-moves: the rain ticker retired, threshold≠record in the writer's own rules (2026-07-07)
 
 - **(program row 7)**: the third type in the E1 four-moves pattern (fire and

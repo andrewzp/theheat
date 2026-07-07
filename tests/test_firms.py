@@ -236,6 +236,41 @@ class TestReverseGeocodeSimple:
         assert country == "Argentina"
 
 
+class TestReverseGeocodeNearestCityFallback:
+    """Two-step fallback upgrade (row 14, PR-A): a hotspot that misses every
+    curated ``_GEO_BOXES`` entry no longer degrades straight to an unplaceable
+    coordinate string. If a ``data/cities.csv`` place sits within
+    ``GEOCODE_NEAR_CITY_MAX_KM``, label it ``"near <city>"`` with that city's
+    country. Boxes still win when they match — curated editorial names like
+    "the Amazon Basin" beat "near Manaus"."""
+
+    def test_near_city_outside_every_box(self):
+        """(25.76, 67.28) sits ~104 km from Karachi, Pakistan and outside
+        every _GEO_BOXES entry (Pakistan's box starts at lat 27.0; this point
+        is at 25.76) — verified against all 638 cities.csv rows: Karachi is
+        the true nearest at 103.69 km, well inside ``GEOCODE_NEAR_CITY_MAX_KM``
+        (200 km)."""
+        region, country = reverse_geocode_simple(25.76, 67.28)
+        assert region == "near Karachi"
+        assert country == "Pakistan"
+
+    def test_beyond_max_km_falls_back_to_coordinate_string(self):
+        """Deep South Atlantic point: nearest cities.csv city (Ushuaia,
+        Argentina) is ~2330 km away — far beyond ``GEOCODE_NEAR_CITY_MAX_KM``.
+        Old coordinate-string + "Unknown" fallback must remain unchanged."""
+        region, country = reverse_geocode_simple(-60.0, -30.0)
+        assert region == "60.0S, 30.0W"
+        assert country == "Unknown"
+
+    def test_box_hit_unaffected_by_nearest_city_logic(self):
+        """A point inside a curated box (Los Angeles / California) must keep
+        its box label — boxes are checked first, before any nearest-city
+        fallback runs."""
+        region, country = reverse_geocode_simple(34.05, -118.25)
+        assert region == "California"
+        assert country == "US"
+
+
 class TestLatLonToRegion:
     """Region lookups against the bounding-box table. Values moved to
     more specific labels as part of the Apr 24 geocoder overhaul."""

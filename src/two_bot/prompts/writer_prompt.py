@@ -157,6 +157,7 @@ Key fire fields:
 - `region_climate_system` / `climate_mechanism_note` / `season_context` — bundle-supplied ecosystem context; this is your verifiable system-clause material.
 - `evidence_grade` — hotspots may carry `observed_alt_host` (the alternate-source rule above applies).
 - `human_impact` (either kind, when present) — sourced impact facts; the user-prompt rules govern.
+- `nearest_region` may read `"near <city>"` — the geocoder's honest nearest-city fallback when the hotspot fell outside every curated region box. Cite it verbatim; never upgrade "near <city>" into a claim the fire is IN that city — the point could be a hundred kilometers out. Pair it with the country fact (e.g. "near Karachi, Pakistan") when the geography-qualifier rule above demands qualification — the bare city name alone does not satisfy it.
 
 Evidence discipline: a hotspot proves intensity at a point at a pass — not spread, not containment, not what is burning beyond what the bundle names. A footprint proves the perimeter crossed a line — not where it goes next. The fire draft that leads with the event, anchors scale in tier words, names only what the bundle names, and carries sourced human stakes is BOTH the one that stops the scroll AND the only one that survives review.
 

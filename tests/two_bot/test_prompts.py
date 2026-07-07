@@ -557,3 +557,18 @@ class TestPrecipFourMoves:
     def test_no_single_system_attribution(self):
         assert "one weather system" not in WRITER_SYSTEM_PROMPT
         assert "single storm or weather system is UNVERIFIABLE" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestFireNearestRegionNearCityClause:
+    """Row 14 PR-A paired writer-prompt touch: the geocoder's nearest-city
+    fallback (src/data/firms.py) can now label a hotspot ``"near <city>"``
+    instead of an unplaceable coordinate string. The fire section's Key
+    fire fields list must cite it verbatim without upgrading it into an
+    IN-that-city claim — an honesty tightening, additions only."""
+
+    def test_nearest_region_near_city_clause_present(self):
+        assert '"near <city>"' in WRITER_SYSTEM_PROMPT
+
+    def test_clause_bans_upgrading_near_to_in(self):
+        assert "never upgrade" in WRITER_SYSTEM_PROMPT
+        assert "claim the fire is IN that city" in WRITER_SYSTEM_PROMPT
