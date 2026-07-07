@@ -257,10 +257,10 @@ Before → after, same honest facts (a Galápagos DHW reading crossing the 12
 °C-week tier, with a `reef_context` fact naming the Cromwell Current upwelling
 system):
 - ✗ template: *"Galápagos Islands has accumulated 12.0 °C-weeks of heat stress,
-  Bleaching Alert Level 3."* (the convergent two-sentence form; no reef fact, no
+  mortality expected."* (the convergent two-sentence form; no reef fact, no
   system clause, indistinguishable from the next region's draft.)
-- ✓ distinct: *"Galápagos reefs have crossed into mortality-risk territory — 12.0
-  °C-weeks of accumulated heat, NOAA's Alert Level 3 tier. These corals normally
+- ✓ distinct: *"Galápagos reefs have crossed into the dose the bundle flags as
+  mortality expected — 12.0 °C-weeks of accumulated heat. These corals normally
   ride the Cromwell Current's cold upwelling; this dose says that buffer failed."*
   (reef situation leads, DHW framed as a dose via the tier word, ONE reef_context
   fact supplies the distinguishing system clause, no trend claim on a snapshot.)
