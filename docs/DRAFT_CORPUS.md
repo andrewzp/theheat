@@ -11,6 +11,291 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-07 — Daily corpus grading (6 fresh drafts; complete queue turnover)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: **complete
+turnover — 2nd occurrence** (after Jul 3→Jul 4's). All 15 of Jul 6's pending drafts (10
+Jul-4 carryovers + 5 Jul-5 fresh, including the 2 strict Basra-class bulk-reject
+candidates — Basrah + Al Başrah al Qadīmah `absolute_extreme` — this routine had flagged
+unactionable for 2 consecutive cycles) are gone from the queue. 6 fresh drafts, all
+created 2026-07-07.
+
+**Major overnight pipeline changes, directly relevant to this plan:**
+
+1. **`main` merged** (`29ac380`, "merge the daily-plan grading corpus to main," #384,
+   2026-07-06T23:42Z). The 29-consecutive-cycle "`main` unmerged since Jun 8" saga this
+   plan has repeated in every entry since Jul 1 is now **resolved** — retiring that
+   operational note going forward.
+2. **P_tier and P_dust SHIPPED as code** — PR #386 "detection-plumbing ban + dust PM10
+   WHO anchor (P_tier, P_dust)," merged 2026-07-07T05:06:48Z. `writer_prompt.py` gained
+   an explicit "DETECTION PLUMBING IS NOT A FACT" rule (bans `band_label`, score
+   thresholds, trigger-definition citations — precisely the tier-jargon shape this plan
+   has tracked for 8 cycles) paired with a fact-check rule and a critic
+   `internal_taxonomy_leak` kill. Dust bundles now carry a pre-computed PM10 24h-mean WHO
+   anchor (`who_pm10_multiple`) — precisely the P_dust fix this plan proposed. See
+   Active/Shipped proposals below for the moved writeups.
+3. **Structural staleness fix** — PR #385 "forecast-elapsed sweep — elapsed-forecast
+   drafts auto-reject (the Basrah class)," merged 2026-07-07T04:55:15Z, provenance-aware
+   (GHCN-observed `absolute_extreme` never sweeps). This is almost certainly why the
+   2 strict bulk-reject candidates this routine could never write-reject (38 consecutive
+   `gh`-absent skips) are simply gone from today's queue — the pipeline now rejects that
+   exact class upstream, independent of this routine's gist-write limitation.
+
+**Fix-timing note (read the grades below with this in mind):** PR #386 merged
+2026-07-07T05:06:48Z. Drafts [1] Zaragoza (03:39 UTC) and [2] Ahvaz (03:40 UTC) were
+generated **~1.5h before** the fix — they still show the tier-jargon violation, exactly
+as expected pre-fix, and are graded as violations below. Drafts [3]–[6] (07:44–14:56 UTC)
+postdate the fix by 2.6–9.8h, but **none of them are `absolute_extreme` / `fire_footprint`
+/ `cyclone_rapid_intensification`** — the only types the shipped ban actually targets —
+so this cycle cannot yet empirically confirm the fix. First real test is the next
+post-05:06-UTC draft of one of those three types (or `regional_sst_anomaly`, the 4th
+type P_tier was confirmed on).
+
+**Staleness review:** 0 bulk-reject candidates — all 6 drafts same-day fresh (oldest
+~11h, newest ~15min at grading). `gh` CLI still absent; write path not attempted (nothing
+qualifies). 39th consecutive `gh`-absent skip (May 13 → Jul 7), though per the note above
+this specific Basra-class pattern may now be handled upstream by PR #385 regardless.
+
+**Grade distribution (6 fresh drafts):** 2 A- / 0 B+ / 3 B / 1 B- / 0 C / 0 D-F.
+**A-rate: 33% (2/6).** Gap from resumption bar: 17pp. Best cycle since Jul 3's 33% (n=3);
+largest sample above 20% since Jun 29's bar-clearing 80% (n=5).
+
+**Headline finding:** The batch's 2 A- drafts both land on a **declarative incongruity/
+named-absence close** rather than the mechanism-only form that's capped so many prior
+drafts — Snowshoe, WV's elevation-inversion reveal ("89°F is the kind of reading the
+valley floor expects, not the ridge") and Soweto's "nowhere to vent," the sharpest
+`air_quality_hazard` close in the corpus and that type's first A-grade. Meanwhile a new
+signal type debuts (`record`, day-of-year records — Aibonito, Puerto Rico) landing
+directly in the P_close mechanism-only failure mode on its first corpus appearance, same
+as every other type's debut. And a post-fix `air_quality_hazard` draft (Riyadh) surfaces
+a fresh, closely-related variant of the just-shipped detection-plumbing violation —
+naming its own signal-kind category ("This is a PM2.5 signal, not dust") rather than a
+severity tier — suggesting this morning's fix may not fully close the self-reference
+class. See new proposal A4 below.
+
+### A-grade drafts
+
+#### [3] Snowshoe, West Virginia — all_time_high — 89°F (31.7°C) — **A-**
+
+> *Snowshoe, West Virginia hit 89°F (31.7°C) on July 3 — hottest daily maximum in 52
+> years of records, 2°F above the 1986 mark. Snowshoe sits atop Cheat Mountain at
+> roughly 4,800 feet; at that elevation, 89°F is the kind of reading the valley floor
+> expects, not the ridge.*
+
+**Score:** 90. Created 2026-07-07T07:44:36Z.
+
+- **P_compound check:** VIOLATION — "hottest daily maximum in 52 years of records, 2°F
+  above the 1986 mark" is the classic archive+margin double-qualifier, 6th cycle
+  observed (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, now Jul 7).
+- **P_close check:** POSITIVE, and a genuinely fresh form. "89°F is the kind of reading
+  the valley floor expects, not the ridge" is a declarative elevation-inversion
+  incongruity — it doesn't just name an absence, it states outright that the reading is
+  displaced from where it belongs. Same family as Congo fire's "broken convective lid"
+  and Prudhoe Bay's latitude peer-comparison (both A-), not the softer implied forms.
+- **Wodehouse rule?** Clean. No restate-padding beyond the compound-qualifier opener,
+  no poetry attempt, no defensive closer.
+
+Same P_compound-present-but-overcome-by-a-strong-close pattern as Jul 4's Loxahatchee
+and Prudhoe Bay — reconfirms P_compound is a soft cost, not a hard cap, unlike P_tier.
+
+#### [5] Soweto, South Africa — air_quality_hazard — PM2.5 154.3 μg/m³ / 10.3× WHO — **A-**
+
+> *Soweto, South Africa: model-estimated 24-hour mean PM2.5 of 154.3 μg/m³ on July 7 —
+> 10.3× the WHO daily guideline. Winter in Soweto is coal season; households burning
+> solid fuel in the Highveld's cold, stable air have nowhere to vent.*
+
+**Score:** 74. Created 2026-07-07T14:54:36Z.
+
+- **P_dust check (air_quality_hazard side):** WHO multiple stated (10.3×) — 4th
+  consecutive `air_quality_hazard` corpus draft to state it unprompted (after Al Aḥmadī
+  10.1×, Johannesburg 10.9×, and see [6] below), while `dust_event` sits at 11 of 11
+  without it (pre-fix; see P_dust SHIPPED writeup).
+- **Named mechanic:** Real causal chain — named season ("coal season"), source
+  attribution ("households burning solid fuel"), and the Highveld's cold/stable-air
+  trapping mechanism.
+- **P_close check:** POSITIVE. "Have nowhere to vent" is a direct declarative
+  named-absence consequence — same family as Costa Rica's "nowhere to drain" (A-) and
+  Amsterdam's "nowhere for the water to go" (A-), not Johannesburg's softer
+  accumulation-trajectory "concentrating it through the day" (failing).
+- **Wodehouse rule?** Clean.
+
+**First A-grade `air_quality_hazard` draft in the corpus.** Confirms the type clears once
+the close lands declaratively — the causal chain was already there (Johannesburg had an
+equally rich one); the gap was purely in the landing, exactly as P_close's thesis predicts.
+
+### B-grade drafts
+
+#### [2] Ahvaz, Iran — absolute_extreme — 47.5°C (118°F) forecast — **B**
+
+> *Ahvaz, Iran is forecast to hit 47.5°C (118°F) on July 7 — above the 47°C
+> absolute-extreme threshold for the Northern Subtropics. Ahvaz sits in the Khuzestan
+> lowlands, where the Zagros block westerly moisture and afternoon heat builds with no
+> relief from elevation or sea.*
+
+**Score:** 83. Created 2026-07-07T03:40:07Z (pre-fix; see fix-timing note above).
+
+- **P_tier check:** VIOLATION — same "47°C absolute-extreme threshold for the Northern
+  Subtropics" phrase family as Basrah/Al Başrah al Qadīmah. Ahvaz is ~100km from the
+  Iraq border, same Mesopotamian/Khuzestan lowland climate zone as the Basra cluster —
+  worth distinguishing from Doha's Jul 5 instance, which was a genuine independent
+  cross-location confirmation (1,500+ km away); Ahvaz is closer to a cluster-adjacent
+  expansion (new country, same regional climate class).
+- **P_close check:** POSITIVE — "no relief from elevation or sea" is a declarative
+  named-absence consequence, same strong subtype as Basrah's "no evaporative relief."
+- **Wodehouse rule?** Clean.
+
+Last pre-fix `absolute_extreme` instance in the corpus (generated 1.5h before PR #386
+merged) — capped at B by P_tier despite a genuinely strong close, consistent with every
+prior instance of this signal type.
+
+#### [4] Aibonito, Puerto Rico — record — 30.6°C (87°F) — **B**
+
+> *Aibonito, Puerto Rico hit 30.6°C (87°F) on July 5 — a new July 5 record, breaking a
+> mark set in 1915. The town sits high in Puerto Rico's Cordillera Central; its
+> elevation keeps it cooler than the lowland coast, which makes records there harder to
+> set and longer-lasting.*
+
+**Score:** 78. Created 2026-07-07T11:04:50Z. **First `record` (day-of-year record)
+corpus draft** — a new signal type, distinct from `all_time_high`/`monthly_high`.
+
+- **P_compound check:** clean — only one qualifier stated (the 1915 mark's year); no
+  margin given at all, so the archive+margin double-qualifier pattern doesn't apply.
+  Worth noting the margin's absence as a separate data-thinness observation, not a P_compound instance.
+- **P_tier check:** clean — no internal-tier language.
+- **P_close check:** FAILING, and on its very first appearance — same shape as every
+  other signal type's debut. "Its elevation keeps it cooler than the lowland coast,
+  which makes records there harder to set and longer-lasting" explains *why* the record
+  is notable (rarity/longevity) but never states a consequence; it's expository, the
+  same expository-vs-punch gap PR #85's Chuuk fix targeted for a different type. Delete-
+  the-clause test: removing sentence 2 still leaves "a new July 5 record, breaking a mark
+  set in 1915" — genuinely interesting on the bare number (111-year-old record) — so
+  sentence 2 reads as supportive color, not load-bearing punch.
+- **Wodehouse rule?** Clean — no restate-padding, no poetry, no defensiveness. This is a
+  quality gap in landing, not an effort-signal violation.
+
+New signal type adds P_close's 15th confirmed type. Graded B: clean, well-reasoned,
+no violations, but the close doesn't clear the mechanism-only ceiling.
+
+#### [6] Riyadh, Saudi Arabia — air_quality_hazard — PM2.5 205.1 μg/m³ / 13.7× WHO — **B**
+
+> *Riyadh, Saudi Arabia: model-estimated 24-hour mean PM2.5 of 205.1 μg/m³ on July 7 —
+> 13.7× the WHO daily guideline. This is a PM2.5 signal, not dust; the Arabian interior's
+> summer heat suppresses mixing and traps fine particles close to the surface.*
+
+**Score:** 74. Created 2026-07-07T14:56:03Z — **postdates the P_tier/P_dust fix (PR #386,
+05:06:48Z) by ~9.8h.**
+
+- **WHO multiple:** stated (13.7×) — continues the `air_quality_hazard` self-selection
+  streak (see [5] above and Patterns below).
+- **New self-reference variant, post-fix:** "This is a PM2.5 signal, not dust" reads as
+  the bot naming its own internal event-classification bucket (`signal_kind`:
+  `air_quality_hazard` vs `dust_event`) rather than describing a verifiable physical fact
+  — the word "signal" is the tell; no lay reader would describe smog this way
+  unprompted. This is a close lexical cousin of the tier-jargon violation PR #386 just
+  banned ("band_label," internal thresholds) but a different shape (disambiguating its
+  own category label, not citing a severity band) — the shipped fix's test ("is this a
+  fact about the world or a fact about this bot's configuration?") answers "configuration"
+  here just as cleanly, but the rule's wording targets tiers/thresholds/triggers, not
+  signal-kind self-naming. Filed as new proposal **A4** below — 1 instance, watching for
+  a 2nd before promoting.
+- **P_close check:** FAILING — "suppresses mixing and traps fine particles close to the
+  surface" is mechanism-only, no named consequence (health/visibility/exposure outcome).
+- **Wodehouse rule?** Otherwise clean.
+
+Graded B: WHO ratio present, reasonable causal chain, but the self-reference oddity and
+mechanism-only close keep it a full grade below Soweto's A- in the same cycle.
+
+### B--grade drafts
+
+#### [1] Zaragoza, Spain — absolute_extreme — 42.0°C (108°F) forecast — **B-**
+
+> *Zaragoza, Spain is forecast to reach 42.0°C (108°F) on July 7 — the absolute-extreme
+> threshold for northern mid-latitudes. The Mediterranean's summer subtropical high locks
+> dry air over the basin, removing the moisture buffer that caps heat at lower
+> latitudes.*
+
+**Score:** 83. Created 2026-07-07T03:39:04Z (pre-fix; see fix-timing note above).
+
+- **P_tier check:** VIOLATION — "the absolute-extreme threshold for northern
+  mid-latitudes" is a **new band name** ("northern mid-latitudes," distinct from every
+  prior instance's "Northern Subtropics"/"Northern Subtropical band"). This is useful
+  evidence in its own right (now moot given the same-morning fix): the internal tier
+  system spans multiple latitude bands, and the citation habit reproduces across all of
+  them, not just one hardcoded string.
+- **P_close check:** FAILING — "removing the moisture buffer that caps heat at lower
+  latitudes" is mechanism-only: it explains why the heat is uncapped but never connects
+  that to a consequence (survivability, human impact). Same weak subtype as Al Başrah's
+  "recycles heat back into an already superheated air column" (also graded B-).
+- **Wodehouse rule?** Clean.
+
+Last pre-fix `absolute_extreme` instance in the corpus alongside [2] — both generated
+before PR #386 merged, both show the exact violation the fix targets. Graded a notch
+below [2] on a weaker, mechanism-only close.
+
+### Patterns named in this batch
+
+1. **`main` merged; P_tier + P_dust shipped as code; Basra-class staleness structurally
+   fixed — all in one overnight push.** See the Context section above. This is the
+   single most consequential cycle for this plan since it started tracking these three
+   items.
+2. **P_tier and P_dust move from Active proposals to Shipped, awaiting empirical
+   confirmation** — today's cycle straddles the fix's merge time exactly (2 pre-fix
+   violations, 4 post-fix drafts of unaffected types). Neither proposal can be declared
+   empirically confirmed yet; that requires a post-05:06-UTC draft of one of the 4 P_tier
+   types or a fresh `dust_event` for P_dust.
+3. **New signal type `record` (day-of-year records) debuts directly into the P_close
+   mechanism-only failure mode** — consistent with every other type's first appearance
+   (absolute_extreme, fire_footprint, marine_heatwave, etc. all did the same). 15th
+   confirmed P_close type.
+4. **New A4 proposal filed:** a post-fix `air_quality_hazard` draft names its own
+   signal-kind category ("This is a PM2.5 signal, not dust") — a close cousin of the
+   just-banned tier-jargon violation, in a shape the shipped rule's wording may not
+   explicitly cover. 1 instance; watching for a 2nd.
+5. **`air_quality_hazard` self-selects for a 4th consecutive cycle** (Al Aḥmadī,
+   Johannesburg, Soweto, Riyadh all state the WHO multiple unprompted) and produces the
+   type's first A-grade (Soweto) — confirms P_close's thesis that a rich causal chain
+   plus a declarative close is sufficient once both land together.
+6. **Ahvaz expands the `absolute_extreme` tier-jargon cluster to a 2nd country** (Iran),
+   but stays within the same regional climate zone as Basrah/Al Başrah — a
+   cluster-adjacent instance, distinct from Doha's genuinely independent cross-location
+   confirmation on Jul 5.
+
+### Followups (in priority order)
+
+1. **Watch for the next `absolute_extreme` / `fire_footprint` / `cyclone_rapid_intensification`
+   / `regional_sst_anomaly` draft** — the first real empirical test of the P_tier fix
+   (PR #386). If the tier-jargon phrase is gone, move P_tier fully to Resolved.
+2. **Watch for the next `dust_event` draft** — first empirical test of the P_dust fix
+   (PM10 WHO anchor). If the anchor appears stated, move P_dust fully to Resolved.
+3. **P_close, P_compound, P9, P5 remain the highest-leverage unimplemented proposals** —
+   all drafted in full in `docs/IMPROVEMENT_PLAN.md`, none require the architecture the
+   hard constraints forbid.
+4. **Watch for a 2nd A4 instance** (signal-kind self-naming) before promoting to active.
+5. **`main` unmerged operational note retired** — resolved as of `29ac380`. No further
+   action needed; this plan's copy of these three docs now reflects `main` directly.
+
+### Numbers
+
+- Pending drafts in queue: 6 (6 fresh; complete queue turnover, 0 carry-overs)
+- Fresh drafts graded: 6
+- A-rate: 33% (2/6) — best cycle since Jul 3 (n=3); largest sample above 20% since Jun 29
+- Grade distribution: 0 A / 2 A- / 0 B+ / 3 B / 1 B- / 0 C / 0 D-F
+- New signal types debuted: 1 (`record` — day-of-year record)
+- Active proposals: P_close 17th cycle (3 positive: Snowshoe, Soweto, Ahvaz; 3 failing:
+  Zaragoza, Aibonito, Riyadh; new 15th signal type `record`); P_compound 6th cycle (Snowshoe);
+  P9/P5 not tested for new evidence beyond air_quality_hazard's 4th self-selection cycle
+  (no precipitation_extreme draft this cycle). **P_tier and P_dust moved to Shipped**
+  (PR #386, awaiting empirical confirmation — see Improvement Plan). New proposal A4
+  filed (signal-kind self-naming, 1 instance).
+- Staleness bulk-reject: 0 candidates this cycle (all same-day fresh). 39th consecutive
+  `gh`-absent skip, though the specific Basra-class pattern may now be structurally
+  handled by PR #385 upstream of this routine.
+- Operational anomalies: (a) 2nd complete queue turnover event (after Jul 4's); (b)
+  `main` merged, ending the 29-cycle unmerged streak; (c) 2 major voice fixes (P_tier,
+  P_dust) and 1 structural staleness fix shipped in the same overnight push.
+
+---
+
 ## 2026-07-06 — Daily corpus grading (0 fresh drafts; 15 carry-overs from Jul 5, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 15 pending drafts —
