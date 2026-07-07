@@ -13,9 +13,10 @@ harness, #379/#380); the successor **front-page-parity program is ADOPTED
 rows 3/4/5 executed the same day (#384/#385/#386/#388 — forecast-elapsed sweep,
 P_tier/P_dust voice floor, `cyclone_land_threat`; statuses in
 [the INDEX](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)).
-**Bet A: the A0 master `THEHEAT_NEWSWORTHINESS_ENABLED=1` is LIVE (2026-07-07
-12:59:59Z)**; enrich + boost stay unset pending A0's 2–3-cycle verification and
-Andrew's per-flip go (track-0 runbook).
+**Bet A: A0 master `THEHEAT_NEWSWORTHINESS_ENABLED=1` LIVE (2026-07-07 12:59:59Z,
+verified) and A1 `THEHEAT_NEWS_ENRICH_ENABLED=1` LIVE (16:23:52Z, verifying clean —
+P0 guard holds).** Boost (`THEHEAT_NEWS_BOOST_ENABLED`) stays unset pending A1's
+verification and Andrew's per-flip go (track-0 runbook).
 
 **The newsworthiness lane exists since 2026-07-04, LIVE since 2026-07-07** ([#366](https://github.com/andrewzp/theheat/pull/366);
 Bet A phase 0 of the [three-pillar plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md),

@@ -1,5 +1,12 @@
 # Row 14 — Two small lifts: fire geocode precision + the geographic-spread cap
 
+> **✅ MERGED 2026-07-07** (PR-A geocode #398 — "near {city}" within 200 km; PR-B per-country
+> cap #399). PR-B took **7 codex rounds**: the `where`-string country heuristic leaked a new
+> class every round, so it was inverted from a fail-unsafe DENYLIST to a **fail-open ALLOWLIST**
+> (only single-country signal_kinds cap; globals/basins/cyclones/multi-country/dynamic kinds
+> fail open). **Ships DISABLED — `THEHEAT_PER_COUNTRY_CAP=0`; Andrew flips to `2` after watching
+> spill logs.** Plan retained for reference (its `where`-fallback mechanism was superseded).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or
 > superpowers:executing-plans. Read
 > [INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)

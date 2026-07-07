@@ -1,11 +1,13 @@
 # @theheat Front-Page Parity Plan — the leveling-up program
 
-> **STATUS (2026-07-07): ADOPTED — #382 merged with Andrew's explicit go.**
-> Rows 3/4/5 MERGED the same day (#384/#385/#386/#388 + the #387 A1-gate fix);
-> **the A0 master flag is LIVE (12:59:59Z)** — FPP + A3 evidence clocks running.
-> Current row statuses live in
+> **STATUS (2026-07-07 evening): ADOPTED (#382) — EVERY EXECUTABLE ROW MERGED.**
+> Rows 3/4/5 (#384/#385/#386/#388/#387), then **6 (#392), 7 (#397), 11 (#402+#404),
+> 14 (#398+#399)** all merged 2026-07-07. **A0 + A1 (enrich) flags LIVE; A2 (boost)
+> pending Andrew.** Remaining rows all gated: 8 (needs days of `news_events` data),
+> 9 (Andrew's X-API tier), 10/12/13. Open follow-ups: #401, #403. Current row
+> statuses in
 > [front-page-parity/INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md);
-> live flag/verification state in the latest handoff.
+> live flag/verification state in [docs/handoffs/2026-07-07-evening.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-evening.md).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans for the fully-specified first move; every
