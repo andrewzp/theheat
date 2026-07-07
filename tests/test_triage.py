@@ -1141,15 +1141,38 @@ class TestCandidateCountryKey:
         )
         assert _candidate_country_key(candidate) == "united states"
 
-    def test_global_disaster_kind_resolves_country(self):
+    # -- non-allowlisted signals fail OPEN -> "" -------------------------
+
+    def test_global_disaster_kind_fails_open(self):
+        """codex r6 P1: global_disaster (GDACS) is a disaster AGGREGATE whose
+        `country` field can list multiple countries for one regional event —
+        same geographically-ambiguous class as river_flood. It is excluded
+        from the allowlist and must fail open, even for a where that happens
+        to look like a single country."""
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
             signal_kind="global_disaster", where="Philippines", country="",
         )
-        assert _candidate_country_key(candidate) == "philippines"
+        assert _candidate_country_key(candidate) == ""
 
-    # -- non-allowlisted signals fail OPEN -> "" -------------------------
+    def test_global_flood_kind_fails_open(self):
+        """codex r6 P1 repro (verified RED against pre-fix code, which
+        returned "bangladesh"): global_flood's bundle.where can be a
+        multi-country join — copernicus_ems.py's _countries_from_payload
+        returns ", ".join(names), e.g. "India, Bangladesh" for one flood
+        activation spanning both countries. Under the old allowlist, the
+        where-fallback's last-comma-segment rule would cap this multi-country
+        flood under the single arbitrary country "Bangladesh" (an over-cap —
+        the dangerous direction, since it could suppress a genuinely distinct
+        India story). global_flood is now excluded from the allowlist and
+        must fail open regardless of how many countries `where` lists."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="global_flood", where="India, Bangladesh", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
 
     def test_hot10_fails_open(self):
         """codex r5 P1 repro: temperature.py's build_hot10_bundle emits

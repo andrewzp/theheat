@@ -157,7 +157,7 @@ _SINGLE_COUNTRY_SIGNAL_KINDS = frozenset({
     "precipitation_extreme", "wet_bulb_extreme",
     "air_quality_hazard", "dust_event",
     "fire", "fire_footprint",
-    "drought", "global_disaster", "global_flood",
+    "drought",
 })
 
 
@@ -174,6 +174,16 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     signal_kind) short-circuits to "" here, BEFORE the trusted bundle.country
     path and the where-fallback below (codex r5 P1 — this replaces the prior
     denylist, which missed hot10 and the dynamic synthesis_* kinds).
+
+    ``global_disaster`` (GDACS) and ``global_flood`` (Copernicus EMS) are
+    disaster AGGREGATES whose country field can legitimately list multiple
+    countries for one event (e.g. copernicus_ems.py's
+    ``_countries_from_payload`` joins names as "India, Bangladesh"). The
+    where-fallback below only ever takes the LAST comma-segment, so a
+    multi-country aggregate would be over-capped under an arbitrary single
+    country. They are deliberately excluded from the allowlist — same
+    geographically-ambiguous class as ``river_flood`` — and fail OPEN
+    (codex r6 P1).
 
     Prefers ``bundle.country`` (documented as a 2-letter code — see
     src/two_bot/types.py) when set; otherwise falls back to the last
