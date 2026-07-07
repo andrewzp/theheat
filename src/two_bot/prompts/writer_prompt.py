@@ -209,6 +209,76 @@ no per-city previous marks, so never invent a record's age, its old value, or a
 "national record." Name places only from `sample_cities`. Moves 1, 2 and 4 apply
 unchanged.
 
+## Marine / coral bundles (`signal_kind = "coral_bleaching"` | `"marine_heatwave"` | `"regional_sst_anomaly"`)
+
+Three signals ride this family, and they are NOT interchangeable. `coral_bleaching`
+is a NOAA Coral Reef Watch region crossing a Degree Heating Week (DHW) alert tier —
+a snapshot dose reading, not a trend. `marine_heatwave` is a global-ocean OISST
+streak milestone — a REAL trend field (`streak_days`), so direction language is
+fair there. `regional_sst_anomaly` is a per-basin area-weighted mean anomaly — the
+bundle's own `signal_note` says explicitly it is NOT a Hobday duration/percentile
+MHW classification, so it must never be called a "marine heatwave." The corpus's
+documented failure mode for coral is template convergence: "7 of 8 coral drafts
+identical two-sentence template" — the same DHW-value-plus-tier-word sentence,
+region after region, with nothing distinguishing one reef from the next. Four
+moves:
+
+1. **Lead with what the heat is doing to the reef, not the unit.** The convergent
+   opener — *"[Region] has accumulated N °C-weeks"* — is a measurement statement,
+   not a finding. Open on the reef's situation: what tier of stress it has crossed
+   into, what that tier means for the corals living there. The DHW number rides
+   inside the sentence, not as its subject.
+2. **°C-weeks is a dose, not a temperature — treat it as one.** DHW accumulates heat
+   stress over time the way a sunburn accumulates UV exposure: 8 °C-weeks is four
+   weeks of +2°C or eight of +1°C — the same dose, different paths. NOAA Coral Reef
+   Watch's alert-level semantics are the published scale (WORLD_KNOWLEDGE, fair
+   game per fact-check rule a) — cite the tier words from `bleaching_level` and
+   `stress_level` verbatim; do not paraphrase past what the bundle says.
+3. **ONE reef_context fact does the work.** With up to 8 coral drafts in a single
+   cycle, the `reef_context` fact — the region's current oceanographic system, a
+   documented prior bleaching event, or an ecosystem note — is the anti-template
+   move: it is what makes THIS region's draft distinct from the last one. Use
+   exactly one per draft; a second buries the lead and starts to read like a
+   briefing. This is the load-bearing system clause — the critic's
+   template-convergence kill remains the backstop, not the only defense.
+4. **Snapshot discipline: a DHW reading is a snapshot.** `coral_bleaching` carries
+   no trend field — never write "still climbing," "still accumulating,"
+   "approaching the next threshold," or "stress is rising" for a DHW value (the
+   NO-SNAPSHOT-TREND rule applies exactly as it does elsewhere). `regional_sst_anomaly`
+   must be framed as the area-weighted basin-mean anomaly it is —
+   `spatial_aggregation` says "cos-latitude area-weighted basin mean" — and the
+   writer must never call it a "marine heatwave" by that name; the bundle's own
+   `signal_note` states it is not a Hobday classification. `marine_heatwave` (the OISST global
+   streak) is the one bundle in this family that DOES carry a real trend field
+   (`streak_days`), so "N days and counting," "the streak has reached," and similar
+   direction language are fair there.
+
+Before → after, same honest facts (a Galápagos DHW reading crossing the 12
+°C-week tier, with a `reef_context` fact naming the Cromwell Current upwelling
+system):
+- ✗ template: *"Galápagos Islands has accumulated 12.0 °C-weeks of heat stress,
+  mortality expected."* (the convergent two-sentence form; no reef fact, no
+  system clause, indistinguishable from the next region's draft.)
+- ✓ distinct: *"Galápagos reefs have crossed into the dose the bundle flags as
+  mortality expected — 12.0 °C-weeks of accumulated heat. These corals normally
+  ride the Cromwell Current's cold upwelling; this dose says that buffer failed."*
+  (reef situation leads, DHW framed as a dose via the tier word, ONE reef_context
+  fact supplies the distinguishing system clause, no trend claim on a snapshot.)
+
+Key marine fields:
+- `dhw_value` / `dhw_tier` — the accumulated dose in °C-weeks; cite verbatim, never
+  converted or recomputed.
+- `bleaching_level` / `stress_level` — the tier words the bundle supplies; use them
+  verbatim as the reader's scale anchor.
+- `reef_context` facts (up to 3, each with a `kind` sibling key) — pick ONE per
+  move 3.
+- `historical_context.thresholds_c_weeks` — the published `[4, 8, 12]` DHW ladder;
+  citable as the canonical scale, not an archive record.
+- `streak_days` (`marine_heatwave` only) — the real trend field; direction language
+  is fair here and nowhere else in this family.
+- `signal_note` (`regional_sst_anomaly` only) — states in the bundle's own words
+  that this is not a Hobday MHW classification; never contradict it.
+
 # THE MEMORY SLICE
 
 The memory slice shows what The Heat has already said. The library shrinks monotonically — every used move is permanently spent. If no fresh angle is available, return tweet=null.

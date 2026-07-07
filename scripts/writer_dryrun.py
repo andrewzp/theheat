@@ -50,15 +50,17 @@ from datetime import UTC, date, datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.air_quality import DUST_TIERS, DustEvent, _tier  # noqa: E402
+from src.data.coral_dhw import CoralBleachingEvent  # noqa: E402
 from src.data.cyclones import LandThreatEvent  # noqa: E402
 from src.data.fire_footprint import FireComplex, _classify_tier  # noqa: E402
 from src.data.firms import FireEvent  # noqa: E402
 from src.data.gpm_imerg import PrecipExtremeEvent  # noqa: E402
+from src.data.ocean_sst import MarineHeatwaveStreakEvent  # noqa: E402
 from src.editorial.newsworthiness import detect_impact_citation  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
 from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
-from src.two_bot.intern import build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle, build_precipitation_bundle  # noqa: E402
+from src.two_bot.intern import build_coral_bleaching_bundle, build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle, build_marine_heatwave_bundle, build_precipitation_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
@@ -116,6 +118,12 @@ DEFAULTS: dict = {
     "precip_threshold_mm": 300.0,
     "record_path": False,
     "country_cluster": False,
+    # coral_bleaching / marine_heatwave (row 11 PR-1) knobs. Neither fixture
+    # ever attaches human_impact — a DHW reading and an OISST streak
+    # milestone carry no human toll (same convention as dust / cyclone_land_threat).
+    "dhw_value": 24.5,
+    "dhw_region": "galapagos",
+    "mhw_streak_days": 12,
 }
 
 _NIFC_URL = (
@@ -161,6 +169,43 @@ def _attach_impact(bundle: StoryBundle, args: argparse.Namespace, incident: str)
 
 
 def _build_bundle(args: argparse.Namespace) -> StoryBundle:
+    if args.type == "coral_bleaching":
+        # Never attaches human_impact — a DHW threshold crossing carries no
+        # human toll. bleaching_level/stress_level use the REAL intern
+        # vocabulary (src/data/coral_dhw.py): bleaching_level comes from
+        # DHW_THRESHOLDS ("mortality expected" at the 12 °C-week tier, not
+        # "Alert Level 3"), stress_level from _stress_level_for_dhw (caps at
+        # "Bleaching Alert Level 2" for any dhw_value >= 8).
+        event = CoralBleachingEvent(
+            region_id=args.dhw_region,
+            region_full_name="Galapagos, Ecuador",
+            date=datetime.now(UTC).date().isoformat(),
+            dhw_value=args.dhw_value,
+            dhw_tier=12,
+            bleaching_level="mortality expected",
+            stress_level="Bleaching Alert Level 2",
+            event_id=f"dryrun_coral_{args.dhw_region}",
+            lat=-0.6, lon=-90.4,
+        )
+        return build_coral_bleaching_bundle(event)
+    if args.type == "marine_heatwave":
+        # Never attaches human_impact — an OISST global streak milestone
+        # carries no human toll. MarineHeatwaveStreakEvent's real field names
+        # are `days` and `years_of_data` (NOT streak_days/archive_years — those
+        # are the BUNDLE's historical_context/current_facts key names, applied
+        # by build_marine_heatwave_bundle).
+        event = MarineHeatwaveStreakEvent(
+            kind="milestone",
+            days=args.mhw_streak_days,
+            peak_anomaly_c=0.31,
+            today_c=21.1,
+            archive_max_c=21.05,
+            archive_max_year=2024,
+            years_of_data=44,
+            date=datetime.now(UTC).date().isoformat(),
+            event_id=f"dryrun_mhw_{args.mhw_streak_days}d",
+        )
+        return build_marine_heatwave_bundle(event)
     if args.type == "cyclone_land_threat":
         # Forecast-tense fixture — never attaches human_impact (a forecast
         # has no toll; the impact knobs are ignored for this type).
@@ -310,6 +355,13 @@ def _print_bundle(bundle: StoryBundle) -> None:
                   f"({facts.get('previous_record_year')}) · deviation +{facts.get('deviation_from_record_mm')} mm")
         else:
             print(f"  alert_threshold ... {facts.get('alert_threshold_mm')} mm")
+    elif bundle.signal_kind == "coral_bleaching":
+        print(f"  dhw_value ......... {facts.get('dhw_value')} °C-weeks (tier {facts.get('dhw_tier')})")
+        print(f"  bleaching_level ... {facts.get('bleaching_level')}")
+        print(f"  stress_level ...... {facts.get('stress_level')}")
+    elif bundle.signal_kind == "marine_heatwave":
+        print(f"  streak_days ....... {facts.get('streak_days')} ({facts.get('kind')})")
+        print(f"  today_c ........... {facts.get('today_c')}°C (peak anomaly {facts.get('peak_anomaly_c')}°C)")
     else:
         print(f"  complex_name ...... {facts.get('complex_name')}")
         print(f"  tier crossed ...... {facts.get('tier_hectares')} ha")
@@ -374,7 +426,7 @@ def _run_one(bundle: StoryBundle, state: dict, idx: int) -> bool:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat", "precipitation_extreme"), default=DEFAULTS["type"])
+    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat", "precipitation_extreme", "coral_bleaching", "marine_heatwave"), default=DEFAULTS["type"])
     p.add_argument("--samples", type=int, default=DEFAULTS["samples"], help="number of candidate drafts")
     p.add_argument("--no-impact", dest="no_impact", action="store_true",
                    help="control run: same bundle with NO human_impact attached")
@@ -437,6 +489,11 @@ def main() -> int:
                    help="country_precip_event fixture shape (city_count monitored "
                         "cities each broke a daily record) instead of the default "
                         "multi_day_accumulation (alert_threshold_mm)")
+    # coral_bleaching / marine_heatwave (row 11 PR-1) knobs
+    p.add_argument("--dhw-value", dest="dhw_value", type=float, default=DEFAULTS["dhw_value"])
+    p.add_argument("--dhw-region", dest="dhw_region", default=DEFAULTS["dhw_region"])
+    p.add_argument("--mhw-streak-days", dest="mhw_streak_days", type=int,
+                   default=DEFAULTS["mhw_streak_days"])
     args = p.parse_args()
 
     if args.record_path and args.country_cluster:

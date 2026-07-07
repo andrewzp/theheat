@@ -559,6 +559,69 @@ class TestPrecipFourMoves:
         assert "single storm or weather system is UNVERIFIABLE" in FACT_CHECK_SYSTEM_PROMPT
 
 
+class TestMarineFourMoves:
+    """Row 11 PR-1: the marine/coral writer-prompt section — E1 pattern,
+    fourth type. Scope is coral_bleaching + marine_heatwave +
+    regional_sst_anomaly ONLY (sea_ice_record/ice_mass_record/extreme_wave
+    are a pre-existing, separately-scoped gap). Guards the corpus's
+    documented template-convergence failure (near-identical two-sentence
+    coral drafts) and the regional_sst_anomaly / marine_heatwave naming
+    boundary the bundle's own signal_note enforces."""
+
+    def test_sections_present(self):
+        assert 'signal_kind = "coral_bleaching"' in WRITER_SYSTEM_PROMPT
+        assert "regional_sst_anomaly" in WRITER_SYSTEM_PROMPT  # in the same section header
+
+    def test_move_one_leads_with_the_reef_not_the_unit(self):
+        assert "Lead with what the heat is doing to the reef" in WRITER_SYSTEM_PROMPT
+
+    def test_move_two_dhw_semantics_are_the_anchor(self):
+        assert "°C-weeks is a dose, not a temperature" in WRITER_SYSTEM_PROMPT
+
+    def test_move_three_one_reef_fact_does_the_work(self):
+        assert "ONE reef_context fact" in WRITER_SYSTEM_PROMPT
+
+    def test_move_four_snapshot_discipline(self):
+        assert "a DHW reading is a snapshot" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_pairing(self):
+        assert "not a Hobday" in FACT_CHECK_SYSTEM_PROMPT
+        assert "°C-weeks is a dose" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestMarineFourMovesDetail:
+    """Additional coverage beyond the plan's six pinned tests: the
+    marine_heatwave / regional_sst_anomaly naming boundary and scope
+    discipline (PR-1 covers only the three in-scope kinds)."""
+
+    def test_regional_sst_anomaly_never_called_marine_heatwave(self):
+        assert "never call it a" in WRITER_SYSTEM_PROMPT
+        assert "marine heatwave" in WRITER_SYSTEM_PROMPT.lower()
+
+    def test_marine_heatwave_streak_direction_language_is_fair(self):
+        assert "streak_days" in WRITER_SYSTEM_PROMPT
+
+    def test_section_scoped_to_three_in_scope_kinds_only(self):
+        # The new section must not claim coverage of the other three marine
+        # signal_kinds (sea_ice_record, ice_mass_record, extreme_wave) —
+        # those are a pre-existing, separately-scoped gap.
+        assert "sea_ice_record" not in WRITER_SYSTEM_PROMPT
+        assert "ice_mass_record" not in WRITER_SYSTEM_PROMPT
+        assert "extreme_wave" not in WRITER_SYSTEM_PROMPT
+
+
+class TestMarineFactCheckPairing:
+    """The E1 discipline: every marine-section loosening lands with a
+    fact-check guard in the same PR."""
+
+    def test_sst_anomaly_naming_contradiction_is_a_bundle_fact_failure(self):
+        assert "signal_note" in FACT_CHECK_SYSTEM_PROMPT
+        assert "regional_sst_anomaly" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_dose_framing_is_canonical(self):
+        assert "canonical" in FACT_CHECK_SYSTEM_PROMPT.lower()
+
+
 class TestFireNearestRegionNearCityClause:
     """Row 14 PR-A paired writer-prompt touch: the geocoder's nearest-city
     fallback (src/data/firms.py) can now label a hotspot ``"near <city>"``
