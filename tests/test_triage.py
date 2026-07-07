@@ -946,6 +946,89 @@ class TestPerCountryCap:
         result = triage_mod.select_survivors(bot_state, candidates, global_cap=10)
         assert len(result) == 3
 
+    def test_bare_country_where_shares_bucket_with_city_bundle(self, monkeypatch):
+        """codex r3 P1 repro: country-level record bundles (e.g.
+        build_country_record_bundle in src/two_bot/intern/temperature.py, and
+        the country_precip_event path in src/two_bot/intern/precipitation.py)
+        emit a BARE country name as `where` with no comma and no
+        bundle.country set. Before the fix, `_candidate_country_key` only
+        handled the where-fallback when `where` contained a comma, so this
+        bare-country bundle got key "" and was NEVER capped — worse, it
+        didn't share a cap bucket with its own city-level records (e.g.
+        "Astana, Kazakhstan" -> "kazakhstan"). cap=1 + one bare-country-record
+        bundle (where="Kazakhstan") + one city bundle
+        (where="Astana, Kazakhstan") must now share the "kazakhstan" bucket
+        and spill to 1 survivor."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="country_record", signal_kind="country_temp_record",
+                where="Kazakhstan", country="",
+            ),
+            _candidate(
+                total=85, event_id="astana_spilled", signal_kind="fire",
+                where="Astana, Kazakhstan", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 1
+        assert result[0].event_id == "country_record"
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "astana_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=1"]
+
+
+class TestCandidateCountryKey:
+    """Direct unit tests for _candidate_country_key() — see TestPerCountryCap
+    above for the select_survivors()-level integration coverage."""
+
+    def test_bare_country_where_with_empty_bundle_country(self):
+        """A bare `where` (no comma) that IS a known country, with no
+        bundle.country set, resolves via the new no-comma where-fallback
+        branch — this is exactly the shape country-record bundles emit
+        (see build_country_record_bundle, temperature.py:98)."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(where="Kazakhstan", country="")
+        assert _candidate_country_key(candidate) == "kazakhstan"
+
+    def test_bare_non_country_where_returns_empty(self):
+        """A bare `where` that is NOT a known country (e.g. an ocean-basin
+        descriptor) still fails the known-country check and returns "" —
+        the new branch must not blindly trust any bare where string."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(where="Global ocean (60°S–60°N)", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    def test_comma_where_still_resolves_known_country(self):
+        """Regression: existing comma-segment where-fallback is unchanged."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(where="Astana, Kazakhstan", country="")
+        assert _candidate_country_key(candidate) == "kazakhstan"
+
+    def test_comma_where_non_country_segment_returns_empty(self):
+        """Regression: basin-shaped where ("BAVI, WP") still returns ""."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(where="BAVI, WP", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    def test_bundle_country_trusted_and_collapses_to_united_states(self):
+        """Regression: bundle.country="US" is trusted as-is and collapses
+        into the "united states" bucket via _US_COUNTRY_TOKENS."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(where="Phoenix, Arizona, United States", country="US")
+        assert _candidate_country_key(candidate) == "united states"
+
 
 class TestPendingTtlSweep:
     """The TTL sweep auto-rejects pending drafts older than the configured

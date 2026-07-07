@@ -371,6 +371,36 @@ class TestRefillPerCountryCap:
         supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
         assert len(supps) == 0
 
+    def test_bare_country_where_shares_bucket_under_refill(self, monkeypatch):
+        """codex r3 P1 repro (refill path): a country-level record bundle
+        (e.g. build_country_record_bundle in temperature.py, or the
+        country_precip_event path in precipitation.py) emits a BARE country
+        name as `where` (no comma) with no bundle.country. Before the fix
+        this got cap-key "" (never capped) and did NOT share a bucket with
+        its own city-level records. cap=1 + a bare-country-record bundle
+        (where="Kazakhstan") + a "Astana, Kazakhstan" city bundle must now
+        share the "kazakhstan" bucket -> only 1 drafts."""
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "5")
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _cand(event_id="country_record", total=95, signal_kind="country_temp_record",
+                  source="s0", where="Kazakhstan", country=""),
+            _cand(event_id="astana_spilled", total=90, signal_kind="fire",
+                  source="s1", where="Astana, Kazakhstan", country=""),
+        ]
+        calls: list = []
+        drafted = _drain(bot_state, monkeypatch, {"country_record", "astana_spilled"}, capture_calls=calls)
+        assert drafted == 1
+        assert calls == ["country_record"]  # astana_spilled cut pre-writer
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "astana_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=1"]
+
 
 # ---------------------------------------------------------------------------
 # prune reconciliation (must-fix #1)

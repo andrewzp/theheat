@@ -145,11 +145,13 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     Prefers ``bundle.country`` (documented as a 2-letter code — see
     src/two_bot/types.py) when set; otherwise falls back to the last
     comma-segment of ``bundle.where`` (e.g. "Phoenix, Arizona, United
-    States" -> "United States"). The result is lowercased/stripped, and US
-    aliases are collapsed into one bucket via the existing
-    _US_COUNTRY_TOKENS set — because `country` rides 2-letter codes ("US")
-    while `where` carries full names ("United States"), and those must
-    never split one country into two cap buckets.
+    States" -> "United States"), or to the whole ``bundle.where`` when it
+    has no comma at all (e.g. "Kazakhstan" -> "Kazakhstan"; see the bare
+    `where` note below). The result is lowercased/stripped, and US aliases
+    are collapsed into one bucket via the existing _US_COUNTRY_TOKENS set
+    — because `country` rides 2-letter codes ("US") while `where` carries
+    full names ("United States"), and those must never split one country
+    into two cap buckets.
 
     Non-US code-vs-name splits (e.g. "ML" vs "Mali") are NOT collapsed —
     this can still under-cap those countries (two spellings of the same
@@ -166,8 +168,18 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     a country) would silently become a cap bucket and two same-basin
     cyclone candidates would suppress each other under a per-COUNTRY rule.
 
+    A bare `where` with no comma at all (e.g. "Kazakhstan") is also tried as
+    a WHERE-fallback candidate — country-level record bundles emit exactly
+    this shape (bare country name as `where`, empty `bundle.country`; see
+    e.g. src/two_bot/intern/temperature.py's build_country_record_bundle and
+    the country_precip_event path in src/two_bot/intern/precipitation.py).
+    It goes through the SAME known-country validation as the comma-segment
+    case below, so a bare non-country `where` (a basin, a storm name, a bare
+    city, "Global ocean (60°S–60°N)") still fails the check and returns "".
+
     Returns "" when no country can be determined (empty bundle.country AND
-    no comma in `where`), OR when the WHERE-fallback segment fails the
+    empty `where`), OR when the WHERE-fallback candidate (the last
+    comma-segment, or the whole `where` when it has no comma) fails the
     known-country check (e.g. "wp") — callers must treat an empty key as
     NEVER capped (unknown/non-country geography must not be suppressed).
     """
@@ -178,6 +190,9 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
         where = (getattr(bundle, "where", "") or "").strip()
         if "," in where:
             country = where.rsplit(",", 1)[-1].strip()
+            from_where = True
+        elif where:
+            country = where  # bare `where`: validated against known-countries below
             from_where = True
     if not country:
         return ""
