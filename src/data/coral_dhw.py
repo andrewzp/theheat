@@ -359,6 +359,16 @@ def _erddap_point_url(lat: float, lon: float) -> str:
 
 
 def _stress_level_for_dhw(dhw: float) -> str:
+    # NOAA Coral Reef Watch Bleaching Alert Levels (matches the fact-check
+    # prompt's documented scale): 4 -> L1, 8 -> L2, 12 -> L3, 16 -> L4, 20 -> L5.
+    # The scale tops out at Level 5; the bleaching_level tier (DHW_THRESHOLDS)
+    # is a separate, coarser field and is deliberately left unchanged.
+    if dhw >= 20:
+        return "Bleaching Alert Level 5"
+    if dhw >= 16:
+        return "Bleaching Alert Level 4"
+    if dhw >= 12:
+        return "Bleaching Alert Level 3"
     if dhw >= 8:
         return "Bleaching Alert Level 2"
     if dhw >= 4:

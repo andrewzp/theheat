@@ -216,6 +216,33 @@ UTC,degrees_north,degrees_east,degree_Celsius_weeks
     )
 
 
+@pytest.mark.parametrize(
+    ("dhw", "expected"),
+    [
+        # Below the bleaching floor.
+        (0.0, "No Stress"),
+        (3.9, "No Stress"),
+        # NOAA Coral Reef Watch Bleaching Alert Levels (matches
+        # fact_check_prompt.py:25 — 4→L1, 8→L2, 12→L3, 16→L4, 20→L5).
+        (4.0, "Bleaching Alert Level 1"),
+        (7.9, "Bleaching Alert Level 1"),
+        (8.0, "Bleaching Alert Level 2"),
+        (11.9, "Bleaching Alert Level 2"),
+        (12.0, "Bleaching Alert Level 3"),
+        (15.9, "Bleaching Alert Level 3"),
+        (16.0, "Bleaching Alert Level 4"),
+        (19.9, "Bleaching Alert Level 4"),
+        (20.0, "Bleaching Alert Level 5"),
+        (25.0, "Bleaching Alert Level 5"),  # scale tops out at Level 5
+    ],
+)
+def test_stress_level_for_dhw_full_noaa_scale(dhw, expected):
+    # #403: _stress_level_for_dhw once capped at "Bleaching Alert Level 2",
+    # under-labeling any reading >=12 C-weeks that NOAA (and the bot's own
+    # fact-check prompt) puts at Alert Level 3/4/5.
+    assert coral_dhw._stress_level_for_dhw(dhw) == expected
+
+
 def test_coral_erddap_accepts_documented_grid_lag():
     lagged = date.today() - timedelta(days=6)
     csv_text = f"""time,latitude,longitude,degree_heating_week
