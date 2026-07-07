@@ -12,8 +12,8 @@ All notable changes to this project will be documented in this file.
   (`"22.3N, 88.1E"`) with `country="Unknown"` — a label a reader can't
   place and the writer can't qualify. Now, on a box miss, the geocoder
   finds the nearest `data/cities.csv` place (638 rows, `load_cities()`,
-  `_haversine_km`) within `GEOCODE_NEAR_CITY_MAX_KM = 300.0`: if found,
-  `region=f"near {city}"` with that city's country; only beyond 300 km of
+  `_haversine_km`) within `GEOCODE_NEAR_CITY_MAX_KM = 200.0`: if found,
+  `region=f"near {city}"` with that city's country; only beyond 200 km of
   every curated city does the old coordinate-string + "Unknown" fallback
   remain (open ocean, deep polar — honest and rare). Boxes are still
   checked first and always win when they match — curated editorial names
