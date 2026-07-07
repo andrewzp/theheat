@@ -366,6 +366,25 @@ class TestFireExemplarTierConsistency:
         # The sentence-1 variety examples pair 309 MW with "high-intensity".
         assert _frp_tier(309.0) == ("high", 100)
 
+    def test_area_examples_match_the_bundle_rounding(self):
+        # codex r1 P1 regression lock: "about 1,030 km²" once taught altering
+        # an exact-match bundle value. The move-2 examples must show the
+        # DIGITS the intern produces for the documented case (103,400 ha).
+        from src.two_bot.intern._shared import _round_sig
+
+        assert round(103400 / 100.0) == 1034
+        assert _round_sig(103400 * 2.47105) == 256000
+        assert "about 1,034 km²" in WRITER_SYSTEM_PROMPT
+        assert "about 256,000 acres" in WRITER_SYSTEM_PROMPT
+        assert "1,030" not in WRITER_SYSTEM_PROMPT
+
+    def test_approved_fire_exemplar_does_not_open_with_the_ticker(self):
+        # codex r1 P1 regression lock: APPROVED EXEMPLARS #4 used to open
+        # "A fire in Mali is radiating…" — the exact ticker shape the fire
+        # section retires. An approved exemplar may never model the retired
+        # opener.
+        assert "A fire in Mali is radiating" not in WRITER_SYSTEM_PROMPT
+
 
 class TestFireFactCheckPairing:
     """The E1 discipline: every fire-section loosening lands with a

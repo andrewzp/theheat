@@ -79,3 +79,19 @@ class TestFireFootprintFixture:
         bundle = _build_bundle(_args(type="fire_footprint"))
         facts = {f["label"]: f.get("value") for f in bundle.current_facts}
         assert facts["hectares"] >= facts["tier_hectares"]
+
+
+class TestExemplarFixtureAttributionConsistency:
+    """codex r1 P1 regression lock: the writer prompt's ✓ fire exemplar and
+    the default harness fixture must attribute the SAME figure to the SAME
+    source — an exemplar teaching "per NIFC" for a Washington-Post-sourced
+    fatalities entry teaches a rule-k failure against the canonical bundle."""
+
+    def test_story_exemplar_sources_match_the_default_fixture(self):
+        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+
+        assert DEFAULTS["fatality_source"] == "The Washington Post"
+        # Fatalities figure attributed to the fixture's fatality source…
+        assert "The Washington Post reports" in WRITER_SYSTEM_PROMPT
+        # …and the personnel figure to NIFC, its own entry's source.
+        assert "NIFC has 1,450 personnel assigned" in WRITER_SYSTEM_PROMPT

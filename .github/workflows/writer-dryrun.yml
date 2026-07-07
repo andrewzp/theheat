@@ -59,19 +59,29 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Run writer dry-run (live writer → fact-check → critic)
+        # Inputs reach the shell ONLY via env (data, not code) — direct
+        # `${{ inputs.* }}` interpolation into `run:` is a command-injection
+        # seam in a step whose env holds API keys. Numeric knobs are
+        # validated by argparse type coercion; --type is an Actions choice.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INPUT_TYPE: ${{ inputs.type }}
+          INPUT_SAMPLES: ${{ inputs.samples }}
+          INPUT_NO_IMPACT: ${{ inputs.no_impact }}
+          INPUT_FRP: ${{ inputs.frp }}
+          INPUT_HECTARES: ${{ inputs.hectares }}
+          INPUT_NAME: ${{ inputs.name }}
         # `|| true`: a clean kill is informative, not a job failure — this is
         # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
         # gate; we want drafts + verdicts in the log however many ship.
         run: |
           EXTRA=""
-          if [ "${{ inputs.no_impact }}" = "true" ]; then EXTRA="--no-impact"; fi
+          if [ "$INPUT_NO_IMPACT" = "true" ]; then EXTRA="--no-impact"; fi
           python scripts/writer_dryrun.py \
-            --type "${{ inputs.type }}" \
-            --samples "${{ inputs.samples }}" \
-            --frp "${{ inputs.frp }}" \
-            --hectares "${{ inputs.hectares }}" \
-            --name "${{ inputs.name }}" \
+            --type "$INPUT_TYPE" \
+            --samples "$INPUT_SAMPLES" \
+            --frp "$INPUT_FRP" \
+            --hectares "$INPUT_HECTARES" \
+            --name "$INPUT_NAME" \
             $EXTRA || true
