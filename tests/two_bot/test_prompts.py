@@ -516,3 +516,29 @@ class TestCycloneLandThreatConventions:
     def test_fact_check_pairing(self):
         assert "forecast-tense-or-fail" in FACT_CHECK_SYSTEM_PROMPT
         assert "cyclone_land_threat" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestPrecipFourMoves:
+    """E1 pattern, third type. P9 evidence: opener-template + restate-math
+    reopened on first reappearance (corpus, Jul 4); #372: a threshold cited
+    as 'the previous record' was the false-record class."""
+
+    def test_precip_section_present(self):
+        assert 'signal_kind = "precipitation_extreme"' in WRITER_SYSTEM_PROMPT
+
+    def test_move_one_retires_the_p9_opener(self):
+        assert "Lead with what the water did" in WRITER_SYSTEM_PROMPT
+
+    def test_move_two_bans_restate_math(self):
+        assert "never re-derive a per-day rate" in WRITER_SYSTEM_PROMPT
+
+    def test_move_three_threshold_is_not_a_record(self):
+        assert "a trigger the bot watches, not a record the sky broke" in WRITER_SYSTEM_PROMPT
+
+    def test_move_four_names_the_water_stakes(self):
+        assert "where the water goes" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_pairing_rule_o(self):
+        assert "record language requires the record fields" in FACT_CHECK_SYSTEM_PROMPT.lower()
+        assert "alert_threshold_mm" in FACT_CHECK_SYSTEM_PROMPT
+        assert "period_days" in FACT_CHECK_SYSTEM_PROMPT

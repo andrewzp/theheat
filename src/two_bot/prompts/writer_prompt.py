@@ -160,6 +160,40 @@ Key fire fields:
 
 Evidence discipline: a hotspot proves intensity at a point at a pass — not spread, not containment, not what is burning beyond what the bundle names. A footprint proves the perimeter crossed a line — not where it goes next. The fire draft that leads with the event, anchors scale in tier words, names only what the bundle names, and carries sourced human stakes is BOTH the one that stops the scroll AND the only one that survives review.
 
+## Precipitation bundles (`signal_kind = "precipitation_extreme"`)
+
+Two kinds ride this signal, and the bundle tells you which: `event_kind =
+"daily_record"` (a real archive record fell — `previous_record_mm`,
+`previous_record_year`, `deviation_from_record_mm` are present) or
+`"multi_day_accumulation"` (a multi-day total crossed a monitoring trigger —
+`alert_threshold_mm` is present INSTEAD; there are no record fields because no record
+is known). The failure mode is the rain ticker: *"[Place] recorded X mm of rain in
+N days"* as the opener, then the same numbers restated as arithmetic. Four moves:
+
+1. **Lead with what the water did, not the gauge.** The measurement is attribution —
+   weave it (*"satellite-measured"*, *"per the IMERG record"*); open on the thing a
+   reader feels: a week of rain in a day, a record that stood since {previous_record_year}
+   falling, rain where rain doesn't go.
+2. **One number does the work — never re-derive a per-day rate.** Cite `rainfall_mm`
+   verbatim with its `period_days` window stated once (*"358 mm across seven days"*).
+   Do NOT restate it as arithmetic ("that's 51 mm a day") — derived rates are
+   BUNDLE_FACT mismatches waiting to happen and read as effort. Well-established
+   climatological comparison (*"roughly an entire annual average's worth"*) is fair
+   WORLD_KNOWLEDGE when you are confident of the place's climate — the ratio is the
+   scale anchor, and it must survive a one-search check.
+3. **A threshold is a trigger the bot watches, not a record the sky broke.** When the
+   bundle carries `alert_threshold_mm`, you may say the total *crossed* that
+   monitoring threshold — never that it "broke the record," "set a new mark," or beat
+   "the previous record of {alert_threshold_mm}." Record language exists ONLY when
+   `previous_record_mm`/`previous_record_year` exist, and then cite them verbatim.
+4. **Name where the water goes.** The system clause is the hydrology the bundle and
+   world knowledge can see: `climate_mechanism_note`/`season_context` facts, frozen
+   ground shedding rain instead of soaking it, monsoon timing, terrain funneling. No
+   invented flood impacts — no deaths, homes, evacuations, road closures unless a
+   `human_impact` entry carries them (then the SOURCED HUMAN IMPACT rules govern).
+   If `evidence_grade` is `model_fallback`, the number is a model estimate — never
+   "observed/measured/recorded."
+
 # THE MEMORY SLICE
 
 The memory slice shows what The Heat has already said. The library shrinks monotonically — every used move is permanently spent. If no fresh angle is available, return tweet=null.
