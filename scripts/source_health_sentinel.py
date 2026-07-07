@@ -1085,6 +1085,160 @@ def _close_queue_watch_issue(number: int) -> None:
     print(f"[sentinel] closed queue-watch issue #{number}")
 
 
+# ---------------------------------------------------------------------------
+# Editor brief — ranked needs-you-now view of the pending queue
+# ---------------------------------------------------------------------------
+
+EDITOR_BRIEF_TITLE = "Editor brief: what the queue needs from you"
+EDITOR_BRIEF_MARKER = "<!-- source-health-editor-brief -->"
+EDITOR_BRIEF_MAX_ROWS = 10
+EDITOR_BRIEF_URGENT_AGE_H = 24
+
+
+def editor_brief(drafts: list[dict] | None, *, now: datetime) -> list[dict]:
+    """One finding per human-gated pending draft, ranked needs-you-first.
+
+    Ranking key (descending urgency):
+      1. forecast window closing (tweet_date == today or tomorrow, for any
+         draft — an elapsed-forecast draft is row 3's sweep's job, not ours)
+      2. age >= EDITOR_BRIEF_URGENT_AGE_H
+      3. score.total
+    Auto-owned drafts (approval_mode auto/policy_auto with auto_approve_at)
+    are excluded — the machine already owns them.
+    Returns [] when nothing is pending → the issue auto-closes.
+    """
+    today = now.date()
+    tomorrow = today + timedelta(days=1)
+    closing_dates = {today.isoformat(), tomorrow.isoformat()}
+
+    findings: list[dict] = []
+    for d in drafts or []:
+        if not isinstance(d, Mapping) or d.get("status") != "pending":
+            continue
+        if _is_auto_owned(d):
+            continue
+        parsed = _parse_ts(str(d.get("created_at") or ""))
+        age_h = int((now - parsed).total_seconds() // 3600) if parsed is not None else 0
+        since = parsed.astimezone(timezone.utc).strftime("%b %d") if parsed is not None else ""
+        tweet_date = d.get("tweet_date")
+        closing = tweet_date in closing_dates
+        urgent = age_h >= EDITOR_BRIEF_URGENT_AGE_H
+        score = int((d.get("score") or {}).get("total") or 0)
+        text = str(d.get("text") or "")
+        findings.append({
+            "id": d.get("id"),
+            "type": str(d.get("type") or "unknown"),
+            "age_h": age_h,
+            "since": since,
+            "score": score,
+            "tweet_date": tweet_date,
+            "urgent": urgent,
+            "closing": closing,
+            "preview": text[:140],
+        })
+    findings.sort(key=lambda f: (not f["closing"], not f["urgent"], -f["score"]))
+    return findings
+
+
+def build_editor_brief_body(findings: list[dict]) -> str:
+    total = len(findings)
+    shown = findings[:EDITOR_BRIEF_MAX_ROWS]
+    needs_now, fresh = [], []
+    for f in shown:
+        (needs_now if f["urgent"] or f["closing"] else fresh).append(f)
+
+    def _row(f: dict) -> str:
+        since = f' · since {f["since"]}' if f.get("since") else ""
+        forecast = f' · forecast {f["tweet_date"]}' if f.get("tweet_date") else ""
+        return (
+            f"- **{f['type']}** · score {f['score']}{since}{forecast}\n"
+            f"  > {f['preview']}"
+        )
+
+    lines = [EDITOR_BRIEF_MARKER, "**What the pending queue needs from you.**", ""]
+    if needs_now:
+        lines.append("### ⚡ Needs you now")
+        lines.extend(_row(f) for f in needs_now)
+        lines.append("")
+    if fresh:
+        lines.append("### — Fresh")
+        lines.extend(_row(f) for f in fresh)
+        lines.append("")
+    remaining = total - len(shown)
+    if remaining > 0:
+        lines.append(f"_(+{remaining} more on the dashboard)_")
+        lines.append("")
+    lines.extend([
+        "**Fix:** review on the dashboard — Approve+Post the good ones, Reject the "
+        "rest.",
+        "",
+        "_Auto-maintained by the source-health sentinel. Closes itself when the "
+        "queue is empty._",
+    ])
+    return "\n".join(lines)
+
+
+def _open_editor_brief_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list editor-brief issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == EDITOR_BRIEF_TITLE:
+            return item
+    return None
+
+
+def plan_editor_brief_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if findings:
+        body = build_editor_brief_body(findings)
+        if open_issue is None:
+            return {"action": "create_editor_brief", "body": body, "labels": [LABEL, "ours"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_editor_brief",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "ours"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_editor_brief", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_editor_brief_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", EDITOR_BRIEF_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened editor-brief issue: {EDITOR_BRIEF_TITLE}")
+
+
+def _update_editor_brief_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated editor-brief issue #{action['number']}")
+
+
+def _close_editor_brief_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "The pending queue is empty. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed editor-brief issue #{number}")
+
 
 # ---------------------------------------------------------------------------
 # News-gap watch — the world reported an event; did our sensors even see it?
@@ -1401,6 +1555,20 @@ def main(argv: list[str] | None = None) -> int:
             _update_queue_watch_issue(qw_action)
         else:
             _close_queue_watch_issue(qw_action["number"])
+    eb = editor_brief(
+        state.get("drafts"),
+        now=datetime.now(timezone.utc),
+    )
+    if eb:
+        print(f"[sentinel] editor-brief: {len(eb)} pending draft(s) need a decision")
+    eb_action = plan_editor_brief_action(eb, _open_editor_brief_issue())
+    if eb_action:
+        if eb_action["action"] == "create_editor_brief":
+            _create_editor_brief_issue(eb_action)
+        elif eb_action["action"] == "update_editor_brief":
+            _update_editor_brief_issue(eb_action)
+        else:
+            _close_editor_brief_issue(eb_action["number"])
     ng = news_gap_watch(
         state.get("news_events"),
         state.get("candidates_log"),

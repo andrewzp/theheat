@@ -747,6 +747,114 @@ class TestQueueWatchIssue:
 
 
 # ---------------------------------------------------------------------------
+# Editor brief — ranked needs-you-now view of the pending queue
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    EDITOR_BRIEF_MARKER,
+    EDITOR_BRIEF_MAX_ROWS,
+    build_editor_brief_body,
+    editor_brief,
+    plan_editor_brief_action,
+)
+
+
+class TestEditorBrief:
+    def _draft(self, *, hours_old=2.0, dtype="fire", score=70, status="pending",
+               tweet_date=None, auto=False, text="draft text"):
+        now = datetime.now(timezone.utc)
+        d = {
+            "id": f"d_{dtype}_{hours_old}",
+            "status": status,
+            "type": dtype,
+            "created_at": (now - timedelta(hours=hours_old)).isoformat().replace("+00:00", "Z"),
+            "score": {"total": score},
+            "text": text,
+        }
+        if tweet_date:
+            d["tweet_date"] = tweet_date
+        if auto:
+            d["approval_mode"] = "auto"
+            d["auto_approve_at"] = now.isoformat().replace("+00:00", "Z")
+        return d
+
+    def test_ranks_closing_forecast_first_then_aging_then_score(self):
+        today = datetime.now(timezone.utc).date().isoformat()
+        drafts = [
+            self._draft(dtype="all_time_high", score=90),
+            self._draft(dtype="fire", hours_old=30.0, score=60),
+            self._draft(dtype="absolute_extreme", score=50, tweet_date=today),
+        ]
+        findings = editor_brief(drafts, now=datetime.now(timezone.utc))
+        assert [f["type"] for f in findings] == ["absolute_extreme", "fire", "all_time_high"]
+        assert findings[0]["closing"] and findings[1]["urgent"]
+
+    def test_excludes_auto_owned_and_non_pending(self):
+        drafts = [self._draft(auto=True), self._draft(status="posted")]
+        assert editor_brief(drafts, now=datetime.now(timezone.utc)) == []
+
+    def test_empty_queue_returns_empty(self):
+        assert editor_brief([], now=datetime.now(timezone.utc)) == []
+
+    def test_body_sections_and_cap(self):
+        drafts = [self._draft(dtype=f"t{i}", score=50 + i) for i in range(12)]
+        findings = editor_brief(drafts, now=datetime.now(timezone.utc))
+        body = build_editor_brief_body(findings)
+        assert EDITOR_BRIEF_MARKER in body
+        assert "more on the dashboard" in body
+        assert body.count("score ") == EDITOR_BRIEF_MAX_ROWS
+
+    def test_body_stable_across_successive_hours(self):
+        """codex P2: the body must render identically hour-to-hour for an
+        unchanged pending queue. Rendering an hourly-recomputed age counter
+        (e.g. '12h old' -> '13h old') made plan_editor_brief_action's
+        body-diff update check fire every hour — exactly the flap the no-flap
+        Global Constraint forbids. ``t`` is pinned to real now() so neither
+        draft (2h/30h old) crosses the 24h urgency boundary between the two
+        renders (2->3h and 30->31h)."""
+        t = datetime.now(timezone.utc)
+        drafts = [
+            {
+                "id": "d_fire_2h",
+                "status": "pending",
+                "type": "fire",
+                "created_at": (t - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+                "score": {"total": 70},
+                "text": "draft text",
+            },
+            {
+                "id": "d_heat_30h",
+                "status": "pending",
+                "type": "all_time_high",
+                "created_at": (t - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "score": {"total": 60},
+                "text": "draft text",
+            },
+        ]
+        body_now = build_editor_brief_body(editor_brief(drafts, now=t))
+        body_later = build_editor_brief_body(editor_brief(drafts, now=t + timedelta(hours=1)))
+        assert body_now == body_later
+
+
+class TestEditorBriefIssue:
+    FINDING = [{"id": "d_fire_2.0", "type": "fire", "age_h": 30, "score": 60,
+                "tweet_date": None, "urgent": True, "closing": False,
+                "preview": "draft text"}]
+
+    def test_create_update_close_noop(self):
+        assert plan_editor_brief_action(self.FINDING, None)["action"] == "create_editor_brief"
+        stale = {"number": 5, "body": EDITOR_BRIEF_MARKER + "\nold"}
+        assert plan_editor_brief_action(self.FINDING, stale)["action"] == "update_editor_brief"
+        assert plan_editor_brief_action([], {"number": 5, "body": EDITOR_BRIEF_MARKER}) == {
+            "action": "close_editor_brief", "number": 5}
+        assert plan_editor_brief_action([], None) is None
+
+    def test_noop_when_body_unchanged(self):
+        body = build_editor_brief_body(self.FINDING)
+        current = {"number": 5, "body": body}
+        assert plan_editor_brief_action(self.FINDING, current) is None
+
+
+# ---------------------------------------------------------------------------
 # News-gap watch — the Bet A phase 0 miss-detector
 # ---------------------------------------------------------------------------
 from scripts.source_health_sentinel import (  # noqa: E402

@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Editor brief — the sentinel's ranked needs-you-now view of the pending queue (2026-07-07)
+
+- **(program row, editor brief)**: a Bavi-class super typhoon dying unreviewed
+  in the queue (five intensification drafts aged out unseen July 3–4, per the
+  [#375](https://github.com/andrewzp/theheat/issues/375) gap) can no longer
+  happen silently — the hourly source-health sentinel now maintains a single
+  ranked GitHub issue naming exactly what the pending queue needs from Andrew,
+  right now. `editor_brief()` emits one finding per human-gated pending draft
+  (auto-owned drafts excluded via the existing `_is_auto_owned` runnable-state
+  check — the machine already owns those), ranked needs-you-first: a closing
+  forecast window (`tweet_date` is today or tomorrow) beats age ≥24h beats
+  raw score. `build_editor_brief_body()` renders a marker-tagged
+  (`<!-- source-health-editor-brief -->`) "Needs you now" / "Fresh" body,
+  capped at 10 rows with a "+N more on the dashboard" overflow line.
+  `plan_editor_brief_action()` + the create/update/close plumbing follow the
+  same auto-owned-issue contract as queue watch
+  ([#364](https://github.com/andrewzp/theheat/pull/364)): open when findings
+  exist and no issue does, edit-in-place on body drift, close-with-comment
+  when the queue drains to empty. Motivation: queue-watch's 24h alarm tells
+  Andrew that something is stale; this tells him which draft to act on first
+  and why — the brief is meant to make queue-watch alarms rare by driving
+  review before the threshold ever fires.
+
 ### Row 5 — `cyclone_land_threat`: the Bavi gap (#375) (2026-07-07)
 
 - **(program row 5)**: a warned storm whose OFFICIAL FORECAST track brings
