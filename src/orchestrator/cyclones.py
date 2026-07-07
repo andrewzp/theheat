@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import cast
 
 from src import state
@@ -11,13 +12,19 @@ from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
     LandfallEvent,
+    LandThreatEvent,
     RapidIntensificationEvent,
     TierCrossingEvent,
+    _landmass_slug,
+    detect_land_threats,
     latest_advisories_by_storm,
+    tracking_key,
 )
+from src.data.open_meteo import load_cities
 from src.editorial.scoring import (
     EditorialScore,
     score_cyclone_basin_record,
+    score_cyclone_land_threat,
     score_cyclone_landfall,
     score_cyclone_rapid_intensification,
     score_cyclone_tier_crossing,
@@ -113,7 +120,7 @@ def _bundle_for_cyclone_event(
 
 
 def _cyclone_review_context(
-    event: RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent,
+    event: RapidIntensificationEvent | TierCrossingEvent | LandfallEvent | BasinRecordEvent | LandThreatEvent,
     *,
     source_label: str,
     source_key: str,
@@ -145,6 +152,19 @@ def _cyclone_review_context(
             _fact("Landfall location", event.location),
             _fact("Wind", f"{event.wind_kt} kt"),
             _fact("Public advisory", event.public_advisory_url or "—"),
+        ]
+    elif isinstance(event, LandThreatEvent):
+        headline = (
+            f"{event.storm_name}: forecast within {event.min_distance_nm:g} NM "
+            f"of {event.landmass_country}"
+        )
+        facts = [
+            _fact("Storm", event.storm_name),
+            _fact("Basin", event.basin),
+            _fact("Current wind", f"{event.current_wind_kt} kt"),
+            _fact("Landmass", f"{event.landmass_country} (near {event.nearest_city})"),
+            _fact("Closest approach", f"{event.min_distance_nm:g} NM"),
+            _fact("Lead time", f"{event.closest_tau_h}h" if event.closest_tau_h is not None else event.closest_valid_at),
         ]
     else:
         headline = f"{event.storm_name}: {event.record_label}"
@@ -229,6 +249,59 @@ def _process_cyclone_source(
                 review_context=review_context,
                 cooldown_exempt=True,
                 on_draft_success=_on_success,
+            )
+
+        # Land-threat detection (#375): a warned storm whose OFFICIAL forecast
+        # track approaches a named landmass. Separate from the events loop —
+        # its dedup is the (storm, landmass) pair state, recorded ONLY on
+        # draft success so a killed draft retries on the next advisory.
+        land_threats = detect_land_threats(
+            advisories,
+            cast(dict, bot_state.get("cyclone_land_threat_pairs", {})),
+            load_cities(),
+            now=datetime.now(UTC),
+        )
+        for lt in land_threats:
+            if state.is_duplicate(bot_state, lt.event_id):
+                continue
+            lt_score = score_cyclone_land_threat(
+                current_wind_kt=lt.current_wind_kt,
+                min_distance_nm=lt.min_distance_nm,
+                closest_tau_h=lt.closest_tau_h,
+                landmass_country=lt.landmass_country,
+            )
+            if not _should_draft(lt_score, lt.event_id):
+                continue
+            source_promoted += 1
+            from src.two_bot.intern import build_cyclone_land_threat_bundle
+
+            lt_bundle = build_cyclone_land_threat_bundle(lt)
+            _lt_review_context = _cyclone_review_context(
+                lt,
+                source_label=source_label,
+                source_key=source_key,
+                current_run=current_run,
+            )
+            # Neither tracking_key nor slug rides LandThreatEvent — derive
+            # both, bound as closure defaults (the nifc.py pattern).
+            _tk = tracking_key(lt.source, lt.storm_id)
+            _slug = _landmass_slug(lt.landmass_country)
+
+            def _on_lt_success(
+                _bs: BotState = bot_state, _k: str = _tk, _s: str = _slug
+            ) -> None:
+                state.record_land_threat_pair(_bs, _k, _s)
+                state.increment_cyclone_annual_count(_bs)
+
+            _enqueue_story_candidate(
+                bot_state,
+                bundle=lt_bundle,
+                score=lt_score,
+                source=source_key,
+                legacy_type="cyclone_land_threat",
+                event_id=lt.event_id,
+                review_context=_lt_review_context,
+                on_draft_success=_on_lt_success,
             )
 
         for advisory in advisories:
