@@ -124,6 +124,34 @@ class LandfallEvent:
 
 
 @dataclass(frozen=True)
+class LandThreatEvent:
+    """A warned storm whose official forecast track approaches a named landmass.
+
+    Forecast-tense by construction — the event says "forecast to pass within
+    about N NM", never an arrival stated as fact. One per (storm, landmass)
+    pair, ever (the drafted-pairs state key).
+    """
+    source: str
+    storm_id: str
+    storm_name: str
+    basin: str
+    advisory_number: str
+    issued_at: str
+    current_wind_kt: int
+    landmass_country: str
+    nearest_city: str
+    min_distance_nm: float
+    closest_valid_at: str
+    closest_tau_h: int | None
+    forecast_wind_kt_at_closest: int | None
+    event_id: str
+
+    @property
+    def kind(self) -> str:
+        return "cyclone_land_threat"
+
+
+@dataclass(frozen=True)
 class BasinRecordEvent:
     source: str
     storm_id: str
@@ -207,6 +235,107 @@ def parse_nhc_forecast_advisory(text: str) -> tuple[ForecastPoint, ...]:
             max_wind_kt=int(m.group(6)) if m.group(6) else None,
         ))
     return tuple(points)
+
+
+LAND_THREAT_MAX_NM = 150.0
+LAND_THREAT_MAX_HOURS = 72
+LAND_THREAT_MIN_WIND_KT = 64  # current intensity >= Cat 1; TS threats are routine
+
+_VALID_AT_RE = re.compile(r"^(\d{2})/?(\d{2})(\d{2})Z$")
+
+
+def _landmass_slug(country: str) -> str:
+    return country.strip().lower().replace(" ", "_")
+
+
+def _valid_at_within_hours(
+    token: str, issued_at_iso: str, now: datetime, max_hours: int
+) -> bool:
+    """Resolve a raw DDHHMMZ / DD/HHMMZ token against issued_at's month/year.
+
+    Same month/year when the token's day >= the issued day, else roll to the
+    next month (forecast tokens are always forward of issuance). Returns
+    False on ANY parse failure — fail-closed: an unparsable time never
+    mints an event.
+    """
+    m = _VALID_AT_RE.match(token.strip())
+    if not m:
+        return False
+    day, hour, minute = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        issued = datetime.fromisoformat(issued_at_iso.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if issued.tzinfo is None:
+        issued = issued.replace(tzinfo=UTC)
+    year, month = issued.year, issued.month
+    if day < issued.day:
+        month += 1
+        if month > 12:
+            month, year = 1, year + 1
+    try:
+        valid = datetime(year, month, day, hour, minute, tzinfo=UTC)
+    except ValueError:
+        return False
+    return valid <= now + timedelta(hours=max_hours)
+
+
+def detect_land_threats(
+    advisories: list[CycloneAdvisory],
+    drafted_pairs: dict[str, list[str]],
+    cities: list[dict],
+    *,
+    now: datetime,
+) -> list[LandThreatEvent]:
+    """A warned storm whose official forecast brings its CENTER within
+    LAND_THREAT_MAX_NM of a curated populated place within
+    LAND_THREAT_MAX_HOURS → one event per (storm, landmass) pair, ever.
+
+    Pure: reads drafted_pairs, never writes it — the caller records the
+    pair only after a draft is successfully saved (the fire_complex_tiers
+    callback pattern). Prefers tau_h when present (JTWC: eta = issuance +
+    tau, immune to month-roll bugs); falls back to token resolution for
+    NHC points (no tau).
+    """
+    from src.data.land_threat_geo import NearestLandmass, nearest_landmass
+
+    events: list[LandThreatEvent] = []
+    for adv in advisories:
+        if adv.wind_kt < LAND_THREAT_MIN_WIND_KT or not adv.forecast_points:
+            continue
+        already = {s.lower() for s in drafted_pairs.get(adv.tracking_key, [])}
+        best: tuple[NearestLandmass, ForecastPoint] | None = None
+        for point in adv.forecast_points:
+            eta_h = point.tau_h
+            if eta_h is not None and eta_h > LAND_THREAT_MAX_HOURS:
+                continue
+            if eta_h is None and not _valid_at_within_hours(
+                point.valid_at, adv.issued_at, now, LAND_THREAT_MAX_HOURS
+            ):
+                continue
+            near = nearest_landmass(point.lat, point.lon, cities)
+            if near is None or near.distance_nm > LAND_THREAT_MAX_NM:
+                continue
+            if _landmass_slug(near.country) in already:
+                continue
+            if best is None or near.distance_nm < best[0].distance_nm:
+                best = (near, point)
+        if best is None:
+            continue
+        near, point = best
+        slug = _landmass_slug(near.country)
+        events.append(LandThreatEvent(
+            source=adv.source, storm_id=adv.storm_id, storm_name=adv.storm_name,
+            basin=adv.basin, advisory_number=adv.advisory_number,
+            issued_at=adv.issued_at, current_wind_kt=adv.wind_kt,
+            landmass_country=near.country, nearest_city=near.city,
+            min_distance_nm=near.distance_nm, closest_valid_at=point.valid_at,
+            closest_tau_h=point.tau_h,
+            forecast_wind_kt_at_closest=point.max_wind_kt,
+            event_id=event_key(adv.source, "land_threat", adv.storm_id,
+                               adv.advisory_number, slug),
+        ))
+    return events
 
 
 def tracking_key(source: str, storm_id: str) -> str:
