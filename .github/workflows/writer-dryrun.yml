@@ -26,6 +26,8 @@ on:
           - dust
           - cyclone_land_threat
           - precipitation_extreme
+          - coral_bleaching
+          - marine_heatwave
         default: 'fire'
       samples:
         description: 'Number of candidate drafts'
@@ -48,6 +50,12 @@ on:
       country_cluster:
         description: 'country_precip_event fixture shape instead of multi_day_accumulation (--type precipitation_extreme; true/false)'
         default: 'false'
+      dhw_value:
+        description: 'DHW value in °C-weeks (--type coral_bleaching)'
+        default: '24.5'
+      mhw_streak_days:
+        description: 'Streak days (--type marine_heatwave)'
+        default: '12'
 
 concurrency:
   group: writer-dryrun
@@ -83,6 +91,8 @@ jobs:
           INPUT_NAME: ${{ inputs.name }}
           INPUT_RECORD_PATH: ${{ inputs.record_path }}
           INPUT_COUNTRY_CLUSTER: ${{ inputs.country_cluster }}
+          INPUT_DHW_VALUE: ${{ inputs.dhw_value }}
+          INPUT_MHW_STREAK_DAYS: ${{ inputs.mhw_streak_days }}
         # `|| true`: a clean kill is informative, not a job failure — this is
         # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
         # gate; we want drafts + verdicts in the log however many ship.
@@ -97,4 +107,6 @@ jobs:
             --frp "$INPUT_FRP" \
             --hectares "$INPUT_HECTARES" \
             --name "$INPUT_NAME" \
+            --dhw-value "$INPUT_DHW_VALUE" \
+            --mhw-streak-days "$INPUT_MHW_STREAK_DAYS" \
             $EXTRA || true

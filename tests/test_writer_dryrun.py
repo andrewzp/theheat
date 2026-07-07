@@ -154,3 +154,31 @@ class TestPrecipFixture:
         assert "alert_threshold_mm" not in facts
         audit = audit_story_bundle(bundle)
         assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+class TestMarineFixture:
+    """Row 11 PR-1 fixtures: coral_bleaching + marine_heatwave. Neither
+    fixture ever attaches human_impact — a DHW reading and an OISST streak
+    milestone carry no human toll (see DEFAULTS comment convention for dust
+    / cyclone_land_threat)."""
+
+    def test_coral_bleaching_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="coral_bleaching"))
+        assert bundle.signal_kind == "coral_bleaching"
+        assert bundle.historical_context["thresholds_c_weeks"] == [4, 8, 12]
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_coral_bleaching_no_impact(self):
+        bundle = _build_bundle(_args(type="coral_bleaching"))
+        assert not getattr(bundle, "human_impact", None)
+
+    def test_marine_heatwave_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="marine_heatwave"))
+        assert bundle.signal_kind == "marine_heatwave"
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_marine_heatwave_no_impact(self):
+        bundle = _build_bundle(_args(type="marine_heatwave"))
+        assert not getattr(bundle, "human_impact", None)

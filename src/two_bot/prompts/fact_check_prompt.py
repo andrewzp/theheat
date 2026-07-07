@@ -169,6 +169,21 @@ present, is a carried bundle fact — citing it verbatim is BUNDLE_FACT, not
 derived arithmetic. Attributing the cluster to a single storm or weather system is UNVERIFIABLE unless the bundle carries a cause — the grouping is by
 country and date only.
 
+**p) Marine/coral — DHW-as-dose is canonical; sst-anomaly≠marine-heatwave.** For
+`coral_bleaching` bundles: the "°C-weeks is a dose, not a temperature" framing
+(8 °C-weeks as four weeks of +2°C or eight of +1°C) is canonical WORLD_KNOWLEDGE —
+ACCEPT it, and ACCEPT `bleaching_level`/`stress_level` tier words cited verbatim
+(these are BUNDLE_FACT; verify exact match). A DHW value with no trend field is a
+SNAPSHOT — rule b applies: "still climbing," "still accumulating," "approaching
+the next threshold" are FAILURES on a `coral_bleaching` bundle. For
+`marine_heatwave` bundles, `streak_days` IS a real trend field — direction
+language ("N days and counting") is fair there, per the rule-b exception. For
+`regional_sst_anomaly` bundles: the bundle's own `signal_note` states this is
+not a Hobday duration/percentile MHW classification. A draft that calls a
+`regional_sst_anomaly` bundle a "marine heatwave" contradicts its own bundle's
+`signal_note` — this is a BUNDLE_FACT inconsistency (quote the `signal_note` text
+in the failure reason) and a FAILURE regardless of how the number reads.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
