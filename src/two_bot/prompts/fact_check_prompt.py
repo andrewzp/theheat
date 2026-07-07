@@ -148,13 +148,20 @@ present/certain-tense arrival claim ("is making landfall", "will hit", a named
 arrival day stated as fact) is a FAILURE — the bundle carries a forecast, and the
 only honest tense is forecast tense attributed to the official track.
 
-**o) Precipitation — record language requires the record fields.** For
-`precipitation_extreme` bundles: "record", "broke/beat the previous record", "new
-mark", "highest since {year}" are warranted ONLY by `previous_record_mm` +
-`previous_record_year` present in the bundle, cited verbatim. A bundle carrying
-`alert_threshold_mm` instead has NO known record: threshold-crossing language
-("crossed the 300 mm monitoring threshold") is BUNDLE_FACT; record language is a
-FAILURE. The accumulation window must match `period_days` exactly (a "week" claim on
+**o) Precipitation — record language requires the record fields; the monitoring
+threshold is internal config, not a citable scale.** For `precipitation_extreme`
+bundles: "record", "broke/beat the previous record", "new mark", "highest since {year}"
+are warranted ONLY by `previous_record_mm` + `previous_record_year` present in the
+bundle, cited verbatim. A bundle carrying `alert_threshold_mm` instead has NO known
+record. The `alert_threshold_mm` value is the bot's own detection trigger (rule m): the
+specific number cited as the tweet's significance
+("crossed the 300 mm monitoring threshold") is UNVERIFIABLE — internal config presented
+as a published scale, exactly what the critic kills as `internal_taxonomy_leak`. Record
+language is likewise a FAILURE. The honest significance is the annual-normal ratio
+(WORLD_KNOWLEDGE, below) or the record fields when present; a qualitative note that the
+total tripped the bot's monitoring trigger may pass as mechanism, but never carrying the
+config number and never as the headline claim. The accumulation window must match
+`period_days` exactly (a "week" claim on
 period_days=7 is fine; on 3 it is a mismatch). Derived per-day rates the bundle does
 not carry are UNVERIFIABLE arithmetic (rule c applies). Annual-normal comparisons are
 WORLD_KNOWLEDGE — accept when the claimed normal is broadly right for the place;
