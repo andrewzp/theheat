@@ -618,7 +618,14 @@ def _merge_land_threat_pairs(
     ours: dict[str, list[str]], theirs: dict[str, list[str]]
 ) -> dict[str, list[str]]:
     """Per-storm union of drafted landmass slugs — a pair recorded by either
-    concurrent run stays recorded (one-shot dedup must never regress)."""
+    concurrent run stays recorded (one-shot dedup must never regress).
+
+    Known + accepted (codex #388 r1 P2): merging against a STALE backend
+    copy can transiently resurrect a TTL-pruned pair. The failure direction
+    is suppression (the pair reads as already-drafted), never a duplicate
+    draft, and the next prune re-deletes it — the union deliberately favors
+    the one-shot guarantee over prune latency.
+    """
     merged: dict[str, list[str]] = {}
     for key in set(ours or {}) | set(theirs or {}):
         merged[key] = sorted(

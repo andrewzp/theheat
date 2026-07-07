@@ -256,7 +256,9 @@ def _valid_at_within_hours(
     Same month/year when the token's day >= the issued day, else roll to the
     next month (forecast tokens are always forward of issuance). Returns
     False on ANY parse failure — fail-closed: an unparsable time never
-    mints an event.
+    mints an event. The point must also still be in the FUTURE (codex #388
+    r1 P1): an already-passed closest approach is no longer a forecast, and
+    a forecast-tense tweet about it would misstate the past as pending.
     """
     m = _VALID_AT_RE.match(token.strip())
     if not m:
@@ -277,7 +279,7 @@ def _valid_at_within_hours(
         valid = datetime(year, month, day, hour, minute, tzinfo=UTC)
     except ValueError:
         return False
-    return valid <= now + timedelta(hours=max_hours)
+    return now <= valid <= now + timedelta(hours=max_hours)
 
 
 def detect_land_threats(

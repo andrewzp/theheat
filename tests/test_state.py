@@ -2482,3 +2482,63 @@ class TestLandThreatPairs:
         theirs = {"jtwc:05w": ["philippines"], "nhc:al032026": ["mexico"]}
         merged = _merge_land_threat_pairs(ours, theirs)
         assert merged == {"jtwc:05w": ["philippines", "taiwan"], "nhc:al032026": ["mexico"]}
+
+
+class TestSqlitePersistenceContract:
+    """The recurring class (PR #194, #198, 2026-05-08, codex #388 r1 P1):
+    a new DEFAULT_STATE key that never gets a _METADATA_JSON_KEYS entry (or
+    schema column) silently loads back as its default after a SQLite
+    round-trip — dedup guards die without an error. This contract test
+    plants a sentinel in EVERY dict/list-valued DEFAULT_STATE key and
+    asserts the whole state survives, so the next new key fails HERE at
+    review time, not in production via a duplicate post."""
+
+    def test_every_default_state_key_is_persisted_by_the_sqlite_store(self):
+        """Pure structural contract — no write machinery, no probe-shape
+        fights with per-key merge helpers. A key is persisted iff it rides
+        a dedicated schema table/column, the metadata JSON allowlist, or is
+        deliberately transient. A new DEFAULT_STATE key that matches none
+        of these fails HERE, at review time."""
+        from src.storage.sqlite_store import _METADATA_JSON_KEYS
+
+        # Keys with dedicated schema tables / bespoke metadata handling in
+        # sqlite_store (see _SCHEMA + the read/write paths).
+        SCHEMA_HANDLED = {
+            "last_hot10", "streaks", "posted_events", "daily_tweet_count",
+            "drafts", "run_history", "errors",
+        }
+        # Deliberately transient — never persisted, popped at run entry.
+        TRANSIENT = {"_triage_queue"}
+
+        unpersisted = [
+            key for key, value in DEFAULT_STATE.items()
+            if isinstance(value, (dict, list))
+            and key not in SCHEMA_HANDLED
+            and key not in TRANSIENT
+            and key not in _METADATA_JSON_KEYS
+        ]
+        assert not unpersisted, (
+            f"DEFAULT_STATE keys with no sqlite persistence path: {unpersisted} — "
+            "add them to sqlite_store._METADATA_JSON_KEYS (the recurring class: "
+            "PR #194, #198, 2026-05-08 memory, codex #388 r1 cyclone_land_threat_pairs), "
+            "or list them as SCHEMA_HANDLED/TRANSIENT here with a comment"
+        )
+
+    def test_land_threat_pairs_survive_sqlite_round_trip(self):
+        # The concrete #388 r1 P1 repro: {"jtwc:05w": ["taiwan"]} loaded back {}.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "cyclone_land_threat_pairs": {"jtwc:05w": ["taiwan"]},
+            }
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+            assert loaded["cyclone_land_threat_pairs"] == {"jtwc:05w": ["taiwan"]}

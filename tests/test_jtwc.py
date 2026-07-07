@@ -311,3 +311,23 @@ def test_land_threat_unparsable_token_never_mints():
     adv = _advisory_with_forecast(
         [ForecastPoint(valid_at="garbage", lat=25.4, lon=121.6)])
     assert detect_land_threats([adv], {}, _TAIPEI, now=datetime.now(UTC)) == []
+
+
+def test_land_threat_past_valid_time_never_mints():
+    # codex #388 r1 P1: an already-passed closest approach must not mint a
+    # forecast-tense event. Issued 2 days ago; token resolves ~30h in the
+    # past; within the +72h window but NOT in the future → no event.
+    from src.data.cyclones import CycloneAdvisory, ForecastPoint, detect_land_threats
+    now = datetime.now(UTC)
+    issued = now - timedelta(hours=48)
+    past_token = (now - timedelta(hours=30)).strftime("%d/%H00Z")
+    adv = CycloneAdvisory(
+        source="nhc", storm_id="AL03", storm_name="Gert", basin="Atlantic",
+        advisory_number="011", issued_at=issued.isoformat(), wind_kt=100,
+        lat=24.0, lon=-70.0,
+        forecast_points=(
+            ForecastPoint(valid_at=past_token, lat=25.4, lon=121.6, max_wind_kt=90),
+        ),
+    )
+    cities = [{"city": "Taipei", "country": "Taiwan", "lat": "25.03", "lon": "121.57", "elevation_m": "9"}]
+    assert detect_land_threats([adv], {}, cities, now=now) == []
