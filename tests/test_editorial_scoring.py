@@ -436,3 +436,33 @@ class TestScoreSynthesisMarineCompound:
         joined = " ".join(score.reasons).lower()
         assert "dhw" in joined
         assert "sst" in joined
+
+
+class TestCycloneLandThreatScore:
+    """#375: a warned storm's official forecast approach to a named landmass."""
+
+    def test_bavi_class_clears_threshold(self):
+        from src.editorial.scoring import score_cyclone_land_threat
+        score = score_cyclone_land_threat(
+            current_wind_kt=135, min_distance_nm=25.0, closest_tau_h=48,
+            landmass_country="Taiwan",
+        )
+        assert score.category == "cyclone_land_threat"
+        assert score.total >= 70
+        assert score.threshold == 70
+
+    def test_marginal_case_does_not_clear(self):
+        from src.editorial.scoring import score_cyclone_land_threat
+        score = score_cyclone_land_threat(
+            current_wind_kt=65, min_distance_nm=140.0, closest_tau_h=72,
+            landmass_country="Mexico",
+        )
+        assert score.total < 70
+
+    def test_no_tau_uses_default_timeliness(self):
+        from src.editorial.scoring import score_cyclone_land_threat
+        score = score_cyclone_land_threat(
+            current_wind_kt=105, min_distance_nm=40.0, closest_tau_h=None,
+            landmass_country="Mexico",
+        )
+        assert score.timeliness == 75
