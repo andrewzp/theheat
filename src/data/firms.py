@@ -11,10 +11,19 @@ import requests
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
 from src.data._witness import is_witness_eligible_failure, tag_source_leg, with_witness
+from src.data.open_meteo import load_cities
 from src.data.source_status import SourceFetchError, SourceSkipped
+from src.editorial._regions import _haversine_km
 
 FIRMS_API_KEY = os.environ.get("NASA_FIRMS_API_KEY", "")
 FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+
+# Nearest-city fallback bound (row 14, PR-A): a hotspot this far or closer to
+# a curated data/cities.csv place gets an honest "near <city>" label instead
+# of an unplaceable coordinate string. Beyond this distance (open ocean, deep
+# polar) the old coordinate fallback remains — "near X" at 299 km is already
+# a stretch; codex review may push this bound down further.
+GEOCODE_NEAR_CITY_MAX_KM = 300.0
 
 # NOAA HMS independent fire witness (R-02). Independent HOST
 # (satepsanone.nesdis.noaa.gov, NESDIS) AND independent INSTRUMENT (GOES) — so it
@@ -399,17 +408,69 @@ def _lookup_box(lat: float, lon: float) -> tuple[str, str] | None:
     return None
 
 
+# Lazy module-level cache of data/cities.csv rows, keyed only by the process
+# lifetime (the fetch loop calls reverse_geocode_simple once per hotspot, so
+# re-reading the CSV per call would be wasteful). None = not yet loaded.
+_CITIES_CACHE: list[dict] | None = None
+
+
+def _nearest_city(lat: float, lon: float) -> tuple[str, str] | None:
+    """Nearest ``data/cities.csv`` place within ``GEOCODE_NEAR_CITY_MAX_KM``,
+    or None if the CSV is unreadable or every city is farther than that.
+
+    Loads and caches the CSV at module level on first use. Any failure to
+    read the CSV degrades to None (the caller falls back to the old
+    coordinate-string label) — geocoding must never break the fire fetch.
+    """
+    global _CITIES_CACHE
+    if _CITIES_CACHE is None:
+        try:
+            _CITIES_CACHE = load_cities()
+        except (OSError, csv.Error):
+            _CITIES_CACHE = []
+
+    best_city: str | None = None
+    best_country: str | None = None
+    best_dist = float("inf")
+    for row in _CITIES_CACHE:
+        try:
+            city_lat = float(row["lat"])
+            city_lon = float(row["lon"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        dist = _haversine_km(lat, lon, city_lat, city_lon)
+        if dist < best_dist:
+            best_dist = dist
+            best_city = row.get("city")
+            best_country = row.get("country")
+
+    if best_city is None or best_dist > GEOCODE_NEAR_CITY_MAX_KM:
+        return None
+    return f"near {best_city}", best_country or "Unknown"
+
+
 def reverse_geocode_simple(lat: float, lon: float) -> tuple[str, str]:
     """Map coordinates to a (region, country) label.
 
-    Bounding-box lookup. Falls back to a coordinate-string region +
-    "Unknown" country when no box contains the point — happens mostly
-    for open ocean or Arctic / Antarctic waters, where no fire should
-    fire anyway.
+    Bounding-box lookup first — curated editorial region names (e.g. "the
+    Amazon Basin") always win when they match. On a box miss, fall back to
+    the nearest ``data/cities.csv`` place within ``GEOCODE_NEAR_CITY_MAX_KM``:
+    ``region="near <city>"``, ``country=<city's country>``. Only beyond that
+    distance from every curated city does the old coordinate-string region +
+    "Unknown" country fallback remain — happens mostly for open ocean or
+    Arctic / Antarctic waters, where no fire should fire anyway.
     """
     match = _lookup_box(lat, lon)
     if match is not None:
         return match
+    try:
+        near = _nearest_city(lat, lon)
+    except Exception:
+        # Geocoding must never break the fire fetch — any unexpected failure
+        # in the nearest-city lookup degrades to the old fallback.
+        near = None
+    if near is not None:
+        return near
     region = f"{abs(lat):.1f}{'N' if lat >= 0 else 'S'}, {abs(lon):.1f}{'E' if lon >= 0 else 'W'}"
     return region, "Unknown"
 
