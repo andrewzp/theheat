@@ -251,6 +251,55 @@ class TestSelectSurvivors:
         assert bot_state["drafts"][0]["status"] == "pending"
         assert "rejected_reason" not in bot_state["drafts"][0]
 
+    def test_kill_switch_disables_forecast_elapsed_sweep(self, monkeypatch):
+        """THEHEAT_TRIAGE_ENABLED=0 must not mutate pending drafts via the
+        forecast-elapsed sweep either (same gate as the TTL sweep)."""
+        from datetime import UTC, datetime, timedelta
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common
+
+        now = datetime.now(UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "elapsed_forecast",
+                "type": "absolute_extreme",
+                "status": "pending",
+                "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+            }
+        ]
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert drafted == 0
+        assert bot_state["drafts"][0]["status"] == "pending"
+        assert "rejected_reason" not in bot_state["drafts"][0]
+
+    def test_drain_runs_forecast_elapsed_sweep_when_enabled(self, monkeypatch):
+        """Triage enabled → the drain step auto-rejects elapsed-forecast drafts."""
+        from datetime import UTC, datetime, timedelta
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        now = datetime.now(UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "elapsed_forecast",
+                "type": "absolute_extreme",
+                "status": "pending",
+                "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+            }
+        ]
+
+        common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        d = bot_state["drafts"][0]
+        assert d["status"] == "rejected"
+        assert d["rejected_reason"].startswith("forecast_elapsed_")
+
     def test_cooldown_exempt_still_subject_to_triage_cap(self, monkeypatch):
         """cooldown_exempt=True doesn't bypass the triage cap."""
         monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
