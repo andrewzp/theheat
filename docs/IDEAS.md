@@ -248,10 +248,10 @@ the destination.
 
 ## Weather-news scanner — "are we missing an obvious event?"
 
-> **STATUS: BUILT & SHIPPED DARK (2026-07-06) as Bet A A0** (#366) — the
-> newsworthiness retrieval lane + news-gap watch. Activation is
-> `THEHEAT_NEWSWORTHINESS_ENABLED` (Andrew's flag). See the Bet A design spec
-> and `docs/handoffs/2026-07-06-evening.md`.
+> **STATUS: LIVE (2026-07-07)** — built as Bet A A0 (#366, shipped dark
+> 2026-07-06); `THEHEAT_NEWSWORTHINESS_ENABLED=1` flipped 2026-07-07 12:59Z
+> with Andrew's go. The news-gap watch now runs every alerts cycle. See the
+> Bet A design spec + the track-0 runbook for verification state.
 
 **What:** A recurring job that scans weather/climate news for the biggest current events
 (heat death tolls, multi-state fire outbreaks, record landfalls…) and cross-checks them

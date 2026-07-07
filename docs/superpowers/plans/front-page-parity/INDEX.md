@@ -12,7 +12,7 @@
 
 | Row | Plan doc | Status | Blocked on |
 |---|---|---|---|
-| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | READY (Andrew flips; any session watches). A1 pre-flip gate GREEN on main 2026-07-07 after the #387 critic fix | Andrew |
+| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | **A0 master LIVE 2026-07-07 12:59Z** (first-light GREEN; citation hand-check on next cycles). Enrich gate GREEN (#387) — flip after A0 verifies, with Andrew's go; boost after that | A0 verify → Andrew |
 | 3 | [row-03-corpus-merge-and-staleness.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-03-corpus-merge-and-staleness.md) | **MERGED 2026-07-07** (#384 + #385; codex r1 P1 → sweep is provenance-aware) | — |
 | 4 | [row-04-voice-ptier-pdust.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-04-voice-ptier-pdust.md) | **MERGED 2026-07-07** (#386; watch air-quality coverage ≥90% for 2 cycles) | — |
 | 5 | [row-05-cyclone-land-threat.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-05-cyclone-land-threat.md) | **MERGED 2026-07-07** (#388, closes #375; codex r1 2×P1 real → fixed + persistence contract test; Bavi = live verify case) | — |

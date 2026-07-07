@@ -12,6 +12,12 @@ near-miss boost (A2) — each verified on real cycles before the next flip.
 
 ## Step 1 — master (A0): retrieval lane + news-gap watch. Zero editorial surface.
 
+> **STATUS: FLIPPED 2026-07-07 12:59:59Z** (Andrew's explicit go). First-light
+> cycle = run 28868097367 (manually dispatched, GREEN): flag reached the run,
+> lane executed clean, no runaway, 1 draft saved (zero editorial surface
+> confirmed). Checklist items still open: news_events citation hand-check +
+> news-gap sanity — do on the 16:00Z/20:00Z cycles.
+
 Andrew:
 ```bash
 gh variable set THEHEAT_NEWSWORTHINESS_ENABLED --body 1 --repo andrewzp/theheat
