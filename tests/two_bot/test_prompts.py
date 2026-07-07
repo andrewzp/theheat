@@ -298,6 +298,110 @@ class TestCriticPromptOutputContract:
             assert example in CRITIC_SYSTEM_PROMPT
 
 
+class TestFireBundleFourMoves:
+    """E1 (plan row 8): the fire writer-prompt section — the reganom
+    four-moves pattern generalized to the fire signal family. These guard
+    the section's load-bearing phrases; losing one regresses fires to the
+    data-ticker form ("A fire in X is radiating N MW, detected by satellite
+    at N% confidence") that E1 exists to retire."""
+
+    def test_fire_section_covers_both_signal_kinds(self):
+        # One section, both fire signals: FIRMS/HMS hotspots (FRP snapshot)
+        # and NIFC named-complex perimeter tier crossings.
+        assert 'signal_kind = "fire" | "fire_footprint"' in WRITER_SYSTEM_PROMPT
+
+    def test_move_one_lead_with_the_event_not_the_detection(self):
+        # Satellite/confidence framing is attribution, not news.
+        assert "Lead with the event, not the detection" in WRITER_SYSTEM_PROMPT
+
+    def test_move_two_scale_words_over_raw_units(self):
+        # frp_tier word anchors hotspots; footprints get the bundle's
+        # pre-computed area equivalents so the writer never converts.
+        assert "Scale words over raw units" in WRITER_SYSTEM_PROMPT
+        assert "area_km2_approx" in WRITER_SYSTEM_PROMPT
+        assert "area_acres_approx" in WRITER_SYSTEM_PROMPT
+
+    def test_move_three_fire_names_are_bundle_or_nothing(self):
+        # complex_name (or a human_impact entry naming the incident) is the
+        # ONLY warrant for a fire name; hotspot bundles are nameless.
+        assert "complex_name" in WRITER_SYSTEM_PROMPT
+        lowered = WRITER_SYSTEM_PROMPT.lower()
+        assert "nameless" in lowered
+
+    def test_move_four_wires_the_a1_sourced_impact(self):
+        # The A1 wiring: when human_impact rides the bundle, the human
+        # stakes are usually THE story — and the rider's rules govern.
+        assert "human_impact" in WRITER_SYSTEM_PROMPT
+        assert "SOURCED HUMAN IMPACT" in WRITER_SYSTEM_PROMPT
+
+    def test_operational_specifics_banned_by_name(self):
+        # What the bundle cannot see, the writer cannot say.
+        lowered = WRITER_SYSTEM_PROMPT.lower()
+        assert "containment" in lowered
+        assert "evacuation" in lowered
+
+    def test_before_after_exemplar_present(self):
+        # The reganom pattern: a ✗ ticker / ✓ story pair, same honest facts.
+        assert "✗ ticker" in WRITER_SYSTEM_PROMPT
+        assert "✓ story" in WRITER_SYSTEM_PROMPT
+
+
+class TestFireExemplarTierConsistency:
+    """Same lock as TestReganomRoundingExampleConsistency: prompt exemplars
+    must agree with the bundle semantics they teach. A tier word that does
+    not match _frp_tier for its exemplar MW teaches the writer a
+    BUNDLE_FACT failure."""
+
+    def test_very_high_exemplar_number_is_actually_very_high_tier(self):
+        from src.two_bot.intern._shared import _frp_tier
+
+        # The fire-section exemplar pairs 595 MW with the very_high tier.
+        assert _frp_tier(595.0) == ("very_high", 500)
+        assert "595 MW" in WRITER_SYSTEM_PROMPT
+        assert "very-high-intensity" in WRITER_SYSTEM_PROMPT
+
+    def test_existing_high_intensity_pairing_still_consistent(self):
+        from src.two_bot.intern._shared import _frp_tier
+
+        # The sentence-1 variety examples pair 309 MW with "high-intensity".
+        assert _frp_tier(309.0) == ("high", 100)
+
+
+class TestFireFactCheckPairing:
+    """The E1 discipline: every fire-section loosening lands with a
+    fact-check guard in the same PR. The writer teaches the move; the
+    checker holds the leash."""
+
+    def test_fire_rule_names_both_kinds(self):
+        assert "fire_footprint" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_fire_name_warrant_rule(self):
+        # A proper fire name must trace to complex_name or a human_impact
+        # entry's claim text; a recognized-from-training name is UNVERIFIABLE.
+        assert "complex_name" in FACT_CHECK_SYSTEM_PROMPT
+        assert "wrong fire" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_hotspot_cannot_see_a_perimeter(self):
+        # Acreage/perimeter figures on a `fire` hotspot bundle are
+        # UNVERIFIABLE — a point detection has no perimeter.
+        assert "cannot see a perimeter" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_operational_specifics_guarded(self):
+        lowered = FACT_CHECK_SYSTEM_PROMPT.lower()
+        assert "containment" in lowered
+
+    def test_area_approx_fields_accepted_with_marker(self):
+        # The pre-rounded bundle areas are BUNDLE_FACT cited with "about" —
+        # the marker is precision discipline, not hedging (reganom rule g
+        # precedent).
+        assert "area_km2_approx" in FACT_CHECK_SYSTEM_PROMPT
+        assert "area_acres_approx" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_tier_word_verified_as_bundle_fact(self):
+        # "very-high-intensity" on a `high` bundle is a BUNDLE_FACT failure.
+        assert "frp_tier" in FACT_CHECK_SYSTEM_PROMPT
+
+
 class TestCriticUserPromptTemplate:
     """The user prompt template must accept the format keys the
     critic.py implementation passes. A mismatch (renamed key, missing

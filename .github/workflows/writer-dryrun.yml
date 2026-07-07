@@ -1,0 +1,77 @@
+name: writer-dryrun
+
+# On-demand LIVE dry-run of a signal type's writer voice (E1 harness).
+#
+# Runs scripts/writer_dryrun.py inside Actions — where ANTHROPIC_API_KEY and
+# GEMINI_API_KEY live as repo secrets — so a per-type fixture bundle (fires
+# first: FIRMS hotspot or NIFC named complex, impact-carrying by default)
+# goes through the REAL evidence contract → writer → safety → §F →
+# fact-check → critic chain, with the decision-4 routing printed per
+# candidate. This is the voice-iteration tool for prompt work; the A1
+# pre-flip gate remains news-enrich-dryrun.yml, untouched.
+#
+# workflow_dispatch ONLY — never scheduled (it makes paid Anthropic + Gemini
+# calls). It POSTS NOTHING and touches NO prod state: a dry-run only prints
+# drafts; the live posting path is untouched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      type:
+        description: 'Signal type'
+        type: choice
+        options:
+          - fire
+          - fire_footprint
+        default: 'fire'
+      samples:
+        description: 'Number of candidate drafts'
+        default: '3'
+      no_impact:
+        description: 'Control run without human_impact (true/false)'
+        default: 'false'
+      frp:
+        description: 'FRP MW (--type fire)'
+        default: '595'
+      hectares:
+        description: 'Perimeter hectares (--type fire_footprint)'
+        default: '103400'
+      name:
+        description: 'complex_name (--type fire_footprint)'
+        default: 'Sierra Complex'
+
+concurrency:
+  group: writer-dryrun
+  cancel-in-progress: false
+
+jobs:
+  dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - run: pip install -r requirements.txt
+
+      - name: Run writer dry-run (live writer → fact-check → critic)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        # `|| true`: a clean kill is informative, not a job failure — this is
+        # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
+        # gate; we want drafts + verdicts in the log however many ship.
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.no_impact }}" = "true" ]; then EXTRA="--no-impact"; fi
+          python scripts/writer_dryrun.py \
+            --type "${{ inputs.type }}" \
+            --samples "${{ inputs.samples }}" \
+            --frp "${{ inputs.frp }}" \
+            --hectares "${{ inputs.hectares }}" \
+            --name "${{ inputs.name }}" \
+            $EXTRA || true

@@ -158,6 +158,22 @@ def _climate_context_facts(
         facts.append({"label": "season_context", "value": ctx.season_context})
     return facts
 
+def _round_sig(value: float, sig: int = 3) -> int:
+    """Round to ``sig`` significant figures, returning an int.
+
+    Used for pre-computed "about"-citable equivalents of large areas
+    (the value_f / value_rounded_c pattern): the bundle supplies the
+    rounded form so writer and fact-checker exact-match the same number
+    and no conversion ever happens mid-tweet.
+    """
+    if value == 0:
+        return 0
+    from math import floor, log10
+
+    digits = sig - int(floor(log10(abs(value)))) - 1
+    return int(round(value, digits))
+
+
 def _frp_tier(frp_mw: float) -> tuple[str, int]:
     """Classify a fire's FRP value into a reader-relatable intensity tier.
 

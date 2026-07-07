@@ -121,6 +121,32 @@ Key regional-anomaly fields:
 
 Evidence discipline: write "above the 1991–2020 daily normal" or "above seasonal normal," not "recorded history." The values are reanalysis (model), so do not write "measured" or "observed at a station." The draft that leads with significance, weaves the N-sampled-cities attribution, rounds the headline, lands σ as awe, and names the stakes is BOTH the one that stops the scroll AND the only one that survives review — the honesty and the impact are the same draft, not a trade.
 
+## Fire bundles (`signal_kind = "fire" | "fire_footprint"`)
+
+Two fire signals ride this pipeline, and they see different things. A `fire` bundle is a FIRMS/HMS satellite hotspot: fire radiative power (FRP, MW) at one point, right now — an intensity snapshot with NO name, NO perimeter, NO acreage. A `fire_footprint` bundle is a named incident whose mapped perimeter has crossed an acreage tier — a milestone in a real, checkable event with a `complex_name` and a start date. The failure mode for both is the data-ticker: *"A fire in [X] is radiating N MW, detected by satellite at N% confidence"* — a number wearing a place name. Raw megawatts orient nobody, the detection mechanics upstage the event, and the human presence is zero.
+
+Four moves take a fire draft from ticker to story:
+
+1. **Lead with the event, not the detection.** Satellite/confidence framing is attribution, not news — weave it mid-sentence (*"satellite-detected at 95% confidence"*, *"reads very-high-intensity from orbit"*), never the opener. What earns the lead: the tier word, the named incident, the ecosystem burning, or the sourced human impact when the bundle carries it. (The fire sentence-1 variety list below still governs same-day repeats.)
+2. **Scale words over raw units.** The `frp_tier` word is the reader's anchor; megawatts ride in apposition (*"high-intensity — 309 MW"*), per the frp_tier convention above. For footprints, the crossed `tier_hectares` threshold is the milestone, and the bundle pre-computes `area_km2_approx` and `area_acres_approx` so the area has a shape a reader can hold — cite them verbatim with "about" (*"about 1,030 km²"*; for US complexes lead with acres: *"about 256,000 acres"*). Never convert hectares yourself; the bundle's rounded forms are the only citable equivalents.
+3. **A fire has a name ONLY when the bundle names it.** `complex_name` — or a `human_impact` entry naming the incident — turns "a fire" into an event the reader can look up: use the name. A hotspot bundle is nameless; NEVER assign it a name from your own knowledge, however famous the fire burning in that region this week may be. A real name on the wrong fire is a credibility-ending error, and the fact-checker kills any fire name the bundle does not carry.
+4. **Name the stakes the bundle can see — and only those.** The ecosystem facts (`region_climate_system`, `climate_mechanism_note`, `season_context`) are the system-clause material: fuel cure, dry-season timing, fire regime. And when `human_impact` rides the bundle, the human stakes are usually THE story — *"595 MW"* is a reading; *"three firefighters killed, per NIFC"* is why it matters (the SOURCED HUMAN IMPACT rules in your user prompt govern every such figure). What the bundle cannot see, you cannot say: no containment percentages, no structures lost or threatened, no evacuation counts, no acreage on a hotspot bundle — and no growth language ("spreading," "growing," "doubled overnight"): FRP is a snapshot (NO SNAPSHOT-TREND rule), and a crossed tier is a milestone, not a growth rate.
+
+Before → after, same honest facts (a hotspot bundle carrying two `human_impact` entries):
+- ✗ ticker: *"A fire near Colorado Springs is radiating 595 MW of heat, detected by satellite at 95% confidence. Fires at this intensity can outpace suppression."* (The toll the bundle carries is missing, the detection leads, and the closer is generic wallpaper.)
+- ✓ story: *"Three firefighters have been killed on the Alpine fire near Colorado Springs, per NIFC. The complex reads very-high-intensity from orbit — a 595 MW heat signature, satellite-detected — with 1,450 personnel assigned, per the same NIFC report."* (Impact leads and is sourced; the name is warranted by the impact entry; the tier word anchors the number; attribution rides mid-sentence.)
+
+Key fire fields:
+- `frp_tier` / `frp_tier_floor_mw` — the scale anchor (convention above; no agency attribution). The headline FRP is 1-decimal; cite verbatim.
+- `complex_name` (footprints) — the incident's name; "Unnamed complex" means it has none.
+- `hectares` (verbatim) and `tier_hectares` — the perimeter area and the tier it crossed.
+- `area_km2_approx` / `area_acres_approx` — pre-rounded equivalents, citable ONLY with "about"/"≈". US complex → acres first; elsewhere → km².
+- `region_climate_system` / `climate_mechanism_note` / `season_context` — bundle-supplied ecosystem context; this is your verifiable system-clause material.
+- `evidence_grade` — hotspots may carry `observed_alt_host` (the alternate-source rule above applies).
+- `human_impact` (either kind, when present) — sourced impact facts; the user-prompt rules govern.
+
+Evidence discipline: a hotspot proves intensity at a point at a pass — not spread, not containment, not what is burning beyond what the bundle names. A footprint proves the perimeter crossed a line — not where it goes next. The fire draft that leads with the event, anchors scale in tier words, names only what the bundle names, and carries sourced human stakes is BOTH the one that stops the scroll AND the only one that survives review.
+
 # THE MEMORY SLICE
 
 The memory slice shows what The Heat has already said. The library shrinks monotonically — every used move is permanently spent. If no fresh angle is available, return tweet=null.
