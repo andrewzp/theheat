@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 3 — the quality instrument reconnected: corpus on main + forecast-elapsed sweep (2026-07-07)
+
+- **[#384](https://github.com/andrewzp/theheat/pull/384)** (program row 3,
+  PR-A): the daily-plan grading corpus (A-rate history, DRAFT_CORPUS grades,
+  IMPROVEMENT_PLAN failure-mode evidence P_tier/P_dust/P_close/P9/P_compound)
+  merged to main after 29 cycles marooned on `daily-plan-current`. Docs-only.
+- **(program row 3, PR-B)**: `apply_forecast_elapsed_sweep` — the staleness
+  rule the grading routine flagged for 38 consecutive cycles but could never
+  execute (no gist write path) is now code-native at the triage drain step.
+  A PENDING draft whose type is forecast-tense (`absolute_extreme`,
+  `wet_bulb_extreme` — the Basrah/Doha class) and whose `tweet_date` has
+  elapsed past a grace day auto-rejects with
+  `rejected_reason=forecast_elapsed_<date>` (recoverable — operator can
+  re-approve from the rejected pile, same contract as the TTL sweep).
+  Observed-record types (GHCN) are deliberately exempt: their `tweet_date`
+  is an observation date and may legitimately age in manual review. The
+  sweep is provenance-aware for `absolute_extreme` (codex r1 P1): GHCN also
+  emits an OBSERVED absolute_extreme, so the sweep requires the draft's
+  review_context `Data source: forecast` marker (rides every
+  absolute_extreme draft since #195) — GHCN or unknown provenance never
+  sweeps (fail-safe; the 7-day TTL sweep still bounds those). Grace knob:
+  `THEHEAT_FORECAST_ELAPSED_GRACE_DAYS` (default 1 — same-day and next-day
+  review remain possible).
+
 ### E1 — the fire voice floor: four moves, paired gates, per-type dryrun (2026-07-06, evening)
 
 - **[#379](https://github.com/andrewzp/theheat/pull/379)** (plan row 8): the

@@ -251,6 +251,57 @@ class TestSelectSurvivors:
         assert bot_state["drafts"][0]["status"] == "pending"
         assert "rejected_reason" not in bot_state["drafts"][0]
 
+    def test_kill_switch_disables_forecast_elapsed_sweep(self, monkeypatch):
+        """THEHEAT_TRIAGE_ENABLED=0 must not mutate pending drafts via the
+        forecast-elapsed sweep either (same gate as the TTL sweep)."""
+        from datetime import UTC, datetime, timedelta
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common
+
+        now = datetime.now(UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "elapsed_forecast",
+                "type": "absolute_extreme",
+                "status": "pending",
+                "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+                "review_context": {"facts": [{"label": "Data source", "value": "forecast"}]},
+            }
+        ]
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert drafted == 0
+        assert bot_state["drafts"][0]["status"] == "pending"
+        assert "rejected_reason" not in bot_state["drafts"][0]
+
+    def test_drain_runs_forecast_elapsed_sweep_when_enabled(self, monkeypatch):
+        """Triage enabled → the drain step auto-rejects elapsed-forecast drafts."""
+        from datetime import UTC, datetime, timedelta
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        now = datetime.now(UTC)
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "id": "elapsed_forecast",
+                "type": "absolute_extreme",
+                "status": "pending",
+                "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+                "review_context": {"facts": [{"label": "Data source", "value": "forecast"}]},
+            }
+        ]
+
+        common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        d = bot_state["drafts"][0]
+        assert d["status"] == "rejected"
+        assert d["rejected_reason"].startswith("forecast_elapsed_")
+
     def test_cooldown_exempt_still_subject_to_triage_cap(self, monkeypatch):
         """cooldown_exempt=True doesn't bypass the triage cap."""
         monkeypatch.delenv("THEHEAT_PER_CATEGORY_CAP", raising=False)
@@ -847,6 +898,104 @@ class TestPendingTtlSweep:
 
         assert n == 0  # 25d < 30d override → kept
         assert bot_state["drafts"][0]["status"] == "pending"
+
+
+class TestForecastElapsedSweep:
+    """Sibling of the TTL sweep, keyed on tweet_date instead of created_at.
+
+    A pending forecast-tense draft whose forecast date has fully elapsed
+    would misstate an already-passed forecast as current — the Basrah/Doha
+    class the daily-plan grader flagged but could never reject.
+    """
+
+    def _draft(self, *, dtype="absolute_extreme", tweet_date_days_ago=2,
+               status="pending", data_source="forecast"):
+        from datetime import UTC, datetime, timedelta
+        now = datetime.now(UTC)
+        draft = {
+            "id": f"draft_{dtype}_{tweet_date_days_ago}",
+            "status": status,
+            "type": dtype,
+            "created_at": (now - timedelta(hours=50)).isoformat().replace("+00:00", "Z"),
+            "tweet_date": (now - timedelta(days=tweet_date_days_ago)).date().isoformat(),
+            "text": "x",
+        }
+        if data_source is not None:
+            # The real marker shape: _fact("Data source", ev.data_source)
+            # inside review_context facts (rides every absolute_extreme
+            # draft since #195).
+            draft["review_context"] = {
+                "facts": [{"label": "Data source", "value": data_source}],
+            }
+        return draft
+
+    def test_rejects_elapsed_forecast_types(self):
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=2)]}
+        assert apply_forecast_elapsed_sweep(state) == 1
+        d = state["drafts"][0]
+        assert d["status"] == "rejected"
+        assert d["rejected_reason"].startswith("forecast_elapsed_")
+        assert d["rejected_at"].endswith("Z")
+
+    def test_wet_bulb_extreme_included(self):
+        # wet_bulb_extreme has no observed variant → sweeps on type alone,
+        # no provenance marker required.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(dtype="wet_bulb_extreme", tweet_date_days_ago=3,
+                                        data_source=None)]}
+        assert apply_forecast_elapsed_sweep(state) == 1
+
+    def test_ghcn_observed_absolute_extreme_never_swept(self):
+        # codex P1 (PR #385 r1): GHCN emits an OBSERVED absolute_extreme whose
+        # tweet_date is an observation date — legitimately ages in review.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=4, data_source="ghcn")]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+        assert state["drafts"][0]["status"] == "pending"
+
+    def test_unknown_provenance_absolute_extreme_never_swept(self):
+        # Fail-safe: no provenance marker → never reject; the created_at TTL
+        # sweep still bounds such drafts at 7 days.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=4, data_source=None)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+
+    def test_grace_day_survives(self):
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=1)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+        assert state["drafts"][0]["status"] == "pending"
+
+    def test_same_day_survives(self):
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=0)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+
+    def test_grace_env_override(self, monkeypatch):
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        monkeypatch.setenv("THEHEAT_FORECAST_ELAPSED_GRACE_DAYS", "3")
+        state = {"drafts": [self._draft(tweet_date_days_ago=2)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+        monkeypatch.setenv("THEHEAT_FORECAST_ELAPSED_GRACE_DAYS", "bogus")
+        # Bad value falls back to the default grace of 1 → 2-days-ago rejects.
+        assert apply_forecast_elapsed_sweep(state) == 1
+
+    def test_observed_record_types_untouched(self):
+        # GHCN records legitimately age 2-4 days in manual review — never swept.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(dtype="all_time_high", tweet_date_days_ago=4)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+
+    def test_non_pending_and_missing_tweet_date_untouched(self):
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        posted = self._draft(tweet_date_days_ago=3, status="posted")
+        no_date = self._draft(tweet_date_days_ago=3)
+        del no_date["tweet_date"]
+        state = {"drafts": [posted, no_date]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+        assert posted["status"] == "posted"
+        assert no_date["status"] == "pending"
 
 
 # ---------------------------------------------------------------------------

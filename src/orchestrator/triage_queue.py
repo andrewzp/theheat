@@ -359,6 +359,17 @@ def _drain_and_write_triage_queue(
                 )
         except Exception as exc:
             print(f"[triage] TTL sweep error (continuing): {exc!r}")
+        # Forecast-elapsed sweep — sibling of the TTL sweep, keyed on the
+        # claim's anchor date instead of draft age. Same isolation contract:
+        # a sweep failure only fails to GC, never blocks the cycle.
+        try:
+            swept_forecast = _triage.apply_forecast_elapsed_sweep(bot_state)
+            if swept_forecast > 0:
+                print(
+                    f"[triage] forecast-elapsed sweep rejected {swept_forecast} draft(s)"
+                )
+        except Exception as exc:
+            print(f"[triage] forecast-elapsed sweep error (continuing): {exc!r}")
 
     # Cast to plain dict: _triage_queue is a transient key not declared in
     # BotState TypedDict (it's excluded from sqlite persistence intentionally).
