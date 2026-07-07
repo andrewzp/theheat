@@ -63,19 +63,33 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: Run reganom writer dry-run (live writer → fact-check → critic)
+        # Inputs reach the shell ONLY via env (data, not code) — direct
+        # `${{ inputs.* }}` interpolation into `run:` is a command-injection
+        # seam in a step whose env holds API keys (the writer-dryrun.yml
+        # class, codex-flagged on #379). Numeric knobs are validated by
+        # argparse type coercion in the script.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INPUT_REGION: ${{ inputs.region }}
+          INPUT_SAMPLES: ${{ inputs.samples }}
+          INPUT_CITIES: ${{ inputs.cities }}
+          INPUT_ANOMALY: ${{ inputs.anomaly }}
+          INPUT_ZSCORE: ${{ inputs.zscore }}
+          INPUT_DAYS: ${{ inputs.days }}
+          INPUT_WINDOW_START: ${{ inputs.window_start }}
+          INPUT_WINDOW_END: ${{ inputs.window_end }}
+          INPUT_LATEST_DAY: ${{ inputs.latest_day }}
         # `|| true`: a clean kill is informative, not a job failure — we want the
         # drafts + verdicts in the log regardless of how many would ship.
         run: |
           python scripts/reganom_writer_dryrun.py \
-            --region "${{ inputs.region }}" \
-            --samples "${{ inputs.samples }}" \
-            --cities "${{ inputs.cities }}" \
-            --anomaly "${{ inputs.anomaly }}" \
-            --zscore "${{ inputs.zscore }}" \
-            --days "${{ inputs.days }}" \
-            --window-start "${{ inputs.window_start }}" \
-            --window-end "${{ inputs.window_end }}" \
-            --latest-day "${{ inputs.latest_day }}" || true
+            --region "$INPUT_REGION" \
+            --samples "$INPUT_SAMPLES" \
+            --cities "$INPUT_CITIES" \
+            --anomaly "$INPUT_ANOMALY" \
+            --zscore "$INPUT_ZSCORE" \
+            --days "$INPUT_DAYS" \
+            --window-start "$INPUT_WINDOW_START" \
+            --window-end "$INPUT_WINDOW_END" \
+            --latest-day "$INPUT_LATEST_DAY" || true
