@@ -149,6 +149,7 @@ class TestPrecipFixture:
         facts = {f["label"]: f.get("value") for f in bundle.current_facts}
         assert facts["event_kind"] == "country_precip_event"
         assert facts["city_count"] == 12
+        assert len(facts["sample_cities"]) == 12
         assert "previous_record_mm" not in facts
         assert "alert_threshold_mm" not in facts
         audit = audit_story_bundle(bundle)

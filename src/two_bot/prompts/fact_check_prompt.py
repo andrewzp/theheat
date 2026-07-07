@@ -166,7 +166,8 @@ FAILURE); any per-city previous-record figure, record age, or "national record"
 claim is UNVERIFIABLE (the cluster carries no per-city record fields); city names
 outside `sample_cities` are UNVERIFIABLE. `deviation_from_record_mm`, when
 present, is a carried bundle fact — citing it verbatim is BUNDLE_FACT, not
-derived arithmetic.
+derived arithmetic. Attributing the cluster to a single storm or weather system is UNVERIFIABLE unless the bundle carries a cause — the grouping is by
+country and date only.
 
 # Archive-window rule
 

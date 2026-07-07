@@ -200,7 +200,11 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
                 lat=51.17,
                 lon=71.43,
                 city_count=12,
-                sample_cities=["Astana", "Karaganda", "Pavlodar"],
+                sample_cities=[
+                    "Astana", "Karaganda", "Pavlodar", "Shymkent", "Almaty",
+                    "Aktobe", "Taraz", "Oskemen", "Semey", "Atyrau",
+                    "Kostanay", "Kyzylorda",
+                ],
                 event_id="dryrun_precip_country_kazakhstan",
                 alert_threshold_mm=None,
             )

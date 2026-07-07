@@ -167,8 +167,8 @@ Three kinds ride this signal, and the bundle tells you which: `event_kind =
 `previous_record_year`, `deviation_from_record_mm` are present),
 `"multi_day_accumulation"` (a multi-day total crossed a monitoring trigger —
 `alert_threshold_mm` is present INSTEAD; there are no record fields because no
-record is known), or `"country_precip_event"` (one weather system broke daily
-rainfall records in `city_count` monitored cities across one country — the
+record is known), or `"country_precip_event"` (daily rainfall records fell in
+`city_count` monitored cities across one country on the same date — the
 cluster is the story; no single-station record fields ride it). The failure mode is the rain ticker: *"[Place] recorded X mm of rain in
 N days"* as the opener, then the same numbers restated as arithmetic. Four moves:
 
@@ -199,7 +199,7 @@ N days"* as the opener, then the same numbers restated as arithmetic. Four moves
    "observed/measured/recorded."
 
 **Country clusters (`event_kind = "country_precip_event"`).** The story is the
-system, not one gauge: `city_count` monitored cities in one country each broke a
+cluster, not one gauge: `city_count` monitored cities in one country each broke a
 daily rainfall record, and `rainfall_mm` is the heaviest single-city total among
 them — cite it verbatim AS the heaviest, never as a national total or average.
 Cluster record language ("daily rainfall records fell in {city_count} cities") is

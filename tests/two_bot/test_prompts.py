@@ -553,3 +553,7 @@ class TestPrecipFourMoves:
     def test_fact_check_country_cluster(self):
         assert "country_precip_event" in FACT_CHECK_SYSTEM_PROMPT
         assert "heaviest SINGLE-CITY total" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_no_single_system_attribution(self):
+        assert "one weather system" not in WRITER_SYSTEM_PROMPT
+        assert "single storm or weather system is UNVERIFIABLE" in FACT_CHECK_SYSTEM_PROMPT
