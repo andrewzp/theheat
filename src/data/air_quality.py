@@ -28,6 +28,11 @@ AQ_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 # WHO 2021 PM2.5 24-hour mean guideline (micrograms per cubic meter).
 WHO_24H_GUIDELINE: float = 15.0
 
+# WHO 2021 Air Quality Guideline, PM10 24-hour mean. The dust anchor is
+# CO-MEASURED PM10 (Open-Meteo `pm10`), never the `dust` variable itself —
+# `dust` is mineral dust only and has no 24h-average standard.
+WHO_PM10_24H_GUIDELINE: float = 45.0
+
 # Air Quality API accepts comma-separated lat/lon lists and returns a JSON list
 # in request order. 50 keeps 638 cities to about 13 calls.
 try:
@@ -68,6 +73,7 @@ class CityAirQuality:
     dust_daily_max: float | None
     aod_daily_max: float | None
     us_aqi_daily_max: int | None
+    pm10_24h_mean: float | None
 
 
 @dataclass(frozen=True)
@@ -99,6 +105,8 @@ class DustEvent:
     tier: int
     aod_daily_max: float | None
     event_id: str
+    pm10_24h_mean: float | None = None
+    who_pm10_multiple: float | None = None
 
 
 def _city_slug(name: str) -> str:
@@ -166,6 +174,7 @@ def _parse_single_location(
         dust_daily_max=_daily_max(_slice("dust")),
         aod_daily_max=_daily_max(_slice("aerosol_optical_depth")),
         us_aqi_daily_max=_daily_max_int(_slice("us_aqi")),
+        pm10_24h_mean=_daily_mean(_slice("pm10")),
     )
 
 
@@ -239,7 +248,7 @@ def _fetch_chunk(
             params={
                 "latitude": lats,
                 "longitude": lons,
-                "hourly": "pm2_5,dust,aerosol_optical_depth,us_aqi",
+                "hourly": "pm2_5,pm10,dust,aerosol_optical_depth,us_aqi",
                 "timezone": "auto",
                 "forecast_days": 1,
                 "past_days": 1,
@@ -353,6 +362,14 @@ def detect_dust_event(obs: CityAirQuality) -> DustEvent | None:
     if tier is None:
         return None
     slug = _city_slug(obs.city)
+    # Co-measured PM10 anchor, pre-rounded here so the writer never divides
+    # (the value_rounded_c pattern). None-safe: a cycle with no pm10 series
+    # still mints the event, just without the WHO anchor.
+    who_pm10_multiple = (
+        round(obs.pm10_24h_mean / WHO_PM10_24H_GUIDELINE, 1)
+        if obs.pm10_24h_mean is not None
+        else None
+    )
     return DustEvent(
         city=obs.city,
         country=obs.country,
@@ -363,4 +380,6 @@ def detect_dust_event(obs: CityAirQuality) -> DustEvent | None:
         tier=tier,
         aod_daily_max=obs.aod_daily_max,
         event_id=f"dust_{slug}_{obs.date}_tier{tier}",
+        pm10_24h_mean=obs.pm10_24h_mean,
+        who_pm10_multiple=who_pm10_multiple,
     )
