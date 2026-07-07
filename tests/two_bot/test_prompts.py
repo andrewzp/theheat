@@ -504,3 +504,15 @@ class TestImpactLeadNotPressRelease:
         # mid-or-late-sentence attribution; the kill stays for openers.
         assert "mid-or-late sentence" in CRITIC_SYSTEM_PROMPT
         assert "OPENS with the agency/label format itself" in CRITIC_SYSTEM_PROMPT
+
+
+class TestCycloneLandThreatConventions:
+    """#375: forecast-tense-only pairing across writer + fact-check."""
+
+    def test_writer_convention_present(self):
+        assert "cyclone_land_threat" in WRITER_SYSTEM_PROMPT
+        assert "per the" in WRITER_SYSTEM_PROMPT  # attribution-to-track phrasing
+
+    def test_fact_check_pairing(self):
+        assert "forecast-tense-or-fail" in FACT_CHECK_SYSTEM_PROMPT
+        assert "cyclone_land_threat" in FACT_CHECK_SYSTEM_PROMPT

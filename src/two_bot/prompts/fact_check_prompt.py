@@ -141,6 +141,13 @@ values exactly as always. A PM10/WHO claim on a `dust_event` bundle must match
 `who_pm10_multiple`/`pm10_24h_mean_ug_m3`; a WHO-multiple claim on a dust bundle
 carrying NO such fields is UNVERIFIABLE.
 
+**n) Cyclone land-threat drafts are forecast-tense-or-fail.** For
+`cyclone_land_threat` bundles: distance/time claims must match
+`min_distance_nm`/`closest_tau_h` (BUNDLE_FACT, "about" marker fine); ANY
+present/certain-tense arrival claim ("is making landfall", "will hit", a named
+arrival day stated as fact) is a FAILURE — the bundle carries a forecast, and the
+only honest tense is forecast tense attributed to the official track.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.

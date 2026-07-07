@@ -1660,3 +1660,36 @@ def test_normalize_station_name_idempotent_in_bundle_builders():
     assert bundle.where == "San Juan, Puerto Rico"
     labels = {f["label"]: f["value"] for f in bundle.current_facts}
     assert labels["city"] == "San Juan"
+
+
+def test_build_cyclone_land_threat_bundle_shape():
+    from datetime import UTC, datetime
+    from src.data.cyclones import LandThreatEvent
+    from src.two_bot.evidence_contract import audit_story_bundle
+    from src.two_bot.intern import build_cyclone_land_threat_bundle
+
+    ev = LandThreatEvent(
+        source="jtwc", storm_id="05W", storm_name="Bavi", basin="WP",
+        advisory_number="024", issued_at=datetime.now(UTC).isoformat(),
+        current_wind_kt=135, landmass_country="Taiwan", nearest_city="Taipei",
+        min_distance_nm=25.0, closest_valid_at="081200Z", closest_tau_h=48,
+        forecast_wind_kt_at_closest=95,
+        event_id="jtwc_land_threat_05w_024_taiwan",
+    )
+    bundle = build_cyclone_land_threat_bundle(ev)
+
+    assert bundle.signal_kind == "cyclone_land_threat"
+    assert bundle.historical_context == {}
+    labels = {f["label"]: f.get("value") for f in bundle.current_facts}
+    for required in (
+        "storm_name", "basin", "current_wind_kt", "saffir_simpson_category",
+        "landmass_country", "nearest_city", "min_distance_nm", "closest_tau_h",
+        "forecast_wind_kt_at_closest", "advisory_number", "forecast_basis",
+    ):
+        assert required in labels, required
+    assert labels["forecast_basis"] == "official forecast track (JTWC/NHC)"
+    assert labels["saffir_simpson_category"] == 4  # 135 kt
+    assert bundle.raw_signal_dump["storm_id"] == "05W"
+    assert bundle.raw_signal_dump["source"] == "jtwc"
+    audit = audit_story_bundle(bundle)
+    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
