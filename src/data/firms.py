@@ -21,9 +21,10 @@ FIRMS_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 # Nearest-city fallback bound (row 14, PR-A): a hotspot this far or closer to
 # a curated data/cities.csv place gets an honest "near <city>" label instead
 # of an unplaceable coordinate string. Beyond this distance (open ocean, deep
-# polar) the old coordinate fallback remains — "near X" at 299 km is already
-# a stretch; codex review may push this bound down further.
-GEOCODE_NEAR_CITY_MAX_KM = 300.0
+# polar) the old coordinate fallback remains. Tightened from 300 to 200 km on
+# codex review: 299 km is too far for "near X" in reader-facing prose; 200 is
+# still generous for sparse global city coverage.
+GEOCODE_NEAR_CITY_MAX_KM = 200.0
 
 # NOAA HMS independent fire witness (R-02). Independent HOST
 # (satepsanone.nesdis.noaa.gov, NESDIS) AND independent INSTRUMENT (GOES) — so it
