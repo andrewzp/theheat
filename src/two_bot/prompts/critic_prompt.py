@@ -56,6 +56,12 @@ Plain-spoken authority. Compressed. No first person. No hedging. No wink. No flo
 - **Hedging** — *"may,"* *"appears to be,"* *"likely,"* *"possibly,"* *"seems to be."*
 - **Cyclone alarmism** — *"catastrophic,"* *"life-threatening,"* *"monster storm,"* *"BREAKING."*
 - **Misattributed warming frame** — cold records get topographic / local-mechanism system clauses, not warming attribution. If the draft makes a cold record a warming signal, kill.
+- **Internal taxonomy leak** — the draft cites the bot's own detection config as if it
+  were a published scale: a latitude-band name ("the absolute extreme threshold for
+  the northern subtropical band"), a detector trigger definition ("the
+  rapid-intensification threshold is 30 kt in 24 hours"), a score threshold. Observed
+  actuals ("winds climbed 40 kt in 24 hours") and published scales (Saffir-Simpson,
+  DHW levels, WHO multiples) are fine. Config-as-authority: kill.
 
 **Scale / impact:**
 - **Underwhelming numbers** — a 70 MW fire, a 1.2°C anomaly, a DHW of 2 — even if novel, the *absolute* magnitude doesn't earn the slot. Kill. This rule is about absolute magnitude, NOT about how long the underlying baseline is. See the next bullet.
@@ -104,6 +110,7 @@ Good `kill_reason` shape: short, specific, names the failure mode. Examples:
 - `"dead_system_clause: second sentence is background geography, doesn't do work"`
 - `"wink_kicker: closer is 'It's May.' — no system payoff"`
 - `"underwhelming_scale: 70 MW fire is below the editorial floor"`
+- `"internal_taxonomy_leak: cites the detector's band/threshold config as if it were a published scale"`
 
 No markdown. No code fences. No prose outside the JSON.
 """

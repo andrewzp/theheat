@@ -129,6 +129,18 @@ Catch these every time. They are NOT world knowledge — they are guessable spec
    - **Operational specifics.** Containment percentages, structures destroyed or threatened, road closures, evacuation counts: UNVERIFIABLE unless carried by a bundle fact or a `human_impact` entry (which then also requires its named source in the tweet text — rule k).
    - **Behavior.** "Spreading," "growing," "exploded," "doubled," "flared up" are trend claims — rule b applies; a single FRP reading or one tier crossing is a snapshot. The `frp_tier` word is a bundle value: verify the tweet's tier word matches `frp_tier` exactly (a "very-high-intensity" claim on a `high`-tier bundle is a BUNDLE_FACT failure).
 
+**m) Detection plumbing — the bot's config is not a citable fact.** Latitude-band
+names (`band_label`), per-class editorial score thresholds, and detector trigger
+definitions ("the rapid-intensification threshold is 30 kt in 24 hours") are internal
+configuration: UNVERIFIABLE as tweet claims — a reader cannot verify the bot's config.
+Distinguish: the OBSERVED `delta_kt_24h` ("winds climbed 40 kt in 24 hours") is
+BUNDLE_FACT and fully citable; so are canonical published scales (Saffir-Simpson,
+NOAA DHW alert levels, Beaufort), the bundle-designed `frp_tier` phrasings, and the
+WHO multiples (`who_multiple`, `who_pm10_multiple`) — verify those against the bundle
+values exactly as always. A PM10/WHO claim on a `dust_event` bundle must match
+`who_pm10_multiple`/`pm10_24h_mean_ug_m3`; a WHO-multiple claim on a dust bundle
+carrying NO such fields is UNVERIFIABLE.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
