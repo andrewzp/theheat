@@ -95,3 +95,18 @@ class TestExemplarFixtureAttributionConsistency:
         assert "The Washington Post reports" in WRITER_SYSTEM_PROMPT
         # …and the personnel figure to NIFC, its own entry's source.
         assert "NIFC has 1,450 personnel assigned" in WRITER_SYSTEM_PROMPT
+
+
+class TestDustFixture:
+    def test_dust_bundle_carries_the_anchor_and_passes_evidence(self):
+        bundle = _build_bundle(_args(type="dust"))
+        assert bundle.signal_kind == "dust_event"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["who_pm10_multiple"] == 20.0
+        assert facts["pm10_24h_mean_ug_m3"] == 900.0
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_dust_fixture_never_attaches_impact(self):
+        bundle = _build_bundle(_args(type="dust"))
+        assert not getattr(bundle, "human_impact", None)

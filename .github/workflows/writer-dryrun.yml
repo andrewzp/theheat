@@ -23,6 +23,7 @@ on:
         options:
           - fire
           - fire_footprint
+          - dust
         default: 'fire'
       samples:
         description: 'Number of candidate drafts'
