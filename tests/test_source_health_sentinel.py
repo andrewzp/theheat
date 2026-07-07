@@ -747,6 +747,63 @@ class TestQueueWatchIssue:
 
 
 # ---------------------------------------------------------------------------
+# Editor brief — ranked needs-you-now view of the pending queue
+# ---------------------------------------------------------------------------
+from scripts.source_health_sentinel import (  # noqa: E402
+    EDITOR_BRIEF_MARKER,
+    EDITOR_BRIEF_MAX_ROWS,
+    build_editor_brief_body,
+    editor_brief,
+)
+
+
+class TestEditorBrief:
+    def _draft(self, *, hours_old=2.0, dtype="fire", score=70, status="pending",
+               tweet_date=None, auto=False, text="draft text"):
+        now = datetime.now(timezone.utc)
+        d = {
+            "id": f"d_{dtype}_{hours_old}",
+            "status": status,
+            "type": dtype,
+            "created_at": (now - timedelta(hours=hours_old)).isoformat().replace("+00:00", "Z"),
+            "score": {"total": score},
+            "text": text,
+        }
+        if tweet_date:
+            d["tweet_date"] = tweet_date
+        if auto:
+            d["approval_mode"] = "auto"
+            d["auto_approve_at"] = now.isoformat().replace("+00:00", "Z")
+        return d
+
+    def test_ranks_closing_forecast_first_then_aging_then_score(self):
+        today = datetime.now(timezone.utc).date().isoformat()
+        drafts = [
+            self._draft(dtype="all_time_high", score=90),
+            self._draft(dtype="fire", hours_old=30.0, score=60),
+            self._draft(dtype="absolute_extreme", score=50, tweet_date=today),
+        ]
+        findings = editor_brief(drafts, now=datetime.now(timezone.utc))
+        assert [f["type"] for f in findings] == ["absolute_extreme", "fire", "all_time_high"]
+        assert findings[0]["closing"] and findings[1]["urgent"]
+
+    def test_excludes_auto_owned_and_non_pending(self):
+        drafts = [self._draft(auto=True), self._draft(status="posted")]
+        assert editor_brief(drafts, now=datetime.now(timezone.utc)) == []
+
+    def test_empty_queue_returns_empty(self):
+        assert editor_brief([], now=datetime.now(timezone.utc)) == []
+
+    def test_body_sections_and_cap(self):
+        drafts = [self._draft(dtype=f"t{i}", score=50 + i) for i in range(12)]
+        findings = editor_brief(drafts, now=datetime.now(timezone.utc))
+        body = build_editor_brief_body(findings)
+        assert EDITOR_BRIEF_MARKER in body
+        assert "more on the dashboard" in body
+        assert body.count("score ") == EDITOR_BRIEF_MAX_ROWS
+
+
+# ---------------------------------------------------------------------------
 # News-gap watch — the Bet A phase 0 miss-detector
 # ---------------------------------------------------------------------------
 from scripts.source_health_sentinel import (  # noqa: E402

@@ -1085,6 +1085,95 @@ def _close_queue_watch_issue(number: int) -> None:
     print(f"[sentinel] closed queue-watch issue #{number}")
 
 
+# ---------------------------------------------------------------------------
+# Editor brief — ranked needs-you-now view of the pending queue
+# ---------------------------------------------------------------------------
+
+EDITOR_BRIEF_TITLE = "Editor brief: what the queue needs from you"
+EDITOR_BRIEF_MARKER = "<!-- source-health-editor-brief -->"
+EDITOR_BRIEF_MAX_ROWS = 10
+EDITOR_BRIEF_URGENT_AGE_H = 24
+
+
+def editor_brief(drafts: list[dict] | None, *, now: datetime) -> list[dict]:
+    """One finding per human-gated pending draft, ranked needs-you-first.
+
+    Ranking key (descending urgency):
+      1. forecast window closing (tweet_date == today or tomorrow, for any
+         draft — an elapsed-forecast draft is row 3's sweep's job, not ours)
+      2. age >= EDITOR_BRIEF_URGENT_AGE_H
+      3. score.total
+    Auto-owned drafts (approval_mode auto/policy_auto with auto_approve_at)
+    are excluded — the machine already owns them.
+    Returns [] when nothing is pending → the issue auto-closes.
+    """
+    today = now.date()
+    tomorrow = today + timedelta(days=1)
+    closing_dates = {today.isoformat(), tomorrow.isoformat()}
+
+    findings: list[dict] = []
+    for d in drafts or []:
+        if not isinstance(d, Mapping) or d.get("status") != "pending":
+            continue
+        if _is_auto_owned(d):
+            continue
+        parsed = _parse_ts(str(d.get("created_at") or ""))
+        age_h = int((now - parsed).total_seconds() // 3600) if parsed is not None else 0
+        tweet_date = d.get("tweet_date")
+        closing = tweet_date in closing_dates
+        urgent = age_h >= EDITOR_BRIEF_URGENT_AGE_H
+        score = int((d.get("score") or {}).get("total") or 0)
+        text = str(d.get("text") or "")
+        findings.append({
+            "id": d.get("id"),
+            "type": str(d.get("type") or "unknown"),
+            "age_h": age_h,
+            "score": score,
+            "tweet_date": tweet_date,
+            "urgent": urgent,
+            "closing": closing,
+            "preview": text[:140],
+        })
+    findings.sort(key=lambda f: (not f["closing"], not f["urgent"], -f["score"]))
+    return findings
+
+
+def build_editor_brief_body(findings: list[dict]) -> str:
+    total = len(findings)
+    shown = findings[:EDITOR_BRIEF_MAX_ROWS]
+    needs_now, fresh = [], []
+    for f in shown:
+        (needs_now if f["urgent"] or f["closing"] else fresh).append(f)
+
+    def _row(f: dict) -> str:
+        forecast = f' · forecast {f["tweet_date"]}' if f.get("tweet_date") else ""
+        return (
+            f"- **{f['type']}** · score {f['score']} · {f['age_h']}h old{forecast}\n"
+            f"  > {f['preview']}"
+        )
+
+    lines = [EDITOR_BRIEF_MARKER, "**What the pending queue needs from you.**", ""]
+    if needs_now:
+        lines.append("### ⚡ Needs you now")
+        lines.extend(_row(f) for f in needs_now)
+        lines.append("")
+    if fresh:
+        lines.append("### — Fresh")
+        lines.extend(_row(f) for f in fresh)
+        lines.append("")
+    remaining = total - len(shown)
+    if remaining > 0:
+        lines.append(f"_(+{remaining} more on the dashboard)_")
+        lines.append("")
+    lines.extend([
+        "**Fix:** review on the dashboard — Approve+Post the good ones, Reject the "
+        "rest.",
+        "",
+        "_Auto-maintained by the source-health sentinel. Closes itself when the "
+        "queue is empty._",
+    ])
+    return "\n".join(lines)
+
 
 # ---------------------------------------------------------------------------
 # News-gap watch — the world reported an event; did our sensors even see it?
