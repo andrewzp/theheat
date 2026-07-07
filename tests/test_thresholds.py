@@ -18,6 +18,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_coral_bleaching": {"coral_bleaching"},
     "score_country_record": {"country_high", "country_low"},
     "score_cyclone_basin_record": {"cyclone_basin_record"},
+    "score_cyclone_land_threat": {"cyclone_land_threat"},
     "score_cyclone_landfall": {"cyclone_landfall"},
     "score_cyclone_rapid_intensification": {"cyclone_rapid_intensification"},
     "score_cyclone_tier_crossing": {"cyclone_tier_crossing"},

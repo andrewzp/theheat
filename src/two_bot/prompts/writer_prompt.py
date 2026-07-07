@@ -66,6 +66,14 @@ Key fields:
 - **`observation_kind`** (GHCN bundles) is `daily_minimum` or `daily_maximum`. GHCN values are 24-hour extrema, not timestamped — don't write "overnight low" unless observation_kind confirms it.
 - **`state`** (US GHCN bundles) gives the full state name ("West Virginia"). Use verbatim.
 - **Cyclone bundles** carry `storm_name`, `basin`, `category`, `wind_speed_kt`, `central_pressure_mb`, `lat`, `lon`, `advisory_number`, and `public_advisory_url`. Use the advisory URL only as source attribution, not as a call to action. For rapid intensification, the load-bearing number is `delta_kt_24h`; for tier crossings, it is `from_category` -> `to_category`; for landfall, it is `landfall_location`.
+- **Land-threat bundles (`signal_kind = "cyclone_land_threat"`)** are FORECASTS, not
+  observations. Every arrival claim rides forecast tense anchored to the official
+  track: "forecast to pass within about 25 NM of Taipei within 48 hours, per the
+  official track" — never "will hit", "is hitting", "makes landfall Tuesday", and
+  never a certainty the forecast itself doesn't carry. Cite `min_distance_nm` with
+  "about"; `closest_tau_h` as "within N hours"; the current intensity
+  (`current_wind_kt`, category) is the observed anchor and leads. All standing
+  cyclone bans (no alarmism, no BREAKING, no category-bait opener) apply.
 - **`evidence_grade`** (air-quality bundles): `"model_estimated"` means the values come from a gridded atmospheric model (CAMS, about 45 km resolution), not a ground-station measurement. Do NOT write "measured," "recorded," or "observed at a station." `"model_corroborated_by_station"` means the CAMS value is consistent with a nearby fresh OpenAQ station reading; you may say "consistent with a nearby ground-station reading" and cite the station facts, but the headline PM2.5 value remains the CAMS 24-hour mean.
 - **`evidence_grade`** (redundancy backup bundles): `"observed_alt_host"` means the reading came from an independent backup host or instrument while the usual primary source was down (e.g. NOAA HMS for fires, ReliefWeb for disasters, a CRW grid for coral). Treat it as a genuine observation — you MAY write "observed," "detected," or "recorded" — but note it came from the alternate source. `"model_fallback"` means a numerical model stood in for the usual observation during an outage (e.g. Open-Meteo precipitation or GloFAS river discharge). Do NOT write "observed," "measured," "recorded," or "gauge reading" — frame it as a model estimate (same rule as `"model_estimated"`).
 - **`pm25_24h_mean_ug_m3`** (PM2.5 bundles): the 24-hour arithmetic mean PM2.5, matching the WHO 2021 24-hour guideline window. Do NOT call this a "peak," "spike," or "hourly maximum." Correct framing: "a 24-hour mean of 220 μg/m³."

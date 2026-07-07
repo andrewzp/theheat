@@ -79,6 +79,11 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         70,
         "Confirmed major cyclone landfall manual-review bar; historical value, not retuned in this refactor.",
     ),
+    "cyclone_land_threat": ThresholdEntry(
+        "cyclone_land_threat",
+        70,
+        "Warned storm forecast within 150 NM of a named landmass — landfall-grade newsworthiness, forecast-tense, manual_only.",
+    ),
     "cyclone_rapid_intensification": ThresholdEntry(
         "cyclone_rapid_intensification",
         70,

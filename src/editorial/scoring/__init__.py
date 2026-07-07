@@ -192,6 +192,11 @@ def score_cyclone_basin_record(*args: Any, **kwargs: Any) -> EditorialScore:
     return _disasters.score_cyclone_basin_record(*args, **kwargs)
 
 
+def score_cyclone_land_threat(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _disasters.score_cyclone_land_threat(*args, **kwargs)
+
+
 def score_storm_surge(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _disasters.score_storm_surge(*args, **kwargs)
@@ -286,6 +291,7 @@ __all__ = [
     "score_cyclone_tier_crossing",
     "score_cyclone_landfall",
     "score_cyclone_basin_record",
+    "score_cyclone_land_threat",
     "score_storm_surge",
     "score_river_flood",
     "score_drought",

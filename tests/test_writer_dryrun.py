@@ -110,3 +110,19 @@ class TestDustFixture:
     def test_dust_fixture_never_attaches_impact(self):
         bundle = _build_bundle(_args(type="dust"))
         assert not getattr(bundle, "human_impact", None)
+
+
+class TestCycloneLandThreatFixture:
+    def test_bundle_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="cyclone_land_threat"))
+        assert bundle.signal_kind == "cyclone_land_threat"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["landmass_country"] == "Taiwan"
+        assert facts["min_distance_nm"] == 25.0
+        assert facts["closest_tau_h"] == 48
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_no_impact_on_cyclone_fixture(self):
+        bundle = _build_bundle(_args(type="cyclone_land_threat"))
+        assert not getattr(bundle, "human_impact", None)

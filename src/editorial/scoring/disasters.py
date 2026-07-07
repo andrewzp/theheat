@@ -216,6 +216,46 @@ def score_cyclone_basin_record(category: int, basin: str, record_label: str) -> 
         reasons=[record_label, basin, f"Category {category}"],
     )
 
+def score_cyclone_land_threat(
+    *,
+    current_wind_kt: int,
+    min_distance_nm: float,
+    closest_tau_h: int | None,
+    landmass_country: str,
+) -> EditorialScore:
+    """Score a warned storm's official forecast approach to a named landmass.
+
+    Severity scales with CURRENT intensity (the observed anchor: 64 kt →
+    ~60, 135 kt → ~95, linear clamp); timeliness inversely with the
+    forecast lead time (≤24h → 95, 72h → 70, unknown → 75); confidence 90
+    (official agency forecast); novelty 80 (one-shot per pair by
+    construction); shareability higher when the approach is close.
+    """
+    severity = min(95.0, max(60.0, 60.0 + (current_wind_kt - 64) * (35.0 / 71.0)))
+    if closest_tau_h is None:
+        timeliness = 75.0
+    elif closest_tau_h <= 24:
+        timeliness = 95.0
+    else:
+        timeliness = 95.0 - (closest_tau_h - 24) * (25.0 / 48.0)
+    shareability = 85.0 if min_distance_nm <= 60 else 75.0
+    reasons = [
+        f"{current_wind_kt} kt warned storm",
+        f"forecast within {min_distance_nm:g} NM of {landmass_country}",
+        f"lead time {closest_tau_h}h" if closest_tau_h is not None else "lead time from forecast token",
+    ]
+    return _build_score(
+        "cyclone_land_threat",
+        severity=severity,
+        novelty=80,
+        timeliness=timeliness,
+        confidence=90,
+        shareability=shareability,
+        sensitivity=40,
+        threshold=get_threshold("cyclone_land_threat"),
+        reasons=reasons,
+    )
+
 def score_storm_surge(anomaly_m: float) -> EditorialScore:
     reasons = [f"{anomaly_m:.2f}m above predicted tide"]
     if anomaly_m >= 1.0:

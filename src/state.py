@@ -43,6 +43,7 @@ _TIER_TOUCH_SEPARATOR = "::"
 _TIER_TTLS_DAYS = {
     "fire_complex_tiers": 90,
     "cyclone_tiers": 30,
+    "cyclone_land_threat_pairs": 30,
     "flood_activation_tiers": 60,
 }
 
@@ -182,6 +183,10 @@ DEFAULT_STATE: BotState = {
     "cyclone_wind_history": {},
     # Visibility counter only; no cap yet.
     "cyclone_annual_count": {},
+    # One-shot land-threat dedup (#375): tracking_key -> drafted landmass
+    # slugs. A (storm, landmass) pair drafts exactly once, ever; recorded
+    # only on draft SUCCESS (the fire_complex_tiers callback pattern).
+    "cyclone_land_threat_pairs": {},
     # Per-Copernicus EMS activation severity dedup for global flood events.
     "flood_activation_tiers": {},
     # Flat sidecar timestamps for tier TTL pruning. Tier dict values stay bare
@@ -606,6 +611,26 @@ def _merge_cyclone_wind_history(
         rows = list(by_time.values())
         rows.sort(key=lambda row: _parse_state_timestamp(row.get("issued_at")))
         merged[storm_id] = rows[-max_items:]
+    return merged
+
+
+def _merge_land_threat_pairs(
+    ours: dict[str, list[str]], theirs: dict[str, list[str]]
+) -> dict[str, list[str]]:
+    """Per-storm union of drafted landmass slugs — a pair recorded by either
+    concurrent run stays recorded (one-shot dedup must never regress).
+
+    Known + accepted (codex #388 r1 P2): merging against a STALE backend
+    copy can transiently resurrect a TTL-pruned pair. The failure direction
+    is suppression (the pair reads as already-drafted), never a duplicate
+    draft, and the next prune re-deletes it — the union deliberately favors
+    the one-shot guarantee over prune latency.
+    """
+    merged: dict[str, list[str]] = {}
+    for key in set(ours or {}) | set(theirs or {}):
+        merged[key] = sorted(
+            set((ours or {}).get(key, [])) | set((theirs or {}).get(key, []))
+        )
     return merged
 
 
@@ -1818,6 +1843,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "cyclone_tiers": _strat_max_by_key(-1),
     "cyclone_wind_history": _merge_cyclone_wind_history,
     "cyclone_annual_count": _strat_max_by_key(0),
+    "cyclone_land_threat_pairs": _merge_land_threat_pairs,
     "flood_activation_tiers": _strat_reduce_by_key(_max_flood_severity),
     "tier_touch_ts": _strat_max_by_key(""),
     "flood_annual_count": _strat_max_by_key(0),
@@ -1953,6 +1979,22 @@ def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> Bot
     if tier > current:
         tiers[complex_id] = int(tier)
         _touch_tier(state, "fire_complex_tiers", complex_id)
+    return state
+
+
+def record_land_threat_pair(state: BotState, tracking_key: str, landmass_slug: str) -> BotState:
+    """Record that a (storm, landmass) land-threat pair has drafted (#375).
+
+    Sorted-deduped list per storm so concurrent runs merge losslessly
+    (see _merge_land_threat_pairs). Called only from on_draft_success —
+    a killed draft leaves the pair unrecorded and retries next advisory.
+    """
+    pairs = state.setdefault("cyclone_land_threat_pairs", {})
+    slugs = set(pairs.get(tracking_key, []))
+    if landmass_slug not in slugs:
+        slugs.add(landmass_slug)
+        pairs[tracking_key] = sorted(slugs)
+        _touch_tier(state, "cyclone_land_threat_pairs", tracking_key)
     return state
 
 

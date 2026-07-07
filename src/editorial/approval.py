@@ -25,7 +25,9 @@ from dataclasses import dataclass
 # absolute_extreme (interpretive framing / bare-region honesty risk); country_high/low
 # (national records — rare but elite enough to keep a human polish window); and every
 # human-impact type (fire, cyclone_*, coral_bleaching, dust, air_quality, wet_bulb,
-# synthesis_*). The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
+# synthesis_*). cyclone_land_threat (#375) is manual by the cyclone_ prefix rule
+# below — a FORECAST-tense event must always cross a human before posting.
+# The THEHEAT_AUTOSHIP_ON_CRITIC_PASS flag and the critic remain the
 # kill-switches; flag OFF is byte-for-byte the manual behavior.
 AUTOSHIP_ALLOWLIST: frozenset[str] = frozenset({
     "hot10", "co2_milestone", "ch4_milestone",

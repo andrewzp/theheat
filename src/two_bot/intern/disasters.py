@@ -17,9 +17,13 @@ from src.data.cyclones import BasinRecordEvent
 
 from src.data.cyclones import LandfallEvent
 
+from src.data.cyclones import LandThreatEvent
+
 from src.data.cyclones import RapidIntensificationEvent
 
 from src.data.cyclones import TierCrossingEvent
+
+from src.data.cyclones import saffir_simpson_category
 
 from src.data.gdacs import GlobalDisasterEvent
 
@@ -263,6 +267,46 @@ def build_cyclone_landfall_bundle(event: LandfallEvent) -> StoryBundle:
             {"label": "landfall_location", "value": event.location},
         ],
         historical_context={"scope": "major_hurricane_landfall"},
+        raw_signal_dump=asdict(event),
+    )
+
+def build_cyclone_land_threat_bundle(event: LandThreatEvent) -> StoryBundle:
+    """A warned storm's official forecast approaches a named landmass (#375).
+
+    FORECAST-tense by construction: every fact here describes the official
+    track's approach, not an arrival. The writer's land-threat convention
+    and the paired fact-check rule keep the tense honest. Labels are
+    land-threat-specific (current_wind_kt, not wind_speed_kt) — the tweet's
+    observed anchor is the storm's CURRENT intensity; everything else is
+    forecast.
+    """
+    return StoryBundle(
+        signal_kind="cyclone_land_threat",
+        where=_cyclone_where(event.storm_name, event.basin),
+        when=event.issued_at or date.today().isoformat(),
+        event_id=event.event_id,
+        headline_metric={
+            "label": "min_distance_nm",
+            "value": event.min_distance_nm,
+            "unit": "NM",
+        },
+        current_facts=[
+            {"label": "source", "value": event.source.upper()},
+            {"label": "storm_name", "value": event.storm_name},
+            {"label": "basin", "value": event.basin},
+            {"label": "current_wind_kt", "value": event.current_wind_kt, "unit": "kt"},
+            {"label": "saffir_simpson_category",
+             "value": saffir_simpson_category(event.current_wind_kt)},
+            {"label": "landmass_country", "value": event.landmass_country},
+            {"label": "nearest_city", "value": event.nearest_city},
+            {"label": "min_distance_nm", "value": event.min_distance_nm, "unit": "NM"},
+            {"label": "closest_tau_h", "value": event.closest_tau_h, "unit": "h"},
+            {"label": "forecast_wind_kt_at_closest",
+             "value": event.forecast_wind_kt_at_closest, "unit": "kt"},
+            {"label": "advisory_number", "value": event.advisory_number},
+            {"label": "forecast_basis", "value": "official forecast track (JTWC/NHC)"},
+        ],
+        historical_context={},
         raw_signal_dump=asdict(event),
     )
 

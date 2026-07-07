@@ -125,3 +125,209 @@ class TestJTWCParsing:
     def test_fetch_error_returns_empty_non_strict(self):
         responses.add(responses.GET, jtwc.JTWC_RSS_URL, status=500)
         assert jtwc.fetch_active_cyclones() == []
+
+
+# ---------------------------------------------------------------------------
+# Forecast-section parsing (#375 land-threat data half)
+# ---------------------------------------------------------------------------
+
+_JTWC_WARNING_FIXTURE = """\
+SUPER TYPHOON 05W (BAVI) WARNING NR 024
+...
+WARNING POSITION:
+060600Z --- NEAR 21.8N 126.9E
+MOVEMENT PAST SIX HOURS - 310 DEGREES AT 08 KTS
+MAX SUSTAINED WINDS - 135 KT, GUSTS 165 KT
+...
+FORECASTS:
+12 HRS, VALID AT:
+070000Z --- 22.9N 125.7E
+MAX SUSTAINED WINDS - 130 KT, GUSTS 160 KT
+...
+24 HRS, VALID AT:
+071200Z --- 23.9N 124.2E
+MAX SUSTAINED WINDS - 120 KT, GUSTS 145 KT
+...
+48 HRS, VALID AT:
+081200Z --- 25.4N 121.6E
+MAX SUSTAINED WINDS - 95 KT, GUSTS 115 KT
+"""
+
+
+def test_parse_jtwc_forecast_sections_extracts_tau_position_wind():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    points = parse_jtwc_forecast_sections(_JTWC_WARNING_FIXTURE)
+    assert [p.tau_h for p in points] == [12, 24, 48]
+    assert points[0].lat == 22.9 and points[0].lon == 125.7
+    assert points[0].max_wind_kt == 130
+    # valid_at keeps the raw DDHHMMZ token; consumers resolve it against
+    # the advisory's issued_at month/year at detection time.
+    assert points[0].valid_at == "070000Z"
+    assert points[2].lat == 25.4 and points[2].lon == 121.6
+
+
+def test_parse_jtwc_forecast_sections_west_longitudes_negative():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    text = "FORECASTS:\n12 HRS, VALID AT:\n070000Z --- 22.9N 125.7W\nMAX SUSTAINED WINDS - 040 KT, GUSTS 050 KT\n"
+    (p,) = parse_jtwc_forecast_sections(text)
+    assert p.lon == -125.7
+
+
+def test_parse_jtwc_forecast_sections_empty_on_no_forecast_block():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    assert parse_jtwc_forecast_sections("MAX SUSTAINED WINDS - 135 KT") == ()
+
+
+_NHC_TCM_FIXTURE = """\
+FORECAST VALID 08/0000Z 24.5N 122.0W
+MAX WIND 105 KT...GUSTS 130 KT.
+
+FORECAST VALID 08/1200Z 25.6N 123.4W
+MAX WIND  95 KT...GUSTS 115 KT.
+"""
+
+# Real-product edge shapes (verified against the archived AL012025 TCM):
+# a status suffix after the position and a dissipated entry with no
+# position at all — the point still parses (wind absent) / is skipped.
+_NHC_TCM_EDGE_FIXTURE = """\
+FORECAST VALID 25/1200Z 39.6N  41.5W...POST-TROP/REMNT LOW
+MAX WIND  30 KT...GUSTS  40 KT.
+
+FORECAST VALID 26/0000Z...DISSIPATED
+"""
+
+
+def test_parse_nhc_forecast_advisory_extracts_points():
+    from src.data.cyclones import parse_nhc_forecast_advisory
+    points = parse_nhc_forecast_advisory(_NHC_TCM_FIXTURE)
+    assert len(points) == 2
+    assert points[0].valid_at == "08/0000Z"
+    assert points[0].lat == 24.5 and points[0].lon == -122.0
+    assert points[0].max_wind_kt == 105
+
+
+def test_parse_nhc_forecast_advisory_handles_real_product_edges():
+    from src.data.cyclones import parse_nhc_forecast_advisory
+    points = parse_nhc_forecast_advisory(_NHC_TCM_EDGE_FIXTURE)
+    # The dissipated line has no position — one point only.
+    assert len(points) == 1
+    assert points[0].lat == 39.6 and points[0].lon == -41.5
+
+
+def test_parse_warning_text_populates_forecast_points():
+    parsed = jtwc.parse_warning_text(_JTWC_WARNING_FIXTURE)
+    assert parsed is not None
+    assert len(parsed.forecast_points) == 3
+    assert parsed.forecast_points[0].tau_h == 12
+
+
+# ---------------------------------------------------------------------------
+# detect_land_threats (#375)
+# ---------------------------------------------------------------------------
+
+def _advisory_with_forecast(points, *, wind_kt=135, storm_id="05W", name="BAVI"):
+    from src.data.cyclones import CycloneAdvisory
+    now = datetime.now(UTC)
+    return CycloneAdvisory(
+        source="jtwc", storm_id=storm_id, storm_name=name, basin="WP",
+        advisory_number="024", issued_at=now.isoformat(), wind_kt=wind_kt,
+        lat=21.8, lon=126.9, forecast_points=tuple(points),
+    )
+
+
+_TAIPEI = [{"city": "Taipei", "country": "Taiwan", "lat": "25.03", "lon": "121.57", "elevation_m": "9"}]
+
+
+def test_land_threat_fires_when_forecast_point_near_landmass():
+    from src.data.cyclones import ForecastPoint, detect_land_threats, event_key
+    adv = _advisory_with_forecast([
+        ForecastPoint(valid_at="ignored", lat=25.4, lon=121.6, max_wind_kt=95, tau_h=48),
+    ])
+    events = detect_land_threats([adv], drafted_pairs={}, cities=_TAIPEI,
+                                 now=datetime.now(UTC))
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.landmass_country == "Taiwan"
+    assert ev.nearest_city == "Taipei"
+    assert ev.min_distance_nm < 30
+    assert ev.closest_tau_h == 48
+    assert ev.forecast_wind_kt_at_closest == 95
+    assert ev.event_id == event_key("jtwc", "land_threat", "05W", "024", "taiwan")
+
+
+def test_land_threat_skips_weak_storms():
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    adv = _advisory_with_forecast(
+        [ForecastPoint(valid_at="x", lat=25.4, lon=121.6, tau_h=24)], wind_kt=45)
+    assert detect_land_threats([adv], {}, _TAIPEI, now=datetime.now(UTC)) == []
+
+
+def test_land_threat_skips_far_or_late_points():
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    adv = _advisory_with_forecast([
+        ForecastPoint(valid_at="x", lat=5.0, lon=150.0, tau_h=24),   # far (> MAX_NM)
+        ForecastPoint(valid_at="x", lat=25.4, lon=121.6, tau_h=96),  # late (> MAX_HOURS)
+    ])
+    assert detect_land_threats([adv], {}, _TAIPEI, now=datetime.now(UTC)) == []
+
+
+def test_land_threat_one_shot_per_storm_landmass_pair():
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    adv = _advisory_with_forecast(
+        [ForecastPoint(valid_at="x", lat=25.4, lon=121.6, tau_h=48)])
+    drafted = {"jtwc:05w": ["taiwan"]}
+    assert detect_land_threats([adv], drafted, _TAIPEI, now=datetime.now(UTC)) == []
+
+
+def test_land_threat_picks_the_closest_qualifying_point():
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    adv = _advisory_with_forecast([
+        ForecastPoint(valid_at="x", lat=23.9, lon=124.2, max_wind_kt=120, tau_h=24),
+        ForecastPoint(valid_at="x", lat=25.4, lon=121.6, max_wind_kt=95, tau_h=48),
+    ])
+    (ev,) = detect_land_threats([adv], {}, _TAIPEI, now=datetime.now(UTC))
+    assert ev.closest_tau_h == 48  # 25.4N/121.6E is nearer Taipei
+
+
+def test_land_threat_nhc_token_resolution_within_window():
+    # NHC points carry no tau; the DD/HHMMZ token resolves against issued_at.
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    now = datetime.now(UTC)
+    in_window = (now + timedelta(hours=24)).strftime("%d/%H00Z")
+    out_window = (now + timedelta(hours=120)).strftime("%d/%H00Z")
+    adv_in = _advisory_with_forecast(
+        [ForecastPoint(valid_at=in_window, lat=25.4, lon=121.6, max_wind_kt=90)])
+    adv_out = _advisory_with_forecast(
+        [ForecastPoint(valid_at=out_window, lat=25.4, lon=121.6, max_wind_kt=90)],
+        storm_id="06W")
+    events = detect_land_threats([adv_in, adv_out], {}, _TAIPEI, now=now)
+    assert len(events) == 1
+    assert events[0].storm_id == "05W"
+
+
+def test_land_threat_unparsable_token_never_mints():
+    # Fail-closed: an unparsable valid_at (no tau) never produces an event.
+    from src.data.cyclones import ForecastPoint, detect_land_threats
+    adv = _advisory_with_forecast(
+        [ForecastPoint(valid_at="garbage", lat=25.4, lon=121.6)])
+    assert detect_land_threats([adv], {}, _TAIPEI, now=datetime.now(UTC)) == []
+
+
+def test_land_threat_past_valid_time_never_mints():
+    # codex #388 r1 P1: an already-passed closest approach must not mint a
+    # forecast-tense event. Issued 2 days ago; token resolves ~30h in the
+    # past; within the +72h window but NOT in the future → no event.
+    from src.data.cyclones import CycloneAdvisory, ForecastPoint, detect_land_threats
+    now = datetime.now(UTC)
+    issued = now - timedelta(hours=48)
+    past_token = (now - timedelta(hours=30)).strftime("%d/%H00Z")
+    adv = CycloneAdvisory(
+        source="nhc", storm_id="AL03", storm_name="Gert", basin="Atlantic",
+        advisory_number="011", issued_at=issued.isoformat(), wind_kt=100,
+        lat=24.0, lon=-70.0,
+        forecast_points=(
+            ForecastPoint(valid_at=past_token, lat=25.4, lon=121.6, max_wind_kt=90),
+        ),
+    )
+    cities = [{"city": "Taipei", "country": "Taiwan", "lat": "25.03", "lon": "121.57", "elevation_m": "9"}]
+    assert detect_land_threats([adv], {}, cities, now=now) == []

@@ -148,6 +148,10 @@ _METADATA_JSON_KEYS = (
     "cyclone_tiers",
     "cyclone_wind_history",
     "cyclone_annual_count",
+    # Land-threat one-shot pair dedup (#375) — must persist, else a SQLite
+    # load drops the (storm, landmass) guard and a later advisory re-drafts
+    # the same approach (codex #388 r1 P1).
+    "cyclone_land_threat_pairs",
     "flood_activation_tiers",
     "tier_touch_ts",
     "flood_annual_count",
@@ -160,6 +164,9 @@ _METADATA_JSON_KEYS = (
     # source-failure counters were both lost on every sqlite-backed
     # round-trip. Found 2026-05-08 via codex review.
     "memory",
+    # Credential-expiry counters (#330) — latent gap FOUND BY the persistence
+    # contract test (codex #388 round): had no sqlite path at all.
+    "credential_expiry",
     "data_source_failures",
     "source_health",
     "last_good_readings",
