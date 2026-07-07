@@ -939,6 +939,17 @@ class TestNewsGapWatch:
         no_tokens = _news_ev("fire", "United States", window_end="2026-07-03")
         assert news_gap_watch([unverified, old, no_tokens], [], [], now=self.NOW) == []
 
+    def test_duplicate_impact_publishers_dedupe_before_the_cap(self):
+        # #396: two NIFC impact rows rendered '(per NIFC, NIFC)'. Dedupe is
+        # order-preserving and applied before the 3-source cap, so a repeated
+        # publisher can't crowd a distinct one out of the cap.
+        ev = _news_ev("fire", "United States", name="Pocket", admin1="AZ",
+                      window_end="2026-07-03", headline="Pocket fire (AZ)",
+                      sources=("NIFC", "NIFC", "InciWeb", "AZ Forestry"))
+        out = news_gap_watch([ev], [], [], now=self.NOW)
+        assert len(out) == 1
+        assert out[0]["sources"] == ["NIFC", "InciWeb", "AZ Forestry"]
+
 
 class TestNewsGapIssue:
     FINDING = [{"kind": "heat_mortality", "headline": "Europe heat deaths",
@@ -948,6 +959,14 @@ class TestNewsGapIssue:
         body = build_news_gap_body(self.FINDING)
         assert NEWS_GAP_MARKER in body
         assert "Europe heat deaths" in body and "WHO" in body
+
+    def test_body_dedupes_repeated_source_names(self):
+        # #396 guard at the render layer too: a finding that arrives with
+        # duplicate names must still name each publisher once.
+        body = build_news_gap_body([{"kind": "fire", "headline": "Pocket fire (AZ)",
+                                     "sources": ["NIFC", "NIFC"]}])
+        assert "(per NIFC)" in body
+        assert "NIFC, NIFC" not in body
 
     def test_lifecycle_create_update_close_noop(self):
         assert plan_news_gap_action(self.FINDING, None)["action"] == "create_news_gap"

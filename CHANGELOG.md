@@ -6,41 +6,52 @@ All notable changes to this project will be documented in this file.
 
 ### Row 14 (PR-B) — per-country spread cap in triage: flag-gated, ships disabled (2026-07-07)
 
-- **(program row 14, PR-B)**: `select_survivors` (`src/orchestrator/triage.py`)
-  gains a third counting dict, `by_country`, exactly parallel to the
-  existing per-category and pending-type caps — the IDEAS.md
-  geographic-spread item, made concrete. A candidate's country key comes
-  from `_candidate_country_key()`: `bundle.country` when set, else the
-  last comma-segment of `bundle.where` ("Phoenix, Arizona, United States"
-  -> "United States"), then lowercased/stripped, with US aliases collapsed
-  into one bucket via the existing `_US_COUNTRY_TOKENS` set (`country`
-  rides 2-letter codes while `where` carries full names — "US" and
-  "United States" must never split into two cap buckets). Non-US
-  code-vs-name splits (e.g. "ML" vs "Mali") are NOT collapsed and can
-  still under-cap those countries — an acceptable fail-open trade-off for
-  a diversity nudge, not a hard partition (documented in the helper's
-  docstring). An empty country key is NEVER capped — unknown geography
-  must not be suppressed. New env `THEHEAT_PER_COUNTRY_CAP`, default `0`
-  = **DISABLED** (flag-gated ship; Andrew flips it to `2` after watching a
-  few cycles' `per_country_cap` spill logs in the suppression ledger).
-  `_per_country_cap()` mirrors `_per_category_cap()`'s env-read-at-call-time
-  contract, except 0 is a real value here (disabled) rather than a floor.
-  The cap sits in the loop after the pending-type check and before the
-  global-cap check, same shape as the other two caps; a country-capped
-  spill records via the existing `_record_triage_suppression` with
-  `reasons=["per_country_cap=N"]` and `kill_stage="triage_cap"` — the
-  function's `reason` dispatch needed one new `elif` branch since it
-  isn't a generic pass-through (it already had a per-branch numeric-limit
-  formatter for `global_cap` / `pending_type_cap`). `bot.yml` gained the
-  passthrough (`THEHEAT_PER_COUNTRY_CAP: ${{ vars.THEHEAT_PER_COUNTRY_CAP
-  || '0' }}`) beside the other pending-queue/TTL knobs. TDD: six new tests
-  in `TestPerCountryCap` (`tests/test_triage.py`) — disabled-by-default (5
-  same-country candidates all rank), cap=2 spills the third with the exact
-  reason string, "US" and "United States" share one bucket under cap=1,
-  empty-country candidates never spill, survivor ordering (score DESC,
-  created_at DESC) unchanged with the cap active but non-binding, and the
-  env override is read live — confirmed FAIL-for-the-right-reason before
-  the implementation, then GREEN.
+- **(program row 14, PR-B)**: a per-country diversity cap so one country's
+  local weather can't fill a whole cycle — the IDEAS.md geographic-spread
+  item. New env `THEHEAT_PER_COUNTRY_CAP`, default `0` = **DISABLED**
+  (flag-gated ship; Andrew flips to `2` after watching `per_country_cap`
+  spills in the suppression ledger). Applied in BOTH drain paths —
+  `select_survivors` (admit-time) and the refill drain `_refill_drain`
+  (`src/orchestrator/triage_queue.py`, success-aware), since
+  `THEHEAT_REFILL_ENABLED=1` routes production through the latter — each a
+  third counting dict parallel to the existing per-category / pending-type
+  caps. Spills record via `_record_triage_suppression` with
+  `reasons=["per_country_cap=N"]` and `kill_stage="triage_cap"`; `bot.yml`
+  gained the passthrough. The country key comes from `_candidate_country_key()`
+  via a **fail-open allowlist** (codex-xhigh, 7 rounds): only signal_kinds
+  known to be single-country-scoped with a reliably country-parseable
+  `where` (temperature record kinds `monthly_*`/`country_*`/`anomaly_*`/
+  `absolute_extreme_*`/`open_meteo_archive_*`, plus `calendar_record`,
+  `record_streak`, `precipitation_extreme`, `wet_bulb_extreme`,
+  `air_quality_hazard`, `dust_event`, `fire`, `fire_footprint`, `drought`)
+  take a key — from `bundle.country` (trusted, US-aliases collapsed via
+  `_US_COUNTRY_TOKENS`) or a known-country-validated `where` fallback.
+  EVERYTHING else fails open (never capped): global climate indices,
+  ocean/ice/reef basins, cyclones, multi-country summaries (`hot10`,
+  `simultaneous_records`), GDACS/Copernicus disaster aggregates (multi-country
+  `where`), all dynamic `synthesis_*` compounds, and any unknown/future
+  signal_kind. A denylist was tried first and abandoned — it fails UNSAFE on
+  omissions and cannot enumerate dynamically-constructed signal_kinds; the
+  allowlist fails toward "don't cap", the safe direction for a soft nudge.
+  Empty/unknown geography is never capped. TDD throughout
+  (`TestPerCountryCap`, `TestCandidateCountryKey`, `TestRefillPerCountryCap`).
+
+### News-gap watch — dedupe source names in the '(per …)' join (2026-07-07)
+
+- **(#396)**: the news-gap watch rendered a gap line as
+  `fire: Pocket fire (AZ) (per NIFC, NIFC)` when two of an event's
+  `impact[]` entries shared a publisher. Source names are now deduped
+  order-preserving (`dict.fromkeys`) in `news_gap_watch`
+  (`scripts/source_health_sentinel.py`) — applied *before* the 3-source
+  cap, so a repeated publisher can't crowd a distinct one out of the cap
+  — and again in `build_news_gap_body`'s join as a render-layer guard for
+  findings built elsewhere. Order-preserving beats a sorted set here: the
+  first-listed publisher is the event's primary source and stays first.
+  No JS mirror: the dashboard does not render the news-gap join
+  (verified — zero `news-gap`/`(per` hits under `dashboard/`). TDD: both
+  new tests (`test_duplicate_impact_publishers_dedupe_before_the_cap`,
+  `test_body_dedupes_repeated_source_names`) reproduced the literal
+  `(per NIFC, NIFC)` symptom RED before the fix, then GREEN.
 
 ### Row 14 (PR-A) — fire geocode nearest-city fallback: no more unplaceable coordinate labels (2026-07-07)
 

@@ -1358,11 +1358,13 @@ def news_gap_watch(
         findings.append({
             "kind": str(ev.get("kind") or ""),
             "headline": str(ev.get("headline") or ""),
-            "sources": [
+            # deduped (order-preserving) before the cap — two impact claims
+            # from one publisher must not crowd a distinct source out (#396)
+            "sources": list(dict.fromkeys(
                 str(i.get("source_name") or "")
                 for i in (ev.get("impact") or [])
                 if isinstance(i, Mapping)
-            ][:3],
+            ))[:3],
         })
     return findings
 
@@ -1381,7 +1383,7 @@ def build_news_gap_body(findings: list[dict]) -> str:
         "",
     ]
     for f in findings:
-        sources = ", ".join(s for s in f.get("sources", []) if s) or "sourced"
+        sources = ", ".join(dict.fromkeys(s for s in f.get("sources", []) if s)) or "sourced"
         lines.append(f"- `{f['kind']}`: {f['headline']} (per {sources})")
     lines += ["", "_Auto-maintained by the source-health sentinel news-gap watch._"]
     return "\n".join(lines)
