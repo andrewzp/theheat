@@ -12,11 +12,12 @@ near-miss boost (A2) — each verified on real cycles before the next flip.
 
 ## Step 1 — master (A0): retrieval lane + news-gap watch. Zero editorial surface.
 
-> **STATUS: FLIPPED 2026-07-07 12:59:59Z** (Andrew's explicit go). First-light
-> cycle = run 28868097367 (manually dispatched, GREEN): flag reached the run,
-> lane executed clean, no runaway, 1 draft saved (zero editorial surface
-> confirmed). Checklist items still open: news_events citation hand-check +
-> news-gap sanity — do on the 16:00Z/20:00Z cycles.
+> **STATUS: LIVE 2026-07-07 12:59:59Z — VERIFIED.** Across post-flip cycles: the
+> `newsworthiness` source row reports `success` (never `skipped`); `news_events`
+> citations hand-checked by replaying the exact NIFC query against the live feed —
+> every claim/value pair matched verbatim; news-gap watch (#395) was discriminating
+> (2 real gaps, 8/10 events matched, no false gaps); ≤5 LLM calls/cycle; zero
+> editorial surface. A0 verification complete.
 
 Andrew:
 ```bash
@@ -52,6 +53,15 @@ least two to complete; check with
 
 ## Step 2 — enrich (A1): sourced human impact on matched bundles. FORCED manual review.
 
+> **STATUS: LIVE 2026-07-07 16:23:52Z** (Andrew's explicit go). Pre-flip gate re-run
+> GREEN on current main (evidence contract PASS; a candidate SHIPS the full ladder;
+> `[decision4] … FORCED manual_only (cited_impact)`). Verifying: clean across 3+ cycles —
+> flag reaches every run, no runaway, **P0 guard holds (zero autoship-armed impact
+> drafts)**. NOTE: enrichment has not yet FIRED a live human-impact draft (stochastic —
+> current `news_events` are all NIFC structured fire data). The manual-only mechanism is
+> proven by the dryrun gate; the remaining live spot-check (enriched figures verbatim +
+> source named) awaits the first real enriched draft.
+
 Precondition: Step 1 verified across ≥2 cycles.
 
 Watcher first — re-run the pre-flip gate on CURRENT main:
@@ -81,6 +91,11 @@ Watcher, next 2–3 cycles:
   without `human_impact`).
 
 ## Step 3 — boost (A2): capped near-miss rescue at the fire score gate.
+
+> **STATUS: NOT YET FLIPPED — Andrew's next flag action.** Precondition (A1 verified
+> ≥2 cycles) is met for the SAFETY invariant (P0 guard holds); recommendation is to
+> wait for ≥1 live enriched draft to spot-check figures before flipping, OR accept the
+> dryrun proof. Andrew's call + explicit go.
 
 Precondition: Step 2 verified across ≥2 cycles.
 

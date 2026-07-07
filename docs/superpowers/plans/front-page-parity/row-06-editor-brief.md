@@ -1,5 +1,8 @@
 # Row 6 — The daily editor brief: the queue stops being where stories die
 
+> **✅ MERGED 2026-07-07 (#392).** Live as issue #394. codex caught an hourly-churn P2
+> (live age counter → stable `since` dates) pre-merge. Plan retained for reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or
 > superpowers:executing-plans. Read
 > [INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)

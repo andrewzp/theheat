@@ -1,5 +1,11 @@
 # Row 7 — Precipitation four-moves: retire P9, keep #372's honesty
 
+> **✅ MERGED 2026-07-07 (#397).** 3 codex rounds — the plan's "verified contract" missed
+> a live kind (`country_precip_event`), caught in review and given a voice path. P9 retired
+> (accumulation + record-path + country-cluster all dryrun-verified). Open follow-up:
+> **#401** (fact-check rule (o) sanctions "the 300 mm monitoring threshold" the critic kills
+> as `internal_taxonomy_leak` — cross-gate contradiction). Plan retained for reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or
 > superpowers:executing-plans. Read
 > [INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)

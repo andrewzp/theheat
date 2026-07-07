@@ -1,5 +1,11 @@
 # Row 11 — Marine/coral + cyclone four-moves: the template-convergence types
 
+> **✅ MERGED 2026-07-07** (PR-1 marine #402, PR-2 cyclone #404). Both dryrun voice-verified.
+> The plan's "verified bundle contracts" MISSED `cyclone_basin_record` (a live 5th cyclone
+> kind) and had fabricated coral vocab ("Alert Level 3" — real caps at "Bleaching Alert
+> Level 2"/"mortality expected") — both caught pre-dispatch/in-review. Open follow-up:
+> **#403** (`_stress_level_for_dhw` under-labels vs the NOAA scale). Plan retained for reference.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development or
 > superpowers:executing-plans. Read
 > [INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)

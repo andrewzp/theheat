@@ -10,21 +10,28 @@
 
 ## Execution order and status
 
+> **Program status (2026-07-07 evening):** every EXECUTABLE row is MERGED — rows 3/4/5/6/7/11/14.
+> Remaining rows are all gated: **8** (needs a few days of `news_events` data), **9** (Andrew's
+> X-API tier), **10/12/13** (A2-live / evidence-clock / spike). Flag ladder: A0 + A1 LIVE, A2
+> pending Andrew. Open follow-ups: #401, #403. See
+> [docs/handoffs/2026-07-07-evening.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-evening.md).
+
+
 | Row | Plan doc | Status | Blocked on |
 |---|---|---|---|
-| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | **A0 master LIVE 2026-07-07 12:59Z** (first-light GREEN; citation hand-check on next cycles). Enrich gate GREEN (#387) — flip after A0 verifies, with Andrew's go; boost after that | A0 verify → Andrew |
+| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | **A0 LIVE 2026-07-07 12:59Z (verified across cycles).** **A1 ENRICH LIVE 2026-07-07 16:23Z (Andrew's go)** — verifying clean, P0 guard holds; enrichment not yet fired a live impact draft. **A2 BOOST unset — Andrew's flip after A1 fully verifies** | A2 → Andrew |
 | 3 | [row-03-corpus-merge-and-staleness.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-03-corpus-merge-and-staleness.md) | **MERGED 2026-07-07** (#384 + #385; codex r1 P1 → sweep is provenance-aware) | — |
 | 4 | [row-04-voice-ptier-pdust.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-04-voice-ptier-pdust.md) | **MERGED 2026-07-07** (#386; watch air-quality coverage ≥90% for 2 cycles) | — |
 | 5 | [row-05-cyclone-land-threat.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-05-cyclone-land-threat.md) | **MERGED 2026-07-07** (#388, closes #375; codex r1 2×P1 real → fixed + persistence contract test; Bavi = live verify case) | — |
-| 6 | [row-06-editor-brief.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-06-editor-brief.md) | READY | row 3 recommended first |
-| 7 | [row-07-precip-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-07-precip-four-moves.md) | READY | row 4 pattern |
-| 8 | [row-08-fpp-weekly-rollup.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-08-fpp-weekly-rollup.md) | READY to build; live data needs master flip | row 1 for live verify |
+| 6 | [row-06-editor-brief.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-06-editor-brief.md) | **MERGED 2026-07-07** (#392; live as issue #394; codex caught hourly-churn P2 → stable `since` dates) | — |
+| 7 | [row-07-precip-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-07-precip-four-moves.md) | **MERGED 2026-07-07** (#397; 3 codex rounds — plan contract missed `country_precip_event`; P9 retired). Follow-up: #401 (critic/threshold cross-gate) | — |
+| 8 | [row-08-fpp-weekly-rollup.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-08-fpp-weekly-rollup.md) | READY to build; needs a few DAYS of `news_events` data (A1 live 2026-07-07) | ~days of data |
 | 9 | [row-09-engagement-capture.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-09-engagement-capture.md) | READY | Andrew confirms X API tier |
-| 10 | [row-10-boost-beyond-fire.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-10-boost-beyond-fire.md) | Mechanics spec'd; finalize after A2 live | rows 1–2 live |
-| 11 | [row-11-marine-cyclone-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-11-marine-cyclone-four-moves.md) | READY | row 7 first (pattern cadence) |
+| 10 | [row-10-boost-beyond-fire.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-10-boost-beyond-fire.md) | Mechanics spec'd; finalize after A2 boost live | A2 flip (Andrew) |
+| 11 | [row-11-marine-cyclone-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-11-marine-cyclone-four-moves.md) | **MERGED 2026-07-07** (PR-1 marine #402 + PR-2 cyclone #404; both voice-verified via dryrun; plan contract missed `cyclone_basin_record` — caught pre-dispatch). Follow-up: #403 (DHW under-labeling) | — |
 | 12 | [row-12-a3-new-coverage-trigger.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-12-a3-new-coverage-trigger.md) | GATED design skeleton — do NOT build until the evidence checklist passes | 2–4 weeks of gap-flag data |
 | 13 | [row-13-heat-dome-spike.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-13-heat-dome-spike.md) | Spike protocol (read-only investigation) | — |
-| 14 | [row-14-geocode-and-spread.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-14-geocode-and-spread.md) | READY (two independent small PRs) | — |
+| 14 | [row-14-geocode-and-spread.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-14-geocode-and-spread.md) | **MERGED 2026-07-07** (PR-A geocode #398; PR-B per-country cap #399 — 7 codex rounds, denylist→fail-open allowlist, ships DISABLED `THEHEAT_PER_COUNTRY_CAP=0`) | — |
 
 ## Standing rules for every implementer (verbatim, non-negotiable)
 
