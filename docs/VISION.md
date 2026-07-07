@@ -58,6 +58,15 @@ human toll of what it does detect.
 > the **front-page-parity plan** + per-row implementation plans, awaiting Andrew's
 > adoption in [PR #382](https://github.com/andrewzp/theheat/pull/382). Its two
 > managed numbers (FPP + A-rate) are the bars above, made measurable.
+>
+> **STATUS (2026-07-07 noon): THE PROGRAM IS ADOPTED AND RUNNING.** #382 merged;
+> rows 3/4/5 executed and merged the same day (#384/#385/#386/#388 + the #387
+> A1-gate fix); **Bet A's master flag is LIVE** (2026-07-07 12:59:59Z, Andrew's
+> explicit go) — the FPP measurement and A3 evidence clocks are ticking, and the
+> A-rate bar now has row 4's voice floor pushing on it (its critic kill fired on
+> real drafts in A0's first live cycle). Remaining rows execute from
+> [the INDEX](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md);
+> enrich → boost flips follow A0's verification, each with Andrew's go.
 
 Produce a **detailed, prioritized upgrade plan** across the three pillars below. For each:
 what's wrong today, what "good" looks like, the sequenced steps to get there, effort/risk, and

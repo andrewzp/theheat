@@ -1,5 +1,12 @@
 # @theheat Front-Page Parity Plan — the leveling-up program
 
+> **STATUS (2026-07-07): ADOPTED — #382 merged with Andrew's explicit go.**
+> Rows 3/4/5 MERGED the same day (#384/#385/#386/#388 + the #387 A1-gate fix);
+> **the A0 master flag is LIVE (12:59:59Z)** — FPP + A3 evidence clocks running.
+> Current row statuses live in
+> [front-page-parity/INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md);
+> live flag/verification state in the latest handoff.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans for the fully-specified first move; every
 > other row gets its own plan doc (brainstorm → write-plan → codex-xhigh) when it reaches

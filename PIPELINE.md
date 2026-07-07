@@ -1,19 +1,23 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-07-07 (version 0.9.82.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07.md).
+**Last updated:** 2026-07-07 noon (version 0.9.85.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-noon.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-noon.md).
 The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
 the non-US world temperature half is threshold-cached, and the dashboard exposes
 per-source troubleshooting logs. The editorial pipeline shape described below is
 unchanged; the source layer is more resilient and more observable. The
 **three-pillar upgrade plan is COMPLETE (rows 1–8 merged**, incl. E1's fire
 four-moves writer section + fact-check rule (l) + `writer_dryrun` per-type
-harness, #379/#380); the successor **front-page-parity program awaits Andrew's
-review in [PR #382](https://github.com/andrewzp/theheat/pull/382)** (program plan
-+ per-row implementation plans, on branch `docs/front-page-parity-plan`). Bet A
-(A0+A1+A2) is merged and fully dark — all three flags unset.
+harness, #379/#380); the successor **front-page-parity program is ADOPTED
+([#382](https://github.com/andrewzp/theheat/pull/382) merged 2026-07-07)** with
+rows 3/4/5 executed the same day (#384/#385/#386/#388 — forecast-elapsed sweep,
+P_tier/P_dust voice floor, `cyclone_land_threat`; statuses in
+[the INDEX](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)).
+**Bet A: the A0 master `THEHEAT_NEWSWORTHINESS_ENABLED=1` is LIVE (2026-07-07
+12:59:59Z)**; enrich + boost stay unset pending A0's 2–3-cycle verification and
+Andrew's per-flip go (track-0 runbook).
 
-**The newsworthiness lane exists since 2026-07-04, SHIPPED DARK** ([#366](https://github.com/andrewzp/theheat/pull/366);
+**The newsworthiness lane exists since 2026-07-04, LIVE since 2026-07-07** ([#366](https://github.com/andrewzp/theheat/pull/366);
 Bet A phase 0 of the [three-pillar plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md),
 design [spec](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/specs/2026-07-03-newsworthiness-bet-a-design.md)).
 A flag-gated source runner (`THEHEAT_NEWSWORTHINESS_ENABLED`, unset=OFF) retrieves
