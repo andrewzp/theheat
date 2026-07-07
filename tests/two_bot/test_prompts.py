@@ -500,3 +500,7 @@ class TestImpactLeadNotPressRelease:
     def test_critic_carves_out_sourced_impact_leads(self):
         assert "NOT press-release" in CRITIC_SYSTEM_PROMPT
         assert "human-stakes lead carries its citation" in CRITIC_SYSTEM_PROMPT
+        # Boundary phrases (codex r1 suggestion): the carve-out is scoped to
+        # mid-or-late-sentence attribution; the kill stays for openers.
+        assert "mid-or-late sentence" in CRITIC_SYSTEM_PROMPT
+        assert "OPENS with the agency/label format itself" in CRITIC_SYSTEM_PROMPT
