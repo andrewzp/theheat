@@ -11,6 +11,8 @@ When OFF, the drain step in common.py writes everything in queue order
 
 Per-category cap: THEHEAT_PER_CATEGORY_CAP env var. Default 2.
 Global cap: MAX_DRAFTS_PER_CYCLE (imported from finalize, currently 3).
+Per-country cap: THEHEAT_PER_COUNTRY_CAP env var. Default 0 = DISABLED
+(flag-gated ship — see _per_country_cap()).
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
 from src.state import MAX_SUPPRESSIONS
+from src.two_bot.intern._shared import _US_COUNTRY_TOKENS
 
 if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
@@ -58,6 +61,64 @@ def _per_category_cap() -> int:
         return max(v, 1)
     except (TypeError, ValueError):
         return PER_CATEGORY_TRIAGE_CAP_DEFAULT
+
+
+# Geographic-spread cap (row 14 PR-B). Default 0 = DISABLED — a hot day in
+# one country must not be able to fill the whole cycle, but this ships flag-
+# gated: Andrew flips THEHEAT_PER_COUNTRY_CAP to 2 after watching a few
+# cycles' spill logs. Unlike PER_CATEGORY_TRIAGE_CAP_DEFAULT (always >=1),
+# 0 here is a real, meaningful value (disabled) rather than a floor.
+PER_COUNTRY_TRIAGE_CAP_DEFAULT = 0
+
+
+def _per_country_cap() -> int:
+    """Read per-country cap from env, falling back to default (0=disabled).
+
+    Mirrors _per_category_cap()'s env-read-at-call-time contract, but 0 is
+    a legitimate value here (disabled), so this does NOT floor to 1 the way
+    _per_category_cap() does.
+    """
+    raw = os.environ.get("THEHEAT_PER_COUNTRY_CAP", "")
+    try:
+        v = int(raw) if raw else PER_COUNTRY_TRIAGE_CAP_DEFAULT
+        return max(v, 0)
+    except (TypeError, ValueError):
+        return PER_COUNTRY_TRIAGE_CAP_DEFAULT
+
+
+def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
+    """Normalize a candidate's country into one cap-bucket key.
+
+    Prefers ``bundle.country`` (documented as a 2-letter code — see
+    src/two_bot/types.py) when set; otherwise falls back to the last
+    comma-segment of ``bundle.where`` (e.g. "Phoenix, Arizona, United
+    States" -> "United States"). The result is lowercased/stripped, and US
+    aliases are collapsed into one bucket via the existing
+    _US_COUNTRY_TOKENS set — because `country` rides 2-letter codes ("US")
+    while `where` carries full names ("United States"), and those must
+    never split one country into two cap buckets.
+
+    Non-US code-vs-name splits (e.g. "ML" vs "Mali") are NOT collapsed —
+    this can still under-cap those countries (two spellings of the same
+    country landing in different buckets), which is an acceptable
+    fail-open trade-off for a diversity NUDGE, not a hard partition.
+
+    Returns "" when no country can be determined (empty bundle.country AND
+    no comma in `where`) — callers must treat an empty key as NEVER capped
+    (unknown geography must not be suppressed).
+    """
+    bundle = getattr(candidate, "bundle", None)
+    country = (getattr(bundle, "country", "") or "").strip()
+    if not country:
+        where = (getattr(bundle, "where", "") or "").strip()
+        if "," in where:
+            country = where.rsplit(",", 1)[-1].strip()
+    if not country:
+        return ""
+    key = country.lower().strip()
+    if key in _US_COUNTRY_TOKENS:
+        return "united states"
+    return key
 
 
 def _pending_type_cap() -> int:
@@ -253,10 +314,12 @@ def _record_triage_suppression(
     """Record a triage-cap suppression in the bot_state suppression ledger.
 
     Sets kill_stage="triage_cap". ``reason`` distinguishes which gate spilled
-    the candidate ("per_category_cap" vs "global_cap") so dashboard
-    attribution can tell apart "more coral than we promote per cron" from
-    "more total signals than MAX_DRAFTS_PER_CYCLE allows". Both pin the
-    relevant numeric limit into the reasons string for at-a-glance triage.
+    the candidate ("per_category_cap" vs "pending_type_cap" vs
+    "per_country_cap" vs "global_cap") so dashboard attribution can tell
+    apart "more coral than we promote per cron" from "more total signals
+    than MAX_DRAFTS_PER_CYCLE allows" from "too many drafts from one
+    country this cycle". All pin the relevant numeric limit into the
+    reasons string for at-a-glance triage.
     """
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
@@ -270,6 +333,8 @@ def _record_triage_suppression(
         reasons_field = [f"global_cap={global_cap}"]
     elif reason == "pending_type_cap":
         reasons_field = [f"pending_type_cap={_pending_type_cap()}"]
+    elif reason == "per_country_cap":
+        reasons_field = [f"per_country_cap={_per_country_cap()}"]
     else:
         reasons_field = [f"per_category_cap={cap}"]
 
@@ -334,14 +399,16 @@ def select_survivors(
 
     cap = _per_category_cap()
     pending_cap = _pending_type_cap()
+    country_cap = _per_country_cap()
     by_category: dict[str, int] = {}
     # Cache per-type pending counts so we don't re-scan bot_state.drafts
     # for every candidate. Incremented for each survivor we admit so the
     # next candidate of the same type sees the post-admit count.
     pending_counts: dict[str, int] = {}
+    by_country: dict[str, int] = {}
     survivors: list["TriageCandidateBundle"] = []
     # (candidate, reason) — reason is "per_category_cap", "pending_type_cap",
-    # or "global_cap".
+    # "per_country_cap", or "global_cap".
     spilled: list[tuple["TriageCandidateBundle", str]] = []
 
     for i, candidate in enumerate(ranked):
@@ -364,6 +431,17 @@ def select_survivors(
             if pending_counts[draft_type] >= pending_cap:
                 spilled.append((candidate, "pending_type_cap"))
                 continue
+        # Geographic-spread cap (row 14 PR-B, flag-gated — default 0 =
+        # disabled). country_cap == 0 short-circuits the whole check so the
+        # default-off path never even computes a country key. An empty
+        # country key is NEVER capped (unknown geography must not be
+        # suppressed) — see _candidate_country_key()'s docstring.
+        country = _candidate_country_key(candidate)
+        if country_cap > 0 and country:
+            used_country = by_country.get(country, 0)
+            if used_country >= country_cap:
+                spilled.append((candidate, "per_country_cap"))
+                continue
         if len(survivors) >= global_cap:
             # Global cap already hit — all remaining spill via the global gate.
             for remaining in ranked[i:]:
@@ -375,6 +453,8 @@ def select_survivors(
             # Account for the just-admitted survivor so consecutive same-type
             # candidates see the bumped count.
             pending_counts[draft_type] = pending_counts.get(draft_type, 0) + 1
+        if country_cap > 0 and country:
+            by_country[country] = by_country.get(country, 0) + 1
 
     for candidate, reason in spilled:
         _record_triage_suppression(

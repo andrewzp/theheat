@@ -38,14 +38,20 @@ def _score(total: int = 80, category: str = "coral_bleaching") -> EditorialScore
     )
 
 
-def _bundle(signal_kind: str = "coral_bleaching") -> StoryBundle:
+def _bundle(
+    signal_kind: str = "coral_bleaching",
+    *,
+    where: str = "Great Barrier Reef",
+    country: str = "",
+) -> StoryBundle:
     return StoryBundle(
         signal_kind=signal_kind,
-        where="Great Barrier Reef",
+        where=where,
         when="2026-05-17",
         event_id="test_event",
         headline_metric={"label": "DHW", "value": 8},
         current_facts=[],
+        country=country,
     )
 
 
@@ -57,11 +63,13 @@ def _candidate(
     event_id: str = "evt_001",
     created_at: str = "2026-05-17T12:00:00Z",
     cooldown_exempt: bool = False,
+    where: str = "Great Barrier Reef",
+    country: str = "",
 ):
     """Build a TriageCandidateBundle with sensible defaults."""
     from src.two_bot.types import TriageCandidateBundle
     return TriageCandidateBundle(
-        bundle=_bundle(signal_kind),
+        bundle=_bundle(signal_kind, where=where, country=country),
         score=_score(total, signal_kind),
         event_id=event_id,
         source=source,
@@ -692,6 +700,168 @@ class TestPendingTypeCap:
         result = select_survivors(bot_state, [candidate], global_cap=10)
 
         assert result == []  # cap=1 means 1 pending is full
+
+
+class TestPerCountryCap:
+    """Geographic-spread cap: a hot day in one country can't fill the whole
+    cycle. Flag-gated via THEHEAT_PER_COUNTRY_CAP, default 0 = disabled.
+
+    Mirrors TestPendingTypeCap's shape — same env-read-at-call-time
+    contract as the other caps (monkeypatch.setenv, no module reload).
+    """
+
+    def test_disabled_by_default_all_same_country_candidates_rank(self, monkeypatch):
+        """Default (unset env) = 0 = disabled. 5 same-country candidates all
+        rank — no country-based spill. Use distinct signal_kinds so the
+        per-category cap (default 2) doesn't interfere."""
+        monkeypatch.delenv("THEHEAT_PER_COUNTRY_CAP", raising=False)
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90 - i,
+                event_id=f"evt_{i}",
+                signal_kind=f"cat_{i}",
+                where="Phoenix, Arizona, United States",
+                country="US",
+            )
+            for i in range(5)
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 5
+
+    def test_cap_2_spills_third_same_country_candidate(self, monkeypatch):
+        """cap=2 → third same-country candidate spills with
+        reasons=['per_country_cap=2'] and kill_stage='triage_cap'."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "2")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="c1", signal_kind="fire",
+                where="Phoenix, Arizona, United States", country="US",
+            ),
+            _candidate(
+                total=85, event_id="c2", signal_kind="drought",
+                where="Tucson, Arizona, United States", country="US",
+            ),
+            _candidate(
+                total=70, event_id="c3_spilled", signal_kind="record",
+                where="Yuma, Arizona, United States", country="US",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 2
+        assert {r.event_id for r in result} == {"c1", "c2"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "c3_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=2"]
+
+    def test_us_and_united_states_share_one_bucket(self, monkeypatch):
+        """bundle.country='US' and bundle.country unset (falls back to
+        where='...United States') must collapse into ONE cap bucket via
+        _US_COUNTRY_TOKENS — cap=1 means the second US-labeled candidate
+        spills even though the two bundles spell the country differently."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="us_code", signal_kind="fire",
+                where="Phoenix, Arizona, United States", country="US",
+            ),
+            _candidate(
+                total=85, event_id="united_states_name_spilled", signal_kind="drought",
+                where="Tucson, Arizona, United States", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 1
+        assert result[0].event_id == "us_code"
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "united_states_name_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=1"]
+
+    def test_empty_country_never_capped(self, monkeypatch):
+        """Empty country key (no bundle.country AND no comma segment in
+        `where`) is NEVER capped — unknown geography must not be suppressed,
+        even with cap=1 and many candidates."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90 - i, event_id=f"evt_{i}", signal_kind=f"cat_{i}",
+                where="Great Barrier Reef",  # no comma segment -> empty key
+                country="",
+            )
+            for i in range(4)
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 4
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
+
+    def test_survivor_ordering_unchanged_when_cap_active(self, monkeypatch):
+        """Cap active but not binding (distinct countries) → ordering is
+        still score DESC, created_at DESC, exactly as with the cap off."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "2")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        low = _candidate(
+            total=65, event_id="low", signal_kind="drought",
+            created_at="2026-05-17T10:00:00Z",
+            where="Bamako, Mali", country="ML",
+        )
+        high = _candidate(
+            total=90, event_id="high", signal_kind="sea_ice_record",
+            created_at="2026-05-17T09:00:00Z",
+            where="Reykjavik, Iceland", country="IS",
+        )
+        mid = _candidate(
+            total=75, event_id="mid", signal_kind="fire",
+            created_at="2026-05-17T08:00:00Z",
+            where="Phoenix, Arizona, United States", country="US",
+        )
+        result = select_survivors(bot_state, [low, mid, high], global_cap=3)
+        assert result[0].event_id == "high"
+        assert result[1].event_id == "mid"
+        assert result[2].event_id == "low"
+
+    def test_per_country_cap_respects_env_override(self, monkeypatch):
+        """THEHEAT_PER_COUNTRY_CAP env is read at call time (no module
+        reload needed) — same contract as the other caps."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="c1", signal_kind="fire",
+                where="Lagos, Nigeria", country="NG",
+            ),
+            _candidate(
+                total=85, event_id="c2", signal_kind="drought",
+                where="Kano, Nigeria", country="NG",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 1
+        assert result[0].event_id == "c1"
 
 
 class TestPendingTtlSweep:
