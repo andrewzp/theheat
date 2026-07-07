@@ -66,7 +66,7 @@ def test_detect_dust_event_carries_pm10_anchor_when_available():
     """P_dust root cause: dust drafts had no WHO-scale anchor because the
     event carried none. The anchor is CO-MEASURED PM10 (a separate hourly
     variable from `dust`), 24h mean vs the WHO 2021 PM10 24h AQG (45)."""
-    obs = _obs(dust_daily_max=2400.0, pm10_24h_mean=900.0)
+    obs = _obs(dust=2400.0, pm10_24h_mean=900.0)
     event = detect_dust_event(obs)
     assert event is not None
     assert event.pm10_24h_mean == 900.0
@@ -76,7 +76,7 @@ def test_detect_dust_event_carries_pm10_anchor_when_available():
 def test_detect_dust_event_is_none_safe_without_pm10():
     # A cycle where the pm10 series is missing must still mint the dust
     # event (tier logic unchanged) with the anchor fields None.
-    obs = _obs(dust_daily_max=2400.0, pm10_24h_mean=None)
+    obs = _obs(dust=2400.0, pm10_24h_mean=None)
     event = detect_dust_event(obs)
     assert event is not None
     assert event.pm10_24h_mean is None
@@ -84,7 +84,8 @@ def test_detect_dust_event_is_none_safe_without_pm10():
 ```
 
 (`_obs` is `tests/test_air_quality.py`'s existing `CityAirQuality` fixture helper —
-extend it with the `pm10_24h_mean=None` keyword default; do not write a new helper.)
+its dust kwarg is `dust=` (NOT `dust_daily_max=`); extend the helper with a
+`pm10_24h_mean=None` keyword default and do not write a new helper.)
 
 - [ ] **Step 2: Run to verify failure**
 

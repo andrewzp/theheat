@@ -648,20 +648,34 @@ rides `LandThreatEvent`; derive both, bound as defaults, the `nifc.py:88-93` pat
             bot_state,
             bundle=lt_bundle,
             score=lt_score,
-            source="cyclones",
+            source=source_key,               # "nhc" or "jtwc" — the feed this
+                                             # _process_cyclone_source pass runs for;
+                                             # telemetry attribution only bumps when
+                                             # this matches the run's source entry
+                                             # (src/orchestrator/telemetry.py:90)
             legacy_type="cyclone_land_threat",
             event_id=lt.event_id,
-            review_context={"cyclone": {"kind": "land_threat"}},
+            review_context=_lt_review_context,
             on_draft_success=_on_success,
         )
 ```
 
+**Attribution rules (codex round 2 on this plan — do not improvise here):**
+(a) `source=` must be the SAME `source_key` ("nhc"/"jtwc") this
+`_process_cyclone_source` pass already uses for the RI/tier/landfall enqueues — read
+the neighboring enqueue in this function and pass the identical variable; a made-up
+key like "cyclones" silently loses triaged/drafted telemetry.
+(b) `_lt_review_context` must be built EXACTLY the way the neighboring cyclone events
+build theirs (there is an existing review-context construction beside the other
+enqueues in this function — copy its shape, including the `source_key` entry that
+`finalize.py`'s prune attribution reads for types without a static mapping).
+(c) If the neighboring enqueues bump a promoted/observed counter for this source
+(look for the counter calls beside them), bump it identically for an admitted
+land-threat candidate.
 (imports: `tracking_key`, `_landmass_slug`, `detect_land_threats` from
 `src.data.cyclones`; `load_cities` from `src.data.open_meteo`;
-`record_land_threat_pair` via the `state` module like the other setters. Match
-`_enqueue_story_candidate`'s ACTUAL keyword signature in this file — read a neighboring
-call before writing. The pair records ONLY on draft success, so a killed draft retries
-on the next advisory.)
+`record_land_threat_pair` via the `state` module like the other setters. The pair
+records ONLY on draft success, so a killed draft retries on the next advisory.)
 
 - [ ] Steps: failing orchestrator test (fake advisories with forecast points near a
 fake city → exactly one candidate enqueued; the pair NOT recorded when the fake
