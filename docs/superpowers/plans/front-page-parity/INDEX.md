@@ -10,11 +10,13 @@
 
 ## Execution order and status
 
-> **Program status (2026-07-07 evening):** every EXECUTABLE row is MERGED — rows 3/4/5/6/7/11/14.
-> Remaining rows are all gated: **8** (needs a few days of `news_events` data), **9** (Andrew's
-> X-API tier), **10/12/13** (A2-live / evidence-clock / spike). Flag ladder: A0 + A1 LIVE, A2
-> pending Andrew. Open follow-ups: #401, #403. See
-> [docs/handoffs/2026-07-07-evening.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-evening.md).
+> **Program status (2026-07-07 night):** every EXECUTABLE row is MERGED — rows 3/4/5/6/7/9/11/14
+> (row 9 #412). Follow-ups #401 (#408) + #403 (#409) shipped; row-13 spiked → GO (#410).
+> **Flag ladder: A0 + A1 + A2 boost ALL LIVE + `THEHEAT_PER_COUNTRY_CAP=2`** (flipped 2026-07-07
+> 20:42Z). Remaining gated: **8** (a few days of `news_events`), **10** (A2 live+verified ≥1 week,
+> ~07-14), **12** (2–4 weeks gap-flag data). **13** is spiked GO — buildable when prioritized.
+> Andrew's pending flag: `THEHEAT_METRICS_ENABLED` (row 9, when ready). See
+> [docs/handoffs/2026-07-07-2140z.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-2140z.md).
 
 
 | Row | Plan doc | Status | Blocked on |
@@ -26,7 +28,7 @@
 | 6 | [row-06-editor-brief.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-06-editor-brief.md) | **MERGED 2026-07-07** (#392; live as issue #394; codex caught hourly-churn P2 → stable `since` dates) | — |
 | 7 | [row-07-precip-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-07-precip-four-moves.md) | **MERGED 2026-07-07** (#397; 3 codex rounds — plan contract missed `country_precip_event`; P9 retired). Follow-up: #401 (critic/threshold cross-gate) | — |
 | 8 | [row-08-fpp-weekly-rollup.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-08-fpp-weekly-rollup.md) | READY to build; needs a few DAYS of `news_events` data (A1 live 2026-07-07) | ~days of data |
-| 9 | [row-09-engagement-capture.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-09-engagement-capture.md) | READY | Andrew confirms X API tier |
+| 9 | [row-09-engagement-capture.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-09-engagement-capture.md) | **MERGED 2026-07-07** (#412 — dormant metrics lane made flippable: bot.yml `THEHEAT_METRICS_ENABLED` passthrough + dashboard `drafts.posted[]` join; ships flag **OFF**). Andrew flips to `1` when ready (X API pay-per-usage cost); Vercel deploy bundled with the flip; routine-corpus grade-join is a routine-owned follow-up | flag flip → Andrew |
 | 10 | [row-10-boost-beyond-fire.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-10-boost-beyond-fire.md) | Mechanics spec'd; finalize after A2 boost live | A2 flip (Andrew) |
 | 11 | [row-11-marine-cyclone-four-moves.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-11-marine-cyclone-four-moves.md) | **MERGED 2026-07-07** (PR-1 marine #402 + PR-2 cyclone #404; both voice-verified via dryrun; plan contract missed `cyclone_basin_record` — caught pre-dispatch). Follow-up: #403 (DHW under-labeling) | — |
 | 12 | [row-12-a3-new-coverage-trigger.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-12-a3-new-coverage-trigger.md) | GATED design skeleton — do NOT build until the evidence checklist passes | 2–4 weeks of gap-flag data |
