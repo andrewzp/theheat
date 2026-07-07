@@ -50,13 +50,14 @@ from datetime import UTC, date, datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.air_quality import DUST_TIERS, DustEvent, _tier  # noqa: E402
+from src.data.cyclones import LandThreatEvent  # noqa: E402
 from src.data.fire_footprint import FireComplex, _classify_tier  # noqa: E402
 from src.data.firms import FireEvent  # noqa: E402
 from src.editorial.newsworthiness import detect_impact_citation  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
 from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
-from src.two_bot.intern import build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle  # noqa: E402
+from src.two_bot.intern import build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
@@ -96,6 +97,16 @@ DEFAULTS: dict = {
     "dust_country": "India",
     "dust_lat": 27.13,
     "dust_lon": 72.36,
+    # cyclone_land_threat (Bavi-class) knobs. Forecast-tense fixture; never
+    # attaches human_impact (a forecast has no toll — the impact knobs are
+    # ignored for this type).
+    "storm_name": "BAVI",
+    "storm_wind_kt": 135,
+    "landmass": "Taiwan",
+    "landmass_city": "Taipei",
+    "distance_nm": 25.0,
+    "tau_h": 48,
+    "forecast_wind_kt": 95,
 }
 
 _NIFC_URL = (
@@ -141,6 +152,21 @@ def _attach_impact(bundle: StoryBundle, args: argparse.Namespace, incident: str)
 
 
 def _build_bundle(args: argparse.Namespace) -> StoryBundle:
+    if args.type == "cyclone_land_threat":
+        # Forecast-tense fixture — never attaches human_impact (a forecast
+        # has no toll; the impact knobs are ignored for this type).
+        lt = LandThreatEvent(
+            source="jtwc", storm_id="05W", storm_name=args.storm_name,
+            basin="WP", advisory_number="024",
+            issued_at=datetime.now(UTC).isoformat(),
+            current_wind_kt=args.storm_wind_kt,
+            landmass_country=args.landmass, nearest_city=args.landmass_city,
+            min_distance_nm=args.distance_nm, closest_valid_at="dryrun",
+            closest_tau_h=args.tau_h,
+            forecast_wind_kt_at_closest=args.forecast_wind_kt,
+            event_id="dryrun_land_threat_05w",
+        )
+        return build_cyclone_land_threat_bundle(lt)
     if args.type == "dust":
         # No _attach_impact for dust — the fixture never carries human_impact
         # (see DEFAULTS comment). The --no-impact / impact knobs are ignored.
@@ -208,6 +234,11 @@ def _print_bundle(bundle: StoryBundle) -> None:
         print(f"  dust_daily_max .... {facts.get('dust_daily_max_ug_m3')} μg/m³ (tier {facts.get('tier')})")
         print(f"  pm10 24h mean ..... {facts.get('pm10_24h_mean_ug_m3')} μg/m³")
         print(f"  WHO PM10 multiple . {facts.get('who_pm10_multiple')}× (guideline {facts.get('who_pm10_24h_guideline_ug_m3')} μg/m³)")
+    elif bundle.signal_kind == "cyclone_land_threat":
+        print(f"  storm ............. {facts.get('storm_name')} ({facts.get('current_wind_kt')} kt, Cat {facts.get('saffir_simpson_category')})")
+        print(f"  landmass .......... {facts.get('landmass_country')} (near {facts.get('nearest_city')})")
+        print(f"  closest approach .. {facts.get('min_distance_nm')} NM within {facts.get('closest_tau_h')}h")
+        print(f"  forecast wind ..... {facts.get('forecast_wind_kt_at_closest')} kt at closest")
     else:
         print(f"  complex_name ...... {facts.get('complex_name')}")
         print(f"  tier crossed ...... {facts.get('tier_hectares')} ha")
@@ -272,7 +303,7 @@ def _run_one(bundle: StoryBundle, state: dict, idx: int) -> bool:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--type", choices=("fire", "fire_footprint", "dust"), default=DEFAULTS["type"])
+    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat"), default=DEFAULTS["type"])
     p.add_argument("--samples", type=int, default=DEFAULTS["samples"], help="number of candidate drafts")
     p.add_argument("--no-impact", dest="no_impact", action="store_true",
                    help="control run: same bundle with NO human_impact attached")
@@ -307,6 +338,17 @@ def main() -> int:
     p.add_argument("--dust-country", dest="dust_country", default=DEFAULTS["dust_country"])
     p.add_argument("--dust-lat", dest="dust_lat", type=float, default=DEFAULTS["dust_lat"])
     p.add_argument("--dust-lon", dest="dust_lon", type=float, default=DEFAULTS["dust_lon"])
+    # cyclone_land_threat knobs
+    p.add_argument("--storm-name", dest="storm_name", default=DEFAULTS["storm_name"])
+    p.add_argument("--storm-wind-kt", dest="storm_wind_kt", type=int,
+                   default=DEFAULTS["storm_wind_kt"])
+    p.add_argument("--landmass", dest="landmass", default=DEFAULTS["landmass"])
+    p.add_argument("--landmass-city", dest="landmass_city", default=DEFAULTS["landmass_city"])
+    p.add_argument("--distance-nm", dest="distance_nm", type=float,
+                   default=DEFAULTS["distance_nm"])
+    p.add_argument("--tau-h", dest="tau_h", type=int, default=DEFAULTS["tau_h"])
+    p.add_argument("--forecast-wind-kt", dest="forecast_wind_kt", type=int,
+                   default=DEFAULTS["forecast_wind_kt"])
     args = p.parse_args()
 
     bundle = _build_bundle(args)

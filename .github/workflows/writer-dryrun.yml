@@ -24,6 +24,7 @@ on:
           - fire
           - fire_footprint
           - dust
+          - cyclone_land_threat
         default: 'fire'
       samples:
         description: 'Number of candidate drafts'
