@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 11 (PR-1) — marine/coral four-moves + fact-check pairing (2026-07-07)
+
+- **(program row 11, PR-1)**: the E1 voice pattern extended to the marine
+  family (coral_bleaching, marine_heatwave, regional_sst_anomaly). New
+  writer-prompt section names four moves — lead with what the heat is doing
+  to the reef (not "X accumulated Y °C-weeks"); DHW as a dose ("°C-weeks is a
+  dose, not a temperature"); ONE `reef_context` fact as the per-draft
+  differentiator (the anti-template move); and snapshot discipline (a DHW
+  reading is a snapshot — no "still climbing" without a trend field).
+  `regional_sst_anomaly` must be framed as the area-weighted basin-mean
+  anomaly it is and NEVER called a "marine heatwave" (its own `signal_note`
+  forbids it), while `marine_heatwave` (OISST streak) DOES carry `streak_days`
+  so direction language is fair there. Paired fact-check rule **(p)** lands in
+  the same commit: the dose framing is canonical (accept); "marine heatwave"
+  naming on a `regional_sst_anomaly` bundle is a BUNDLE_FACT inconsistency
+  (reject, quoting `signal_note`). `writer_dryrun` gained `--type
+  coral_bleaching` and `--type marine_heatwave` fixtures (using the REAL
+  `CoralBleachingEvent`/`MarineHeatwaveStreakEvent` dataclass fields — the
+  plan's placeholder vocab was corrected against `DHW_THRESHOLDS` /
+  `_stress_level_for_dhw`). Scope is coral/MHW/SST only; a test asserts the
+  out-of-scope kinds (sea_ice_record, ice_mass_record, extreme_wave) never
+  appear in the prompt. Additions-only in both prompt files; codex-xhigh.
+
 ### Row 14 (PR-B) — per-country spread cap in triage: flag-gated, ships disabled (2026-07-07)
 
 - **(program row 14, PR-B)**: a per-country diversity cap so one country's
