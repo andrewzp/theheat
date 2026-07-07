@@ -139,8 +139,36 @@ def _known_countries() -> set[str]:
     return _KNOWN_COUNTRIES
 
 
+# Signals that are global, multi-country, or ocean/ice/reef-basin scoped —
+# never a single-country diversity item, so they must never take a per-country
+# cap key (a bare "greenland"/"France, Spain" where would otherwise false-key).
+# The per-country cap is a same-COUNTRY diversity nudge; these are out of its scope.
+_NON_COUNTRY_SIGNAL_KINDS = frozenset({
+    # global atmospheric indices
+    "co2_milestone", "ch4_milestone", "enso", "oscillation_transition",
+    "oscillation_extreme", "oscillation_alignment", "ozone_hole_peak",
+    # ocean / ice / reef basins
+    "sea_ice_record", "ice_mass_record", "marine_heatwave",
+    "regional_sst_anomaly", "extreme_wave", "coral_bleaching",
+    # multi-country summary
+    "simultaneous_records",
+})
+
+
 def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     """Normalize a candidate's country into one cap-bucket key.
+
+    Short-circuits to "" (never capped) when ``bundle.signal_kind`` is in
+    _NON_COUNTRY_SIGNAL_KINDS — these signals are global, multi-country, or
+    ocean/ice/reef-basin scoped, so a where-derived key (e.g. bare
+    "greenland" from ice_mass_record, or "France, Spain" from
+    simultaneous_records) would otherwise false-key them into an arbitrary
+    single-country bucket (codex r4 P1 + P2). This check runs BEFORE the
+    trusted bundle.country path and the where-fallback below, and is
+    independent of the known-country validation (an "exactly one known
+    country in where" rule would wrongly treat "Atlanta, Georgia, United
+    States" as ambiguous due to the Georgia-state/Georgia-country name
+    collision — the denylist avoids that failure mode entirely).
 
     Prefers ``bundle.country`` (documented as a 2-letter code — see
     src/two_bot/types.py) when set; otherwise falls back to the last
@@ -184,6 +212,8 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     NEVER capped (unknown/non-country geography must not be suppressed).
     """
     bundle = getattr(candidate, "bundle", None)
+    if getattr(bundle, "signal_kind", "") in _NON_COUNTRY_SIGNAL_KINDS:
+        return ""
     country = (getattr(bundle, "country", "") or "").strip()
     from_where = False
     if not country:

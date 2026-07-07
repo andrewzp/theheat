@@ -983,6 +983,35 @@ class TestPerCountryCap:
         assert supps[0]["event_id"] == "astana_spilled"
         assert supps[0]["reasons"] == ["per_country_cap=1"]
 
+    def test_ice_mass_record_bundles_bypass_country_cap(self, monkeypatch):
+        """codex r4 P2 integration repro: two ice_mass_record bundles
+        (where="greenland", where="antarctica") under cap=1 must BOTH
+        survive — ice_mass_record is global/basin-scoped, not a
+        single-country diversity item, so it must never take a cap key
+        even though "greenland" happens to resolve as a known country via
+        cities.csv (Nuuk,Greenland)."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="greenland_ice", signal_kind="ice_mass_record",
+                where="greenland", country="",
+            ),
+            _candidate(
+                total=85, event_id="antarctica_ice", signal_kind="ice_mass_record",
+                where="antarctica", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 2
+        assert {r.event_id for r in result} == {"greenland_ice", "antarctica_ice"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
+
 
 class TestCandidateCountryKey:
     """Direct unit tests for _candidate_country_key() — see TestPerCountryCap
@@ -992,10 +1021,14 @@ class TestCandidateCountryKey:
         """A bare `where` (no comma) that IS a known country, with no
         bundle.country set, resolves via the new no-comma where-fallback
         branch — this is exactly the shape country-record bundles emit
-        (see build_country_record_bundle, temperature.py:98)."""
+        (see build_country_record_bundle, temperature.py:98). Uses an
+        explicit non-denylisted signal_kind since _candidate()'s default
+        ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
         from src.orchestrator.triage import _candidate_country_key
 
-        candidate = _candidate(where="Kazakhstan", country="")
+        candidate = _candidate(
+            signal_kind="country_temp_record", where="Kazakhstan", country="",
+        )
         assert _candidate_country_key(candidate) == "kazakhstan"
 
     def test_bare_non_country_where_returns_empty(self):
@@ -1008,10 +1041,12 @@ class TestCandidateCountryKey:
         assert _candidate_country_key(candidate) == ""
 
     def test_comma_where_still_resolves_known_country(self):
-        """Regression: existing comma-segment where-fallback is unchanged."""
+        """Regression: existing comma-segment where-fallback is unchanged.
+        Uses an explicit non-denylisted signal_kind since _candidate()'s
+        default ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
         from src.orchestrator.triage import _candidate_country_key
 
-        candidate = _candidate(where="Astana, Kazakhstan", country="")
+        candidate = _candidate(signal_kind="fire", where="Astana, Kazakhstan", country="")
         assert _candidate_country_key(candidate) == "kazakhstan"
 
     def test_comma_where_non_country_segment_returns_empty(self):
@@ -1023,10 +1058,74 @@ class TestCandidateCountryKey:
 
     def test_bundle_country_trusted_and_collapses_to_united_states(self):
         """Regression: bundle.country="US" is trusted as-is and collapses
-        into the "united states" bucket via _US_COUNTRY_TOKENS."""
+        into the "united states" bucket via _US_COUNTRY_TOKENS. Uses an
+        explicit non-denylisted signal_kind since _candidate()'s default
+        ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
         from src.orchestrator.triage import _candidate_country_key
 
-        candidate = _candidate(where="Phoenix, Arizona, United States", country="US")
+        candidate = _candidate(
+            signal_kind="fire", where="Phoenix, Arizona, United States", country="US",
+        )
+        assert _candidate_country_key(candidate) == "united states"
+
+    def test_ice_mass_record_bare_where_returns_empty(self):
+        """codex r4 P2 repro: marine.py's ice_mass_record emits a bare
+        where=record.region ("greenland"/"antarctica") with empty
+        bundle.country. cities.csv lists Greenland as a country
+        (Nuuk,Greenland), so the bare-where fallback would otherwise
+        resolve "greenland" as a real country and false-key an ice-sheet
+        signal into a single-country bucket. The signal_kind denylist must
+        short-circuit this to "" before the bare-where check ever runs."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="ice_mass_record", where="greenland", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_simultaneous_records_comma_where_returns_empty(self):
+        """codex r4 P1 repro: temperature.py's simultaneous_records bundle
+        emits where=", ".join(countries) (e.g. "France, Spain") with empty
+        bundle.country. The last-comma-segment fallback would otherwise
+        grab "spain" and cap a multi-country story under one arbitrary
+        country. The signal_kind denylist must short-circuit this to ""
+        before the comma-segment fallback ever runs."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="simultaneous_records", where="France, Spain", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_regional_sst_anomaly_real_country_where_still_returns_empty(self):
+        """Belt-and-suspenders: even when a denylisted signal_kind's `where`
+        happens to look exactly like a real, known country name, the
+        denylist short-circuit fires BEFORE the known-country check, so it
+        still returns "" — the denylist is signal_kind-keyed, not
+        where-shape-keyed."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="regional_sst_anomaly", where="Kazakhstan", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_georgia_state_vs_country_collision_not_broken_by_denylist(self):
+        """REGRESSION GUARD: proves the fix is a signal_kind denylist, NOT
+        an "exactly one known country in where" rule (which would have
+        broken this case — "Georgia" collides between the US state and the
+        country, so an ambiguity-based rule would see two countries.
+        monthly_high (temperature.py's monthly record path, NOT in the
+        denylist) with where="Atlanta, Georgia, United States" must still
+        resolve to "united states" via the ordinary last-comma-segment
+        fallback, untouched by the new denylist."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="monthly_high",
+            where="Atlanta, Georgia, United States",
+            country="",
+        )
         assert _candidate_country_key(candidate) == "united states"
 
 

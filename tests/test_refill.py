@@ -304,7 +304,11 @@ class TestRefillPerCountryCap:
     def test_country_cap_spills_under_refill(self, monkeypatch):
         """codex's exact repro: THEHEAT_REFILL_ENABLED=1 + THEHEAT_PER_COUNTRY_CAP=1
         + 3 same-country (US) candidates -> only 1 drafts, the other 2 spill with
-        reason='per_country_cap' (previously: all 3 drafted, zero suppressions)."""
+        reason='per_country_cap' (previously: all 3 drafted, zero suppressions).
+        us3 uses river_flood (a country-scoped signal_kind, per triage.py's
+        _NON_COUNTRY_SIGNAL_KINDS denylist) rather than sea_ice_record — this
+        test is about 3 distinct categories all sharing one country bucket,
+        not about sea_ice_record's own (basin-scoped) behavior."""
         monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
         monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
         monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
@@ -315,7 +319,7 @@ class TestRefillPerCountryCap:
                   where="Phoenix, Arizona, United States", country="US"),
             _cand(event_id="us2", total=94, signal_kind="fire", source="s1",
                   where="Tucson, Arizona, United States", country="US"),
-            _cand(event_id="us3", total=93, signal_kind="sea_ice_record", source="s2",
+            _cand(event_id="us3", total=93, signal_kind="river_flood", source="s2",
                   where="Yuma, Arizona, United States", country="US"),
         ]
         calls: list = []
