@@ -59,7 +59,8 @@ Plain-spoken authority. Compressed. No first person. No hedging. No wink. No flo
 - **Internal taxonomy leak** — the draft cites the bot's own detection config as if it
   were a published scale: a latitude-band name ("the absolute extreme threshold for
   the northern subtropical band"), a detector trigger definition ("the
-  rapid-intensification threshold is 30 kt in 24 hours"), a score threshold. Observed
+  rapid-intensification threshold is 30 kt in 24 hours"), a score threshold (a
+  precipitation `alert_threshold_mm`, e.g. "the 300 mm monitoring threshold"). Observed
   actuals ("winds climbed 40 kt in 24 hours") and published scales (Saffir-Simpson,
   DHW levels, WHO multiples) are fine. Config-as-authority: kill.
 

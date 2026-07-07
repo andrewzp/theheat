@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### #401 — precip monitoring threshold: align writer + fact-check to the critic (2026-07-07)
+
+- **(row-7 follow-up, editorial cross-gate)**: fixes the contradiction where the
+  writer (move 3) and fact-check (rule o) sanctioned "crossed the 300 mm monitoring
+  threshold" as citable while the F3 critic killed the same phrase as
+  `internal_taxonomy_leak` (config-as-authority) — giving threshold-path precip drafts
+  a structurally low ship rate (live evidence: 16:24Z cycle, run 28881851888). The fix
+  aligns the writer + fact-check TO the critic; honesty only tightens, no gate weakened.
+  `alert_threshold_mm` is internal detection config: never cited as a scale, never the
+  significance or the lead. Significance for a bare-threshold bundle comes from the
+  annual-normal ratio (WORLD_KNOWLEDGE) or the record fields; a formerly-blessed
+  "crossed the 300 mm monitoring threshold" claim is now UNVERIFIABLE (rule o aligned to
+  the rule-m detection-plumbing ban). The critic gains an explicit precip example in its
+  `internal_taxonomy_leak` kill list so the three-gate alignment is self-documenting.
+  `alert_threshold_mm` stays a bundle fact (unchanged) — only its citation as a scale is
+  barred; the record-language teaching is preserved verbatim. codex-xhigh.
+
 ### Row 11 (PR-2) — cyclone four-moves: all five kinds, observed-delta lead (2026-07-07)
 
 - **(program row 11, PR-2)**: the E1 voice pattern for the cyclone family,

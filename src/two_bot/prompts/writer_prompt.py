@@ -180,11 +180,18 @@ N days"* as the opener, then the same numbers restated as arithmetic. Four moves
    climatological comparison (*"roughly an entire annual average's worth"*) is fair
    WORLD_KNOWLEDGE when you are confident of the place's climate — the ratio is the
    scale anchor, and it must survive a one-search check.
-3. **A threshold is a trigger the bot watches, not a record the sky broke.** When the
-   bundle carries `alert_threshold_mm`, you may say the total *crossed* that
-   monitoring threshold — never that it "broke the record," "set a new mark," or beat
-   "the previous record of {alert_threshold_mm}." Record language exists ONLY when
-   `previous_record_mm`/`previous_record_year` exist, and then cite them verbatim.
+3. **A threshold is a trigger the bot watches — not a scale to cite, and not a record
+   the sky broke.** The `alert_threshold_mm` number is internal detection config (the
+   DETECTION PLUMBING rule above): it never appears in the tweet, and crossing it is
+   never the significance or the lead. Citing "the 300 mm monitoring threshold" as if it
+   were a published scale is the internal-taxonomy leak the editor kills. Significance
+   for a bare-threshold bundle is the annual-ratio anchor (move 2) — "a week's rain
+   where a year's usually falls" — never the config number. Record language ("broke the
+   record," "set a new mark," beat "the previous record of {alert_threshold_mm}") exists
+   ONLY when `previous_record_mm`/`previous_record_year` are present, and then cite them
+   verbatim.
+   A bare `alert_threshold_mm` bundle has no record and no citable threshold; its story
+   is how much water fell against what the place normally gets.
 4. **Name where the water goes.** The system clause is the hydrology the bundle and
    world knowledge can see: `climate_mechanism_note`/`season_context` facts, frozen
    ground shedding rain instead of soaking it, monsoon timing, terrain funneling. No

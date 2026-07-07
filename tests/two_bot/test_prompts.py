@@ -533,7 +533,14 @@ class TestPrecipFourMoves:
         assert "never re-derive a per-day rate" in WRITER_SYSTEM_PROMPT
 
     def test_move_three_threshold_is_not_a_record(self):
-        assert "a trigger the bot watches, not a record the sky broke" in WRITER_SYSTEM_PROMPT
+        # #401: the monitoring threshold is a trigger the bot watches — never a
+        # record AND never a citable scale. The writer must not lead on, or anchor
+        # significance in, the config number.
+        assert "a trigger the bot watches" in WRITER_SYSTEM_PROMPT
+        assert "not a scale to cite" in WRITER_SYSTEM_PROMPT
+        assert "no record and no citable threshold" in WRITER_SYSTEM_PROMPT
+        # The permissive carve-out that contradicted the critic is gone.
+        assert "you may say the total" not in WRITER_SYSTEM_PROMPT
 
     def test_move_four_names_the_water_stakes(self):
         assert "where the water goes" in WRITER_SYSTEM_PROMPT
@@ -542,6 +549,11 @@ class TestPrecipFourMoves:
         assert "record language requires the record fields" in FACT_CHECK_SYSTEM_PROMPT.lower()
         assert "alert_threshold_mm" in FACT_CHECK_SYSTEM_PROMPT
         assert "period_days" in FACT_CHECK_SYSTEM_PROMPT
+        # #401: the cited threshold number is UNVERIFIABLE (internal config),
+        # aligned with the critic — NOT the old BUNDLE_FACT sanction.
+        assert 'monitoring threshold") is UNVERIFIABLE' in FACT_CHECK_SYSTEM_PROMPT
+        assert 'monitoring threshold") is BUNDLE_FACT' not in FACT_CHECK_SYSTEM_PROMPT
+        assert "internal_taxonomy_leak" in FACT_CHECK_SYSTEM_PROMPT
 
     def test_country_cluster_taught(self):
         assert '"country_precip_event"' in WRITER_SYSTEM_PROMPT
@@ -557,6 +569,35 @@ class TestPrecipFourMoves:
     def test_no_single_system_attribution(self):
         assert "one weather system" not in WRITER_SYSTEM_PROMPT
         assert "single storm or weather system is UNVERIFIABLE" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestPrecipThresholdCrossGate:
+    """#401: the writer + fact-check once blessed 'crossed the 300 mm monitoring
+    threshold' as citable while the critic killed the same phrase as
+    internal_taxonomy_leak (config-as-authority). Row-7 threshold-path drafts
+    therefore had a structurally low ship rate. The fix aligns the writer and
+    fact-check TO the critic — all three gates now agree the alert_threshold_mm
+    number is internal detection config, not a published scale. Honesty is only
+    tightened (a formerly-blessed claim is now a FAILURE), never weakened."""
+
+    def test_all_three_gates_name_the_threshold_as_config(self):
+        assert "alert_threshold_mm" in WRITER_SYSTEM_PROMPT
+        assert "alert_threshold_mm" in FACT_CHECK_SYSTEM_PROMPT
+        assert "alert_threshold_mm" in CRITIC_SYSTEM_PROMPT
+
+    def test_critic_names_precip_threshold_example(self):
+        # The internal_taxonomy_leak kill list gains an explicit precip example
+        # so the three-gate alignment is self-documenting (strengthens the gate).
+        assert "300 mm monitoring threshold" in CRITIC_SYSTEM_PROMPT
+
+    def test_writer_anchors_significance_in_annual_ratio_not_the_number(self):
+        # Significance for a bare-threshold bundle is the annual-normal ratio
+        # (move 2), never the config number.
+        assert "annual-ratio anchor" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_classifies_cited_number_unverifiable(self):
+        assert 'monitoring threshold") is UNVERIFIABLE' in FACT_CHECK_SYSTEM_PROMPT
+        assert "internal_taxonomy_leak" in FACT_CHECK_SYSTEM_PROMPT
 
 
 class TestMarineFourMoves:
