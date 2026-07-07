@@ -13,6 +13,22 @@ RI_THRESHOLD_KT_24H = 30
 
 
 @dataclass(frozen=True)
+class ForecastPoint:
+    """One official forecast position from a warning/forecast-advisory product.
+
+    ``valid_at`` is the RAW time token as printed by the product (JTWC
+    ``DDHHMMZ``; NHC ``DD/HHMMZ``) — resolving it to an absolute datetime
+    needs the advisory's issued_at month/year and is done at detection time,
+    never here (parsers stay pure text→fields).
+    """
+    valid_at: str
+    lat: float
+    lon: float
+    max_wind_kt: int | None = None
+    tau_h: int | None = None
+
+
+@dataclass(frozen=True)
 class CycloneAdvisory:
     source: str
     storm_id: str
@@ -28,6 +44,7 @@ class CycloneAdvisory:
     public_advisory_url: str = ""
     advisory_text: str = ""
     source_leg: str | None = None
+    forecast_points: tuple[ForecastPoint, ...] = ()
 
     @property
     def category(self) -> int:
@@ -127,6 +144,69 @@ class BasinRecordEvent:
     @property
     def kind(self) -> str:
         return "cyclone_basin_record"
+
+
+_JTWC_TAU_RE = re.compile(r"^\s*(\d{2,3})\s+HRS?,\s*VALID\s+AT:", re.MULTILINE)
+_JTWC_POINT_RE = re.compile(
+    r"(\d{6}Z)\s*-{1,3}\s*(\d+(?:\.\d+)?)([NS])\s+(\d+(?:\.\d+)?)([EW])"
+)
+_JTWC_FCST_WIND_RE = re.compile(r"MAX\s+SUSTAINED\s+WINDS\s*-\s*(\d+)\s*KT")
+
+
+def parse_jtwc_forecast_sections(text: str) -> tuple[ForecastPoint, ...]:
+    """Extract forecast positions from a JTWC warning product's FORECASTS
+    block. Returns () when the text carries no forecast sections — a
+    warning without forecasts simply produces no land-threat signal."""
+    marker = text.find("FORECASTS:")
+    if marker < 0:
+        return ()
+    body = text[marker:]
+    points: list[ForecastPoint] = []
+    taus = list(_JTWC_TAU_RE.finditer(body))
+    for i, tau_match in enumerate(taus):
+        seg_end = taus[i + 1].start() if i + 1 < len(taus) else len(body)
+        segment = body[tau_match.start():seg_end]
+        pos = _JTWC_POINT_RE.search(segment)
+        if not pos:
+            continue
+        wind = _JTWC_FCST_WIND_RE.search(segment)
+        lat = float(pos.group(2)) * (1 if pos.group(3) == "N" else -1)
+        lon = float(pos.group(4)) * (1 if pos.group(5) == "E" else -1)
+        points.append(ForecastPoint(
+            valid_at=pos.group(1),
+            lat=lat,
+            lon=lon,
+            max_wind_kt=int(wind.group(1)) if wind else None,
+            tau_h=int(tau_match.group(1)),
+        ))
+    return tuple(points)
+
+
+_NHC_FCST_RE = re.compile(
+    r"FORECAST\s+VALID\s+(\d{2}/\d{4}Z)\s+(\d+(?:\.\d+)?)([NS])\s+(\d+(?:\.\d+)?)([EW])"
+    r"(?:\s*\nMAX\s+WIND\s+(\d+)\s*KT)?",
+)
+
+
+def parse_nhc_forecast_advisory(text: str) -> tuple[ForecastPoint, ...]:
+    """Extract forecast positions from an NHC Forecast/Advisory (TCM) text.
+
+    Tolerates real-product edges (verified vs archived AL012025): a status
+    suffix after the position ("...POST-TROP/REMNT LOW" — point parses,
+    wind group simply doesn't match) and dissipated entries with no
+    position at all (skipped by the position requirement).
+    """
+    points: list[ForecastPoint] = []
+    for m in _NHC_FCST_RE.finditer(text):
+        lat = float(m.group(2)) * (1 if m.group(3) == "N" else -1)
+        lon = float(m.group(4)) * (1 if m.group(5) == "E" else -1)
+        points.append(ForecastPoint(
+            valid_at=m.group(1),
+            lat=lat,
+            lon=lon,
+            max_wind_kt=int(m.group(6)) if m.group(6) else None,
+        ))
+    return tuple(points)
 
 
 def tracking_key(source: str, storm_id: str) -> str:

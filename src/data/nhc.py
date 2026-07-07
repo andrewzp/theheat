@@ -12,6 +12,7 @@ from src.data._http import fetch_with_retry
 from src.data.cyclones import (
     BasinRecordEvent,
     CycloneAdvisory,
+    ForecastPoint,
     LandfallEvent,
     RapidIntensificationEvent,
     TierCrossingEvent,
@@ -21,6 +22,7 @@ from src.data.cyclones import (
     detect_tier_crossings,
     parse_coordinate,
     parse_int,
+    parse_nhc_forecast_advisory,
 )
 from src.data.source_status import SourceFetchError, assert_response_schema
 
@@ -129,6 +131,19 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
     ) or "").strip())
     advisory_text = _fetch_advisory_text(public_advisory_url)
 
+    # Land-threat leg (#375): the Forecast/Advisory (TCM) product carries the
+    # official forecast track. Key verified against NHC_JSON_Sample.json:
+    # forecastAdvisory -> {advNum, issuance, fileUpdateTime, url}. A missing
+    # key, non-dict shape, or failed fetch all degrade to no forecast points —
+    # the storm still parses; the land-threat signal simply cannot fire.
+    forecast_points: tuple[ForecastPoint, ...] = ()
+    tcm_obj = raw.get("forecastAdvisory")
+    if isinstance(tcm_obj, dict):
+        tcm_url = _normalize_url(str(tcm_obj.get("url") or "").strip())
+        tcm_text = _fetch_advisory_text(tcm_url)
+        if tcm_text:
+            forecast_points = parse_nhc_forecast_advisory(tcm_text)
+
     return CycloneAdvisory(
         source="nhc",
         storm_id=storm_id or name,
@@ -143,6 +158,7 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
         classification=str(_first_present(raw, "classification", "status", default="") or ""),
         public_advisory_url=public_advisory_url,
         advisory_text=advisory_text,
+        forecast_points=forecast_points,
     )
 
 

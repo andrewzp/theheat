@@ -23,6 +23,7 @@ from src.data.cyclones import (
     detect_tier_crossings,
     parse_coordinate,
     parse_int,
+    parse_jtwc_forecast_sections,
 )
 from src.data.source_status import SourceFetchError
 
@@ -169,6 +170,7 @@ def parse_warning_text(
         classification=_classification_from_text(clean),
         public_advisory_url=fallback_url,
         advisory_text=clean[:8000],
+        forecast_points=parse_jtwc_forecast_sections(clean),
     )
 
 

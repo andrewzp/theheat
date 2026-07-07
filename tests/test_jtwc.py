@@ -125,3 +125,97 @@ class TestJTWCParsing:
     def test_fetch_error_returns_empty_non_strict(self):
         responses.add(responses.GET, jtwc.JTWC_RSS_URL, status=500)
         assert jtwc.fetch_active_cyclones() == []
+
+
+# ---------------------------------------------------------------------------
+# Forecast-section parsing (#375 land-threat data half)
+# ---------------------------------------------------------------------------
+
+_JTWC_WARNING_FIXTURE = """\
+SUPER TYPHOON 05W (BAVI) WARNING NR 024
+...
+WARNING POSITION:
+060600Z --- NEAR 21.8N 126.9E
+MOVEMENT PAST SIX HOURS - 310 DEGREES AT 08 KTS
+MAX SUSTAINED WINDS - 135 KT, GUSTS 165 KT
+...
+FORECASTS:
+12 HRS, VALID AT:
+070000Z --- 22.9N 125.7E
+MAX SUSTAINED WINDS - 130 KT, GUSTS 160 KT
+...
+24 HRS, VALID AT:
+071200Z --- 23.9N 124.2E
+MAX SUSTAINED WINDS - 120 KT, GUSTS 145 KT
+...
+48 HRS, VALID AT:
+081200Z --- 25.4N 121.6E
+MAX SUSTAINED WINDS - 95 KT, GUSTS 115 KT
+"""
+
+
+def test_parse_jtwc_forecast_sections_extracts_tau_position_wind():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    points = parse_jtwc_forecast_sections(_JTWC_WARNING_FIXTURE)
+    assert [p.tau_h for p in points] == [12, 24, 48]
+    assert points[0].lat == 22.9 and points[0].lon == 125.7
+    assert points[0].max_wind_kt == 130
+    # valid_at keeps the raw DDHHMMZ token; consumers resolve it against
+    # the advisory's issued_at month/year at detection time.
+    assert points[0].valid_at == "070000Z"
+    assert points[2].lat == 25.4 and points[2].lon == 121.6
+
+
+def test_parse_jtwc_forecast_sections_west_longitudes_negative():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    text = "FORECASTS:\n12 HRS, VALID AT:\n070000Z --- 22.9N 125.7W\nMAX SUSTAINED WINDS - 040 KT, GUSTS 050 KT\n"
+    (p,) = parse_jtwc_forecast_sections(text)
+    assert p.lon == -125.7
+
+
+def test_parse_jtwc_forecast_sections_empty_on_no_forecast_block():
+    from src.data.cyclones import parse_jtwc_forecast_sections
+    assert parse_jtwc_forecast_sections("MAX SUSTAINED WINDS - 135 KT") == ()
+
+
+_NHC_TCM_FIXTURE = """\
+FORECAST VALID 08/0000Z 24.5N 122.0W
+MAX WIND 105 KT...GUSTS 130 KT.
+
+FORECAST VALID 08/1200Z 25.6N 123.4W
+MAX WIND  95 KT...GUSTS 115 KT.
+"""
+
+# Real-product edge shapes (verified against the archived AL012025 TCM):
+# a status suffix after the position and a dissipated entry with no
+# position at all — the point still parses (wind absent) / is skipped.
+_NHC_TCM_EDGE_FIXTURE = """\
+FORECAST VALID 25/1200Z 39.6N  41.5W...POST-TROP/REMNT LOW
+MAX WIND  30 KT...GUSTS  40 KT.
+
+FORECAST VALID 26/0000Z...DISSIPATED
+"""
+
+
+def test_parse_nhc_forecast_advisory_extracts_points():
+    from src.data.cyclones import parse_nhc_forecast_advisory
+    points = parse_nhc_forecast_advisory(_NHC_TCM_FIXTURE)
+    assert len(points) == 2
+    assert points[0].valid_at == "08/0000Z"
+    assert points[0].lat == 24.5 and points[0].lon == -122.0
+    assert points[0].max_wind_kt == 105
+
+
+def test_parse_nhc_forecast_advisory_handles_real_product_edges():
+    from src.data.cyclones import parse_nhc_forecast_advisory
+    points = parse_nhc_forecast_advisory(_NHC_TCM_EDGE_FIXTURE)
+    # The dissipated line has no position — one point only.
+    assert len(points) == 1
+    assert points[0].lat == 39.6 and points[0].lon == -41.5
+
+
+def test_parse_warning_text_populates_forecast_points():
+    parsed = jtwc.parse_warning_text(_JTWC_WARNING_FIXTURE)
+    assert parsed is not None
+    assert len(parsed.forecast_points) == 3
+    assert parsed.forecast_points[0].tau_h == 12
