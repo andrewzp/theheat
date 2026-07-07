@@ -11,17 +11,22 @@ When OFF, the drain step in common.py writes everything in queue order
 
 Per-category cap: THEHEAT_PER_CATEGORY_CAP env var. Default 2.
 Global cap: MAX_DRAFTS_PER_CYCLE (imported from finalize, currently 3).
+Per-country cap: THEHEAT_PER_COUNTRY_CAP env var. Default 0 = DISABLED
+(flag-gated ship — see _per_country_cap()).
 """
 
 from __future__ import annotations
 
+import csv
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from src.data import open_meteo
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
 from src.state import MAX_SUPPRESSIONS
+from src.two_bot.intern._shared import _US_COUNTRY_TOKENS
 
 if TYPE_CHECKING:
     from src.two_bot.types import TriageCandidateBundle
@@ -58,6 +63,199 @@ def _per_category_cap() -> int:
         return max(v, 1)
     except (TypeError, ValueError):
         return PER_CATEGORY_TRIAGE_CAP_DEFAULT
+
+
+# Geographic-spread cap (row 14 PR-B). Default 0 = DISABLED — a hot day in
+# one country must not be able to fill the whole cycle, but this ships flag-
+# gated: Andrew flips THEHEAT_PER_COUNTRY_CAP to 2 after watching a few
+# cycles' spill logs. Unlike PER_CATEGORY_TRIAGE_CAP_DEFAULT (always >=1),
+# 0 here is a real, meaningful value (disabled) rather than a floor.
+PER_COUNTRY_TRIAGE_CAP_DEFAULT = 0
+
+
+def _per_country_cap() -> int:
+    """Read per-country cap from env, falling back to default (0=disabled).
+
+    Mirrors _per_category_cap()'s env-read-at-call-time contract, but 0 is
+    a legitimate value here (disabled), so this does NOT floor to 1 the way
+    _per_category_cap() does.
+    """
+    raw = os.environ.get("THEHEAT_PER_COUNTRY_CAP", "")
+    try:
+        v = int(raw) if raw else PER_COUNTRY_TRIAGE_CAP_DEFAULT
+        return max(v, 0)
+    except (TypeError, ValueError):
+        return PER_COUNTRY_TRIAGE_CAP_DEFAULT
+
+
+# Lazily-built set of known-country strings (lowercased/stripped) used to
+# validate the WHERE-fallback segment in _candidate_country_key(). Built
+# from the repo's curated 638-city data/cities.csv (via open_meteo.load_cities())
+# UNION _US_COUNTRY_TOKENS. None = not yet built.
+#
+# Deliberately NOT cached when the csv load comes back empty (0 countries
+# from data/cities.csv, before the _US_COUNTRY_TOKENS union): production's
+# curated 638-city csv is never legitimately empty, so an empty result only
+# ever means a transient failure (missing file, race, or — in tests — a
+# same-process monkeypatch of open_meteo.load_cities from an unrelated
+# test that happened to be active the first time this ran). Memoizing that
+# as permanent would silently and irrecoverably disable the where-fallback
+# validation for the rest of the process. Retrying on empty costs one extra
+# csv read at most per unlucky call — cheap next to correctness.
+#
+# Called as `open_meteo.load_cities()` (module attribute access, not a
+# `from ... import load_cities` name snapshot) so it always resolves
+# whatever `load_cities` currently is on the module — immune to being
+# permanently pinned to a monkeypatched value from whatever test happens
+# to be running the moment this module is first imported.
+_KNOWN_COUNTRIES: set[str] | None = None
+
+
+def _known_countries() -> set[str]:
+    """Lazily load + cache the known-country set for WHERE-fallback validation.
+
+    Degrades to an empty set if data/cities.csv can't be read (never let a
+    missing/corrupt csv crash triage) — an empty set rejects every
+    where-fallback segment, which just disables that fallback path while
+    leaving bundle.country capping (the trusted path) fully functional. A
+    result with zero csv-derived countries is treated as a failed load and
+    is NOT cached (see module comment above) — only a real, non-empty load
+    is memoized.
+    """
+    global _KNOWN_COUNTRIES
+    if _KNOWN_COUNTRIES is None:
+        try:
+            cities = open_meteo.load_cities()
+            csv_countries = {
+                (c.get("country") or "").strip().lower()
+                for c in cities
+                if (c.get("country") or "").strip()
+            }
+        except (OSError, csv.Error, KeyError):
+            csv_countries = set()
+        if not csv_countries:
+            return set() | _US_COUNTRY_TOKENS
+        _KNOWN_COUNTRIES = csv_countries | _US_COUNTRY_TOKENS
+    return _KNOWN_COUNTRIES
+
+
+# The per-country cap is a same-country diversity NUDGE. Only signals that are
+# scoped to exactly one country AND emit a reliably country-parseable `where`
+# ("City, Country" / "Country" / "City, State, Country") take a cap key. This is
+# a fail-OPEN allowlist: any signal NOT listed here (global indices, ocean/ice/
+# reef basins, cyclones, multi-country summaries like hot10 / simultaneous_records,
+# dynamic synthesis_* compounds, ambiguous-`where` signals like severe_weather /
+# usgs_earthquake / storm_surge / river_flood, and any FUTURE signal_kind) returns
+# "" and is never capped. Fail-open (under-cap) is correct for a soft nudge; a
+# denylist here fails UNSAFE (a missed non-country signal false-keys) and cannot
+# enumerate the dynamic signal_kinds, which is why this is an allowlist.
+_SINGLE_COUNTRY_SIGNAL_PREFIXES = (
+    "monthly_", "country_", "open_meteo_archive_", "anomaly_", "absolute_extreme_",
+)
+_SINGLE_COUNTRY_SIGNAL_KINDS = frozenset({
+    "calendar_record", "calendar_record_low", "record_streak",
+    "precipitation_extreme", "wet_bulb_extreme",
+    "air_quality_hazard", "dust_event",
+    "fire", "fire_footprint",
+    "drought",
+})
+
+
+def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
+    """Normalize a candidate's country into one cap-bucket key.
+
+    Gates to "" (never capped) unless ``bundle.signal_kind`` is in the
+    fail-open allowlist (_SINGLE_COUNTRY_SIGNAL_KINDS / the stable dynamic
+    prefixes in _SINGLE_COUNTRY_SIGNAL_PREFIXES) — see the allowlist's own
+    docstring-adjacent comment for why this is an allowlist and not a
+    denylist. Everything not listed (global indices, ocean/ice/reef basins,
+    cyclones, multi-country summaries like hot10/simultaneous_records,
+    dynamic synthesis_* compounds, ambiguous-`where` signals, and any future
+    signal_kind) short-circuits to "" here, BEFORE the trusted bundle.country
+    path and the where-fallback below (codex r5 P1 — this replaces the prior
+    denylist, which missed hot10 and the dynamic synthesis_* kinds).
+
+    ``global_disaster`` (GDACS) and ``global_flood`` (Copernicus EMS) are
+    disaster AGGREGATES whose country field can legitimately list multiple
+    countries for one event (e.g. copernicus_ems.py's
+    ``_countries_from_payload`` joins names as "India, Bangladesh"). The
+    where-fallback below only ever takes the LAST comma-segment, so a
+    multi-country aggregate would be over-capped under an arbitrary single
+    country. They are deliberately excluded from the allowlist — same
+    geographically-ambiguous class as ``river_flood`` — and fail OPEN
+    (codex r6 P1).
+
+    Prefers ``bundle.country`` (documented as a 2-letter code — see
+    src/two_bot/types.py) when set; otherwise falls back to the last
+    comma-segment of ``bundle.where`` (e.g. "Phoenix, Arizona, United
+    States" -> "United States"), or to the whole ``bundle.where`` when it
+    has no comma at all (e.g. "Kazakhstan" -> "Kazakhstan"; see the bare
+    `where` note below). The result is lowercased/stripped, and US aliases
+    are collapsed into one bucket via the existing _US_COUNTRY_TOKENS set
+    — because `country` rides 2-letter codes ("US") while `where` carries
+    full names ("United States"), and those must never split one country
+    into two cap buckets.
+
+    Non-US code-vs-name splits (e.g. "ML" vs "Mali") are NOT collapsed —
+    this can still under-cap those countries (two spellings of the same
+    country landing in different buckets), which is an acceptable
+    fail-open trade-off for a diversity NUDGE, not a hard partition.
+
+    ``bundle.country``, when set, is TRUSTED as-is — it's documented as a
+    real country code, so it is never run through the known-country check
+    below. Only the WHERE-fallback segment is validated: a consumer's
+    `where` string can carry non-country shapes, so the final comma-segment
+    must be checked against a known-country set before it's trusted as a cap
+    key.
+
+    A bare `where` with no comma at all (e.g. "Kazakhstan") is also tried as
+    a WHERE-fallback candidate — country-level record bundles emit exactly
+    this shape (bare country name as `where`, empty `bundle.country`; see
+    e.g. src/two_bot/intern/temperature.py's build_country_record_bundle and
+    the country_precip_event path in src/two_bot/intern/precipitation.py).
+    It goes through the SAME known-country validation as the comma-segment
+    case below, so a bare non-country `where` still fails the check and
+    returns "".
+
+    Returns "" when no country can be determined (empty bundle.country AND
+    empty `where`), OR when the WHERE-fallback candidate (the last
+    comma-segment, or the whole `where` when it has no comma) fails the
+    known-country check — callers must treat an empty key as NEVER capped
+    (unknown/non-country geography must not be suppressed).
+
+    KNOWN RESIDUAL EDGE (documented, not fixed here): a US record whose
+    `where` is "City, Georgia" — i.e. the US STATE "Georgia" with the
+    country segment omitted entirely — will still key to "georgia" (the
+    country), because Georgia-the-US-state collides with Georgia-the-
+    country in the known-countries check and there is no country segment
+    to prefer instead. This requires the country field to be empty on a
+    US-Georgia record, which is rare in practice, and it fails toward a
+    minor OVER-cap on a diversity nudge that ships disabled by default —
+    an acceptable trade next to the alternative of trying to special-case
+    every US-state/country name collision here.
+    """
+    bundle = getattr(candidate, "bundle", None)
+    sk = getattr(bundle, "signal_kind", "") or ""
+    if sk not in _SINGLE_COUNTRY_SIGNAL_KINDS and not sk.startswith(_SINGLE_COUNTRY_SIGNAL_PREFIXES):
+        return ""
+    country = (getattr(bundle, "country", "") or "").strip()
+    from_where = False
+    if not country:
+        where = (getattr(bundle, "where", "") or "").strip()
+        if "," in where:
+            country = where.rsplit(",", 1)[-1].strip()
+            from_where = True
+        elif where:
+            country = where  # bare `where`: validated against known-countries below
+            from_where = True
+    if not country:
+        return ""
+    key = country.lower().strip()
+    if key in _US_COUNTRY_TOKENS:
+        return "united states"
+    if from_where and key not in _known_countries():
+        return ""
+    return key
 
 
 def _pending_type_cap() -> int:
@@ -253,10 +451,12 @@ def _record_triage_suppression(
     """Record a triage-cap suppression in the bot_state suppression ledger.
 
     Sets kill_stage="triage_cap". ``reason`` distinguishes which gate spilled
-    the candidate ("per_category_cap" vs "global_cap") so dashboard
-    attribution can tell apart "more coral than we promote per cron" from
-    "more total signals than MAX_DRAFTS_PER_CYCLE allows". Both pin the
-    relevant numeric limit into the reasons string for at-a-glance triage.
+    the candidate ("per_category_cap" vs "pending_type_cap" vs
+    "per_country_cap" vs "global_cap") so dashboard attribution can tell
+    apart "more coral than we promote per cron" from "more total signals
+    than MAX_DRAFTS_PER_CYCLE allows" from "too many drafts from one
+    country this cycle". All pin the relevant numeric limit into the
+    reasons string for at-a-glance triage.
     """
     suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
@@ -270,6 +470,8 @@ def _record_triage_suppression(
         reasons_field = [f"global_cap={global_cap}"]
     elif reason == "pending_type_cap":
         reasons_field = [f"pending_type_cap={_pending_type_cap()}"]
+    elif reason == "per_country_cap":
+        reasons_field = [f"per_country_cap={_per_country_cap()}"]
     else:
         reasons_field = [f"per_category_cap={cap}"]
 
@@ -334,14 +536,16 @@ def select_survivors(
 
     cap = _per_category_cap()
     pending_cap = _pending_type_cap()
+    country_cap = _per_country_cap()
     by_category: dict[str, int] = {}
     # Cache per-type pending counts so we don't re-scan bot_state.drafts
     # for every candidate. Incremented for each survivor we admit so the
     # next candidate of the same type sees the post-admit count.
     pending_counts: dict[str, int] = {}
+    by_country: dict[str, int] = {}
     survivors: list["TriageCandidateBundle"] = []
     # (candidate, reason) — reason is "per_category_cap", "pending_type_cap",
-    # or "global_cap".
+    # "per_country_cap", or "global_cap".
     spilled: list[tuple["TriageCandidateBundle", str]] = []
 
     for i, candidate in enumerate(ranked):
@@ -364,6 +568,22 @@ def select_survivors(
             if pending_counts[draft_type] >= pending_cap:
                 spilled.append((candidate, "pending_type_cap"))
                 continue
+        # Geographic-spread cap (row 14 PR-B, flag-gated — default 0 =
+        # disabled). country_cap == 0 short-circuits the whole check so the
+        # default-off path never even computes a country key — the guard
+        # is the `if country_cap > 0:` below, which _candidate_country_key()
+        # is called INSIDE, not before. An empty country key is NEVER capped
+        # (unknown geography must not be suppressed) — see
+        # _candidate_country_key()'s docstring.
+        if country_cap > 0:
+            country = _candidate_country_key(candidate)
+            if country:
+                used_country = by_country.get(country, 0)
+                if used_country >= country_cap:
+                    spilled.append((candidate, "per_country_cap"))
+                    continue
+        else:
+            country = ""
         if len(survivors) >= global_cap:
             # Global cap already hit — all remaining spill via the global gate.
             for remaining in ranked[i:]:
@@ -375,6 +595,8 @@ def select_survivors(
             # Account for the just-admitted survivor so consecutive same-type
             # candidates see the bumped count.
             pending_counts[draft_type] = pending_counts.get(draft_type, 0) + 1
+        if country_cap > 0 and country:
+            by_country[country] = by_country.get(country, 0) + 1
 
     for candidate, reason in spilled:
         _record_triage_suppression(

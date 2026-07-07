@@ -298,6 +298,12 @@ jobs:
           # weeks-long bleaching event's drafts aren't discarded as "stale".
           THEHEAT_PENDING_TTL_DAYS: ${{ vars.THEHEAT_PENDING_TTL_DAYS }}
           THEHEAT_PENDING_TTL_DAYS_SLOW: ${{ vars.THEHEAT_PENDING_TTL_DAYS_SLOW }}
+          # Row 14 PR-B — geographic-spread cap in triage. Flag-gated ship:
+          # default '0' = DISABLED (no behavior change). Andrew flips to '2'
+          # after watching a few cycles' per_country_cap spill logs.
+          # Activate: gh variable set THEHEAT_PER_COUNTRY_CAP --body 2 --repo andrewzp/theheat
+          # Rollback: gh variable set THEHEAT_PER_COUNTRY_CAP --body 0 --repo andrewzp/theheat
+          THEHEAT_PER_COUNTRY_CAP: ${{ vars.THEHEAT_PER_COUNTRY_CAP || '0' }}
           # "both" = GHCN (deep US NOAA station records) + Open-Meteo (curated
           # world cities incl. Europe), partitioned US/non-US in run_extreme_signals.
           # GHCN alone is blind outside the US (it missed the deadly June 2026

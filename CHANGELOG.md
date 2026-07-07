@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 14 (PR-B) — per-country spread cap in triage: flag-gated, ships disabled (2026-07-07)
+
+- **(program row 14, PR-B)**: a per-country diversity cap so one country's
+  local weather can't fill a whole cycle — the IDEAS.md geographic-spread
+  item. New env `THEHEAT_PER_COUNTRY_CAP`, default `0` = **DISABLED**
+  (flag-gated ship; Andrew flips to `2` after watching `per_country_cap`
+  spills in the suppression ledger). Applied in BOTH drain paths —
+  `select_survivors` (admit-time) and the refill drain `_refill_drain`
+  (`src/orchestrator/triage_queue.py`, success-aware), since
+  `THEHEAT_REFILL_ENABLED=1` routes production through the latter — each a
+  third counting dict parallel to the existing per-category / pending-type
+  caps. Spills record via `_record_triage_suppression` with
+  `reasons=["per_country_cap=N"]` and `kill_stage="triage_cap"`; `bot.yml`
+  gained the passthrough. The country key comes from `_candidate_country_key()`
+  via a **fail-open allowlist** (codex-xhigh, 7 rounds): only signal_kinds
+  known to be single-country-scoped with a reliably country-parseable
+  `where` (temperature record kinds `monthly_*`/`country_*`/`anomaly_*`/
+  `absolute_extreme_*`/`open_meteo_archive_*`, plus `calendar_record`,
+  `record_streak`, `precipitation_extreme`, `wet_bulb_extreme`,
+  `air_quality_hazard`, `dust_event`, `fire`, `fire_footprint`, `drought`)
+  take a key — from `bundle.country` (trusted, US-aliases collapsed via
+  `_US_COUNTRY_TOKENS`) or a known-country-validated `where` fallback.
+  EVERYTHING else fails open (never capped): global climate indices,
+  ocean/ice/reef basins, cyclones, multi-country summaries (`hot10`,
+  `simultaneous_records`), GDACS/Copernicus disaster aggregates (multi-country
+  `where`), all dynamic `synthesis_*` compounds, and any unknown/future
+  signal_kind. A denylist was tried first and abandoned — it fails UNSAFE on
+  omissions and cannot enumerate dynamically-constructed signal_kinds; the
+  allowlist fails toward "don't cap", the safe direction for a soft nudge.
+  Empty/unknown geography is never capped. TDD throughout
+  (`TestPerCountryCap`, `TestCandidateCountryKey`, `TestRefillPerCountryCap`).
+
 ### News-gap watch — dedupe source names in the '(per …)' join (2026-07-07)
 
 - **(#396)**: the news-gap watch rendered a gap line as
