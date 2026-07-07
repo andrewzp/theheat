@@ -25,6 +25,8 @@ on:
           - fire_footprint
           - dust
           - cyclone_land_threat
+          - cyclone_rapid_intensification
+          - cyclone_basin_record
           - precipitation_extreme
           - coral_bleaching
           - marine_heatwave
@@ -56,6 +58,18 @@ on:
       mhw_streak_days:
         description: 'Streak days (--type marine_heatwave)'
         default: '12'
+      ri_previous_wind_kt:
+        description: 'Previous wind kt, 24h prior (--type cyclone_rapid_intensification)'
+        default: '105'
+      ri_current_wind_kt:
+        description: 'Current wind kt (--type cyclone_rapid_intensification)'
+        default: '145'
+      record_label:
+        description: 'Basin record label (--type cyclone_basin_record)'
+        default: 'strongest landfalling typhoon on record'
+      record_scope:
+        description: 'Basin record scope (--type cyclone_basin_record)'
+        default: 'Western Pacific basin'
 
 concurrency:
   group: writer-dryrun
@@ -93,6 +107,10 @@ jobs:
           INPUT_COUNTRY_CLUSTER: ${{ inputs.country_cluster }}
           INPUT_DHW_VALUE: ${{ inputs.dhw_value }}
           INPUT_MHW_STREAK_DAYS: ${{ inputs.mhw_streak_days }}
+          INPUT_RI_PREVIOUS_WIND_KT: ${{ inputs.ri_previous_wind_kt }}
+          INPUT_RI_CURRENT_WIND_KT: ${{ inputs.ri_current_wind_kt }}
+          INPUT_RECORD_LABEL: ${{ inputs.record_label }}
+          INPUT_RECORD_SCOPE: ${{ inputs.record_scope }}
         # `|| true`: a clean kill is informative, not a job failure — this is
         # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
         # gate; we want drafts + verdicts in the log however many ship.
@@ -109,4 +127,8 @@ jobs:
             --name "$INPUT_NAME" \
             --dhw-value "$INPUT_DHW_VALUE" \
             --mhw-streak-days "$INPUT_MHW_STREAK_DAYS" \
+            --ri-previous-wind-kt "$INPUT_RI_PREVIOUS_WIND_KT" \
+            --ri-current-wind-kt "$INPUT_RI_CURRENT_WIND_KT" \
+            --record-label "$INPUT_RECORD_LABEL" \
+            --record-scope "$INPUT_RECORD_SCOPE" \
             $EXTRA || true

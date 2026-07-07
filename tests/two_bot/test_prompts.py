@@ -622,6 +622,82 @@ class TestMarineFactCheckPairing:
         assert "canonical" in FACT_CHECK_SYSTEM_PROMPT.lower()
 
 
+class TestCycloneFourMoves:
+    """Row 11 PR-2: the cyclone writer-prompt section — E1 pattern, fifth
+    type. Consolidates + supersedes the old single 'Cyclone alarmism'
+    convention bullet. Must cover ALL FIVE cyclone signal_kinds the intern
+    emits (src/two_bot/intern/disasters.py), including cyclone_basin_record
+    — the prep-note gap the plan itself omitted."""
+
+    def test_section_header_present(self):
+        assert 'signal_kind = "cyclone_rapid_intensification"' in WRITER_SYSTEM_PROMPT
+
+    def test_all_five_cyclone_kinds_named_in_section(self):
+        assert "cyclone_rapid_intensification" in WRITER_SYSTEM_PROMPT
+        assert "cyclone_tier_crossing" in WRITER_SYSTEM_PROMPT
+        assert "cyclone_landfall" in WRITER_SYSTEM_PROMPT
+        assert "cyclone_land_threat" in WRITER_SYSTEM_PROMPT
+        assert "cyclone_basin_record" in WRITER_SYSTEM_PROMPT
+
+    def test_move_one_leads_with_change_not_category_label(self):
+        assert "Lead with the storm's change, not its category label" in WRITER_SYSTEM_PROMPT
+
+    def test_move_two_observed_delta_is_the_anchor(self):
+        assert "the observed delta is the anchor" in WRITER_SYSTEM_PROMPT
+
+    def test_move_three_one_mechanism_the_basin_explains(self):
+        assert "one mechanism the basin explains" in WRITER_SYSTEM_PROMPT
+
+    def test_move_four_forecast_tense_when_forecast(self):
+        assert "everything lands forecast-tense when the bundle is a forecast" in WRITER_SYSTEM_PROMPT
+
+    def test_basin_record_move_two_anchor(self):
+        # The gap kind: record_label/record_scope cited verbatim as the
+        # move-2 anchor (a REAL archive record, unlike a precip threshold).
+        assert "record_label" in WRITER_SYSTEM_PROMPT
+        assert "record_scope" in WRITER_SYSTEM_PROMPT
+
+    def test_ri_trigger_definition_never_citable(self):
+        assert "rapid_intensification_threshold_kt" in WRITER_SYSTEM_PROMPT
+        assert "never citable" in WRITER_SYSTEM_PROMPT or "never cited" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_cyclone_block_present(self):
+        assert "cyclone_basin_record" in FACT_CHECK_SYSTEM_PROMPT
+        assert "record_label" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestCycloneFourMovesBansSurvive:
+    """The old 'Cyclone alarmism' bullet's bans must survive verbatim in the
+    new consolidated section — consolidation is a relocation, not a drop."""
+
+    def test_alarmism_words_still_banned(self):
+        for word in (
+            "catastrophic", "life-threatening", "deadly", "killer",
+            "monster storm", "historic devastation",
+        ):
+            assert word in WRITER_SYSTEM_PROMPT, f"banned word {word!r} missing after consolidation"
+
+    def test_breaking_opener_still_banned(self):
+        assert "BREAKING" in WRITER_SYSTEM_PROMPT
+
+    def test_category_bait_opener_still_banned(self):
+        assert "category-bait" in WRITER_SYSTEM_PROMPT
+
+
+class TestCycloneLandThreatAbsorption:
+    """Row 5's land-threat convention (forecast-tense, min_distance_nm,
+    closest_tau_h, current_wind_kt as observed anchor) must be absorbed into
+    the cyclone section's move 2 + move 4 without changing its semantics."""
+
+    def test_land_threat_forecast_tense_framing_present(self):
+        assert "FORECASTS" in WRITER_SYSTEM_PROMPT or "forecast" in WRITER_SYSTEM_PROMPT
+        assert "min_distance_nm" in WRITER_SYSTEM_PROMPT
+        assert "closest_tau_h" in WRITER_SYSTEM_PROMPT
+
+    def test_land_threat_never_certainty_language(self):
+        assert '"will hit"' in WRITER_SYSTEM_PROMPT or "will hit" in WRITER_SYSTEM_PROMPT
+
+
 class TestFireNearestRegionNearCityClause:
     """Row 14 PR-A paired writer-prompt touch: the geocoder's nearest-city
     fallback (src/data/firms.py) can now label a hotspot ``"near <city>"``

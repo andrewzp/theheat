@@ -184,6 +184,26 @@ not a Hobday duration/percentile MHW classification. A draft that calls a
 `signal_note` — this is a BUNDLE_FACT inconsistency (quote the `signal_note` text
 in the failure reason) and a FAILURE regardless of how the number reads.
 
+**q) Cyclone family — one block for all five kinds.** Collects the cyclone
+rules in one place: the tense rule (rule n) — `cyclone_land_threat` is
+forecast-tense-or-fail; `cyclone_rapid_intensification`, `cyclone_tier_crossing`,
+`cyclone_landfall`, and `cyclone_basin_record` are observed-tense (past/
+present-observed), no forecast hedging required. The observed-delta-vs-
+trigger-definition distinction (rule m) applies to every RI draft: the
+OBSERVED `delta_kt_24h` is BUNDLE_FACT and citable; the bundle's
+`historical_context.rapid_intensification_threshold_kt` (30) is the bot's own
+detector trigger definition — UNVERIFIABLE as a tweet claim, never citable,
+regardless of phrasing. Basin mechanism (warm-pool depth, wind shear, SST
+anomalies feeding the storm) is WORLD_KNOWLEDGE — ACCEPT one mechanism per
+draft as established tropical-meteorology framing. For `cyclone_basin_record`
+bundles: `record_label` and `record_scope` are BUNDLE_FACT — verify the
+tweet's record language matches `record_label` verbatim (cited, not
+paraphrased into a stronger or different superlative), and `record_scope`
+bounds the geographic scope of the claim; unlike a precipitation
+`alert_threshold_mm` (rule o), a cyclone basin record IS a real archive-backed
+record, so record language ("strongest on record") is warranted here without
+requiring `previous_record_mm`-style fields.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.
