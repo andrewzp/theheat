@@ -1,5 +1,12 @@
 # @theheat Three-Pillar Upgrade Plan
 
+> **STATUS (2026-07-07): COMPLETE — queue rows 1–8 ALL BUILT AND MERGED.** Remaining
+> loose ends carried forward: R4 (SELFHEAL_PAT, Andrew's one command) and A3 (now
+> evidence-gated row 12 of the successor). **Successor program:** the
+> front-page-parity plan + per-row implementation plans — awaiting Andrew's adoption
+> in [PR #382](https://github.com/andrewzp/theheat/pull/382) (branch
+> `docs/front-page-parity-plan`). This document is kept as the executed record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement the fully-specified tasks
 > task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This is the PROGRAM

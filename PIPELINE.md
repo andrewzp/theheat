@@ -1,12 +1,17 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-07-06 (version 0.9.81.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-06.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-06.md).
+**Last updated:** 2026-07-07 (version 0.9.82.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07.md).
 The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
 the non-US world temperature half is threshold-cached, and the dashboard exposes
 per-source troubleshooting logs. The editorial pipeline shape described below is
-unchanged; the source layer is more resilient and more observable, and the
-**three-pillar upgrade plan is executing** (see below).
+unchanged; the source layer is more resilient and more observable. The
+**three-pillar upgrade plan is COMPLETE (rows 1–8 merged**, incl. E1's fire
+four-moves writer section + fact-check rule (l) + `writer_dryrun` per-type
+harness, #379/#380); the successor **front-page-parity program awaits Andrew's
+review in [PR #382](https://github.com/andrewzp/theheat/pull/382)** (program plan
++ per-row implementation plans, on branch `docs/front-page-parity-plan`). Bet A
+(A0+A1+A2) is merged and fully dark — all three flags unset.
 
 **The newsworthiness lane exists since 2026-07-04, SHIPPED DARK** ([#366](https://github.com/andrewzp/theheat/pull/366);
 Bet A phase 0 of the [three-pillar plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md),
