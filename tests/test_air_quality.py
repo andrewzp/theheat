@@ -69,6 +69,7 @@ def _obs(
     dust: float | None = 500.0,
     aod: float | None = 0.6,
     us_aqi: int | None = 210,
+    pm10_24h_mean: float | None = None,
 ) -> CityAirQuality:
     return CityAirQuality(
         city=city,
@@ -80,6 +81,7 @@ def _obs(
         dust_daily_max=dust,
         aod_daily_max=aod,
         us_aqi_daily_max=us_aqi,
+        pm10_24h_mean=pm10_24h_mean,
     )
 
 
@@ -157,6 +159,27 @@ def test_dust_tier_3_fires_at_5000():
 
 def test_dust_below_threshold_returns_none():
     assert detect_dust_event(_obs(dust=499.9)) is None
+
+
+def test_detect_dust_event_carries_pm10_anchor_when_available():
+    """P_dust root cause: dust drafts had no WHO-scale anchor because the
+    event carried none. The anchor is CO-MEASURED PM10 (a separate hourly
+    variable from `dust`), 24h mean vs the WHO 2021 PM10 24h AQG (45)."""
+    obs = _obs(dust=2400.0, pm10_24h_mean=900.0)
+    event = detect_dust_event(obs)
+    assert event is not None
+    assert event.pm10_24h_mean == 900.0
+    assert event.who_pm10_multiple == 20.0  # round(900/45, 1)
+
+
+def test_detect_dust_event_is_none_safe_without_pm10():
+    # A cycle where the pm10 series is missing must still mint the dust
+    # event (tier logic unchanged) with the anchor fields None.
+    obs = _obs(dust=2400.0, pm10_24h_mean=None)
+    event = detect_dust_event(obs)
+    assert event is not None
+    assert event.pm10_24h_mean is None
+    assert event.who_pm10_multiple is None
 
 
 def test_batch_fetch_chunk_splits():

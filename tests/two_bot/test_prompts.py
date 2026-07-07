@@ -457,3 +457,35 @@ class TestCriticUserPromptTemplate:
         pending_pos = rendered.index("THE_PENDING_MARKER")
         shipped_pos = rendered.index("THE_SHIPPED_MARKER")
         assert draft_pos < bundle_pos < pending_pos < shipped_pos
+
+
+class TestDetectionPlumbingBan:
+    """P_tier (10 instances, 4 signal types, grade-capping at B in the
+    grading corpus): internal detection taxonomy leaking into tweets.
+    Observed actuals and bundle-designed anchors stay citable; the
+    detector's own config never is."""
+
+    def test_writer_bullet_present(self):
+        assert "DETECTION PLUMBING IS NOT A FACT" in WRITER_SYSTEM_PROMPT
+        assert "band_label" in WRITER_SYSTEM_PROMPT
+
+    def test_observed_actuals_stay_sanctioned(self):
+        assert "a fact about the storm" in WRITER_SYSTEM_PROMPT
+        # Pre-existing sanctioned phrasing must SURVIVE this change:
+        assert "above the 100 MW high-intensity threshold" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_pairing(self):
+        assert "the bot's config is not a citable fact" in FACT_CHECK_SYSTEM_PROMPT.lower()
+        assert "band_label" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_critic_kill_condition(self):
+        assert "internal_taxonomy_leak" in CRITIC_SYSTEM_PROMPT
+
+
+class TestDustWhoAnchor:
+    """P_dust (11/11 corpus instances): dust drafts carried no WHO-scale
+    anchor. The anchor is the new co-measured PM10 bundle fact."""
+
+    def test_dust_anchor_move_present_and_paired(self):
+        assert "who_pm10_multiple" in WRITER_SYSTEM_PROMPT
+        assert "who_pm10_multiple" in FACT_CHECK_SYSTEM_PROMPT

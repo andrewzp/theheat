@@ -49,13 +49,14 @@ from datetime import UTC, date, datetime, timedelta
 # Allow `python scripts/writer_dryrun.py` from the repo root.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.data.air_quality import DUST_TIERS, DustEvent, _tier  # noqa: E402
 from src.data.fire_footprint import FireComplex, _classify_tier  # noqa: E402
 from src.data.firms import FireEvent  # noqa: E402
 from src.editorial.newsworthiness import detect_impact_citation  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
 from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
-from src.two_bot.intern import build_fire_bundle, build_fire_footprint_bundle  # noqa: E402
+from src.two_bot.intern import build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
@@ -86,6 +87,15 @@ DEFAULTS: dict = {
     "fatalities": 3,
     "fatality_source": "The Washington Post",
     "fatality_url": "https://www.washingtonpost.com/climate-environment/",
+    # dust — the Phalodi-class shape (P_dust: tier-2 dust WITH the co-measured
+    # PM10 WHO anchor; 900/45 = 20.0×). Dust ignores the impact knobs — no
+    # human_impact fixture exists for dust (the A1 matcher has no dust lane).
+    "dust_daily_max": 2400.0,
+    "pm10_24h_mean": 900.0,
+    "dust_city": "Phalodi",
+    "dust_country": "India",
+    "dust_lat": 27.13,
+    "dust_lon": 72.36,
 }
 
 _NIFC_URL = (
@@ -131,6 +141,27 @@ def _attach_impact(bundle: StoryBundle, args: argparse.Namespace, incident: str)
 
 
 def _build_bundle(args: argparse.Namespace) -> StoryBundle:
+    if args.type == "dust":
+        # No _attach_impact for dust — the fixture never carries human_impact
+        # (see DEFAULTS comment). The --no-impact / impact knobs are ignored.
+        who_multiple = (
+            round(args.pm10_24h_mean / 45.0, 1)
+            if args.pm10_24h_mean is not None else None
+        )
+        event = DustEvent(
+            city=args.dust_city,
+            country=args.dust_country,
+            lat=args.dust_lat,
+            lon=args.dust_lon,
+            date=datetime.now(UTC).date().isoformat(),
+            dust_daily_max=args.dust_daily_max,
+            tier=_tier(args.dust_daily_max, DUST_TIERS),
+            aod_daily_max=None,
+            event_id=f"dryrun_dust_{args.dust_city.lower()}",
+            pm10_24h_mean=args.pm10_24h_mean,
+            who_pm10_multiple=who_multiple,
+        )
+        return build_dust_event_bundle(event)
     if args.type == "fire_footprint":
         hectares = float(args.hectares)
         fc = FireComplex(
@@ -173,6 +204,10 @@ def _print_bundle(bundle: StoryBundle) -> None:
     print(f"  headline .......... {h['label']} = {h['value']} {h.get('unit', '')}".rstrip())
     if bundle.signal_kind == "fire":
         print(f"  frp_tier .......... {facts.get('frp_tier')} (floor {facts.get('frp_tier_floor_mw')} MW)")
+    elif bundle.signal_kind == "dust_event":
+        print(f"  dust_daily_max .... {facts.get('dust_daily_max_ug_m3')} μg/m³ (tier {facts.get('tier')})")
+        print(f"  pm10 24h mean ..... {facts.get('pm10_24h_mean_ug_m3')} μg/m³")
+        print(f"  WHO PM10 multiple . {facts.get('who_pm10_multiple')}× (guideline {facts.get('who_pm10_24h_guideline_ug_m3')} μg/m³)")
     else:
         print(f"  complex_name ...... {facts.get('complex_name')}")
         print(f"  tier crossed ...... {facts.get('tier_hectares')} ha")
@@ -237,7 +272,7 @@ def _run_one(bundle: StoryBundle, state: dict, idx: int) -> bool:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--type", choices=("fire", "fire_footprint"), default=DEFAULTS["type"])
+    p.add_argument("--type", choices=("fire", "fire_footprint", "dust"), default=DEFAULTS["type"])
     p.add_argument("--samples", type=int, default=DEFAULTS["samples"], help="number of candidate drafts")
     p.add_argument("--no-impact", dest="no_impact", action="store_true",
                    help="control run: same bundle with NO human_impact attached")
@@ -262,6 +297,16 @@ def main() -> int:
     p.add_argument("--fatalities", type=int, default=DEFAULTS["fatalities"])
     p.add_argument("--fatality-source", default=DEFAULTS["fatality_source"])
     p.add_argument("--fatality-url", default=DEFAULTS["fatality_url"])
+    # dust knobs
+    p.add_argument("--dust-daily-max", dest="dust_daily_max", type=float,
+                   default=DEFAULTS["dust_daily_max"])
+    p.add_argument("--pm10-24h-mean", dest="pm10_24h_mean", type=float,
+                   default=DEFAULTS["pm10_24h_mean"],
+                   help="co-measured PM10 24h mean; the WHO anchor (45 μg/m³ AQG)")
+    p.add_argument("--dust-city", dest="dust_city", default=DEFAULTS["dust_city"])
+    p.add_argument("--dust-country", dest="dust_country", default=DEFAULTS["dust_country"])
+    p.add_argument("--dust-lat", dest="dust_lat", type=float, default=DEFAULTS["dust_lat"])
+    p.add_argument("--dust-lon", dest="dust_lon", type=float, default=DEFAULTS["dust_lon"])
     args = p.parse_args()
 
     bundle = _build_bundle(args)

@@ -71,6 +71,11 @@ Key fields:
 - **`pm25_24h_mean_ug_m3`** (PM2.5 bundles): the 24-hour arithmetic mean PM2.5, matching the WHO 2021 24-hour guideline window. Do NOT call this a "peak," "spike," or "hourly maximum." Correct framing: "a 24-hour mean of 220 μg/m³."
 - **`who_multiple`** (PM2.5 bundles): the bundle's pre-computed ratio, pm25_24h_mean / 15.0. Cite it verbatim. The WHO 2021 PM2.5 24-hour mean guideline is 15 μg/m³; `"who_24h_guideline_ug_m3": 15` is canonical.
 - **PM2.5 / dust signal-kind conventions**: No health-alarm language. No "dangerous," "deadly," "toxic," or "life-threatening." State the fact and one system clause. If the signal is co-located with an active FIRMS fire, say so only when the bundle includes a `co_located_fire` fact.
+  For `dust_event` bundles carrying `who_pm10_multiple`, that multiple is the scale
+  anchor — *"during the event, PM10 averaged 20× the WHO 24-hour guideline"* — cite it
+  verbatim. The claim is about co-measured PM10 (`pm10_24h_mean_ug_m3`), never about
+  the dust concentration itself, and never a daily max against the 24h-mean guideline.
+  When the bundle has no `who_pm10_multiple`, write the dust tweet without a WHO claim.
 
 ## historical_context constraints
 
@@ -188,6 +193,16 @@ Absolute. No exceptions.
 - **Cyclone alarmism.** Cyclones are life-safety adjacent. Banned: "catastrophic," "life-threatening," "deadly," "killer," "monster storm," "historic devastation," and any mockery or trivialization. No "BREAKING" openers. No category-bait opener that only says the storm is now Category N; frame rate-of-change, landfall, basin record, or ocean/atmospheric mechanism.
 - **Label:value phrasing.** No *"Severity: Severe," "Alert level: Red," "Confidence: HIGH."* That's press-release format. Weave the fact into prose.
 - **Tier explainers.** No *"the highest severity level GDACS issues"* / *"this is the highest alert tier."* Assume the reader is smart; let the numbers carry the extremity.
+- **DETECTION PLUMBING IS NOT A FACT.** The bot's own detection configuration —
+  latitude-band names (`band_label`, e.g. "the northern subtropical band"), per-class
+  editorial score thresholds, detector trigger definitions ("the rapid-intensification
+  threshold is 30 kt in 24 hours") — is how the bot decided to LOOK, not something a
+  reader can verify anywhere. Never cite it. What stays: observed actuals (the storm's
+  real `delta_kt_24h` — "winds climbing 40 kt in 24 hours" is a fact about the storm,
+  not the bot) and bundle-designed reader anchors (`frp_tier` words including "above
+  the 100 MW high-intensity threshold", Saffir-Simpson, DHW alert levels, Beaufort,
+  the WHO multiples). Test: is this a fact about the WORLD a reader could look up, or
+  a fact about this bot's configuration? World: cite. Bot: never.
 - **Bare-region / national temperature aggregates for `regional_anomaly` bundles.** The signal is N sampled cities, not the whole region. Banned: *"[Region] averaged +X°C,"* *"[Region]'s average temperature,"* *"[Region]'s national/area-weighted average,"* *"country-wide / nationwide average."* Always attribute to the N sampled cities (*"6 sampled cities in France"*). A bare-region aggregate is a factual misrepresentation — it is killed deterministically before fact-check, not treated as a style nit.
 - **ORIENT THE READER GEOGRAPHICALLY.** If it is not one of ~25 globally iconic cities, qualify it. The cities that may stand alone, unqualified: London, Tokyo, New York, Paris, Berlin, Sydney, Mumbai, Cairo, Moscow, Beijing, Shanghai, Mexico City, São Paulo, Buenos Aires, Hong Kong, Bangkok, Istanbul, Rome, Madrid, Toronto, Los Angeles, Chicago, Miami, Dubai, Singapore. Everything else: non-iconic city → add country (*"Conakry, Guinea." "Yakutsk, Russia." "Manaus, Brazil."*); US location → add state (*"Imperial County, California." "Point Lay, Alaska." "Sissonville, West Virginia."*); non-city features (volcanoes, observatories, ice shelves, mountains, deserts, rivers, lakes, basins, archipelagos) → always qualify regardless of scientific fame (*"Mauna Loa, Hawaii." "Verkhoyansk Basin, Russia." "Larsen C, Antarctica." "Lake Chad, in the Sahel."*). When in doubt, qualify.
 

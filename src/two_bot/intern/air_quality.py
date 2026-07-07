@@ -60,6 +60,15 @@ def build_dust_event_bundle(event: DustEvent) -> StoryBundle:
         {"label": "lon", "value": event.lon},
         {"label": "evidence_grade", "value": "model_estimated"},
     ]
+    if event.pm10_24h_mean is not None and event.who_pm10_multiple is not None:
+        # Co-measured PM10 anchor (mean-vs-mean against the WHO 2021 PM10
+        # 24h AQG). The `dust` value itself has no 24h-average standard —
+        # the anchor claim is about PM10 during the event, never about dust.
+        current_facts.extend([
+            {"label": "pm10_24h_mean_ug_m3", "value": event.pm10_24h_mean},
+            {"label": "who_pm10_multiple", "value": event.who_pm10_multiple},
+            {"label": "who_pm10_24h_guideline_ug_m3", "value": 45},
+        ])
     return StoryBundle(
         signal_kind="dust_event",
         where=f"{event.city}, {event.country}",

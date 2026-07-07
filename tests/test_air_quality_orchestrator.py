@@ -30,6 +30,7 @@ def _obs(
         dust_daily_max=dust,
         aod_daily_max=0.6,
         us_aqi_daily_max=210,
+        pm10_24h_mean=None,
     )
 
 

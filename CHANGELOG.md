@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 4 — voice floor: detection-plumbing ban + the dust WHO anchor (P_tier, P_dust) (2026-07-07)
+
+- **(program row 4)**: the writer may never cite the bot's own detection
+  config (`band_label`, score thresholds, trigger definitions) — observed
+  actuals ("winds climbed 40 kt in 24 hours") and published scales
+  (Saffir-Simpson, DHW levels, `frp_tier` phrasings, WHO multiples) stay
+  citable; paired fact-check rule (m) + critic `internal_taxonomy_leak`
+  kill in the same PR (the E1 pairing discipline). Dust events now carry a
+  real scale anchor: co-measured PM10 24h mean vs the WHO 2021 PM10 24h AQG
+  (45 μg/m³ — `WHO_PM10_24H_GUIDELINE`), pre-computed on the event and
+  bundle (`pm10_24h_mean_ug_m3`, `who_pm10_multiple`,
+  `who_pm10_24h_guideline_ug_m3` — conditional facts, omitted when the
+  pm10 series is missing; Open-Meteo hourly request goes 4→5 variables).
+  The claim is about co-measured PM10, never the `dust` variable (mineral
+  dust has no 24h-average standard), mean-vs-mean only. `writer_dryrun
+  --type dust` added (Phalodi-class fixture, 900/45 = 20.0×). Corpus
+  evidence: P_tier 10 instances/4 types grade-capping at B; P_dust 11/11
+  dust drafts with no WHO-scale anchor.
+
 ### Row 3 — the quality instrument reconnected: corpus on main + forecast-elapsed sweep (2026-07-07)
 
 - **[#384](https://github.com/andrewzp/theheat/pull/384)** (program row 3,
