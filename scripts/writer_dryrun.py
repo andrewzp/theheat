@@ -19,6 +19,12 @@ Types:
 - ``fire_footprint`` — a NAMED NIFC-style complex crossing an acreage tier
   (Sierra Complex, 103,400 ha -> tier 2 / 100,000 ha crossed). Impact
   entries name THE complex (matcher-consistency); ``--no-impact`` to drop.
+- ``cyclone_rapid_intensification`` (row 11 PR-2) — Bavi-class RI: 105 -> 145
+  kt over 24h, delta 40 kt. Never attaches human_impact.
+- ``cyclone_basin_record`` (row 11 PR-2 gap fixture) — an archive-backed
+  basin record (`record_label`/`record_scope`), the fifth cyclone kind the
+  intern emits that the plan's PR-2 scope omitted. Never attaches
+  human_impact.
 
 The reganom voice keeps its own harness (scripts/reganom_writer_dryrun.py);
 scripts/news_enrich_writer_dryrun.py remains THE pre-flip gate for
@@ -51,7 +57,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.air_quality import DUST_TIERS, DustEvent, _tier  # noqa: E402
 from src.data.coral_dhw import CoralBleachingEvent  # noqa: E402
-from src.data.cyclones import LandThreatEvent  # noqa: E402
+from src.data.cyclones import BasinRecordEvent, LandThreatEvent, RapidIntensificationEvent  # noqa: E402
 from src.data.fire_footprint import FireComplex, _classify_tier  # noqa: E402
 from src.data.firms import FireEvent  # noqa: E402
 from src.data.gpm_imerg import PrecipExtremeEvent  # noqa: E402
@@ -60,7 +66,7 @@ from src.editorial.newsworthiness import detect_impact_citation  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
 from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
-from src.two_bot.intern import build_coral_bleaching_bundle, build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle, build_marine_heatwave_bundle, build_precipitation_bundle  # noqa: E402
+from src.two_bot.intern import build_coral_bleaching_bundle, build_cyclone_basin_record_bundle, build_cyclone_land_threat_bundle, build_cyclone_rapid_intensification_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle, build_marine_heatwave_bundle, build_precipitation_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
@@ -124,6 +130,18 @@ DEFAULTS: dict = {
     "dhw_value": 24.5,
     "dhw_region": "galapagos",
     "mhw_streak_days": 12,
+    # cyclone_rapid_intensification (row 11 PR-2) knobs. Bavi-class:
+    # 105 -> 145 kt, delta 40 over 24h. Never attaches human_impact — an
+    # observed intensity jump carries no human toll of its own.
+    "ri_storm_name": "BAVI",
+    "ri_previous_wind_kt": 105,
+    "ri_current_wind_kt": 145,
+    # cyclone_basin_record (row 11 PR-2 gap fixture) knobs. Proves the
+    # gap-kind's voice path — a REAL archive-backed record, unlike a precip
+    # alert_threshold. Never attaches human_impact.
+    "record_storm_name": "BAVI",
+    "record_label": "strongest landfalling typhoon on record",
+    "record_scope": "Western Pacific basin",
 }
 
 _NIFC_URL = (
@@ -206,6 +224,47 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
             event_id=f"dryrun_mhw_{args.mhw_streak_days}d",
         )
         return build_marine_heatwave_bundle(event)
+    if args.type == "cyclone_rapid_intensification":
+        # Never attaches human_impact — an observed intensity jump carries
+        # no human toll of its own. Real fields per
+        # src/data/cyclones.py RapidIntensificationEvent: current_wind_kt,
+        # previous_wind_kt, delta_kt_24h, current_category, previous_category
+        # (categories derived via saffir_simpson_category, NOT hand-picked).
+        from src.data.cyclones import saffir_simpson_category
+
+        previous_wind_kt = args.ri_previous_wind_kt
+        current_wind_kt = args.ri_current_wind_kt
+        event = RapidIntensificationEvent(
+            source="jtwc", storm_id="05W", storm_name=args.ri_storm_name,
+            basin="WP", advisory_number="024",
+            issued_at=datetime.now(UTC).isoformat(),
+            current_wind_kt=current_wind_kt,
+            previous_wind_kt=previous_wind_kt,
+            delta_kt_24h=current_wind_kt - previous_wind_kt,
+            current_category=saffir_simpson_category(current_wind_kt),
+            previous_category=saffir_simpson_category(previous_wind_kt),
+            pressure_mb=925, lat=15.4, lon=128.2,
+            public_advisory_url="https://www.metoc.navy.mil/jtwc/jtwc.html",
+            event_id="dryrun_ri_05w",
+        )
+        return build_cyclone_rapid_intensification_bundle(event)
+    if args.type == "cyclone_basin_record":
+        # Never attaches human_impact. Real fields per
+        # src/data/cyclones.py BasinRecordEvent: record_label, record_scope
+        # (cited verbatim — a REAL archive record, unlike a precip
+        # alert_threshold).
+        event = BasinRecordEvent(
+            source="jtwc", storm_id="05W", storm_name=args.record_storm_name,
+            basin="WP", advisory_number="030",
+            issued_at=datetime.now(UTC).isoformat(),
+            category=5, wind_kt=160,
+            record_label=args.record_label,
+            record_scope=args.record_scope,
+            pressure_mb=895, lat=14.8, lon=126.1,
+            public_advisory_url="https://www.metoc.navy.mil/jtwc/jtwc.html",
+            event_id="dryrun_record_05w",
+        )
+        return build_cyclone_basin_record_bundle(event)
     if args.type == "cyclone_land_threat":
         # Forecast-tense fixture — never attaches human_impact (a forecast
         # has no toll; the impact knobs are ignored for this type).
@@ -345,6 +404,15 @@ def _print_bundle(bundle: StoryBundle) -> None:
         print(f"  landmass .......... {facts.get('landmass_country')} (near {facts.get('nearest_city')})")
         print(f"  closest approach .. {facts.get('min_distance_nm')} NM within {facts.get('closest_tau_h')}h")
         print(f"  forecast wind ..... {facts.get('forecast_wind_kt_at_closest')} kt at closest")
+    elif bundle.signal_kind == "cyclone_rapid_intensification":
+        print(f"  storm ............. {facts.get('storm_name')} ({facts.get('basin')})")
+        print(f"  delta_kt_24h ...... {facts.get('delta_kt_24h')} kt "
+              f"({facts.get('previous_wind_kt')} -> {facts.get('wind_speed_kt')} kt)")
+        print(f"  category .......... {facts.get('previous_category')} -> {facts.get('category')}")
+    elif bundle.signal_kind == "cyclone_basin_record":
+        print(f"  storm ............. {facts.get('storm_name')} ({facts.get('basin')}, Cat {facts.get('category')})")
+        print(f"  record_label ...... {facts.get('record_label')}")
+        print(f"  record_scope ...... {facts.get('record_scope')}")
     elif bundle.signal_kind == "precipitation_extreme":
         print(f"  rainfall_mm ....... {facts.get('rainfall_mm')} mm over {facts.get('period_days')} day(s)")
         if facts.get("event_kind") == "country_precip_event":
@@ -426,7 +494,7 @@ def _run_one(bundle: StoryBundle, state: dict, idx: int) -> bool:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat", "precipitation_extreme", "coral_bleaching", "marine_heatwave"), default=DEFAULTS["type"])
+    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat", "cyclone_rapid_intensification", "cyclone_basin_record", "precipitation_extreme", "coral_bleaching", "marine_heatwave"), default=DEFAULTS["type"])
     p.add_argument("--samples", type=int, default=DEFAULTS["samples"], help="number of candidate drafts")
     p.add_argument("--no-impact", dest="no_impact", action="store_true",
                    help="control run: same bundle with NO human_impact attached")
@@ -494,6 +562,17 @@ def main() -> int:
     p.add_argument("--dhw-region", dest="dhw_region", default=DEFAULTS["dhw_region"])
     p.add_argument("--mhw-streak-days", dest="mhw_streak_days", type=int,
                    default=DEFAULTS["mhw_streak_days"])
+    # cyclone_rapid_intensification (row 11 PR-2) knobs
+    p.add_argument("--ri-storm-name", dest="ri_storm_name", default=DEFAULTS["ri_storm_name"])
+    p.add_argument("--ri-previous-wind-kt", dest="ri_previous_wind_kt", type=int,
+                   default=DEFAULTS["ri_previous_wind_kt"])
+    p.add_argument("--ri-current-wind-kt", dest="ri_current_wind_kt", type=int,
+                   default=DEFAULTS["ri_current_wind_kt"])
+    # cyclone_basin_record (row 11 PR-2 gap fixture) knobs
+    p.add_argument("--record-storm-name", dest="record_storm_name",
+                   default=DEFAULTS["record_storm_name"])
+    p.add_argument("--record-label", dest="record_label", default=DEFAULTS["record_label"])
+    p.add_argument("--record-scope", dest="record_scope", default=DEFAULTS["record_scope"])
     args = p.parse_args()
 
     if args.record_path and args.country_cluster:

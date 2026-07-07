@@ -156,6 +156,50 @@ class TestPrecipFixture:
         assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
 
 
+class TestCycloneRapidIntensificationFixture:
+    """Row 11 PR-2: Bavi-class RI fixture, 105->145 kt, delta 40. Real fields
+    per src/data/cyclones.py RapidIntensificationEvent."""
+
+    def test_bundle_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="cyclone_rapid_intensification"))
+        assert bundle.signal_kind == "cyclone_rapid_intensification"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["previous_wind_kt"] == 105
+        assert facts["wind_speed_kt"] == 145
+        assert facts["delta_kt_24h"] == 40
+        assert bundle.headline_metric["label"] == "delta_kt_24h"
+        assert bundle.headline_metric["value"] == 40
+        assert bundle.historical_context["rapid_intensification_threshold_kt"] == 30
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_no_impact_on_ri_fixture(self):
+        bundle = _build_bundle(_args(type="cyclone_rapid_intensification"))
+        assert not getattr(bundle, "human_impact", None)
+
+
+class TestCycloneBasinRecordFixture:
+    """Row 11 PR-2 gap fixture: proves cyclone_basin_record has a
+    sanctioned voice path. Real fields per src/data/cyclones.py
+    BasinRecordEvent (record_label, record_scope)."""
+
+    def test_bundle_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="cyclone_basin_record"))
+        assert bundle.signal_kind == "cyclone_basin_record"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["record_label"]
+        assert facts["record_scope"]
+        assert bundle.historical_context["record_label"] == facts["record_label"]
+        assert bundle.historical_context["record_scope"] == facts["record_scope"]
+        assert bundle.historical_context["scope"] == "basin_record"
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_no_impact_on_basin_record_fixture(self):
+        bundle = _build_bundle(_args(type="cyclone_basin_record"))
+        assert not getattr(bundle, "human_impact", None)
+
+
 class TestMarineFixture:
     """Row 11 PR-1 fixtures: coral_bleaching + marine_heatwave. Neither
     fixture ever attaches human_impact — a DHW reading and an OISST streak
