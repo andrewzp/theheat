@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### #403 — coral DHW stress_level: full NOAA alert scale (fix under-labeling) (2026-07-07)
+
+- **(row-11 follow-up, emitted honesty field)**: `_stress_level_for_dhw` capped at
+  "Bleaching Alert Level 2" for any DHW ≥ 8, under-labeling readings the NOAA Coral
+  Reef Watch scale — and the bot's own fact-check prompt (`fact_check_prompt.py:25`) —
+  put higher: 12 °C-weeks → Alert Level 3, 16 → Level 4, 20 → Level 5. A coral bundle
+  at DHW tier 12 carried the correct `bleaching_level="mortality expected"` but
+  `stress_level="Bleaching Alert Level 2"` — a public under-statement of severity, and
+  a scale mismatch the fact-checker (which knows 12 = Level 3) could flag if the writer
+  cited it verbatim. Extended `_stress_level_for_dhw` to the full scale (L3/L4/L5);
+  `DHW_THRESHOLDS` (`bleaching_level`) left unchanged. A parametrized test pins each
+  tier→level including boundaries. codex-xhigh.
+
 ### #401 — precip monitoring threshold: align writer + fact-check to the critic (2026-07-07)
 
 - **(row-7 follow-up, editorial cross-gate)**: fixes the contradiction where the
