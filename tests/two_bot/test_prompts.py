@@ -489,3 +489,18 @@ class TestDustWhoAnchor:
     def test_dust_anchor_move_present_and_paired(self):
         assert "who_pm10_multiple" in WRITER_SYSTEM_PROMPT
         assert "who_pm10_multiple" in FACT_CHECK_SYSTEM_PROMPT
+
+
+class TestImpactLeadNotPressRelease:
+    """The A1 gate contradiction (news-enrich-dryrun 2026-07-07): rule (k)
+    REQUIRES the source name in the tweet text, E1's fire exemplar leads
+    with the sourced toll — the critic must not kill required attribution
+    as press-release shape. The kill stays for agency/label OPENERS."""
+
+    def test_critic_carves_out_sourced_impact_leads(self):
+        assert "NOT press-release" in CRITIC_SYSTEM_PROMPT
+        assert "human-stakes lead carries its citation" in CRITIC_SYSTEM_PROMPT
+        # Boundary phrases (codex r1 suggestion): the carve-out is scoped to
+        # mid-or-late-sentence attribution; the kill stays for openers.
+        assert "mid-or-late sentence" in CRITIC_SYSTEM_PROMPT
+        assert "OPENS with the agency/label format itself" in CRITIC_SYSTEM_PROMPT
