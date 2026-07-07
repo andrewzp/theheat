@@ -139,36 +139,41 @@ def _known_countries() -> set[str]:
     return _KNOWN_COUNTRIES
 
 
-# Signals that are global, multi-country, or ocean/ice/reef-basin scoped —
-# never a single-country diversity item, so they must never take a per-country
-# cap key (a bare "greenland"/"France, Spain" where would otherwise false-key).
-# The per-country cap is a same-COUNTRY diversity nudge; these are out of its scope.
-_NON_COUNTRY_SIGNAL_KINDS = frozenset({
-    # global atmospheric indices
-    "co2_milestone", "ch4_milestone", "enso", "oscillation_transition",
-    "oscillation_extreme", "oscillation_alignment", "ozone_hole_peak",
-    # ocean / ice / reef basins
-    "sea_ice_record", "ice_mass_record", "marine_heatwave",
-    "regional_sst_anomaly", "extreme_wave", "coral_bleaching",
-    # multi-country summary
-    "simultaneous_records",
+# The per-country cap is a same-country diversity NUDGE. Only signals that are
+# scoped to exactly one country AND emit a reliably country-parseable `where`
+# ("City, Country" / "Country" / "City, State, Country") take a cap key. This is
+# a fail-OPEN allowlist: any signal NOT listed here (global indices, ocean/ice/
+# reef basins, cyclones, multi-country summaries like hot10 / simultaneous_records,
+# dynamic synthesis_* compounds, ambiguous-`where` signals like severe_weather /
+# usgs_earthquake / storm_surge / river_flood, and any FUTURE signal_kind) returns
+# "" and is never capped. Fail-open (under-cap) is correct for a soft nudge; a
+# denylist here fails UNSAFE (a missed non-country signal false-keys) and cannot
+# enumerate the dynamic signal_kinds, which is why this is an allowlist.
+_SINGLE_COUNTRY_SIGNAL_PREFIXES = (
+    "monthly_", "country_", "open_meteo_archive_", "anomaly_", "absolute_extreme_",
+)
+_SINGLE_COUNTRY_SIGNAL_KINDS = frozenset({
+    "calendar_record", "calendar_record_low", "record_streak",
+    "precipitation_extreme", "wet_bulb_extreme",
+    "air_quality_hazard", "dust_event",
+    "fire", "fire_footprint",
+    "drought", "global_disaster", "global_flood",
 })
 
 
 def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     """Normalize a candidate's country into one cap-bucket key.
 
-    Short-circuits to "" (never capped) when ``bundle.signal_kind`` is in
-    _NON_COUNTRY_SIGNAL_KINDS — these signals are global, multi-country, or
-    ocean/ice/reef-basin scoped, so a where-derived key (e.g. bare
-    "greenland" from ice_mass_record, or "France, Spain" from
-    simultaneous_records) would otherwise false-key them into an arbitrary
-    single-country bucket (codex r4 P1 + P2). This check runs BEFORE the
-    trusted bundle.country path and the where-fallback below, and is
-    independent of the known-country validation (an "exactly one known
-    country in where" rule would wrongly treat "Atlanta, Georgia, United
-    States" as ambiguous due to the Georgia-state/Georgia-country name
-    collision — the denylist avoids that failure mode entirely).
+    Gates to "" (never capped) unless ``bundle.signal_kind`` is in the
+    fail-open allowlist (_SINGLE_COUNTRY_SIGNAL_KINDS / the stable dynamic
+    prefixes in _SINGLE_COUNTRY_SIGNAL_PREFIXES) — see the allowlist's own
+    docstring-adjacent comment for why this is an allowlist and not a
+    denylist. Everything not listed (global indices, ocean/ice/reef basins,
+    cyclones, multi-country summaries like hot10/simultaneous_records,
+    dynamic synthesis_* compounds, ambiguous-`where` signals, and any future
+    signal_kind) short-circuits to "" here, BEFORE the trusted bundle.country
+    path and the where-fallback below (codex r5 P1 — this replaces the prior
+    denylist, which missed hot10 and the dynamic synthesis_* kinds).
 
     Prefers ``bundle.country`` (documented as a 2-letter code — see
     src/two_bot/types.py) when set; otherwise falls back to the last
@@ -189,12 +194,9 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     ``bundle.country``, when set, is TRUSTED as-is — it's documented as a
     real country code, so it is never run through the known-country check
     below. Only the WHERE-fallback segment is validated: a consumer's
-    `where` string can carry non-country shapes (a cyclone bundle emits
-    where="BAVI, WP" — storm name, basin — with no bundle.country set), so
-    the final comma-segment must be checked against a known-country set
-    before it's trusted as a cap key. Without this check "wp" (a basin, not
-    a country) would silently become a cap bucket and two same-basin
-    cyclone candidates would suppress each other under a per-COUNTRY rule.
+    `where` string can carry non-country shapes, so the final comma-segment
+    must be checked against a known-country set before it's trusted as a cap
+    key.
 
     A bare `where` with no comma at all (e.g. "Kazakhstan") is also tried as
     a WHERE-fallback candidate — country-level record bundles emit exactly
@@ -202,17 +204,29 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     e.g. src/two_bot/intern/temperature.py's build_country_record_bundle and
     the country_precip_event path in src/two_bot/intern/precipitation.py).
     It goes through the SAME known-country validation as the comma-segment
-    case below, so a bare non-country `where` (a basin, a storm name, a bare
-    city, "Global ocean (60°S–60°N)") still fails the check and returns "".
+    case below, so a bare non-country `where` still fails the check and
+    returns "".
 
     Returns "" when no country can be determined (empty bundle.country AND
     empty `where`), OR when the WHERE-fallback candidate (the last
     comma-segment, or the whole `where` when it has no comma) fails the
-    known-country check (e.g. "wp") — callers must treat an empty key as
-    NEVER capped (unknown/non-country geography must not be suppressed).
+    known-country check — callers must treat an empty key as NEVER capped
+    (unknown/non-country geography must not be suppressed).
+
+    KNOWN RESIDUAL EDGE (documented, not fixed here): a US record whose
+    `where` is "City, Georgia" — i.e. the US STATE "Georgia" with the
+    country segment omitted entirely — will still key to "georgia" (the
+    country), because Georgia-the-US-state collides with Georgia-the-
+    country in the known-countries check and there is no country segment
+    to prefer instead. This requires the country field to be empty on a
+    US-Georgia record, which is rare in practice, and it fails toward a
+    minor OVER-cap on a diversity nudge that ships disabled by default —
+    an acceptable trade next to the alternative of trying to special-case
+    every US-state/country name collision here.
     """
     bundle = getattr(candidate, "bundle", None)
-    if getattr(bundle, "signal_kind", "") in _NON_COUNTRY_SIGNAL_KINDS:
+    sk = getattr(bundle, "signal_kind", "") or ""
+    if sk not in _SINGLE_COUNTRY_SIGNAL_KINDS and not sk.startswith(_SINGLE_COUNTRY_SIGNAL_PREFIXES):
         return ""
     country = (getattr(bundle, "country", "") or "").strip()
     from_where = False

@@ -733,7 +733,12 @@ class TestPerCountryCap:
 
     def test_cap_2_spills_third_same_country_candidate(self, monkeypatch):
         """cap=2 → third same-country candidate spills with
-        reasons=['per_country_cap=2'] and kill_stage='triage_cap'."""
+        reasons=['per_country_cap=2'] and kill_stage='triage_cap'.
+        c3_spilled uses monthly_high (allowlisted via the "monthly_" prefix)
+        rather than the placeholder "record" — "record" isn't a real
+        signal_kind and, under the codex r5 fail-open allowlist, an unknown
+        signal_kind is (correctly) never capped, so this test needs a
+        real allowlisted kind to exercise the cap at all."""
         monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "2")
         monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
         from src.orchestrator.triage import select_survivors
@@ -749,7 +754,7 @@ class TestPerCountryCap:
                 where="Tucson, Arizona, United States", country="US",
             ),
             _candidate(
-                total=70, event_id="c3_spilled", signal_kind="record",
+                total=70, event_id="c3_spilled", signal_kind="monthly_high",
                 where="Yuma, Arizona, United States", country="US",
             ),
         ]
@@ -1012,70 +1017,177 @@ class TestPerCountryCap:
         supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
         assert len(supps) == 0
 
+    def test_hot10_not_suppressed_by_country_cap(self, monkeypatch):
+        """codex r5 P1 integration repro: cap=1 + a US `fire` candidate +
+        a `hot10` candidate whose where LOOKS like "City, US" (the daily
+        global leaderboard's leader-only where) must NOT suppress hot10 —
+        it fails open (never takes a cap key) precisely because it isn't in
+        the allowlist, even though its where-shape is indistinguishable
+        from a real single-city bundle."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="us_fire", signal_kind="fire",
+                where="Phoenix, Arizona, United States", country="US",
+            ),
+            _candidate(
+                total=85, event_id="hot10_leaderboard", signal_kind="hot10",
+                where="Phoenix, US", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 2
+        assert {r.event_id for r in result} == {"us_fire", "hot10_leaderboard"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
+
+    def test_two_us_fire_bundles_second_spills_per_country_cap(self, monkeypatch):
+        """cap=1 + two US `fire` bundles (an allowlisted single-country
+        signal_kind) -> the second spills via per_country_cap, confirming
+        the allowlist still caps the signals it's supposed to."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="fire_a", signal_kind="fire",
+                where="Phoenix, Arizona, United States", country="US",
+            ),
+            _candidate(
+                total=85, event_id="fire_b_spilled", signal_kind="fire",
+                where="Tucson, Arizona, United States", country="US",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 1
+        assert result[0].event_id == "fire_a"
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "fire_b_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=1"]
+
 
 class TestCandidateCountryKey:
     """Direct unit tests for _candidate_country_key() — see TestPerCountryCap
-    above for the select_survivors()-level integration coverage."""
+    above for the select_survivors()-level integration coverage.
 
-    def test_bare_country_where_with_empty_bundle_country(self):
-        """A bare `where` (no comma) that IS a known country, with no
-        bundle.country set, resolves via the new no-comma where-fallback
-        branch — this is exactly the shape country-record bundles emit
-        (see build_country_record_bundle, temperature.py:98). Uses an
-        explicit non-denylisted signal_kind since _candidate()'s default
-        ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
+    codex r5 (BLOCK): the prior _NON_COUNTRY_SIGNAL_KINDS DENYLIST fails
+    UNSAFE on any omission (a missed non-country signal false-keys and
+    over-caps), and cannot enumerate the dynamically-constructed signal_kinds
+    (f"monthly_{kind}", f"synthesis_{kind}", f"country_{kind}", etc). This
+    class now exercises the fail-OPEN _SINGLE_COUNTRY_SIGNAL_KINDS /
+    _SINGLE_COUNTRY_SIGNAL_PREFIXES ALLOWLIST: only signals confirmed
+    single-country-scoped with a reliably country-parseable `where` take a
+    cap key; everything else — including hot10 and the dynamic synthesis_*
+    kinds the denylist missed — returns "" and is never capped."""
+
+    # -- allowlisted signals resolve their country -----------------------
+
+    def test_monthly_high_prefix_resolves_country(self):
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
-            signal_kind="country_temp_record", where="Kazakhstan", country="",
+            signal_kind="monthly_high", where="Astana, Kazakhstan", country="",
         )
         assert _candidate_country_key(candidate) == "kazakhstan"
 
-    def test_bare_non_country_where_returns_empty(self):
-        """A bare `where` that is NOT a known country (e.g. an ocean-basin
-        descriptor) still fails the known-country check and returns "" —
-        the new branch must not blindly trust any bare where string."""
-        from src.orchestrator.triage import _candidate_country_key
-
-        candidate = _candidate(where="Global ocean (60°S–60°N)", country="")
-        assert _candidate_country_key(candidate) == ""
-
-    def test_comma_where_still_resolves_known_country(self):
-        """Regression: existing comma-segment where-fallback is unchanged.
-        Uses an explicit non-denylisted signal_kind since _candidate()'s
-        default ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
-        from src.orchestrator.triage import _candidate_country_key
-
-        candidate = _candidate(signal_kind="fire", where="Astana, Kazakhstan", country="")
-        assert _candidate_country_key(candidate) == "kazakhstan"
-
-    def test_comma_where_non_country_segment_returns_empty(self):
-        """Regression: basin-shaped where ("BAVI, WP") still returns ""."""
-        from src.orchestrator.triage import _candidate_country_key
-
-        candidate = _candidate(where="BAVI, WP", country="")
-        assert _candidate_country_key(candidate) == ""
-
-    def test_bundle_country_trusted_and_collapses_to_united_states(self):
-        """Regression: bundle.country="US" is trusted as-is and collapses
-        into the "united states" bucket via _US_COUNTRY_TOKENS. Uses an
-        explicit non-denylisted signal_kind since _candidate()'s default
-        ("coral_bleaching") is now in _NON_COUNTRY_SIGNAL_KINDS."""
+    def test_country_high_prefix_bare_where_resolves_country(self):
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
-            signal_kind="fire", where="Phoenix, Arizona, United States", country="US",
+            signal_kind="country_high", where="Kazakhstan", country="",
+        )
+        assert _candidate_country_key(candidate) == "kazakhstan"
+
+    def test_fire_kind_resolves_country(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="fire", where="Wildcity, US", country="",
         )
         assert _candidate_country_key(candidate) == "united states"
 
-    def test_ice_mass_record_bare_where_returns_empty(self):
-        """codex r4 P2 repro: marine.py's ice_mass_record emits a bare
-        where=record.region ("greenland"/"antarctica") with empty
-        bundle.country. cities.csv lists Greenland as a country
-        (Nuuk,Greenland), so the bare-where fallback would otherwise
-        resolve "greenland" as a real country and false-key an ice-sheet
-        signal into a single-country bucket. The signal_kind denylist must
-        short-circuit this to "" before the bare-where check ever runs."""
+    def test_air_quality_hazard_kind_resolves_country(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="air_quality_hazard", where="Delhi, India", country="",
+        )
+        assert _candidate_country_key(candidate) == "india"
+
+    def test_precipitation_extreme_kind_resolves_country(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="precipitation_extreme", where="Lagos, Nigeria", country="",
+        )
+        assert _candidate_country_key(candidate) == "nigeria"
+
+    def test_drought_kind_resolves_country(self):
+        """drought's bundle.where is the literal "United States" (bare, no
+        comma) — exercises the bare-where fallback for an allowlisted kind."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="drought", where="United States", country="",
+        )
+        assert _candidate_country_key(candidate) == "united states"
+
+    def test_global_disaster_kind_resolves_country(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="global_disaster", where="Philippines", country="",
+        )
+        assert _candidate_country_key(candidate) == "philippines"
+
+    # -- non-allowlisted signals fail OPEN -> "" -------------------------
+
+    def test_hot10_fails_open(self):
+        """codex r5 P1 repro: temperature.py's build_hot10_bundle emits
+        where=f"{leader_city}, {leader_country}" (e.g. "Phoenix, US") for the
+        GLOBAL daily leaderboard — a multi-country summary that happened to
+        slip past the old denylist because its where LOOKS like a normal
+        single-city bundle. The allowlist gate must reject it on
+        signal_kind alone, before the where-shape is ever inspected."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(signal_kind="hot10", where="Phoenix, US", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    def test_synthesis_marine_compound_fails_open(self):
+        """codex r5 P1 repro: synthesis.py builds signal_kind=f"synthesis_{kind}"
+        dynamically, so no denylist literal could ever have enumerated it. A
+        compound synthesis story keyed to a coral REGION named "Kenya" would
+        have false-keyed into the real-country "kenya" bucket under the old
+        denylist. The allowlist has no synthesis_ prefix, so this fails open."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="synthesis_marine_compound", where="Kenya", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_synthesis_fire_drought_heat_fails_open(self):
+        """Same dynamic-signal_kind class as above, with a US-state name
+        ("Georgia") standing in for the compound's region — would have
+        false-keyed to the country "georgia" bucket. Fails open."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="synthesis_fire_drought_heat", where="Georgia", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_ice_mass_record_fails_open(self):
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
@@ -1083,13 +1195,25 @@ class TestCandidateCountryKey:
         )
         assert _candidate_country_key(candidate) == ""
 
-    def test_simultaneous_records_comma_where_returns_empty(self):
-        """codex r4 P1 repro: temperature.py's simultaneous_records bundle
-        emits where=", ".join(countries) (e.g. "France, Spain") with empty
-        bundle.country. The last-comma-segment fallback would otherwise
-        grab "spain" and cap a multi-country story under one arbitrary
-        country. The signal_kind denylist must short-circuit this to ""
-        before the comma-segment fallback ever runs."""
+    def test_co2_milestone_fails_open(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(signal_kind="co2_milestone", where="Mauna Loa Observatory", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    def test_regional_anomaly_fails_open(self):
+        """regional_anomaly samples MULTI-country synoptic zones (e.g.
+        "Sahel" spans Niger/Sudan/Chad/Mali/Nigeria; "United Kingdom &
+        Ireland" spans two countries) — not a single-country signal despite
+        the per-city sampling. Must fail open."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="regional_anomaly", where="6 sampled cities in Sahel", country="",
+        )
+        assert _candidate_country_key(candidate) == ""
+
+    def test_simultaneous_records_fails_open(self):
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
@@ -1097,28 +1221,33 @@ class TestCandidateCountryKey:
         )
         assert _candidate_country_key(candidate) == ""
 
-    def test_regional_sst_anomaly_real_country_where_still_returns_empty(self):
-        """Belt-and-suspenders: even when a denylisted signal_kind's `where`
-        happens to look exactly like a real, known country name, the
-        denylist short-circuit fires BEFORE the known-country check, so it
-        still returns "" — the denylist is signal_kind-keyed, not
-        where-shape-keyed."""
+    def test_cyclone_landfall_fails_open(self):
         from src.orchestrator.triage import _candidate_country_key
 
-        candidate = _candidate(
-            signal_kind="regional_sst_anomaly", where="Kazakhstan", country="",
-        )
+        candidate = _candidate(signal_kind="cyclone_landfall", where="BAVI, WP", country="")
         assert _candidate_country_key(candidate) == ""
 
-    def test_georgia_state_vs_country_collision_not_broken_by_denylist(self):
-        """REGRESSION GUARD: proves the fix is a signal_kind denylist, NOT
-        an "exactly one known country in where" rule (which would have
-        broken this case — "Georgia" collides between the US state and the
-        country, so an ambiguity-based rule would see two countries.
-        monthly_high (temperature.py's monthly record path, NOT in the
-        denylist) with where="Atlanta, Georgia, United States" must still
-        resolve to "united states" via the ordinary last-comma-segment
-        fallback, untouched by the new denylist."""
+    def test_usgs_earthquake_fails_open(self):
+        """place strings are ambiguous free text ("10km SW of X, Chad") —
+        fails open even though the last segment happens to look like a
+        real country."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(signal_kind="usgs_earthquake", where="10km SW of X, Chad", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    def test_storm_surge_fails_open(self):
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(signal_kind="storm_surge", where="Battery, New York", country="")
+        assert _candidate_country_key(candidate) == ""
+
+    # -- regressions ------------------------------------------------------
+
+    def test_georgia_state_vs_country_collision_preserved(self):
+        """monthly_high (allowlisted via the "monthly_" prefix) with
+        where="Atlanta, Georgia, United States" must still resolve to
+        "united states" via the ordinary last-comma-segment fallback."""
         from src.orchestrator.triage import _candidate_country_key
 
         candidate = _candidate(
@@ -1127,6 +1256,26 @@ class TestCandidateCountryKey:
             country="",
         )
         assert _candidate_country_key(candidate) == "united states"
+
+    def test_bundle_country_trusted_and_collapses_to_united_states(self):
+        """bundle.country="US" is trusted as-is and collapses into the
+        "united states" bucket via _US_COUNTRY_TOKENS, for an allowlisted
+        signal_kind."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(
+            signal_kind="fire", where="Phoenix, Arizona, United States", country="US",
+        )
+        assert _candidate_country_key(candidate) == "united states"
+
+    def test_comma_where_non_country_segment_returns_empty(self):
+        """Even an allowlisted kind fails open when the where-fallback
+        segment isn't a known country (belt-and-suspenders on the
+        known-countries validation, independent of the allowlist gate)."""
+        from src.orchestrator.triage import _candidate_country_key
+
+        candidate = _candidate(signal_kind="fire", where="BAVI, WP", country="")
+        assert _candidate_country_key(candidate) == ""
 
 
 class TestPendingTtlSweep:

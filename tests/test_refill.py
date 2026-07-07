@@ -305,10 +305,12 @@ class TestRefillPerCountryCap:
         """codex's exact repro: THEHEAT_REFILL_ENABLED=1 + THEHEAT_PER_COUNTRY_CAP=1
         + 3 same-country (US) candidates -> only 1 drafts, the other 2 spill with
         reason='per_country_cap' (previously: all 3 drafted, zero suppressions).
-        us3 uses river_flood (a country-scoped signal_kind, per triage.py's
-        _NON_COUNTRY_SIGNAL_KINDS denylist) rather than sea_ice_record — this
-        test is about 3 distinct categories all sharing one country bucket,
-        not about sea_ice_record's own (basin-scoped) behavior."""
+        us3 uses fire_footprint (a single-country-scoped signal_kind in triage.py's
+        _SINGLE_COUNTRY_SIGNAL_KINDS allowlist) rather than river_flood — river_flood's
+        `where` is ambiguous free text and is correctly NOT allowlisted (codex r5
+        fail-open fix), so it would never take a country key here. This test is about
+        3 distinct categories all sharing one country bucket, not about any one
+        signal_kind's own where-shape behavior."""
         monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
         monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
         monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
@@ -319,7 +321,7 @@ class TestRefillPerCountryCap:
                   where="Phoenix, Arizona, United States", country="US"),
             _cand(event_id="us2", total=94, signal_kind="fire", source="s1",
                   where="Tucson, Arizona, United States", country="US"),
-            _cand(event_id="us3", total=93, signal_kind="river_flood", source="s2",
+            _cand(event_id="us3", total=93, signal_kind="fire_footprint", source="s2",
                   where="Yuma, Arizona, United States", country="US"),
         ]
         calls: list = []
@@ -371,6 +373,32 @@ class TestRefillPerCountryCap:
         drafted = _drain(bot_state, monkeypatch, {"cyclone_a", "cyclone_b"}, capture_calls=calls)
         assert drafted == 2
         assert set(calls) == {"cyclone_a", "cyclone_b"}
+
+    def test_hot10_not_suppressed_by_country_cap_under_refill(self, monkeypatch):
+        """codex r5 P1 repro at the refill layer: cap=1 + a US `fire` candidate
+        + a `hot10` candidate (where="Phoenix, US", the leaderboard's
+        leader-only where) -> BOTH draft. hot10 is a global multi-country
+        summary, not in the fail-open allowlist, so it never takes a
+        country-cap key even though its where looks like a normal
+        single-city bundle."""
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "5")
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _cand(event_id="us_fire", total=90, signal_kind="fire", source="s0",
+                  where="Phoenix, Arizona, United States", country="US"),
+            _cand(event_id="hot10_leaderboard", total=85, signal_kind="hot10", source="s1",
+                  where="Phoenix, US", country=""),
+        ]
+        calls: list = []
+        drafted = _drain(bot_state, monkeypatch, {"us_fire", "hot10_leaderboard"}, capture_calls=calls)
+        assert drafted == 2
+        assert set(calls) == {"us_fire", "hot10_leaderboard"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
 
         supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
         assert len(supps) == 0
