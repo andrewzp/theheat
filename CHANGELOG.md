@@ -19,9 +19,14 @@ All notable changes to this project will be documented in this file.
   `rejected_reason=forecast_elapsed_<date>` (recoverable — operator can
   re-approve from the rejected pile, same contract as the TTL sweep).
   Observed-record types (GHCN) are deliberately exempt: their `tweet_date`
-  is an observation date and may legitimately age in manual review. Grace
-  knob: `THEHEAT_FORECAST_ELAPSED_GRACE_DAYS` (default 1 — same-day and
-  next-day review remain possible).
+  is an observation date and may legitimately age in manual review. The
+  sweep is provenance-aware for `absolute_extreme` (codex r1 P1): GHCN also
+  emits an OBSERVED absolute_extreme, so the sweep requires the draft's
+  review_context `Data source: forecast` marker (rides every
+  absolute_extreme draft since #195) — GHCN or unknown provenance never
+  sweeps (fail-safe; the 7-day TTL sweep still bounds those). Grace knob:
+  `THEHEAT_FORECAST_ELAPSED_GRACE_DAYS` (default 1 — same-day and next-day
+  review remain possible).
 
 ### E1 — the fire voice floor: four moves, paired gates, per-type dryrun (2026-07-06, evening)
 

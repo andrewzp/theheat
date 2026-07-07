@@ -267,6 +267,7 @@ class TestSelectSurvivors:
                 "status": "pending",
                 "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
                 "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+                "review_context": {"facts": [{"label": "Data source", "value": "forecast"}]},
             }
         ]
 
@@ -291,6 +292,7 @@ class TestSelectSurvivors:
                 "status": "pending",
                 "created_at": (now - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
                 "tweet_date": (now - timedelta(days=3)).date().isoformat(),
+                "review_context": {"facts": [{"label": "Data source", "value": "forecast"}]},
             }
         ]
 
@@ -907,10 +909,10 @@ class TestForecastElapsedSweep:
     """
 
     def _draft(self, *, dtype="absolute_extreme", tweet_date_days_ago=2,
-               status="pending"):
+               status="pending", data_source="forecast"):
         from datetime import UTC, datetime, timedelta
         now = datetime.now(UTC)
-        return {
+        draft = {
             "id": f"draft_{dtype}_{tweet_date_days_ago}",
             "status": status,
             "type": dtype,
@@ -918,6 +920,14 @@ class TestForecastElapsedSweep:
             "tweet_date": (now - timedelta(days=tweet_date_days_ago)).date().isoformat(),
             "text": "x",
         }
+        if data_source is not None:
+            # The real marker shape: _fact("Data source", ev.data_source)
+            # inside review_context facts (rides every absolute_extreme
+            # draft since #195).
+            draft["review_context"] = {
+                "facts": [{"label": "Data source", "value": data_source}],
+            }
+        return draft
 
     def test_rejects_elapsed_forecast_types(self):
         from src.orchestrator.triage import apply_forecast_elapsed_sweep
@@ -929,9 +939,27 @@ class TestForecastElapsedSweep:
         assert d["rejected_at"].endswith("Z")
 
     def test_wet_bulb_extreme_included(self):
+        # wet_bulb_extreme has no observed variant → sweeps on type alone,
+        # no provenance marker required.
         from src.orchestrator.triage import apply_forecast_elapsed_sweep
-        state = {"drafts": [self._draft(dtype="wet_bulb_extreme", tweet_date_days_ago=3)]}
+        state = {"drafts": [self._draft(dtype="wet_bulb_extreme", tweet_date_days_ago=3,
+                                        data_source=None)]}
         assert apply_forecast_elapsed_sweep(state) == 1
+
+    def test_ghcn_observed_absolute_extreme_never_swept(self):
+        # codex P1 (PR #385 r1): GHCN emits an OBSERVED absolute_extreme whose
+        # tweet_date is an observation date — legitimately ages in review.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=4, data_source="ghcn")]}
+        assert apply_forecast_elapsed_sweep(state) == 0
+        assert state["drafts"][0]["status"] == "pending"
+
+    def test_unknown_provenance_absolute_extreme_never_swept(self):
+        # Fail-safe: no provenance marker → never reject; the created_at TTL
+        # sweep still bounds such drafts at 7 days.
+        from src.orchestrator.triage import apply_forecast_elapsed_sweep
+        state = {"drafts": [self._draft(tweet_date_days_ago=4, data_source=None)]}
+        assert apply_forecast_elapsed_sweep(state) == 0
 
     def test_grace_day_survives(self):
         from src.orchestrator.triage import apply_forecast_elapsed_sweep

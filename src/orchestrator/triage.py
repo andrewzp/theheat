@@ -163,6 +163,15 @@ def apply_pending_ttl_sweep(
 # Observed-record types are deliberately NOT here: a GHCN record's
 # tweet_date is an observation date and may legitimately age in review.
 FORECAST_TENSE_TYPES = frozenset({"absolute_extreme", "wet_bulb_extreme"})
+# absolute_extreme is forecast-tense ONLY on the forecast path: GHCN emits
+# an OBSERVED absolute_extreme (data_source="ghcn") whose tweet_date is an
+# observation date that may legitimately age in review. The provenance
+# marker has ridden review_context facts since the type shipped (#195):
+# {"label": "Data source", "value": "forecast" | "ghcn"}. Types here sweep
+# only on a POSITIVE forecast marker; unknown provenance never sweeps
+# (fail-safe — the created_at TTL sweep still bounds those drafts at 7d).
+# wet_bulb_extreme has no observed variant, so it sweeps on type alone.
+PROVENANCE_CHECKED_TYPES = frozenset({"absolute_extreme"})
 FORECAST_ELAPSED_GRACE_DAYS_DEFAULT = 1
 
 
@@ -174,6 +183,20 @@ def _forecast_elapsed_grace_days() -> int:
         return FORECAST_ELAPSED_GRACE_DAYS_DEFAULT
 
 
+def _draft_has_forecast_provenance(d: dict) -> bool:
+    """True when the draft's review_context positively marks the forecast path."""
+    ctx = d.get("review_context")
+    facts = ctx.get("facts") if isinstance(ctx, dict) else None
+    if not isinstance(facts, list):
+        return False
+    for fact in facts:
+        if not isinstance(fact, dict):
+            continue
+        if str(fact.get("label", "")).strip().lower() == "data source":
+            return str(fact.get("value", "")).strip().lower() == "forecast"
+    return False
+
+
 def apply_forecast_elapsed_sweep(
     bot_state: Any,
     *,
@@ -182,9 +205,10 @@ def apply_forecast_elapsed_sweep(
     """Reject pending forecast-tense drafts whose forecast date has elapsed.
 
     Sibling of apply_pending_ttl_sweep: that sweep keys on created_at (age);
-    this one keys on tweet_date (the claim's anchor). Recoverable — the
-    operator can re-approve from the rejected pile. Mutates in place;
-    returns the count newly rejected.
+    this one keys on tweet_date (the claim's anchor). Provenance-aware for
+    types with an observed variant (see PROVENANCE_CHECKED_TYPES).
+    Recoverable — the operator can re-approve from the rejected pile.
+    Mutates in place; returns the count newly rejected.
     """
     if now is None:
         now = datetime.now(UTC)
@@ -195,7 +219,10 @@ def apply_forecast_elapsed_sweep(
     for d in bot_state.get("drafts", []) or []:
         if not isinstance(d, dict) or d.get("status") != "pending":
             continue
-        if str(d.get("type") or "") not in FORECAST_TENSE_TYPES:
+        dtype = str(d.get("type") or "")
+        if dtype not in FORECAST_TENSE_TYPES:
+            continue
+        if dtype in PROVENANCE_CHECKED_TYPES and not _draft_has_forecast_provenance(d):
             continue
         tweet_date = d.get("tweet_date")
         if not isinstance(tweet_date, str) or not tweet_date:
