@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 13 (PR-A) — heat-exposure detection foundation (2026-07-07)
+
+- **(program row 13, PR-A of 2)**: the verified data + computation layer for the
+  population-under-extreme-heat-warnings aggregate class (spike GO, #410). New
+  `src/data/heat_exposure.py` joins active NWS Extreme-Heat-Warning alerts' county
+  `SAME` codes to a vendored, public-domain Census county-population map
+  (`us_county_population.csv` — `POPESTIMATE2024` for 3,144 `SUMLEV=050` counties,
+  trimmed from CO-EST2024, US Gov public domain) and sums DISTINCT counties.
+  Marine/unknown SAME codes drop out (no county population); the figure is an honest
+  UPPER BOUND (county-scoped). No pipeline wiring, no editorial surface, no state writes
+  yet — PR-B adds the signal/intern/scoring/writer/fact-check/dedup + the
+  extraordinariness floor (Andrew's editorial-bar tuning). codex-xhigh.
+
 ### Row 9 — engagement capture: make the dormant metrics lane flippable (2026-07-07)
 
 - **(program row 9)**: the Twitter engagement-metrics lane (`src/data/twitter_metrics.py`
