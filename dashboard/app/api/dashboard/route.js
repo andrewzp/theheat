@@ -36,6 +36,29 @@ function pendingDrafts(state) {
     .map((d) => ({ ...d, tweet_id: d.tweet_id ?? null }))
 }
 
+// Row 9: posted drafts joined to their captured engagement metrics, so the
+// grading corpus can compare its A–F grades against what readers actually did.
+// Only posted drafts that carry a tweet_id (the join key) are surfaced;
+// metrics is null until the twitter_metrics lane has polled that tweet.
+function postedDraftsWithMetrics(state) {
+  const metrics = state?.tweet_metrics || {}
+  return (state?.drafts || [])
+    .filter((d) => d.status === "posted" && d.tweet_id)
+    .sort((a, b) => new Date(b.posted_at || 0) - new Date(a.posted_at || 0))
+    .map((d) => ({
+      id: d.id,
+      type: d.type ?? null,
+      event_id: d.event_id ?? null,
+      tweet_id: d.tweet_id,
+      text: d.text ?? null,
+      posted_at: d.posted_at ?? null,
+      created_at: d.created_at ?? null,
+      score: d.score ?? null,
+      candidate_score: d.candidate_score ?? null,
+      metrics: metrics[d.tweet_id] ?? null,
+    }))
+}
+
 function suppressionsPayload(state, { sourceFilter, sinceFilter, limit }) {
   const all = Array.isArray(state?.suppressions) ? state.suppressions : []
   const sinceMs = sinceFilter ? Date.parse(sinceFilter) : NaN
@@ -124,7 +147,7 @@ export async function GET(request) {
   const results = {
     state: null,
     stateBackend: getStateBackend(),
-    drafts: { drafts: [] },
+    drafts: { drafts: [], posted: [] },
     suppressions: { suppressions: [], stats: null },
     sourceHealth: { sources: [], stats: null },
     config: modelConfig(),
@@ -135,7 +158,7 @@ export async function GET(request) {
     const state = await readStateStore()
     results.state = projectStateForDashboard(state)
     results.stateBackend = getStateBackend()
-    results.drafts = { drafts: pendingDrafts(state) }
+    results.drafts = { drafts: pendingDrafts(state), posted: postedDraftsWithMetrics(state) }
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
   } catch (error) {

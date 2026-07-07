@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 9 — engagement capture: make the dormant metrics lane flippable (2026-07-07)
+
+- **(program row 9)**: the Twitter engagement-metrics lane (`src/data/twitter_metrics.py`
+  + `src/orchestrator/hot10.py`, already built but dormant) becomes flippable — `bot.yml`
+  gains the `THEHEAT_METRICS_ENABLED` passthrough (default `"0"`, ships OFF; flipping it ON
+  incurs X API pay-per-usage owned-read cost — ~1 batched read/day of the bot's own posted
+  tweets). The dashboard payload now joins posted drafts to their captured `tweet_metrics`
+  (`drafts.posted[]`, each with likes/retweets/replies or `null` until polled) so the
+  grading corpus can compare its A–F grades against real reader behavior. No new
+  `DEFAULT_STATE` key (`tweet_metrics` already present + merged). Recording metrics next to
+  grades in the routine corpus is a routine-owned follow-up (its own PR). codex-xhigh.
+
 ### #403 — coral DHW stress_level: full NOAA alert scale (fix under-labeling) (2026-07-07)
 
 - **(row-11 follow-up, emitted honesty field)**: `_stress_level_for_dhw` capped at

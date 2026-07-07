@@ -304,6 +304,14 @@ jobs:
           # Activate: gh variable set THEHEAT_PER_COUNTRY_CAP --body 2 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_PER_COUNTRY_CAP --body 0 --repo andrewzp/theheat
           THEHEAT_PER_COUNTRY_CAP: ${{ vars.THEHEAT_PER_COUNTRY_CAP || '0' }}
+          # Row 9 — Twitter engagement metrics polling (dormant since built).
+          # Reads public_metrics for the last 30d of posted tweets, one batched
+          # API call per day, gated once-per-day in code; feeds the grading
+          # corpus (FUTURE_STATE eval-set). Code default stays "0". Flipping it
+          # ON incurs X API per-read cost (pay-per-usage owned-reads).
+          # Activate: gh variable set THEHEAT_METRICS_ENABLED --body 1 --repo andrewzp/theheat
+          # Rollback: gh variable set THEHEAT_METRICS_ENABLED --body 0 --repo andrewzp/theheat
+          THEHEAT_METRICS_ENABLED: ${{ vars.THEHEAT_METRICS_ENABLED || '0' }}
           # "both" = GHCN (deep US NOAA station records) + Open-Meteo (curated
           # world cities incl. Europe), partitioned US/non-US in run_extreme_signals.
           # GHCN alone is blind outside the US (it missed the deadly June 2026
