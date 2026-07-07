@@ -25,6 +25,7 @@ on:
           - fire_footprint
           - dust
           - cyclone_land_threat
+          - precipitation_extreme
         default: 'fire'
       samples:
         description: 'Number of candidate drafts'
@@ -41,6 +42,12 @@ on:
       name:
         description: 'complex_name (--type fire_footprint)'
         default: 'Sierra Complex'
+      record_path:
+        description: 'daily_record fixture shape instead of multi_day_accumulation (--type precipitation_extreme; true/false)'
+        default: 'false'
+      country_cluster:
+        description: 'country_precip_event fixture shape instead of multi_day_accumulation (--type precipitation_extreme; true/false)'
+        default: 'false'
 
 concurrency:
   group: writer-dryrun
@@ -74,12 +81,16 @@ jobs:
           INPUT_FRP: ${{ inputs.frp }}
           INPUT_HECTARES: ${{ inputs.hectares }}
           INPUT_NAME: ${{ inputs.name }}
+          INPUT_RECORD_PATH: ${{ inputs.record_path }}
+          INPUT_COUNTRY_CLUSTER: ${{ inputs.country_cluster }}
         # `|| true`: a clean kill is informative, not a job failure — this is
         # the voice-iteration tool (reganom-dryrun semantics), NOT a flip
         # gate; we want drafts + verdicts in the log however many ship.
         run: |
           EXTRA=""
           if [ "$INPUT_NO_IMPACT" = "true" ]; then EXTRA="--no-impact"; fi
+          if [ "$INPUT_RECORD_PATH" = "true" ]; then EXTRA="$EXTRA --record-path"; fi
+          if [ "$INPUT_COUNTRY_CLUSTER" = "true" ]; then EXTRA="$EXTRA --country-cluster"; fi
           python scripts/writer_dryrun.py \
             --type "$INPUT_TYPE" \
             --samples "$INPUT_SAMPLES" \

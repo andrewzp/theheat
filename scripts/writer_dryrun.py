@@ -53,11 +53,12 @@ from src.data.air_quality import DUST_TIERS, DustEvent, _tier  # noqa: E402
 from src.data.cyclones import LandThreatEvent  # noqa: E402
 from src.data.fire_footprint import FireComplex, _classify_tier  # noqa: E402
 from src.data.firms import FireEvent  # noqa: E402
+from src.data.gpm_imerg import PrecipExtremeEvent  # noqa: E402
 from src.editorial.newsworthiness import detect_impact_citation  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
 from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
-from src.two_bot.intern import build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle  # noqa: E402
+from src.two_bot.intern import build_cyclone_land_threat_bundle, build_dust_event_bundle, build_fire_bundle, build_fire_footprint_bundle, build_precipitation_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
@@ -107,6 +108,14 @@ DEFAULTS: dict = {
     "distance_nm": 25.0,
     "tau_h": 48,
     "forecast_wind_kt": 95,
+    # precipitation_extreme (Astana-class) knobs
+    "precip_location": "Astana",
+    "precip_country": "Kazakhstan",
+    "precip_mm": 358.0,
+    "precip_period_days": 7,
+    "precip_threshold_mm": 300.0,
+    "record_path": False,
+    "country_cluster": False,
 }
 
 _NIFC_URL = (
@@ -167,6 +176,58 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
             event_id="dryrun_land_threat_05w",
         )
         return build_cyclone_land_threat_bundle(lt)
+    if args.type == "precipitation_extreme":
+        # Never attaches human_impact (see DEFAULTS comment for dust) — the
+        # --no-impact / impact knobs are ignored for this type. record_path
+        # and country_cluster pick between three disjoint fixture shapes: a
+        # threshold-crossing multi_day_accumulation (alert_threshold_mm, no
+        # record fields), a daily_record with an archive previous_record_mm
+        # (#372 — a static trigger presented as "the previous record" is a
+        # false-record claim no downstream gate can catch), or a
+        # country_precip_event cluster (city_count monitored cities each
+        # broke a daily record; no per-city record fields ride it — codex P1).
+        if args.country_cluster:
+            event = PrecipExtremeEvent(
+                kind="country_precip_event",
+                location=args.precip_country,
+                country=args.precip_country,
+                date=datetime.now(UTC).date().isoformat(),
+                mm_total=args.precip_mm,
+                period_days=1,
+                deviation_from_record_mm=None,
+                previous_record_mm=None,
+                previous_record_year=None,
+                lat=51.17,
+                lon=71.43,
+                city_count=12,
+                sample_cities=[
+                    "Astana", "Karaganda", "Pavlodar", "Shymkent", "Almaty",
+                    "Aktobe", "Taraz", "Oskemen", "Semey", "Atyrau",
+                    "Kostanay", "Kyzylorda",
+                ],
+                event_id="dryrun_precip_country_kazakhstan",
+                alert_threshold_mm=None,
+            )
+            return build_precipitation_bundle(event)
+        record = bool(args.record_path)
+        event = PrecipExtremeEvent(
+            kind="daily_record" if record else "multi_day_accumulation",
+            location=args.precip_location,
+            country=args.precip_country,
+            date=datetime.now(UTC).date().isoformat(),
+            mm_total=args.precip_mm,
+            period_days=1 if record else args.precip_period_days,
+            deviation_from_record_mm=148.0 if record else None,
+            previous_record_mm=210.0 if record else None,
+            previous_record_year=2013 if record else None,
+            lat=51.17,
+            lon=71.43,
+            city_count=1,
+            sample_cities=[args.precip_location],
+            event_id="dryrun_precip_astana",
+            alert_threshold_mm=None if record else args.precip_threshold_mm,
+        )
+        return build_precipitation_bundle(event)
     if args.type == "dust":
         # No _attach_impact for dust — the fixture never carries human_impact
         # (see DEFAULTS comment). The --no-impact / impact knobs are ignored.
@@ -239,6 +300,16 @@ def _print_bundle(bundle: StoryBundle) -> None:
         print(f"  landmass .......... {facts.get('landmass_country')} (near {facts.get('nearest_city')})")
         print(f"  closest approach .. {facts.get('min_distance_nm')} NM within {facts.get('closest_tau_h')}h")
         print(f"  forecast wind ..... {facts.get('forecast_wind_kt_at_closest')} kt at closest")
+    elif bundle.signal_kind == "precipitation_extreme":
+        print(f"  rainfall_mm ....... {facts.get('rainfall_mm')} mm over {facts.get('period_days')} day(s)")
+        if facts.get("event_kind") == "country_precip_event":
+            print(f"  city_count ........ {facts.get('city_count')} monitored cities (each broke a daily record)")
+            print(f"  heaviest single-city {facts.get('rainfall_mm')} mm")
+        elif facts.get("previous_record_mm") is not None:
+            print(f"  record ............ previous record {facts.get('previous_record_mm')} mm "
+                  f"({facts.get('previous_record_year')}) · deviation +{facts.get('deviation_from_record_mm')} mm")
+        else:
+            print(f"  alert_threshold ... {facts.get('alert_threshold_mm')} mm")
     else:
         print(f"  complex_name ...... {facts.get('complex_name')}")
         print(f"  tier crossed ...... {facts.get('tier_hectares')} ha")
@@ -303,7 +374,7 @@ def _run_one(bundle: StoryBundle, state: dict, idx: int) -> bool:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat"), default=DEFAULTS["type"])
+    p.add_argument("--type", choices=("fire", "fire_footprint", "dust", "cyclone_land_threat", "precipitation_extreme"), default=DEFAULTS["type"])
     p.add_argument("--samples", type=int, default=DEFAULTS["samples"], help="number of candidate drafts")
     p.add_argument("--no-impact", dest="no_impact", action="store_true",
                    help="control run: same bundle with NO human_impact attached")
@@ -349,7 +420,27 @@ def main() -> int:
     p.add_argument("--tau-h", dest="tau_h", type=int, default=DEFAULTS["tau_h"])
     p.add_argument("--forecast-wind-kt", dest="forecast_wind_kt", type=int,
                    default=DEFAULTS["forecast_wind_kt"])
+    # precipitation_extreme knobs
+    p.add_argument("--precip-location", dest="precip_location", default=DEFAULTS["precip_location"])
+    p.add_argument("--precip-country", dest="precip_country", default=DEFAULTS["precip_country"])
+    p.add_argument("--precip-mm", dest="precip_mm", type=float, default=DEFAULTS["precip_mm"])
+    p.add_argument("--precip-period-days", dest="precip_period_days", type=int,
+                   default=DEFAULTS["precip_period_days"])
+    p.add_argument("--precip-threshold-mm", dest="precip_threshold_mm", type=float,
+                   default=DEFAULTS["precip_threshold_mm"])
+    p.add_argument("--record-path", dest="record_path", action="store_true",
+                   default=DEFAULTS["record_path"],
+                   help="daily_record fixture shape (previous_record_mm) instead of "
+                        "the default multi_day_accumulation (alert_threshold_mm)")
+    p.add_argument("--country-cluster", dest="country_cluster", action="store_true",
+                   default=DEFAULTS["country_cluster"],
+                   help="country_precip_event fixture shape (city_count monitored "
+                        "cities each broke a daily record) instead of the default "
+                        "multi_day_accumulation (alert_threshold_mm)")
     args = p.parse_args()
+
+    if args.record_path and args.country_cluster:
+        p.error("--record-path and --country-cluster are mutually exclusive")
 
     bundle = _build_bundle(args)
 
