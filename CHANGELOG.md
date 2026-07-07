@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### E1 — the fire voice floor: four moves, paired gates, per-type dryrun (2026-07-06, evening)
+
+- **[#379](https://github.com/andrewzp/theheat/pull/379)** (plan row 8): the
+  reganom four-moves pattern generalized to fires. The writer prompt gains a
+  dedicated fire-bundles section (`fire` | `fire_footprint`): lead with the
+  event not the detection; scale words over raw units (`frp_tier` anchor;
+  footprints cite the new pre-rounded `area_km2_approx`/`area_acres_approx`
+  with "about"); a fire has a name ONLY when the bundle names it
+  (`complex_name` or a `human_impact` claim — hotspots are nameless); name
+  the stakes the bundle can see, with the A1 sourced-impact path wired in as
+  the fourth move. Paired in the same PR: fact-check rule (l) — fire names,
+  areas, operational specifics, and behavior are bundle-or-nothing; tier
+  words verify against `frp_tier` exactly. New `scripts/writer_dryrun.py
+  --type fire|fire_footprint` + `writer-dryrun.yml` (workflow_dispatch,
+  voice-iteration `|| true` semantics; `news-enrich-dryrun.yml` remains the
+  A1 pre-flip gate, untouched), with offline fixture tests so a green run
+  tests the real A1 shape. Honesty gates only tightened.
+
 ### gpm false-record class fixed + the Barrow stuck-sensor artifact (2026-07-06, late)
 
 - **[#376](https://github.com/andrewzp/theheat/pull/376)** (fixes the deterministic
