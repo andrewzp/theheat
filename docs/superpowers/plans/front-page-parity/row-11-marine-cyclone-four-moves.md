@@ -95,9 +95,48 @@ DOES carry `streak_days` and direction language is fair there.
 explicit lines: the dose framing is canonical (accept); "marine heatwave" naming on a
 `regional_sst_anomaly` bundle contradicts the bundle's own `signal_note` (reject —
 BUNDLE_FACT inconsistency, quote the note).
-- [ ] **Dryrun:** `--type coral_bleaching` (Galápagos-class fixture: dhw 24.5, tier
-12, `bleaching_level`/`stress_level` from the intern's real vocabulary, 2 reef_context
-facts) and `--type marine_heatwave` (streak 12d milestone). Fixture tests as in row 4.
+- [ ] **Dryrun (self-contained):** add BOTH types to `scripts/writer_dryrun.py`.
+DEFAULTS: `"dhw_value": 24.5, "dhw_region": "galapagos", "mhw_streak_days": 12`.
+argparse: the two types in `--type` choices + `--dhw-value/--dhw-region/--mhw-streak-days`.
+`_build_bundle` branches (keyword construction, dates today-relative):
+
+```python
+    if args.type == "coral_bleaching":
+        event = CoralBleachingEvent(
+            region_id=args.dhw_region,
+            region_full_name="Galápagos Islands",
+            date=datetime.now(UTC).date().isoformat(),
+            dhw_value=args.dhw_value,
+            dhw_tier=12,
+            bleaching_level="Alert Level 3",
+            stress_level="multi-species mortality risk",
+            event_id=f"dryrun_coral_{args.dhw_region}",
+            lat=-0.6, lon=-90.4,
+        )
+        return build_coral_bleaching_bundle(event)
+    if args.type == "marine_heatwave":
+        event = MarineHeatwaveStreakEvent(
+            kind="milestone",
+            days=args.mhw_streak_days,
+            peak_anomaly_c=0.31,
+            today_c=21.1,
+            archive_max_c=21.05,
+            archive_max_year=2024,
+            years_of_data=44,
+            date=datetime.now(UTC).date().isoformat(),
+            event_id=f"dryrun_mhw_{args.mhw_streak_days}d",
+        )
+        return build_marine_heatwave_bundle(event)
+```
+
+(imports from `src.data.coral_dhw` / `src.data.ocean_sst` / `src.two_bot.intern`.
+BEFORE writing the fixtures, read both event dataclasses and copy their REAL field
+names/vocabulary — the `bleaching_level`/`stress_level` strings above must match the
+intern's actual emitted vocabulary; adjust from the dataclass defaults if they differ.)
+Fixture tests in `tests/test_writer_dryrun.py`: each type → correct `signal_kind`,
+evidence contract PASS, no `human_impact`; the coral bundle carries
+`thresholds_c_weeks == [4, 8, 12]` in `historical_context`. Workflow choices gain both
+types.
 - [ ] Version/changelog/gates/PR/codex loop (attack: does move 3 conflict with the
 critic's template-convergence kill or double-teach it; dose-analogy arithmetic
 correctness; any loosening unpaired) → merge → dispatch both dryrun types.

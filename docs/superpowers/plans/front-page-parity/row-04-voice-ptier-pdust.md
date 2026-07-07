@@ -53,7 +53,7 @@ Branch: `git checkout main && git pull && git checkout -b feat/voice-ptier-pdust
 
 **Files:**
 - Modify: `src/data/air_quality.py`
-- Test: `tests/two_bot/test_air_quality_intern.py` (intern half lands in Task 2; this task's tests go wherever the existing `detect_dust_event` tests live — find them with `grep -rn "detect_dust_event" tests/` and add alongside)
+- Test: `tests/test_air_quality.py` (the existing detector tests live here; its fixture helper is `_obs(...)` at line ~63 — extend THAT helper with a `pm10_24h_mean=None` keyword default)
 
 **Interfaces:**
 - Consumes: the existing `_slice`/`_daily_mean`/`_daily_max` helpers in `src/data/air_quality.py` and the hourly request string at `src/data/air_quality.py:242`.
@@ -66,7 +66,7 @@ def test_detect_dust_event_carries_pm10_anchor_when_available():
     """P_dust root cause: dust drafts had no WHO-scale anchor because the
     event carried none. The anchor is CO-MEASURED PM10 (a separate hourly
     variable from `dust`), 24h mean vs the WHO 2021 PM10 24h AQG (45)."""
-    obs = _city_air_quality(dust_daily_max=2400.0, pm10_24h_mean=900.0)
+    obs = _obs(dust_daily_max=2400.0, pm10_24h_mean=900.0)
     event = detect_dust_event(obs)
     assert event is not None
     assert event.pm10_24h_mean == 900.0
@@ -76,15 +76,15 @@ def test_detect_dust_event_carries_pm10_anchor_when_available():
 def test_detect_dust_event_is_none_safe_without_pm10():
     # A cycle where the pm10 series is missing must still mint the dust
     # event (tier logic unchanged) with the anchor fields None.
-    obs = _city_air_quality(dust_daily_max=2400.0, pm10_24h_mean=None)
+    obs = _obs(dust_daily_max=2400.0, pm10_24h_mean=None)
     event = detect_dust_event(obs)
     assert event is not None
     assert event.pm10_24h_mean is None
     assert event.who_pm10_multiple is None
 ```
 
-(If the existing test file builds `CityAirQuality` via a helper, extend that helper with
-a `pm10_24h_mean=None` keyword default rather than writing a new one.)
+(`_obs` is `tests/test_air_quality.py`'s existing `CityAirQuality` fixture helper —
+extend it with the `pm10_24h_mean=None` keyword default; do not write a new helper.)
 
 - [ ] **Step 2: Run to verify failure**
 

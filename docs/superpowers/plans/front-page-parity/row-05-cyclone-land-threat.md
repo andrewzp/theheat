@@ -574,7 +574,7 @@ not) → implement → registry/threshold tests green → commit
 - Test: `tests/two_bot/test_intern.py`, `tests/two_bot/test_prompts.py`
 
 **Interfaces:**
-- Produces: `build_cyclone_land_threat_bundle(ev: LandThreatEvent) -> StoryBundle` with `signal_kind="cyclone_land_threat"`; `current_facts` labels exactly: `storm_name`, `basin`, `current_wind_kt`, `saffir_simpson_category` (from the existing helper), `landmass_country`, `nearest_city`, `min_distance_nm`, `closest_tau_h`, `forecast_wind_kt_at_closest`, `advisory_number`, `forecast_basis` = `"official forecast track (JTWC/NHC)"`; `raw_signal_dump` MUST include `storm_id` (the evidence contract's source-anchor check, `src/two_bot/evidence_contract.py:34-44`); `historical_context={}`.
+- Produces: `build_cyclone_land_threat_bundle(ev: LandThreatEvent) -> StoryBundle` with `signal_kind="cyclone_land_threat"`; `current_facts` labels exactly: `storm_name`, `basin`, `current_wind_kt`, `saffir_simpson_category` (from the existing helper), `landmass_country`, `nearest_city`, `min_distance_nm`, `closest_tau_h`, `forecast_wind_kt_at_closest`, `advisory_number`, `forecast_basis` = `"official forecast track (JTWC/NHC)"`; `raw_signal_dump` includes `storm_id` and `source` (these are in the evidence contract's source-like anchor tokens, `src/two_bot/evidence_contract.py:34-44` — a missing anchor is only a WARNING there, but include them anyway: they also feed auditability and the fact-checker's raw view); `historical_context={}`.
 - Writer prompt: a compact convention block (row 11 upgrades it to full four-moves later) added to the cyclone bundle conventions:
 
 ```markdown
@@ -615,13 +615,53 @@ FACT_CHECK_SYSTEM_PROMPT) → run FAIL → implement → PASS → commit
 
 **Interfaces:**
 - Consumes: `detect_land_threats` (Task 3), `record_land_threat_pair` (Task 4), `score_cyclone_land_threat` (Task 5), `build_cyclone_land_threat_bundle` (Task 6), `load_cities` (`src/data/open_meteo.py:218`), the existing `isinstance` dispatch in `_score_cyclone_event` (`src/orchestrator/cyclones.py:72-93`) and `_bundle_for_cyclone_event` (`:96-112`), `_enqueue_story_candidate` + `on_draft_success` (the `src/orchestrator/sources/nifc.py:88-104` pattern), `state.is_duplicate`.
-- Behavior: inside `_process_cyclone_source` (after the landfall block): call
-`detect_land_threats(advisories, bot_state.get("cyclone_land_threat_pairs", {}), load_cities(), now=datetime.now(timezone.utc))`;
-for each event — `is_duplicate` guard on `event_id`, score, `_should_draft` gate,
-build bundle, enqueue with `legacy_type="cyclone_land_threat"` and an
-`on_draft_success` closure calling `record_land_threat_pair(bot_state, tracking_key, slug)`
-(bind loop variables as defaults, exactly like `nifc.py:88-93` — the pair records ONLY
-on draft success, so a killed draft retries next advisory).
+- Behavior: inside `_process_cyclone_source` (after the landfall block) — exact shape,
+with the closure deriving its keys from the event (neither `tracking_key` nor `slug`
+rides `LandThreatEvent`; derive both, bound as defaults, the `nifc.py:88-93` pattern):
+
+```python
+    land_threats = detect_land_threats(
+        advisories,
+        bot_state.get("cyclone_land_threat_pairs", {}),
+        load_cities(),
+        now=datetime.now(timezone.utc),
+    )
+    for lt in land_threats:
+        if state.is_duplicate(bot_state, lt.event_id):
+            continue
+        lt_score = score_cyclone_land_threat(
+            current_wind_kt=lt.current_wind_kt,
+            min_distance_nm=lt.min_distance_nm,
+            closest_tau_h=lt.closest_tau_h,
+            landmass_country=lt.landmass_country,
+        )
+        if not _should_draft(lt_score, lt.event_id):
+            continue
+        lt_bundle = build_cyclone_land_threat_bundle(lt)
+        _tk = tracking_key(lt.source, lt.storm_id)
+        _slug = _landmass_slug(lt.landmass_country)
+
+        def _on_success(_bs: BotState = bot_state, _k: str = _tk, _s: str = _slug) -> None:
+            state.record_land_threat_pair(_bs, _k, _s)
+
+        _enqueue_story_candidate(
+            bot_state,
+            bundle=lt_bundle,
+            score=lt_score,
+            source="cyclones",
+            legacy_type="cyclone_land_threat",
+            event_id=lt.event_id,
+            review_context={"cyclone": {"kind": "land_threat"}},
+            on_draft_success=_on_success,
+        )
+```
+
+(imports: `tracking_key`, `_landmass_slug`, `detect_land_threats` from
+`src.data.cyclones`; `load_cities` from `src.data.open_meteo`;
+`record_land_threat_pair` via the `state` module like the other setters. Match
+`_enqueue_story_candidate`'s ACTUAL keyword signature in this file — read a neighboring
+call before writing. The pair records ONLY on draft success, so a killed draft retries
+on the next advisory.)
 
 - [ ] Steps: failing orchestrator test (fake advisories with forecast points near a
 fake city → exactly one candidate enqueued; the pair NOT recorded when the fake
@@ -629,15 +669,70 @@ enqueue reports no success; recorded after success) → implement (add the two
 `isinstance` branches + the detection block) → PASS → commit
 `"feat(cyclone): wire land-threat detection into the cyclone source (#375)"`.
 
-### Task 8: `writer_dryrun --type cyclone_land_threat`
+### Task 8: `writer_dryrun --type cyclone_land_threat` (self-contained)
 
-Mirror the row-04 Task-4 shape exactly: DEFAULTS gain a Bavi-class fixture
-(`storm "BAVI"`, `current_wind_kt 135`, `landmass "Taiwan"`, `nearest_city "Taipei"`,
-`min_distance_nm 25.0`, `closest_tau_h 48`, `forecast_wind_kt_at_closest 95`), a
-`_build_bundle` branch constructing `LandThreatEvent` directly (issued_at =
-`datetime.now(UTC).isoformat()` — today-relative) → `build_cyclone_land_threat_bundle`,
-workflow choice list gains the type, fixture tests in `tests/test_writer_dryrun.py`
-(evidence PASS + no impact attached). Commit
+**Files:** `scripts/writer_dryrun.py`, `.github/workflows/writer-dryrun.yml`,
+`tests/test_writer_dryrun.py`.
+
+- [ ] **Step 1: Failing fixture tests** (append to `tests/test_writer_dryrun.py`):
+
+```python
+class TestCycloneLandThreatFixture:
+    def test_bundle_shape_and_evidence(self):
+        bundle = _build_bundle(_args(type="cyclone_land_threat"))
+        assert bundle.signal_kind == "cyclone_land_threat"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["landmass_country"] == "Taiwan"
+        assert facts["min_distance_nm"] == 25.0
+        assert facts["closest_tau_h"] == 48
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_no_impact_on_cyclone_fixture(self):
+        bundle = _build_bundle(_args(type="cyclone_land_threat"))
+        assert not getattr(bundle, "human_impact", None)
+```
+
+- [ ] **Step 2:** Run → FAIL (`invalid choice`).
+- [ ] **Step 3:** Implement in `scripts/writer_dryrun.py` — DEFAULTS additions:
+
+```python
+    # cyclone_land_threat (Bavi-class) knobs
+    "storm_name": "BAVI",
+    "storm_wind_kt": 135,
+    "landmass": "Taiwan",
+    "landmass_city": "Taipei",
+    "distance_nm": 25.0,
+    "tau_h": 48,
+    "forecast_wind_kt": 95,
+```
+
+argparse: add `"cyclone_land_threat"` to the `--type` choices plus
+`--storm-name/--storm-wind-kt/--landmass/--landmass-city/--distance-nm/--tau-h/--forecast-wind-kt`
+(defaults from DEFAULTS). `_build_bundle` branch:
+
+```python
+    if args.type == "cyclone_land_threat":
+        lt = LandThreatEvent(
+            source="jtwc", storm_id="05W", storm_name=args.storm_name,
+            basin="WP", advisory_number="024",
+            issued_at=datetime.now(UTC).isoformat(),
+            current_wind_kt=args.storm_wind_kt,
+            landmass_country=args.landmass, nearest_city=args.landmass_city,
+            min_distance_nm=args.distance_nm, closest_valid_at="dryrun",
+            closest_tau_h=args.tau_h,
+            forecast_wind_kt_at_closest=args.forecast_wind_kt,
+            event_id="dryrun_land_threat_05w",
+        )
+        return build_cyclone_land_threat_bundle(lt)
+```
+
+(imports: `LandThreatEvent` from `src.data.cyclones`,
+`build_cyclone_land_threat_bundle` from `src.two_bot.intern`). `_print_bundle` gets a
+branch printing storm/landmass/distance/tau. Workflow: add `cyclone_land_threat` to the
+`type` choice options (inputs stay env-only).
+
+- [ ] **Step 4:** Tests PASS + no-keys smoke exits 2. **Step 5:** Commit
 `"feat(dryrun): --type cyclone_land_threat — Bavi-class fixture"`.
 
 ### Task 9: Version, changelog, full gates

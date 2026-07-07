@@ -149,20 +149,77 @@ reject invented specificity (an exact local normal to the millimetre).
 - [ ] **Step 6:** Commit
 `"feat(voice): precipitation four-moves + fact-check rule (o) — P9 retired, threshold≠record in the writer's own rules"`.
 
-### Task 2: `writer_dryrun --type precipitation_extreme`
+### Task 2: `writer_dryrun --type precipitation_extreme` (self-contained)
 
-Mirror row-04 Task 4 exactly. DEFAULTS: an Astana-class accumulation fixture
-(`kind="multi_day_accumulation"`, `location="Astana"`, `country="Kazakhstan"`,
-`mm_total=358.0`, `period_days=7`, `alert_threshold_mm=300.0`, record fields None,
-`city_count=1`, `sample_cities=["Astana"]`, plausible lat/lon 51.17/71.43, `date` =
-today) with a `--record-path` flag variant swapping in the record shape
-(`previous_record_mm=210.0`, `previous_record_year=2013`,
-`deviation_from_record_mm=+148.0`, `alert_threshold_mm=None`). Construct
-`PrecipExtremeEvent` (from `src.data.gpm_imerg`) keyword-style, `event_id`
-`"dryrun_precip_astana"`, date today-relative → `build_precipitation_bundle`. Fixture
-tests in `tests/test_writer_dryrun.py`: both shapes pass the evidence contract; the
-accumulation fixture carries `alert_threshold_mm` and NO record fields; the record
-fixture the reverse. Workflow choice list gains the type. Commit
+**Files:** `scripts/writer_dryrun.py`, `.github/workflows/writer-dryrun.yml`,
+`tests/test_writer_dryrun.py`.
+
+- [ ] **Step 1: Failing fixture tests:**
+
+```python
+class TestPrecipFixture:
+    def test_accumulation_shape(self):
+        bundle = _build_bundle(_args(type="precipitation_extreme"))
+        assert bundle.signal_kind == "precipitation_extreme"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["alert_threshold_mm"] == 300.0
+        assert "previous_record_mm" not in facts
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_record_path_shape(self):
+        bundle = _build_bundle(_args(type="precipitation_extreme", record_path=True))
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["previous_record_mm"] == 210.0
+        assert "alert_threshold_mm" not in facts
+```
+
+- [ ] **Step 2:** Run → FAIL. **Step 3:** Implement — DEFAULTS additions:
+
+```python
+    # precipitation_extreme (Astana-class) knobs
+    "precip_location": "Astana",
+    "precip_country": "Kazakhstan",
+    "precip_mm": 358.0,
+    "precip_period_days": 7,
+    "precip_threshold_mm": 300.0,
+    "record_path": False,
+```
+
+argparse: `"precipitation_extreme"` in `--type` choices; `--precip-location`,
+`--precip-country`, `--precip-mm`, `--precip-period-days`, `--precip-threshold-mm`,
+and `--record-path` (store_true, dest `record_path`). `_build_bundle` branch:
+
+```python
+    if args.type == "precipitation_extreme":
+        record = bool(args.record_path)
+        event = PrecipExtremeEvent(
+            kind="daily_record" if record else "multi_day_accumulation",
+            location=args.precip_location,
+            country=args.precip_country,
+            date=datetime.now(UTC).date().isoformat(),
+            mm_total=args.precip_mm,
+            period_days=1 if record else args.precip_period_days,
+            deviation_from_record_mm=148.0 if record else None,
+            previous_record_mm=210.0 if record else None,
+            previous_record_year=2013 if record else None,
+            lat=51.17,
+            lon=71.43,
+            city_count=1,
+            sample_cities=[args.precip_location],
+            event_id="dryrun_precip_astana",
+            alert_threshold_mm=None if record else args.precip_threshold_mm,
+        )
+        return build_precipitation_bundle(event)
+```
+
+(imports: `PrecipExtremeEvent` from `src.data.gpm_imerg`,
+`build_precipitation_bundle` from `src.two_bot.intern`). `_print_bundle` gets a precip
+branch (mm/period/threshold-or-record). Workflow: add the type to choices; add a
+`record_path` boolean input wired via `INPUT_RECORD_PATH` env → `--record-path` flag,
+same `EXTRA` pattern as `no_impact`.
+
+- [ ] **Step 4:** PASS + smoke exit 2. **Step 5:** Commit
 `"feat(dryrun): --type precipitation_extreme — accumulation + record-path fixtures"`.
 
 ### Task 3: Version, changelog, gates, PR, codex, live verify

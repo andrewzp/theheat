@@ -46,22 +46,28 @@ loop gets a per-country soft cap, exactly parallel to the existing per-category 
 pending-type caps — the IDEAS.md geographic-spread item, made concrete.
 
 **Architecture:** `select_survivors` (`src/orchestrator/triage.py:214-305`) gains a
-third counting dict in its survivor loop. Country comes from
-`candidate.bundle.country` (`StoryBundle.country`, `src/two_bot/types.py:57`) with
-fallbacks: `bundle.country or _country_from_where(bundle.where) or ""` — where
-`_country_from_where` takes the last comma-segment of the `where` string ("Phoenix,
-Arizona, United States" → "United States"); empty string is NEVER capped (unknown
-geography must not be suppressed). Env `THEHEAT_PER_COUNTRY_CAP`, default `0` =
-DISABLED (flag-gated ship; Andrew flips to `2` after watching a few cycles' spill
-logs).
+third counting dict in its survivor loop. Country key =
+`_candidate_country_key(candidate)`: take `bundle.country` if set, else the last
+comma-segment of `bundle.where` ("Phoenix, Arizona, United States" → "United States"),
+then NORMALIZE — lowercase, strip, and collapse US aliases via the existing
+`_US_COUNTRY_TOKENS` set (`src/two_bot/intern/_shared.py:106-108`: "united states",
+"usa", "us", …→ one bucket "united states") — because `StoryBundle.country` is
+documented as a 2-letter code (`src/two_bot/types.py:52`) while `where` carries full
+names, and "US" vs "United States" must never split one country into two cap buckets.
+Non-US code-vs-name splits (e.g. "ML" vs "Mali") can still under-cap — acceptable for
+a fail-open diversity nudge; say so in a code comment. Empty key is NEVER capped
+(unknown geography must not be suppressed). Env `THEHEAT_PER_COUNTRY_CAP`, default
+`0` = DISABLED (flag-gated ship; Andrew flips to `2` after watching a few cycles'
+spill logs).
 
 - [ ] **Failing tests** (beside the existing `select_survivors` tests in
 `tests/test_triage.py`): cap disabled by default (5 same-country candidates → all
 rank as today); cap=2 → third same-country candidate spills with
-`reasons=["per_country_cap=2"]` and `kill_stage="triage_cap"`; empty-country
-candidates never spill on this rule; the spill is recorded via the existing
-`_record_triage_suppression` with the new reason string; ordering among survivors
-otherwise unchanged (score DESC, created_at DESC).
+`reasons=["per_country_cap=2"]` and `kill_stage="triage_cap"`; **"US" and "United
+States" share one bucket** (one candidate each + cap=1 → the second spills);
+empty-country candidates never spill on this rule; the spill is recorded via the
+existing `_record_triage_suppression` with the new reason string; ordering among
+survivors otherwise unchanged (score DESC, created_at DESC).
 - [ ] **Implement**: read the env in a `_per_country_cap()` helper mirroring
 `_per_category_cap()` (~line 53); in the loop (after the pending-type check, before
 the global-cap check) — same shape as `by_category`:
@@ -69,15 +75,16 @@ the global-cap check) — same shape as `by_category`:
 ```python
         country_cap = _per_country_cap()
         # ... in the loop:
-        country = _candidate_country(candidate)
+        country = _candidate_country_key(candidate)
         if country_cap > 0 and country:
             if by_country.get(country, 0) >= country_cap:
                 spilled.append((candidate, "per_country_cap"))
                 continue
 ```
 
-with the increment beside the other two on admit, and `_candidate_country(c)` doing
-the bundle.country/where fallback. Extend `_record_triage_suppression`'s reason
+with the increment beside the other two on admit, and `_candidate_country_key(c)`
+doing the bundle.country / where-last-segment fallback + lowercase/strip + US-alias
+collapse via `_US_COUNTRY_TOKENS` exactly as the Architecture paragraph specifies. Extend `_record_triage_suppression`'s reason
 plumbing only if the reason string doesn't already flow through generically (read it
 first — it takes `reason` today).
 - [ ] **bot.yml passthrough** for `THEHEAT_PER_COUNTRY_CAP` (house comment pattern,
