@@ -21,6 +21,11 @@ All notable changes to this project will be documented in this file.
   voice-iteration `|| true` semantics; `news-enrich-dryrun.yml` remains the
   A1 pre-flip gate, untouched), with offline fixture tests so a green run
   tests the real A1 shape. Honesty gates only tightened.
+- **[#380](https://github.com/andrewzp/theheat/pull/380)** (the codex r1 finding,
+  generalized): dispatch inputs reach ALL dryrun workflow shells (`reganom-dryrun`,
+  `news-enrich-dryrun`, `writer-dryrun`) via `INPUT_*` env vars only — no
+  `${{ inputs.* }}` inside `run:` blocks holding API keys. No semantic change;
+  news-enrich stays fail-loud as the A1 pre-flip gate.
 
 ### gpm false-record class fixed + the Barrow stuck-sensor artifact (2026-07-06, late)
 

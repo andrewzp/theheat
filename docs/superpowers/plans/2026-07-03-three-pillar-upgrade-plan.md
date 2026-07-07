@@ -47,7 +47,7 @@ Sonnet writer / Gemini Flash fact-check / Gemini 2.5 Pro critic, Next.js dashboa
 | 5 | **A0: Bet A phase 0** — **BUILT, SHIPPED DARK (#366; activation = Andrew's flag flip)** | 2 | M | Low (zero editorial surface) | Andrew approved 2026-07-03 ("follow your own recommendations") |
 | 6 | **A1: Bet A enrich** — `human_impact` on bundles + writer/fact-check/§F gates + forced manual_only — **BUILT, SHIPPED DARK (#371; codex-xhigh 4 rounds → clean APPROVE; live dryrun GREEN)** | 2→1 | L | Med (editorial-gate diffs; codex mandatory) | A0 live-verified |
 | 7 | **A2: Bet A boost** — capped rescue at the fire score gate — **BUILT, SHIPPED DARK (#373; codex-xhigh 4 rounds → clean APPROVE)** | 2 | M | Med | A0; A1 recommended first |
-| 8 | **E1: voice-floor iteration** — generalize the reganom four-moves + dryrun-harness pattern to the next signal type (fires) | 1 | M | Med | A1 (impact-carrying fire tweets are the richest test) |
+| 8 | **E1: voice-floor iteration (fires)** — **BUILT AND MERGED (#379 + workflow class-fix #380; codex-xhigh r1 4×P1 → r2 clean APPROVE; 2026-07-06)** | 1 | M | Med | A1 (impact-carrying fire tweets are the richest test) |
 | 9 | R4: self-heal completion — `SELFHEAL_PAT` (operator: Andrew) + verify | 3 | XS (Andrew) | Low | — |
 | 10 | A3 (v2): new-coverage-trigger for sensor-less stories — gated on gap-flag evidence | 2 | L | High | A0-A2 live + gap-flag data |
 
@@ -323,6 +323,14 @@ merge the reganom stakes fix (PR #1 in the queue, in flight), then A1 delivers t
 anecdote capability. What remains pillar-specific:
 
 ### E1: voice-floor iteration, one signal type at a time (after A1)
+
+> **STATUS: FIRES BUILT AND MERGED 2026-07-06** — PR #379 (`feat/e1-fire-voice-floor`,
+> v0.9.82.0) + #380 (workflow input-injection class-fix). Fire-bundles four-moves
+> section (`fire` | `fire_footprint`), fact-check rule (l) pairing, pre-computed
+> footprint area equivalents, `scripts/writer_dryrun.py --type fire|fire_footprint`
+> + `writer-dryrun.yml`. codex-xhigh 2 rounds (r1: 4 real P1s; r2: clean APPROVE).
+> The harness runs with all Bet A flags OFF. Next types per the pattern:
+> precip/marine.
 
 The reganom voice upgrade established the repeatable pattern: (1) name the type's
 four moves in its writer-prompt section (lead with significance, weave attribution,
