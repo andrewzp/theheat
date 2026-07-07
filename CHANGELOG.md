@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### News-gap watch — dedupe source names in the '(per …)' join (2026-07-07)
+
+- **(#396)**: the news-gap watch rendered a gap line as
+  `fire: Pocket fire (AZ) (per NIFC, NIFC)` when two of an event's
+  `impact[]` entries shared a publisher. Source names are now deduped
+  order-preserving (`dict.fromkeys`) in `news_gap_watch`
+  (`scripts/source_health_sentinel.py`) — applied *before* the 3-source
+  cap, so a repeated publisher can't crowd a distinct one out of the cap
+  — and again in `build_news_gap_body`'s join as a render-layer guard for
+  findings built elsewhere. Order-preserving beats a sorted set here: the
+  first-listed publisher is the event's primary source and stays first.
+  No JS mirror: the dashboard does not render the news-gap join
+  (verified — zero `news-gap`/`(per` hits under `dashboard/`). TDD: both
+  new tests (`test_duplicate_impact_publishers_dedupe_before_the_cap`,
+  `test_body_dedupes_repeated_source_names`) reproduced the literal
+  `(per NIFC, NIFC)` symptom RED before the fix, then GREEN.
+
 ### Row 14 (PR-A) — fire geocode nearest-city fallback: no more unplaceable coordinate labels (2026-07-07)
 
 - **(program row 14, PR-A)**: `reverse_geocode_simple` (`src/data/firms.py`)
