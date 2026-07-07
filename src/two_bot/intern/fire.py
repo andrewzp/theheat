@@ -16,7 +16,7 @@ from src.data.firms import FireEvent
 
 from src.two_bot.types import StoryBundle
 
-from ._shared import _climate_context_facts, _frp_tier
+from ._shared import _climate_context_facts, _frp_tier, _round_sig
 
 
 
@@ -100,6 +100,15 @@ def build_fire_footprint_bundle(fc: FireComplex) -> StoryBundle:
             {"label": "tier", "value": fc.tier},
             {"label": "tier_hectares", "value": tier_hectares, "unit": "hectares"},
             {"label": "start_date", "value": fc.start_date.isoformat() if fc.start_date else None},
+            # Pre-computed "about"-citable area equivalents (the value_f /
+            # value_rounded_c pattern): the writer cites these verbatim with
+            # an approximation marker instead of converting hectares itself.
+            {"label": "area_km2_approx", "value": round(fc.hectares / 100.0), "unit": "km²"},
+            {
+                "label": "area_acres_approx",
+                "value": _round_sig(fc.hectares * 2.47105),
+                "unit": "acres",
+            },
         ],
         historical_context={},
         raw_signal_dump={

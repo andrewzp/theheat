@@ -687,6 +687,35 @@ def test_build_fire_footprint_bundle_includes_complex_name():
     assert {"label": "tier_hectares", "value": 100000, "unit": "hectares"} in bundle.current_facts
 
 
+def test_build_fire_footprint_bundle_precomputes_area_equivalents():
+    """E1: the bundle pre-computes 'about'-citable area equivalents (the
+    value_f / value_rounded_c pattern) so the writer never converts
+    hectares mid-tweet — km² for the global reader, acres for the US one."""
+    fc = FireComplex(
+        complex_id="cx_002", name="Sierra Complex", country="US", region="California",
+        hectares=103400.0, start_date=None, tier=2,
+        event_id="ff_cx_002_2",
+    )
+    bundle = build_fire_footprint_bundle(fc)
+    facts = {f["label"]: f for f in bundle.current_facts}
+    # km²: hectares / 100, rounded to an int.
+    assert facts["area_km2_approx"]["value"] == 1034
+    # acres: hectares × 2.47105, rounded to 3 significant figures.
+    assert facts["area_acres_approx"]["value"] == 256000
+
+
+def test_build_fire_footprint_bundle_area_equivalents_at_tier_floor():
+    fc = FireComplex(
+        complex_id="cx_003", name=None, country="Australia", region="New South Wales",
+        hectares=20000.0, start_date=None, tier=0,
+        event_id="ff_cx_003_0",
+    )
+    bundle = build_fire_footprint_bundle(fc)
+    facts = {f["label"]: f for f in bundle.current_facts}
+    assert facts["area_km2_approx"]["value"] == 200
+    assert facts["area_acres_approx"]["value"] == 49400
+
+
 def test_build_co2_milestone_bundle_anchors_to_mauna_loa():
     m = CO2Milestone(
         ppm_crossed=434, actual_ppm=434.02, date="2026-05-04",
