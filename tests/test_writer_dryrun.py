@@ -143,3 +143,13 @@ class TestPrecipFixture:
         facts = {f["label"]: f.get("value") for f in bundle.current_facts}
         assert facts["previous_record_mm"] == 210.0
         assert "alert_threshold_mm" not in facts
+
+    def test_country_cluster_shape(self):
+        bundle = _build_bundle(_args(type="precipitation_extreme", country_cluster=True))
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["event_kind"] == "country_precip_event"
+        assert facts["city_count"] == 12
+        assert "previous_record_mm" not in facts
+        assert "alert_threshold_mm" not in facts
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]

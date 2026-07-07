@@ -542,3 +542,14 @@ class TestPrecipFourMoves:
         assert "record language requires the record fields" in FACT_CHECK_SYSTEM_PROMPT.lower()
         assert "alert_threshold_mm" in FACT_CHECK_SYSTEM_PROMPT
         assert "period_days" in FACT_CHECK_SYSTEM_PROMPT
+
+    def test_country_cluster_taught(self):
+        assert '"country_precip_event"' in WRITER_SYSTEM_PROMPT
+        assert "the heaviest single-city total" in WRITER_SYSTEM_PROMPT
+
+    def test_deviation_citation_sanctioned(self):
+        assert "citing it verbatim is sanctioned" in WRITER_SYSTEM_PROMPT
+
+    def test_fact_check_country_cluster(self):
+        assert "country_precip_event" in FACT_CHECK_SYSTEM_PROMPT
+        assert "heaviest SINGLE-CITY total" in FACT_CHECK_SYSTEM_PROMPT

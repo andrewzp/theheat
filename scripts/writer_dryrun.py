@@ -115,6 +115,7 @@ DEFAULTS: dict = {
     "precip_period_days": 7,
     "precip_threshold_mm": 300.0,
     "record_path": False,
+    "country_cluster": False,
 }
 
 _NIFC_URL = (
@@ -178,11 +179,32 @@ def _build_bundle(args: argparse.Namespace) -> StoryBundle:
     if args.type == "precipitation_extreme":
         # Never attaches human_impact (see DEFAULTS comment for dust) — the
         # --no-impact / impact knobs are ignored for this type. record_path
-        # picks between the two fixture shapes: a threshold-crossing
-        # multi_day_accumulation (alert_threshold_mm, no record fields) or a
-        # daily_record with an archive previous_record_mm (#372 — a static
-        # trigger presented as "the previous record" is a false-record claim
-        # no downstream gate can catch, so the two shapes stay disjoint).
+        # and country_cluster pick between three disjoint fixture shapes: a
+        # threshold-crossing multi_day_accumulation (alert_threshold_mm, no
+        # record fields), a daily_record with an archive previous_record_mm
+        # (#372 — a static trigger presented as "the previous record" is a
+        # false-record claim no downstream gate can catch), or a
+        # country_precip_event cluster (city_count monitored cities each
+        # broke a daily record; no per-city record fields ride it — codex P1).
+        if args.country_cluster:
+            event = PrecipExtremeEvent(
+                kind="country_precip_event",
+                location=args.precip_country,
+                country=args.precip_country,
+                date=datetime.now(UTC).date().isoformat(),
+                mm_total=args.precip_mm,
+                period_days=1,
+                deviation_from_record_mm=None,
+                previous_record_mm=None,
+                previous_record_year=None,
+                lat=51.17,
+                lon=71.43,
+                city_count=12,
+                sample_cities=["Astana", "Karaganda", "Pavlodar"],
+                event_id="dryrun_precip_country_kazakhstan",
+                alert_threshold_mm=None,
+            )
+            return build_precipitation_bundle(event)
         record = bool(args.record_path)
         event = PrecipExtremeEvent(
             kind="daily_record" if record else "multi_day_accumulation",
@@ -276,9 +298,12 @@ def _print_bundle(bundle: StoryBundle) -> None:
         print(f"  forecast wind ..... {facts.get('forecast_wind_kt_at_closest')} kt at closest")
     elif bundle.signal_kind == "precipitation_extreme":
         print(f"  rainfall_mm ....... {facts.get('rainfall_mm')} mm over {facts.get('period_days')} day(s)")
-        if facts.get("previous_record_mm") is not None:
-            print(f"  record ............ {facts.get('previous_record_mm')} mm ({facts.get('previous_record_year')}), "
-                  f"+{facts.get('deviation_from_record_mm')} mm over")
+        if facts.get("event_kind") == "country_precip_event":
+            print(f"  city_count ........ {facts.get('city_count')} monitored cities (each broke a daily record)")
+            print(f"  heaviest single-city {facts.get('rainfall_mm')} mm")
+        elif facts.get("previous_record_mm") is not None:
+            print(f"  record ............ previous record {facts.get('previous_record_mm')} mm "
+                  f"({facts.get('previous_record_year')}) · deviation +{facts.get('deviation_from_record_mm')} mm")
         else:
             print(f"  alert_threshold ... {facts.get('alert_threshold_mm')} mm")
     else:
@@ -403,7 +428,15 @@ def main() -> int:
                    default=DEFAULTS["record_path"],
                    help="daily_record fixture shape (previous_record_mm) instead of "
                         "the default multi_day_accumulation (alert_threshold_mm)")
+    p.add_argument("--country-cluster", dest="country_cluster", action="store_true",
+                   default=DEFAULTS["country_cluster"],
+                   help="country_precip_event fixture shape (city_count monitored "
+                        "cities each broke a daily record) instead of the default "
+                        "multi_day_accumulation (alert_threshold_mm)")
     args = p.parse_args()
+
+    if args.record_path and args.country_cluster:
+        p.error("--record-path and --country-cluster are mutually exclusive")
 
     bundle = _build_bundle(args)
 

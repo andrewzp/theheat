@@ -159,6 +159,14 @@ period_days=7 is fine; on 3 it is a mismatch). Derived per-day rates the bundle 
 not carry are UNVERIFIABLE arithmetic (rule c applies). Annual-normal comparisons are
 WORLD_KNOWLEDGE — accept when the claimed normal is broadly right for the place;
 reject invented specificity (an exact local normal to the millimetre).
+For `event_kind = "country_precip_event"`: cluster record language ("records in
+{city_count} cities") is BUNDLE_FACT warranted by `city_count`; `rainfall_mm` is
+the heaviest SINGLE-CITY total (presenting it as a national total or sum is a
+FAILURE); any per-city previous-record figure, record age, or "national record"
+claim is UNVERIFIABLE (the cluster carries no per-city record fields); city names
+outside `sample_cities` are UNVERIFIABLE. `deviation_from_record_mm`, when
+present, is a carried bundle fact — citing it verbatim is BUNDLE_FACT, not
+derived arithmetic.
 
 # Archive-window rule
 

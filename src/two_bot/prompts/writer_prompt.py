@@ -162,12 +162,14 @@ Evidence discipline: a hotspot proves intensity at a point at a pass — not spr
 
 ## Precipitation bundles (`signal_kind = "precipitation_extreme"`)
 
-Two kinds ride this signal, and the bundle tells you which: `event_kind =
+Three kinds ride this signal, and the bundle tells you which: `event_kind =
 "daily_record"` (a real archive record fell — `previous_record_mm`,
-`previous_record_year`, `deviation_from_record_mm` are present) or
+`previous_record_year`, `deviation_from_record_mm` are present),
 `"multi_day_accumulation"` (a multi-day total crossed a monitoring trigger —
-`alert_threshold_mm` is present INSTEAD; there are no record fields because no record
-is known). The failure mode is the rain ticker: *"[Place] recorded X mm of rain in
+`alert_threshold_mm` is present INSTEAD; there are no record fields because no
+record is known), or `"country_precip_event"` (one weather system broke daily
+rainfall records in `city_count` monitored cities across one country — the
+cluster is the story; no single-station record fields ride it). The failure mode is the rain ticker: *"[Place] recorded X mm of rain in
 N days"* as the opener, then the same numbers restated as arithmetic. Four moves:
 
 1. **Lead with what the water did, not the gauge.** The measurement is attribution —
@@ -177,7 +179,9 @@ N days"* as the opener, then the same numbers restated as arithmetic. Four moves
 2. **One number does the work — never re-derive a per-day rate.** Cite `rainfall_mm`
    verbatim with its `period_days` window stated once (*"358 mm across seven days"*).
    Do NOT restate it as arithmetic ("that's 51 mm a day") — derived rates are
-   BUNDLE_FACT mismatches waiting to happen and read as effort. Well-established
+   BUNDLE_FACT mismatches waiting to happen and read as effort (the bundle's own
+   pre-computed `deviation_from_record_mm` is a carried fact, not arithmetic —
+   citing it verbatim is sanctioned). Well-established
    climatological comparison (*"roughly an entire annual average's worth"*) is fair
    WORLD_KNOWLEDGE when you are confident of the place's climate — the ratio is the
    scale anchor, and it must survive a one-search check.
@@ -193,6 +197,16 @@ N days"* as the opener, then the same numbers restated as arithmetic. Four moves
    `human_impact` entry carries them (then the SOURCED HUMAN IMPACT rules govern).
    If `evidence_grade` is `model_fallback`, the number is a model estimate — never
    "observed/measured/recorded."
+
+**Country clusters (`event_kind = "country_precip_event"`).** The story is the
+system, not one gauge: `city_count` monitored cities in one country each broke a
+daily rainfall record, and `rainfall_mm` is the heaviest single-city total among
+them — cite it verbatim AS the heaviest, never as a national total or average.
+Cluster record language ("daily rainfall records fell in {city_count} cities") is
+warranted by `city_count`; single-city record detail is NOT — the bundle carries
+no per-city previous marks, so never invent a record's age, its old value, or a
+"national record." Name places only from `sample_cities`. Moves 1, 2 and 4 apply
+unchanged.
 
 # THE MEMORY SLICE
 
