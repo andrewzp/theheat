@@ -107,6 +107,12 @@ time. First real FPP number ≈ one week after the master flip.
 | 13 | **Heat-dome / population-exposure class design spike** — "N million under extreme-heat warnings" from NWS zones (+ reganom for the world half); build only if the spike closes the data question | 1 | M (spike S) | Med | spike first |
 | 14 | **Fire geocode precision + geographic-spread triage tiebreaker** (IDEAS backlog; kills "somewhere in Asia" labels; prevents mono-region days) | 1/2 | S each | Low | — |
 
+> **Per-row implementation plans (execution granularity for every build row):**
+> [docs/superpowers/plans/front-page-parity/INDEX.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)
+> — one self-contained TDD plan per row, written for a zero-context implementer, plus
+> the track-0 flip runbook, the gated A3 design skeleton, and the heat-dome spike
+> protocol.
+
 Rationale for the order: rows 1–2 are the root-cause machine already built and reviewed —
 every week they stay dark, the Congo-vs-Colorado failure class continues and the A3
 evidence clock hasn't started. Row 3 reconnects the quality instrument before more voice
