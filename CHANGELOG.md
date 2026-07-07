@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 5 — `cyclone_land_threat`: the Bavi gap (#375) (2026-07-07)
+
+- **(program row 5)**: a warned storm whose OFFICIAL FORECAST track brings
+  its center within 150 NM of a named landmass within 72 h now produces
+  exactly ONE `manual_only` draftable event per (storm, landmass) pair —
+  a Bavi-class super typhoon bearing down on Taiwan can never again go
+  silent at peak newsworthiness. Forecast track points are parsed from
+  advisory text the bot already stores (JTWC `FORECASTS:` blocks) plus a
+  new NHC Forecast/Advisory (TCM) fetch via `CurrentStorms.json`'s
+  `forecastAdvisory.url` (one extra HTTP fetch per active NHC storm;
+  degrades to no-forecast on any failure). Landmass v1 = nearest curated
+  `cities.csv` place; one-shot dedup via the new
+  `cyclone_land_threat_pairs` state key (per-storm union merge, 30d TTL,
+  recorded ONLY on draft success). Forecast-tense-or-fail pairing: writer
+  land-threat convention + fact-check rule (n) — any present/certain-tense
+  arrival claim fails. Threshold 70; scoring leads with observed current
+  intensity. Tunables (Andrew's coverage knobs, module constants):
+  `LAND_THREAT_MAX_NM=150`, `LAND_THREAT_MAX_HOURS=72`,
+  `LAND_THREAT_MIN_WIND_KT=64`. `writer_dryrun --type cyclone_land_threat`
+  added (Bavi-class fixture). `manual_only` by construction (the
+  `cyclone_` prefix rule).
+
 ### Row 4 — voice floor: detection-plumbing ban + the dust WHO anchor (P_tier, P_dust) (2026-07-07)
 
 - **(program row 4)**: the writer may never cite the bot's own detection
