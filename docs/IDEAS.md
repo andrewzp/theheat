@@ -8,6 +8,10 @@ un-park it.
 
 ## Geographic spread as per-cycle tiebreaker
 
+> **STATUS (2026-07-07): PLANNED** — front-page-parity **row 14 PR-B** (flag-gated
+> per-country soft cap in `select_survivors`); executable plan in
+> `docs/superpowers/plans/front-page-parity/row-14-geocode-and-spread.md` (PR #382).
+
 **What:** When the per-cycle cap (currently `MAX_DRAFTS_PER_CYCLE = 3`)
 selects top drafts by signal score, add a continent/region tiebreaker so
 three signals from the same region lose to a mix spanning multiple regions
@@ -36,6 +40,12 @@ single-cycle one. The cooldown already spreads the feed across days.
 ---
 
 ## Voice engine upgrade
+
+> **STATUS (2026-07-07): EXECUTING as the per-type four-moves program** — reganom
+> (#349) and fires (#379, E1) SHIPPED; dust/P_tier, precip, marine/coral + cyclone
+> are front-page-parity **rows 4, 7, 11** with executable plans in
+> `docs/superpowers/plans/front-page-parity/` (PR #382). The A-rate instrument
+> (>50% bar) is the scoreboard.
 
 **What:** Rewrite the Gemini system prompt or tighten the Sonnet
 evaluator so automated drafts clear a higher voice bar, not just a
@@ -74,6 +84,11 @@ the lift is real, just not infinite.
 ---
 
 ## Fire reverse-geocoder regional precision
+
+> **STATUS (2026-07-07): PLANNED** — front-page-parity **row 14 PR-A**
+> (nearest-city fallback over `data/cities.csv` when `_GEO_BOXES` misses);
+> executable plan in
+> `docs/superpowers/plans/front-page-parity/row-14-geocode-and-spread.md` (PR #382).
 
 **What:** Replace `src/data/firms.py::reverse_geocode_simple` (and
 `_lat_lon_to_country`) with something that resolves fire coordinates

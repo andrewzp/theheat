@@ -50,6 +50,14 @@ human toll of what it does detect.
 > time-travel canary, Bet A phase 0 dark). The mission and bars above remain the
 > north star; current state lives in the latest handoff. This section is kept as
 > the record of the mandate.
+>
+> **STATUS (2026-07-07): rows 1–8 ALL MERGED (E1 fire voice floor closed the
+> queue).** The mandate re-ran at Andrew's request as a whole-project audit against
+> the three bars — verdict: not yet cleared (A-rate 20% vs >50%; queue-vs-world
+> zero fire/cyclone drafts; Bet A still dark) — and produced the SUCCESSOR program:
+> the **front-page-parity plan** + per-row implementation plans, awaiting Andrew's
+> adoption in [PR #382](https://github.com/andrewzp/theheat/pull/382). Its two
+> managed numbers (FPP + A-rate) are the bars above, made measurable.
 
 Produce a **detailed, prioritized upgrade plan** across the three pillars below. For each:
 what's wrong today, what "good" looks like, the sequenced steps to get there, effort/risk, and
