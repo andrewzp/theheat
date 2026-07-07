@@ -186,8 +186,10 @@ def _refill_drain(
     max_attempts = _caps.refill_max_attempts(target)
     per_cat_cap = _triage._per_category_cap()
     pending_cap = _triage._pending_type_cap()
+    country_cap = _triage._per_country_cap()
 
     success_by_category: dict[str, int] = {}
+    success_by_country: dict[str, int] = {}
     pending_by_type: dict[str, int] = {}
     attempted_event_ids: set[str] = set()
 
@@ -245,6 +247,11 @@ def _refill_drain(
                 _cut(candidate, "pending_type_cap")
                 continue
 
+        country = _triage._candidate_country_key(candidate) if country_cap > 0 else ""
+        if country_cap > 0 and country and success_by_country.get(country, 0) >= country_cap:
+            _cut(candidate, "per_country_cap")
+            continue
+
         # Annual-cap re-check at admit time (codex must-fix #3) via the source's own
         # cap predicate against LIVE state. Prior successes' callbacks fired inline,
         # so this reflects this-cycle drafts and keys the cap correctly (event-date
@@ -291,6 +298,8 @@ def _refill_drain(
         if drafted:
             drafted_count += 1
             success_by_category[category] = success_by_category.get(category, 0) + 1
+            if country:
+                success_by_country[country] = success_by_country.get(country, 0) + 1
             if draft_type:
                 pending_by_type[draft_type] = pending_by_type.get(draft_type, 0) + 1
             _bump_run_drafted(current_run, candidate.source)

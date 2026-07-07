@@ -33,18 +33,19 @@ def _score(total: int = 80, category: str = "drought") -> EditorialScore:
     )
 
 
-def _bundle(signal_kind: str, event_id: str, where: str = "Place") -> StoryBundle:
+def _bundle(signal_kind: str, event_id: str, where: str = "Place", country: str = "") -> StoryBundle:
     return StoryBundle(
         signal_kind=signal_kind, where=where, when="2026-06-16", event_id=event_id,
-        headline_metric={"label": "x", "value": 1}, current_facts=[],
+        headline_metric={"label": "x", "value": 1}, current_facts=[], country=country,
     )
 
 
 def _cand(*, event_id, total=80, signal_kind="drought", source="drought",
           city="", tweet_date="", cooldown_exempt=False, on_draft_success=None,
-          annual_cap_check=None):
+          annual_cap_check=None, where="Place", country=""):
     return TriageCandidateBundle(
-        bundle=_bundle(signal_kind, event_id), score=_score(total, signal_kind),
+        bundle=_bundle(signal_kind, event_id, where=where, country=country),
+        score=_score(total, signal_kind),
         event_id=event_id, source=source, review_context={}, city=city,
         tweet_date=tweet_date, cooldown_exempt=cooldown_exempt, legacy_type=signal_kind,
         created_at="2026-06-16T12:00:00Z", on_draft_success=on_draft_success,
@@ -290,6 +291,85 @@ class TestRefillLoop:
         drafted = _drain(bot_state, monkeypatch, set(), capture_calls=calls)  # first fails
         assert drafted == 0
         assert calls == ["dup"]  # attempted once; the duplicate event is skipped $0
+
+
+# ---------------------------------------------------------------------------
+# per-country cap (codex r2 P1) — THEHEAT_REFILL_ENABLED bypassed the
+# per-country cap entirely because _refill_drain() reimplements the
+# diversity caps success-aware and never called _per_country_cap(). These
+# mirror TestPerCategoryCap's success-aware shape for the country dimension.
+# ---------------------------------------------------------------------------
+
+class TestRefillPerCountryCap:
+    def test_country_cap_spills_under_refill(self, monkeypatch):
+        """codex's exact repro: THEHEAT_REFILL_ENABLED=1 + THEHEAT_PER_COUNTRY_CAP=1
+        + 3 same-country (US) candidates -> only 1 drafts, the other 2 spill with
+        reason='per_country_cap' (previously: all 3 drafted, zero suppressions)."""
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")  # don't let category cap interfere
+        monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "5")
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _cand(event_id="us1", total=95, signal_kind="drought", source="s0",
+                  where="Phoenix, Arizona, United States", country="US"),
+            _cand(event_id="us2", total=94, signal_kind="fire", source="s1",
+                  where="Tucson, Arizona, United States", country="US"),
+            _cand(event_id="us3", total=93, signal_kind="sea_ice_record", source="s2",
+                  where="Yuma, Arizona, United States", country="US"),
+        ]
+        calls: list = []
+        drafted = _drain(bot_state, monkeypatch, {"us1", "us2", "us3"}, capture_calls=calls)
+        assert drafted == 1
+        assert calls == ["us1"]  # us2/us3 cut pre-writer — $0, never reach the writer
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 2
+        assert {s["event_id"] for s in supps} == {"us2", "us3"}
+        assert all(s["reasons"] == ["per_country_cap=1"] for s in supps)
+
+    def test_country_cap_disabled_all_draft(self, monkeypatch):
+        """cap=0 (disabled, the default) -> all 3 same-country candidates draft."""
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "0")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "5")
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _cand(event_id="us1", total=95, signal_kind="drought", source="s0",
+                  where="Phoenix, Arizona, United States", country="US"),
+            _cand(event_id="us2", total=94, signal_kind="fire", source="s1",
+                  where="Tucson, Arizona, United States", country="US"),
+            _cand(event_id="us3", total=93, signal_kind="sea_ice_record", source="s2",
+                  where="Yuma, Arizona, United States", country="US"),
+        ]
+        calls: list = []
+        drafted = _drain(bot_state, monkeypatch, {"us1", "us2", "us3"}, capture_calls=calls)
+        assert drafted == 3
+        assert set(calls) == {"us1", "us2", "us3"}
+
+    def test_basin_shaped_where_not_capped_as_country(self, monkeypatch):
+        """A cyclone bundle's where='BAVI, WP' has no real country (basin, not a
+        country) -> _candidate_country_key() returns "" -> never capped, even
+        under cap=1. Both survive and draft."""
+        monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "5")
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _cand(event_id="cyclone_a", total=90, signal_kind="cyclone_landfall", source="s0",
+                  where="BAVI, WP", country=""),
+            _cand(event_id="cyclone_b", total=85, signal_kind="cyclone_ri", source="s1",
+                  where="BAVI, WP", country=""),
+        ]
+        calls: list = []
+        drafted = _drain(bot_state, monkeypatch, {"cyclone_a", "cyclone_b"}, capture_calls=calls)
+        assert drafted == 2
+        assert set(calls) == {"cyclone_a", "cyclone_b"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
 
 
 # ---------------------------------------------------------------------------
