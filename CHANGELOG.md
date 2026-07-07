@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 11 (PR-2) — cyclone four-moves: all five kinds, observed-delta lead (2026-07-07)
+
+- **(program row 11, PR-2)**: the E1 voice pattern for the cyclone family,
+  consolidating the three old single-bullet cyclone conventions (field list,
+  land-threat block, alarmism bans) into one four-moves section — every ban
+  preserved verbatim (a consolidation, not a loosening). Four moves: lead with
+  the storm's CHANGE not its category label (the category-bait ban, integrated);
+  the OBSERVED delta is the anchor per kind; one mechanism the basin explains
+  (warm-pool/shear/SST as WORLD_KNOWLEDGE); everything lands forecast-tense when
+  the bundle is a forecast. Covers all FIVE emitted cyclone kinds — the plan's
+  contract listed only four; `cyclone_basin_record` (a REAL archive record,
+  `record_label`/`record_scope` cited verbatim) was the omitted fifth, now given
+  a move-2 anchor + dryrun fixture + fact-check coverage (the row-7
+  `country_precip_event` class of gap, caught pre-dispatch). The RI TRIGGER
+  definition (`rapid_intensification_threshold_kt: 30`) stays config — the
+  observed `delta_kt_24h` is citable, the threshold is never (row-4 plumbing ban
+  + internal_taxonomy_leak). Row-5's land-threat forecast-tense convention is
+  absorbed unchanged. Paired fact-check rule **(q)** collects the tense rule,
+  the observed-delta-vs-trigger distinction, basin-mechanism acceptance, and
+  basin_record's record_label as BUNDLE_FACT. `writer_dryrun` gained `--type
+  cyclone_rapid_intensification` and `--type cyclone_basin_record`. codex-xhigh.
+
 ### Row 11 (PR-1) — marine/coral four-moves + fact-check pairing (2026-07-07)
 
 - **(program row 11, PR-1)**: the E1 voice pattern extended to the marine
