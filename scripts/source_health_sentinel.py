@@ -1119,6 +1119,7 @@ def editor_brief(drafts: list[dict] | None, *, now: datetime) -> list[dict]:
             continue
         parsed = _parse_ts(str(d.get("created_at") or ""))
         age_h = int((now - parsed).total_seconds() // 3600) if parsed is not None else 0
+        since = parsed.astimezone(timezone.utc).strftime("%b %d") if parsed is not None else ""
         tweet_date = d.get("tweet_date")
         closing = tweet_date in closing_dates
         urgent = age_h >= EDITOR_BRIEF_URGENT_AGE_H
@@ -1128,6 +1129,7 @@ def editor_brief(drafts: list[dict] | None, *, now: datetime) -> list[dict]:
             "id": d.get("id"),
             "type": str(d.get("type") or "unknown"),
             "age_h": age_h,
+            "since": since,
             "score": score,
             "tweet_date": tweet_date,
             "urgent": urgent,
@@ -1146,9 +1148,10 @@ def build_editor_brief_body(findings: list[dict]) -> str:
         (needs_now if f["urgent"] or f["closing"] else fresh).append(f)
 
     def _row(f: dict) -> str:
+        since = f' · since {f["since"]}' if f.get("since") else ""
         forecast = f' · forecast {f["tweet_date"]}' if f.get("tweet_date") else ""
         return (
-            f"- **{f['type']}** · score {f['score']} · {f['age_h']}h old{forecast}\n"
+            f"- **{f['type']}** · score {f['score']}{since}{forecast}\n"
             f"  > {f['preview']}"
         )
 

@@ -803,6 +803,37 @@ class TestEditorBrief:
         assert "more on the dashboard" in body
         assert body.count("score ") == EDITOR_BRIEF_MAX_ROWS
 
+    def test_body_stable_across_successive_hours(self):
+        """codex P2: the body must render identically hour-to-hour for an
+        unchanged pending queue. Rendering an hourly-recomputed age counter
+        (e.g. '12h old' -> '13h old') made plan_editor_brief_action's
+        body-diff update check fire every hour — exactly the flap the no-flap
+        Global Constraint forbids. ``t`` is pinned to real now() so neither
+        draft (2h/30h old) crosses the 24h urgency boundary between the two
+        renders (2->3h and 30->31h)."""
+        t = datetime.now(timezone.utc)
+        drafts = [
+            {
+                "id": "d_fire_2h",
+                "status": "pending",
+                "type": "fire",
+                "created_at": (t - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
+                "score": {"total": 70},
+                "text": "draft text",
+            },
+            {
+                "id": "d_heat_30h",
+                "status": "pending",
+                "type": "all_time_high",
+                "created_at": (t - timedelta(hours=30)).isoformat().replace("+00:00", "Z"),
+                "score": {"total": 60},
+                "text": "draft text",
+            },
+        ]
+        body_now = build_editor_brief_body(editor_brief(drafts, now=t))
+        body_later = build_editor_brief_body(editor_brief(drafts, now=t + timedelta(hours=1)))
+        assert body_now == body_later
+
 
 class TestEditorBriefIssue:
     FINDING = [{"id": "d_fire_2.0", "type": "fire", "age_h": 30, "score": 60,
