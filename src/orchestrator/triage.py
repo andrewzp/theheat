@@ -155,6 +155,62 @@ def apply_pending_ttl_sweep(
     return rejected_count
 
 
+# Forecast-tense signal types: the tweet's claim is anchored to a FUTURE
+# date (Open-Meteo forecast paths). Once that date has fully elapsed,
+# posting would misstate an already-passed forecast as current — the exact
+# class the daily-plan grader has flagged since 2026-07-01 (Basrah/Doha)
+# but could never reject (no gist write path from its environment).
+# Observed-record types are deliberately NOT here: a GHCN record's
+# tweet_date is an observation date and may legitimately age in review.
+FORECAST_TENSE_TYPES = frozenset({"absolute_extreme", "wet_bulb_extreme"})
+FORECAST_ELAPSED_GRACE_DAYS_DEFAULT = 1
+
+
+def _forecast_elapsed_grace_days() -> int:
+    raw = os.environ.get("THEHEAT_FORECAST_ELAPSED_GRACE_DAYS", "")
+    try:
+        return max(0, int(raw)) if raw else FORECAST_ELAPSED_GRACE_DAYS_DEFAULT
+    except ValueError:
+        return FORECAST_ELAPSED_GRACE_DAYS_DEFAULT
+
+
+def apply_forecast_elapsed_sweep(
+    bot_state: Any,
+    *,
+    now: datetime | None = None,
+) -> int:
+    """Reject pending forecast-tense drafts whose forecast date has elapsed.
+
+    Sibling of apply_pending_ttl_sweep: that sweep keys on created_at (age);
+    this one keys on tweet_date (the claim's anchor). Recoverable — the
+    operator can re-approve from the rejected pile. Mutates in place;
+    returns the count newly rejected.
+    """
+    if now is None:
+        now = datetime.now(UTC)
+    grace = _forecast_elapsed_grace_days()
+    cutoff = (now - timedelta(days=grace)).date().isoformat()
+    now_iso = now.isoformat().replace("+00:00", "Z")
+    rejected = 0
+    for d in bot_state.get("drafts", []) or []:
+        if not isinstance(d, dict) or d.get("status") != "pending":
+            continue
+        if str(d.get("type") or "") not in FORECAST_TENSE_TYPES:
+            continue
+        tweet_date = d.get("tweet_date")
+        if not isinstance(tweet_date, str) or not tweet_date:
+            continue
+        # ISO dates compare lexicographically; strictly BEFORE the cutoff
+        # date means the grace day has fully passed.
+        if tweet_date >= cutoff:
+            continue
+        d["status"] = "rejected"
+        d["rejected_reason"] = f"forecast_elapsed_{tweet_date}"
+        d["rejected_at"] = now_iso
+        rejected += 1
+    return rejected
+
+
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
