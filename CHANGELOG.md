@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Row 7 — precipitation four-moves: the rain ticker retired, threshold≠record in the writer's own rules (2026-07-07)
+
+- **(program row 7)**: the third type in the E1 four-moves pattern (fire and
+  reganom already established the shape). A dedicated `precipitation_extreme`
+  writer-prompt section (inserted after fire-bundles, before THE MEMORY
+  SLICE — the established position convention) retires the rain-ticker
+  failure mode: *"[Place] recorded X mm of rain in N days"* as the opener,
+  then the same numbers restated as arithmetic (P9 corpus evidence). Four
+  moves: lead with what the water did, not the gauge; cite `rainfall_mm` +
+  `period_days` verbatim and never re-derive a per-day rate; a threshold is a
+  trigger the bot watches, not a record the sky broke; name where the water
+  goes via `climate_mechanism_note`/`season_context`, never invented flood
+  impacts absent a `human_impact` entry. Paired fact-check rule (o) — the
+  prompt's rule list ended at (n) (cyclone land-threat, #375, already merged
+  on this branch's base), so precipitation follows directly as (o): record
+  language ("record", "broke the previous record", "highest since {year}")
+  is warranted ONLY by `previous_record_mm` + `previous_record_year` present
+  in the bundle; a bundle carrying `alert_threshold_mm` instead has no known
+  record — threshold-crossing language is BUNDLE_FACT, record language is a
+  FAILURE (the #372 false-record class: a monitoring trigger is not "the
+  previous record"). `writer_dryrun --type precipitation_extreme` added
+  (Astana-class fixture) with both bundle shapes: the default
+  `multi_day_accumulation` (`alert_threshold_mm`, no record fields) and
+  `--record-path` for `daily_record` (`previous_record_mm` +
+  `previous_record_year` + `deviation_from_record_mm`) — kept disjoint on
+  purpose, per the #372 lesson. TDD: `TestPrecipFourMoves` (6 tests)
+  confirmed FAIL-for-the-right-reason before the prompt insertion, then
+  GREEN; full prompt suite 70 passed (64 baseline + 6 new).
+
 ### Editor brief — the sentinel's ranked needs-you-now view of the pending queue (2026-07-07)
 
 - **(program row, editor brief)**: a Bavi-class super typhoon dying unreviewed
