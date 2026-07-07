@@ -17,11 +17,13 @@ Per-country cap: THEHEAT_PER_COUNTRY_CAP env var. Default 0 = DISABLED
 
 from __future__ import annotations
 
+import csv
 import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from src.data import open_meteo
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
 from src.state import MAX_SUPPRESSIONS
 from src.two_bot.intern._shared import _US_COUNTRY_TOKENS
@@ -86,6 +88,57 @@ def _per_country_cap() -> int:
         return PER_COUNTRY_TRIAGE_CAP_DEFAULT
 
 
+# Lazily-built set of known-country strings (lowercased/stripped) used to
+# validate the WHERE-fallback segment in _candidate_country_key(). Built
+# from the repo's curated 638-city data/cities.csv (via open_meteo.load_cities())
+# UNION _US_COUNTRY_TOKENS. None = not yet built.
+#
+# Deliberately NOT cached when the csv load comes back empty (0 countries
+# from data/cities.csv, before the _US_COUNTRY_TOKENS union): production's
+# curated 638-city csv is never legitimately empty, so an empty result only
+# ever means a transient failure (missing file, race, or — in tests — a
+# same-process monkeypatch of open_meteo.load_cities from an unrelated
+# test that happened to be active the first time this ran). Memoizing that
+# as permanent would silently and irrecoverably disable the where-fallback
+# validation for the rest of the process. Retrying on empty costs one extra
+# csv read at most per unlucky call — cheap next to correctness.
+#
+# Called as `open_meteo.load_cities()` (module attribute access, not a
+# `from ... import load_cities` name snapshot) so it always resolves
+# whatever `load_cities` currently is on the module — immune to being
+# permanently pinned to a monkeypatched value from whatever test happens
+# to be running the moment this module is first imported.
+_KNOWN_COUNTRIES: set[str] | None = None
+
+
+def _known_countries() -> set[str]:
+    """Lazily load + cache the known-country set for WHERE-fallback validation.
+
+    Degrades to an empty set if data/cities.csv can't be read (never let a
+    missing/corrupt csv crash triage) — an empty set rejects every
+    where-fallback segment, which just disables that fallback path while
+    leaving bundle.country capping (the trusted path) fully functional. A
+    result with zero csv-derived countries is treated as a failed load and
+    is NOT cached (see module comment above) — only a real, non-empty load
+    is memoized.
+    """
+    global _KNOWN_COUNTRIES
+    if _KNOWN_COUNTRIES is None:
+        try:
+            cities = open_meteo.load_cities()
+            csv_countries = {
+                (c.get("country") or "").strip().lower()
+                for c in cities
+                if (c.get("country") or "").strip()
+            }
+        except (OSError, csv.Error, KeyError):
+            csv_countries = set()
+        if not csv_countries:
+            return set() | _US_COUNTRY_TOKENS
+        _KNOWN_COUNTRIES = csv_countries | _US_COUNTRY_TOKENS
+    return _KNOWN_COUNTRIES
+
+
 def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     """Normalize a candidate's country into one cap-bucket key.
 
@@ -103,21 +156,36 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     country landing in different buckets), which is an acceptable
     fail-open trade-off for a diversity NUDGE, not a hard partition.
 
+    ``bundle.country``, when set, is TRUSTED as-is — it's documented as a
+    real country code, so it is never run through the known-country check
+    below. Only the WHERE-fallback segment is validated: a consumer's
+    `where` string can carry non-country shapes (a cyclone bundle emits
+    where="BAVI, WP" — storm name, basin — with no bundle.country set), so
+    the final comma-segment must be checked against a known-country set
+    before it's trusted as a cap key. Without this check "wp" (a basin, not
+    a country) would silently become a cap bucket and two same-basin
+    cyclone candidates would suppress each other under a per-COUNTRY rule.
+
     Returns "" when no country can be determined (empty bundle.country AND
-    no comma in `where`) — callers must treat an empty key as NEVER capped
-    (unknown geography must not be suppressed).
+    no comma in `where`), OR when the WHERE-fallback segment fails the
+    known-country check (e.g. "wp") — callers must treat an empty key as
+    NEVER capped (unknown/non-country geography must not be suppressed).
     """
     bundle = getattr(candidate, "bundle", None)
     country = (getattr(bundle, "country", "") or "").strip()
+    from_where = False
     if not country:
         where = (getattr(bundle, "where", "") or "").strip()
         if "," in where:
             country = where.rsplit(",", 1)[-1].strip()
+            from_where = True
     if not country:
         return ""
     key = country.lower().strip()
     if key in _US_COUNTRY_TOKENS:
         return "united states"
+    if from_where and key not in _known_countries():
+        return ""
     return key
 
 
@@ -433,15 +501,20 @@ def select_survivors(
                 continue
         # Geographic-spread cap (row 14 PR-B, flag-gated — default 0 =
         # disabled). country_cap == 0 short-circuits the whole check so the
-        # default-off path never even computes a country key. An empty
-        # country key is NEVER capped (unknown geography must not be
-        # suppressed) — see _candidate_country_key()'s docstring.
-        country = _candidate_country_key(candidate)
-        if country_cap > 0 and country:
-            used_country = by_country.get(country, 0)
-            if used_country >= country_cap:
-                spilled.append((candidate, "per_country_cap"))
-                continue
+        # default-off path never even computes a country key — the guard
+        # is the `if country_cap > 0:` below, which _candidate_country_key()
+        # is called INSIDE, not before. An empty country key is NEVER capped
+        # (unknown geography must not be suppressed) — see
+        # _candidate_country_key()'s docstring.
+        if country_cap > 0:
+            country = _candidate_country_key(candidate)
+            if country:
+                used_country = by_country.get(country, 0)
+                if used_country >= country_cap:
+                    spilled.append((candidate, "per_country_cap"))
+                    continue
+        else:
+            country = ""
         if len(survivors) >= global_cap:
             # Global cap already hit — all remaining spill via the global gate.
             for remaining in ranked[i:]:

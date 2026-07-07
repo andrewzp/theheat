@@ -863,6 +863,89 @@ class TestPerCountryCap:
         assert len(result) == 1
         assert result[0].event_id == "c1"
 
+    def test_basin_shaped_where_uncapped_both_survive(self, monkeypatch):
+        """codex P1 repro: a cyclone bundle emits where='BAVI, WP' (storm
+        name, basin) with no bundle.country set. The final comma-segment
+        "wp" is a basin, not a country — it must fail the known-country
+        check and return "" from _candidate_country_key(), so BOTH
+        same-basin candidates survive under cap=1 (never capped on a
+        non-country key)."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="cyclone_a", signal_kind="cyclone_landfall",
+                where="BAVI, WP", country="",
+            ),
+            _candidate(
+                total=85, event_id="cyclone_b", signal_kind="cyclone_ri",
+                where="BAVI, WP", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 2
+        assert {r.event_id for r in result} == {"cyclone_a", "cyclone_b"}
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 0
+
+    def test_where_fallback_still_caps_real_country(self, monkeypatch):
+        """The known-country validation must not break the existing,
+        legitimate where-fallback path: "Astana, Kazakhstan" -> "kazakhstan"
+        is a real csv country, so cap=1 still spills the second candidate."""
+        monkeypatch.setenv("THEHEAT_PER_COUNTRY_CAP", "1")
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        from src.orchestrator.triage import select_survivors
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90, event_id="astana", signal_kind="fire",
+                where="Astana, Kazakhstan", country="",
+            ),
+            _candidate(
+                total=85, event_id="almaty_spilled", signal_kind="drought",
+                where="Almaty, Kazakhstan", country="",
+            ),
+        ]
+        result = select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 1
+        assert result[0].event_id == "astana"
+
+        supps = [s for s in bot_state.get("suppressions", []) if s.get("stage") == "triage_cap"]
+        assert len(supps) == 1
+        assert supps[0]["event_id"] == "almaty_spilled"
+        assert supps[0]["reasons"] == ["per_country_cap=1"]
+
+    def test_cap_zero_never_computes_country_key(self, monkeypatch):
+        """Secondary fix: with cap=0, _candidate_country_key() must never
+        even be called — proxy-tested by monkeypatching it to raise and
+        asserting select_survivors doesn't raise. This proves the guard
+        ordering (`if country_cap > 0:` wraps the call), not just that the
+        result happens to be uncapped."""
+        monkeypatch.delenv("THEHEAT_PER_COUNTRY_CAP", raising=False)
+        monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "10")
+        import src.orchestrator.triage as triage_mod
+
+        def _boom(candidate):
+            raise AssertionError("_candidate_country_key must not be called when country_cap == 0")
+
+        monkeypatch.setattr(triage_mod, "_candidate_country_key", _boom)
+
+        bot_state = _fresh_state()
+        candidates = [
+            _candidate(
+                total=90 - i, event_id=f"evt_{i}", signal_kind=f"cat_{i}",
+                where="BAVI, WP", country="",
+            )
+            for i in range(3)
+        ]
+        result = triage_mod.select_survivors(bot_state, candidates, global_cap=10)
+        assert len(result) == 3
+
 
 class TestPendingTtlSweep:
     """The TTL sweep auto-rejects pending drafts older than the configured
