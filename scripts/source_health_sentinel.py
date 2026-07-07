@@ -1175,6 +1175,68 @@ def build_editor_brief_body(findings: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _open_editor_brief_issue() -> dict[str, Any] | None:
+    try:
+        out = _run_gh(
+            ["issue", "list", "--label", LABEL, "--state", "open",
+             "--json", "number,title,body,labels", "--limit", "200"]
+        ).stdout
+        items = json.loads(out or "[]")
+    except (subprocess.CalledProcessError, json.JSONDecodeError, FileNotFoundError) as exc:
+        print(f"[sentinel] could not list editor-brief issue: {exc!r}", file=sys.stderr)
+        return None
+    for item in items:
+        if item.get("title") == EDITOR_BRIEF_TITLE:
+            return item
+    return None
+
+
+def plan_editor_brief_action(
+    findings: list[dict],
+    open_issue: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    if findings:
+        body = build_editor_brief_body(findings)
+        if open_issue is None:
+            return {"action": "create_editor_brief", "body": body, "labels": [LABEL, "ours"]}
+        if _open_issue_body(open_issue).strip() != body.strip():
+            return {
+                "action": "update_editor_brief",
+                "number": _open_issue_number(open_issue),
+                "body": body,
+                "labels": [LABEL, "ours"],
+            }
+        return None
+    if open_issue is not None:
+        return {"action": "close_editor_brief", "number": _open_issue_number(open_issue)}
+    return None
+
+
+def _create_editor_brief_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "create", "--title", EDITOR_BRIEF_TITLE, "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] opened editor-brief issue: {EDITOR_BRIEF_TITLE}")
+
+
+def _update_editor_brief_issue(action: Mapping[str, Any]) -> None:
+    args = ["issue", "edit", str(action["number"]), "--body", str(action["body"])]
+    for label in action.get("labels") or []:
+        args.extend(["--add-label", str(label)])
+    _run_gh(args, check=False)
+    print(f"[sentinel] updated editor-brief issue #{action['number']}")
+
+
+def _close_editor_brief_issue(number: int) -> None:
+    _run_gh(
+        ["issue", "close", str(number), "--comment",
+         "The pending queue is empty. Auto-closed by the source-health sentinel."],
+        check=False,
+    )
+    print(f"[sentinel] closed editor-brief issue #{number}")
+
+
 # ---------------------------------------------------------------------------
 # News-gap watch — the world reported an event; did our sensors even see it?
 # (Bet A phase 0 miss-detector: read-only, zero editorial surface.)
@@ -1490,6 +1552,20 @@ def main(argv: list[str] | None = None) -> int:
             _update_queue_watch_issue(qw_action)
         else:
             _close_queue_watch_issue(qw_action["number"])
+    eb = editor_brief(
+        state.get("drafts"),
+        now=datetime.now(timezone.utc),
+    )
+    if eb:
+        print(f"[sentinel] editor-brief: {len(eb)} pending draft(s) need a decision")
+    eb_action = plan_editor_brief_action(eb, _open_editor_brief_issue())
+    if eb_action:
+        if eb_action["action"] == "create_editor_brief":
+            _create_editor_brief_issue(eb_action)
+        elif eb_action["action"] == "update_editor_brief":
+            _update_editor_brief_issue(eb_action)
+        else:
+            _close_editor_brief_issue(eb_action["number"])
     ng = news_gap_watch(
         state.get("news_events"),
         state.get("candidates_log"),

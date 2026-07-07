@@ -754,6 +754,7 @@ from scripts.source_health_sentinel import (  # noqa: E402
     EDITOR_BRIEF_MAX_ROWS,
     build_editor_brief_body,
     editor_brief,
+    plan_editor_brief_action,
 )
 
 
@@ -801,6 +802,25 @@ class TestEditorBrief:
         assert EDITOR_BRIEF_MARKER in body
         assert "more on the dashboard" in body
         assert body.count("score ") == EDITOR_BRIEF_MAX_ROWS
+
+
+class TestEditorBriefIssue:
+    FINDING = [{"id": "d_fire_2.0", "type": "fire", "age_h": 30, "score": 60,
+                "tweet_date": None, "urgent": True, "closing": False,
+                "preview": "draft text"}]
+
+    def test_create_update_close_noop(self):
+        assert plan_editor_brief_action(self.FINDING, None)["action"] == "create_editor_brief"
+        stale = {"number": 5, "body": EDITOR_BRIEF_MARKER + "\nold"}
+        assert plan_editor_brief_action(self.FINDING, stale)["action"] == "update_editor_brief"
+        assert plan_editor_brief_action([], {"number": 5, "body": EDITOR_BRIEF_MARKER}) == {
+            "action": "close_editor_brief", "number": 5}
+        assert plan_editor_brief_action([], None) is None
+
+    def test_noop_when_body_unchanged(self):
+        body = build_editor_brief_body(self.FINDING)
+        current = {"number": 5, "body": body}
+        assert plan_editor_brief_action(self.FINDING, current) is None
 
 
 # ---------------------------------------------------------------------------
