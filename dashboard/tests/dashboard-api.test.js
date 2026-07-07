@@ -140,3 +140,68 @@ test("dashboard API hydrates page data with one state read and one workflow read
     globalThis.fetch = originalFetch
   }
 })
+
+test("dashboard API joins posted drafts to their tweet_metrics (row 9)", async () => {
+  setupEnv()
+  const state = {
+    drafts: [
+      { id: "d_pending", status: "pending", score: { total: 50 }, created_at: "2026-05-20T09:00:00Z" },
+      { id: "d_posted_metrics", status: "posted", type: "fire", event_id: "ev1", tweet_id: "t_100", text: "posted A", posted_at: "2026-05-19T12:00:00Z", score: { total: 80 } },
+      { id: "d_posted_nometrics", status: "posted", type: "record", event_id: "ev2", tweet_id: "t_200", text: "posted B", posted_at: "2026-05-18T12:00:00Z", score: { total: 70 } },
+      { id: "d_posted_noid", status: "posted", type: "dust", event_id: "ev3", text: "posted C, never got a tweet_id", posted_at: "2026-05-17T12:00:00Z" },
+    ],
+    tweet_metrics: {
+      t_100: { at: "2026-05-20T00:00:00Z", likes: 42, retweets: 7, replies: 3 },
+    },
+    suppressions: [],
+    source_health: {},
+    run_history: [],
+    posted_events: [],
+    errors: [],
+    last_hot10: { date: null, cities: [] },
+    streaks: {},
+    daily_tweet_count: {},
+    pending_confirmations: [],
+    publish_ledger: {},
+    memory: {},
+  }
+
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    const href = String(url)
+    if (href.includes("/actions/runs")) return actionsResponse()
+    return gistResponse(state)
+  }
+
+  try {
+    const { GET } = await importFresh("app/api/dashboard/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/dashboard", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      })
+    )
+    assert.equal(response.status, 200)
+    const payload = await response.json()
+
+    // Only posted drafts WITH a tweet_id (the metrics join key) are surfaced,
+    // most-recently-posted first. The posted draft that never got a tweet_id
+    // is excluded (it cannot be correlated to metrics).
+    assert.deepEqual(payload.drafts.posted.map((d) => d.id), ["d_posted_metrics", "d_posted_nometrics"])
+
+    const withMetrics = payload.drafts.posted.find((d) => d.id === "d_posted_metrics")
+    assert.deepEqual(withMetrics.metrics, { at: "2026-05-20T00:00:00Z", likes: 42, retweets: 7, replies: 3 })
+    // The grade-join keys the corpus routine needs travel with the row.
+    assert.equal(withMetrics.type, "fire")
+    assert.equal(withMetrics.event_id, "ev1")
+    assert.equal(withMetrics.tweet_id, "t_100")
+
+    // A posted draft with no metrics yet joins to null, not undefined/missing.
+    const noMetrics = payload.drafts.posted.find((d) => d.id === "d_posted_nometrics")
+    assert.equal(noMetrics.metrics, null)
+
+    // The pending lane is unchanged.
+    assert.deepEqual(payload.drafts.drafts.map((d) => d.id), ["d_pending"])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
