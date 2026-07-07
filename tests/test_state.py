@@ -2462,3 +2462,23 @@ class TestSqliteRoundTripDropsTriageQueue:
             "_triage_queue survived sqlite round-trip — add it to the skip-list "
             "in src/storage/sqlite_store.py::_METADATA_JSON_KEYS (or equivalent)"
         )
+
+
+class TestLandThreatPairs:
+    """cyclone_land_threat_pairs (#375): one-shot dedup per (storm, landmass)."""
+
+    def test_record_land_threat_pair_appends_once(self):
+        from copy import deepcopy
+        from src.state import DEFAULT_STATE, record_land_threat_pair
+        s = deepcopy(DEFAULT_STATE)
+        record_land_threat_pair(s, "jtwc:05w", "taiwan")
+        record_land_threat_pair(s, "jtwc:05w", "taiwan")
+        record_land_threat_pair(s, "jtwc:05w", "philippines")
+        assert s["cyclone_land_threat_pairs"]["jtwc:05w"] == ["philippines", "taiwan"]
+
+    def test_merge_land_threat_pairs_unions_per_key(self):
+        from src.state import _merge_land_threat_pairs
+        ours = {"jtwc:05w": ["taiwan"]}
+        theirs = {"jtwc:05w": ["philippines"], "nhc:al032026": ["mexico"]}
+        merged = _merge_land_threat_pairs(ours, theirs)
+        assert merged == {"jtwc:05w": ["philippines", "taiwan"], "nhc:al032026": ["mexico"]}
