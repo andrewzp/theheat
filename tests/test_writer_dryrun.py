@@ -126,3 +126,20 @@ class TestCycloneLandThreatFixture:
     def test_no_impact_on_cyclone_fixture(self):
         bundle = _build_bundle(_args(type="cyclone_land_threat"))
         assert not getattr(bundle, "human_impact", None)
+
+
+class TestPrecipFixture:
+    def test_accumulation_shape(self):
+        bundle = _build_bundle(_args(type="precipitation_extreme"))
+        assert bundle.signal_kind == "precipitation_extreme"
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["alert_threshold_mm"] == 300.0
+        assert "previous_record_mm" not in facts
+        audit = audit_story_bundle(bundle)
+        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+    def test_record_path_shape(self):
+        bundle = _build_bundle(_args(type="precipitation_extreme", record_path=True))
+        facts = {f["label"]: f.get("value") for f in bundle.current_facts}
+        assert facts["previous_record_mm"] == 210.0
+        assert "alert_threshold_mm" not in facts
