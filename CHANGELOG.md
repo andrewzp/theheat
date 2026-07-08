@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Heat records-cluster mechanism — detection, dedup, honesty gate (#414 PR-B) (2026-07-08)
+
+- **(program #414, PR-B of 2)**: wires the global heat records-cluster class end-to-end,
+  **behind default-OFF `THEHEAT_RECORDS_CLUSTER_ENABLED`** and **manual-approval only**
+  (a geography-honesty-sensitive class, like `regional_anomaly` — never autoships). Flag
+  OFF ⇒ the same-day path is byte-identical to today (regression-tested).
+  - **Detection prepass** (`src/orchestrator/sources/open_meteo.py`): before the per-bundle
+    loop (so it can suppress inline daily drafts), collects calendar-highs **independently
+    of the cascade winner**, spatially clusters them, and for each fired cluster enqueues a
+    `heat_records_cluster` draft. A fired cluster **supersedes** the flat `simultaneous_records`
+    for its date and **suppresses the constituent individual daily drafts** (all-time/monthly
+    winners keep their own bigger draft).
+  - **Bundle + scoring**: `build_heat_records_cluster_bundle` carries only verifiable geography
+    (`region_name` or null, `cluster_continents`, `cluster_countries`, `sample_cities`);
+    `score_heat_records_cluster` (threshold 80, just above the scattered `simultaneous_records`).
+  - **Honesty backstop**: the bundle carries a `forbidden_claims` denylist ("heat dome",
+    blocking ridge, …) and the deterministic `_forbidden_claim_violation` gate now fires for
+    `heat_records_cluster` — the copy states the clustered-records FACT, never the unproven
+    synoptic cause.
+  - **Dedup**: new `heat_records_cluster_fired` `DEFAULT_STATE` key (event_id → date), keyed by
+    a deterministic cluster **signature** hash; rides the sqlite persistence contract test +
+    MERGE_SPEC (key-union) + 30-day TTL; recorded only on draft SUCCESS.
+  - Registered across threshold / scoring shims / cooldown + prune maps. 12 new tests; writer
+    voice prose + the fact-check LLM rule land in PR-C.
+
 ### Heat records-cluster foundation — spatial clustering + honest namer (#414 PR-A) (2026-07-08)
 
 - **(program #414, PR-A of 2)**: `src/editorial/records_cluster.py` — the pure, dead-until-

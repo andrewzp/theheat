@@ -49,6 +49,7 @@ EXPECTED_THRESHOLD_KEYS_BY_FUNCTION = {
     "score_seasonal_snow_record": {"seasonal_snow_record"},
     "score_severe_weather": {"severe_weather"},
     "score_simultaneous_records": {"simultaneous_records"},
+    "score_heat_records_cluster": {"heat_records_cluster"},
     "score_snow_extreme": {"snow_extreme"},
     "score_storm_surge": {"storm_surge"},
     "score_synthesis_fire_drought_heat": {"synthesis_fire_drought_heat"},

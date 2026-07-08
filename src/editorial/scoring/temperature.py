@@ -296,3 +296,35 @@ def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> Edi
         threshold=get_threshold("simultaneous_records"),
         reasons=reasons,
     )
+
+def score_heat_records_cluster(
+    city_count: int, country_count: int, region_name: str | None = None
+) -> EditorialScore:
+    """A spatially-coherent cluster of same-day daily heat records — a regional
+    heat event (the "records across [region]" story), not scattered records.
+
+    Outranks the flat simultaneous_records count of comparable size: the spatial
+    coherence IS the added story. Scales with cluster size; a documented region or
+    a multi-country span adds novelty.
+    """
+    reasons = [
+        f"{city_count} cities set daily heat records in one spatial cluster",
+        "spatially coherent — a regional heat event, not scattered records",
+    ]
+    if region_name:
+        reasons.append(f"documented region: {region_name}")
+    if country_count >= 3:
+        reasons.append(f"spans {country_count} countries")
+    if city_count >= 15:
+        reasons.append("mass event")
+    return _build_score(
+        "heat_records_cluster",
+        severity=78 + min(city_count - 6, 20) * 2,
+        novelty=88,
+        timeliness=94,
+        confidence=86,
+        shareability=84 + min(city_count - 6, 20) * 1.5,
+        sensitivity=6,
+        threshold=get_threshold("heat_records_cluster"),
+        reasons=reasons,
+    )

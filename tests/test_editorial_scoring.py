@@ -161,6 +161,17 @@ class TestEditorialScoring:
         assert large.total > small.total
         assert large.passes
 
+    def test_heat_records_cluster_scores_and_scales(self):
+        from src.editorial.scoring import score_heat_records_cluster
+        small = score_heat_records_cluster(city_count=6, country_count=1, region_name=None)
+        big = score_heat_records_cluster(city_count=20, country_count=4, region_name="Iberia")
+        assert small.category == "heat_records_cluster"
+        assert small.passes                    # a 6-city cluster clears the bar
+        assert big.total > small.total          # more cities → stronger story
+        # a documented dome outranks a comparable scattered same-day count
+        sim = score_simultaneous_records(city_count=6, sample_cities=["A","B","C","D","E","F"])
+        assert small.total >= sim.total
+
     def test_score_marine_heatwave_day_5_passes_threshold(self):
         from src.editorial.scoring import score_marine_heatwave
         score = score_marine_heatwave(days=5, peak_anomaly_c=0.25, years_of_data=44)

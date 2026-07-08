@@ -23,6 +23,7 @@ continent.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -70,6 +71,21 @@ ZONE_COUNTRIES: dict[str, frozenset[str]] = {
         {"South Africa", "Zimbabwe", "Botswana", "Namibia"}
     ),
 }
+
+# The published copy states only the VERIFIABLE fact (many cities set daily records
+# across a region). A "heat dome" / blocking-ridge is the plausible synoptic CAUSE,
+# but the bundle proves only clustered records — asserting the mechanism is an
+# unwarranted claim (mirrors the precip-cluster fact-check rule). These phrases are
+# carried as the bundle's forbidden_claims and hard-blocked by the deterministic
+# honesty gate. Substring, case-insensitive.
+CAUSE_ATTRIBUTION_DENYLIST: tuple[str, ...] = (
+    "heat dome",
+    "heat-dome",
+    "blocking high",
+    "blocking ridge",
+    "omega block",
+    "omega-block",
+)
 
 # Countries that physically span two continents, so a country→continent lookup is
 # unreliable for a specific cluster. When any cluster city is in one of these, the
@@ -278,6 +294,24 @@ def _continents_for(countries: list[str], *, blocked: bool) -> list[str]:
     if "Unknown" in resolved:
         return []
     return sorted(resolved)
+
+
+def cluster_signature(stations: list[dict]) -> str:
+    """A deterministic, naming-independent id for a cluster's membership.
+
+    Short hex digest of the sorted ``(city, country, round(lat,2), round(lon,2))``
+    member rows — process-stable (hashlib, not the salted builtin hash) so the same
+    dome yields the same dedup id across runs, and two different clusters on the same
+    date never collide. Used to build the per-cluster/date dedup event id.
+    """
+    def _row(s: dict) -> str:
+        coords = _coords(s)
+        lat = f"{coords[0]:.2f}" if coords else ""
+        lon = f"{coords[1]:.2f}" if coords else ""
+        return f"{str(s.get('city') or '')}|{_country_key(s.get('country'))}|{lat}|{lon}"
+
+    canonical = "\n".join(sorted(_row(s) for s in stations))
+    return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:12]
 
 
 def name_cluster(stations: list[dict]) -> ClusterName:

@@ -32,6 +32,7 @@ _PRUNE_SOURCE_KEY_BY_TYPE = {
     "record_low": "open_meteo_extreme_signals",
     "record_streak": "open_meteo_extreme_signals",
     "simultaneous_records": "open_meteo_extreme_signals",
+    "heat_records_cluster": "open_meteo_extreme_signals",
     "country_high": "open_meteo_extreme_signals",
     "country_low": "open_meteo_extreme_signals",
     "fire": "firms",

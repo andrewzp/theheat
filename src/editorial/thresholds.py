@@ -213,6 +213,13 @@ THRESHOLDS: dict[str, ThresholdEntry] = {
         78,
         "Multiple-city same-day record pattern signal; historical value, not retuned in this refactor.",
     ),
+    "heat_records_cluster": ThresholdEntry(
+        "heat_records_cluster",
+        80,
+        "Spatially-coherent same-day daily-record cluster (a 'records across [region]' "
+        "heat event); set just above simultaneous_records — the spatial coherence is a "
+        "stronger story than a scattered count.",
+    ),
     "storm_surge": ThresholdEntry(
         "storm_surge",
         60,

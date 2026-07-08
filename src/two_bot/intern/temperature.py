@@ -28,6 +28,8 @@ from src.data.open_meteo import RecordStreakEvent
 
 from src.data.reanalysis_anomaly import RegionalAnomalyEvent
 
+from src.editorial.records_cluster import CAUSE_ATTRIBUTION_DENYLIST, ClusterName
+
 from src.two_bot.types import StoryBundle
 
 from ._shared import _MONTH_NAMES, _audience_unit_facts, _c_to_f, _climate_context_facts, _format_where, _ghcn_observation_facts, _headline_temp_label, _resolve_when
@@ -550,6 +552,50 @@ def build_simultaneous_records_bundle(
         historical_context={
             "scope": "same_day_calendar_records",
             "stations": stations,  # full per-station detail for the writer
+        },
+        raw_signal_dump={"stations": stations, "event_id": event_id},
+    )
+
+def build_heat_records_cluster_bundle(
+    stations: list[dict],
+    name: ClusterName,
+    *,
+    event_id: str,
+    when: str | None = None,
+) -> StoryBundle:
+    """A spatially-coherent cluster of same-day daily heat records (#414).
+
+    Every geography label the writer may use is a carried, verifiable bundle fact:
+    ``region_name`` (a documented reganom zone, or null), ``cluster_continents``
+    (may be empty when the continent can't be asserted honestly), and
+    ``cluster_countries``. The writer cites them verbatim and may name NO other
+    region; single-cause attributions ("heat dome", blocking ridge, …) are carried
+    in ``forbidden_claims`` and hard-blocked by the deterministic honesty gate.
+    """
+    when = when or date.today().isoformat()
+    sample_cities = [s.get("city", "") for s in stations if s.get("city")][:5]
+    where = name.region_name or ", ".join(name.lead_countries) or "global"
+    return StoryBundle(
+        signal_kind="heat_records_cluster",
+        where=where,
+        when=when,
+        event_id=event_id,
+        headline_metric={
+            "label": "cities_setting_daily_records",
+            "value": name.city_count,
+            "unit": "cities",
+        },
+        current_facts=[
+            {"label": "city_count", "value": name.city_count},
+            {"label": "region_name", "value": name.region_name},
+            {"label": "cluster_countries", "value": name.countries},
+            {"label": "cluster_continents", "value": name.continents},
+            {"label": "sample_cities", "value": sample_cities},
+        ],
+        historical_context={
+            "scope": "same_day_daily_records_cluster",
+            "stations": stations,  # full per-station detail for the writer
+            "forbidden_claims": list(CAUSE_ATTRIBUTION_DENYLIST),
         },
         raw_signal_dump={"stations": stations, "event_id": event_id},
     )

@@ -2542,3 +2542,49 @@ class TestSqlitePersistenceContract:
                 assert write_state(sample) is True
                 loaded = read_state()
             assert loaded["cyclone_land_threat_pairs"] == {"jtwc:05w": ["taiwan"]}
+
+
+class TestHeatRecordsClusterDedup:
+    """heat_records_cluster_fired (#414): per-cluster/date dedup, recorded on
+    draft success so a killed draft retries next cycle."""
+
+    def test_record_adds_event_id_with_date(self):
+        from copy import deepcopy
+        from src.state import DEFAULT_STATE, record_heat_records_cluster
+        s = deepcopy(DEFAULT_STATE)
+        eid = "heat_records_cluster_2026-07-08_abc123def456"
+        record_heat_records_cluster(s, eid, when="2026-07-08")
+        assert s["heat_records_cluster_fired"][eid] == "2026-07-08"
+
+    def test_record_is_idempotent(self):
+        from copy import deepcopy
+        from src.state import DEFAULT_STATE, record_heat_records_cluster
+        s = deepcopy(DEFAULT_STATE)
+        eid = "heat_records_cluster_2026-07-08_abc"
+        record_heat_records_cluster(s, eid, when="2026-07-08")
+        record_heat_records_cluster(s, eid, when="2026-07-08")
+        assert list(s["heat_records_cluster_fired"]) == [eid]
+
+    def test_fired_map_survives_sqlite_round_trip(self):
+        # Mirrors the land-threat #388 contract: an unpersisted dedup map loads
+        # back {} after a SQLite round-trip and re-posts the same cluster.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/theheat.sqlite"
+            sample = {
+                **DEFAULT_STATE,
+                "heat_records_cluster_fired": {
+                    "heat_records_cluster_2026-07-08_abc": "2026-07-08"
+                },
+            }
+            with patch.multiple(
+                "src.state",
+                STATE_BACKEND="sqlite",
+                DB_PATH=db_path,
+                GIST_ID="",
+                GITHUB_TOKEN="",
+            ):
+                assert write_state(sample) is True
+                loaded = read_state()
+            assert loaded["heat_records_cluster_fired"] == {
+                "heat_records_cluster_2026-07-08_abc": "2026-07-08"
+            }

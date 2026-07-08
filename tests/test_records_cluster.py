@@ -15,6 +15,7 @@ from src.editorial.records_cluster import (
     ZONE_COUNTRIES,
     ClusterName,
     cluster_record_stations,
+    cluster_signature,
     name_cluster,
 )
 from src.data.reanalysis_anomaly import REGION_WATCHLIST
@@ -419,6 +420,23 @@ def test_cluster_name_is_a_frozen_dataclass():
 # --------------------------------------------------------------------------- #
 # ZONE_COUNTRIES ↔ REGION_WATCHLIST contract
 # --------------------------------------------------------------------------- #
+
+def test_cluster_signature_is_order_independent():
+    a = [_st("Paris", "France", 48.86, 2.35), _st("Lyon", "France", 45.75, 4.85)]
+    assert cluster_signature(a) == cluster_signature(list(reversed(a)))
+
+
+def test_cluster_signature_differs_by_membership():
+    a = [_st("Paris", "France", 48.86, 2.35)]
+    b = [_st("Madrid", "Spain", 40.42, -3.70)]
+    assert cluster_signature(a) != cluster_signature(b)
+
+
+def test_cluster_signature_is_short_hex_and_stable():
+    sig = cluster_signature(FRANCE)
+    assert isinstance(sig, str) and sig.isalnum() and 8 <= len(sig) <= 16
+    assert cluster_signature(FRANCE) == sig  # pure
+
 
 def test_zone_countries_keys_match_region_watchlist_exactly():
     watchlist_names = {r.name for r in REGION_WATCHLIST}

@@ -1693,3 +1693,64 @@ def test_build_cyclone_land_threat_bundle_shape():
     assert bundle.raw_signal_dump["source"] == "jtwc"
     audit = audit_story_bundle(bundle)
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def _hrc_stations(country_lat_lon):
+    return [
+        {"city": c, "country": ctry, "lat": lat, "lon": lon,
+         "temp_c": 39.0, "old_record_c": 37.8, "old_record_year": 1947,
+         "margin_c": 1.2}
+        for c, ctry, lat, lon in country_lat_lon
+    ]
+
+
+def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    stations = _hrc_stations([
+        ("Paris", "France", 48.86, 2.35), ("Lyon", "France", 45.75, 4.85),
+        ("Marseille", "France", 43.30, 5.37), ("Bordeaux", "France", 44.84, -0.58),
+        ("Toulouse", "France", 43.60, 1.44), ("Nantes", "France", 47.22, -1.55),
+    ])
+    from src.two_bot.evidence_contract import audit_story_bundle
+    name = name_cluster(stations)
+    bundle = build_heat_records_cluster_bundle(
+        stations, name,
+        event_id="heat_records_cluster_2026-07-08_deadbeef", when="2026-07-08",
+    )
+    assert bundle.signal_kind == "heat_records_cluster"
+    assert bundle.when == "2026-07-08"
+    assert bundle.event_id.endswith("deadbeef")
+    facts = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert facts["city_count"] == 6
+    assert facts["region_name"] == "France"
+    assert facts["cluster_countries"] == ["France"]
+    assert facts["sample_cities"]
+    # deterministic honesty backstop: the cause-attribution denylist is carried
+    fc = bundle.historical_context["forbidden_claims"]
+    assert "heat dome" in fc and "blocking ridge" in fc
+    audit = audit_story_bundle(bundle)
+    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    stations = _hrc_stations([
+        ("Paris", "France", 48.86, 2.35), ("Lille", "France", 50.63, 3.06),
+        ("Brussels", "Belgium", 50.85, 4.35), ("Amsterdam", "Netherlands", 52.37, 4.90),
+        ("Cologne", "Germany", 50.94, 6.96), ("Frankfurt", "Germany", 50.11, 8.68),
+    ])
+    from src.two_bot.evidence_contract import audit_story_bundle
+    name = name_cluster(stations)
+    bundle = build_heat_records_cluster_bundle(
+        stations, name, event_id="hrc_x", when="2026-07-08",
+    )
+    facts = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert facts["region_name"] is None
+    assert facts["cluster_continents"] == ["Europe"]
+    assert set(facts["cluster_countries"]) == {"France", "Germany", "Belgium", "Netherlands"}
+    audit = audit_story_bundle(bundle)
+    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]

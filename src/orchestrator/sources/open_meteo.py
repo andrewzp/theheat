@@ -18,6 +18,12 @@ WORLD_CACHE_TTL_DAYS = 30
 WORLD_LEADERBOARD_RESERVE = 120
 
 
+def _records_cluster_enabled() -> bool:
+    """Heat records-cluster class (#414). Default OFF — when off, the prepass is
+    skipped and the same-day path is byte-identical to today."""
+    return os.environ.get("THEHEAT_RECORDS_CLUSTER_ENABLED", "") == "1"
+
+
 def _fetch_city_archive(city: dict) -> dict | None:
     today = date.today()
     try:
@@ -285,6 +291,68 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 ghcn_bundles, ghcn_country, om_bundles, om_country,
             )
         source_promoted = 0
+
+        # Heat records-cluster (#414) PREPASS — must run BEFORE the per-bundle loop,
+        # because that loop enqueues individual daily-record drafts inline and a dome
+        # supersedes them. Collect calendar-highs INDEPENDENTLY of the cascade winner
+        # (a city whose all-time/monthly signal wins is still part of the dome, and
+        # keeps its own bigger draft — we only suppress the constituent *daily* drafts).
+        # Flag OFF ⇒ empty sets, zero behavior change.
+        records_cluster_suppressed_ids: set[str] = set()
+        records_cluster_fired_dates: set[str] = set()
+        records_cluster_candidates: list[tuple] = []
+        if _records_cluster_enabled():
+            from collections import defaultdict as _defaultdict
+
+            from src.editorial.records_cluster import (
+                cluster_record_stations,
+                cluster_signature,
+                name_cluster,
+            )
+            from src.two_bot.intern import build_heat_records_cluster_bundle
+
+            _rows_by_date: dict[str, list[dict]] = _defaultdict(list)
+            for _b in bundles:
+                _ch = _b.calendar_date_high
+                if _ch is None or _ch.lat is None or _ch.lon is None:
+                    continue
+                _d = (_b.signal_date or date.today()).isoformat()
+                _rows_by_date[_d].append({
+                    "city": _ch.city, "country": _ch.country,
+                    "lat": _ch.lat, "lon": _ch.lon,
+                    "temp_c": _ch.new_temp_c, "old_record_c": _ch.old_record_c,
+                    "old_record_year": _ch.old_record_year,
+                    "margin_c": round(_ch.new_temp_c - _ch.old_record_c, 1),
+                    "signal_date": _d, "cal_event_id": _ch.event_id,
+                })
+            for _date_iso, _rows in _rows_by_date.items():
+                for _cluster in cluster_record_stations(_rows):
+                    _cname = name_cluster(_cluster)
+                    _rc_event_id = (
+                        f"heat_records_cluster_{_date_iso}_{cluster_signature(_cluster)}"
+                    )
+                    if _rc_event_id in bot_state.get("heat_records_cluster_fired", {}):
+                        continue
+                    if state.is_duplicate(bot_state, _rc_event_id):
+                        continue
+                    _rc_score = score_heat_records_cluster(
+                        _cname.city_count, _cname.country_count, _cname.region_name,
+                    )
+                    if not _should_draft(_rc_score, _rc_event_id):
+                        continue
+                    # Fires: supersede the flat lane for this date and suppress the
+                    # constituent individual daily drafts.
+                    records_cluster_fired_dates.add(_date_iso)
+                    records_cluster_suppressed_ids.update(
+                        _r["cal_event_id"] for _r in _cluster
+                    )
+                    _rc_bundle = build_heat_records_cluster_bundle(
+                        _cluster, _cname, event_id=_rc_event_id, when=_date_iso,
+                    )
+                    records_cluster_candidates.append(
+                        (_rc_bundle, _rc_score, _rc_event_id, _cname, _date_iso)
+                    )
+
         for bundle in bundles:
             # Process signals in descending order of priority:
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
@@ -476,7 +544,15 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                         ]
                         signal_counts["anomaly"] += 1
 
-            if strongest_signal is None and bundle.calendar_date_high:
+            if (
+                strongest_signal is None
+                and bundle.calendar_date_high
+                # #414: a city inside a fired records-cluster has its individual
+                # daily draft suppressed — the dome is the story (all-time/monthly
+                # winners above are untouched; they keep their bigger draft).
+                and bundle.calendar_date_high.event_id
+                not in records_cluster_suppressed_ids
+            ):
                 ev_cdh: RecordEvent = bundle.calendar_date_high
                 if not state.is_duplicate(bot_state, ev_cdh.event_id):
                     score = score_record_event(
@@ -822,11 +898,57 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             _simultaneous_source = "NOAA GHCN-Daily"
         else:
             _simultaneous_source = "open_meteo_extreme_signals"
+
+        # #414: enqueue the fired records-cluster candidates from the prepass. Each
+        # records its per-cluster/date dedup key only on draft SUCCESS (a killed
+        # draft retries next cycle). Empty when the flag is OFF.
+        for (
+            _rc_bundle, _rc_score, _rc_event_id, _rc_name, _rc_date,
+        ) in records_cluster_candidates:
+            def _rc_on_success(_bs=bot_state, _eid=_rc_event_id, _w=_rc_date) -> None:
+                state.record_heat_records_cluster(_bs, _eid, _w)
+
+            _rc_region = (
+                _rc_name.region_name
+                or ", ".join(_rc_name.lead_countries)
+                or "multiple regions"
+            )
+            _rc_ctx = _review_context(
+                source=_simultaneous_source,
+                source_key="heat_records_cluster",
+                headline=(
+                    f"{_rc_name.city_count} cities set daily heat records "
+                    f"across {_rc_region}"
+                ),
+                current_run=current_run,
+                facts=[
+                    _fact("Cities", _rc_name.city_count),
+                    _fact("Region", _rc_name.region_name or "none (countries only)"),
+                    _fact("Countries", ", ".join(_rc_name.lead_countries)),
+                    _fact("Continents", ", ".join(_rc_name.continents) or "omitted"),
+                ],
+            )
+            if _enqueue_story_candidate(
+                bot_state,
+                bundle=_rc_bundle,
+                score=_rc_score,
+                source="open_meteo_extreme_signals",
+                legacy_type="heat_records_cluster",
+                event_id=_rc_event_id,
+                review_context=_rc_ctx,
+                tweet_date=_rc_date,
+                on_draft_success=_rc_on_success,
+            ):
+                source_promoted += 1
+
         simultaneous_groups: dict[str, list[dict]] = {}
         for station_row in simultaneous_record_stations:
             sim_date = station_row.get("signal_date") or date.today().isoformat()
             simultaneous_groups.setdefault(sim_date, []).append(station_row)
         for today_iso, simultaneous_group in simultaneous_groups.items():
+            # #414: a fired records-cluster supersedes the flat count for its date.
+            if today_iso in records_cluster_fired_dates:
+                continue
             if len(simultaneous_group) < 5:
                 continue
             sim_event_id = f"simultaneous_records_{today_iso}"

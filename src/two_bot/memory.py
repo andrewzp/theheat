@@ -49,6 +49,7 @@ _SIGNAL_KIND_TO_CATEGORY: dict[str, str] = {
     "severe_weather": "severe_weather",
     "record_streak": "record_streak",
     "simultaneous_records": "simultaneous_records",
+    "heat_records_cluster": "heat_records_cluster",
     "co2_milestone": "co2",
     "sea_ice": "cryosphere",
     "ice_mass": "cryosphere",
