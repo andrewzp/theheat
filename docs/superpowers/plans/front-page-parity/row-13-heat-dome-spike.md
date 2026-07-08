@@ -1,5 +1,12 @@
 # Row 13 — Heat-dome / population-exposure class: the design spike (read-only)
 
+> **⛔ SUPERSEDED 2026-07-08 — the GO below is void.** This class is US-only by
+> construction (NWS alerts + US Census), and **US-only/US-focused coverage is off-brand
+> for @theheat, a global account.** Abandoned; PR-A (#415) reverted. The heat-dome story
+> is the **global records-cluster** — see
+> [2026-07-08-heat-records-cluster-spike.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-08-heat-records-cluster-spike.md)
+> (#414). Kept for the record only.
+
 > **Protocol, not a build plan.** Timebox: one session. Deliverable: a go/no-go with a
 > design sketch, appended to THIS file under "Findings". No code ships from the spike.
 > Any session (or a lesser model) can run it — every step is read-only investigation.

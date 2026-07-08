@@ -4,18 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Row 13 (PR-A) — heat-exposure detection foundation (2026-07-07)
+### Remove row-13 US-only heat-exposure (off-brand) (2026-07-08)
 
-- **(program row 13, PR-A of 2)**: the verified data + computation layer for the
-  population-under-extreme-heat-warnings aggregate class (spike GO, #410). New
-  `src/data/heat_exposure.py` joins active NWS Extreme-Heat-Warning alerts' county
-  `SAME` codes to a vendored, public-domain Census county-population map
-  (`us_county_population.csv` — `POPESTIMATE2024` for 3,144 `SUMLEV=050` counties,
-  trimmed from CO-EST2024, US Gov public domain) and sums DISTINCT counties.
-  Marine/unknown SAME codes drop out (no county population); the figure is an honest
-  UPPER BOUND (county-scoped). No pipeline wiring, no editorial surface, no state writes
-  yet — PR-B adds the signal/intern/scoring/writer/fact-check/dedup + the
-  extraordinariness floor (Andrew's editorial-bar tuning). codex-xhigh.
+- **Reverts #415.** The row-13 heat-exposure class ("N million Americans under Extreme
+  Heat Warnings") was US-only by construction (NWS alerts + US Census). US-only/US-focused
+  coverage is off-brand for @theheat, a **global** climate account — so the (caller-less,
+  never-wired) foundation is removed: `src/data/heat_exposure.py`,
+  `src/data/us_county_population.csv`, `tests/test_heat_exposure.py`. The heat-dome story
+  is now the **global** records-cluster (#414, spiked GO 2026-07-08), which rides the
+  bot's already-worldwide GHCN + Open-Meteo record data.
 
 ### Row 9 — engagement capture: make the dormant metrics lane flippable (2026-07-07)
 
