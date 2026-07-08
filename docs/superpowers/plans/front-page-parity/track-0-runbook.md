@@ -92,10 +92,14 @@ Watcher, next 2–3 cycles:
 
 ## Step 3 — boost (A2): capped near-miss rescue at the fire score gate.
 
-> **STATUS: NOT YET FLIPPED — Andrew's next flag action.** Precondition (A1 verified
-> ≥2 cycles) is met for the SAFETY invariant (P0 guard holds); recommendation is to
-> wait for ≥1 live enriched draft to spot-check figures before flipping, OR accept the
-> dryrun proof. Andrew's call + explicit go.
+> **STATUS: LIVE 2026-07-07 20:42:16Z** (Andrew's explicit go — accepted the dryrun
+> proof). Watch REGRESSION-CLEAN across the first post-flip alert cycles (21:25Z, 02:45Z,
+> 08:xxZ): newsworthiness healthy (success, zero failed), P0 guard holds (zero impact
+> drafts, so none autoship-armed), **no boost has fired yet** (expected — a boost needs a
+> near-miss × matched-verified-news coincidence, days apart), no runaway. The provenance/
+> hard-floor checks below remain the ongoing (days-horizon) watch for the first actual
+> boost. Rollback `--body 0`. (Companion flip same moment: `THEHEAT_PER_COUNTRY_CAP=2`,
+> row 14 PR-B — no per-country spills observed.)
 
 Precondition: Step 2 verified across ≥2 cycles.
 

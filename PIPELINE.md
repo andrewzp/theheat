@@ -1,22 +1,19 @@
 # @theheat Pipeline — From Raw Data to Published Tweet
 
-**Last updated:** 2026-07-07 noon (version 0.9.85.0). Authoritative current state:
-[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-noon.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-noon.md).
-The THIRTY-LOOP audit backlog is complete, SOURCE-REDUNDANCY is mostly shipped,
-the non-US world temperature half is threshold-cached, and the dashboard exposes
-per-source troubleshooting logs. The editorial pipeline shape described below is
-unchanged; the source layer is more resilient and more observable. The
-**three-pillar upgrade plan is COMPLETE (rows 1–8 merged**, incl. E1's fire
-four-moves writer section + fact-check rule (l) + `writer_dryrun` per-type
-harness, #379/#380); the successor **front-page-parity program is ADOPTED
-([#382](https://github.com/andrewzp/theheat/pull/382) merged 2026-07-07)** with
-rows 3/4/5 executed the same day (#384/#385/#386/#388 — forecast-elapsed sweep,
-P_tier/P_dust voice floor, `cyclone_land_threat`; statuses in
-[the INDEX](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md)).
-**Bet A: A0 master `THEHEAT_NEWSWORTHINESS_ENABLED=1` LIVE (2026-07-07 12:59:59Z,
-verified) and A1 `THEHEAT_NEWS_ENRICH_ENABLED=1` LIVE (16:23:52Z, verifying clean —
-P0 guard holds).** Boost (`THEHEAT_NEWS_BOOST_ENABLED`) stays unset pending A1's
-verification and Andrew's per-flip go (track-0 runbook).
+**Last updated:** 2026-07-08 (version 0.9.97.0). Authoritative current state:
+[/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08.md).
+The editorial pipeline shape described below is unchanged; the source layer is
+resilient and observable. The **front-page-parity program's every EXECUTABLE row is
+MERGED** (3/4/5/6/7/9/11/14) — including row-9 engagement capture (#412) and the
+editorial follow-ups #401 (#408, precip threshold cross-gate) + #403 (#409, DHW full
+NOAA scale). **Bet A is FULLY LIVE: A0 `THEHEAT_NEWSWORTHINESS_ENABLED` (2026-07-07
+12:59Z) + A1 `THEHEAT_NEWS_ENRICH_ENABLED` (16:23Z) + A2 `THEHEAT_NEWS_BOOST_ENABLED`
+(20:42Z)**, plus `THEHEAT_PER_COUNTRY_CAP=2` (20:42Z) and `THEHEAT_METRICS_ENABLED`
+(row 9, 22:43Z). Boost/cap watch regression-clean; no boost has fired yet (rare). The
+heat-dome coverage story is the **global records-cluster (#414, spiked GO #416)** —
+the next build; the US-only row-13 population-extent was reverted (#417) as off-brand.
+Remaining rows gated on data/time: 8 / 10 / 12. Statuses in
+[the INDEX](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/INDEX.md).
 
 **The newsworthiness lane exists since 2026-07-04, LIVE since 2026-07-07** ([#366](https://github.com/andrewzp/theheat/pull/366);
 Bet A phase 0 of the [three-pillar plan](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-03-three-pillar-upgrade-plan.md),
