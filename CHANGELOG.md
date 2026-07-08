@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Heat records-cluster foundation — spatial clustering + honest namer (#414 PR-A) (2026-07-08)
+
+- **(program #414, PR-A of 2)**: `src/editorial/records_cluster.py` — the pure, dead-until-
+  PR-B foundation for the global heat records-cluster class (successor to the dropped US-only
+  row 13). `cluster_record_stations` groups same-day daily-record cities by single-linkage
+  great-circle distance (a heat dome is a spatial blob that ignores borders); deterministic,
+  tunable `LINK_KM=350` / `MIN_CLUSTER_SIZE=6`. `name_cluster` names each cluster HONESTLY:
+  a documented reganom `REGION_WATCHLIST` zone only when the cluster is country-**pure** for
+  it (Spain+Morocco can never inherit "Iberia") **and** geographically contained; otherwise
+  "N cities across K countries[ in {continent(s)}]", with the continent **omitted** for
+  transcontinental countries (a western-Russia cluster is never labelled "in Asia"). Reuses
+  `_haversine_km` + `resolve_continent`; no new geo data files. Design codex-xhigh-hardened
+  (country-purity + transcontinental omission were P0 fixes). Zero behavior change — nothing
+  imports it yet.
+
 ### Remove row-13 US-only heat-exposure (off-brand) (2026-07-08)
 
 - **Reverts #415.** The row-13 heat-exposure class ("N million Americans under Extreme
