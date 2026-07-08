@@ -11,6 +11,337 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-08 — Daily corpus grading (8 fresh drafts; complete queue turnover)
+
+**Context:** Gist read via git-clone path (success). Queue: **complete turnover — 3rd
+occurrence** (after Jul 3→4 and Jul 6→7). All 6 of Jul 7's pending drafts are gone. 8
+fresh drafts, all created 2026-07-08 (02:50–14:32 UTC). Bot at `0.9.97.0` per
+`BRIEFING.md` — since Jul 7's grading, the front-page-parity program shipped **rows 6,
+7, 11, 14** (#392, #397, #398/#399, #402/#404) and flipped Bet A live (`THEHEAT_NEWS_
+BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`). Two of
+those PRs land directly on this plan's open items: **#397 "precip four-moves" (P9's
+fix)** and **#404 "cyclone four-moves, all 5 kinds"** (which includes the new
+`cyclone_land_threat` and `cyclone_landfall` signal kinds debuting in today's batch).
+All 8 of today's drafts postdate every relevant fix (#386 P_tier/P_dust from Jul 7
+morning; #397/#404 from Jul 7 evening) — **this is the first cycle where every fresh
+draft is safely post-fix for all three shipped items**, unlike Jul 7's straddled batch.
+
+**Staleness review:** 0 bulk-reject candidates — all 8 drafts same-day fresh (oldest
+~12h, newest ~15min at grading). `gh` CLI confirmed absent (`which gh` → not found); no
+gist-write tool exposed via the GitHub MCP tools loaded this session. 40th consecutive
+`gh`-absent skip (May 13 → Jul 8) — moot for this cycle regardless, since nothing
+qualifies.
+
+**Grade distribution (8 fresh drafts):** 0 A / 4 A- / 3 B+ / 1 B / 0 B- / 0 C / 0 D-F.
+**A-rate: 50% (4/8).** Gap from resumption bar: **0pp by raw arithmetic, but 50% is not
+itself a majority** (exactly half, not more than half) — the bar requires >50%, so it
+is technically not cleared. This is nonetheless the closest approach since Jun 29's
+80% clearance, the largest raw A- count in a cycle since Jun 29 (4, tying that cycle's
+count on a larger n=8 vs n=5), and nearly double Jul 7's 33%.
+
+**Headline finding:** Three of this plan's shipped fixes get their first fully clean
+post-fix test in the same cycle, and all three hold. **P_dust** (PR #386): Riyadh's
+`dust_event` draft states a WHO PM10 multiple (27.9×) for the first time in 12 corpus
+instances — the 11-for-11 gap this plan tracked for 9 cycles is closed. **P9** (PR
+#397): all 3 fresh `precipitation_extreme` drafts land a declarative annual-ratio
+closer with zero restate-math — the first precip batch in the corpus's history without
+a single P9 violation. **Cyclone four-moves** (PR #404): both of today's brand-new
+cyclone signal kinds (`cyclone_landfall`, `cyclone_land_threat`) debut clean of
+tier-jargon and correctly forecast-tense the land-threat kind. The gap that remains is
+entirely in the two *unimplemented* proposals — **P_close** caps 4 of today's 8 drafts
+on a mechanism-only or expository close, and **P_compound** resurfaces on Snowshoe, WV
+for a 7th cycle. Also: a same-city near-duplicate regression (Snowshoe's Jul 7 draft was
+A-; today's is B+) and a recurring bundle-leak bug (raw JTWC URL in tweet text, 2nd
+occurrence) are logged as operational notes below.
+
+### A-grade drafts
+
+#### [2] Barrow, Alaska — precipitation_extreme — 71.2 mm/day, prior record 0.0 mm — **A-**
+
+> *Barrow, Alaska received 71.2 mm of rain in a single day on July 6 — the previous
+> daily record was 0.0 mm. Barrow sits on the Arctic Ocean at 71°N, where annual
+> precipitation totals roughly 110 mm; one storm just delivered two-thirds of a normal
+> year in a day.*
+
+**Score:** 78. Created 2026-07-08T02:53:38Z.
+
+- **P9 check:** CLEAN. No restate-math — the previous record being 0.0 mm makes the
+  margin trivial/redundant, so the writer correctly omits deriving it. First sentence
+  states the record fields verbatim (move 1); no re-derived rate anywhere.
+- **P_close check:** POSITIVE. "One storm just delivered two-thirds of a normal year in
+  a day" is exactly the annual-ratio anchor PR #397's move 2 prescribes, stated as a
+  direct declarative closer, not stranded or hedged.
+- **Wodehouse rule?** Clean.
+
+First genuinely clean `precipitation_extreme` draft in the corpus's history — no
+opener-template, no restate-math, no hedge on the closer.
+
+#### [3] Astana, Kazakhstan — precipitation_extreme — 51.1 mm/day, prior record 1.5 mm — **A-**
+
+> *Astana, Kazakhstan recorded 51.1 mm of rain on July 6 — smashing the previous daily
+> record of 1.5 mm, also set in 2026. Astana sits in the Eurasian steppe, where annual
+> totals rarely exceed 300 mm; this single storm delivered roughly a sixth of a typical
+> year's rain.*
+
+**Score:** 76. Created 2026-07-08T02:55:57Z.
+
+- **P9 check:** CLEAN. "Smashing" replaces the flat "received X — Y above Z" restate-math
+  form entirely; no re-derived arithmetic. "Also set in 2026" is a real, verbatim-cited
+  fact (the prior record's own year), not derived.
+- **P_close check:** POSITIVE. "This single storm delivered roughly a sixth of a
+  typical year's rain" — same annual-ratio anchor form as [2], declarative, unhedged.
+- **Wodehouse rule?** Clean.
+
+Same steppe ecosystem-incongruity mechanic this station has self-selected before (Jun
+30's Astana B+); today's version pairs it with the fixed closer form and clears to A-.
+
+#### [4] Anchorage, Alaska — precipitation_extreme — 370.4 mm/7d — **A-**
+
+> *Anchorage, Alaska: 370.4 mm of rain in seven days ending July 6 — roughly a full
+> year's average in one week. The Chugach Range forces Gulf of Alaska moisture upward,
+> compressing what would otherwise be weeks of accumulation into days.*
+
+**Score:** 75. Created 2026-07-08T06:35:01Z.
+
+- **P9 check:** CLEAN, and the strongest-constructed of the three. Colon-lead opener
+  (a genuine 4th sentence-1 variant, not the "recorded/received X mm" template); the
+  annual-ratio anchor leads sentence 1 instead of being saved for the close; no record
+  fields cited at all (this reads as a bare `multi_day_accumulation` bundle with no
+  `previous_record_mm`), correctly complying with move 3's "no record language without
+  record fields" rule.
+- **P_close check:** POSITIVE — arguably the batch's best. "Compressing what would
+  otherwise be weeks of accumulation into days" is a declarative physical-transformation
+  statement doing double duty as both mechanism (orographic lift) and consequence
+  (time-compression), with no redundancy against sentence 1's ratio.
+- **Wodehouse rule?** Clean.
+
+Best-constructed precip draft of the three: ratio-anchor leads instead of stranding as
+a closer, and the system clause still finds a fresh consequence to state. If a single
+draft should anchor a future exemplar for the precip four-moves prompt section, this is
+the strongest candidate in the corpus to date.
+
+#### [8] Riyadh, Saudi Arabia — air_quality_hazard — PM2.5 150 μg/m³ / 10× WHO — **A-**
+
+> *Riyadh, Saudi Arabia: model-estimated 24-hour mean PM2.5 of 150 μg/m³ on July 8 —
+> 10× the WHO daily guideline. The Arabian interior's summer heat cycle lifts fine dust
+> through convective mixing; at 45 km model resolution, this is a basin-scale loading,
+> not a street-corner spike.*
+
+**Score:** 74. Created 2026-07-08T14:32:38Z. Same city, same day as [7] below (see
+Patterns).
+
+- **A4 check:** does NOT recur. No signal-kind self-naming ("this is a PM2.5 signal,
+  not dust") — a genuine negative data point after Jul 7's single instance.
+- **P_close check:** POSITIVE, and a new subtype. "At 45 km model resolution, this is a
+  basin-scale loading, not a street-corner spike" is declarative and states a real
+  consequence (what the reading does and does not represent), but it is not a
+  named-absence or incongruity close like the corpus's other A- forms — it's an
+  **honesty-about-measurement-scale contrast**: distinguishing what the model can and
+  can't resolve, then landing on the more consequential of the two readings. Distinct
+  from dust_event's failing "resolution-form" close subtype (which is about atmospheric
+  dispersal, not model grid resolution) — worth not conflating the two in future
+  grading.
+- **Wodehouse rule?** Clean.
+
+Continues `air_quality_hazard`'s self-selection streak (5th consecutive cycle stating
+the WHO multiple unprompted) and lands the batch's freshest close mechanic. Candidate
+9th named move for P5's palette if this "scale-honesty contrast" recurs.
+
+### B+-grade drafts
+
+#### [1] Snowshoe, West Virginia — all_time_high — 90°F (32.2°C) — **B+**
+
+> *Snowshoe, West Virginia hit 90°F (32.2°C) on July 4 — hottest daily maximum in 52
+> years of records, 3°F above the 1986 mark. Snowshoe sits atop Cheat Mountain at 4,800
+> feet; that elevation normally keeps summer highs well below what the valleys see.*
+
+**Score:** 90. Created 2026-07-08T02:50:51Z.
+
+- **P_compound check:** VIOLATION — "hottest daily maximum in 52 years of records, 3°F
+  above the 1986 mark," the same archive+margin double-qualifier, 7th cycle (Jun 28, 29,
+  30, Jul 2, 4, 7, now 8).
+- **P_close check:** FAILING — implied-consequence, not declarative. "That elevation
+  normally keeps summer highs well below what the valleys see" states the norm the
+  record broke but never names the displacement directly. **Same station, one day
+  later, a materially weaker close than Jul 7's own Snowshoe draft** ("89°F is the kind
+  of reading the valley floor expects, not the ridge" — A-, declarative) — see Patterns.
+- **Wodehouse rule?** Clean.
+
+Graded B+, not the A- this station earned yesterday: same signal, same mechanic
+available, but the writer this time stopped at the mechanism instead of stating the
+inversion outright.
+
+#### [5] Typhoon Bavi — cyclone_landfall — Eastern China, Category 4 / 135 kt — **B+**
+
+> *Typhoon Bavi made landfall in Eastern China at Category 4 intensity — 135 kt winds.
+> The Western Pacific's warm pool this summer has been deep enough to sustain major
+> typhoon strength almost to the coast.
+> https://www.metoc.navy.mil/jtwc/products/wp0926prog.txt*
+
+**Score:** 73. Created 2026-07-08T06:36:50Z. **First `cyclone_landfall` corpus draft.**
+
+- **Move 1/2 check:** mostly clean — leads with the landfall event (move 1), cites
+  `landfall_location` verbatim ("Eastern China," move 2). Mild redundancy: "Category 4
+  intensity — 135 kt winds" restates the same fact two ways in one clause; not a
+  violation, just slightly less economical than the cyclone section's own worked
+  examples.
+- **P_tier check:** clean — no internal threshold/band language.
+- **P_close check:** POSITIVE — first for this signal type. "Sustain major typhoon
+  strength almost to the coast" is a declarative causal statement (warm-pool depth →
+  the storm didn't weaken before landfall), not hedged.
+- **Bug, not graded:** a raw JTWC advisory URL is appended directly to the tweet text —
+  **2nd occurrence of this exact bundle-leak** (1st was Jul 3's Typhoon Bavi
+  `cyclone_rapid_intensification` draft). Flagged for the engineer per that precedent,
+  not folded into the grade.
+- **Wodehouse rule?** Clean otherwise.
+
+Solid debut for the type; held to B+ by the mild opener redundancy and the (ungraded but
+real) recurring URL-leak bug rather than any P_close/P_tier failure.
+
+#### [7] Riyadh, Saudi Arabia — dust_event — PM10 1,257 μg/m³ / 27.9× WHO — **B+**
+
+> *Riyadh, Saudi Arabia: model-estimated PM10 averaged 27.9× the WHO 24-hour guideline
+> on July 8 — 1,257 μg/m³ against a standard of 45. The Arabian interior sits downwind
+> of the Nafud and Rub' al Khali; when shamal winds peak, both source regions feed the
+> same column.*
+
+**Score:** 75. Created 2026-07-08T14:31:27Z. Same city, same day as [8] above (see
+Patterns).
+
+- **P_dust check: FIX CONFIRMED — first post-fix `dust_event` draft in the corpus.**
+  "27.9× the WHO 24-hour guideline" is stated verbatim, WHO-multiple-first, matching PR
+  #386's prescribed form exactly. Closes the 11-for-11 gap this plan tracked across 9
+  cycles (Jun 13 → Jul 5). Opener also drops the old AOD-only template entirely — no
+  aerosol optical depth mentioned at all.
+- **Named mechanic:** genuine two-source causal chain (Nafud + Rub' al Khali deserts
+  both feeding the same air column when shamal winds peak) — sophisticated, but per
+  established P5 convention this counts as mechanism construction, not a named humor
+  move; the gap P5 tracks for `dust_event` is a different axis than P_dust and remains
+  open (see Patterns).
+- **P_close check:** FAILING — mechanism-only. "Both source regions feed the same
+  column" states the mechanism but never reaches a consequence. Same gap this signal
+  type has shown in all 12 corpus instances; the P_dust fix and the P_close gap are
+  orthogonal — fixing the WHO anchor didn't touch the close.
+- **Wodehouse rule?** Clean.
+
+First empirical confirmation of the P_dust fix. Graded B+: the structural fix (WHO
+anchor) landed cleanly, but the same P_close gap that has always sat under this signal
+type is untouched by it, as expected — a different fix.
+
+### B-grade drafts
+
+#### [6] Typhoon Bavi — cyclone_land_threat — Ishigaki, Japan, ~42 NM / ~60h — **B**
+
+> *Typhoon Bavi, packing 125 kt winds, is forecast to pass within about 42 NM of
+> Ishigaki, Japan in roughly 60 hours — at 110 kt per the JTWC track. Ishigaki sits at
+> the southern tip of the Ryukyu chain, directly in the Western Pacific typhoon
+> corridor.*
+
+**Score:** 77. Created 2026-07-08T14:30:15Z. **First `cyclone_land_threat` corpus
+draft** (the signal kind PR #388 added specifically to close the "Bavi gap").
+
+- **Move 4 check:** CLEAN and precise — current intensity leads as the one observed
+  anchor ("packing 125 kt winds"), then forecast tense throughout ("is forecast to
+  pass... in roughly 60 hours"), `min_distance_nm` cited with "about," `closest_tau_h`
+  cited as "roughly N hours." Matches the prompt's own worked example almost exactly.
+- **Clarity wrinkle (not a rule violation, worth watching):** two different wind values
+  in one sentence — 125 kt (now) and 110 kt (forecast, at closest approach) — with no
+  explicit marker that the second is a different time snapshot. A reader could misread
+  this as an internal contradiction rather than a forecast weakening trend. Watch for a
+  2nd instance before filing as a proposal.
+- **P_close check:** FAILING — expository, not even mechanism-only. "Ishigaki sits at
+  the southern tip of the Ryukyu chain, directly in the Western Pacific typhoon
+  corridor" describes geography without connecting it to any consequence of proximity —
+  same expository-debut pattern every other signal type has shown on its first corpus
+  appearance (most recently `record`'s Aibonito, Jul 7).
+- **Wodehouse rule?** Clean.
+
+Clean, correct forecast-tense debut — the structural rules land exactly as specified —
+but the system clause is pure scene-setting and P_close's mechanism-only ceiling applies
+on debut, consistent with every other type's first instance.
+
+### Patterns named in this batch
+
+1. **Three shipped fixes, three clean first tests, one cycle.** P_dust (dust_event WHO
+   anchor, PR #386), P9 (precip four-moves, PR #397), and the cyclone tier-jargon ban
+   (PR #386/#404) all get their first fully post-fix draft today and all hold clean.
+   This is the most consequential confirmation cycle since the fixes started shipping.
+2. **P_tier itself remains formally unconfirmed on its 4 named target types**
+   (`absolute_extreme`, `fire_footprint`, `cyclone_rapid_intensification`,
+   `regional_sst_anomaly`) — none appeared today. The 2 new cyclone kinds are governed
+   by the same "DETECTION PLUMBING IS NOT A FACT" rule and both came back clean, which
+   is supporting (not definitive) evidence; the formal confirmation still needs one of
+   the 4 originally-tracked types.
+3. **Same-city, same-type, consecutive-day quality regression:** Snowshoe, WV's
+   `all_time_high` graded A- on Jul 7 and B+ today — same elevation-inversion mechanic
+   available both times, declaratively stated only on the first draft. Distinct from
+   the corpus's prior duplicate-location clusters (Ft Green, Basrah) in that this is a
+   *different day's reading* at the same station, not a re-issue of the same event —
+   but the quality delta is worth tracking if it recurs.
+4. **Recurring bundle-leak bug:** a raw JTWC advisory URL appended to tweet text, 2nd
+   occurrence (Jul 3, Jul 8), both on Typhoon Bavi drafts. Not folded into either grade
+   per the Jul 3 precedent, but two occurrences make this worth a direct flag to the
+   engineer rather than a passive note.
+5. **Operator data-consistency question (not a voice finding):** today's two Typhoon
+   Bavi drafts describe landfall in Eastern China ([5]) and a forecast threat to
+   Ishigaki, Japan — south of the China coast — 60 hours out ([6]). Presented together
+   without advisory timestamps/numbers, the sequence reads as physically backwards (a
+   storm normally passes the Ryukyus before, not after, a China landfall) unless Bavi
+   recurved post-landfall, which does happen but is unusual. Worth the operator
+   confirming the two bundles' advisory numbers/issue-times line up before publishing
+   both.
+6. **dust_event / air_quality_hazard duplicate-location, same day:** [7] and [8] are
+   both Riyadh, both created within ~70 seconds of each other on Jul 8 — the same
+   adjacent-PM-signal-type clustering this plan has flagged before (Jul 1's Al Aḥmadī
+   cluster). Not a new pattern, logged for completeness.
+7. **Candidate 9th P5 move:** [8]'s "basin-scale loading, not a street-corner spike"
+   (scale-honesty contrast) is a fresh mechanic not on P5's existing list of 8. Watching
+   for a 2nd instance before proposing the addition formally.
+8. **A4 does not recur.** Jul 7's single "This is a PM2.5 signal, not dust" instance is
+   not repeated in either of today's PM-signal drafts — useful negative evidence; A4
+   stays at 1 cycle, not promoted.
+
+### Followups (in priority order)
+
+1. **Move P_dust fully to Resolved once one more clean `dust_event` draft confirms** —
+   today's [7] is the first of what the runbook's convention would want as a
+   multi-cycle confirmation before archiving the active-tracking entry (see improvement
+   plan for the exact bar).
+2. **Watch for the next `precipitation_extreme` draft** — a 2nd consecutive clean cycle
+   would let P9 move fully to Resolved.
+3. **Watch for the next `absolute_extreme` / `fire_footprint` /
+   `cyclone_rapid_intensification` / `regional_sst_anomaly` draft** — still the first
+   real empirical test of the P_tier fix on its originally-named types.
+4. **P_close and P_compound remain the highest-leverage unimplemented proposals** — both
+   drafted in full in `docs/IMPROVEMENT_PLAN.md`.
+5. **Flag the raw-URL bundle-leak bug to the engineer directly** (2nd occurrence) rather
+   than logging it passively a 3rd time.
+6. **Operator: verify the Bavi landfall/land_threat bundle timestamps** before deciding
+   whether to publish both today's Typhoon Bavi drafts.
+
+### Numbers
+
+- Pending drafts in queue: 8 (8 fresh; complete queue turnover, 0 carry-overs)
+- Fresh drafts graded: 8
+- A-rate: 50% (4/8) — best cycle since Jun 29 (80%, n=5); largest raw A- count (4) tied
+  with Jun 29 on a larger sample
+- Grade distribution: 0 A / 4 A- / 3 B+ / 1 B / 0 B- / 0 C / 0 D-F
+- New signal types debuted: 2 (`cyclone_landfall`, `cyclone_land_threat`)
+- Active proposals: P_close 18th cycle (5 positive: Barrow, Astana, Anchorage, Riyadh
+  air_quality_hazard, Typhoon Bavi landfall; 3 failing: Snowshoe, Riyadh dust_event,
+  Typhoon Bavi land_threat — new 16th/17th signal types via `cyclone_landfall` positive
+  and `cyclone_land_threat` failing); P_compound 7th cycle (Snowshoe). **P_dust
+  and P9 empirically confirmed clean for the first time** (1 cycle each — see
+  Improvement Plan for exact status language). P_tier not tested on a named target type.
+  A4 does not recur (still 1 cycle).
+- Staleness bulk-reject: 0 candidates this cycle (all same-day fresh). 40th consecutive
+  `gh`-absent skip.
+- Operational anomalies: (a) 3rd complete queue turnover event; (b) 2nd raw-JTWC-URL
+  bundle leak (flag to engineer); (c) possible Bavi landfall/land_threat sequencing
+  inconsistency (operator to verify); (d) same-city quality regression (Snowshoe).
+
+---
+
 ## 2026-07-07 — Daily corpus grading (6 fresh drafts; complete queue turnover)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: **complete
