@@ -10,18 +10,20 @@
 
 ## Execution order and status
 
-> **Program status (2026-07-07 night):** every EXECUTABLE row is MERGED — rows 3/4/5/6/7/9/11/14
-> (row 9 #412). Follow-ups #401 (#408) + #403 (#409) shipped; row-13 spiked → GO (#410).
-> **Flag ladder: A0 + A1 + A2 boost ALL LIVE + `THEHEAT_PER_COUNTRY_CAP=2`** (flipped 2026-07-07
-> 20:42Z). Remaining gated: **8** (a few days of `news_events`), **10** (A2 live+verified ≥1 week,
-> ~07-14), **12** (2–4 weeks gap-flag data). **13** is spiked GO — buildable when prioritized.
-> Andrew's pending flag: `THEHEAT_METRICS_ENABLED` (row 9, when ready). See
-> [docs/handoffs/2026-07-07-2140z.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-07-2140z.md).
+> **Program status (2026-07-08):** every EXECUTABLE row is MERGED — rows 3/4/5/6/7/9/11/14
+> (row 9 #412). Follow-ups #401 (#408) + #403 (#409) shipped. **Flag ladder: A0 + A1 + A2
+> boost ALL LIVE + `THEHEAT_PER_COUNTRY_CAP=2` (20:42Z) + `THEHEAT_METRICS_ENABLED` (row 9,
+> 22:43Z)** — all live; boost/cap watch regression-clean. **Row 13 SUPERSEDED/dropped —
+> US-only population-extent is off-brand** (PR-A #415 built then reverted #417); the
+> heat-dome story is now the **GLOBAL records-cluster (#414, spiked GO #416)** — the next
+> build. Remaining gated: **8** (a few days of `news_events`), **10** (A2 live+verified ≥1
+> week, ~07-14), **12** (2–4 weeks gap-flag data). Andrew pending: row-9 Vercel deploy. See
+> [docs/handoffs/2026-07-08.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08.md).
 
 
 | Row | Plan doc | Status | Blocked on |
 |---|---|---|---|
-| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | **A0 LIVE 2026-07-07 12:59Z (verified across cycles).** **A1 ENRICH LIVE 2026-07-07 16:23Z (Andrew's go)** — verifying clean, P0 guard holds; enrichment not yet fired a live impact draft. **A2 BOOST unset — Andrew's flip after A1 fully verifies** | A2 → Andrew |
+| 1–2 | [track-0-runbook.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/track-0-runbook.md) — flip + live-verify Bet A | **A0 + A1 + A2 ALL LIVE.** A0 `NEWSWORTHINESS` 2026-07-07 12:59Z; A1 `NEWS_ENRICH` 16:23Z (P0 guard holds; no live enriched draft yet — stochastic); **A2 `NEWS_BOOST` 20:42Z (Andrew's go, dryrun-proof accepted)** — watch REGRESSION-CLEAN, no boost fired yet (rare/days-out). Also `PER_COUNTRY_CAP=2` 20:42Z. | — (boost provenance = days-horizon watch) |
 | 3 | [row-03-corpus-merge-and-staleness.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-03-corpus-merge-and-staleness.md) | **MERGED 2026-07-07** (#384 + #385; codex r1 P1 → sweep is provenance-aware) | — |
 | 4 | [row-04-voice-ptier-pdust.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-04-voice-ptier-pdust.md) | **MERGED 2026-07-07** (#386; watch air-quality coverage ≥90% for 2 cycles) | — |
 | 5 | [row-05-cyclone-land-threat.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/front-page-parity/row-05-cyclone-land-threat.md) | **MERGED 2026-07-07** (#388, closes #375; codex r1 2×P1 real → fixed + persistence contract test; Bavi = live verify case) | — |
