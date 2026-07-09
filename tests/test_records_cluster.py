@@ -438,6 +438,17 @@ def test_cluster_signature_is_short_hex_and_stable():
     assert cluster_signature(FRANCE) == sig  # pure
 
 
+def test_cluster_signature_distinguishes_stations_by_event_id():
+    # Two distinct GHCN stations can normalize to the same display city + rounded
+    # coords; the per-station event id must keep their signatures distinct so two
+    # different same-date clusters can't collapse to one dedup id.
+    a = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
+          "cal_event_id": "cal_high_USA1_2026-07-08"}]
+    b = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
+          "cal_event_id": "cal_high_USB2_2026-07-08"}]
+    assert cluster_signature(a) != cluster_signature(b)
+
+
 def test_zone_countries_keys_match_region_watchlist_exactly():
     watchlist_names = {r.name for r in REGION_WATCHLIST}
     assert set(ZONE_COUNTRIES) == watchlist_names, (

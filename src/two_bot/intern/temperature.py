@@ -28,7 +28,7 @@ from src.data.open_meteo import RecordStreakEvent
 
 from src.data.reanalysis_anomaly import RegionalAnomalyEvent
 
-from src.editorial.records_cluster import CAUSE_ATTRIBUTION_DENYLIST, ClusterName
+from src.editorial.records_cluster import ALL_CONTINENTS, CAUSE_ATTRIBUTION_DENYLIST, ClusterName
 
 from src.two_bot.types import StoryBundle
 
@@ -569,12 +569,19 @@ def build_heat_records_cluster_bundle(
     ``region_name`` (a documented reganom zone, or null), ``cluster_continents``
     (may be empty when the continent can't be asserted honestly), and
     ``cluster_countries``. The writer cites them verbatim and may name NO other
-    region; single-cause attributions ("heat dome", blocking ridge, …) are carried
-    in ``forbidden_claims`` and hard-blocked by the deterministic honesty gate.
+    region; single-cause attributions ("heat dome", blocking ridge, …) AND any
+    continent the cluster doesn't actually span are carried in ``forbidden_claims``
+    and hard-blocked by the deterministic honesty gate.
     """
     when = when or date.today().isoformat()
     sample_cities = [s.get("city", "") for s in stations if s.get("city")][:5]
     where = name.region_name or ", ".join(name.lead_countries) or "global"
+    # Geography-overclaim guard: forbid every continent the cluster does NOT span
+    # (all six when the continent was omitted). Caught deterministically alongside
+    # the cause-attribution denylist.
+    forbidden_claims = list(CAUSE_ATTRIBUTION_DENYLIST) + [
+        c for c in ALL_CONTINENTS if c not in name.continents
+    ]
     return StoryBundle(
         signal_kind="heat_records_cluster",
         where=where,
@@ -594,8 +601,8 @@ def build_heat_records_cluster_bundle(
         ],
         historical_context={
             "scope": "same_day_daily_records_cluster",
+            "forbidden_claims": forbidden_claims,
             "stations": stations,  # full per-station detail for the writer
-            "forbidden_claims": list(CAUSE_ATTRIBUTION_DENYLIST),
         },
         raw_signal_dump={"stations": stations, "event_id": event_id},
     )

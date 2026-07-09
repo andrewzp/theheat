@@ -73,11 +73,12 @@ ZONE_COUNTRIES: dict[str, frozenset[str]] = {
 }
 
 # The published copy states only the VERIFIABLE fact (many cities set daily records
-# across a region). A "heat dome" / blocking-ridge is the plausible synoptic CAUSE,
-# but the bundle proves only clustered records — asserting the mechanism is an
-# unwarranted claim (mirrors the precip-cluster fact-check rule). These phrases are
-# carried as the bundle's forbidden_claims and hard-blocked by the deterministic
-# honesty gate. Substring, case-insensitive.
+# across a region). A "heat dome" / blocking ridge / anticyclone is the plausible
+# synoptic CAUSE, but the bundle proves only clustered records — asserting the
+# mechanism is an unwarranted claim (mirrors the precip-cluster fact-check rule).
+# These phrases + synonyms are carried as the bundle's forbidden_claims and
+# hard-blocked by the deterministic honesty gate. Substring, case-insensitive; the
+# honest copy never needs any of them, so the false-positive risk is ~zero.
 CAUSE_ATTRIBUTION_DENYLIST: tuple[str, ...] = (
     "heat dome",
     "heat-dome",
@@ -85,6 +86,22 @@ CAUSE_ATTRIBUTION_DENYLIST: tuple[str, ...] = (
     "blocking ridge",
     "omega block",
     "omega-block",
+    "high-pressure",
+    "high pressure",
+    "anticyclone",
+    "stationary high",
+    "ridge of high pressure",
+    "upper-level ridge",
+    "upper ridge",
+    "heat ridge",
+)
+
+# The six continents resolve_continent can emit. Used to build the per-bundle
+# continent-overclaim denylist: any continent NOT carried in the cluster's
+# ``cluster_continents`` is forbidden, so "across Asia" for a Europe cluster (or ANY
+# continent when the continent was omitted) is caught by the deterministic gate.
+ALL_CONTINENTS: tuple[str, ...] = (
+    "Africa", "Asia", "Europe", "North America", "Oceania", "South America",
 )
 
 # Countries that physically span two continents, so a country→continent lookup is
@@ -299,16 +316,22 @@ def _continents_for(countries: list[str], *, blocked: bool) -> list[str]:
 def cluster_signature(stations: list[dict]) -> str:
     """A deterministic, naming-independent id for a cluster's membership.
 
-    Short hex digest of the sorted ``(city, country, round(lat,2), round(lon,2))``
-    member rows — process-stable (hashlib, not the salted builtin hash) so the same
-    dome yields the same dedup id across runs, and two different clusters on the same
-    date never collide. Used to build the per-cluster/date dedup event id.
+    Short hex digest of the sorted per-station rows — process-stable (hashlib, not
+    the salted builtin hash) so the same dome yields the same dedup id across runs,
+    and two different clusters on the same date never collide. Each row keys on the
+    per-station event id when present (distinct GHCN stations can normalize to the
+    same display city + rounded coords, so city/coords alone are not collision-safe),
+    falling back to city/country/coords. Used to build the per-cluster/date dedup id.
     """
     def _row(s: dict) -> str:
         coords = _coords(s)
         lat = f"{coords[0]:.2f}" if coords else ""
         lon = f"{coords[1]:.2f}" if coords else ""
-        return f"{str(s.get('city') or '')}|{_country_key(s.get('country'))}|{lat}|{lon}"
+        ident = str(s.get("cal_event_id") or s.get("event_id") or "")
+        return (
+            f"{ident}|{str(s.get('city') or '')}"
+            f"|{_country_key(s.get('country'))}|{lat}|{lon}"
+        )
 
     canonical = "\n".join(sorted(_row(s) for s in stations))
     return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:12]

@@ -1727,9 +1727,24 @@ def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
     assert facts["region_name"] == "France"
     assert facts["cluster_countries"] == ["France"]
     assert facts["sample_cities"]
-    # deterministic honesty backstop: the cause-attribution denylist is carried
+    # deterministic honesty backstop: cause-attribution denylist (+ synonyms) AND
+    # the continent-overclaim guard are carried in forbidden_claims.
+    from src.two_bot.pipeline import _forbidden_claim_violation
     fc = bundle.historical_context["forbidden_claims"]
-    assert "heat dome" in fc and "blocking ridge" in fc
+    assert "heat dome" in fc and "anticyclone" in fc and "high-pressure" in fc
+    # France cluster spans Europe only → every OTHER continent is forbidden.
+    assert "Asia" in fc and "Africa" in fc and "Europe" not in fc
+    # the gate actually fires on a synonym and on a continent overclaim
+    assert _forbidden_claim_violation(
+        "Records fell as an anticyclone parked over the region.", bundle
+    ) == "anticyclone"
+    assert _forbidden_claim_violation(
+        "Heat records clustered across Asia today.", bundle
+    ) == "Asia"
+    # ...but the honest form (region + within-cluster continent) passes clean
+    assert _forbidden_claim_violation(
+        "Records fell in 6 cities across France, in Europe.", bundle
+    ) is None
     audit = audit_story_bundle(bundle)
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
 
