@@ -4,6 +4,7 @@ from src.data.open_meteo import (
     AbsoluteExtremeEvent,
     AllTimeRecord,
     ExtremeSignalBundle,
+    MonthlyRecord,
     RecordEvent,
     WetBulbEvent,
 )
@@ -55,6 +56,262 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 2
     assert source_run["drafted"] == 2
+
+
+_FRANCE_CLUSTER = [
+    ("Paris", 48.86, 2.35), ("Lyon", 45.75, 4.85), ("Marseille", 43.30, 5.37),
+    ("Bordeaux", 44.84, -0.58), ("Toulouse", 43.60, 1.44), ("Nantes", 47.22, -1.55),
+]
+
+
+def _france_cluster_bundles(signal_date):
+    """Six France cities, each with only a DAILY calendar-record (no all-time /
+    monthly). A daily-only cluster — spatially coherent but not significant."""
+    bundles = []
+    for city, lat, lon in _FRANCE_CLUSTER:
+        rec = RecordEvent(
+            city=city, country="France", new_temp_c=39.0, old_record_c=37.5,
+            old_record_year=1947, event_id=f"record_{city}_2026-07-08",
+            signal_date=signal_date, lat=lat, lon=lon,
+        )
+        bundles.append(ExtremeSignalBundle(
+            city=city, country="France", calendar_date_high=rec, signal_date=signal_date,
+        ))
+    return bundles
+
+
+# Same six France cities + Lille, but Paris carries an ALL-TIME high — one all-time
+# record makes the cluster significant (the other six are daily). Its own all-time
+# individual draft SURVIVES (double-coverage default); only the daily are suppressed.
+_FRANCE_SIGNIFICANT = [
+    ("Paris", 48.86, 2.35, "all_time"),
+    ("Lyon", 45.75, 4.85, "daily"),
+    ("Marseille", 43.30, 5.37, "daily"),
+    ("Bordeaux", 44.84, -0.58, "daily"),
+    ("Toulouse", 43.60, 1.44, "daily"),
+    ("Nantes", 47.22, -1.55, "daily"),
+    ("Lille", 50.63, 3.06, "daily"),
+]
+
+
+def _france_significant_bundles(signal_date):
+    bundles = []
+    for city, lat, lon, tier in _FRANCE_SIGNIFICANT:
+        if tier == "all_time":
+            bundles.append(ExtremeSignalBundle(
+                city=city, country="France", signal_date=signal_date,
+                all_time_high=AllTimeRecord(
+                    city=city, country="France", kind="high", new_temp_c=41.0,
+                    old_record_c=39.5, old_record_year=1923, years_of_data=80,
+                    event_id=f"alltime_high_{city}_2026-07-08", lat=lat, lon=lon,
+                ),
+            ))
+        else:
+            bundles.append(ExtremeSignalBundle(
+                city=city, country="France", signal_date=signal_date,
+                calendar_date_high=RecordEvent(
+                    city=city, country="France", new_temp_c=39.0, old_record_c=37.5,
+                    old_record_year=1947, event_id=f"record_{city}_2026-07-08",
+                    signal_date=signal_date, lat=lat, lon=lon,
+                ),
+            ))
+    return bundles
+
+
+# Six Spanish cities carrying only MONTHLY highs and NO calendar_date_high — exactly
+# the shape evaluate_city emits for world cities. A cluster built from them proves
+# the class fires GLOBALLY, with zero daily-record (GHCN/US) input.
+_IBERIA_MONTHLY = [
+    ("Madrid", 40.42, -3.70), ("Toledo", 39.86, -4.02), ("Valencia", 39.47, -0.38),
+    ("Zaragoza", 41.65, -0.89), ("Barcelona", 41.39, 2.16), ("Albacete", 38.99, -1.86),
+]
+
+
+def _world_monthly_bundles(signal_date, old_year=1990):
+    bundles = []
+    for city, lat, lon in _IBERIA_MONTHLY:
+        bundles.append(ExtremeSignalBundle(
+            city=city, country="Spain", signal_date=signal_date,
+            monthly_high=MonthlyRecord(
+                city=city, country="Spain", kind="high", month=7,
+                new_temp_c=42.0, old_record_c=40.5, old_record_year=old_year,
+                years_of_data=55, event_id=f"monthly_high_{city}_2026_07",
+                lat=lat, lon=lon,
+            ),
+        ))
+    return bundles
+
+
+def _monthly_plus_daily_bundles(signal_date, old_year):
+    # Each city carries a monthly_high (with old_record_year == signal_year, so the
+    # cascade's monthly guard suppresses its individual monthly draft) AND a daily
+    # calendar record. It joins the cluster as a MONTHLY member; its daily draft must
+    # be suppressed by the cluster, never leak as an individual "record".
+    bundles = []
+    for city, lat, lon in _FRANCE_CLUSTER:
+        bundles.append(ExtremeSignalBundle(
+            city=city, country="France", signal_date=signal_date,
+            monthly_high=MonthlyRecord(
+                city=city, country="France", kind="high", month=7,
+                new_temp_c=41.0, old_record_c=39.0, old_record_year=old_year,
+                years_of_data=55, event_id=f"monthly_high_{city}_2026_07",
+                lat=lat, lon=lon,
+            ),
+            calendar_date_high=RecordEvent(
+                city=city, country="France", new_temp_c=39.0, old_record_c=37.5,
+                old_record_year=1947, event_id=f"record_{city}_2026-07-08",
+                signal_date=signal_date, lat=lat, lon=lon,
+            ),
+        ))
+    return bundles
+
+
+def _capture_enqueue(monkeypatch, runner):
+    enqueued = []
+    monkeypatch.setattr(
+        runner, "_enqueue_story_candidate",
+        lambda *a, **k: (enqueued.append(k.get("legacy_type")) or True),
+    )
+    return enqueued
+
+
+def test_heat_records_cluster_fires_and_suppresses_daily_drafts(monkeypatch):
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _france_significant_bundles(signal_date)
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert enqueued.count("heat_records_cluster") == 1
+    assert "record" not in enqueued            # constituent daily drafts suppressed
+    assert "all_time_high" in enqueued         # the all-time member keeps its own draft
+    assert "simultaneous_records" not in enqueued  # flat lane superseded on this date
+
+
+def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch):
+    # The heart of the tier rework: a spatially-coherent burst of DAILY-only records
+    # is not significant, so the class must NOT fire — and the daily records post
+    # individually (they are not suppressed, because no cluster fired).
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _france_cluster_bundles(signal_date)   # six daily-only France cities
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert "heat_records_cluster" not in enqueued   # daily-only ⇒ not significant
+    assert enqueued.count("record") == 6            # daily drafts NOT suppressed
+    assert "simultaneous_records" in enqueued       # flat lane runs normally
+
+
+def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch):
+    # The class is GLOBAL: world cities (evaluate_city) emit monthly/all-time highs
+    # but no calendar_date_high, so a cluster built purely from monthly records must
+    # fire — with zero daily input. Their individual monthly drafts survive.
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _world_monthly_bundles(signal_date)
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert enqueued.count("heat_records_cluster") == 1   # fires from monthly records alone
+    assert "record" not in enqueued                       # no daily-record input at all
+    assert "monthly_high" in enqueued                     # monthly members keep their drafts
+
+
+def test_world_monthly_same_year_prior_record_still_clusters(monkeypatch):
+    # world_cache stamps a provisional monthly record's year as the CURRENT year, so
+    # real world monthly highs routinely carry old_record_year == signal_year. The
+    # cluster must NOT drop them (that would gut global reach — the exact US-only
+    # failure the tier rework exists to avoid): a monthly record is a valid cluster
+    # member regardless of when its prior record was set.
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _world_monthly_bundles(signal_date, old_year=signal_date.year)
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert enqueued.count("heat_records_cluster") == 1   # same-year monthlies still cluster
+
+
+def test_cluster_member_daily_draft_suppressed_when_monthly_guard_fails(monkeypatch):
+    # A city that joins the cluster as a monthly member (its individual monthly draft
+    # guard-fails in the cascade because the prior record was set this year) must have
+    # its DAILY draft suppressed too — it must not leak an individual "record".
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _monthly_plus_daily_bundles(signal_date, old_year=signal_date.year)
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.setenv("THEHEAT_RECORDS_CLUSTER_ENABLED", "1")
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert enqueued.count("heat_records_cluster") == 1   # monthly members form the cluster
+    assert "record" not in enqueued                       # daily drafts suppressed (no leak)
+    assert "monthly_high" not in enqueued                 # cascade guard-fails same-year monthly
+
+
+def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch):
+    from src.orchestrator.sources import open_meteo as runner
+
+    signal_date = date(2026, 7, 8)
+    bundles = _france_cluster_bundles(signal_date)
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "mode": "alerts", "started_at": "2026-07-08T00:00:00Z", "sources": []}
+
+    monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "open_meteo")
+    monkeypatch.delenv("THEHEAT_RECORDS_CLUSTER_ENABLED", raising=False)
+    monkeypatch.setattr(runner, "_check_city_extreme_signals", lambda cities, metrics_out: (bundles, []))
+    monkeypatch.setattr(runner, "_should_draft", lambda *a, **k: True)
+    enqueued = _capture_enqueue(monkeypatch, runner)
+
+    runner.run_extreme_signals(bot_state, current_run, [], {}, {})
+
+    assert "heat_records_cluster" not in enqueued   # flag off ⇒ class dormant
+    assert enqueued.count("record") == 6            # each daily record drafts individually
+    assert "simultaneous_records" in enqueued       # today's flat lane unchanged
 
 
 def test_absolute_extreme_is_queued_when_it_is_strongest(monkeypatch):

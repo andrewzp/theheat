@@ -1693,3 +1693,128 @@ def test_build_cyclone_land_threat_bundle_shape():
     assert bundle.raw_signal_dump["source"] == "jtwc"
     audit = audit_story_bundle(bundle)
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def _hrc_stations(rows):
+    # rows: (city, country, lat, lon, tier) — tier is all_time / monthly / daily.
+    return [
+        {"city": c, "country": ctry, "lat": lat, "lon": lon, "tier": tier,
+         "temp_c": 39.0, "old_record_c": 37.8, "old_record_year": 1947,
+         "margin_c": 1.2}
+        for c, ctry, lat, lon, tier in rows
+    ]
+
+
+def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    # A significant France cluster: 2 all-time, 1 monthly, 3 daily records.
+    stations = _hrc_stations([
+        ("Paris", "France", 48.86, 2.35, "all_time"),
+        ("Lyon", "France", 45.75, 4.85, "all_time"),
+        ("Marseille", "France", 43.30, 5.37, "monthly"),
+        ("Bordeaux", "France", 44.84, -0.58, "daily"),
+        ("Toulouse", "France", 43.60, 1.44, "daily"),
+        ("Nantes", "France", 47.22, -1.55, "daily"),
+    ])
+    from src.two_bot.evidence_contract import audit_story_bundle
+    name = name_cluster(stations)
+    bundle = build_heat_records_cluster_bundle(
+        stations, name,
+        event_id="heat_records_cluster_2026-07-08_deadbeef", when="2026-07-08",
+    )
+    assert bundle.signal_kind == "heat_records_cluster"
+    assert bundle.when == "2026-07-08"
+    assert bundle.event_id.endswith("deadbeef")
+    facts = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert facts["city_count"] == 6
+    assert facts["region_name"] == "France"
+    assert facts["cluster_countries"] == ["France"]
+    assert facts["sample_cities"]
+    # tier breakdown — carried so the writer leads with the SIGNIFICANT records
+    # ("2 all-time and 1 monthly high"), not a flat "6 cities" count.
+    assert facts["tier_counts"] == {"all_time": 2, "monthly": 1, "daily": 3}
+    # significant_cities lists the all-time + monthly members (all-time first), the
+    # ones the copy names; daily members are the supporting breadth.
+    assert facts["significant_cities"] == [
+        {"city": "Paris", "tier": "all_time"},
+        {"city": "Lyon", "tier": "all_time"},
+        {"city": "Marseille", "tier": "monthly"},
+    ]
+    # deterministic honesty backstop: cause-attribution denylist (+ synonyms) AND
+    # the continent-overclaim guard are carried in forbidden_claims.
+    from src.two_bot.pipeline import _forbidden_claim_violation
+    fc = bundle.historical_context["forbidden_claims"]
+    assert "heat dome" in fc and "anticyclone" in fc and "high-pressure" in fc
+    # France cluster spans Europe only → every OTHER continent is forbidden.
+    assert "Asia" in fc and "Africa" in fc and "Europe" not in fc
+    # the gate actually fires on a synonym and on a continent overclaim
+    assert _forbidden_claim_violation(
+        "Records fell as an anticyclone parked over the region.", bundle
+    ) == "anticyclone"
+    assert _forbidden_claim_violation(
+        "Heat records clustered across Asia today.", bundle
+    ) == "Asia"
+    # ...but the honest form (region + within-cluster continent) passes clean
+    assert _forbidden_claim_violation(
+        "Records fell in 6 cities across France, in Europe.", bundle
+    ) is None
+    audit = audit_story_bundle(bundle)
+    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    # A significant multi-country cluster: 3 monthly, 3 daily.
+    stations = _hrc_stations([
+        ("Paris", "France", 48.86, 2.35, "monthly"),
+        ("Lille", "France", 50.63, 3.06, "monthly"),
+        ("Brussels", "Belgium", 50.85, 4.35, "monthly"),
+        ("Amsterdam", "Netherlands", 52.37, 4.90, "daily"),
+        ("Cologne", "Germany", 50.94, 6.96, "daily"),
+        ("Frankfurt", "Germany", 50.11, 8.68, "daily"),
+    ])
+    from src.two_bot.evidence_contract import audit_story_bundle
+    name = name_cluster(stations)
+    bundle = build_heat_records_cluster_bundle(
+        stations, name, event_id="hrc_x", when="2026-07-08",
+    )
+    facts = {f["label"]: f["value"] for f in bundle.current_facts}
+    assert facts["region_name"] is None
+    assert facts["cluster_continents"] == ["Europe"]
+    assert set(facts["cluster_countries"]) == {"France", "Germany", "Belgium", "Netherlands"}
+    assert facts["tier_counts"] == {"all_time": 0, "monthly": 3, "daily": 3}
+    audit = audit_story_bundle(bundle)
+    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def test_build_heat_records_cluster_bundle_carries_observed_forecast_provenance():
+    # The cluster can mix OBSERVED records (GHCN, a reading that happened) with
+    # FORECAST "on pace" records (Open-Meteo world cities). The bundle carries the
+    # provenance so the writer can be tense-honest — never asserting a forecast
+    # record was already "set".
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    _cities = [
+        ("Paris", 48.86, 2.35), ("Lyon", 45.75, 4.85), ("Marseille", 43.30, 5.37),
+        ("Bordeaux", 44.84, -0.58), ("Toulouse", 43.60, 1.44), ("Nantes", 47.22, -1.55),
+    ]
+
+    def _provenance(observed_flags):
+        stations = [
+            {"city": c, "country": "France", "lat": lat, "lon": lon, "tier": "monthly",
+             "observed": obs, "temp_c": 39.0, "old_record_c": 37.8, "old_record_year": 1990}
+            for (c, lat, lon), obs in zip(_cities, observed_flags)
+        ]
+        bundle = build_heat_records_cluster_bundle(
+            stations, name_cluster(stations), event_id="x", when="2026-07-08",
+        )
+        return {f["label"]: f["value"] for f in bundle.current_facts}["records_provenance"]
+
+    assert _provenance([True] * 6) == "observed"
+    assert _provenance([False] * 6) == "forecast"
+    assert _provenance([True, True, True, False, False, False]) == "mixed"

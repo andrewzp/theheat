@@ -296,3 +296,52 @@ def score_simultaneous_records(city_count: int, sample_cities: list[str]) -> Edi
         threshold=get_threshold("simultaneous_records"),
         reasons=reasons,
     )
+
+def score_heat_records_cluster(
+    *,
+    all_time_count: int,
+    monthly_count: int,
+    daily_count: int,
+    country_count: int,
+    region_name: str | None = None,
+) -> EditorialScore:
+    """A spatially-coherent cluster of same-day heat records — a regional heat
+    event (the "records are falling across [region]" story), not scattered records.
+
+    Scores on record SIGNIFICANCE (all-time >> monthly >> daily), not a raw daily
+    count: an all-time or monthly record carries far more weight than "warmest
+    this-date here". The caller applies ``is_significant_cluster`` FIRST, so a
+    daily-only cluster is never scored — every cluster reaching this function has
+    already cleared the significance gate, and this score ranks it (and clears the
+    threshold) accordingly. A documented region or a multi-country span adds
+    novelty; spatial breadth (city count) adds shareability.
+    """
+    city_count = all_time_count + monthly_count + daily_count
+    reasons = [
+        f"{city_count} cities set heat records in one spatial cluster",
+        "spatially coherent — a regional heat event, not scattered records",
+    ]
+    if all_time_count:
+        reasons.append(f"{all_time_count} all-time record(s) in the cluster")
+    if monthly_count:
+        reasons.append(f"{monthly_count} monthly record(s) in the cluster")
+    if region_name:
+        reasons.append(f"documented region: {region_name}")
+    if country_count >= 3:
+        reasons.append(f"spans {country_count} countries")
+    if city_count >= 15:
+        reasons.append("mass event")
+    return _build_score(
+        "heat_records_cluster",
+        # Significance-weighted: all-time and monthly records dominate; daily
+        # records add only a sliver. A minimal significant cluster (one all-time
+        # record) clears the threshold; more/heavier records rank higher.
+        severity=74 + all_time_count * 6 + monthly_count * 3 + daily_count * 0.5,
+        novelty=87 + (5 if region_name else 0) + (4 if country_count >= 3 else 0),
+        timeliness=94,
+        confidence=86,
+        shareability=82 + min(city_count - 6, 24) * 1.0,
+        sensitivity=6,
+        threshold=get_threshold("heat_records_cluster"),
+        reasons=reasons,
+    )

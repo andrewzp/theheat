@@ -44,6 +44,7 @@ _TIER_TTLS_DAYS = {
     "fire_complex_tiers": 90,
     "cyclone_tiers": 30,
     "cyclone_land_threat_pairs": 30,
+    "heat_records_cluster_fired": 30,
     "flood_activation_tiers": 60,
 }
 
@@ -187,6 +188,11 @@ DEFAULT_STATE: BotState = {
     # slugs. A (storm, landmass) pair drafts exactly once, ever; recorded
     # only on draft SUCCESS (the fire_complex_tiers callback pattern).
     "cyclone_land_threat_pairs": {},
+    # Per-cluster/date dedup for the heat records-cluster class (#414):
+    # event_id -> signal_date. Recorded only on draft SUCCESS (a killed draft
+    # retries next cycle); TTL-pruned. The generic posted_events guard only
+    # sees per-event ids, so this map is consulted explicitly in detection.
+    "heat_records_cluster_fired": {},
     # Per-Copernicus EMS activation severity dedup for global flood events.
     "flood_activation_tiers": {},
     # Flat sidecar timestamps for tier TTL pruning. Tier dict values stay bare
@@ -1844,6 +1850,9 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "cyclone_wind_history": _merge_cyclone_wind_history,
     "cyclone_annual_count": _strat_max_by_key(0),
     "cyclone_land_threat_pairs": _merge_land_threat_pairs,
+    # event_id -> date; key-union so a cluster fired by either concurrent run
+    # stays deduped (max on the shared date value is a no-op).
+    "heat_records_cluster_fired": _strat_max_by_key(""),
     "flood_activation_tiers": _strat_reduce_by_key(_max_flood_severity),
     "tier_touch_ts": _strat_max_by_key(""),
     "flood_annual_count": _strat_max_by_key(0),
@@ -1979,6 +1988,19 @@ def update_fire_complex_tier(state: BotState, complex_id: str, tier: int) -> Bot
     if tier > current:
         tiers[complex_id] = int(tier)
         _touch_tier(state, "fire_complex_tiers", complex_id)
+    return state
+
+
+def record_heat_records_cluster(state: BotState, event_id: str, when: str) -> BotState:
+    """Record that a heat records-cluster (#414) has drafted, for per-cluster/date
+    dedup. ``event_id`` is ``heat_records_cluster_{date}_{signature}``; ``when`` is
+    the signal date (stored as the value, informational). Called only from
+    on_draft_success — a killed draft leaves it unrecorded and retries next cycle.
+    TTL-pruned via the tier sidecar (see _TIER_TTLS_DAYS)."""
+    fired = state.setdefault("heat_records_cluster_fired", {})
+    if event_id not in fired:
+        fired[event_id] = when
+        _touch_tier(state, "heat_records_cluster_fired", event_id)
     return state
 
 

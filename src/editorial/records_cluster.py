@@ -23,6 +23,7 @@ continent.
 
 from __future__ import annotations
 
+import hashlib
 import math
 from collections import Counter
 from dataclasses import dataclass
@@ -41,6 +42,20 @@ MIN_CLUSTER_SIZE = 6               # cities needed to clear the "many records" b
 ZONE_MEMBER_KM = 300.0             # a city is "in" a zone if within this of any zone point
 ZONE_CONTAINMENT_FRACTION = 0.80   # min fraction of cluster cities geographically in a zone
 MAX_NAMED_COUNTRIES = 3            # cap on countries enumerated in the tier-2 label
+
+# Significance gate (tier-aware rework #414). A cluster fires only when it carries
+# real record weight: >= SIGNIFICANCE_MIN_ALL_TIME all-time records OR >=
+# SIGNIFICANCE_MIN_MONTHLY monthly records. Daily records alone never qualify — a
+# spatial burst of "warmest this-date here" across a region is weather, not a
+# story. This gate is ALSO what makes the class global in production: world cities
+# enter the cluster only via their monthly/all-time members (the world path emits
+# no calendar_date_high). Taste calls; surfaced to Andrew to calibrate.
+SIGNIFICANCE_MIN_ALL_TIME = 1
+SIGNIFICANCE_MIN_MONTHLY = 3
+
+# The record tiers a cluster member can carry, strongest first. The prepass tags
+# each member with its bundle's strongest available high tier.
+TIER_ORDER: tuple[str, ...] = ("all_time", "monthly", "daily")
 
 # The documented countries of each REGION_WATCHLIST zone. Tier-1 naming requires
 # the cluster to be country-PURE for the zone (every city's country in this set),
@@ -70,6 +85,38 @@ ZONE_COUNTRIES: dict[str, frozenset[str]] = {
         {"South Africa", "Zimbabwe", "Botswana", "Namibia"}
     ),
 }
+
+# The published copy states only the VERIFIABLE fact (many cities set daily records
+# across a region). A "heat dome" / blocking ridge / anticyclone is the plausible
+# synoptic CAUSE, but the bundle proves only clustered records — asserting the
+# mechanism is an unwarranted claim (mirrors the precip-cluster fact-check rule).
+# These phrases + synonyms are carried as the bundle's forbidden_claims and
+# hard-blocked by the deterministic honesty gate. Substring, case-insensitive; the
+# honest copy never needs any of them, so the false-positive risk is ~zero.
+CAUSE_ATTRIBUTION_DENYLIST: tuple[str, ...] = (
+    "heat dome",
+    "heat-dome",
+    "blocking high",
+    "blocking ridge",
+    "omega block",
+    "omega-block",
+    "high-pressure",
+    "high pressure",
+    "anticyclone",
+    "stationary high",
+    "ridge of high pressure",
+    "upper-level ridge",
+    "upper ridge",
+    "heat ridge",
+)
+
+# The six continents resolve_continent can emit. Used to build the per-bundle
+# continent-overclaim denylist: any continent NOT carried in the cluster's
+# ``cluster_continents`` is forbidden, so "across Asia" for a Europe cluster (or ANY
+# continent when the continent was omitted) is caught by the deterministic gate.
+ALL_CONTINENTS: tuple[str, ...] = (
+    "Africa", "Asia", "Europe", "North America", "Oceania", "South America",
+)
 
 # Countries that physically span two continents, so a country→continent lookup is
 # unreliable for a specific cluster. When any cluster city is in one of these, the
@@ -280,6 +327,35 @@ def _continents_for(countries: list[str], *, blocked: bool) -> list[str]:
     return sorted(resolved)
 
 
+def cluster_signature(stations: list[dict]) -> str:
+    """A deterministic, TIER-AGNOSTIC id for a cluster's membership.
+
+    Short hex digest of the sorted per-station rows — process-stable (hashlib, not
+    the salted builtin hash) so the same dome yields the same dedup id across runs,
+    and two different clusters on the same date never collide. Each row keys on a
+    ``place_key`` (a per-station identity — e.g. the GHCN station id — that does NOT
+    change with record tier) plus city/country/rounded coords. Deliberately does
+    NOT key on the tier-specific event id: the same city set must dedup identically
+    even when a member's record upgrades from monthly to all-time between runs
+    (else the regional event re-hashes and re-fires). ``place_key`` distinguishes
+    distinct GHCN stations that normalize to the same display city + rounded coords;
+    world cities carry an empty ``place_key`` and fall back to city/country/coords
+    (also tier-agnostic). Used to build the per-cluster/date dedup id.
+    """
+    def _row(s: dict) -> str:
+        coords = _coords(s)
+        lat = f"{coords[0]:.2f}" if coords else ""
+        lon = f"{coords[1]:.2f}" if coords else ""
+        place = str(s.get("place_key") or "")
+        return (
+            f"{place}|{str(s.get('city') or '')}"
+            f"|{_country_key(s.get('country'))}|{lat}|{lon}"
+        )
+
+    canonical = "\n".join(sorted(_row(s) for s in stations))
+    return hashlib.sha1(canonical.encode("utf-8")).hexdigest()[:12]
+
+
 def name_cluster(stations: list[dict]) -> ClusterName:
     """Honest geographic naming of one cluster (see module docstring).
 
@@ -306,4 +382,38 @@ def name_cluster(stations: list[dict]) -> ClusterName:
         lead_countries=ordered_countries[:MAX_NAMED_COUNTRIES],
         country_count=len(ordered_countries),
         city_count=len(stations),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# significance gate (tier-aware rework)
+# --------------------------------------------------------------------------- #
+
+def cluster_tier_counts(stations: list[dict]) -> dict[str, int]:
+    """Count cluster members by record tier (all_time / monthly / daily).
+
+    Always returns all three keys (0-filled); a member with a missing or unknown
+    ``tier`` is ignored. The prepass tags each member with its bundle's strongest
+    available high tier, so these counts drive both the significance gate and the
+    significance-weighted score.
+    """
+    counts = dict.fromkeys(TIER_ORDER, 0)
+    for station in stations:
+        tier = station.get("tier")
+        if tier in counts:
+            counts[tier] += 1
+    return counts
+
+
+def is_significant_cluster(tier_counts: dict[str, int]) -> bool:
+    """Whether a cluster carries enough record significance to fire.
+
+    True when the cluster has at least ``SIGNIFICANCE_MIN_ALL_TIME`` all-time
+    records OR ``SIGNIFICANCE_MIN_MONTHLY`` monthly records. A daily-only cluster
+    is never significant — the gate that turns "N cities each broke their daily
+    record" (weather) into "records are falling across the region" (a story).
+    """
+    return (
+        tier_counts.get("all_time", 0) >= SIGNIFICANCE_MIN_ALL_TIME
+        or tier_counts.get("monthly", 0) >= SIGNIFICANCE_MIN_MONTHLY
     )

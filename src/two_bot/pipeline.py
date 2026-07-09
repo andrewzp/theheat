@@ -18,18 +18,22 @@ from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterR
 from src.voice.safety import run_safety_pipeline
 
 
-def _forbidden_claim_violation(tweet: str, bundle: StoryBundle) -> str | None:
-    """§F deterministic honesty gate (Layer 0) for regional-anomaly drafts.
+_FORBIDDEN_CLAIM_SIGNAL_KINDS = ("regional_anomaly", "heat_records_cluster")
 
-    For ``signal_kind == "regional_anomaly"`` bundles, reject any draft whose text
-    contains a ``historical_context.forbidden_claims`` substring (case-insensitive).
-    The forbidden list is curated honest-form-safe (see build_regional_anomaly_bundle),
-    so this catches bare-region / national / area-weighted framings without
-    false-killing the honest "N sampled cities in {region}" form. This is the
-    LOAD-BEARING honesty layer; the writer prompt + safety regex are backstops.
-    Returns the matched phrase, or None when clean / not a regional-anomaly bundle.
+
+def _forbidden_claim_violation(tweet: str, bundle: StoryBundle) -> str | None:
+    """§F deterministic honesty gate (Layer 0) for bundles carrying a curated
+    ``historical_context.forbidden_claims`` denylist.
+
+    For ``regional_anomaly`` this catches bare-region / national / area-weighted
+    framings (see build_regional_anomaly_bundle). For ``heat_records_cluster`` (#414)
+    it blocks single-cause synoptic attributions ("heat dome", blocking ridge, …) —
+    the bundle proves clustered records, not their cause. Rejects any draft whose
+    text contains a forbidden substring (case-insensitive). This is the LOAD-BEARING
+    honesty layer; the writer prompt + fact-check + safety regex are backstops.
+    Returns the matched phrase, or None when clean / not a guarded signal_kind.
     """
-    if bundle.signal_kind != "regional_anomaly":
+    if bundle.signal_kind not in _FORBIDDEN_CLAIM_SIGNAL_KINDS:
         return None
     # Normalize Unicode curly apostrophes to straight before matching: the writer
     # is Gemini, which routinely emits U+2019, and the possessive forbidden_claims

@@ -77,6 +77,11 @@ def score_simultaneous_records(*args: Any, **kwargs: Any) -> EditorialScore:
     return _temperature.score_simultaneous_records(*args, **kwargs)
 
 
+def score_heat_records_cluster(*args: Any, **kwargs: Any) -> EditorialScore:
+    _sync_date()
+    return _temperature.score_heat_records_cluster(*args, **kwargs)
+
+
 def score_regional_anomaly(*args: Any, **kwargs: Any) -> EditorialScore:
     _sync_date()
     return _temperature.score_regional_anomaly(*args, **kwargs)
@@ -268,6 +273,7 @@ __all__ = [
     "score_absolute_extreme",
     "score_record_streak",
     "score_simultaneous_records",
+    "score_heat_records_cluster",
     "score_regional_anomaly",
     "score_fire_event",
     "score_fire_footprint",

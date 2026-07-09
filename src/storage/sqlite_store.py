@@ -152,6 +152,9 @@ _METADATA_JSON_KEYS = (
     # load drops the (storm, landmass) guard and a later advisory re-drafts
     # the same approach (codex #388 r1 P1).
     "cyclone_land_threat_pairs",
+    # Heat records-cluster per-cluster/date dedup (#414) — must persist, else a
+    # SQLite load drops the guard and re-posts the same cluster.
+    "heat_records_cluster_fired",
     "flood_activation_tiers",
     "tier_touch_ts",
     "flood_annual_count",

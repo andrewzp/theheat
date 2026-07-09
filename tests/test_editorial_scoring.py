@@ -161,6 +161,32 @@ class TestEditorialScoring:
         assert large.total > small.total
         assert large.passes
 
+    def test_heat_records_cluster_scores_on_significance(self):
+        from src.editorial.scoring import score_heat_records_cluster
+        # A minimal SIGNIFICANT cluster — one all-time record among daily ones —
+        # clears the bar. Record significance, not a raw daily count, is the story.
+        minimal = score_heat_records_cluster(
+            all_time_count=1, monthly_count=0, daily_count=5,
+            country_count=1, region_name=None,
+        )
+        assert minimal.category == "heat_records_cluster"
+        assert minimal.passes
+        # A monthly-heavy significant cluster also clears the bar.
+        monthly_heavy = score_heat_records_cluster(
+            all_time_count=0, monthly_count=3, daily_count=3,
+            country_count=1, region_name=None,
+        )
+        assert monthly_heavy.passes
+        # More (and more significant) records + a documented region → stronger story.
+        bigger = score_heat_records_cluster(
+            all_time_count=5, monthly_count=8, daily_count=7,
+            country_count=4, region_name="Iberia",
+        )
+        assert bigger.total > minimal.total
+        # A documented dome outranks a comparable scattered same-day count.
+        sim = score_simultaneous_records(city_count=6, sample_cities=list("ABCDEF"))
+        assert minimal.total >= sim.total
+
     def test_score_marine_heatwave_day_5_passes_threshold(self):
         from src.editorial.scoring import score_marine_heatwave
         score = score_marine_heatwave(days=5, peak_anomaly_c=0.25, years_of_data=44)

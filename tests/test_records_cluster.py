@@ -12,9 +12,14 @@ from __future__ import annotations
 from src.editorial.records_cluster import (
     LINK_KM,
     MIN_CLUSTER_SIZE,
+    SIGNIFICANCE_MIN_ALL_TIME,
+    SIGNIFICANCE_MIN_MONTHLY,
     ZONE_COUNTRIES,
     ClusterName,
     cluster_record_stations,
+    cluster_signature,
+    cluster_tier_counts,
+    is_significant_cluster,
     name_cluster,
 )
 from src.data.reanalysis_anomaly import REGION_WATCHLIST
@@ -420,9 +425,110 @@ def test_cluster_name_is_a_frozen_dataclass():
 # ZONE_COUNTRIES ↔ REGION_WATCHLIST contract
 # --------------------------------------------------------------------------- #
 
+def test_cluster_signature_is_order_independent():
+    a = [_st("Paris", "France", 48.86, 2.35), _st("Lyon", "France", 45.75, 4.85)]
+    assert cluster_signature(a) == cluster_signature(list(reversed(a)))
+
+
+def test_cluster_signature_differs_by_membership():
+    a = [_st("Paris", "France", 48.86, 2.35)]
+    b = [_st("Madrid", "Spain", 40.42, -3.70)]
+    assert cluster_signature(a) != cluster_signature(b)
+
+
+def test_cluster_signature_is_short_hex_and_stable():
+    sig = cluster_signature(FRANCE)
+    assert isinstance(sig, str) and sig.isalnum() and 8 <= len(sig) <= 16
+    assert cluster_signature(FRANCE) == sig  # pure
+
+
+def test_cluster_signature_distinguishes_stations_by_place_key():
+    # Two distinct GHCN stations can normalize to the same display city + rounded
+    # coords; a per-station ``place_key`` (the station id) keeps their signatures
+    # distinct so two different same-date clusters can't collapse to one dedup id.
+    a = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
+          "place_key": "USW00093822"}]
+    b = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
+          "place_key": "USW00093820"}]
+    assert cluster_signature(a) != cluster_signature(b)
+
+
+def test_cluster_signature_is_tier_agnostic():
+    # The SAME city on the same date must dedup to the SAME signature even when a
+    # member's record tier changes across runs (e.g. a forecast upgrades a
+    # monthly_high into an all_time_high). The signature keys on the tier-agnostic
+    # PLACE, never the tier-specific event id — otherwise the same regional event
+    # re-hashes to a new dedup key and re-fires.
+    monthly = [{"city": "Madrid", "country": "Spain", "lat": 40.42, "lon": -3.70,
+                "place_key": "", "event_id": "monthly_high_Madrid_2026_07"}]
+    all_time = [{"city": "Madrid", "country": "Spain", "lat": 40.42, "lon": -3.70,
+                 "place_key": "", "event_id": "alltime_high_Madrid_2026-07-08"}]
+    assert cluster_signature(monthly) == cluster_signature(all_time)
+
+
 def test_zone_countries_keys_match_region_watchlist_exactly():
     watchlist_names = {r.name for r in REGION_WATCHLIST}
     assert set(ZONE_COUNTRIES) == watchlist_names, (
         "ZONE_COUNTRIES must define allowed countries for exactly the "
         "REGION_WATCHLIST zones — drift breaks tier-1 naming honesty."
     )
+
+
+# --------------------------------------------------------------------------- #
+# tier counts + significance gate (#414 tier-aware rework)
+#
+# The cluster fires on record SIGNIFICANCE (all_time >> monthly >> daily), not a
+# raw daily-record count. A spatial burst of "warmest July 8th here" is weather;
+# a burst that includes all-time or several monthly records is the story. This is
+# ALSO what makes the class global: world cities enter the cluster only via their
+# monthly/all-time members (evaluate_city emits no calendar_date_high).
+# --------------------------------------------------------------------------- #
+
+def _tier(tier: str, n: int, *, country: str = "France") -> list[dict]:
+    return [
+        {"city": f"{tier}{i}", "country": country, "lat": 48.0 + i * 0.1,
+         "lon": 2.0, "tier": tier}
+        for i in range(n)
+    ]
+
+
+def test_cluster_tier_counts_buckets_members_by_tier():
+    members = _tier("all_time", 2) + _tier("monthly", 3) + _tier("daily", 4)
+    assert cluster_tier_counts(members) == {"all_time": 2, "monthly": 3, "daily": 4}
+
+
+def test_cluster_tier_counts_zero_fills_absent_tiers():
+    # A daily-only cluster still reports all three keys (0-filled), so callers can
+    # index the gate without KeyErrors.
+    assert cluster_tier_counts(_tier("daily", 6)) == {
+        "all_time": 0, "monthly": 0, "daily": 6,
+    }
+
+
+def test_cluster_tier_counts_ignores_unknown_or_missing_tier():
+    members = _tier("all_time", 1) + [{"city": "x", "country": "France"}]
+    assert cluster_tier_counts(members) == {"all_time": 1, "monthly": 0, "daily": 0}
+
+
+def test_daily_only_cluster_is_not_significant():
+    # The whole point of the rework: a spatial burst of daily-only records must NOT
+    # fire — it isn't newsworthy enough on its own.
+    assert not is_significant_cluster(cluster_tier_counts(_tier("daily", 12)))
+
+
+def test_one_all_time_record_makes_cluster_significant():
+    members = _tier("all_time", 1) + _tier("daily", 5)
+    assert is_significant_cluster(cluster_tier_counts(members))
+
+
+def test_two_monthly_records_are_not_significant_but_three_are():
+    two = _tier("monthly", 2) + _tier("daily", 4)
+    three = _tier("monthly", 3) + _tier("daily", 3)
+    assert not is_significant_cluster(cluster_tier_counts(two))
+    assert is_significant_cluster(cluster_tier_counts(three))
+
+
+def test_significance_thresholds_are_the_documented_defaults():
+    # Taste-call constants surfaced to Andrew; pin them so a silent drift is caught.
+    assert SIGNIFICANCE_MIN_ALL_TIME == 1
+    assert SIGNIFICANCE_MIN_MONTHLY == 3

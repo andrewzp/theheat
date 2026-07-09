@@ -22,6 +22,16 @@ class TestApprovalPolicy:
         assert policy.mode == "manual_only"
         assert policy.can_auto_approve is False
 
+    def test_heat_records_cluster_requires_manual_review(self):
+        # Geography-honesty-sensitive class (like regional_anomaly): never autoship.
+        policy = recommend_approval_policy(
+            "heat_records_cluster",
+            signal_total=90,
+            candidate_score={"total": 84},
+        )
+        assert policy.mode == "manual_only"
+        assert policy.can_auto_approve is False
+
     def test_usgs_earthquake_requires_manual_review(self):
         policy = recommend_approval_policy(
             "usgs_earthquake",
