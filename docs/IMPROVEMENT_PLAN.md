@@ -2,6 +2,27 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 9: 2 fresh drafts, complete queue turnover (4th occurrence), 50% A-rate (n=2, not
+> a majority) — 2nd consecutive cycle landing exactly on the half-boundary.** All 8 of
+> Jul 8's drafts are gone; 2 fresh, both created 2026-07-09T03:26–03:29Z. 1 A-:
+> Stevensville, Maryland `all_time_high` (103°F, "beating a record from 1934, by 2°F, in
+> 101 years of data" — **P_compound's worst instance to date**, a triple-stacked
+> qualifier one past every prior double-qualifier form; overcome by a clean
+> buffer-failure declarative close, "that buffer failed," same shape as Jun 29's Congo
+> fire A-). 1 B: Anchorage, Alaska `precipitation_extreme` (61.2mm/day against a 0.9mm
+> prior record — exactly 68×, the corpus's most dramatic precip ratio, left unstated;
+> P9-clean of restate-math and the legacy template, but P_close FAILING on "wring out
+> moisture in concentrated bursts" — one word from Jun 26's own Anchorage draft, "wring
+> out moisture in compressed bursts," and notably weaker than this same station's Jul 8
+> A- draft two days earlier on a different bundle metric [7-day accumulation vs. daily
+> record]). **P9 gets its 2nd independent clean cycle (Jul 8 3/3 + Jul 9 1/1) — closing
+> the tracking**, though today's instance also shows the fix's benefit may be
+> metric-shaped (proven on accumulation bundles, not yet on daily-record bundles). P_close
+> 19th cycle (1 positive, 1 failing). P_compound 8th cycle (new worst instance). P_tier
+> still not tested on a named target type (none appeared Jul 7, 8, or 9). P_dust/A4/A5
+> not tested (no target-type draft). 41st consecutive `gh` staleness skip (0 candidates —
+> both same-day fresh).
+>
 > **Jul 8: 8 fresh drafts, complete queue turnover (3rd occurrence), 50% A-rate — closest
 > approach to the bar since Jun 29's 80% clearance** (50% is exactly half, not a
 > majority, so the bar is technically not cleared). All 8 drafts postdate every fix
@@ -239,27 +260,27 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.97.0` per `BRIEFING.md` (2026-07-08). Since the Jul 7 cycle: PR #392 (row 6 editor brief), **PR #397 (row 7 precip four-moves — P9 fix)**, PR #398/#399 (row 14 fire geocode + per-country cap), PR #402/**#404** (row 11 marine + **cyclone four-moves, all 5 kinds**), PR #408 (precip 300mm-threshold cross-gate), PR #409 (coral DHW `_stress_level_for_dhw` full NOAA scale), PR #412 (row 9 engagement-metrics lane). Bet A fully live: `THEHEAT_NEWS_BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`. Heat-dome arc pivoted from US-only (#415, reverted #417) to a global records-cluster design (#414/#416, next build). Prior: 0.9.86.0 (Jul 7) — #384 `main` merge, #385 forecast-elapsed staleness sweep, #386 detection-plumbing ban + dust PM10 WHO anchor (P_tier + P_dust fix), #387 critic carve-out, #388 `cyclone_land_threat`. |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **50% (4/8 fresh, Jul 8)** — closest approach to the resumption bar since Jun 29's 80% clearance (50% is exactly half, not a majority — bar technically not cleared). Prior: 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority)**. |
-| Gap | **0pp by raw subtraction (50% − 50%), but 50% is exactly half, not a majority — the bar is not cleared.** Smallest true gap of any measured cycle since Jun 29's bar-clearing 80%. **P_dust and P9 are both now empirically confirmed clean** (1 cycle each, Jul 8) — the first genuinely resolved active-capping levers since this plan started tracking them. P_tier remains shipped-but-unconfirmed (no target-type draft Jul 8). P_close and P_compound remain the highest-leverage *unimplemented* levers. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 7 all below/no-data, **Jul 8 50%** — closest approach to the bar since the Jun 29 peak, on the largest sample (n=8) since Jun 29. **Queue fully turned over to 8 fresh drafts as of Jul 8** (3rd complete turnover event, after Jul 3→4 and Jul 6→7) — 0 carry-overs. |
+| Last cycle A-rate | **50% (1/2 fresh, Jul 9)** — n=2, not a majority; 2nd consecutive cycle landing exactly on the half-boundary. Prior: 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority)**. |
+| Gap | **0pp by raw subtraction (50% − 50%), but 50% of n=2 is one draft, not a majority — the bar is not cleared.** Two consecutive cycles (Jul 8, Jul 9) now land on the exact-half boundary. **P9 reaches its 2nd independent confirmation cycle this cycle (Jul 8 + Jul 9) — tracking closes.** P_dust remains at 1 confirmation cycle (not retested Jul 9). P_tier remains shipped-but-unconfirmed (no target-type draft Jul 7–9). P_close and P_compound remain the highest-leverage *unimplemented* levers, both extending their evidence again this cycle. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 7 all below/no-data, Jul 8–Jul 9 both landed on the exact-half boundary (50%, not a majority). **Queue fully turned over to 2 fresh drafts as of Jul 9** (4th complete turnover event, after Jul 3→4, Jul 6→7, Jul 7→8) — 0 carry-overs. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **8 pending as of Jul 8 grading — complete turnover from Jul 7's 6** (4 A- [Barrow AK precip, Astana precip, Anchorage precip, Riyadh air_quality_hazard], 3 B+ [Snowshoe WV all_time_high, Typhoon Bavi `cyclone_landfall`, Riyadh dust_event], 1 B [Typhoon Bavi `cyclone_land_threat`]). 0 staleness bulk-reject candidates this cycle (all same-day fresh, all safely post-fix). Bot at 0.9.97.0; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **Operator: verify the two Typhoon Bavi bundles' advisory timestamps** (landfall + land_threat read as a possibly-inconsistent sequence) and note the 2nd occurrence of the raw-JTWC-URL bundle-leak bug before publishing. |
+| Queue status | **2 pending as of Jul 9 grading — complete turnover from Jul 8's 8** (1 A- [Stevensville MD all_time_high], 1 B [Anchorage AK precipitation_extreme]). 0 staleness bulk-reject candidates this cycle (both same-day fresh). Bot at 0.9.97.0 (unchanged since Jul 8); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **Operator: watch whether the Jul 8 precip fix's benefit generalizes past accumulation bundles** — today's daily-record Anchorage draft reverted to a near-verbatim repeat of its own weakest historical close form. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 8: **P_dust and P9 now empirically confirmed
-clean** (1 cycle each) — both no longer need operator attention beyond watching for a
-2nd confirming cycle before archiving the tracking entries; **P_tier remains
-shipped-but-unconfirmed** (no `absolute_extreme`/`fire_footprint`/
-`cyclone_rapid_intensification`/`regional_sst_anomaly` draft this cycle to test against,
-though the 2 new cyclone kinds governed by the same rule came back clean). Remaining
-active proposals, re-ordered: **P_close** (18 cycles, last evidence Jul 8: 4 positive/4
-failing, 16th/17th signal types via the two new cyclone kinds) > **P_compound** (7
-cycles, last evidence Jul 8: Snowshoe) > **P5** (dust_event gap last evidence Jul 8;
-air_quality_hazard self-selection streak now 5 cycles; a candidate 9th named move
-surfaced this cycle, watching for a 2nd instance). **A4 did not recur this cycle** (still
-1 cycle, Jul 7 only — useful negative evidence, not yet promotable).
+Ordered by leverage. Priority as of Jul 9: **P9 reaches its 2nd independent confirmation
+cycle (Jul 8 3/3 + Jul 9 1/1) — CONFIRMED, tracking closed** (see P9 entry below for the
+metric-shaped caveat). **P_dust remains at 1 confirmation cycle** (not retested Jul 9 —
+no `dust_event` draft this cycle), still needs one more clean cycle before its tracking
+closes too. **P_tier remains shipped-but-unconfirmed** (no `absolute_extreme`/
+`fire_footprint`/`cyclone_rapid_intensification`/`regional_sst_anomaly` draft Jul 7, 8,
+or 9). Remaining active proposals, re-ordered: **P_close** (19 cycles, last evidence
+Jul 9: 1 positive/1 failing) > **P_compound** (8 cycles, last evidence Jul 9: Stevensville
+— worst instance to date, a triple-stacked qualifier) > **P5** (dust_event gap last
+evidence Jul 8; precipitation_extreme now shows split self-selection by bundle metric —
+see P5 entry). **A4 and A5 not tested this cycle** (no `air_quality_hazard` or
+`cyclone_land_threat` draft; both remain at 1 cycle, not yet promotable).
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
@@ -633,6 +654,14 @@ types (adding `cyclone_landfall` [positive] and `cyclone_land_threat` [failing] 
 **Last seen:** Jul 8 (4 positive: Barrow, Astana, Anchorage, Riyadh air_quality_hazard; 4
 failing: Snowshoe, Riyadh dust_event, Typhoon Bavi `cyclone_land_threat`; Typhoon Bavi
 `cyclone_landfall` also positive, counted above).
+Jul 9: 1 positive — Stevensville, Maryland `all_time_high` ("low terrain and Atlantic
+moisture normally blunt the worst of continental heat; that buffer failed" = declarative
+buffer-failure consequence, POSITIVE, same shape as Jun 29's Congo fire A-). 1 failing —
+Anchorage, Alaska `precipitation_extreme` ("wring out moisture in concentrated bursts" =
+mechanism-only, FAILING — one word from Jun 26's own Anchorage draft, "wring out
+moisture in compressed bursts," and a materially weaker close than this same station's
+Jul 8 A- draft on a different bundle metric two days earlier).
+**Last seen:** Jul 9 (1 positive: Stevensville; 1 failing: Anchorage).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -653,11 +682,13 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal in this
-plan: 16 cycles of evidence, 35+ drafts, same gap to A across every signal type it's been
+plan: 19 cycles of evidence, 40+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
-absolute_extreme, fire_footprint, cyclone_rapid_intensification — 14 confirmed types). The
-permafrost-carbon fire mechanic (4 instances, all B+/A-) is the clearest existence-proof in
+absolute_extreme, fire_footprint, cyclone_rapid_intensification, record, cyclone_landfall,
+cyclone_land_threat — 17 confirmed types). The
+permafrost-carbon fire mechanic (4 instances, all B+/A-) and the buffer-failure mechanic
+(Galapagos, Congo fire, Stevensville, all A-/A-range) are the clearest existence-proofs in
 the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
 already sound.
 
@@ -746,6 +777,9 @@ tracked for 9 cycles. The old AOD-only opener template is also gone entirely (no
 optical depth mentioned). P_close's separate mechanism-only gap remains open on the same
 draft — confirms the two proposals are orthogonal, as expected (P_dust was a MISSING
 reader-facing reference; P_close is a different axis entirely).
+
+Jul 9: no `dust_event` draft this cycle — not retested. Still 1 confirmation cycle;
+awaiting a 2nd independent clean instance before moving to Resolved.
 
 **Status:** SHIPPED in PR #386 (`208159a`), merged 2026-07-07T05:06:48Z. **9 cycles of
 evidence before the fix** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence
@@ -850,6 +884,9 @@ cyclone bundle family, not just `cyclone_rapid_intensification`), and both came 
 clean of tier-jargon. This is consistent with the fix working but is not the same as a
 confirmation on a named target type — do not move to Resolved on this basis alone.
 **Last seen (violation):** Jul 7. **Not yet tested on a named target type.**
+Jul 9: no draft of any of the 4 target types, nor of the 2 cyclone kinds that gave
+indirect supporting evidence Jul 8 (all_time_high and precipitation_extreme only). Still
+formally unconfirmed.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`,
 near the existing HARD RULES / bad-examples list:
@@ -895,7 +932,7 @@ Also watch for the closely-related "signal"/self-naming variant filed as new pro
 below — a post-fix `air_quality_hazard` draft this cycle shows a lexically different but
 conceptually adjacent self-reference the shipped rule's wording may not explicitly cover.
 
-### ~~P9~~ — precipitation_extreme opener template convergence + restate-math — **SHIPPED 2026-07-07 (PR #397, empirically confirmed 1 cycle)**
+### ~~P9~~ — precipitation_extreme opener template convergence + restate-math — **SHIPPED 2026-07-07 (PR #397), CONFIRMED 2026-07-09 (2 independent clean cycles)**
 
 **Observed:** First observed 2026-06-18. Archived 2026-07-03 after 3 consecutive fresh-draft
 cycles without a `precipitation_extreme` draft (Jul 1, Jul 2, Jul 3), with an explicit note
@@ -945,10 +982,28 @@ restate-math; state the annual/seasonal baseline ratio directly as significance 
 bundle supports it. Full worked examples preserved in `docs/DRAFT_CORPUS.md`'s Jun
 7/18/22/25/26/28/29/30/Jul 4/Jul 8 entries.
 
+**Jul 9 — 2nd empirical confirmation.** Anchorage, Alaska `precipitation_extreme` (61.2
+mm/day against a 0.9 mm prior daily record): no restate-math, no legacy opener template —
+"against a previous daily record of 0.9 mm set earlier in 2026" is a distinct, clean
+construction. This confirms the fix holds on its narrow terms a 2nd time on an
+independent draft. **Caveat worth tracking, not re-opening the proposal over:** the draft
+leaves a real punchline unstated — 61.2 mm against 0.9 mm is exactly 68×, the most
+dramatic ratio in the `precipitation_extreme` corpus, and unlike Jul 4's Astana (which
+needed an external annual baseline), this ratio is arithmetic on the two numbers already
+in the sentence. PR #397's shipped rule prescribes the annual/seasonal-baseline ratio
+specifically, not a record-to-record ratio, so this isn't a rule violation — but it's the
+same shape of missed opportunity, on a bundle shape (single-day record vs. prior record)
+distinct from the one the fix was proven against (7-day accumulation with an annual
+baseline, all 3 of Jul 8's drafts). Watch whether daily-record precipitation_extreme
+bundles keep reverting to a flatter close than accumulation bundles; if a 2nd instance of
+this specific gap appears, it may warrant a small follow-on proposal scoped to
+record-to-record ratios specifically.
+
 **Status:** SHIPPED in PR #397, merged 2026-07-07 (evening session, after that day's 15:00
 UTC grading run — this plan's Jul 7 entry still showed it as unimplemented for that reason).
-**1 empirical confirmation cycle** (Jul 8, 3/3 clean). Move to Resolved once one more clean
-`precipitation_extreme` cycle confirms the fix holds under a 2nd independent test.
+**CONFIRMED — 2 independent clean cycles** (Jul 8, 3/3 clean; Jul 9, 1/1 clean). Tracking
+closes here; reopen only if restate-math or the pre-fix opener template reappears in a
+future `precipitation_extreme` draft.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
@@ -1039,6 +1094,18 @@ ratio + convective-mixing mechanism), and its close surfaces a genuinely new mov
 2nd before proposing its formal addition to the "Voice moves available" list below.
 **Last seen:** Jul 8 (dust_event gap now 6 cycles; air_quality_hazard self-selection now
 5 instances/4 cycles; candidate 9th move — scale-honesty contrast — 1 instance).
+Jul 9: split evidence. Stevensville, Maryland `all_time_high` self-selects the
+buffer-failure mechanic cleanly and unprompted — consistent with the extreme-heat/record
+family's established organic-deployment pattern. Anchorage, Alaska
+`precipitation_extreme`, though, shows the category can regress: this same city's Jul 8
+draft (a 7-day accumulation bundle) self-selected a strong declarative ratio-anchor move,
+but today's daily-record-bundle draft falls back to mechanism-only description with no
+named move at all — the same station, 2 days apart, opposite outcomes. Precipitation's
+self-selection appears to depend on bundle shape (accumulation bundles land moves;
+single-day-record bundles default to mechanism-only), not just signal category.
+**Last seen:** Jul 9 (extreme-heat/record family self-selection streak continues;
+precipitation_extreme now shows metric-dependent split behavior rather than uniform
+self-selection).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -1116,6 +1183,15 @@ comparison point: P_compound alone doesn't cap a draft (soft cost), but stacking
 a P_close-failing close compounds to a full grade below the same city's draft from the
 day before.
 **Last seen:** Jul 8 (7 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8).
+Jul 9: Stevensville, Maryland `all_time_high` — "beating a record from 1934, by 2°F, in
+101 years of data" — **the worst instance of this pattern yet**, stacking a third
+qualifier (the named prior-record year, 1934) on top of the usual archive-span + margin
+pair. Every prior instance stacked exactly two of the three available qualifiers; this
+is the first to stack all three in one clause. Overcome by a clean declarative
+buffer-failure close (see P_close), so it still soft-caps rather than hard-caps — same
+pattern as every prior P_compound-plus-strong-close instance (Prudhoe Bay, Loxahatchee,
+Snowshoe Jul 7).
+**Last seen:** Jul 9 (8 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 record-type framing section:
@@ -1132,7 +1208,7 @@ already solid. Immediate two-observation confirmation within a single cycle sugg
 double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
 monthly_high, country_record signal types where both archive depth and margin are available.
 
-**Status:** Drafted. Awaiting human implementation. 7 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8). One of two highest-leverage unimplemented proposals alongside P_close, now that P_tier/P_dust/P9 have all shipped as code.
+**Status:** Drafted. Awaiting human implementation. 8 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9), including this cycle's worst-yet triple-qualifier instance. One of two highest-leverage unimplemented proposals alongside P_close, now that P_tier/P_dust/P9 have all shipped as code (P9 confirmed as of Jul 9).
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 

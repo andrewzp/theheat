@@ -11,6 +11,171 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-09 — Daily corpus grading (2 fresh drafts; complete queue turnover)
+
+**Context:** Gist read via git-clone path (success). Queue: **complete turnover — 4th
+occurrence** (after Jul 3→4, Jul 6→7, Jul 7→8). All 8 of Jul 8's pending drafts are gone.
+2 fresh drafts, both created 2026-07-09 (03:26–03:29 UTC). Bot commit unchanged from Jul
+8's `0.9.97.0` per `BRIEFING.md` — no new PR merged between the two grading pulls.
+
+**Staleness review:** 0 bulk-reject candidates — both drafts same-day fresh (~11-12h old
+at grading). `gh` CLI confirmed absent (`which gh` → not found); no gist-write tool
+exposed via the GitHub MCP tools loaded this session. 41st consecutive `gh`-absent skip
+(May 13 → Jul 9) — moot for this cycle regardless, since nothing qualifies.
+
+**Grade distribution (2 fresh drafts):** 0 A / 1 A- / 0 B+ / 1 B / 0 B- / 0 C / 0 D-F.
+**A-rate: 50% (1/2).** Gap from resumption bar: **0pp by raw arithmetic, but 50% of n=2
+is one draft — not a majority** — same technicality as Jul 8's 4/8. Third consecutive
+graded cycle (Jul 7 33%, Jul 8 50%, Jul 9 50%) without a clean bar-clearing majority,
+and now two cycles running that land on the exact-half boundary. Sample too small (n=2)
+to read as more than a data point.
+
+**Headline finding:** The same city, Anchorage, Alaska, produced this plan's best-ever
+`precipitation_extreme` close on Jul 8 and a near-verbatim repeat of its own
+worst-recorded `precipitation_extreme` close on Jul 9 — two days apart, two different
+bundle metrics (7-day accumulation vs. single-day record). Today's Anchorage draft
+closes "wring out moisture in concentrated bursts" — one word off Jun 26's Anchorage
+draft, "wring out moisture in compressed bursts," 13 days earlier, same station,
+mechanism-only both times (P_close failing both times). This argues P5/P_close gaps are
+sticking at the bundle-construction level (daily-record bundles), not something the Jul
+8 precip fix generally solved — the fix worked on the bundle shape it was tested against
+(7-day accumulation with an annual baseline available) but the daily-record bundle shape
+continues to default to the older, weaker mechanism-only close. Separately, Stevensville,
+Maryland's `all_time_high` draft delivers this cycle's one A-: a genuine buffer-failure
+declarative close ("that buffer failed") riding on top of the **worst P_compound
+instance in the corpus to date** — a triple-stacked qualifier (named year + margin +
+archive span all in one clause), one qualifier further than every prior double-qualifier
+instance. **P9 gets its 2nd independent clean cycle** (no restate-math, no legacy opener
+template) — see Followups for the confirmation call.
+
+### A-grade drafts
+
+#### [1] Stevensville, Maryland — all_time_high — 103°F (39.4°C) — **A-**
+
+> *Stevensville, Maryland hit 103°F (39.4°C) on July 5 — beating a record from 1934, by
+> 2°F, in 101 years of data. On the Atlantic Coastal Plain, low terrain and Atlantic
+> moisture normally blunt the worst of continental heat; that buffer failed.*
+
+**Score:** 90. Created 2026-07-09T03:26:55Z.
+
+- **P_compound check:** VIOLATION, and the worst instance yet. "Beating a record from
+  1934, by 2°F, in 101 years of data" packs **three** qualifiers into one clause — named
+  prior-record year (1934), margin (2°F), and archive span (101 years) — one qualifier
+  past every prior instance of this pattern, which stacked only two (archive OR margin,
+  paired but never with the named year too). 8th cycle (Jun 28, 29, 30, Jul 2, 4, 7, 8,
+  now 9).
+- **P_close check:** POSITIVE, and a clean instance of the buffer-failure form. "Low
+  terrain and Atlantic moisture normally blunt the worst of continental heat; that
+  buffer failed" names the protective mechanism, then states its failure as flat fact —
+  same shape as Jun 29's Congo fire A- ("something has broken the convective lid") and
+  the corpus's other buffer-failure exemplars (Galapagos, May 15). No hedge on "failed."
+- **Wodehouse rule?** Clean otherwise — the triple-qualifier opener is P_compound
+  territory, not restate-padding or approximation; it doesn't repeat information already
+  given, it just states three real facts in one breath.
+
+Same soften-not-cap pattern P_compound has shown every time it's paired with a genuinely
+declarative close (Jun 29 Prudhoe Bay, Jul 4 Loxahatchee, Jul 7 Snowshoe): the opener's
+qualifier-stacking costs nothing here because the close does real work. Held to A- and
+not A because the opener's density is still worth naming as the cycle's most extreme
+compound instance.
+
+### B-grade drafts
+
+#### [2] Anchorage, Alaska — precipitation_extreme — 61.2 mm/day, prior record 0.9 mm — **B**
+
+> *Anchorage logged 61.2 mm of rain on July 7 — against a previous daily record of 0.9 mm
+> set earlier in 2026. The city sits at the head of Cook Inlet, where Gulf of Alaska
+> storms can stall against the Chugach Range and wring out moisture in concentrated
+> bursts.*
+
+**Score:** 77. Created 2026-07-09T03:29:13Z.
+
+- **P9 check:** CLEAN of the banned form — no restate-math (doesn't compute or state
+  "60.3 mm above"), and "against a previous daily record of 0.9 mm" is a distinct
+  construction from the old "recorded X — Y above the previous record of Z" template.
+  **But a real punchline goes unstated**: 61.2 mm against a 0.9 mm prior record is
+  exactly **68×** — the most dramatic ratio in the `precipitation_extreme` corpus to
+  date, and unlike Jul 4's Astana (which needed an external annual-average figure to
+  build its stranded ratio), this one is arithmetic on the two numbers already in the
+  sentence. The shipped fix (PR #397) prescribes the annual/seasonal-baseline ratio
+  specifically; it doesn't require a record-to-record ratio, so this isn't a rule
+  violation — but it's the same shape of missed opportunity P9 was filed to fix, on a
+  different axis (record ratio, not annual baseline).
+- **P_close check:** FAILING, mechanism-only, and a near-verbatim repeat. "Wring out
+  moisture in concentrated bursts" is one word from Jun 26's Anchorage draft, "wring out
+  moisture in compressed bursts" — same station, same orographic-stall mechanism, same
+  mechanism-only stopping point, 13 days apart. Also notably weaker than this same
+  station's own Jul 8 draft ("compressing what would otherwise be weeks of accumulation
+  into days"), which used the very same Chugach-orographic mechanism to reach a
+  declarative close two days earlier — see Patterns.
+- **Wodehouse rule?** Clean.
+
+Confirms P9's fix holds on its narrow terms (no restate-math, no legacy template) while
+exposing that the fix's benefit is currently metric-shaped: it was proven on 7-day
+accumulation bundles with an annual baseline (Jul 8's three drafts) and hasn't yet been
+tested — until today — against the older daily-record-vs-prior-record bundle shape,
+which reverts to the corpus's weakest available close.
+
+### Patterns / operational notes
+
+1. **Complete queue turnover, 4th occurrence.** All 8 of Jul 8's drafts (4 A-, 3 B+, 1 B)
+   are gone from the queue; both of today's drafts are same-day fresh. Cause unconfirmed
+   from the gist alone (bulk-publish, bulk-reject, or TTL/other sweep) — consistent with
+   the prior three turnover events (Jul 3→4, Jul 6→7, Jul 7→8), all of which also went
+   unexplained. Worth the operator confirming whether this is now the queue's normal
+   operating rhythm (drafts don't survive past the next day's cron) rather than an
+   anomaly each time.
+
+2. **Anchorage, Alaska: same city, two bundle metrics, opposite outcomes, two days apart.**
+   Jul 8's 7-day-accumulation Anchorage draft is this plan's strongest-cited
+   `precipitation_extreme` exemplar (ratio-anchor leads sentence 1, declarative
+   orographic-compression close, A-). Jul 9's daily-record Anchorage draft, same
+   mechanism (Chugach orographic lift), closes on a near-verbatim repeat of its own Jun
+   26 mechanism-only form and grades B. The gap tracks the bundle's metric shape
+   (multi-day accumulation vs. single-day record), not the station or the underlying
+   physical setup — worth watching whether the Jul 8 fix's benefit generalizes to
+   daily-record precipitation_extreme bundles or stays confined to accumulation bundles.
+
+3. **P9: 2nd independent clean cycle.** Jul 8 (3/3 clean) + Jul 9 (1/1 clean, this
+   Anchorage draft) — no restate-math and no legacy opener template in either cycle. Per
+   the runbook's own promotion condition ("move to Resolved once one more clean cycle
+   confirms the fix holds under a 2nd independent test"), this closes the tracking. See
+   `docs/IMPROVEMENT_PLAN.md`'s P9 entry for the updated status.
+
+4. **P_compound's worst instance to date.** Stevensville's triple-stacked qualifier
+   (year + margin + archive span) is a new escalation of a pattern that had, until now,
+   only ever stacked two of the three. Worth flagging to the operator as evidence the
+   pattern isn't self-limiting.
+
+### Followups (in priority order)
+
+1. **P9 — move to confirmed/closed.** 2 independent clean cycles (Jul 8, Jul 9). No
+   further tracking needed unless a future cycle reintroduces restate-math or the old
+   template.
+2. **P_close and P_compound remain the two highest-leverage unimplemented proposals** —
+   19 and 8 cycles of evidence respectively as of this cycle.
+3. **Watch whether the Jul 8 precip fix's benefit generalizes past accumulation
+   bundles** — today's daily-record Anchorage instance suggests it may not yet, though
+   n=1 on that specific bundle shape isn't enough to file a new proposal on its own.
+4. **P_tier still awaits a post-fix test on a named target type** (`absolute_extreme`,
+   `fire_footprint`, `cyclone_rapid_intensification`, `regional_sst_anomaly`) — none
+   appeared Jul 7, 8, or 9.
+
+### Numbers
+
+- Pending drafts in queue: 2 (2 fresh; complete turnover from Jul 8's 8, 4th occurrence)
+- Fresh drafts graded: 2
+- A-rate: 50% (1/2) — not a majority, bar not cleared
+- Grade distribution: 1 A- / 1 B
+- Active proposals: P_close 19th cycle (1 positive, 1 failing); P_compound 8th cycle
+  (worst instance yet); **P9 2nd independent clean cycle — closing the tracking**;
+  P_tier/P_dust/A4/A5 not tested this cycle (no target-type draft)
+- Staleness bulk-reject: 0 candidates (both same-day fresh); write not attempted —
+  nothing qualified; `gh` CLI absent regardless (41st consecutive skip)
+- Operational anomalies: complete queue turnover (4th occurrence), cause unconfirmed
+
+---
+
 ## 2026-07-08 — Daily corpus grading (8 fresh drafts; complete queue turnover)
 
 **Context:** Gist read via git-clone path (success). Queue: **complete turnover — 3rd
