@@ -1,5 +1,16 @@
 # Handoff — 2026-07-08 (evening) · #414 heat records-cluster: DESIGN PIVOT to tier-aware standalone
 
+> **✅ SHIPPED 2026-07-08 eve.** The tier-aware rework described below is MERGED to `main`:
+> **#424** (mechanism, `988312b`, v0.9.99.0) + **#425** (PR-C writer voice + fact-check rule
+> `r)` + `scripts/records_cluster_writer_dryrun.py`, `54399d3`). Flag
+> `THEHEAT_RECORDS_CLUSTER_ENABLED` stays **OFF** + manual-approval; flag-off byte-identical.
+> codex-xhigh APPROVED (mechanism 2 rounds — round 1 caught the world-monthly US-only trap
+> [`world_cache` stamps `old_record_year=_year(today)`], tier-agnostic dedup, a daily-draft
+> leak, and forecast-as-set provenance — all fixed; PR-C 2 rounds); 2512 tests green. The
+> **"do NOT merge PR-B" guidance below is now historical** — PR-B was reworked in place and
+> merged. NEXT: run the dryrun harness with keys for a live voice sample, then Andrew flips
+> the flag (his call). See memory `project_theheat_414_records_cluster`.
+
 **`main` @ `51d633b`, version `0.9.98.0`.** PR-B lives UNMERGED on
 `origin/feat/records-cluster-detection` @ `ccc99f7` (version 0.9.99.0 on the branch).
 Supersedes [docs/handoffs/2026-07-08.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08.md) for everything #414.
