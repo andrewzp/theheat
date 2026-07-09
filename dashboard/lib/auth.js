@@ -29,6 +29,15 @@ function unconfiguredResponse() {
 }
 
 export function verifyDashboardAuth(request) {
+  // App-level HTTP Basic auth is an OPTIONAL second layer. Set DASHBOARD_AUTH_DISABLED=1
+  // to turn it off intentionally and rely on Vercel Deployment Protection (Vercel
+  // Authentication) as the sole gate. Without this explicit opt-out, unconfigured auth
+  // still fails CLOSED in production (503 below) so a forgotten config never exposes the
+  // dashboard — which can trigger runs and post tweets.
+  if (process.env.DASHBOARD_AUTH_DISABLED === "1") {
+    return { ok: true, response: null }
+  }
+
   const dashboardUsername = getDashboardUsername()
   const dashboardPassword = getDashboardPassword()
 

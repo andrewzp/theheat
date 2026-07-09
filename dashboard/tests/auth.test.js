@@ -221,3 +221,33 @@ test("middleware blocks public dashboard access", async () => {
   }))
   assert.equal(passed.status, 200)
 })
+
+test("DASHBOARD_AUTH_DISABLED turns off app auth (Vercel Deployment Protection is the sole gate)", async () => {
+  process.env.NODE_ENV = "production"
+  process.env.DASHBOARD_AUTH_DISABLED = "1"
+  delete process.env.DASHBOARD_USERNAME
+  delete process.env.DASHBOARD_PASSWORD
+
+  try {
+    const { verifyDashboardAuth, requireDashboardAuth } = await importFresh("lib/auth.js")
+    // no credentials on the request, yet auth passes (the flag is the intentional opt-out)
+    assert.equal(verifyDashboardAuth(new Request("http://localhost/")).ok, true)
+    assert.equal(requireDashboardAuth(new Request("http://localhost/api/trigger")), null)
+    // the site-wide middleware lets it through too
+    const { middleware } = await importFresh("middleware.js")
+    assert.equal(middleware(new Request("http://localhost/")).status, 200)
+  } finally {
+    delete process.env.DASHBOARD_AUTH_DISABLED
+  }
+})
+
+test("without the disable flag, unconfigured auth still fails CLOSED in production", async () => {
+  process.env.NODE_ENV = "production"
+  delete process.env.DASHBOARD_AUTH_DISABLED
+  delete process.env.DASHBOARD_USERNAME
+  delete process.env.DASHBOARD_PASSWORD
+
+  const { middleware } = await importFresh("middleware.js")
+  // no flag, no creds, prod → still blocked (503), so a forgotten config can't expose the site
+  assert.equal(middleware(new Request("http://localhost/")).status, 503)
+})
