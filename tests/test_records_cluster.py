@@ -12,10 +12,14 @@ from __future__ import annotations
 from src.editorial.records_cluster import (
     LINK_KM,
     MIN_CLUSTER_SIZE,
+    SIGNIFICANCE_MIN_ALL_TIME,
+    SIGNIFICANCE_MIN_MONTHLY,
     ZONE_COUNTRIES,
     ClusterName,
     cluster_record_stations,
     cluster_signature,
+    cluster_tier_counts,
+    is_significant_cluster,
     name_cluster,
 )
 from src.data.reanalysis_anomaly import REGION_WATCHLIST
@@ -455,3 +459,63 @@ def test_zone_countries_keys_match_region_watchlist_exactly():
         "ZONE_COUNTRIES must define allowed countries for exactly the "
         "REGION_WATCHLIST zones — drift breaks tier-1 naming honesty."
     )
+
+
+# --------------------------------------------------------------------------- #
+# tier counts + significance gate (#414 tier-aware rework)
+#
+# The cluster fires on record SIGNIFICANCE (all_time >> monthly >> daily), not a
+# raw daily-record count. A spatial burst of "warmest July 8th here" is weather;
+# a burst that includes all-time or several monthly records is the story. This is
+# ALSO what makes the class global: world cities enter the cluster only via their
+# monthly/all-time members (evaluate_city emits no calendar_date_high).
+# --------------------------------------------------------------------------- #
+
+def _tier(tier: str, n: int, *, country: str = "France") -> list[dict]:
+    return [
+        {"city": f"{tier}{i}", "country": country, "lat": 48.0 + i * 0.1,
+         "lon": 2.0, "tier": tier}
+        for i in range(n)
+    ]
+
+
+def test_cluster_tier_counts_buckets_members_by_tier():
+    members = _tier("all_time", 2) + _tier("monthly", 3) + _tier("daily", 4)
+    assert cluster_tier_counts(members) == {"all_time": 2, "monthly": 3, "daily": 4}
+
+
+def test_cluster_tier_counts_zero_fills_absent_tiers():
+    # A daily-only cluster still reports all three keys (0-filled), so callers can
+    # index the gate without KeyErrors.
+    assert cluster_tier_counts(_tier("daily", 6)) == {
+        "all_time": 0, "monthly": 0, "daily": 6,
+    }
+
+
+def test_cluster_tier_counts_ignores_unknown_or_missing_tier():
+    members = _tier("all_time", 1) + [{"city": "x", "country": "France"}]
+    assert cluster_tier_counts(members) == {"all_time": 1, "monthly": 0, "daily": 0}
+
+
+def test_daily_only_cluster_is_not_significant():
+    # The whole point of the rework: a spatial burst of daily-only records must NOT
+    # fire — it isn't newsworthy enough on its own.
+    assert not is_significant_cluster(cluster_tier_counts(_tier("daily", 12)))
+
+
+def test_one_all_time_record_makes_cluster_significant():
+    members = _tier("all_time", 1) + _tier("daily", 5)
+    assert is_significant_cluster(cluster_tier_counts(members))
+
+
+def test_two_monthly_records_are_not_significant_but_three_are():
+    two = _tier("monthly", 2) + _tier("daily", 4)
+    three = _tier("monthly", 3) + _tier("daily", 3)
+    assert not is_significant_cluster(cluster_tier_counts(two))
+    assert is_significant_cluster(cluster_tier_counts(three))
+
+
+def test_significance_thresholds_are_the_documented_defaults():
+    # Taste-call constants surfaced to Andrew; pin them so a silent drift is caught.
+    assert SIGNIFICANCE_MIN_ALL_TIME == 1
+    assert SIGNIFICANCE_MIN_MONTHLY == 3

@@ -43,6 +43,20 @@ ZONE_MEMBER_KM = 300.0             # a city is "in" a zone if within this of any
 ZONE_CONTAINMENT_FRACTION = 0.80   # min fraction of cluster cities geographically in a zone
 MAX_NAMED_COUNTRIES = 3            # cap on countries enumerated in the tier-2 label
 
+# Significance gate (tier-aware rework #414). A cluster fires only when it carries
+# real record weight: >= SIGNIFICANCE_MIN_ALL_TIME all-time records OR >=
+# SIGNIFICANCE_MIN_MONTHLY monthly records. Daily records alone never qualify — a
+# spatial burst of "warmest this-date here" across a region is weather, not a
+# story. This gate is ALSO what makes the class global in production: world cities
+# enter the cluster only via their monthly/all-time members (the world path emits
+# no calendar_date_high). Taste calls; surfaced to Andrew to calibrate.
+SIGNIFICANCE_MIN_ALL_TIME = 1
+SIGNIFICANCE_MIN_MONTHLY = 3
+
+# The record tiers a cluster member can carry, strongest first. The prepass tags
+# each member with its bundle's strongest available high tier.
+TIER_ORDER: tuple[str, ...] = ("all_time", "monthly", "daily")
+
 # The documented countries of each REGION_WATCHLIST zone. Tier-1 naming requires
 # the cluster to be country-PURE for the zone (every city's country in this set),
 # so a cross-border bleed (Spain+Morocco) can never inherit a single zone's name.
@@ -363,4 +377,38 @@ def name_cluster(stations: list[dict]) -> ClusterName:
         lead_countries=ordered_countries[:MAX_NAMED_COUNTRIES],
         country_count=len(ordered_countries),
         city_count=len(stations),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# significance gate (tier-aware rework)
+# --------------------------------------------------------------------------- #
+
+def cluster_tier_counts(stations: list[dict]) -> dict[str, int]:
+    """Count cluster members by record tier (all_time / monthly / daily).
+
+    Always returns all three keys (0-filled); a member with a missing or unknown
+    ``tier`` is ignored. The prepass tags each member with its bundle's strongest
+    available high tier, so these counts drive both the significance gate and the
+    significance-weighted score.
+    """
+    counts = dict.fromkeys(TIER_ORDER, 0)
+    for station in stations:
+        tier = station.get("tier")
+        if tier in counts:
+            counts[tier] += 1
+    return counts
+
+
+def is_significant_cluster(tier_counts: dict[str, int]) -> bool:
+    """Whether a cluster carries enough record significance to fire.
+
+    True when the cluster has at least ``SIGNIFICANCE_MIN_ALL_TIME`` all-time
+    records OR ``SIGNIFICANCE_MIN_MONTHLY`` monthly records. A daily-only cluster
+    is never significant — the gate that turns "N cities each broke their daily
+    record" (weather) into "records are falling across the region" (a story).
+    """
+    return (
+        tier_counts.get("all_time", 0) >= SIGNIFICANCE_MIN_ALL_TIME
+        or tier_counts.get("monthly", 0) >= SIGNIFICANCE_MIN_MONTHLY
     )

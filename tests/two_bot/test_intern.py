@@ -1695,12 +1695,13 @@ def test_build_cyclone_land_threat_bundle_shape():
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
 
 
-def _hrc_stations(country_lat_lon):
+def _hrc_stations(rows):
+    # rows: (city, country, lat, lon, tier) — tier is all_time / monthly / daily.
     return [
-        {"city": c, "country": ctry, "lat": lat, "lon": lon,
+        {"city": c, "country": ctry, "lat": lat, "lon": lon, "tier": tier,
          "temp_c": 39.0, "old_record_c": 37.8, "old_record_year": 1947,
          "margin_c": 1.2}
-        for c, ctry, lat, lon in country_lat_lon
+        for c, ctry, lat, lon, tier in rows
     ]
 
 
@@ -1708,10 +1709,14 @@ def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
     from src.editorial.records_cluster import name_cluster
     from src.two_bot.intern import build_heat_records_cluster_bundle
 
+    # A significant France cluster: 2 all-time, 1 monthly, 3 daily records.
     stations = _hrc_stations([
-        ("Paris", "France", 48.86, 2.35), ("Lyon", "France", 45.75, 4.85),
-        ("Marseille", "France", 43.30, 5.37), ("Bordeaux", "France", 44.84, -0.58),
-        ("Toulouse", "France", 43.60, 1.44), ("Nantes", "France", 47.22, -1.55),
+        ("Paris", "France", 48.86, 2.35, "all_time"),
+        ("Lyon", "France", 45.75, 4.85, "all_time"),
+        ("Marseille", "France", 43.30, 5.37, "monthly"),
+        ("Bordeaux", "France", 44.84, -0.58, "daily"),
+        ("Toulouse", "France", 43.60, 1.44, "daily"),
+        ("Nantes", "France", 47.22, -1.55, "daily"),
     ])
     from src.two_bot.evidence_contract import audit_story_bundle
     name = name_cluster(stations)
@@ -1727,6 +1732,16 @@ def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
     assert facts["region_name"] == "France"
     assert facts["cluster_countries"] == ["France"]
     assert facts["sample_cities"]
+    # tier breakdown — carried so the writer leads with the SIGNIFICANT records
+    # ("2 all-time and 1 monthly high"), not a flat "6 cities" count.
+    assert facts["tier_counts"] == {"all_time": 2, "monthly": 1, "daily": 3}
+    # significant_cities lists the all-time + monthly members (all-time first), the
+    # ones the copy names; daily members are the supporting breadth.
+    assert facts["significant_cities"] == [
+        {"city": "Paris", "tier": "all_time"},
+        {"city": "Lyon", "tier": "all_time"},
+        {"city": "Marseille", "tier": "monthly"},
+    ]
     # deterministic honesty backstop: cause-attribution denylist (+ synonyms) AND
     # the continent-overclaim guard are carried in forbidden_claims.
     from src.two_bot.pipeline import _forbidden_claim_violation
@@ -1753,10 +1768,14 @@ def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
     from src.editorial.records_cluster import name_cluster
     from src.two_bot.intern import build_heat_records_cluster_bundle
 
+    # A significant multi-country cluster: 3 monthly, 3 daily.
     stations = _hrc_stations([
-        ("Paris", "France", 48.86, 2.35), ("Lille", "France", 50.63, 3.06),
-        ("Brussels", "Belgium", 50.85, 4.35), ("Amsterdam", "Netherlands", 52.37, 4.90),
-        ("Cologne", "Germany", 50.94, 6.96), ("Frankfurt", "Germany", 50.11, 8.68),
+        ("Paris", "France", 48.86, 2.35, "monthly"),
+        ("Lille", "France", 50.63, 3.06, "monthly"),
+        ("Brussels", "Belgium", 50.85, 4.35, "monthly"),
+        ("Amsterdam", "Netherlands", 52.37, 4.90, "daily"),
+        ("Cologne", "Germany", 50.94, 6.96, "daily"),
+        ("Frankfurt", "Germany", 50.11, 8.68, "daily"),
     ])
     from src.two_bot.evidence_contract import audit_story_bundle
     name = name_cluster(stations)
@@ -1767,5 +1786,6 @@ def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
     assert facts["region_name"] is None
     assert facts["cluster_continents"] == ["Europe"]
     assert set(facts["cluster_countries"]) == {"France", "Germany", "Belgium", "Netherlands"}
+    assert facts["tier_counts"] == {"all_time": 0, "monthly": 3, "daily": 3}
     audit = audit_story_bundle(bundle)
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]

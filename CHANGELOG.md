@@ -4,30 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Heat records-cluster mechanism — detection, dedup, honesty gate (#414 PR-B) (2026-07-08)
+### Heat records-cluster mechanism — tier-aware, standalone, global (#414 PR-B) (2026-07-08)
 
-- **(program #414, PR-B of 2)**: wires the global heat records-cluster class end-to-end,
+- **(program #414, PR-B of 2)**: wires the heat records-cluster class end-to-end,
   **behind default-OFF `THEHEAT_RECORDS_CLUSTER_ENABLED`** and **manual-approval only**
   (a geography-honesty-sensitive class, like `regional_anomaly` — never autoships). Flag
-  OFF ⇒ the same-day path is byte-identical to today (regression-tested).
-  - **Detection prepass** (`src/orchestrator/sources/open_meteo.py`): before the per-bundle
-    loop (so it can suppress inline daily drafts), collects calendar-highs **independently
-    of the cascade winner**, spatially clusters them, and for each fired cluster enqueues a
-    `heat_records_cluster` draft. A fired cluster **supersedes** the flat `simultaneous_records`
-    for its date and **suppresses the constituent individual daily drafts** (all-time/monthly
-    winners keep their own bigger draft).
-  - **Bundle + scoring**: `build_heat_records_cluster_bundle` carries only verifiable geography
-    (`region_name` or null, `cluster_continents`, `cluster_countries`, `sample_cities`);
-    `score_heat_records_cluster` (threshold 80, just above the scattered `simultaneous_records`).
+  OFF ⇒ the same-day path is byte-identical to today (regression-tested). The class is
+  **tier-aware and standalone** — it fires on record **significance**, not a daily count,
+  with **no** cause attribution and **no** reganom fusion.
+  - **Tiered, global detection prepass** (`src/orchestrator/sources/open_meteo.py`): before
+    the per-bundle loop, collects **one member per city at its strongest high tier**
+    (all-time > monthly > daily), independently of the cascade winner. This is what makes
+    the class **global**: world cities (`evaluate_city`) emit only monthly/all-time highs —
+    never a calendar-day record — so they enter the cluster through those tiers, not a
+    US-only daily lane.
+  - **Significance gate**: a cluster fires only with `>=1` all-time OR `>=3` monthly records
+    (`is_significant_cluster`); a daily-only spatial burst is weather, not a story, and never
+    fires. `score_heat_records_cluster` is significance-weighted (all-time >> monthly >>
+    daily); every gate-passing cluster clears threshold 80.
+  - **Supersede / suppress**: a fired cluster **supersedes** the flat `simultaneous_records`
+    for its date and **suppresses only the constituent *daily* drafts**; all-time/monthly
+    members keep their own bigger individual draft (the double-coverage default — a taste
+    call surfaced to Andrew).
+  - **Bundle**: `build_heat_records_cluster_bundle` carries `tier_counts` and
+    `significant_cities` (so the writer leads with the notable records) alongside only
+    verifiable geography (`region_name` or null, `cluster_continents`, `cluster_countries`,
+    `sample_cities`).
   - **Honesty backstop**: the bundle carries a `forbidden_claims` denylist ("heat dome",
-    blocking ridge, …) and the deterministic `_forbidden_claim_violation` gate now fires for
-    `heat_records_cluster` — the copy states the clustered-records FACT, never the unproven
-    synoptic cause.
+    blocking ridge, …) plus every continent the cluster does not span, and the deterministic
+    `_forbidden_claim_violation` gate fires for `heat_records_cluster` — the copy states the
+    clustered-records FACT, never the unproven synoptic cause.
   - **Dedup**: new `heat_records_cluster_fired` `DEFAULT_STATE` key (event_id → date), keyed by
     a deterministic cluster **signature** hash; rides the sqlite persistence contract test +
     MERGE_SPEC (key-union) + 30-day TTL; recorded only on draft SUCCESS.
-  - Registered across threshold / scoring shims / cooldown + prune maps. 12 new tests; writer
-    voice prose + the fact-check LLM rule land in PR-C.
+  - Registered across threshold / scoring shims / cooldown + prune maps. Writer voice prose +
+    the fact-check LLM rule land in PR-C.
 
 ### Heat records-cluster foundation — spatial clustering + honest namer (#414 PR-A) (2026-07-08)
 

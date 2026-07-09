@@ -263,9 +263,11 @@ jobs:
           # Rollback: gh variable set THEHEAT_REGANOM_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_REGANOM_ENABLED: ${{ vars.THEHEAT_REGANOM_ENABLED || '0' }}
           # Heat records-cluster class (#414) — default OFF, manual_only. When ON,
-          # spatially clusters same-day daily heat records into a "records across
-          # [region]" story. NOTE: full global coverage needs the world-path to emit
-          # calendar-day records (tracked follow-up); do NOT flip until that lands.
+          # spatially clusters same-day heat records (all-time / monthly / daily)
+          # into a "records are falling across [region]" story, gated on record
+          # SIGNIFICANCE (not a daily count). Global by construction: world cities
+          # enter via their monthly/all-time records, so this is not US-only. Stays
+          # OFF until Andrew reviews a live cluster sample (writer voice = PR-C).
           # Activate: gh variable set THEHEAT_RECORDS_CLUSTER_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_RECORDS_CLUSTER_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_RECORDS_CLUSTER_ENABLED: ${{ vars.THEHEAT_RECORDS_CLUSTER_ENABLED || '0' }}
