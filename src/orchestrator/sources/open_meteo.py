@@ -44,38 +44,58 @@ def _cluster_member_row(
 
 
 def _records_cluster_member(
-    bundle: open_meteo.ExtremeSignalBundle, date_iso: str, signal_year: int
+    bundle: open_meteo.ExtremeSignalBundle, date_iso: str
 ) -> dict | None:
     """The strongest-tier heat record for one city bundle, for #414 clustering.
 
     Tier priority all-time > monthly > daily mirrors the individual-draft cascade.
     This is what makes the class GLOBAL: world cities (evaluate_city) emit only
     monthly / all-time highs — never a calendar_date_high — so they enter the
-    cluster through those tiers. Only a DAILY member carries ``cal_event_id`` (the
-    id of the individual daily draft the cluster suppresses); all-time/monthly
-    members keep their own bigger draft (the double-coverage default), so carry
-    none. Returns None when the bundle has no high record with usable coordinates.
+    cluster through those tiers. Returns None when the bundle has no high record
+    with usable coordinates.
+
+    Every member carries three cross-cutting fields:
+      - ``place_key`` — a TIER-AGNOSTIC station/location identity (the GHCN station
+        id; empty for world cities, which fall back to city+coords in the signature).
+        The cluster dedup signature keys on this, so a member upgrading monthly ->
+        all-time between same-day runs does not re-hash and re-fire the same event.
+      - ``cal_event_id`` — the id of THIS city's individual DAILY draft whenever the
+        bundle has a calendar_date_high, regardless of the member's own tier. A fired
+        cluster suppresses that daily draft, so no cluster member ever ALSO posts its
+        weakest (daily) record individually; all-time/monthly members still keep
+        their bigger individual draft (the double-coverage default).
+      - ``observed`` — True for GHCN (an observed reading), False for Open-Meteo (a
+        forecast "on pace" record); lets the writer be tense-honest.
+
+    There is deliberately NO monthly "old record set this year" guard here. That
+    guard is an individual-tweet nicety, but world monthly records legitimately
+    carry ``old_record_year == the current year`` (world_cache stamps provisional
+    records with today's year), so guarding here would silently drop world monthly
+    members and make the class US-only — the exact failure the tier rework fixes.
     """
-    at = bundle.all_time_high
-    if at is not None and at.lat is not None and at.lon is not None:
-        return _cluster_member_row(at, "all_time", date_iso)
-    mh = bundle.monthly_high
-    if (
-        mh is not None
-        and mh.lat is not None
-        and mh.lon is not None
-        # Mirror the cascade's monthly guard: "hottest month ever, old record set
-        # THIS year" is not a real monthly record — such a city falls through to
-        # its daily record (if any), else does not participate in the cluster.
-        and mh.old_record_year != signal_year
-    ):
-        return _cluster_member_row(mh, "monthly", date_iso)
+    place_key = bundle.station_id or ""
+    observed = bool(bundle.station_id)
     ch = bundle.calendar_date_high
-    if ch is not None and ch.lat is not None and ch.lon is not None:
-        row = _cluster_member_row(ch, "daily", date_iso)
-        row["cal_event_id"] = ch.event_id
-        return row
-    return None
+    cal_id = (
+        ch.event_id
+        if (ch is not None and ch.lat is not None and ch.lon is not None)
+        else None
+    )
+    at = bundle.all_time_high
+    mh = bundle.monthly_high
+    if at is not None and at.lat is not None and at.lon is not None:
+        member = _cluster_member_row(at, "all_time", date_iso)
+    elif mh is not None and mh.lat is not None and mh.lon is not None:
+        member = _cluster_member_row(mh, "monthly", date_iso)
+    elif ch is not None and ch.lat is not None and ch.lon is not None:
+        member = _cluster_member_row(ch, "daily", date_iso)
+    else:
+        return None
+    member["place_key"] = place_key
+    member["observed"] = observed
+    if cal_id is not None:
+        member["cal_event_id"] = cal_id
+    return member
 
 
 def _fetch_city_archive(city: dict) -> dict | None:
@@ -372,9 +392,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             _rows_by_date: dict[str, list[dict]] = _defaultdict(list)
             for _b in bundles:
                 _d = (_b.signal_date or date.today()).isoformat()
-                _member = _records_cluster_member(
-                    _b, _d, (_b.signal_date or date.today()).year
-                )
+                _member = _records_cluster_member(_b, _d)
                 if _member is not None:
                     _rows_by_date[_d].append(_member)
             for _date_iso, _rows in _rows_by_date.items():
@@ -986,7 +1004,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 source=_simultaneous_source,
                 source_key="heat_records_cluster",
                 headline=(
-                    f"{_rc_name.city_count} cities set heat records "
+                    f"{_rc_name.city_count} cities setting heat records "
                     f"across {_rc_region}"
                 ),
                 current_run=current_run,

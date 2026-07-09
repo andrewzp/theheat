@@ -583,6 +583,16 @@ def build_heat_records_cluster_bundle(
     sample_cities = [s.get("city", "") for s in stations if s.get("city")][:5]
     where = name.region_name or ", ".join(name.lead_countries) or "global"
     tier_counts = cluster_tier_counts(stations)
+    # Provenance so the writer stays tense-honest: GHCN members are OBSERVED (a
+    # reading that happened), Open-Meteo members are FORECAST ("on pace"). A mixed
+    # cluster must never be framed as uniformly "records were set".
+    observed_flags = [bool(s.get("observed")) for s in stations]
+    if observed_flags and all(observed_flags):
+        records_provenance = "observed"
+    elif not any(observed_flags):
+        records_provenance = "forecast"
+    else:
+        records_provenance = "mixed"
     # The all-time + monthly members (all-time first) — the records the copy names;
     # daily members are the supporting breadth (their count lives in tier_counts).
     significant_cities = sorted(
@@ -612,6 +622,7 @@ def build_heat_records_cluster_bundle(
         current_facts=[
             {"label": "city_count", "value": name.city_count},
             {"label": "tier_counts", "value": tier_counts},
+            {"label": "records_provenance", "value": records_provenance},
             {"label": "significant_cities", "value": significant_cities},
             {"label": "region_name", "value": name.region_name},
             {"label": "cluster_countries", "value": name.countries},

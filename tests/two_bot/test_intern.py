@@ -1789,3 +1789,32 @@ def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
     assert facts["tier_counts"] == {"all_time": 0, "monthly": 3, "daily": 3}
     audit = audit_story_bundle(bundle)
     assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+
+
+def test_build_heat_records_cluster_bundle_carries_observed_forecast_provenance():
+    # The cluster can mix OBSERVED records (GHCN, a reading that happened) with
+    # FORECAST "on pace" records (Open-Meteo world cities). The bundle carries the
+    # provenance so the writer can be tense-honest — never asserting a forecast
+    # record was already "set".
+    from src.editorial.records_cluster import name_cluster
+    from src.two_bot.intern import build_heat_records_cluster_bundle
+
+    _cities = [
+        ("Paris", 48.86, 2.35), ("Lyon", 45.75, 4.85), ("Marseille", 43.30, 5.37),
+        ("Bordeaux", 44.84, -0.58), ("Toulouse", 43.60, 1.44), ("Nantes", 47.22, -1.55),
+    ]
+
+    def _provenance(observed_flags):
+        stations = [
+            {"city": c, "country": "France", "lat": lat, "lon": lon, "tier": "monthly",
+             "observed": obs, "temp_c": 39.0, "old_record_c": 37.8, "old_record_year": 1990}
+            for (c, lat, lon), obs in zip(_cities, observed_flags)
+        ]
+        bundle = build_heat_records_cluster_bundle(
+            stations, name_cluster(stations), event_id="x", when="2026-07-08",
+        )
+        return {f["label"]: f["value"] for f in bundle.current_facts}["records_provenance"]
+
+    assert _provenance([True] * 6) == "observed"
+    assert _provenance([False] * 6) == "forecast"
+    assert _provenance([True, True, True, False, False, False]) == "mixed"

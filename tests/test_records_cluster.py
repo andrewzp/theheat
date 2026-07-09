@@ -442,15 +442,28 @@ def test_cluster_signature_is_short_hex_and_stable():
     assert cluster_signature(FRANCE) == sig  # pure
 
 
-def test_cluster_signature_distinguishes_stations_by_event_id():
+def test_cluster_signature_distinguishes_stations_by_place_key():
     # Two distinct GHCN stations can normalize to the same display city + rounded
-    # coords; the per-station event id must keep their signatures distinct so two
-    # different same-date clusters can't collapse to one dedup id.
+    # coords; a per-station ``place_key`` (the station id) keeps their signatures
+    # distinct so two different same-date clusters can't collapse to one dedup id.
     a = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
-          "cal_event_id": "cal_high_USA1_2026-07-08"}]
+          "place_key": "USW00093822"}]
     b = [{"city": "Springfield", "country": "US", "lat": 39.8, "lon": -89.6,
-          "cal_event_id": "cal_high_USB2_2026-07-08"}]
+          "place_key": "USW00093820"}]
     assert cluster_signature(a) != cluster_signature(b)
+
+
+def test_cluster_signature_is_tier_agnostic():
+    # The SAME city on the same date must dedup to the SAME signature even when a
+    # member's record tier changes across runs (e.g. a forecast upgrades a
+    # monthly_high into an all_time_high). The signature keys on the tier-agnostic
+    # PLACE, never the tier-specific event id — otherwise the same regional event
+    # re-hashes to a new dedup key and re-fires.
+    monthly = [{"city": "Madrid", "country": "Spain", "lat": 40.42, "lon": -3.70,
+                "place_key": "", "event_id": "monthly_high_Madrid_2026_07"}]
+    all_time = [{"city": "Madrid", "country": "Spain", "lat": 40.42, "lon": -3.70,
+                 "place_key": "", "event_id": "alltime_high_Madrid_2026-07-08"}]
+    assert cluster_signature(monthly) == cluster_signature(all_time)
 
 
 def test_zone_countries_keys_match_region_watchlist_exactly():

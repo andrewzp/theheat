@@ -328,22 +328,27 @@ def _continents_for(countries: list[str], *, blocked: bool) -> list[str]:
 
 
 def cluster_signature(stations: list[dict]) -> str:
-    """A deterministic, naming-independent id for a cluster's membership.
+    """A deterministic, TIER-AGNOSTIC id for a cluster's membership.
 
     Short hex digest of the sorted per-station rows — process-stable (hashlib, not
     the salted builtin hash) so the same dome yields the same dedup id across runs,
-    and two different clusters on the same date never collide. Each row keys on the
-    per-station event id when present (distinct GHCN stations can normalize to the
-    same display city + rounded coords, so city/coords alone are not collision-safe),
-    falling back to city/country/coords. Used to build the per-cluster/date dedup id.
+    and two different clusters on the same date never collide. Each row keys on a
+    ``place_key`` (a per-station identity — e.g. the GHCN station id — that does NOT
+    change with record tier) plus city/country/rounded coords. Deliberately does
+    NOT key on the tier-specific event id: the same city set must dedup identically
+    even when a member's record upgrades from monthly to all-time between runs
+    (else the regional event re-hashes and re-fires). ``place_key`` distinguishes
+    distinct GHCN stations that normalize to the same display city + rounded coords;
+    world cities carry an empty ``place_key`` and fall back to city/country/coords
+    (also tier-agnostic). Used to build the per-cluster/date dedup id.
     """
     def _row(s: dict) -> str:
         coords = _coords(s)
         lat = f"{coords[0]:.2f}" if coords else ""
         lon = f"{coords[1]:.2f}" if coords else ""
-        ident = str(s.get("cal_event_id") or s.get("event_id") or "")
+        place = str(s.get("place_key") or "")
         return (
-            f"{ident}|{str(s.get('city') or '')}"
+            f"{place}|{str(s.get('city') or '')}"
             f"|{_country_key(s.get('country'))}|{lat}|{lon}"
         )
 

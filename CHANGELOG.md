@@ -26,8 +26,10 @@ All notable changes to this project will be documented in this file.
     for its date and **suppresses only the constituent *daily* drafts**; all-time/monthly
     members keep their own bigger individual draft (the double-coverage default — a taste
     call surfaced to Andrew).
-  - **Bundle**: `build_heat_records_cluster_bundle` carries `tier_counts` and
-    `significant_cities` (so the writer leads with the notable records) alongside only
+  - **Bundle**: `build_heat_records_cluster_bundle` carries `tier_counts`,
+    `significant_cities` (so the writer leads with the notable records), and
+    `records_provenance` (`observed` / `forecast` / `mixed` — GHCN readings vs
+    Open-Meteo "on pace" forecasts, so the writer stays tense-honest) alongside only
     verifiable geography (`region_name` or null, `cluster_continents`, `cluster_countries`,
     `sample_cities`).
   - **Honesty backstop**: the bundle carries a `forbidden_claims` denylist ("heat dome",
@@ -35,8 +37,10 @@ All notable changes to this project will be documented in this file.
     `_forbidden_claim_violation` gate fires for `heat_records_cluster` — the copy states the
     clustered-records FACT, never the unproven synoptic cause.
   - **Dedup**: new `heat_records_cluster_fired` `DEFAULT_STATE` key (event_id → date), keyed by
-    a deterministic cluster **signature** hash; rides the sqlite persistence contract test +
-    MERGE_SPEC (key-union) + 30-day TTL; recorded only on draft SUCCESS.
+    a deterministic, **tier-agnostic** cluster **signature** hash (keyed on a place identity,
+    so a member upgrading monthly→all-time between runs never re-fires the same regional
+    event); rides the sqlite persistence contract test + MERGE_SPEC (key-union) + 30-day TTL;
+    recorded only on draft SUCCESS.
   - Registered across threshold / scoring shims / cooldown + prune maps. Writer voice prose +
     the fact-check LLM rule land in PR-C.
 
