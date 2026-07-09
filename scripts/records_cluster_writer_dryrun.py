@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """Offline dry-run harness for the heat records-cluster (#414) writer voice.
 
-Reconstructs a spatially-coherent cluster of same-day heat records (an Iberia-ish
+Reconstructs a spatially-coherent cluster of same-day heat records (an Iberia
 burst by default: a mix of all-time / monthly / daily records across Spanish and
 Portuguese cities), builds the REAL production bundle via ``name_cluster`` +
-``build_heat_records_cluster_bundle``, and runs the draft through the SAME gate
-chain the live pipeline uses — writer -> safety -> §F forbidden-claims ->
+``build_heat_records_cluster_bundle``, and runs it through the live pipeline's
+gate chain — evidence-contract -> writer -> safety -> §F forbidden-claims ->
 fact-check -> critic — printing every stage so you can confirm a prompt change
-"lands harder while passing fact-check + critic" before it ships.
+"lands harder while passing fact-check + critic" before it ships. (The
+evidence-contract gate runs BEFORE the writer in production, so the harness checks
+it once up front and refuses to draft against a malformed bundle.)
 
 The class fires on record SIGNIFICANCE (all-time >> monthly >> daily) and is
 GLOBAL by construction (world cities enter via monthly/all-time). The published
@@ -44,21 +46,24 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.editorial.records_cluster import name_cluster  # noqa: E402
 from src.state import DEFAULT_STATE  # noqa: E402
 from src.two_bot import critic, fact_check, memory, writer  # noqa: E402
+from src.two_bot.evidence_contract import audit_story_bundle  # noqa: E402
 from src.two_bot.intern import build_heat_records_cluster_bundle  # noqa: E402
 from src.two_bot.pipeline import _forbidden_claim_violation  # noqa: E402
 from src.two_bot.types import StoryBundle  # noqa: E402
 from src.voice.safety import run_safety_pipeline  # noqa: E402
 
 # A pool of real Iberian cities (lat, lon) that cluster under single-linkage — enough
-# to draw all-time / monthly / daily members from a plausible same-day dome.
+# to draw all-time / monthly / daily members from a plausible same-day cluster.
+# Portugal sits within the first dozen so the default member counts exercise the
+# multi-country (Spain + Portugal) Iberia geography, not Spain alone.
 _IBERIA_POOL: list[tuple[str, str, float, float]] = [
     ("Madrid", "Spain", 40.42, -3.70), ("Toledo", "Spain", 39.86, -4.02),
     ("Valencia", "Spain", 39.47, -0.38), ("Zaragoza", "Spain", 41.65, -0.89),
     ("Barcelona", "Spain", 41.39, 2.16), ("Albacete", "Spain", 38.99, -1.86),
-    ("Cordoba", "Spain", 37.89, -4.78), ("Seville", "Spain", 37.39, -5.98),
-    ("Badajoz", "Spain", 38.88, -6.97), ("Ciudad Real", "Spain", 38.99, -3.93),
-    ("Salamanca", "Spain", 40.97, -5.66), ("Valladolid", "Spain", 41.65, -4.72),
+    ("Cordoba", "Spain", 37.89, -4.78), ("Badajoz", "Spain", 38.88, -6.97),
     ("Lisbon", "Portugal", 38.72, -9.13), ("Evora", "Portugal", 38.57, -7.91),
+    ("Seville", "Spain", 37.39, -5.98), ("Ciudad Real", "Spain", 38.99, -3.93),
+    ("Salamanca", "Spain", 40.97, -5.66), ("Valladolid", "Spain", 41.65, -4.72),
 ]
 
 
@@ -174,6 +179,18 @@ def main() -> int:
           f"fact_check={fact_check.FACT_CHECKER_MODEL}")
     print("\nBUNDLE THE WRITER SEES:")
     _print_bundle_facts(bundle)
+
+    # Evidence-contract gate — production runs this BEFORE the writer (pipeline.py),
+    # rejecting a malformed bundle before any draft. Mirror it so the harness can
+    # never print SHIPS for a bundle production would refuse to generate against.
+    audit = audit_story_bundle(bundle)
+    if audit.prompt_ready:
+        print("\n  [evidence]  PASS (prompt_ready)")
+    else:
+        errors = ", ".join(i.code for i in audit.issues if i.severity == "error")
+        print(f"\n  [evidence]  FAIL — {errors}")
+        print("  Bundle is not prompt-ready — production rejects it BEFORE the writer.")
+        return 1
 
     missing = [k for k in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY") if not os.environ.get(k)]
     if missing:
