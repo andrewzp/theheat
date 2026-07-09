@@ -1,5 +1,15 @@
 # #414 — Global heat records-cluster (executable plan)
 
+> **⚠️ PARTIALLY SUPERSEDED — design pivot 2026-07-08 evening.** This plan describes the
+> **daily-record-count** clustering approach (built as PR-A + the unmerged PR-B). A codex
+> reasoning stress-test then **killed the reganom-fusion idea** and reframed the class as
+> **tier-aware + standalone**: cluster members are daily **+ monthly + all-time** records,
+> gated on record *significance* (not daily count), which is ALSO what makes it global in
+> production — **no reganom fusion, no cause attribution.** The PR-A namer + honesty layers
+> below are unchanged and correct; the detection/scoring/bundle/copy are being reworked. The
+> **live direction + kickoff** is
+> [docs/handoffs/2026-07-08-records-cluster.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08-records-cluster.md).
+
 > Successor to row 13 (US population-extent, **dropped as off-brand**). Design
 > spike (GO): [2026-07-08-heat-records-cluster-spike.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/2026-07-08-heat-records-cluster-spike.md).
 > Issue [#414](https://github.com/andrewzp/theheat/issues/414). Binds to
