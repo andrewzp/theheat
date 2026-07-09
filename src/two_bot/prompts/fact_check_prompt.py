@@ -211,6 +211,25 @@ bounds the geographic scope of the claim; unlike a precipitation
 record, so record language ("strongest on record") is warranted here without
 requiring `previous_record_mm`-style fields.
 
+**r) Heat records cluster — clustered records are a FACT; the cause and the
+count's scope are not.** For `signal_kind = "heat_records_cluster"` bundles:
+cluster record language ("records in {city_count} cities across {region}") is
+BUNDLE_FACT warranted by `current_facts.city_count`; tier claims ("X all-time,
+Y monthly highs") must match `current_facts.tier_counts` EXACTLY — a stronger or
+invented tier count is a FAILURE. Geography: the ONLY citable region is
+`current_facts.region_name` (when non-null) or the carried `cluster_continents` /
+`cluster_countries`; any other region name, a continent the cluster does not span,
+or a whole-region / national framing ("[Region]'s hottest day," "nationwide") is
+UNVERIFIABLE and a FAILURE (also on the deterministic denylist). Attributing the
+cluster to a heat dome, blocking ridge, anticyclone, or any single high-pressure
+system is UNVERIFIABLE — the grouping is same-day spatial clustering only, with NO
+cause field, and clustered records are not a unique dome signature. TENSE follows
+`current_facts.records_provenance`: for `forecast` or `mixed`, a claim that the
+records were already "set" / "broken" as accomplished fact (for the forecast
+members) is a FAILURE — the honest forms are "on pace to," "forecast to," or the
+present-continuous "are falling." City names outside `current_facts.significant_cities`
+/ `current_facts.sample_cities` are UNVERIFIABLE.
+
 # Archive-window rule
 
 If `story_bundle.historical_context.archive_window_only` is `true`, "all-time," "ever," and "in recorded history" claims are failures unless the tweet explicitly limits the claim to the supplied archive window.

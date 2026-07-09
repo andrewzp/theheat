@@ -128,6 +128,30 @@ Key regional-anomaly fields:
 
 Evidence discipline: write "above the 1991–2020 daily normal" or "above seasonal normal," not "recorded history." The values are reanalysis (model), so do not write "measured" or "observed at a station." The draft that leads with significance, weaves the N-sampled-cities attribution, rounds the headline, lands σ as awe, and names the stakes is BOTH the one that stops the scroll AND the only one that survives review — the honesty and the impact are the same draft, not a trade.
 
+## Heat records cluster bundles (`signal_kind = "heat_records_cluster"`)
+
+This signal detects a spatially-coherent BURST of same-day heat records across a region — many cities in one contiguous area setting records the same day. It is the "records are falling across [region]" story that single-city records miss. It fires on record SIGNIFICANCE, not a headcount: the bundle's `tier_counts` (all-time / monthly / daily) is the story, weighted all-time ≫ monthly ≫ daily. A daily record is "warmest July 8th here"; an all-time record is "the hottest reading this city has ever seen." Lead with the significant ones.
+
+The failure mode is a scoreboard — *"N cities set heat records today across [region]"* — a headcount with no sense of what KIND of records or why it matters. Worse, it invites the unearned cause: this bundle proves clustered records, NOT a heat dome. There is no synoptic map in the data, and clustered records are not even a unique fingerprint of one.
+
+Four moves take this from scoreboard to story:
+
+1. **Lead with the significant records, not the count.** Cite `tier_counts` — *"three all-time and five monthly highs among 14 cities"* — and name a couple from `significant_cities`. The all-time and monthly records ARE the story; the daily ones are the breadth that makes it regional. A bare "N cities" buries the lede.
+2. **Tense follows `records_provenance` — never claim a forecast as done.** `observed` → the records were SET (past; GHCN readings that happened). `forecast` → cities are ON PACE / FORECAST to set them (Open-Meteo forecasts today's high — it has not happened yet). `mixed` → present-continuous, *"records are falling across…"* — never flatten the forecast members into accomplished fact. The provenance is the tense contract; honor it.
+3. **Geography is ONLY what the bundle carries — and NEVER a cause.** Name `region_name` when present (a documented region like "Iberia"), else the carried `cluster_continents` + `cluster_countries`, verbatim. Do NOT name any other region, and do NOT assert a continent the cluster does not span. And NEVER attribute the cluster to a "heat dome," "blocking ridge," "anticyclone," or any single high-pressure system — the bundle sees clustered records, not the air mass that may have caused them. Every cause phrase and every off-cluster continent is on the deterministic kill list (`forbidden_claims`); write none.
+4. **The cities are the subject — don't personify the region.** *"Records fell in 14 cities across Iberia"* — not *"Iberia baked"* or *"Iberia's hottest day."* The signal is N cities with records in a spatial cluster, not a whole-region measurement; making the bare region the subject overclaims the coverage the data supports.
+
+Key heat-records-cluster fields:
+- `current_facts.tier_counts` — `{all_time, monthly, daily}`. LEAD with the all-time + monthly counts; they are the significance. Cite exactly.
+- `current_facts.records_provenance` — `observed` | `forecast` | `mixed`. The tense contract (move 2). A forecast record framed as already "set" is killed.
+- `current_facts.significant_cities` — the all-time + monthly members (`{city, tier}`), the ones to NAME. Daily members are breadth; do not single them out as records "of note."
+- `current_facts.region_name` — a documented region, or null. The ONLY named region you may use. If null, name only `cluster_continents` + `cluster_countries`.
+- `current_facts.cluster_continents` / `cluster_countries` — the verifiable geography backbone. `cluster_continents` may be empty (omitted when it can't be asserted honestly) — then name only the countries.
+- `current_facts.city_count` — the total cluster size; the breadth, cited as "N cities," never as a national total.
+- `historical_context.forbidden_claims` — the hard kill list (every cause phrase + every continent the cluster does not span). Write none.
+
+Evidence discipline: the bundle proves that records CLUSTERED in space on one day. It does not prove a cause, a national total, or anything about the nights. The honest draft leads with the all-time/monthly records, names the honest geography, keeps the tense the provenance dictates, and lets the spatial coincidence — many cities, same day, one region — carry the weight. That coincidence is the finding; the cause is not yours to name.
+
 ## Fire bundles (`signal_kind = "fire" | "fire_footprint"`)
 
 Two fire signals ride this pipeline, and they see different things. A `fire` bundle is a FIRMS/HMS satellite hotspot: fire radiative power (FRP, MW) at one point, right now — an intensity snapshot with NO name, NO perimeter, NO acreage. A `fire_footprint` bundle is a named incident whose mapped perimeter has crossed an acreage tier — a milestone in a real, checkable event with a `complex_name` and a start date. The failure mode for both is the data-ticker: *"A fire in [X] is radiating N MW, detected by satellite at N% confidence"* — a number wearing a place name. Raw megawatts orient nobody, the detection mechanics upstage the event, and the human presence is zero.
