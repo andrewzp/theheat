@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)
+
+- **(voice, prompt-only)**: the `## Heat records cluster bundles` section of
+  `WRITER_SYSTEM_PROMPT` had drifted into a scoreboard register — four moves that were
+  all data-handling (which records lead, tense, geography, subject) with no move
+  supplying the SIGNATURE MOVE's second beat. Realigned: the section now names its
+  system clause explicitly (**the SHIFT, not the cause** — record heat has stopped
+  arriving one city at a time; a region's worth in a single day is what a warming
+  baseline looks like — never a "heat dome"/blocking ridge, which stay on
+  `forbidden_claims`), folds the subject rule into the geography move, trims restated
+  globals, and adds the house before→after example (✗ scoreboard 214 chars / ✓ shift
+  277 chars, forecast-provenance facts). Fact-check rule `r)` unchanged — already
+  aligned ("on pace"/"are falling" tense forms, no-cause kill). Editing contract added
+  to the module docstring: per-signal sections carry signal-specifics only; the house
+  voice is defined once and every class rides it.
+
 ### Heat records-cluster mechanism — tier-aware, standalone, global (#414 PR-B) (2026-07-08)
 
 - **(program #414, PR-B of 2)**: wires the heat records-cluster class end-to-end,
