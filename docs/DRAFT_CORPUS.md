@@ -11,6 +11,171 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-10 — Daily corpus grading (3 fresh drafts; 2 carry-overs, first non-full-turnover cycle since Jul 6)
+
+**Context:** Gist read via git-clone path (success). Queue: 5 pending — **2 carry-overs from
+Jul 9 survive for the first time in 4 cycles** (Stevensville MD `all_time_high` A-, Anchorage
+AK `precipitation_extreme` B; both graded Jul 9, not re-graded), breaking the complete-
+queue-turnover streak that ran Jul 3→4, Jul 6→7, Jul 7→8, Jul 8→9. 3 fresh: Riyadh, Saudi
+Arabia `dust_event` (created 2026-07-09T15:25:55Z — after Jul 9's ~15:00 UTC grading pull, so
+genuinely new today, not a duplicate of Jul 9's Stevensville/Anchorage pair), Tepee Creek,
+Montana `all_time_high` (2026-07-10T11:01:01Z), Ahvaz, Iran `absolute_extreme`
+(2026-07-10T11:05:11Z). Bot commit unchanged at `0.9.97.0` per `BRIEFING.md` (still dated
+2026-07-08) — no new PR merged between the Jul 9 and Jul 10 pulls as far as this session can
+confirm.
+
+**Staleness review:** 0 bulk-reject candidates. Stevensville/Anchorage carry-overs are
+~35.7h old (well under 48h); Riyadh ~23.7h; Tepee Creek/Ahvaz ~4h. Ahvaz's forecast date
+(July 10) is today — accurate, not stale. `gh` CLI confirmed absent (`which gh` → not
+found); write path not attempted since nothing qualifies. 42nd consecutive `gh`-absent skip
+(May 13 → Jul 10).
+
+**Grade distribution (3 fresh drafts):** 1 A- / 2 B+ / 0 B / 0 C / 0 D-F.
+**A-rate: 33% (1/3).** Best fresh-draft rate since Jul 7's 33% (n=6); still short of the
+resumption bar, but small-n.
+
+**Headline finding: the first post-fix confirmation of the P_tier fix on a named target
+type.** Ahvaz, Iran's `absolute_extreme` draft — the exact signal type this proposal was
+filed against — reaches pending 3+ days after PR #386 merged (Jul 7T05:06 UTC) and contains
+**no internal band-label or tier-jargon citation**: "just above the 47°C threshold where
+heat in this part of the Middle East historically crosses into the range where shade and
+rest alone stop being enough" cites the raw number (an observed actual, explicitly citable
+under the shipped rule) and a physiological consequence, not a bucket name like "the
+absolute-extreme threshold for the Northern Subtropics" (the exact phrase this same city's
+pre-fix Jul 7 draft used). Paired with a strong declarative P_close, this is the corpus's
+first A-grade `absolute_extreme` draft. Separately, Riyadh's `dust_event` draft states its
+WHO multiple for a **2nd independent post-fix cycle** (24.9×, after Jul 8's 27.9×) — closing
+P_dust's tracking the same way P9 closed on Jul 9's 2nd confirmation.
+
+### A-grade drafts
+
+#### [5] Ahvaz, Iran — absolute_extreme — 47.1°C (117°F) forecast — **A-**
+
+> *Ahvaz, Iran is forecast to hit 47.1°C (117°F) on July 10 — just above the 47°C threshold
+> where heat in this part of the Middle East historically crosses into the range where shade
+> and rest alone stop being enough.*
+
+**Score:** 83. Created 2026-07-10T11:05:11Z. Forecast date (July 10) is today — accurate,
+not stale. 2nd corpus `absolute_extreme` draft for this city (after Jul 7's pre-fix instance,
+graded B), and the **first post-fix `absolute_extreme` draft of any city to reach pending**
+(no target-type draft appeared Jul 8 or Jul 9).
+
+- **P_tier check: FIX CONFIRMED — 1st post-fix instance on a named target type.** No band
+  label ("Northern Subtropics"), no internal-bucket phrase ("absolute-extreme threshold
+  for..."). The word "threshold" survives, but attached to the raw number (47°C — an
+  observed actual, explicitly citable per PR #386's rule) and a stated physiological
+  consequence, not a classification name. This is the exact distinction the shipped rule
+  draws: "is this a fact about the WORLD a reader could look up, or a fact about this bot's
+  configuration? World: cite. Bot: never." Direct comparison to this same city's Jul 7
+  pre-fix draft ("above the 47°C absolute-extreme threshold for the Northern Subtropics")
+  makes the contrast legible in one pair.
+- **P_close check:** POSITIVE, and one of the strongest survivability-consequence closes in
+  the corpus — "where shade and rest alone stop being enough" states directly what crossing
+  the line means for a person on the ground. Same family as Doha's "closing off the
+  evaporative cooling that makes extreme dry heat survivable" (Jul 5, pre-fix, capped at B)
+  and Soweto's "nowhere to vent" (Jul 7, A-).
+- **Wodehouse rule?** Clean.
+
+Graded A- — no P_tier cap this time, and a close strong enough to clear the bar on its own.
+First A-grade `absolute_extreme` draft in the corpus. Held short of a full A only because
+this is a single post-fix instance; a 2nd confirmation on a different `absolute_extreme`
+city (or on `fire_footprint`/`cyclone_rapid_intensification`/`regional_sst_anomaly`) is still
+needed before treating the fix as fully proven across the whole target-type family.
+
+### B+-grade drafts
+
+#### [3] Riyadh, Saudi Arabia — dust_event — PM10 1,120 μg/m³ / 24.9× WHO — **B+**
+
+> *Riyadh, Saudi Arabia: model-estimated PM10 averaged 1,120 μg/m³ on July 9 — 24.9× the WHO
+> 24-hour guideline. The Arabian Peninsula's summer Shamal lifts fine sediment from the Nafud
+> and Rub' al Khali in concentrated columns; Riyadh sits directly in that corridor.*
+
+**Score:** 75. Created 2026-07-09T15:25:55Z. Same city as the proposal's Jun 13 origin
+instance and Jul 8's first post-fix confirmation (different reading each time).
+
+- **P_dust check: 2ND POST-FIX CONFIRMATION — tracking closes.** "24.9× the WHO 24-hour
+  guideline" stated verbatim and WHO-first, same prescribed form as Jul 8's Riyadh instance
+  (27.9×). Two independent clean `dust_event` drafts, 2 days apart, same city but different
+  readings — the same "2 independent clean cycles" bar P9 used to close its tracking on Jul 9.
+- **Named mechanic:** Shamal wind system named explicitly, two source deserts named (Nafud,
+  Rub' al Khali), corridor framing — real ecosystem specificity, unprompted.
+- **P_close check:** Borderline/failing. "Riyadh sits directly in that corridor" is a
+  structural/locational statement, not a named consequence — short of the declarative form,
+  though it avoids the resolution/dispersal anti-climax that was the dominant `dust_event`
+  failure mode pre-fix (Phalodi "wash the column clean," Urumqi "traps it" ×3).
+- **Wodehouse rule?** Clean.
+
+Graded B+, consistent with Jul 8's confirmation instance — the WHO anchor lifts it clear of
+every pre-fix `dust_event` grade, but P_close's separate mechanism/structural-only gap still
+caps it below A-, confirming the two proposals are orthogonal (as already established Jul 8).
+
+#### [4] Tepee Creek, Montana — all_time_high — 94°F (34.7°C) — **B+**
+
+> *Tepee Creek, Montana hit 94°F (34.7°C) on July 7 — hottest daily maximum in 39 years of
+> records, 4°F above the 2002 mark. The upper Gallatin drainage sits at elevation;
+> continental heat rarely arrives intact this far into the Rockies.*
+
+**Score:** 92. Created 2026-07-10T11:01:01Z.
+
+- **P_compound check:** VIOLATION — standard double-qualifier form (archive depth "39 years
+  of records" + margin "4°F above the 2002 mark"), same shape as the majority of prior
+  record-type openers (Beaver Dams, Casper, Prudhoe Bay, Island Pond, Loxahatchee, Snowshoe).
+- **P_close check:** FAILING (implied form). "Continental heat rarely arrives intact this
+  far into the Rockies" states the norm but never declares that it arrived intact this time
+  — the reader infers the violation from the headline rather than the close stating it.
+- **Wodehouse rule?** Clean.
+
+Graded B+ — solid ecosystem specificity (named drainage, elevation framing) but capped by
+the double-qualifier opener and an implied rather than declarative close, the same
+combination that's produced B/B+ grades throughout this proposal's evidence.
+
+### Patterns named in this batch
+
+1. **P_tier: first post-fix confirmation on a named target type, and a clean A-/B contrast
+   pair on the same city.** Ahvaz's Jul 7 (pre-fix, B, band-label jargon) and Jul 10
+   (post-fix, A-, no jargon) drafts are the cleanest before/after comparison this proposal
+   has produced — same city, same signal type, same close quality tier, different fix
+   status, different grade ceiling.
+
+2. **P_dust closes its tracking on the same 2-independent-clean-cycles bar P9 used.** Jul 8
+   + Jul 10 Riyadh instances both state the WHO multiple unprompted, 2 days apart (with a
+   Jul 9 gap where no `dust_event` draft appeared).
+
+3. **The complete-queue-turnover streak breaks.** 4 consecutive full-turnover cycles
+   (Jul 3→4, Jul 6→7, Jul 7→8, Jul 8→9) end today — 2 of Jul 9's 2 drafts survive as
+   carry-overs. Not enough data to call this a new steady-state; worth watching whether
+   full turnover resumes next cycle or partial-carryover becomes the norm.
+
+### Followups (in priority order)
+
+1. **P_tier: watch for a 2nd post-fix confirmation** on any of the 4 originally-tracked
+   target types (`absolute_extreme`, `fire_footprint`, `cyclone_rapid_intensification`,
+   `regional_sst_anomaly`) before moving to Resolved — 1 confirmed instance today, same
+   position P_dust was in after Jul 8.
+2. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — 20
+   and 9 cycles of evidence respectively as of this cycle (see `docs/IMPROVEMENT_PLAN.md`).
+3. **A4 (signal-kind self-naming) and A5 (cyclone dual-wind-value) remain untested this
+   cycle** — no `air_quality_hazard` or `cyclone_land_threat` draft in today's queue.
+
+### Numbers
+
+- Pending drafts in queue: 5 (3 fresh; 2 carry-overs from Jul 9, grades unchanged: 1 A-
+  Stevensville MD, 1 B Anchorage AK)
+- Fresh drafts graded: 3
+- A-rate: 33% (1/3) — best fresh-draft rate since Jul 7
+- Grade distribution: 0 A / 1 A- / 2 B+ / 0 B / 0 B- / 0 C / 0 D-F
+- New signal types debuted: none (all 3 signal types have prior corpus instances)
+- Active proposals with new evidence: P_close (20th cycle), P_tier (**1st post-fix
+  confirmation — parallels P_dust's Jul 8 milestone**), P_dust (**2nd post-fix confirmation
+  — tracking closes**), P_compound (9th cycle), P5 (mixed — dust_event shows real mechanism
+  again, absolute_extreme self-selects a strong declarative move, all_time_high implied-only)
+- Staleness bulk-reject: 0 candidates — all 5 drafts under 48h (oldest ~35.7h); write not
+  attempted since nothing qualified this cycle
+- Operational anomalies: complete-queue-turnover streak breaks for the first time since Jul 6
+  (2 of 5 pending are carry-overs)
+
+---
+
 ## 2026-07-09 — Daily corpus grading (2 fresh drafts; complete queue turnover)
 
 **Context:** Gist read via git-clone path (success). Queue: **complete turnover — 4th
