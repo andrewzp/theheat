@@ -11,6 +11,162 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-11 — Daily corpus grading (2 fresh drafts; 4 carry-overs, partial turnover)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending. 4
+carry-overs survive unchanged from Jul 9/10 (Stevensville, MD `all_time_high` A-; Riyadh,
+Saudi Arabia `dust_event` B+; Tepee Creek, MT `all_time_high` B+; Ahvaz, Iran
+`absolute_extreme` A-). 2 fresh, both `fire`, both created 2026-07-11T06:23–06:25Z: an
+interior Alaska draft and a 3-signal western Siberia cluster. **Anchorage, AK
+`precipitation_extreme` (B, graded Jul 9, carried Jul 10) has dropped out of the queue** —
+the first departure from the 5-pending set graded yesterday; cause unconfirmed (published,
+operator-rejected, or a TTL sweep — worth an operator check, though not urgent). Bot commit
+unchanged at `0.9.97.0` per `BRIEFING.md` (still dated 2026-07-08) — no new PR merged
+between the Jul 10 and Jul 11 pulls as far as this session can confirm.
+
+**Staleness review:** 0 bulk-reject candidates. Stevensville (~59.7h) and Riyadh (~47.7h)
+are both past-tense dated reports ("hit 103°F ... on July 5" / "averaged ... on July 9")
+with no real-time-baked language — the established all_time_high/dust_event carve-out
+applies regardless of age (same convention this corpus has applied to every past-tense
+record-type draft since April). Tepee Creek/Ahvaz ~28.1h; the 2 fresh fire drafts ~8.7-8.8h.
+**Operational note:** Ahvaz's forecast date (July 10) has now elapsed by one calendar day —
+the same class of issue the pre-#385 Basra-area cluster showed repeatedly — but it sits
+under the 48h mechanical threshold, so it isn't a strict bulk-reject candidate yet. Worth
+flagging for the operator that PR #385's forecast-elapsed structural auto-reject (merged
+Jul 7) does not appear to have cleared this draft from the queue on its own by the time its
+forecast date passed; either the fix is gated on the 48h age threshold too (by design) or
+this is a gap worth a direct look. `gh` CLI confirmed absent (`which gh` → command not
+found); no gist-write tool is exposed via the GitHub MCP tools loaded this session. **43rd
+consecutive skip** (May 13 → Jul 11) — moot for this cycle regardless, since nothing
+qualifies under the mechanical rule.
+
+**Grade distribution (2 fresh drafts):** 0 A / 0 A- / 2 B+ / 0 B / 0 C / 0 D-F.
+**A-rate: 0% (0/2).**
+
+**Headline finding: the corpus's most reliable fire A-grade path — the permafrost-carbon
+mechanic — shows its first sign of converging on reused stock phrasing across different
+locations and events, not just the already-tracked within-location duplicate-generation
+anomaly.** Two independent phrase-level repeats appear today, each with exactly one prior
+corpus instance: interior Alaska's close reuses Jul 5 eastern Siberia's "doesn't just
+[verb] — it [verb]s ..." contrastive-negation construction near-structurally, and western
+Siberia's close reuses Jul 3's near-duplicate Canadian Arctic close's exact clause, "...that
+took centuries to accumulate." Both today's drafts otherwise grade consistently with this
+mechanic's established B+ tier (real ecosystem specificity, declarative-but-weak P_close,
+no Wodehouse violations) — the concern is about phrase freshness, not correctness. New
+proposal **A6** filed below.
+
+### B+-grade drafts
+
+#### [5] Interior Alaska — fire — 926.3 MW, 66°N — **B+**
+
+> *926.3 MW of radiative heat in interior Alaska at 66°N — very-high-intensity fire,
+> satellite-confirmed at 100% confidence. Interior Alaska's boreal forest sits on
+> permafrost; summer fire here doesn't just consume trees — it burns into the organic
+> layer above the frozen ground.*
+
+**Score:** 79. Created 2026-07-11T06:23:34Z. 6th corpus instance of the permafrost-carbon
+fire mechanic (after Jun 25 Siberia, Jul 3 Canadian Arctic ×2, Jul 5 eastern Siberia).
+
+- **P_close check: POSITIVE (declarative-but-weak form).** "Burns into the organic layer
+  above the frozen ground" states the fire's action directly — actively consuming ancient
+  carbon storage, not merely describing a mechanism — same tier as Jul 3's near-dup ("burns
+  into organic soil layers that took centuries to accumulate," also graded B+). Weaker than
+  Jul 3's original A- ("reaches carbon the frozen ground has held for millennia") and Jul
+  5's A- ("thaws the ground beneath it") because no specific carbon/climate stake or
+  state-change is named beyond the physical extent of the burn.
+- **P5 check:** the permafrost mechanic self-selects again, unprompted — consistent with
+  fire's established organic-deployment pattern (now a 5th/6th consecutive confirming
+  instance).
+- **A6 evidence (new, see below):** "doesn't just consume trees — it burns into the organic
+  layer above the frozen ground" is the same contrastive-negation shape as Jul 5's "doesn't
+  just burn the surface — it thaws the ground beneath it" — a different fire event
+  (different location, date, MW reading) reusing the prior draft's sentence architecture
+  almost verbatim.
+- **Wodehouse rule?** Clean otherwise — no restate-padding, no explicit gap math, no
+  tier-jargon (this is a plain `fire` draft, not `fire_footprint`, so P_tier doesn't apply).
+
+Graded B+ — solid ecosystem specificity and a genuinely declarative (if soft) close, but the
+mechanic's signature phrasing is starting to repeat across unrelated events rather than
+being freshly composed each time.
+
+#### [6] Western Siberia — fire (3-signal cluster) — 1,387.9 / 958.0 / 720.7 MW — **B+**
+
+> *Three fire signals in the same patch of western Siberia today: 1,387.9 MW, 958.0 MW, and
+> 720.7 MW — all satellite-detected, all very-high-intensity. Western Siberia's summer fire
+> season is burning across peat that took centuries to accumulate.*
+
+**Score:** 78. Created 2026-07-11T06:24:52Z. Contains "today" — real-time-baked but well
+under 48h; will cross the 48h threshold ~2026-07-13T06:25Z if still pending — watch then.
+
+- **Structure:** a genuine comic-triple of three co-located fire signals (1,387.9 / 958.0 /
+  720.7 MW) — a variant of Jun 27's "three-fire national cluster" comic triple, but bundling
+  3 signals from the same patch into a single tweet rather than 3 separate cities. Worth
+  flagging as a structural question for the operator (is this 3 independent detections of
+  one fire complex, or 3 genuinely distinct fires?) — not folded into the grade either way.
+- **P_close check: POSITIVE (declarative-but-weak form, consistent with Jul 3 precedent).**
+  "Burning across peat that took centuries to accumulate" states the same class of
+  consequence as Jul 3's near-dup ("burns into organic soil layers that took centuries to
+  accumulate") — the fire actively consuming an irreplaceable, centuries-old carbon store.
+- **A6 evidence (new, see below):** the clause "... that took centuries to accumulate" is a
+  near-verbatim repeat of Jul 3's near-duplicate Canadian Arctic close, 8 days later, on a
+  completely different fire event (different continent, different signal reading).
+- **Wodehouse rule?** Clean otherwise.
+
+Graded B+ — same tier as [5] and consistent with the mechanic's established grading pattern;
+the phrase-reuse concern is the same one raised on [5], not a separate deduction.
+
+### Patterns named in this batch
+
+1. **A6 filed: the permafrost-carbon fire mechanic's close is starting to repeat verbatim
+   across different fire events, not just within a single duplicate-generation cluster.**
+   Two independent recurrences in the same cycle (Alaska reusing Jul 5's construction,
+   Siberia reusing Jul 3's exact clause) is enough to file as an awaiting-evidence proposal
+   per this plan's A3/A4/A5 precedent, though not yet enough (on 1 cycle) to promote to an
+   active proposal.
+2. **Anchorage's `precipitation_extreme` draft (B, Jul 9/10) drops from the queue** without
+   a visible cause — first departure since it entered pending, logged as an operational
+   observation, not a voice-quality finding.
+3. **Ahvaz's forecast-elapsed date (July 10) sits un-rejected past its stated date but under
+   48h** — worth the operator confirming whether PR #385's structural fix is age-gated by
+   design or has a gap on same-day-elapsed forecasts.
+
+### Followups (in priority order)
+
+1. **Watch for a 3rd instance of either A6 construction** ("doesn't just X — it Y" / "...
+   that took centuries to accumulate") on a different fire location before promoting A6 to
+   an active proposal.
+2. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — 21
+   and 9 cycles of evidence respectively as of this cycle (see `docs/IMPROVEMENT_PLAN.md`).
+3. **P_tier still needs a 2nd post-fix confirmation** on any of its 4 originally-tracked
+   target types before its tracking closes (1 of 2 as of Jul 10; not tested today — neither
+   fresh draft was a target type).
+4. **A4/A5 remain untested** — no `air_quality_hazard` or `cyclone_land_threat` draft this
+   cycle.
+5. **Operator: confirm what happened to the Anchorage precipitation_extreme draft** and
+   whether Ahvaz's elapsed forecast date should have auto-rejected under PR #385.
+
+### Numbers
+
+- Pending drafts in queue: 6 (2 fresh; 4 carry-overs from Jul 9/10, grades unchanged: 1 A-
+  Stevensville MD, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT, 1 A- Ahvaz Iran)
+- Fresh drafts graded: 2
+- A-rate: 0% (0/2)
+- Grade distribution: 0 A / 0 A- / 2 B+ / 0 B / 0 B- / 0 C / 0 D-F
+- New signal types debuted: none
+- Active proposals with new evidence: P_close (21st cycle: 2 positive, declarative-but-weak
+  form both times), P5 (fire self-selection continues; also surfaces the A6 concern)
+- New proposals filed: A6 (permafrost-carbon fire mechanic reusing stock phrasing
+  cross-location)
+- Proposals not tested this cycle: P_tier (no target-type draft), P_dust/P9 (no
+  dust_event/precipitation_extreme draft), P_compound (no record-type draft), A4/A5 (no
+  air_quality_hazard/cyclone_land_threat draft)
+- Staleness bulk-reject: 0 candidates — write not attempted since nothing qualified; `gh`
+  CLI confirmed absent, 43rd consecutive skip (May 13 → Jul 11)
+- Operational anomalies: Anchorage precipitation_extreme drops from queue (cause
+  unconfirmed); Ahvaz forecast date elapsed but under 48h (watch PR #385 behavior)
+
+---
+
 ## 2026-07-10 — Daily corpus grading (3 fresh drafts; 2 carry-overs, first non-full-turnover cycle since Jul 6)
 
 **Context:** Gist read via git-clone path (success). Queue: 5 pending — **2 carry-overs from
