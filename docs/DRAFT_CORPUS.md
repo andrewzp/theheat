@@ -11,6 +11,77 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-12 — Daily corpus grading (0 fresh drafts; 5 carry-overs from Jul 11, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending —
+exact match to 5 of Jul 11's 6 graded drafts (same `draft_id`s, scores, text): Stevensville,
+MD `all_time_high` A-; Riyadh, Saudi Arabia `dust_event` B+; Tepee Creek, MT `all_time_high`
+B+; interior Alaska `fire` B+; western Siberia `fire` (3-signal cluster) B+. **Ahvaz, Iran
+`absolute_extreme` (A-, graded Jul 10, carried Jul 11) has dropped out of the queue** —
+cause unconfirmed, same pattern as Anchorage AK's unexplained departure between the Jul 10
+and Jul 11 pulls. No re-grading performed; all 5 remaining grades stand on their original
+record (Stevensville/Riyadh/Tepee Creek from Jul 9-10, the two fires from Jul 11). Bot commit
+unchanged at `0.9.97.0` per `BRIEFING.md` (still dated 2026-07-08) — no new PR merged between
+the Jul 11 and Jul 12 pulls as far as this session can confirm.
+
+**Staleness review as of 2026-07-12 ~15:18 UTC:** 0 bulk-reject candidates, unchanged from
+Jul 11's ruling. Stevensville (~83.9h) and Riyadh (~71.9h) remain past-tense-dated reports
+("hit 103°F ... on July 5" / "averaged ... on July 9") — the established carve-out applies
+regardless of age. Tepee Creek (~52.3h, "hit 94°F ... on July 7") is the same carve-out.
+Interior Alaska fire (~32.9h) has no real-time language. **Western Siberia fire cluster
+(~32.9h) still contains "today"** — flagged Jul 11 as approaching the 48h threshold around
+2026-07-13T06:25Z; still under it as of this pull, watch the next cycle. `gh` CLI confirmed
+absent — **44th consecutive skip** (May 13 → Jul 12), moot this cycle since nothing qualifies.
+
+**A-rate:** — (no fresh drafts). Most recent measured cycle: **0% (0/2, Jul 11)**.
+
+### Patterns / operational notes
+
+1. **Queue contraction, not turnover, for the second consecutive cycle.** Jul 10→11 lost
+   Anchorage; Jul 11→12 loses Ahvaz. Both departures are unexplained from the gist alone (no
+   `status` transition visible without posted_at/rejected_at fields in the pulled records).
+   Worth an operator check on whether either was published, manually rejected, or caught by a
+   TTL/other sweep — distinct from the "complete turnover" pattern (4 occurrences, Jul 4/7/8/9)
+   where the entire queue replaces at once.
+2. **Losing Ahvaz costs the corpus its most useful open P_tier test case** — it was 1 of the
+   2 confirmations this proposal's tracking needs to close (see `docs/IMPROVEMENT_PLAN.md`),
+   and its grade/text remain preserved in the Jul 10 corpus entry regardless of queue status.
+   Its departure doesn't erase that evidence, but it does mean the tracking bar (a 2nd
+   post-fix confirmation on any of the 4 original target types) still needs a *fresh*
+   `absolute_extreme`/`fire_footprint`/cyclone/`regional_sst_anomaly` draft to close.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, P5, P_tier, P_dust, P9, A4, A5, or A6. All retain
+   their Jul 11 counts and "Last seen" dates unchanged.
+
+### Followups (in priority order)
+
+1. **Operator: confirm the cause of Ahvaz's departure from the queue** (published vs.
+   rejected vs. swept) — same open question as Anchorage's Jul 10→11 departure, now a
+   2nd instance of unexplained single-draft queue contraction.
+2. **Watch western Siberia's fire cluster** — crosses 48h with "today" still in the text
+   around 2026-07-13T06:25Z if still pending at the next pull.
+3. **P_tier still needs a 2nd post-fix confirmation** on a fresh target-type draft; P_close
+   and P_compound remain the two highest-leverage unimplemented proposals (21 and 9 cycles).
+4. **A6 (permafrost-carbon fire mechanic phrase reuse) needs a 3rd instance** — still at 1
+   cycle, unchanged.
+
+### Numbers
+
+- Pending drafts in queue: 5 (0 fresh; 5 carry-overs — 5 of Jul 11's 6, Ahvaz dropped)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-07-11)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 21 cycles, P_compound 9 cycles,
+  P5 ongoing, P_tier 1/2 confirmations, P_dust/P9 confirmed-closed, A4/A5 untested, A6 1 cycle
+  — all counts stand at Jul 11's levels)
+- Staleness bulk-reject: 0 candidates (all 5 pending drafts carve out under the established
+  past-tense-date rule or remain under 48h); `gh` CLI absent (44th consecutive skip, May 13 →
+  Jul 12)
+- Operational anomalies: 2nd consecutive cycle of unexplained single-draft queue contraction
+  (Ahvaz, following Anchorage the cycle before)
+
+---
+
 ## 2026-07-11 — Daily corpus grading (2 fresh drafts; 4 carry-overs, partial turnover)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending. 4

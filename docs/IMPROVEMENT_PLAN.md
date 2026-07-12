@@ -2,6 +2,20 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 12: 0 fresh drafts.** 5 pending — exact match to 5 of Jul 11's 6 graded drafts
+> (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+, interior Alaska fire B+,
+> western Siberia fire cluster B+); no re-grading performed, all grades stand. **Ahvaz, Iran
+> `absolute_extreme` (A-) drops from the queue** — cause unconfirmed, 2nd consecutive cycle of
+> unexplained single-draft contraction (Anchorage dropped Jul 10→11; now Ahvaz Jul 11→12).
+> Losing Ahvaz costs the corpus its best open P_tier test case — it was 1 of the 2
+> confirmations this proposal's tracking needs to close; the Jul 10 grade record stands, but
+> closing P_tier now needs a fresh `absolute_extreme`/`fire_footprint`/cyclone/
+> `regional_sst_anomaly` draft. No active-proposal evidence updates this cycle — P_close,
+> P_compound, P5, P_tier, P_dust, P9, A4, A5, and A6 all retain their Jul 11 counts and "Last
+> seen" dates. 0 staleness candidates (Stevensville/Riyadh/Tepee Creek past-tense carve-out;
+> both fires <33h; western Siberia's "today" still under 48h, watch ~2026-07-13T06:25Z). `gh`
+> CLI absent, 44th consecutive skip.
+>
 > **Jul 11: 2 fresh drafts, 4 carry-overs (partial turnover), 0% A-rate.** 4 of Jul 9/10's
 > drafts survive unchanged (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+,
 > Ahvaz A-); Anchorage AK precipitation_extreme drops from the queue (cause unconfirmed). 2
@@ -305,29 +319,32 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.97.0` per `BRIEFING.md` (2026-07-08, unchanged as of Jul 11). Since the Jul 7 cycle: PR #392 (row 6 editor brief), **PR #397 (row 7 precip four-moves — P9 fix)**, PR #398/#399 (row 14 fire geocode + per-country cap), PR #402/**#404** (row 11 marine + **cyclone four-moves, all 5 kinds**), PR #408 (precip 300mm-threshold cross-gate), PR #409 (coral DHW `_stress_level_for_dhw` full NOAA scale), PR #412 (row 9 engagement-metrics lane). Bet A fully live: `THEHEAT_NEWS_BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`. Heat-dome arc pivoted from US-only (#415, reverted #417) to a global records-cluster design (#414/#416, next build). Prior: 0.9.86.0 (Jul 7) — #384 `main` merge, #385 forecast-elapsed staleness sweep, #386 detection-plumbing ban + dust PM10 WHO anchor (P_tier + P_dust fix), #387 critic carve-out, #388 `cyclone_land_threat`. |
+| Bot commit | `0.9.97.0` per `BRIEFING.md` (2026-07-08, unchanged as of Jul 12 — no newer handoff confirmed this session). Since the Jul 7 cycle: PR #392 (row 6 editor brief), **PR #397 (row 7 precip four-moves — P9 fix)**, PR #398/#399 (row 14 fire geocode + per-country cap), PR #402/**#404** (row 11 marine + **cyclone four-moves, all 5 kinds**), PR #408 (precip 300mm-threshold cross-gate), PR #409 (coral DHW `_stress_level_for_dhw` full NOAA scale), PR #412 (row 9 engagement-metrics lane). Bet A fully live: `THEHEAT_NEWS_BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`. Heat-dome arc pivoted from US-only (#415, reverted #417) to a global records-cluster design (#414/#416, next build). Prior: 0.9.86.0 (Jul 7) — #384 `main` merge, #385 forecast-elapsed staleness sweep, #386 detection-plumbing ban + dust PM10 WHO anchor (P_tier + P_dust fix), #387 critic carve-out, #388 `cyclone_land_threat`. |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/2 fresh, Jul 11)** — 2 B+ fire drafts (interior Alaska, western Siberia), both clean permafrost-carbon-mechanic instances. Prior: 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2)**. |
-| Gap | **50pp below bar** (50% − 0%, Jul 11, n=2). Small-n and signal-mix-driven (both fresh drafts were `fire`, a category with no A-grade instance since Jun 29's Congo fire), not a regression in any shipped fix — P_tier/P_dust/P9 are all untouched by today's grades since neither draft was a target type. The cycle's real finding is qualitative: **new proposal A6** flags the first sign that the permafrost-carbon fire mechanic — this plan's most reliable fire A-grade path — is starting to reuse its own prior phrasing across different events. P_close and P_compound remain the highest-leverage *unimplemented* levers. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 11 all below/no-data or half-boundary. **Queue partially turned over as of Jul 11**: 4 carry-overs from Jul 9/10 (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+, Ahvaz A-) + 2 fresh fire drafts; Anchorage AK precipitation_extreme dropped from the queue (cause unconfirmed). |
+| Last cycle A-rate | **— (0 fresh drafts, Jul 12).** Most recent measured: **0% (0/2, Jul 11)** — 2 B+ fire drafts (interior Alaska, western Siberia), both clean permafrost-carbon-mechanic instances. Prior: 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12 no fresh drafts**. |
+| Gap | **50pp below bar** (50% − 0%, most recent measured cycle Jul 11, n=2). No fresh measurement Jul 12. Small-n and signal-mix-driven (both Jul 11 fresh drafts were `fire`, a category with no A-grade instance since Jun 29's Congo fire), not a regression in any shipped fix. P_close and P_compound remain the highest-leverage *unimplemented* levers, both unchanged since Jul 11 (no fresh evidence Jul 12). A6 (permafrost-carbon fire mechanic phrase reuse) still needs a 3rd instance to promote. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 11 all below/no-data or half-boundary, Jul 12 no fresh drafts. **Queue contracted by one as of Jul 12**: 5 pending, exact match to 5 of Jul 11's 6 (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+, interior Alaska fire B+, western Siberia fire cluster B+); Ahvaz, Iran `absolute_extreme` (A-) dropped from the queue between the Jul 11 and Jul 12 pulls (cause unconfirmed). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **6 pending as of Jul 11 grading** (4 carry-overs from Jul 9/10: 1 A- Stevensville MD all_time_high, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT all_time_high, 1 A- Ahvaz Iran absolute_extreme; 2 fresh, both B+ `fire`: interior Alaska, western Siberia 3-signal cluster). 0 staleness bulk-reject candidates this cycle (Stevensville/Riyadh past-tense carve-out regardless of age; all others <29h). Bot at 0.9.97.0 (unchanged since Jul 8); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **Operator: watch for a 2nd post-fix P_tier confirmation** on any of the 4 target types before treating the fix as fully proven; confirm whether Ahvaz's elapsed-but-under-48h forecast date is a PR #385 gap. |
+| Queue status | **5 pending as of Jul 12 grading, down from Jul 11's 6** (1 A- Stevensville MD all_time_high, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT all_time_high, 2 B+ fire [interior Alaska, western Siberia 3-signal cluster]; Ahvaz Iran absolute_extreme A- dropped out, cause unconfirmed — 2nd consecutive cycle of unexplained single-draft contraction after Anchorage's Jul 10→11 departure). 0 staleness bulk-reject candidates this cycle. Bot at 0.9.97.0 (unchanged since Jul 8); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **Operator: Ahvaz's departure costs the corpus its best open P_tier test case** — it was 1 of 2 confirmations needed to close that proposal's tracking; a fresh target-type draft is now needed instead. Confirm the cause of both Anchorage's and Ahvaz's queue departures if possible (published / rejected / swept). |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 11, carried forward from Jul 10 (no target-type
-draft this cycle to move P_tier/P_dust/P9 — both fresh drafts were `fire`): **P_dust and
-P9 remain CONFIRMED, tracking closed.** **P_tier remains at 1 of 2 confirmations** — still
-needs one more clean instance on any of the 4 target types before its tracking closes.
+Ordered by leverage. Priority as of Jul 12, carried forward verbatim from Jul 11 (zero fresh
+drafts means no new evidence to reorder against — Ahvaz's departure from the queue removes a
+future P_tier test opportunity but doesn't change today's ranking): **P_dust and P9 remain
+CONFIRMED, tracking closed.** **P_tier remains at 1 of 2 confirmations** — still needs one
+more clean instance on any of the 4 target types before its tracking closes, and now needs a
+*fresh* draft to get one since Ahvaz (its 1 post-fix confirmation) is no longer in the queue
+(the grade record itself is unaffected — see `docs/DRAFT_CORPUS.md` Jul 10 entry).
 With P9 and P_dust closed and P_tier one confirmation away, the remaining *unimplemented*
 active proposals, unchanged in order: **P_close** (21 cycles, last evidence Jul 11: 2
 positive, both weak-declarative form — Alaska/Siberia fire) > **P_compound** (9 cycles,
-not tested this cycle — no record-type draft) > **P5** (fire self-selects the
-permafrost-carbon mechanic again, unprompted, but now also surfaces the A6 phrase-reuse
-concern below). **A4, A5, and the new A6 not tested/only 1 cycle** (no `air_quality_hazard`
-or `cyclone_land_threat` draft this cycle; A6 filed today on its first instance, watching
-for a 2nd before promotion).
+not tested Jul 11 or Jul 12 — no record-type draft in either cycle) > **P5** (fire
+self-selects the permafrost-carbon mechanic again, unprompted, but now also surfaces the A6
+phrase-reuse concern below). **A4, A5, and A6 not tested this cycle** (no `air_quality_hazard`
+or `cyclone_land_threat` draft Jul 11 or Jul 12; A6 still at 1 cycle, watching for a 2nd
+instance before promotion).
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
