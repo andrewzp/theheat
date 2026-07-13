@@ -11,6 +11,99 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-13 — Daily corpus grading (0 fresh drafts; 5 carry-overs from Jul 12, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending —
+**exact match** to Jul 12's fully-graded batch, same 5 `draft_id`s, scores, text: Stevensville,
+MD `all_time_high` A-; Riyadh, Saudi Arabia `dust_event` B+; Tepee Creek, MT `all_time_high`
+B+; interior Alaska `fire` B+; western Siberia `fire` (3-signal cluster) B+. Zero new drafts
+entered the queue between the Jul 12 and Jul 13 pulls — no re-grading performed; all 5 grades
+stand on their original record. **Also note: the daily-plan routine appears to have gone
+silent for 7 days prior to this session** (`docs/IMPROVEMENT_PLAN.md`/`docs/QUALITY_TREND.md`
+on `main` were still at their Jul 6 state at session start, main's copy having been merged via
+#384 on Jul 7 and never refreshed since) — but `daily-plan-current` itself was NOT stale: it
+carries daily cycles straight through Jul 7–12 with no gap, so the routine ran every day; only
+`main`'s copy lagged (unsurprising, since #384 was a one-time merge and the rolling branch is
+the live document). Rebased this session's work onto current `origin/main` (fast-forward,
+docs-only, zero conflicts) before appending this entry — no re-grading of Jul 7–12 content
+occurred, matching Step 0's stale-checkout guard.
+
+**Staleness review as of 2026-07-13 ~15:00 UTC:** **1 new strict bulk-reject candidate**,
+crossing the threshold flagged proactively in the Jul 11/Jul 12 entries:
+
+- **Western Siberia fire cluster** (created Jul11T06:24:52Z, ~56.6h old): "Three fire signals
+  in the same patch of western Siberia **today**" — the draft crosses 48h AND still contains
+  present-tense "today," which now misdates the event by more than two days if posted as-is.
+  Flagged as approaching this line in both prior cycles' entries; it has now arrived.
+
+Interior Alaska fire (~56.6h, same creation window, no date/time-of-day language at all — the
+established fire carve-out, same as every prior clean fire draft) does not qualify. Stevensville
+(~107.6h), Riyadh (~95.6h), and Tepee Creek (~76.0h) all remain past-tense-dated reports ("hit
+103°F ... on July 5" / "averaged ... on July 9" / "hit 94°F ... on July 7") — the established
+carve-out applies regardless of age. **Bulk-reject attempted:** `gh api -X PATCH gists/...`
+requires the `gh` CLI, confirmed absent this session (`which gh` → command not found); no
+gist-write tool is exposed via the GitHub MCP server tools loaded this session (repo/PR/issue
+tools only, no gist scope). Skipped per the hard constraints, logged rather than failing the
+cycle — **45th consecutive skip** (May 13 → Jul 13). Operator should reject the western Siberia
+fire cluster draft via dashboard.
+
+**A-rate:** — (no fresh drafts). Most recent measured cycle: **0% (0/2, Jul 11)**.
+
+### Patterns / operational notes
+
+1. **Queue fully static for the first time since the Jul 11→12 contraction.** This is the
+   first cycle since Jul 9 where the queue neither gained fresh drafts nor lost a carry-over —
+   a genuine pause after two consecutive single-draft contractions (Anchorage Jul 10→11, Ahvaz
+   Jul 11→12).
+2. **The western Siberia "today" staleness crossing is exactly the outcome flagged two cycles
+   running** (Jul 11's entry projected ~2026-07-13T06:25Z; Jul 12's entry repeated the watch).
+   This is the first staleness bulk-reject candidate since Jul 6 (the Basra-area
+   `absolute_extreme` pair) — a reminder that PR #385's forecast-elapsed auto-reject sweep is
+   scoped to `{absolute_extreme, wet_bulb_extreme}` per its row-3 implementation, not to
+   present-tense date language in `fire` drafts generally; this class of staleness still
+   depends on the routine's manual (currently write-disabled) bulk-reject step.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, P5, P_tier, P_dust, P9, A4, A5, or A6. All retain
+   their Jul 12 counts and "Last seen" dates unchanged. P_tier's tracking still needs a 2nd
+   post-fix confirmation on a fresh target-type draft (Ahvaz's departure Jul 12 cost the
+   corpus its only queued test case); none of today's 5 carry-overs are a qualifying type.
+
+### Followups (in priority order)
+
+1. **Operator: reject the western Siberia fire cluster draft via dashboard** — >48h old,
+   present-tense "today" now misdates the event; the routine cannot write to the gist this
+   cycle (no `gh` CLI, no gist-write MCP tool available).
+2. **P_tier still needs a 2nd post-fix confirmation** on a fresh `absolute_extreme`/
+   `fire_footprint`/cyclone/`regional_sst_anomaly` draft — the tracking bar is otherwise ready
+   to close (see `docs/IMPROVEMENT_PLAN.md`).
+3. **P_close and P_compound remain the two highest-leverage unimplemented proposals** (21 and
+   9 cycles respectively) — unchanged, no new evidence this cycle.
+4. **A6 (permafrost-carbon fire mechanic phrase reuse) needs a 3rd instance** — still at 1
+   cycle, unchanged; today's carry-over fire drafts are the same Jul 11 instances already
+   counted, not new evidence.
+5. **Recommend the operator confirm `main`'s copies of these three docs get refreshed
+   periodically** (not just at program milestones like #384) — a 6-day lag between `main`'s
+   snapshot and the rolling branch's live state is easy to mistake for the routine being down,
+   as this session's own Step 0 sync initially suggested before `daily-plan-current` was found
+   to be current throughout.
+
+### Numbers
+
+- Pending drafts in queue: 5 (0 fresh; 5 carry-overs, exact match to Jul 12's graded batch)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 0% on 2026-07-11)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 21 cycles, P_compound 9 cycles, P5
+  ongoing, P_tier 1/2 confirmations, P_dust/P9 confirmed-closed, A4/A5 untested, A6 1 cycle —
+  all counts stand at Jul 12's levels)
+- Staleness bulk-reject: **1 strict candidate identified** (western Siberia fire cluster, ~56.6h
+  old, present-tense "today"); write skipped — `gh` CLI absent, no gist-write MCP tool available
+  (45th consecutive skip, May 13 → Jul 13)
+- Operational anomalies: none this cycle (queue fully static; `main`/rolling-branch lag noted
+  above is a docs-freshness observation, not a routine failure)
+
+---
+
 ## 2026-07-12 — Daily corpus grading (0 fresh drafts; 5 carry-overs from Jul 11, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending —
