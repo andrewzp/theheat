@@ -4,7 +4,15 @@
 > **`main` @ `dd4e525`, v`0.9.99.0`, tree clean.** Everything below is MERGED unless marked **OPEN**.
 > Detailed #414 journey (design pivot + codex stress-test): [docs/handoffs/2026-07-08-records-cluster.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/handoffs/2026-07-08-records-cluster.md) (marked SHIPPED).
 
-## ★ THE ONE THING TO DO NEXT — realign the `heat_records_cluster` writer voice (OPEN)
+## ★ THE ONE THING TO DO NEXT — realign the `heat_records_cluster` writer voice (✅ SHIPPED — #429 merged 2026-07-10, squash `3cc28a8`, v0.9.100.0)
+
+> **2026-07-10:** Done as specced below — new move 4 ("the system clause is the SHIFT, not the
+> cause"), subject rule folded into the geography move, house ✗/✓ example added (the target ✓
+> trimmed two words to clear the file's own 280 cap: 277 chars), editing contract in the module
+> docstring, fact-check rule `r)` untouched. codex-xhigh clean APPROVE round 1; Andrew approved
+> the before/after ("objective improvements"). Standing rule logged
+> (`feedback_theheat_one_house_voice`). Dryrun live sample + `THEHEAT_RECORDS_CLUSTER_ENABLED`
+> flip remain Andrew-gated.
 
 **Andrew's directive:** *the voice across the whole project must be the same.* My PR-C writer
 section — `## Heat records cluster bundles` in
