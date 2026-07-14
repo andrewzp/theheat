@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
   `_METADATA_JSON_KEYS` persistence. Ends the stale-comment era: spend becomes a
   measured number the P1 dashboard line can read.
 
+### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+
 - **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
   UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
   disagree for hours around local midnight (surfaced as the one full-suite
