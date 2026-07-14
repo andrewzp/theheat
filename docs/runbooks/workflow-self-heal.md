@@ -97,7 +97,12 @@ which pre-creates `.venv` and installs dashboard deps before invoking you.)
 ## 5. Write the heartbeat (every run, even a no-op)
 
 The dashboard and the hourly observer watch this beacon so a dead self-heal
-routine is itself surfaced (the meta-guard). Write it at the **end of every run**:
+routine is itself surfaced (the meta-guard). Since the economics P0.5 split,
+the workflow's keyless `gate` job writes a heartbeat on EVERY scheduled run
+(green days never invoke you at all — that write is what keeps the beacon
+fresh at $0). You only run when the gate found red, and you must STILL write
+the beacon at the **end of every run you execute** — yours records the real
+`outcome` and `fixed` count, overwriting the gate's provisional `fixed: 0`:
 
 ```bash
 gh variable set SELFHEAL_BEACON --body "$(cat <<JSON

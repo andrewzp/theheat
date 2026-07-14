@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+### Economics P0.5 — self-heal: keyless red-gate + Haiku pin; agent only on red (2026-07-14)
+
+- **(workflow + runbook)**: `workflow-self-heal.yml` split into two jobs. A keyless
+  `gate` job ($0, no model call) checks the five monitored workflows via `gh api` —
+  latest decisive conclusion on main, staleness vs expected cadence (a dead
+  scheduler is an outage even with no failed run), and disabled state — and writes
+  the `SELFHEAL_BEACON` heartbeat itself, so green days never start the agent
+  (previously an unpinned agent ran daily, green or not; one observed green-day run
+  selected an Opus-class model for "nothing is red"). The `heal` agent job runs
+  only when the gate found red, pinned `--model claude-haiku-4-5` (mechanical
+  triage; JUDGMENT items are PR-and-stop anyway) and receives the gate's red list
+  in its prompt. Runbook §5 updated: the gate owns the daily heartbeat; the agent
+  still writes its final beacon (real `outcome` + `fixed`) on runs it executes.
+  Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
+  (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
 
 - **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
   UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
