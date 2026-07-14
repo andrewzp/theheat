@@ -54,12 +54,41 @@ def test_budget_default_and_override(monkeypatch):
     assert budget.monthly_budget_usd() == 14.0
 
 
-def test_levels_at_70_and_90(monkeypatch):
+def test_levels_at_exact_70_and_90_boundaries(monkeypatch):
+    """codex P2: pin the EXACT >= boundaries — a >=→> regression must fail.
+    $14 budget: 70% = $9.80, 90% = $12.60."""
     monkeypatch.delenv("THEHEAT_MONTHLY_BUDGET_USD", raising=False)
-    # $14 budget: 70% = $9.80, 90% = $12.60.
     assert budget.budget_status(_state(1.0, days=7), now=NOW)["level"] == "ok"
-    assert budget.budget_status(_state(1.5, days=7), now=NOW)["level"] == "warn_70"   # $10.50
-    assert budget.budget_status(_state(2.0, days=7), now=NOW)["level"] == "alarm_90"  # $14.00
+    just_under_70 = _state(9.79 / 7, days=7)
+    assert budget.budget_status(just_under_70, now=NOW)["level"] == "ok"
+    exactly_70 = _state(9.80 / 7, days=7)
+    assert budget.budget_status(exactly_70, now=NOW)["level"] == "warn_70"
+    just_under_90 = _state(12.59 / 7, days=7)
+    assert budget.budget_status(just_under_90, now=NOW)["level"] == "warn_70"
+    exactly_90 = _state(12.60 / 7, days=7)
+    assert budget.budget_status(exactly_90, now=NOW)["level"] == "alarm_90"
+
+
+def test_month_sum_rejects_junk_day_keys_and_overflow():
+    """codex P1+P2: shape-junk keys and absurd usd values must neither
+    pollute the sum nor raise."""
+    state = _state(1.0, days=7)
+    state["llm_usage"]["2026-07-zz"] = {"writer|m": {"usd": 99.0}}
+    state["llm_usage"]["9999-99-00"] = {"writer|m": {"usd": 99.0}}
+    state["llm_usage"]["2026-07-08"] = {"writer|m": {"usd": 10**400}}  # float() overflows
+    assert budget.month_to_date_usd(state, now=NOW) == pytest.approx(7.0)
+
+
+def test_record_budget_health_survives_status_explosion(monkeypatch):
+    """codex P1: the status computation itself is fail-open — a raising
+    state object must not abort the CLI before write_state."""
+    class _Bomb:
+        def get(self, *_a, **_k):
+            raise RuntimeError("boom")
+
+    status = budget.record_budget_health(_Bomb(), now=NOW)
+    assert status["level"] == "ok"
+    assert status["mtd_usd"] == 0.0
 
 
 def test_projection_is_straight_line():

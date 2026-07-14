@@ -263,6 +263,11 @@ jobs:
           # the repo variable. Activate: gh variable set THEHEAT_REGANOM_ENABLED --body 1 --repo andrewzp/theheat
           # Rollback: gh variable set THEHEAT_REGANOM_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_REGANOM_ENABLED: ${{ vars.THEHEAT_REGANOM_ENABLED || '0' }}
+          # Monthly LLM budget for the P1.1 budget watch (default $14 in code).
+          # Tune: gh variable set THEHEAT_MONTHLY_BUDGET_USD --body 20 --repo andrewzp/theheat
+          # NOTE: the dashboard reads its own copy from the Vercel env — set
+          # both places or the bot and dashboard will disagree.
+          THEHEAT_MONTHLY_BUDGET_USD: ${{ vars.THEHEAT_MONTHLY_BUDGET_USD || '14' }}
           # Heat records-cluster class (#414) — default OFF, manual_only. When ON,
           # spatially clusters same-day heat records (all-time / monthly / daily)
           # into a "records are falling across [region]" story, gated on record

@@ -17,9 +17,12 @@ Budget default: $14/month — the top of the master plan's operational band
 from __future__ import annotations
 
 import calendar
+import math
 import os
 from datetime import datetime, timezone
 from typing import Any
+
+from src.two_bot.usage_ledger import _is_valid_day_key
 
 _DEFAULT_MONTHLY_BUDGET_USD = 14.0
 
@@ -45,16 +48,20 @@ def month_to_date_usd(state: Any, *, now: datetime | None = None) -> float:
         return 0.0
     total = 0.0
     for day, bucket in ledger.items():
-        if not isinstance(day, str) or not day.startswith(prefix):
+        # Canonical-date validation (codex P2): this reads RAW state — the
+        # ledger validates at drain/merge, but a reader must not trust it.
+        if not _is_valid_day_key(day) or not day.startswith(prefix):
             continue
         if not isinstance(bucket, dict):
             continue
         for agg in bucket.values():
             if isinstance(agg, dict):
                 try:
-                    total += float(agg.get("usd", 0.0) or 0.0)
-                except (TypeError, ValueError):
+                    usd = float(agg.get("usd", 0.0) or 0.0)
+                except (TypeError, ValueError, OverflowError):
                     continue
+                if math.isfinite(usd):
+                    total += usd
     return round(total, 6)
 
 
@@ -84,8 +91,18 @@ def budget_status(state: Any, *, now: datetime | None = None) -> dict:
 def record_budget_health(state: Any, *, now: datetime | None = None) -> dict:
     """Cycle hook: compute the status and surface non-ok levels through the
     source-health lane (sentinel auto-issues + dashboard rows come free).
-    Never raises."""
-    status = budget_status(state, now=now)
+    Never raises — the status computation itself sits inside the fail-open
+    boundary too (codex P1: an unexpected value class in raw state must not
+    abort the CLI before write_state)."""
+    try:
+        status = budget_status(state, now=now)
+    except Exception as exc:  # noqa: BLE001 — accounting never blocks a cycle
+        print(f"[budget] status error (ignored): {exc!r}")
+        status = {
+            "budget_usd": monthly_budget_usd(), "mtd_usd": 0.0,
+            "projected_usd": 0.0, "pct_of_budget": 0.0, "level": "ok",
+        }
+        return status
     try:
         from src import state as _state
 
