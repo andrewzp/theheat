@@ -20,7 +20,17 @@ All notable changes to this project will be documented in this file.
   era-anchor test classes dropped. `src/voice/era_anchors.py` + its curated
   data KEPT (hand-curated editorial reference, no kill power, candidate for
   two_bot adoption). Suite: 2,443 passed (85 dead-path tests retired with
-  their modules).
+  their modules). Round 2 (codex): also deleted `src/voice/templates.py`
+  (298-line "Gemini-down safety net" with zero importers — its claim was
+  unreachable) and the generated-draft compat adapters
+  (`_unwrap_generated_result` / `_evaluator_metadata_from_bundle` /
+  `_save_generated_draft`) with their shim pins; corrected operationally
+  dangerous stale docs — BRIEFING's secrets table called `ANTHROPIC_API_KEY`
+  the "evaluator" credential (it is the WRITER's key; rotating it away would
+  stop all drafting) and still documented `EVALUATOR_ENABLED`; PIPELINE's
+  caching paragraph, the `config.py` docstring, the dead
+  `src.voice.generator` mypy override, and `era_anchors.json` `_meta` all
+  updated.
 
 ### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
 

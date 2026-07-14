@@ -39,7 +39,9 @@ LEGACY_COMMON_ALL = [
     "_current_suppression_ctx",
     "_cyclone_history_advisories",
     "_cyclone_review_context",
-    "_evaluator_metadata_from_bundle",
+    # "_evaluator_metadata_from_bundle" + "_unwrap_generated_result" +
+    # "_save_generated_draft" removed 2026-07-14 (economics P1.2): the
+    # legacy generated-draft adapters died with the generator — intentional.
     "_fact",
     "_fetch_strict",
     "_find_draft",
@@ -60,7 +62,6 @@ LEGACY_COMMON_ALL = [
     "_review_context",
     "_same_day_already_posted",
     "_same_day_pending_collision",
-    "_save_generated_draft",
     "_score_cyclone_event",
     "_score_field",
     "_score_int",
@@ -79,7 +80,6 @@ LEGACY_COMMON_ALL = [
     "_drain_and_write_triage_queue",
     "_try_two_bot_draft",
     "_two_bot_bundle_for_extreme_signal",
-    "_unwrap_generated_result",
     "_utc_after_minutes_iso",
     "_utc_now",
     "_utc_now_iso",
@@ -225,6 +225,9 @@ def test_main_sync_compat_globals_updates_split_modules(monkeypatch):
 
 
 def test_common_save_patch_reaches_moved_save_callers(monkeypatch):
+    # (_save_generated_draft half removed 2026-07-14 with the legacy
+    # generated-draft adapter — economics P1.2. The live two_bot save path
+    # below is the remaining contract.)
     calls = []
 
     def fake_save_draft(*args, **kwargs):
@@ -232,9 +235,6 @@ def test_common_save_patch_reaches_moved_save_callers(monkeypatch):
         return True
 
     monkeypatch.setattr(common, "save_draft", fake_save_draft)
-
-    assert common._save_generated_draft("generated text", {"drafts": []}, "record", "evt_1", object()) is True
-    assert calls[-1][0][:4] == ("generated text", {"drafts": []}, "record", "evt_1")
 
     class Bundle:
         where = "Somewhere"

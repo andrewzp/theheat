@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "purpose": "Pre-computed cultural anchors per year, used by record-type generators in src/voice/generator.py to ground 'last time it was this hot in YEAR' framings without asking Gemini to invent one.",
+    "purpose": "Pre-computed cultural anchors per year. Kept as curated editorial reference: the legacy voice generator that consumed this file was deleted 2026-07-14 (economics P1.2); no live importer remains, and the two_bot writer lane may adopt it (offer-anchors idea). Original use: ground 'last time it was this hot in YEAR' framings without asking a model to invent the anchor.",
     "selection_criteria": "Globally legible (the bot covers 179 countries — anchors must read outside the US). Universally recognizable as time-markers. POLITICALLY NEUTRAL — no elections, wars, terrorism, political movements, or divisive public figures. NO mass-tragedy-as-scaffolding (no using deaths or disasters as time-markers). Tech, film, music, sports (when global), space/science, weird-global-events are the safe lanes.",
     "format": "year (string) -> list of short anchor strings, each ready to slot into 'back when X' / 'the year Y' / 'still when Z' framings.",
     "year_coverage": "1995-2025. Open-Meteo archive starts ~1995; pre-1995 records are exceedingly rare in this pipeline.",

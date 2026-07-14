@@ -45,7 +45,7 @@ from src.data.error_class import classify_error_class
 from src.data.source_status import SourceSkipped
 from src.editorial import synthesis
 from src.editorial.approval import recommend_approval_policy
-from src.editorial.candidates import CandidateBundle
+from src.editorial.candidates import CandidateBundle  # noqa: F401 — legacy shim re-export (contract-pinned)
 from src.editorial._regions import cities_to_state_map, lat_lon_to_state
 from src.editorial.simultaneous_format import select_roll_call_subset
 from src.editorial.scoring import (
@@ -144,63 +144,8 @@ def _find_draft(bot_state: BotState, draft_id: str = "", tweet_text: str = "") -
             return draft
     return None
 
-def _unwrap_generated_result(
-    generated: str | CandidateBundle | object | None,
-) -> tuple[str, list[dict] | None, dict | None, dict | None]:
-    if generated is None:
-        return "", None, None, None
-
-    if isinstance(generated, str):
-        return generated, None, None, None
-
-    if isinstance(generated, CandidateBundle):
-        candidates = [candidate.as_dict() for candidate in generated.candidates]
-        selected_score = generated.selected_score.as_dict() if generated.selected_score else None
-        evaluator_metadata = _evaluator_metadata_from_bundle(generated)
-        return generated.text, candidates, selected_score, evaluator_metadata
-
-    text = getattr(generated, "text", "") if isinstance(getattr(generated, "text", ""), str) else ""
-    raw_candidates: Any = getattr(generated, "candidates", None)
-    raw_selected_score: Any = getattr(generated, "selected_score", None)
-    evaluator_metadata = _evaluator_metadata_from_bundle(generated)
-
-    candidate_payload: list[dict] | None = None
-    if raw_candidates:
-        candidate_payload = []
-        for candidate in raw_candidates:
-            if hasattr(candidate, "as_dict"):
-                candidate_payload.append(candidate.as_dict())
-            elif isinstance(candidate, dict):
-                candidate_payload.append(candidate)
-
-    selected_payload = (
-        raw_selected_score.as_dict() if hasattr(raw_selected_score, "as_dict") else raw_selected_score
-    )
-    return text, candidate_payload, selected_payload, evaluator_metadata
-
-
 from src.orchestrator.draft_save import *  # noqa: E402,F403
 import src.orchestrator.draft_save as _draft_save  # noqa: E402
-
-def _evaluator_metadata_from_bundle(generated: object) -> dict | None:
-    verdict = getattr(generated, "evaluator_verdict", None)
-    if not isinstance(verdict, dict):
-        return None
-
-    scores = verdict.get("scores") if isinstance(verdict.get("scores"), dict) else {}
-    failures_raw = verdict.get("failures")
-    failures = [str(item) for item in failures_raw] if isinstance(failures_raw, list) else []
-    skipped = verdict.get("reasoning") == "evaluator skipped"
-    # Null means the evaluator did not actually run; True/False means it returned a verdict.
-    evaluator_pass = None if skipped else bool(verdict.get("passed"))
-
-    return {
-        "evaluator_pass": evaluator_pass,
-        "evaluator_total": int(verdict.get("total") or 0),
-        "evaluator_scores": scores,
-        "evaluator_failures": failures,
-        "evaluator_used_rewrite": bool(getattr(generated, "evaluator_used_rewrite", False)),
-    }
 
 def _fact(label: str, value: str | int | float | None) -> dict | None:
     if value is None:
@@ -331,7 +276,6 @@ __all__ = [
     "_current_suppression_ctx",
     "_cyclone_history_advisories",
     "_cyclone_review_context",
-    "_evaluator_metadata_from_bundle",
     "_fact",
     "_fetch_strict",
     "_find_draft",
@@ -353,7 +297,6 @@ __all__ = [
     "_review_context",
     "_same_day_already_posted",
     "_same_day_pending_collision",
-    "_save_generated_draft",
     "_score_cyclone_event",
     "_score_field",
     "_score_int",
@@ -372,7 +315,6 @@ __all__ = [
     "_drain_and_write_triage_queue",
     "_try_two_bot_draft",
     "_two_bot_bundle_for_extreme_signal",
-    "_unwrap_generated_result",
     "_utc_after_minutes_iso",
     "_utc_now",
     "_utc_now_iso",

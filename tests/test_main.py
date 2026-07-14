@@ -2653,7 +2653,6 @@ class TestSynthesisRecording:
             confidence=95, frp=1500.0,
         )
         monkeypatch.setattr(firms, "fetch_fires", lambda: [fake_fire])
-        monkeypatch.setattr(main, "_save_generated_draft", lambda *a, **kw: True)
         # Short-circuit open-meteo + others.
         monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
         monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities",

@@ -1,7 +1,8 @@
 """Central model config for @theheat.
 
-One place to read or override the model defaults used by the voice
-generator and the two-bot pipeline. Each caller still keeps its own
+One place to read or override the model defaults used by the two-bot
+pipeline (and, historically, the legacy voice generator — deleted
+2026-07-14, economics P1.2). Each caller still keeps its own
 specific env-var override (``THEHEAT_FACT_CHECK_MODEL``,
 ``THEHEAT_CLAIM_EXTRACT_MODEL``, ``THEHEAT_WRITER_MODEL``,
 ``GEMINI_MODEL``) for surgical changes; this module just provides the
