@@ -858,8 +858,7 @@ responses>=0.25
 | `GEMINI_API_KEY` | Google AI Studio API key for Gemini |
 | `GEMINI_MODEL` | (Optional) Model ID for the candidate generator. Default `gemini-flash-latest` — the alias Google rolls to whatever the current best Flash is (currently `gemini-3-flash-preview`, $0.30/$2.50 per MTok). Override with `gemini-3-pro-preview`, a pinned snapshot like `gemini-3-flash-preview`, or fallback `gemini-2.5-flash` without redeploying. |
 | `GEMINI_SAFETY_MODEL` | (Optional) Separate model ID for the LLM safety layer. Defaults to whatever `GEMINI_MODEL` is. |
-| `EVALUATOR_ENABLED` | (Optional) Set to `false` to skip the Sonnet 4.6 virality-evaluator pass and save ~$25-45/mo. Defaults to `true`. Drafts then flow Gemini → safety → ranking → dashboard with no second-pass rewrites or kills. |
-| `ANTHROPIC_API_KEY` | Claude Sonnet 4.6 evaluator |
+| `ANTHROPIC_API_KEY` | **Claude Sonnet 4.6 writer** — the two-bot pipeline's writer of every audience-facing tweet. Rotating or removing this key stops all drafting. (A stale earlier row called this the "evaluator" credential; the legacy evaluator was deleted 2026-07-14, economics P1.2.) |
 | `GIST_ID` | State storage (`06c02c97ffc0d11458687f1ed998d9e5`) |
 | `GH_GIST_TOKEN` | PAT with `gist` scope for state writes |
 | `NASA_FIRMS_API_KEY` | NASA fire satellite detection |

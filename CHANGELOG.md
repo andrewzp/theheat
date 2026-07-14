@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P1.2 — dead legacy pipeline deleted (2026-07-14)
+
+- **(deletion, no behavior change)**: removed `src/voice/generator.py` (1,745
+  lines — the pre-two-bot Gemini generation path; zero live callers, its only
+  importer was a test-compat re-export) and `src/editorial/evaluator.py` (308
+  lines — the virality-rubric rewriter with kill power: "scroll-stopping
+  opener", "REPLY BAIT" — the banned wink one import away from the publication
+  path; its `EVALUATOR_ENABLED` env-default also contradicted its own
+  comments). Orchestrator vestiges cleaned: `common.py` compat import +
+  `__all__` entry (shim contract test updated — intentional change, not
+  drift), `editorial/__init__` re-export, stale config comment. Tests: the 3
+  dead suites deleted, 16 defensive `@patch("src.main.generator")` decorators
+  + 11 vestigial assertions removed from `test_main.py`, generator-internal
+  era-anchor test classes dropped. `src/voice/era_anchors.py` + its curated
+  data KEPT (hand-curated editorial reference, no kill power, candidate for
+  two_bot adoption). Suite: 2,443 passed (85 dead-path tests retired with
+  their modules). Round 2 (codex): also deleted `src/voice/templates.py`
+  (298-line "Gemini-down safety net" with zero importers — its claim was
+  unreachable) and the generated-draft compat adapters
+  (`_unwrap_generated_result` / `_evaluator_metadata_from_bundle` /
+  `_save_generated_draft`) with their shim pins; corrected operationally
+  dangerous stale docs — BRIEFING's secrets table called `ANTHROPIC_API_KEY`
+  the "evaluator" credential (it is the WRITER's key; rotating it away would
+  stop all drafting) and still documented `EVALUATOR_ENABLED`; PIPELINE's
+  caching paragraph, the `config.py` docstring, the dead
+  `src.voice.generator` mypy override, and `era_anchors.json` `_meta` all
+  updated.
+
 ### Economics P0.4 — voice-regression: nightly cron → PR gate + daily canary + weekly full (2026-07-14)
 
 - **(workflow + tests)**: the full 39-replay suite no longer burns ~$1 every night.
