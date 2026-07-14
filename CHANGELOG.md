@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P1.1 — budget watch: 70%/90% alerts + usage dashboard line (2026-07-14)
+
+- **(telemetry)**: new `src/orchestrator/budget.py` reads the P0.6 ledger and
+  computes month-to-date est. spend, a straight-line month projection, and an
+  alert level against `THEHEAT_MONTHLY_BUDGET_USD` (default $14 — the top of
+  the master plan's operational band). The cycle records a `budget`
+  source-health row (`success` under 70%, `degraded` at 70%, `failed` at
+  90%+), so the EXISTING sentinel auto-files/auto-closes budget issues and the
+  dashboard renders the row with zero new alert plumbing; the cycle log prints
+  the one-line readout every run. New dashboard `GET /api/usage`: MTD /
+  projection / budget / last-14-day per-day series from `state.llm_usage`
+  (estimate semantics mirror `budget.py` — the Console is the invoice).
+
 ### Economics P0.6 — per-call LLM usage ledger MVP (2026-07-14)
 
 - **(telemetry + state)**: new `src/two_bot/usage_ledger.py` — every paid writer
