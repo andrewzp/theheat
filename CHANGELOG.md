@@ -16,6 +16,14 @@ All notable changes to this project will be documented in this file.
   the one-line readout every run. New dashboard `GET /api/usage`: MTD /
   projection / budget / last-14-day per-day series from `state.llm_usage`
   (estimate semantics mirror `budget.py` — the Console is the invoice).
+  Round 2 (codex): the status computation itself is fail-open (an
+  OverflowError-class value in raw state could have aborted the CLI before
+  `write_state`); both readers validate canonical day keys (raw-state readers
+  must not trust the ledger's drain/merge validation); the budget env var is
+  actually plumbed (`bot.yml` env ← repo variable, with a note that the
+  dashboard's Vercel env is a separate copy); tests pin the exact ≥70%/≥90%
+  boundaries and the route echoes `as_of_day`/`days_in_month` so the
+  projection asserts deterministically.
 
 ### Economics P0.6 — per-call LLM usage ledger MVP (2026-07-14)
 
