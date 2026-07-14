@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.data import open_meteo
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
+from src.orchestrator.suppression import _SUPPRESSIONS_LOCK
 from src.state import MAX_SUPPRESSIONS
 from src.two_bot.intern._shared import _US_COUNTRY_TOKENS
 
@@ -458,7 +459,6 @@ def _record_triage_suppression(
     country this cycle". All pin the relevant numeric limit into the
     reasons string for at-a-glance triage.
     """
-    suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
     score = candidate.score
@@ -475,7 +475,7 @@ def _record_triage_suppression(
     else:
         reasons_field = [f"per_category_cap={cap}"]
 
-    suppressions.append({
+    row = {
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
         "run_id": None,
@@ -488,9 +488,14 @@ def _record_triage_suppression(
         "per_category_cap": cap,
         "reasons": reasons_field,
         "summary": getattr(getattr(candidate, "bundle", None), "where", None) or candidate.city or None,
-    })
-    if len(suppressions) > MAX_SUPPRESSIONS:
-        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    }
+    # Shared with suppression.py's writers (codex r2 P2): the cap trim
+    # replaces the list object, so unsynchronized appends can drop rows.
+    with _SUPPRESSIONS_LOCK:
+        suppressions = bot_state.setdefault("suppressions", [])
+        suppressions.append(row)
+        if len(suppressions) > MAX_SUPPRESSIONS:
+            bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
     from src.orchestrator import funnel as _funnel
 
     _funnel.record_kill(bot_state, "triage_cap")
