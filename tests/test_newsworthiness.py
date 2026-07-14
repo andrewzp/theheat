@@ -28,10 +28,12 @@ def _impact(**overrides):
 
 def _event(confidence="verified", kind="fire", **overrides):
     # window dates are TODAY-relative: record_news_events prunes on window_end,
-    # so a fixed date here would rot against the time-travel canary.
-    from datetime import date, timedelta
+    # so a fixed date here would rot against the time-travel canary. UTC, not
+    # date.today() — the prune window is UTC-derived, and the machine-local
+    # date disagrees with UTC's for hours around local midnight.
+    from datetime import timedelta
 
-    today = date.today()
+    today = datetime.now(UTC).date()
     ev = {
         "kind": kind,
         "headline": "Knowles fire (CO)",
@@ -228,15 +230,16 @@ class TestGroundedParse:
 
 class TestStateRecording:
     def test_record_news_events_stamps_and_merges(self):
-        # Fully clock-relative: the _event fixture windows derive from
-        # date.today(), so the recording 'now' must be the same clock.
-        from datetime import date, datetime, timezone
+        # Single-clock: retrieved_at is stamped from the UTC 'now' passed in,
+        # so the expected date must derive from that same instant — a local
+        # date.today() here disagrees with it for hours around local midnight.
+        from datetime import datetime, timezone
 
         s = _fresh_state()
         now = datetime.now(timezone.utc)
         record_news_events(s, [_event()], now=now)
         assert len(s["news_events"]) == 1
-        assert s["news_events"][0]["retrieved_at"].startswith(date.today().isoformat())
+        assert s["news_events"][0]["retrieved_at"].startswith(now.date().isoformat())
         # same (kind, headline, window_start) replaces, not duplicates
         record_news_events(s, [_event()], now=now)
         assert len(s["news_events"]) == 1
@@ -245,11 +248,11 @@ class TestStateRecording:
         # codex P2 regression: incoming events outside [cutoff, now+1d] are
         # filtered at write time — a stale event freshly retrieved, or a
         # malformed far-future window_end, cannot enter or become immortal.
-        from datetime import date, datetime, timedelta, timezone
+        from datetime import datetime, timedelta, timezone
 
         s = _fresh_state()
         now = datetime.now(timezone.utc)
-        today = date.today()
+        today = now.date()
         stale = _event(window_end=(today - timedelta(days=30)).isoformat())
         immortal = _event(headline="future", window_end=(today + timedelta(days=400)).isoformat())
         record_news_events(s, [stale, immortal], now=now)

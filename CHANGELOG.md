@@ -25,6 +25,39 @@ All notable changes to this project will be documented in this file.
   (2) silently stacked a second transport layer under it (3 SDK attempts × 3 outer
   attempts = up to 9 transport calls per sample). Also corrected the stale
   "~5,700 tokens" prompt-cache note to the measured ~15.1k tokens (2026-07-13).
+- **(telemetry)**: new `billing_aborted` funnel volume (python `funnel_rates` +
+  dashboard mirror + rollup) so billing-skipped candidates are visible and never
+  misread as editorial `triage_cut` (codex r3/r4).
+
+### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+
+- **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
+  UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
+  disagree for hours around local midnight (surfaced as the one full-suite
+  failure at ~06:15 UTC / 23:15 Pacific, 2026-07-14). Every date in
+  `tests/test_newsworthiness.py` now derives from the clock the code under
+  test stamps and prunes with: the stamp assertion compares against
+  `now.date()`, and the `_event()` / stale / far-future fixture windows build
+  from `datetime.now(UTC).date()`. `record_news_events` itself was already
+  UTC-coherent — no production change. Repro note for future clock bugs:
+  freezegun (hence the time-travel canary) cannot express local-vs-UTC date
+  skew — `tz_offset` shifts tz-aware `now(UTC)` along with `date.today()` —
+  so reproduce with the real clock under `TZ=Etc/GMT-14` (mismatch when UTC
+  hour ≥ 10) or `TZ=Etc/GMT+12` (UTC hour < 12); suite is green under both
+  directions after this fix.
+
+### Production stop — all bot.yml schedules removed (2026-07-14)
+
+- **(ops, workflow-only)**: removed the three `bot.yml` crons (hourly
+  `auto_publish_due` posting lane, 12:00 UTC leaderboard, 4-hourly alert/drafting
+  cycles) on Andrew's instruction to stop automated activities until the
+  economics P0 (PLAN-ECONOMICS-MASTER-v3) lands. `pull_request` CI (the required
+  `test` check) and `workflow_dispatch` manual ops are untouched. The five other
+  scheduled workflows (voice-regression, workflow-self-heal,
+  source-health-sentinel, refresh-thresholds, time-travel-canary) were disabled
+  the same night via `gh workflow disable` — no commit needed, re-enable with
+  `gh workflow enable <name>`. Restore the crons by reverting this commit.
+  Cost while stopped: $0/month (was ~$50–70/month measured).
 
 ### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)
 
