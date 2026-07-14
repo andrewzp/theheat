@@ -259,9 +259,14 @@ class TestSelfHealLiveness:
             "age_hours": 4.0,
             "last_success_at": "2026-06-17T12:00:00Z",
         })
+        from scripts.workflow_health import SELFHEAL_MAX_AGE_H
+
         assert "HEALER started and never finished" in body
-        assert f"{SELFHEAL_PENDING_MAX_AGE_H}h" in body
-        assert "26" not in body, "must not cite the staleness threshold"
+        assert f"threshold {SELFHEAL_PENDING_MAX_AGE_H}h" in body
+        assert f"threshold {SELFHEAL_MAX_AGE_H}h" not in body, (
+            "must not cite the 26h staleness threshold"
+        )
+        assert "has not checked in" not in body, "must not reuse the stale body"
         assert "heal" in body and "log" in body
 
 
