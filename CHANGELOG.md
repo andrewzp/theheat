@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+
+- **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
+  UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
+  disagree for hours around local midnight (surfaced as the one full-suite
+  failure at ~06:15 UTC / 23:15 Pacific, 2026-07-14). Every date in
+  `tests/test_newsworthiness.py` now derives from the clock the code under
+  test stamps and prunes with: the stamp assertion compares against
+  `now.date()`, and the `_event()` / stale / far-future fixture windows build
+  from `datetime.now(UTC).date()`. `record_news_events` itself was already
+  UTC-coherent — no production change. Repro note for future clock bugs:
+  freezegun (hence the time-travel canary) cannot express local-vs-UTC date
+  skew — `tz_offset` shifts tz-aware `now(UTC)` along with `date.today()` —
+  so reproduce with the real clock under `TZ=Etc/GMT-14` (mismatch when UTC
+  hour ≥ 10) or `TZ=Etc/GMT+12` (UTC hour < 12); suite is green under both
+  directions after this fix.
+
 ### Production stop — all bot.yml schedules removed (2026-07-14)
 
 - **(ops, workflow-only)**: removed the three `bot.yml` crons (hourly
