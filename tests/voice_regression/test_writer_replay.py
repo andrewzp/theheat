@@ -5,8 +5,10 @@ asserts the output stays within the writer's contract. Catches silent voice
 regressions when the writer prompt or model changes.
 
 Skipped by default. Runs in the dedicated `.github/workflows/voice-regression.yml`
-workflow on a daily schedule, on demand via `workflow_dispatch`, or on
-PRs with the `voice-check` label.
+workflow: weekly full suite (Sunday), automatically on PRs touching the
+writer path (`src/two_bot/prompts/**`, `writer.py`), on demand via
+`workflow_dispatch`, or on PRs with the `voice-check` label. The daily
+3-fixture canary lives in `test_canary.py` (economics P0.4).
 
 To run locally:
 

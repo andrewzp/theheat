@@ -92,8 +92,8 @@ jobs:
       - run: mypy src/
 
       # `voice_replay` tests live in tests/voice_regression/ and call the
-      # real Anthropic writer. They run in voice-regression.yml on a
-      # daily schedule, not on every PR.
+      # real Anthropic writer. They run in voice-regression.yml (daily
+      # canary + weekly full + writer-path PR gate), not in this suite.
       - run: python -m pytest tests/ -v -m "not voice_replay"
 
       - name: SQLite backend smoke
