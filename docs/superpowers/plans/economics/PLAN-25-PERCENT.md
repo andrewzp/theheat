@@ -1,5 +1,12 @@
 # The 25% plan — theheat API-cost redesign
 
+> ⚠️ **SUPERSEDED 2026-07-13 by [PLAN-ECONOMICS-MASTER-v3.md](PLAN-ECONOMICS-MASTER-v3.md)** — the
+> reconciliation of this plan with the external cross-model audit. Two findings changed decisions:
+> the evaluator line below is **dead code ($0, not $3/mo)**, and the P0 samples flip is **unsafe
+> without also setting `THEHEAT_CRITIC_REVISE_ENABLED=0`** (single-sample mode activates the
+> critic-REVISE rewrite lane). Do not execute from this file. The market/local research appendix
+> below remains current.
+
 > **Mandate (Andrew, 2026-07-13):** Claude stays the writer. Everything else can move. Quality same
 > or better. Cost ≤ 25% of today. Today ≈ **$53–73/month** (measured); target ≤ **$13–18/month**;
 > this plan lands at **~$9–12/month (~15–18%)**.
