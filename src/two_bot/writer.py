@@ -142,6 +142,21 @@ def _call_anthropic(user_prompt: str) -> str:
             messages=[{"role": "user", "content": user_prompt}],
         ),
     )
+    # Economics P0.6: every paid call lands in the usage ledger. getattr
+    # guards so a fake/odd response without usage never breaks a call that
+    # already succeeded; record_usage itself never raises.
+    usage = getattr(response, "usage", None)
+    if usage is not None:
+        from src.two_bot import usage_ledger
+
+        usage_ledger.record_usage(
+            "writer",
+            WRITER_MODEL,
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
+            cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+        )
     # response.content is a list of block types — narrow to TextBlock.
     # We don't request thinking / tool use, so the first block is always text;
     # the explicit check is for static type safety + future-proofing.
@@ -172,6 +187,20 @@ def _call_google(user_prompt: str) -> str:
             contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
         ),
     )
+    # Economics P0.6: mirror the Anthropic capture. Gemini token fields live
+    # on usage_metadata; unknown models price at $0 in the ledger (honest
+    # "unknown" — this path is a never-used-live fallback).
+    usage_meta = getattr(response, "usage_metadata", None)
+    if usage_meta is not None:
+        from src.two_bot import usage_ledger
+
+        usage_ledger.record_usage(
+            "writer",
+            WRITER_MODEL,
+            input_tokens=getattr(usage_meta, "prompt_token_count", 0) or 0,
+            output_tokens=getattr(usage_meta, "candidates_token_count", 0) or 0,
+            cache_read_tokens=getattr(usage_meta, "cached_content_token_count", 0) or 0,
+        )
     # google-genai response.text is Optional — empty falls through to the
     # JSON parser as a parse error, which the caller handles.
     return response.text or ""

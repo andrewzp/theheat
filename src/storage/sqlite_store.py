@@ -175,6 +175,9 @@ _METADATA_JSON_KEYS = (
     "last_good_readings",
     "publish_ledger",
     "tweet_metrics",
+    # Per-day LLM usage ledger (economics P0.6) — must persist or every
+    # sqlite round-trip zeroes the month's spend history.
+    "llm_usage",
     "_state_rev",
     # Reanalysis regional-anomaly onset guard — must persist (§E) so a sustained
     # spell stays suppressed across restarts. The transient _reganom_live_cache is

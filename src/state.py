@@ -125,6 +125,10 @@ DEFAULT_STATE: BotState = {
     "publish_ledger": {},
     # Public engagement metrics for posted X tweets, keyed by tweet_id.
     "tweet_metrics": {},
+    # Per-day LLM usage ledger (economics P0.6): day → "stage|model" →
+    # {calls, in, cached_in, cache_write, out, usd}. Pruned to
+    # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
+    "llm_usage": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -1825,6 +1829,10 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "last_good_readings": _merge_last_good,
     "publish_ledger": _strat_dict_overlay,
     "tweet_metrics": _merge_tweet_metrics,
+    # Per-day overlay: runs are serialized by the bot concurrency group, and
+    # each writer mutated its own read snapshot, so last-writer-wins per day
+    # key is exact for the ledger's directional-estimate purpose.
+    "llm_usage": _strat_dict_overlay,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),
