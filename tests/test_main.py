@@ -185,6 +185,8 @@ class TestCycloneAlerts:
             event_id="nhc_tier_al012026_12_cat4",
             review_context=ANY,
             cooldown_exempt=True,
+            # The drain always requests result_out now (billing circuit breaker).
+            result_out=ANY,
         )
         source = next(item for item in current_run["sources"] if item["source"] == "nhc")
         assert source["observed"] == 1
@@ -842,13 +844,17 @@ class TestMonthlyRecordSameYearSuppression:
     Suppress them at detection."""
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_suppresses_monthly_when_old_record_this_year(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         from src.data.open_meteo import ExtremeSignalBundle, MonthlyRecord
@@ -880,17 +886,21 @@ class TestMonthlyRecordSameYearSuppression:
         state = _fresh_state()
         run_alerts(state)
 
-        mock_gen.generate_monthly_record_tweet.assert_not_called()
 
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_allows_monthly_when_old_record_prior_year(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
+        mock_two_bot,
         mock_alerts_pipeline_sources,
     ):
         """When the prior record was set in a prior year, the signal
@@ -926,7 +936,6 @@ class TestMonthlyRecordSameYearSuppression:
 
         # Voice generator must NOT be called for monthly_high anymore —
         # this is the whole point of the port.
-        mock_gen.generate_monthly_record_tweet.assert_not_called()
         # Two-bot path is exercised. The bundle that flows through is
         # built from the MonthlyRecord above.
         mock_two_bot.assert_called_once()
@@ -952,12 +961,15 @@ class TestCO2AnnualCap:
         assert state["co2_annual_count"][str(date.today().year)] == CO2_ANNUAL_CAP
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     def test_skips_milestone_when_cap_reached(
-        self, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         from src.main import CO2_ANNUAL_CAP
@@ -979,16 +991,19 @@ class TestCO2AnnualCap:
 
         run_alerts(state)
         # CO2 milestone draft should not have been generated
-        mock_gen.generate_co2_milestone_tweet.assert_not_called()
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     def test_allows_milestone_below_cap(
-        self, mock_om, mock_firms, mock_co2, mock_two_bot, mock_gen, mock_draft,
+        self,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_two_bot,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         """Below the annual CO2 cap, a fresh milestone should reach the
@@ -1013,7 +1028,6 @@ class TestCO2AnnualCap:
 
         run_alerts(state)
         # Voice gen no longer called; two-bot path is the live path.
-        mock_gen.generate_co2_milestone_tweet.assert_not_called()
         mock_two_bot.assert_called_once()
 
 
@@ -1058,6 +1072,8 @@ class TestCH4Alerts:
             legacy_type="ch4_milestone",
             event_id="ch4_milestone_1940ppb",
             review_context=ANY,
+            # The drain always requests result_out now (billing circuit breaker).
+            result_out=ANY,
         )
         assert state["ch4_last_milestone"] == 1940
         assert state["ch4_annual_count"][str(date.today().year)] == 1
@@ -1359,13 +1375,17 @@ class TestPostApproved:
 
 class TestRunAlerts:
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_calls_all_data_sources(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
@@ -1384,13 +1404,17 @@ class TestRunAlerts:
         mock_co2.fetch_co2_data.assert_called_once()
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_deduplicates_events(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
@@ -1406,16 +1430,19 @@ class TestRunAlerts:
         state = _fresh_state()
         run_alerts(state)
 
-        mock_gen.generate_record_tweet.assert_not_called()
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_handles_data_source_errors_gracefully(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.side_effect = Exception("API down")
@@ -1430,14 +1457,18 @@ class TestRunAlerts:
 
     @patch("src.main.save_draft")
     @patch("src.two_bot.pipeline.generate_fire_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_drafts_fire_alert(
-        self, mock_state, mock_om, mock_firms, mock_co2, mock_gen,
-        mock_generate_fire_draft, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_firms,
+        mock_co2,
+        mock_generate_fire_draft,
+        mock_draft,
         monkeypatch,
         mock_alerts_pipeline_sources,
     ):
@@ -1475,7 +1506,6 @@ class TestRunAlerts:
 
         mock_generate_fire_draft.assert_not_called()
         mock_two_bot.assert_called_once()
-        mock_gen.generate_fire_tweet.assert_not_called()
 
     def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
         """Day-5 streak crossing → one draft saved under marine_heatwave."""
@@ -1556,13 +1586,10 @@ class TestRunAlerts:
 
 class TestRunLeaderboard:
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_computes_anomalies_and_drafts(
-        self, mock_state, mock_om, mock_two_bot, mock_gen, mock_draft
-    ):
+    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft):
         """Hot 10 leaderboard: ported from voice gen to two-bot writer
         on 2026-05-04. The voice generator's `generate_tweet` is no
         longer reached for the hot10 category."""
@@ -1587,18 +1614,14 @@ class TestRunLeaderboard:
 
         mock_om.compute_anomalies.assert_called_once()
         mock_om.rank_hot10.assert_called_once()
-        mock_gen.generate_tweet.assert_not_called()
         mock_two_bot.assert_called_once()
         assert result is not None
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_persists_compact_hot10_rows(
-        self, mock_state, mock_om, mock_two_bot, mock_gen, mock_draft
-    ):
+    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft):
         ranked = [
             CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx)
             for idx in range(1, 11)
@@ -1634,12 +1657,9 @@ class TestRunLeaderboard:
         assert len(json.dumps(rows, separators=(",", ":")).encode("utf-8")) < 1024
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_handles_empty_temps_gracefully(
-        self, mock_state, mock_om, mock_gen, mock_draft
-    ):
+    def test_handles_empty_temps_gracefully(self, mock_state, mock_om, mock_draft):
         mock_om.load_cities.return_value = []
         mock_om.load_normals.return_value = {}
         mock_om.fetch_all_city_temps.return_value = []
@@ -1647,17 +1667,13 @@ class TestRunLeaderboard:
         state = _fresh_state()
         result = run_leaderboard(state)
 
-        mock_gen.generate_tweet.assert_not_called()
         mock_draft.assert_not_called()
         assert result is not None
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_handles_no_valid_anomalies(
-        self, mock_state, mock_om, mock_gen, mock_draft
-    ):
+    def test_handles_no_valid_anomalies(self, mock_state, mock_om, mock_draft):
         mock_om.load_cities.return_value = [
             {"city": "Unknown", "country": "XX", "lat": "0", "lon": "0"}
         ]
@@ -1671,16 +1687,12 @@ class TestRunLeaderboard:
         state = _fresh_state()
         result = run_leaderboard(state)
 
-        mock_gen.generate_tweet.assert_not_called()
         assert result is not None
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_updates_state_with_hot10(
-        self, mock_state, mock_om, mock_gen, mock_draft
-    ):
+    def test_updates_state_with_hot10(self, mock_state, mock_om, mock_draft):
         mock_om.load_cities.return_value = []
         mock_om.load_normals.return_value = {}
         mock_om.fetch_all_city_temps.return_value = [
@@ -1692,7 +1704,6 @@ class TestRunLeaderboard:
         mock_om.rank_hot10.return_value = [
             CityTemp("Miami", "US", 25.76, -80.19, 38.0, 30.0, 8.0),
         ]
-        mock_gen.generate_tweet.return_value = "Hot 10: Miami +8."
         mock_draft.return_value = True
         mock_state.update_streaks.return_value = {}
 
@@ -2349,14 +2360,20 @@ class TestRunAlertsIceMass:
 class TestFireFootprintIntegration:
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.fire_footprint")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_tier_crossing_creates_draft_and_updates_state(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft, mock_two_bot,
+        self,
+        mock_state,
+        mock_om,
+        mock_ff,
+        mock_firms,
+        mock_co2,
+        mock_draft,
+        mock_two_bot,
         mock_alerts_pipeline_sources,
     ):
         """Fire footprint ported to two-bot writer on 2026-05-04. The
@@ -2395,7 +2412,6 @@ class TestFireFootprintIntegration:
         run_alerts(state_dict)
 
         # Voice gen no longer reached.
-        mock_gen.generate_fire_footprint_tweet.assert_not_called()
         # Two-bot is the live path. Inspect the bundle for shape + content.
         mock_two_bot.assert_called_once()
         bundle_arg = mock_two_bot.call_args.args[0]
@@ -2407,14 +2423,19 @@ class TestFireFootprintIntegration:
         assert state_dict.get("fire_complex_tiers", {}).get("GWIS_AAA") == 3
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.fire_footprint")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_same_day_second_run_gated_out(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_ff,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
@@ -2432,14 +2453,19 @@ class TestFireFootprintIntegration:
         mock_ff.fetch_active_fire_perimeters.assert_not_called()
 
     @patch("src.main.save_draft")
-    @patch("src.main.generator")
     @patch("src.main.co2")
     @patch("src.main.firms")
     @patch("src.main.fire_footprint")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
     def test_fetch_error_is_logged_not_fatal(
-        self, mock_state, mock_om, mock_ff, mock_firms, mock_co2, mock_gen, mock_draft,
+        self,
+        mock_state,
+        mock_om,
+        mock_ff,
+        mock_firms,
+        mock_co2,
+        mock_draft,
         mock_alerts_pipeline_sources,
     ):
         mock_om.load_cities.return_value = []
@@ -2627,7 +2653,6 @@ class TestSynthesisRecording:
             confidence=95, frp=1500.0,
         )
         monkeypatch.setattr(firms, "fetch_fires", lambda: [fake_fire])
-        monkeypatch.setattr(main, "_save_generated_draft", lambda *a, **kw: True)
         # Short-circuit open-meteo + others.
         monkeypatch.setattr(main.open_meteo, "load_cities", lambda: [])
         monkeypatch.setattr(main.open_meteo, "check_extreme_signals_for_cities",

@@ -1,6 +1,9 @@
 """Pre-computed cultural anchors per year.
 
-Used by record-type generators in src/voice/generator.py to ground
+Curated data module with no live importers since the legacy voice
+generator was deleted (economics P1.2, 2026-07-14) — kept because the
+anchor corpus is hand-curated editorial reference the two_bot writer
+lane may adopt (offer-anchors idea). Originally used to ground
 "last time it was this hot in YEAR" framings without asking Gemini to
 invent the anchor — invented anchors hallucinate (Gemini will pick a
 plausible but wrong year-event pairing) and lack variety (the same

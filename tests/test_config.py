@@ -35,21 +35,6 @@ def test_writer_model_env_override(monkeypatch):
     cfg = _reload_config()
     assert cfg.WRITER_MODEL == "claude-opus-4-1"
 
-
-def test_voice_generator_uses_cheap_model_default(monkeypatch):
-    """Voice generator must default to the central CHEAP_MODEL,
-    not the prior 'gemini-flash-latest' alias that caused the
-    2026-05-02 timeout incident."""
-    monkeypatch.delenv("THEHEAT_CHEAP_MODEL", raising=False)
-    monkeypatch.delenv("GEMINI_MODEL", raising=False)
-    _reload_config()
-    import src.voice.generator as gen
-    importlib.reload(gen)
-    assert gen.GEMINI_MODEL == "gemini-2.5-flash"
-    # Retry budget tightened to 1 in the same incident response.
-    assert gen.MAX_RETRIES == 1
-
-
 def test_two_bot_callers_use_central_defaults(monkeypatch):
     """fact_check and writer should both read defaults from src/config.py —
     historically each hardcoded its own and the inconsistency hid the bug for

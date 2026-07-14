@@ -26,8 +26,10 @@ writer replays call paid APIs and are run only by the voice-regression workflow.
 - `theheat-bot`: hourly auto-publish at `30 * * * *`, daily leaderboard at
   `0 12 * * *`, and alert polling at `0 0,4,8,16,20 * * *`.
 - `refresh-thresholds`: weekly station-threshold refresh at `0 2 * * 0`.
-- `voice-regression`: daily live writer replay at `0 9 * * *` and opt-in PR
-  checks via the `voice-check` label.
+- `voice-regression`: daily 3-fixture billing/voice canary at `17 9 * * 1-6`,
+  weekly full replay Sundays at `0 9 * * 0`, automatic PR gate on writer-path
+  changes (`src/two_bot/prompts/**`, `writer.py`), and opt-in PR checks via
+  the `voice-check` label (economics P0.4).
 - `source-health-sentinel`: source-health issue reconciliation at
   `30 * * * *`.
 

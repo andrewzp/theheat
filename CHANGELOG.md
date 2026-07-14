@@ -18,6 +18,112 @@ All notable changes to this project will be documented in this file.
   `_METADATA_JSON_KEYS` persistence. Ends the stale-comment era: spend becomes a
   measured number the P1 dashboard line can read.
 
+### Economics P1.2 — dead legacy pipeline deleted (2026-07-14)
+
+- **(deletion, no behavior change)**: removed `src/voice/generator.py` (1,745
+  lines — the pre-two-bot Gemini generation path; zero live callers, its only
+  importer was a test-compat re-export) and `src/editorial/evaluator.py` (308
+  lines — the virality-rubric rewriter with kill power: "scroll-stopping
+  opener", "REPLY BAIT" — the banned wink one import away from the publication
+  path; its `EVALUATOR_ENABLED` env-default also contradicted its own
+  comments). Orchestrator vestiges cleaned: `common.py` compat import +
+  `__all__` entry (shim contract test updated — intentional change, not
+  drift), `editorial/__init__` re-export, stale config comment. Tests: the 3
+  dead suites deleted, 16 defensive `@patch("src.main.generator")` decorators
+  + 11 vestigial assertions removed from `test_main.py`, generator-internal
+  era-anchor test classes dropped. `src/voice/era_anchors.py` + its curated
+  data KEPT (hand-curated editorial reference, no kill power, candidate for
+  two_bot adoption). Suite: 2,443 passed (85 dead-path tests retired with
+  their modules). Round 2 (codex): also deleted `src/voice/templates.py`
+  (298-line "Gemini-down safety net" with zero importers — its claim was
+  unreachable) and the generated-draft compat adapters
+  (`_unwrap_generated_result` / `_evaluator_metadata_from_bundle` /
+  `_save_generated_draft`) with their shim pins; corrected operationally
+  dangerous stale docs — BRIEFING's secrets table called `ANTHROPIC_API_KEY`
+  the "evaluator" credential (it is the WRITER's key; rotating it away would
+  stop all drafting) and still documented `EVALUATOR_ENABLED`; PIPELINE's
+  caching paragraph, the `config.py` docstring, the dead
+  `src.voice.generator` mypy override, and `era_anchors.json` `_meta` all
+  updated.
+
+### Economics P0.4 — voice-regression: nightly cron → PR gate + daily canary + weekly full (2026-07-14)
+
+- **(workflow + tests)**: the full 39-replay suite no longer burns ~$1 every night.
+  New trigger set: **automatic `pull_request` gate** on the writer path
+  (`src/two_bot/prompts/**`, `src/two_bot/writer.py` — a keyless `changes` job
+  detects it; the `voice-check` label still opts in any other PR, and now persists
+  across pushes), **weekly full run** (Sunday 09:00 UTC), and a **daily 3-fixture
+  canary** (09:17 UTC, new `voice_canary` marker + `tests/voice_regression/test_canary.py`).
+  The canary is the billing-outage tripwire the nightly suite used to be by
+  accident (2026-07-11: balance hit $0 and this was the only loud signal): it fails
+  RED on any provider/auth error AND on a missing key, requires ≥2/3 historically
+  strong fixtures to produce a safety-passing tweet, and never blesses unsafe copy.
+  Stale "$6/month" header replaced with honest base+per-event math: ≈$6.4/month
+  fixed (weekly full + Mon–Sat canary; Sunday's canary is skipped — the full
+  suite covers it) + ~$1 per qualifying writer-path PR event (was ~$30/month
+  nightly regardless) — applies when the workflow is re-enabled after the #441
+  production stop. Per-PR concurrency cancels stale paid runs on rapid pushes.
+  Round 2 (codex): the canary's ≥2/3 production assertion gained ONE bounded
+  re-sample of only the fixtures that killed — single-sampling kills are
+  legitimate (this suite once spent five days red on exactly that) while
+  broken-lane kills are deterministic, so a repeated failure is the real
+  signal; its provider-error promise is scoped honestly to UNRECOVERED errors
+  (call_with_retries absorbs transients); stale daily-replay references in
+  README, bot.yml's CI comment, and the replay module docstring corrected.
+
+### Economics P0.5 — self-heal: keyless red-gate + Haiku pin; agent only on red (2026-07-14)
+
+- **(workflow + runbook)**: `workflow-self-heal.yml` split into two jobs. A keyless
+  `gate` job ($0, no model call) checks the five monitored workflows via `gh api` —
+  latest decisive conclusion on main, staleness vs expected cadence (a dead
+  scheduler is an outage even with no failed run), and disabled state — and writes
+  the `SELFHEAL_BEACON` heartbeat itself, so green days never start the agent
+  (previously an unpinned agent ran daily, green or not; one observed green-day run
+  selected an Opus-class model for "nothing is red"). The `heal` agent job runs
+  only when the gate found red, pinned `--model claude-haiku-4-5` (mechanical
+  triage; JUDGMENT items are PR-and-stop anyway) and receives the gate's red list
+  in its prompt. Runbook §5 updated: the gate owns the daily heartbeat; the agent
+  still writes its final beacon (real `outcome` + `fixed`) on runs it executes.
+  Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
+  (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
+  Round 2 (codex): red days write `outcome:"pending"` and the heal agent
+  finalizes it — the observer + dashboard now alarm on a beacon stuck pending
+  >3h (`stuck_pending_heal` / red dot), so a fresh morning gate heartbeat can
+  never mask a forever-failing healer; the runs query gains
+  `exclude_pull_requests=true` (fork PRs on a branch named `main` must not
+  mask production failures or feed the PAT-backed healer) and `per_page=50`
+  with no-decisive-in-window counting RED; every jq/date parse is guarded so
+  a parse failure counts that workflow red instead of aborting the gate (a
+  dead gate would skip the healer); a failed beacon write files ONE
+  deduplicated alarm issue with the default token (a never-written beacon is
+  deliberately quiet in the observer, so silent write failures were
+  invisible).
+
+### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
+
+- **(orchestrator)**: cycle-level billing circuit breaker in both triage drain paths
+  (`_refill_drain` + the legacy loop): the first `kill_stage == "budget_exhausted"`
+  aborts the remaining slate, records ONE `billing_cycle_abort` suppression row, and
+  marks the never-attempted remainder `billing_abort` in the funnel slate view.
+  Motivated by 2026-07-13T21:02Z: six paid writer attempts (six distinct request_ids)
+  fired after the first "credit balance is too low" error because each queued
+  candidate independently re-discovered the same dead balance. The drain now always
+  requests `result_out`, so the breaker sees kill stages even with funnel telemetry
+  off. The abort also trips a cycle-scoped latch (transient `_billing_exhausted_latch`
+  state key, dropped by `_merge_state` on write): in `both` mode the leaderboard
+  drain after alerts skips its slate instead of re-probing the dead balance (codex
+  r2 P1). Suppression append+trim is now guarded by one shared lock — the cap trim
+  replaces the list object, so unsynchronized worker-thread appends could drop rows
+  (codex r2 P2).
+- **(writer)**: `max_retries=0` on the Anthropic client — `call_with_retries`
+  (3 attempts, billing-aware) is the single transport-retry owner; the SDK default
+  (2) silently stacked a second transport layer under it (3 SDK attempts × 3 outer
+  attempts = up to 9 transport calls per sample). Also corrected the stale
+  "~5,700 tokens" prompt-cache note to the measured ~15.1k tokens (2026-07-13).
+- **(telemetry)**: new `billing_aborted` funnel volume (python `funnel_rates` +
+  dashboard mirror + rollup) so billing-skipped candidates are visible and never
+  misread as editorial `triage_cut` (codex r3/r4).
+
 ### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
 
 - **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 from src.orchestrator.common import _utc_now_iso
 from src.orchestrator.suppression import (
     _current_suppression_ctx,
+    _record_billing_cycle_abort_suppression,
     _record_downstream_suppression,
     _record_triage_error_suppression,
 )
@@ -142,6 +143,72 @@ def _draft_kwargs_for(candidate: "TriageCandidateBundle") -> dict:
     return kwargs
 
 
+def _abort_cycle_on_billing(
+    bot_state: BotState,
+    current_run: dict | None,
+    funnel_sink: dict | None,
+    remaining: list,
+    aborted_event_id: str,
+    *,
+    bump_triaged_out: bool,
+) -> None:
+    """Cycle-level billing circuit breaker (economics P0).
+
+    The per-call breaker (``retry.py``) stops retrying ONE candidate the
+    moment the provider says the balance is empty; this stops the CYCLE.
+    On 2026-07-13T21:02Z the drain fired six paid attempts (six distinct
+    request_ids) after the first "credit balance is too low" error because
+    each queued candidate independently re-discovered the same dead balance.
+    Records one stage-level suppression; when funnel telemetry is on, the
+    never-attempted remainder is marked ``billing_abort`` so the slate view
+    explains why those candidates have no writer outcome.
+
+    ``bump_triaged_out`` keeps ``triage_cut = triaged_in - triaged_out``
+    exact in both drains (codex r4 P2): a billing-skipped candidate exited
+    triage via billing, not an editorial cut, so it must be counted in
+    ``triaged_out`` — but the legacy loop already counted every survivor
+    there up front, so only the refill loop (which counts per attempt)
+    passes True.
+    """
+    print(
+        f"[triage] billing circuit breaker: budget exhausted on "
+        f"{aborted_event_id or 'unknown'}; aborting cycle "
+        f"({len(remaining)} queued candidate(s) skipped)"
+    )
+    # Trip the cycle-scoped latch (codex r2 P1): later drains in this SAME
+    # cli run (leaderboard after alerts in `both` mode) skip their slates
+    # instead of re-probing the dead balance at one paid call each. A
+    # transient '_' key: _merge_state drops non-MERGE_SPEC keys on write and
+    # sqlite persists only listed keys, so the latch lives exactly one
+    # process — the next cron re-probes with a single attempt by design.
+    cast(dict, bot_state)["_billing_exhausted_latch"] = True
+    _record_billing_cycle_abort_suppression(
+        bot_state,
+        aborted_event_id=aborted_event_id,
+        skipped=len(remaining),
+    )
+    # Volume telemetry (codex r3/r4 P2): billing-skipped candidates are
+    # visible as billing_aborted and — where not already counted — leave the
+    # triage_cut denominator via triaged_out, so an outage never reads as an
+    # editorial cap and real editorial cuts stay visible.
+    for skipped_candidate in remaining:
+        _bump_source_field_in_run(current_run, skipped_candidate.source, "billing_aborted")
+        if bump_triaged_out:
+            _bump_source_field_in_run(current_run, skipped_candidate.source, "triaged_out")
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        for skipped_candidate in remaining:
+            # Never overwrite a resolved terminal (codex P1): duplicate
+            # event_ids are expected in the ranked queue, and a candidate
+            # that already drafted / killed must keep its true outcome.
+            if skipped_candidate.event_id in funnel_sink.get("_slate_terminal", {}):
+                continue
+            _funnel.record_slate_terminal(
+                funnel_sink, skipped_candidate.event_id, "billing_abort"
+            )
+
+
 def _refill_drain(
     bot_state: BotState,
     current_run: dict | None,
@@ -221,7 +288,7 @@ def _refill_drain(
 
     drafted_count = 0
     attempts = 0
-    for candidate in ranked:
+    for idx, candidate in enumerate(ranked):
         if drafted_count >= target or attempts >= max_attempts:
             _cut(candidate, "global_cap")
             continue
@@ -279,13 +346,14 @@ def _refill_drain(
             attempted_event_ids.add(candidate.event_id)
 
         draft_kwargs = _draft_kwargs_for(candidate)
-        cand_result: dict | None = {} if sink_active else None
-        if cand_result is not None:
-            draft_kwargs["result_out"] = cand_result
+        # Always request result_out — the billing circuit breaker below reads
+        # kill_stage even when funnel telemetry is off.
+        cand_result: dict = {}
+        draft_kwargs["result_out"] = cand_result
         drafted = _common._try_two_bot_draft(
             candidate.bundle, bot_state, candidate.score, **draft_kwargs,
         )
-        if sink_active and cand_result is not None:
+        if sink_active:
             _funnel.record_candidate_passes(funnel_sink, cand_result.get("stage_outcomes"))
             if drafted:
                 terminal = "drafted"
@@ -310,6 +378,14 @@ def _refill_drain(
                     candidate.on_draft_success()
                 except Exception as cb_exc:  # noqa: BLE001
                     print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+
+        if cand_result.get("kill_stage") == "budget_exhausted":
+            _abort_cycle_on_billing(
+                bot_state, current_run, funnel_sink,
+                ranked[idx + 1 :], candidate.event_id,
+                bump_triaged_out=True,  # refill counts triaged_out per attempt
+            )
+            break
 
     return drafted_count
 
@@ -424,6 +500,31 @@ def _drain_and_write_triage_queue(
     for source, count in queued_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_in", count)
 
+    # Cycle-scoped billing latch (codex r2 P1): an earlier drain this run
+    # proved the balance dead; every candidate here would re-discover it at
+    # one paid call each. Skip the whole slate — the first abort row already
+    # tells the story, so no duplicate suppression is recorded.
+    if state_dict.get("_billing_exhausted_latch"):
+        print(
+            f"[triage] billing latch tripped earlier this run; skipping "
+            f"drain of {len(queue)} candidate(s)"
+        )
+        for candidate in queue:
+            _bump_source_field_in_run(current_run, candidate.source, "billing_aborted")
+            # Counted in triaged_in above but never selected/attempted:
+            # pair with triaged_out so the skip doesn't read as a triage cut.
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+        if funnel_sink is not None:
+            from src.orchestrator import funnel as _funnel
+
+            for candidate in queue:
+                if candidate.event_id in funnel_sink.get("_slate_terminal", {}):
+                    continue
+                _funnel.record_slate_terminal(
+                    funnel_sink, candidate.event_id, "billing_abort"
+                )
+        return 0
+
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.
     if refill_enabled:
@@ -462,7 +563,7 @@ def _drain_and_write_triage_queue(
                 _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
     drafted_count = 0
-    for candidate in survivors:
+    for idx, candidate in enumerate(survivors):
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         draft_kwargs = {
             "legacy_type": candidate.legacy_type,
@@ -477,16 +578,17 @@ def _drain_and_write_triage_queue(
             draft_kwargs["cooldown_exempt"] = candidate.cooldown_exempt
         if candidate.draft_metadata:
             draft_kwargs["draft_metadata"] = candidate.draft_metadata
-        cand_result: dict | None = {} if funnel_sink is not None else None
-        if cand_result is not None:
-            draft_kwargs["result_out"] = cand_result
+        # Always request result_out — the billing circuit breaker below reads
+        # kill_stage even when funnel telemetry is off.
+        cand_result: dict = {}
+        draft_kwargs["result_out"] = cand_result
         drafted = _common._try_two_bot_draft(
             candidate.bundle,
             bot_state,
             candidate.score,
             **draft_kwargs,
         )
-        if funnel_sink is not None and cand_result is not None:
+        if funnel_sink is not None:
             from src.orchestrator import funnel as _funnel
 
             _funnel.record_candidate_passes(funnel_sink, cand_result.get("stage_outcomes"))
@@ -519,6 +621,16 @@ def _drain_and_write_triage_queue(
                         candidate.on_draft_success()
                     except Exception as cb_exc:
                         print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+
+        if cand_result.get("kill_stage") == "budget_exhausted":
+            _abort_cycle_on_billing(
+                bot_state, current_run, funnel_sink,
+                survivors[idx + 1 :], candidate.event_id,
+                # Legacy pre-counts every survivor in triaged_out — bumping
+                # again would hide real editorial cuts (codex r4 P2).
+                bump_triaged_out=False,
+            )
+            break
 
     return drafted_count
 

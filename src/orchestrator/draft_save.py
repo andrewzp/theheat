@@ -13,12 +13,10 @@ from src.editorial.approval import (
     recommend_approval_policy,
 )
 from src.editorial.newsworthiness import detect_impact_citation
-from src.editorial.candidates import CandidateBundle
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
 from src.orchestrator.common import (
     _parse_iso_utc,
-    _unwrap_generated_result,
     _utc_after_minutes_iso,
     _utc_now,
     _utc_now_iso,
@@ -333,40 +331,7 @@ def save_draft(
     return True
 
 
-def _save_generated_draft(
-    generated: str | CandidateBundle | object | None,
-    bot_state: BotState,
-    tweet_type: str,
-    event_id: str,
-    score: EditorialScore,
-    review_context: dict | None = None,
-    city: str = "",
-    tweet_date: str = "",
-    cooldown_exempt: bool = False,
-) -> bool:
-    tweet_text, candidates, candidate_score, evaluator_metadata = _unwrap_generated_result(generated)
-    if not tweet_text:
-        return False
-    from src.orchestrator import common as _common
-
-    return _common.save_draft(
-        tweet_text,
-        bot_state,
-        tweet_type,
-        event_id,
-        score=score,
-        candidates=candidates,
-        candidate_score=candidate_score,
-        review_context=review_context,
-        evaluator_metadata=evaluator_metadata,
-        city=city,
-        tweet_date=tweet_date,
-        cooldown_exempt=cooldown_exempt,
-    )
-
-
 __all__ = [
-    "_save_generated_draft",
     "_touch_draft",
     "can_draft_candidate",
     "save_draft",

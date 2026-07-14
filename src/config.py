@@ -1,7 +1,8 @@
 """Central model config for @theheat.
 
-One place to read or override the model defaults used by the voice
-generator and the two-bot pipeline. Each caller still keeps its own
+One place to read or override the model defaults used by the two-bot
+pipeline (and, historically, the legacy voice generator — deleted
+2026-07-14, economics P1.2). Each caller still keeps its own
 specific env-var override (``THEHEAT_FACT_CHECK_MODEL``,
 ``THEHEAT_CLAIM_EXTRACT_MODEL``, ``THEHEAT_WRITER_MODEL``,
 ``GEMINI_MODEL``) for surgical changes; this module just provides the
@@ -42,10 +43,9 @@ def _bool_env(name: str, default: bool = False) -> bool:
 # workload (12K-char prompts asking for 4 candidates).
 CHEAP_MODEL = os.environ.get("THEHEAT_CHEAP_MODEL", "gemini-2.5-flash")
 
-# Editorial model used by the two-bot writer and (currently) the
-# voice-generator evaluator pass. Sonnet is the right tier for the
-# creative judgment work; Haiku/Flash struggle with theheat's banned-
-# phrase discipline and tone constraints.
+# Editorial model used by the two-bot writer. Sonnet is the right tier
+# for the creative judgment work; Haiku/Flash struggle with theheat's
+# banned-phrase discipline and tone constraints.
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
 
 # Second-pass editorial critic — runs after fact_check passes, the final

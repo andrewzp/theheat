@@ -36,6 +36,7 @@ ignore = [
 addopts = "-m 'not voice_replay' --ignore-glob='* [0-9].py'"
 markers = [
     "voice_replay: live writer-replay test (calls real Anthropic API; skipped by default, run via the voice-regression workflow)",
+    "voice_canary: daily 3-fixture billing + voice canary (paid; carries voice_replay too so default CI keeps deselecting it — selected alone by the canary job)",
     "allow_network: opt out of the hermeticity gate and allow real outbound connections",
     "real_backoff: opt out of the no-op retry backoff fixture and run real retry sleeps",
 ]
@@ -62,8 +63,3 @@ exclude = [
 # src.state / src.editorial.scoring were removed in the BotState
 # TypedDict pass; those modules now type-check cleanly via the
 # nested TypedDicts in src/state_schema.py.
-[[tool.mypy.overrides]]
-module = "src.voice.generator"
-# Voice generator has many template helpers with primitive arg types;
-# most don't need annotations.
-disallow_untyped_defs = false
