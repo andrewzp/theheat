@@ -99,7 +99,8 @@ LEGACY_COMMON_ALL = [
     "firms",
     "fire_footprint",
     "gdacs",
-    "generator",
+    # "generator" removed 2026-07-14 (economics P1.2): the legacy voice
+    # generator was deleted — an intentional contract change, not drift.
     "ghcn",
     "gpm_imerg",
     "ice_mass",

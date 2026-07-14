@@ -96,7 +96,6 @@ from src.editorial.scoring import (
     score_usgs_earthquake,
     score_wet_bulb_extreme,
 )
-from src.voice import generator  # noqa: F401 — referenced via @patch("src.main.generator") in tests
 from src.voice.safety import run_safety_pipeline
 from src.posting.bluesky import post_to_bluesky
 from src.posting.twitter import post_tweet
@@ -393,7 +392,6 @@ __all__ = [
     "firms",
     "fire_footprint",
     "gdacs",
-    "generator",
     "ghcn",
     "gpm_imerg",
     "ice_mass",

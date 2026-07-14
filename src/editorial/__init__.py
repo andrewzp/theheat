@@ -2,7 +2,6 @@
 
 from src.editorial.approval import ApprovalPolicy
 from src.editorial.candidates import CandidateBundle, CandidateScore, DraftCandidate
-from src.editorial.evaluator import EvaluatorVerdict
 from src.editorial.scoring import EditorialScore
 
 __all__ = [
@@ -11,5 +10,4 @@ __all__ = [
     "CandidateScore",
     "DraftCandidate",
     "EditorialScore",
-    "EvaluatorVerdict",
 ]

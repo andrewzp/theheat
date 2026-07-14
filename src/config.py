@@ -42,10 +42,9 @@ def _bool_env(name: str, default: bool = False) -> bool:
 # workload (12K-char prompts asking for 4 candidates).
 CHEAP_MODEL = os.environ.get("THEHEAT_CHEAP_MODEL", "gemini-2.5-flash")
 
-# Editorial model used by the two-bot writer and (currently) the
-# voice-generator evaluator pass. Sonnet is the right tier for the
-# creative judgment work; Haiku/Flash struggle with theheat's banned-
-# phrase discipline and tone constraints.
+# Editorial model used by the two-bot writer. Sonnet is the right tier
+# for the creative judgment work; Haiku/Flash struggle with theheat's
+# banned-phrase discipline and tone constraints.
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", "claude-sonnet-4-6")
 
 # Second-pass editorial critic — runs after fact_check passes, the final
