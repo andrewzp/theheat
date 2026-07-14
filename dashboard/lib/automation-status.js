@@ -29,6 +29,11 @@ export function selectLatestDecisiveRun(runs) {
 // Matches scripts/workflow_health.py SELFHEAL_MAX_AGE_H.
 export const SELFHEAL_MAX_AGE_MS = 26 * 60 * 60 * 1000
 
+// Economics P0.5: on red days the keyless gate writes outcome="pending" and
+// the heal agent finalizes it. Pending past the healer's runtime budget means
+// the healer died. Matches scripts/workflow_health.py SELFHEAL_PENDING_MAX_AGE_H.
+export const SELFHEAL_PENDING_MAX_AGE_MS = 3 * 60 * 60 * 1000
+
 export function dotColorForWorkflow(wf) {
   if (!wf) return "gray"
   if (wf.error) return "red"
@@ -51,11 +56,17 @@ export function failingWorkflows(status) {
 // Self-heal routine heartbeat dot. A MISSING beacon is gray (routine may not be
 // configured yet — no rollout noise, matching the observer's "missing = quiet"
 // rule). A beacon that EXISTS but is stale is RED — the watcher died, and that
-// must be loud. A fresh beacon is green, or yellow if its last outcome errored.
+// must be loud. A "pending" beacon (gate found red, heal dispatched) is yellow
+// while the healer could still be running, RED once stuck past its runtime
+// budget — a fresh morning gate write must not mask a dead healer. A fresh
+// finalized beacon is green, or yellow if its last outcome errored.
 export function dotColorForSelfHeal(beacon, now = Date.now()) {
   const runAt = beacon?.run_at ? Date.parse(beacon.run_at) : NaN
   if (Number.isNaN(runAt)) return "gray"
   if (now - runAt > SELFHEAL_MAX_AGE_MS) return "red"
+  if (beacon?.outcome === "pending") {
+    return now - runAt > SELFHEAL_PENDING_MAX_AGE_MS ? "red" : "yellow"
+  }
   if (beacon?.outcome === "error") return "yellow"
   return "green"
 }

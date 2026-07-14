@@ -1,11 +1,21 @@
 name: workflow-self-heal
 
 # The daily autonomous self-heal routine (Layer 3 of the workflow-self-heal
-# system). Runs Claude Code headless against docs/runbooks/workflow-self-heal.md:
-# it checks all five scheduled workflows, and for any red on main investigates and
-# fixes — auto-merging *mechanical* fixes and opening a PR-and-stop for
-# *judgment/destructive* ones — then writes the SELFHEAL_BEACON heartbeat so the
-# hourly observer can tell this routine is still alive.
+# system), split into two jobs (economics master plan P0.5):
+#
+#   gate — keyless ($0, no model call): checks the five monitored scheduled
+#     workflows via the GitHub API (latest decisive conclusion on main,
+#     staleness vs expected cadence, disabled state) and writes the
+#     SELFHEAL_BEACON heartbeat. Green days end here.
+#
+#   heal — the Claude Code agent against docs/runbooks/workflow-self-heal.md,
+#     pinned to claude-haiku-4-5 (mechanical triage; JUDGMENT items are
+#     PR-and-stop anyway). Runs ONLY when the gate found red — previously the
+#     agent ran unpinned every day, green or not (an observed green-day run
+#     selected an Opus-class model: $0.39 for "nothing is red").
+#
+# Cost: gate $0/run daily; heal ≈ $0.02–0.10/run (Haiku) × observed red-day
+# rate (~1–2/week) ≈ $0.2–0.8/month — replaces ~$5–15/month unpinned-daily.
 #
 # Why GitHub Actions (not a claude.ai Routine): the fixer needs gh + a real dev
 # env to run pytest, open PRs, and merge. The claude.ai Routine env has no gh CLI
@@ -14,12 +24,14 @@ name: workflow-self-heal
 # REQUIRED SECRET: SELFHEAL_PAT — a PAT (repo scope, + Variables: write) used so
 # (a) PRs the routine opens actually trigger the `test` CI gate (PRs created by the
 # default GITHUB_TOKEN do NOT trigger workflows, so they could never be merged on
-# green) and (b) it can write the SELFHEAL_BEACON repo variable. Without it the
-# workflow degrades to detection-only (no CI-triggering PRs, no heartbeat write).
+# green), (b) the gate can write the SELFHEAL_BEACON repo variable (the default
+# GITHUB_TOKEN cannot write Actions variables). Without it the gate still detects
+# (keyless reads work) but the heartbeat write degrades to a loud warning and the
+# hourly observer flags the stale beacon within 26h — the meta-guard working.
 
 on:
   schedule:
-    - cron: '0 13 * * *'   # daily 13:00 UTC (~9am ET) — after the 09:00 voice-regression run
+    - cron: '0 13 * * *'   # daily 13:00 UTC (~9am ET) — after the 09:17 canary
   workflow_dispatch: {}
 
 concurrency:
@@ -33,7 +45,147 @@ permissions:
   actions: read
 
 jobs:
-  self-heal:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      red_count: ${{ steps.detect.outputs.red_count }}
+      red_names: ${{ steps.detect.outputs.red_names }}
+    steps:
+      - name: Detect red / stale / disabled workflows (keyless)
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          now_epoch=$(date -u +%s)
+          RED_NAMES=""
+          CHECKED=0
+
+          check_wf() {
+            local wf="$1" horizon="$2"
+            CHECKED=$((CHECKED + 1))
+
+            local state
+            state=$(gh api "repos/${REPO}/actions/workflows/${wf}" --jq '.state' 2>/dev/null) || state="fetch_error"
+            if [ "$state" = "fetch_error" ] || [ -z "$state" ]; then
+              echo "::warning::${wf}: could not fetch workflow — counting as red"
+              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return 0
+            fi
+            if [ "$state" != "active" ]; then
+              RED_NAMES="${RED_NAMES},${wf}(disabled:${state})"; return 0
+            fi
+
+            # Reject PR-triggered runs by EVENT (codex r2 P1): a fork PR
+            # whose branch is named "main" must not contribute runs that mask
+            # a production failure or hand attacker-controlled logs to the
+            # PAT-backed healer. Note exclude_pull_requests=true would NOT do
+            # this — per GitHub's docs it only omits the response's
+            # pull_requests arrays, not the runs themselves.
+            local runs_json
+            runs_json=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&per_page=50" 2>/dev/null) || {
+              echo "::warning::${wf}: could not list runs — counting as red"
+              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return 0
+            }
+            runs_json=$(echo "$runs_json" | jq '{workflow_runs: [.workflow_runs[]
+              | select(.event != "pull_request" and .event != "pull_request_target")]}' 2>/dev/null) || {
+              RED_NAMES="${RED_NAMES},${wf}(parse_error)"; return 0
+            }
+
+            # A stale schedule is an outage even when no run is marked failed
+            # (runbook §1): newest run of ANY status older than the horizon.
+            # Every parse below is guarded: under set -euo pipefail a jq/date
+            # failure must count that workflow red, never abort the gate
+            # (codex P2 — an aborted gate skips the heal job entirely).
+            local newest_created
+            newest_created=$(echo "$runs_json" | jq -r '.workflow_runs[0].created_at // empty' 2>/dev/null) || newest_created=""
+            if [ -z "$newest_created" ]; then
+              RED_NAMES="${RED_NAMES},${wf}(no_runs)"; return 0
+            fi
+            local newest_epoch age
+            newest_epoch=$(date -u -d "$newest_created" +%s 2>/dev/null) || newest_epoch=""
+            if [ -z "$newest_epoch" ]; then
+              RED_NAMES="${RED_NAMES},${wf}(parse_error)"; return 0
+            fi
+            age=$((now_epoch - newest_epoch))
+            if [ "$age" -gt "$horizon" ]; then
+              RED_NAMES="${RED_NAMES},${wf}(stale:$((age / 3600))h)"; return 0
+            fi
+
+            # Latest DECISIVE run on main: success/failure/timed_out/
+            # startup_failure; ignore cancelled + in-progress (runbook §1).
+            # No decisive run in the newest 50 counts RED (codex P1): a hung
+            # run plus concurrency-cancelled retriggers can push the last
+            # decisive failure off-page — silence is not green.
+            local conclusion
+            conclusion=$(echo "$runs_json" | jq -r '[.workflow_runs[]
+              | select(.status == "completed")
+              | select(.conclusion == "success" or .conclusion == "failure"
+                       or .conclusion == "timed_out" or .conclusion == "startup_failure")
+              ][0].conclusion // "none"' 2>/dev/null) || conclusion="parse_error"
+            case "$conclusion" in
+              success) : ;;
+              failure|timed_out|startup_failure)
+                RED_NAMES="${RED_NAMES},${wf}(${conclusion})" ;;
+              *)
+                RED_NAMES="${RED_NAMES},${wf}(no_decisive)" ;;
+            esac
+          }
+
+          # Horizons = expected cadence + grace. bot: 6 cycles/day + hourly
+          # queue → 6h. voice-regression: daily canary → 48h. sentinel:
+          # hourly → 6h. refresh-thresholds: weekly Sunday → 8d.
+          # time-travel-canary: weekly Monday → 8d.
+          check_wf "bot.yml" 21600
+          check_wf "voice-regression.yml" 172800
+          check_wf "source-health-sentinel.yml" 21600
+          check_wf "refresh-thresholds.yml" 691200
+          check_wf "time-travel-canary.yml" 691200
+
+          RED_NAMES="${RED_NAMES#,}"
+          RED_COUNT=0
+          [ -n "$RED_NAMES" ] && RED_COUNT=$(echo "$RED_NAMES" | tr ',' '\n' | wc -l | tr -d ' ')
+          echo "checked=${CHECKED} red_count=${RED_COUNT} red_names=${RED_NAMES:-none}"
+          echo "red_count=${RED_COUNT}" >> "$GITHUB_OUTPUT"
+          echo "red_names=${RED_NAMES}" >> "$GITHUB_OUTPUT"
+          echo "RED_COUNT=${RED_COUNT}" >> "$GITHUB_ENV"
+
+      - name: Write SELFHEAL_BEACON heartbeat (green days cost $0)
+        env:
+          GH_TOKEN: ${{ secrets.SELFHEAL_PAT || github.token }}
+          ISSUES_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Green days finalize as "ok". Red days write "pending" — the heal
+          # agent's end-of-run beacon finalizes the outcome, and the hourly
+          # observer alarms on a beacon stuck "pending" >3h (codex P1: a
+          # fresh gate "ok" every morning would mask a forever-failing heal).
+          OUTCOME="ok"
+          [ "${RED_COUNT}" != "0" ] && OUTCOME="pending"
+          BODY=$(printf '{"run_at":"%s","outcome":"%s","checked":5,"failing":%d,"fixed":0}' "$NOW" "$OUTCOME" "${RED_COUNT}")
+          if gh variable set SELFHEAL_BEACON --repo "$REPO" --body "$BODY"; then
+            echo "beacon written: $BODY"
+          else
+            echo "::warning::SELFHEAL_BEACON write failed (SELFHEAL_PAT missing or expired?)"
+            # A missing/never-written beacon is deliberately quiet in the
+            # observer (rollout-noise refusal), so a silent write failure
+            # would stay invisible forever. File ONE deduplicated alarm
+            # issue with the default token (codex P2).
+            TITLE="[workflow-health] self-heal beacon write failing (SELFHEAL_PAT missing/expired?)"
+            EXISTING=$(GH_TOKEN="$ISSUES_TOKEN" gh issue list --repo "$REPO" --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty' 2>/dev/null) || EXISTING=""
+            if [ -z "$EXISTING" ]; then
+              GH_TOKEN="$ISSUES_TOKEN" gh issue create --repo "$REPO" --title "$TITLE" --body "The self-heal gate could not write the SELFHEAL_BEACON repo variable via gh variable set. Check that the SELFHEAL_PAT secret exists and has repo scope + Variables: write. Until fixed, the heartbeat meta-guard is blind to a dead self-heal routine. Auto-filed by the gate job; close after fixing the PAT." || echo "::warning::alarm issue creation also failed"
+            else
+              echo "alarm issue already open: #$EXISTING"
+            fi
+          fi
+
+  heal:
+    needs: gate
+    if: needs.gate.outputs.red_count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -83,7 +235,8 @@ jobs:
           github_token: ${{ secrets.SELFHEAL_PAT || secrets.GITHUB_TOKEN }}
           prompt: |
             You are the @theheat workflow self-heal agent, running headless in
-            GitHub Actions on a scheduled daily run.
+            GitHub Actions because the keyless gate job found red/stale
+            workflows: ${{ needs.gate.outputs.red_names }}
 
             Follow the runbook EXACTLY: docs/runbooks/workflow-self-heal.md
             Repo: ${{ github.repository }}.
@@ -93,15 +246,17 @@ jobs:
             - Dashboard deps are installed (`cd dashboard && npm test && npm run build`).
             - `gh` is authenticated; git identity is configured.
 
-            Do the full loop: detect red workflows across all five scheduled
-            workflows (and check source-health-sentinel's own liveness), fix red
-            ones per the autonomy split (auto-merge MECHANICAL; open a PR and STOP
-            for JUDGMENT/DESTRUCTIVE — anything touching tweet output or the
+            Do the full loop: verify the gate's findings and detect anything it
+            missed across all five scheduled workflows (and check
+            source-health-sentinel's own liveness), fix red ones per the
+            autonomy split (auto-merge MECHANICAL; open a PR and STOP for
+            JUDGMENT/DESTRUCTIVE — anything touching tweet output or the
             voice-regression contract is JUDGMENT), respect the cross-run
-            anti-thrash rule, and ALWAYS write the SELFHEAL_BEACON heartbeat at the
-            end via `gh variable set` — even on a clean no-op run.
-
-            If nothing is red and the beacon write succeeds, you are done.
+            anti-thrash rule, and ALWAYS write the SELFHEAL_BEACON heartbeat at
+            the end via `gh variable set` — even if you fixed nothing. (The
+            gate already wrote a heartbeat when it ran; yours records the
+            outcome and fixed count.)
           claude_args: |
+            --model claude-haiku-4-5
             --max-turns 40
             --allowedTools Bash,Edit,Write,Read,Glob,Grep
