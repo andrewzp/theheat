@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+### Economics P0.4 — voice-regression: nightly cron → PR gate + daily canary + weekly full (2026-07-14)
+
+- **(workflow + tests)**: the full 39-replay suite no longer burns ~$1 every night.
+  New trigger set: **automatic `pull_request` gate** on the writer path
+  (`src/two_bot/prompts/**`, `src/two_bot/writer.py` — a keyless `changes` job
+  detects it; the `voice-check` label still opts in any other PR, and now persists
+  across pushes), **weekly full run** (Sunday 09:00 UTC), and a **daily 3-fixture
+  canary** (09:17 UTC, new `voice_canary` marker + `tests/voice_regression/test_canary.py`).
+  The canary is the billing-outage tripwire the nightly suite used to be by
+  accident (2026-07-11: balance hit $0 and this was the only loud signal): it fails
+  RED on any provider/auth error AND on a missing key, requires ≥2/3 historically
+  strong fixtures to produce a safety-passing tweet, and never blesses unsafe copy.
+  Stale "$6/month" header replaced with measured math: ≈$5–7/month typical
+  (was ~$30/month) — applies when the workflow is re-enabled after the #441
+  production stop. Per-PR concurrency cancels stale paid runs on rapid pushes.
 
 - **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
   UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
