@@ -6,8 +6,10 @@ Architecture (spec § 3):
     Phase 3: WRITE — only survivors reach _try_two_bot_draft()
 
 Kill-switch: THEHEAT_TRIAGE_ENABLED env var. Default OFF for first PR.
-When OFF, the drain step in common.py writes everything in queue order
-(legacy behaviour). When ON, select_survivors() applies the full algorithm.
+When OFF, the drain step in common.py writes the queue in order after the
+deterministic pre-writer filter (certain duplicate/cooldown rejections and
+same-cycle duplicate ids run in BOTH modes). When ON, select_survivors()
+applies the full algorithm on top.
 
 Per-category cap: THEHEAT_PER_CATEGORY_CAP env var. Default 2.
 Global cap: MAX_DRAFTS_PER_CYCLE (imported from finalize, currently 3).

@@ -318,6 +318,29 @@ def test_build_severe_weather_bundle_has_empty_historical_context():
     assert {"label": "max_wind_gust", "value": "40 mph"} in bundle.current_facts
 
 
+def test_build_severe_weather_bundle_carries_emergency_designation():
+    """The writer must see the emergency tier honestly: the event is a
+    Flash Flood Warning, the designation is what makes it news."""
+    alert = SevereWeatherAlert(
+        event_type="Flash Flood Warning",
+        area="Iron, MO; Reynolds, MO",
+        severity="Severe",
+        headline="Flash Flood Warning issued July 10 by NWS St Louis MO",
+        event_id="nws_vtec:KLSX.FF.W.0050:2026",
+        description="FLASH FLOOD EMERGENCY for numerous locations",
+        emergency_designation="Flash Flood Emergency",
+    )
+
+    bundle = build_severe_weather_bundle(alert)
+
+    assert {
+        "label": "emergency_designation",
+        "value": "Flash Flood Emergency",
+    } in bundle.current_facts
+    assert {"label": "event_type", "value": "Flash Flood Warning"} in bundle.current_facts
+    assert bundle.raw_signal_dump["emergency_designation"] == "Flash Flood Emergency"
+
+
 def test_build_cyclone_rapid_intensification_bundle_includes_climate_context():
     event = RapidIntensificationEvent(
         source="nhc",

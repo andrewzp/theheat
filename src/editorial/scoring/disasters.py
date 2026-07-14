@@ -14,10 +14,13 @@ _GLOBAL_FLOOD_POPULATION_THRESHOLD = 100_000
 _GLOBAL_FLOOD_MAJOR_AREA_KM2 = 100.0
 
 
-def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
+def score_severe_weather(
+    event_type: str, severity: str, *, emergency_designation: str = ""
+) -> EditorialScore:
     event_weight = {
         "Tornado Warning": 92,
         "Flash Flood Emergency": 96,
+        "Tornado Emergency": 96,
         "Hurricane Warning": 94,
         "Storm Surge Warning": 90,
         "Extreme Wind Warning": 88,
@@ -28,8 +31,21 @@ def score_severe_weather(event_type: str, severity: str) -> EditorialScore:
         "Severe": 84,
         "Moderate": 70,
     }
-    severity_score = max(event_weight.get(event_type, 78), severity_weight.get(severity, 74))
+    # NWS encodes emergencies as ordinary Warnings + a designation (damage
+    # threat / wording) — score the designation at the tier the event map
+    # intends for it. PDS sits one notch below the emergency tier.
+    designation_weight = {
+        "Flash Flood Emergency": 96,
+        "Tornado Emergency": 96,
+        "Particularly Dangerous Situation": 92,
+    }
+    weight = event_weight.get(event_type, 78)
+    if emergency_designation:
+        weight = max(weight, designation_weight.get(emergency_designation, 92))
+    severity_score = max(weight, severity_weight.get(severity, 74))
     reasons = [event_type]
+    if emergency_designation and emergency_designation != event_type:
+        reasons.insert(0, emergency_designation)
     if "Warning" in event_type:
         reasons.append("active warning, not outlook")
     reasons.append("fast-moving operational signal")

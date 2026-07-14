@@ -348,6 +348,322 @@ class TestSuppressionContext:
         assert _current_suppression_ctx() is None
 
 
+class TestDrainPendingDuplicateGate:
+
+    def test_pending_draft_blocks_writer_spend(self, monkeypatch):
+        """A pending draft for the same event_id must kill the candidate
+        BEFORE the writer runs: persistent-lifecycle events (active NWS
+        warnings, promoted emergencies) re-enqueue every cron cycle, and
+        the default drain used to spend a writer call before save_draft
+        rejected the duplicate."""
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"event_id": "nws_vtec:KLSX.FF.W.0050:2026", "status": "pending"}
+        ]
+        bot_state["_triage_queue"] = [
+            _candidate(event_id="nws_vtec:KLSX.FF.W.0050:2026"),
+            _candidate(event_id="fresh_event"),
+        ]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        current_run = {"sources": [{"source": "coral_dhw"}]}
+        drafted = common._drain_and_write_triage_queue(bot_state, current_run)
+
+        assert written == ["fresh_event"]
+        assert drafted == 1
+        # writer_attempted counts actual writer invocations, not slate size.
+        assert current_run["sources"][0].get("writer_attempted", 0) == 1
+        assert current_run["sources"][0].get("drafted", 0) == 1
+
+    def test_pending_duplicates_do_not_consume_survivor_slots(self, monkeypatch):
+        """Certain rejections are filtered BEFORE capped survivor
+        selection: with the global cap at 3, three higher-scoring pending
+        duplicates would otherwise take every slot and the fresh candidate
+        would be cut as global_cap with zero writers run."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"event_id": f"dupe_{i}", "status": "pending"} for i in range(3)
+        ]
+        bot_state["_triage_queue"] = [
+            *(_candidate(event_id=f"dupe_{i}", total=95) for i in range(3)),
+            _candidate(event_id="fresh_event", total=70),
+        ]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert written == ["fresh_event"]
+        assert drafted == 1
+
+    def test_same_cycle_duplicate_ids_coalesce_before_selection(self, monkeypatch):
+        """Duplicate event_ids inside one queue must not consume capped
+        survivor slots — only the first copy competes; the fresh candidate
+        still drafts."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            *(_candidate(event_id="same_event", total=95) for _ in range(3)),
+            _candidate(event_id="fresh_event", total=70),
+        ]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert written == ["same_event", "fresh_event"]
+        assert drafted == 2
+
+    def test_prefiltered_duplicates_do_not_count_as_triage_cuts(self, monkeypatch):
+        """Pre-filtered certain rejections never entered the triage stage:
+        triaged_in must count admissible candidates only, or the funnel's
+        triage_cap_rate reports cuts that never happened."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"event_id": f"dupe_{i}", "status": "pending"} for i in range(3)
+        ]
+        bot_state["_triage_queue"] = [
+            *(_candidate(event_id=f"dupe_{i}", total=95) for i in range(3)),
+            _candidate(event_id="fresh_event", total=70),
+        ]
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *a, **k: True)
+
+        current_run = {"sources": [{"source": "coral_dhw"}]}
+        common._drain_and_write_triage_queue(bot_state, current_run)
+
+        entry = current_run["sources"][0]
+        assert entry.get("triaged_in", 0) == 1
+        assert entry.get("triaged_out", 0) == 1
+
+    def test_same_cycle_duplicates_keep_best_scored_copy(self, monkeypatch):
+        """Coalescing must keep the copy triage would rank highest — keeping
+        the first-encountered low-score copy can cost the event its capped
+        slot entirely."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _candidate(event_id="same_event", total=10),
+            _candidate(event_id="same_event", total=99),
+            _candidate(event_id="fresh_1", total=90),
+            _candidate(event_id="fresh_2", total=80),
+            _candidate(event_id="fresh_3", total=70),
+        ]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        # The 99-point copy competes and wins a slot (all candidates share
+        # one category; the per-category cap of 2 admits it + fresh_1).
+        # Keeping the first-encountered 10-point copy instead would have
+        # cost the event its slot entirely: written == [fresh_1, fresh_2].
+        assert written == ["same_event", "fresh_1"]
+
+    def test_posted_event_blocks_writer_spend(self, monkeypatch):
+        from src.orchestrator import common
+
+        bot_state = _fresh_state()
+        bot_state["posted_events"] = ["already_posted_event"]
+        bot_state["_triage_queue"] = [_candidate(event_id="already_posted_event")]
+
+        written = []
+
+        def fake_try_two_bot_draft(bundle, state, score, **kwargs):
+            written.append(kwargs.get("event_id"))
+            return True
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try_two_bot_draft)
+
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []})
+
+        assert written == []
+        assert drafted == 0
+
+    def test_billing_abort_labels_kept_duplicate_copy(self, monkeypatch):
+        """The discarded lower-score copy must not write a slate terminal
+        under the shared event id — the billing abort path is
+        first-write-wins, and a stale duplicate_draft label would mask the
+        kept copy's real outcome."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common, funnel
+
+        bot_state = _fresh_state()
+        bot_state["_triage_queue"] = [
+            _candidate(event_id="billing_trigger", total=95),
+            _candidate(event_id="same_event", total=10),
+            _candidate(event_id="same_event", total=99),
+        ]
+
+        def fake_try(bundle, state, score, *, result_out=None, **kwargs):
+            if result_out is not None:
+                result_out["kill_stage"] = "budget_exhausted"
+            return False
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", fake_try)
+        sink = funnel.new_funnel()
+        common._drain_and_write_triage_queue(bot_state, {"sources": []}, funnel_sink=sink)
+
+        assert sink.get("_slate_terminal", {}).get("same_event") == "billing_abort"
+
+    def test_latch_does_not_mislabel_certain_duplicates(self, monkeypatch):
+        """Free deterministic gates run before billing classification: a
+        pending duplicate on a latched cycle is a duplicate, not billing
+        impact."""
+        monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+        from src.orchestrator import common, funnel
+
+        bot_state = _fresh_state()
+        bot_state["_billing_exhausted_latch"] = True
+        bot_state["drafts"] = [{"event_id": "dupe", "status": "pending"}]
+        bot_state["_triage_queue"] = [
+            _candidate(event_id="dupe", total=95),
+            _candidate(event_id="fresh", total=90),
+        ]
+
+        monkeypatch.setattr("src.orchestrator.common._try_two_bot_draft", lambda *a, **k: True)
+        sink = funnel.new_funnel()
+        drafted = common._drain_and_write_triage_queue(bot_state, {"sources": []}, funnel_sink=sink)
+
+        assert drafted == 0
+        terminals = sink.get("_slate_terminal", {})
+        assert terminals.get("dupe") == "duplicate_draft"
+        assert terminals.get("fresh") == "billing_abort"
+
+
+class TestLifecycleTransitionRedraft:
+    """Lifecycle-transition rejections mean "the NWS warning changed tier
+    or ended", not "editorially killed" — the same event id may honestly
+    re-draft when its tier recurs (PDS → emergency → PDS oscillation).
+    Operator rejections must keep blocking."""
+
+    def _rejected_draft_state(self, reason: str) -> dict:
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "event_id": "nws_vtec:KSGF.TO.W.0074:2026:pds",
+                "status": "rejected",
+                "rejected_reason": reason,
+            }
+        ]
+        return bot_state
+
+    def test_upgrade_rejection_does_not_block_redraft(self):
+        from src.orchestrator.draft_save import can_draft_candidate
+
+        bot_state = self._rejected_draft_state("superseded_by_emergency_upgrade")
+        ok, _ = can_draft_candidate(
+            bot_state, _candidate(event_id="nws_vtec:KSGF.TO.W.0074:2026:pds")
+        )
+        assert ok
+
+    def test_downgrade_rejection_does_not_block_redraft(self):
+        from src.orchestrator.draft_save import can_draft_candidate
+
+        bot_state = self._rejected_draft_state("nws_lifecycle_downgraded")
+        ok, _ = can_draft_candidate(
+            bot_state, _candidate(event_id="nws_vtec:KSGF.TO.W.0074:2026:pds")
+        )
+        assert ok
+
+    def test_ttl_rejection_still_blocks_redraft(self):
+        from src.orchestrator.draft_save import can_draft_candidate
+
+        bot_state = self._rejected_draft_state("staleness_ttl_7d")
+        ok, reason = can_draft_candidate(
+            bot_state, _candidate(event_id="nws_vtec:KSGF.TO.W.0074:2026:pds")
+        )
+        assert not ok
+        assert reason == "duplicate_draft"
+
+    def test_reasonless_operator_rejection_still_blocks_redraft(self):
+        # Dashboard rejections may carry no rejected_reason at all.
+        from src.orchestrator.draft_save import can_draft_candidate
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"event_id": "nws_vtec:KSGF.TO.W.0074:2026:pds", "status": "rejected"}
+        ]
+        ok, reason = can_draft_candidate(
+            bot_state, _candidate(event_id="nws_vtec:KSGF.TO.W.0074:2026:pds")
+        )
+        assert not ok
+        assert reason == "duplicate_draft"
+
+    def test_save_draft_allows_redraft_after_lifecycle_transition(self):
+        # save_draft's own dedup (defense in depth) honors the same
+        # redraftable-transition exception.
+        from src.orchestrator.draft_save import save_draft
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {
+                "event_id": "nws_vtec:KSGF.TO.W.0074:2026:pds",
+                "status": "rejected",
+                "rejected_reason": "superseded_by_emergency_upgrade",
+            }
+        ]
+        saved = save_draft(
+            "Tornado warning re-drafted honestly.",
+            bot_state,
+            "severe_weather",
+            event_id="nws_vtec:KSGF.TO.W.0074:2026:pds",
+        )
+        assert saved
+        statuses = [d.get("status") for d in bot_state["drafts"]]
+        assert statuses.count("pending") == 1
+
+    def test_pending_draft_still_blocks_redraft(self):
+        from src.orchestrator.draft_save import can_draft_candidate
+
+        bot_state = _fresh_state()
+        bot_state["drafts"] = [
+            {"event_id": "nws_vtec:KSGF.TO.W.0074:2026:pds", "status": "pending"}
+        ]
+        ok, reason = can_draft_candidate(
+            bot_state, _candidate(event_id="nws_vtec:KSGF.TO.W.0074:2026:pds")
+        )
+        assert not ok
+        assert reason == "duplicate_draft"
+
+
 class TestTriageExceptionHandling:
 
     def test_triage_exception_falls_through_to_legacy(self, monkeypatch):

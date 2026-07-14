@@ -34,6 +34,29 @@ def _touch_draft(draft: dict) -> None:
     draft["updated_at"] = _utc_now_iso()
 
 
+# Lifecycle-transition rejections mean "the NWS warning changed tier or
+# ended", not "editorially killed" — the same event id may honestly
+# re-draft when its tier recurs (PDS → emergency → PDS oscillation).
+# Operator and TTL rejections keep blocking. Known accepted edge: a
+# dashboard re-rejection that retains a stale automatic reason re-opens
+# redraft — reaching it requires an operator to REAPPROVE a
+# lifecycle-rejected draft first, and reconciliation re-attests every
+# cycle either way.
+_REDRAFTABLE_REJECTIONS = frozenset(
+    {
+        "superseded_by_emergency_upgrade",
+        "nws_lifecycle_downgraded",
+    }
+)
+
+
+def _blocks_redraft(draft: dict) -> bool:
+    return not (
+        draft.get("status") == "rejected"
+        and draft.get("rejected_reason") in _REDRAFTABLE_REJECTIONS
+    )
+
+
 def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     """Pre-writer deterministic gate (Phase C): would ``save_draft`` reject this
     candidate regardless of the not-yet-written copy? If so the refill loop skips
@@ -51,7 +74,9 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
 
     event_id = getattr(candidate, "event_id", "") or ""
     drafts = bot_state.get("drafts", []) or []
-    if event_id and any(d.get("event_id") == event_id for d in drafts):
+    if event_id and any(
+        d.get("event_id") == event_id and _blocks_redraft(d) for d in drafts
+    ):
         return False, "duplicate_draft"
     if event_id and _state.is_duplicate(bot_state, event_id):
         return False, "duplicate_posted"
@@ -140,7 +165,9 @@ def save_draft(
     drafts = bot_state.setdefault("drafts", [])
 
     # Don't duplicate drafts for the same event
-    if event_id and any(d.get("event_id") == event_id for d in drafts):
+    if event_id and any(
+        d.get("event_id") == event_id and _blocks_redraft(d) for d in drafts
+    ):
         print(f"[draft] Already drafted: {event_id}")
         _record_save_rejection(
             bot_state=bot_state,
