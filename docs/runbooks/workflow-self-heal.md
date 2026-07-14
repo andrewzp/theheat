@@ -98,11 +98,15 @@ which pre-creates `.venv` and installs dashboard deps before invoking you.)
 
 The dashboard and the hourly observer watch this beacon so a dead self-heal
 routine is itself surfaced (the meta-guard). Since the economics P0.5 split,
-the workflow's keyless `gate` job writes a heartbeat on EVERY scheduled run
-(green days never invoke you at all — that write is what keeps the beacon
-fresh at $0). You only run when the gate found red, and you must STILL write
-the beacon at the **end of every run you execute** — yours records the real
-`outcome` and `fixed` count, overwriting the gate's provisional `fixed: 0`:
+the workflow's keyless `gate` job writes a heartbeat on EVERY scheduled run:
+`outcome: "ok"` on green days (which never invoke you at all — that write is
+what keeps the beacon fresh at $0), `outcome: "pending"` on red days. You
+only run when the gate found red, and you MUST write the beacon at the
+**end of every run you execute** — yours finalizes the `outcome`
+(`ok`/`escalated`/`error`) and the real `fixed` count. This is not optional
+bookkeeping: the observer alarms on a beacon stuck at `"pending"` for >3h
+(`stuck_pending_heal`), which is exactly how a crashed or failing heal run
+gets surfaced instead of being masked by the next morning's gate heartbeat:
 
 ```bash
 gh variable set SELFHEAL_BEACON --body "$(cat <<JSON

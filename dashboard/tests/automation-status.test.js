@@ -103,6 +103,19 @@ test("self-heal dot: a fresh error heartbeat is yellow", () => {
   assert.equal(dotColorForSelfHeal(beacon, NOW), "yellow")
 })
 
+test("self-heal dot: a fresh pending heartbeat is yellow (heal running)", () => {
+  const beacon = { run_at: "2026-06-17T15:30:00Z", outcome: "pending" } // 30m
+  assert.equal(dotColorForSelfHeal(beacon, NOW), "yellow")
+})
+
+test("self-heal dot: a stuck pending heartbeat is RED before 26h staleness", () => {
+  // Economics P0.5 (codex P1): the heal agent is capped at 45 minutes; a
+  // beacon still pending 4h later means the healer died. Without this the
+  // next morning's gate heartbeat would mask a forever-failing healer.
+  const beacon = { run_at: "2026-06-17T12:00:00Z", outcome: "pending" } // 4h
+  assert.equal(dotColorForSelfHeal(beacon, NOW), "red")
+})
+
 test("self-heal dot: a missing beacon is gray (not configured yet, no rollout noise)", () => {
   assert.equal(dotColorForSelfHeal(null, NOW), "gray")
   assert.equal(dotColorForSelfHeal({}, NOW), "gray")

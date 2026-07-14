@@ -68,46 +68,61 @@ jobs:
             CHECKED=$((CHECKED + 1))
 
             local state
-            state=$(gh api "repos/${REPO}/actions/workflows/${wf}" --jq '.state' 2>/dev/null || echo "fetch_error")
-            if [ "$state" = "fetch_error" ]; then
+            state=$(gh api "repos/${REPO}/actions/workflows/${wf}" --jq '.state' 2>/dev/null) || state="fetch_error"
+            if [ "$state" = "fetch_error" ] || [ -z "$state" ]; then
               echo "::warning::${wf}: could not fetch workflow — counting as red"
-              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return
+              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return 0
             fi
             if [ "$state" != "active" ]; then
-              RED_NAMES="${RED_NAMES},${wf}(disabled:${state})"; return
+              RED_NAMES="${RED_NAMES},${wf}(disabled:${state})"; return 0
             fi
 
+            # exclude_pull_requests=true (codex P1): a fork PR whose branch is
+            # named "main" must not contribute runs that mask a production
+            # failure or hand attacker-controlled logs to the PAT-backed healer.
             local runs_json
-            runs_json=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&per_page=15" 2>/dev/null) || {
+            runs_json=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&per_page=50&exclude_pull_requests=true" 2>/dev/null) || {
               echo "::warning::${wf}: could not list runs — counting as red"
-              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return
+              RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return 0
             }
 
             # A stale schedule is an outage even when no run is marked failed
             # (runbook §1): newest run of ANY status older than the horizon.
+            # Every parse below is guarded: under set -euo pipefail a jq/date
+            # failure must count that workflow red, never abort the gate
+            # (codex P2 — an aborted gate skips the heal job entirely).
             local newest_created
-            newest_created=$(echo "$runs_json" | jq -r '.workflow_runs[0].created_at // empty')
+            newest_created=$(echo "$runs_json" | jq -r '.workflow_runs[0].created_at // empty' 2>/dev/null) || newest_created=""
             if [ -z "$newest_created" ]; then
-              RED_NAMES="${RED_NAMES},${wf}(no_runs)"; return
+              RED_NAMES="${RED_NAMES},${wf}(no_runs)"; return 0
             fi
             local newest_epoch age
-            newest_epoch=$(date -u -d "$newest_created" +%s)
+            newest_epoch=$(date -u -d "$newest_created" +%s 2>/dev/null) || newest_epoch=""
+            if [ -z "$newest_epoch" ]; then
+              RED_NAMES="${RED_NAMES},${wf}(parse_error)"; return 0
+            fi
             age=$((now_epoch - newest_epoch))
             if [ "$age" -gt "$horizon" ]; then
-              RED_NAMES="${RED_NAMES},${wf}(stale:$((age / 3600))h)"; return
+              RED_NAMES="${RED_NAMES},${wf}(stale:$((age / 3600))h)"; return 0
             fi
 
             # Latest DECISIVE run on main: success/failure/timed_out/
             # startup_failure; ignore cancelled + in-progress (runbook §1).
+            # No decisive run in the newest 50 counts RED (codex P1): a hung
+            # run plus concurrency-cancelled retriggers can push the last
+            # decisive failure off-page — silence is not green.
             local conclusion
             conclusion=$(echo "$runs_json" | jq -r '[.workflow_runs[]
               | select(.status == "completed")
               | select(.conclusion == "success" or .conclusion == "failure"
                        or .conclusion == "timed_out" or .conclusion == "startup_failure")
-              ][0].conclusion // "none"')
+              ][0].conclusion // "none"' 2>/dev/null) || conclusion="parse_error"
             case "$conclusion" in
+              success) : ;;
               failure|timed_out|startup_failure)
                 RED_NAMES="${RED_NAMES},${wf}(${conclusion})" ;;
+              *)
+                RED_NAMES="${RED_NAMES},${wf}(no_decisive)" ;;
             esac
           }
 
@@ -132,15 +147,33 @@ jobs:
       - name: Write SELFHEAL_BEACON heartbeat (green days cost $0)
         env:
           GH_TOKEN: ${{ secrets.SELFHEAL_PAT || github.token }}
+          ISSUES_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           set -uo pipefail
           NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          BODY=$(printf '{"run_at":"%s","outcome":"ok","checked":5,"failing":%d,"fixed":0}' "$NOW" "${RED_COUNT}")
+          # Green days finalize as "ok". Red days write "pending" — the heal
+          # agent's end-of-run beacon finalizes the outcome, and the hourly
+          # observer alarms on a beacon stuck "pending" >3h (codex P1: a
+          # fresh gate "ok" every morning would mask a forever-failing heal).
+          OUTCOME="ok"
+          [ "${RED_COUNT}" != "0" ] && OUTCOME="pending"
+          BODY=$(printf '{"run_at":"%s","outcome":"%s","checked":5,"failing":%d,"fixed":0}' "$NOW" "$OUTCOME" "${RED_COUNT}")
           if gh variable set SELFHEAL_BEACON --repo "$REPO" --body "$BODY"; then
             echo "beacon written: $BODY"
           else
-            echo "::warning::SELFHEAL_BEACON write failed (SELFHEAL_PAT missing or expired?) — the hourly observer will flag the stale beacon within 26h."
+            echo "::warning::SELFHEAL_BEACON write failed (SELFHEAL_PAT missing or expired?)"
+            # A missing/never-written beacon is deliberately quiet in the
+            # observer (rollout-noise refusal), so a silent write failure
+            # would stay invisible forever. File ONE deduplicated alarm
+            # issue with the default token (codex P2).
+            TITLE="[workflow-health] self-heal beacon write failing (SELFHEAL_PAT missing/expired?)"
+            EXISTING=$(GH_TOKEN="$ISSUES_TOKEN" gh issue list --repo "$REPO" --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty' 2>/dev/null) || EXISTING=""
+            if [ -z "$EXISTING" ]; then
+              GH_TOKEN="$ISSUES_TOKEN" gh issue create --repo "$REPO" --title "$TITLE" --body "The self-heal gate could not write the SELFHEAL_BEACON repo variable via gh variable set. Check that the SELFHEAL_PAT secret exists and has repo scope + Variables: write. Until fixed, the heartbeat meta-guard is blind to a dead self-heal routine. Auto-filed by the gate job; close after fixing the PAT." || echo "::warning::alarm issue creation also failed"
+            else
+              echo "alarm issue already open: #$EXISTING"
+            fi
           fi
 
   heal:

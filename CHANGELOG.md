@@ -19,6 +19,18 @@ All notable changes to this project will be documented in this file.
   still writes its final beacon (real `outcome` + `fixed`) on runs it executes.
   Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
   (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
+  Round 2 (codex): red days write `outcome:"pending"` and the heal agent
+  finalizes it — the observer + dashboard now alarm on a beacon stuck pending
+  >3h (`stuck_pending_heal` / red dot), so a fresh morning gate heartbeat can
+  never mask a forever-failing healer; the runs query gains
+  `exclude_pull_requests=true` (fork PRs on a branch named `main` must not
+  mask production failures or feed the PAT-backed healer) and `per_page=50`
+  with no-decisive-in-window counting RED; every jq/date parse is guarded so
+  a parse failure counts that workflow red instead of aborting the gate (a
+  dead gate would skip the healer); a failed beacon write files ONE
+  deduplicated alarm issue with the default token (a never-written beacon is
+  deliberately quiet in the observer, so silent write failures were
+  invisible).
 
 ### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
 

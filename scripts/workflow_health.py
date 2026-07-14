@@ -57,6 +57,12 @@ TITLE_PREFIX = "Workflow failing: "
 # Self-heal routine heartbeat (mirrors ROUTINE_BEACON for the daily-plan routine).
 BEACON_VARIABLE = "SELFHEAL_BEACON"
 SELFHEAL_MAX_AGE_H = 26  # daily routine; flag once it is clearly more than a day late.
+# Economics P0.5: on red days the keyless gate writes outcome="pending" and
+# the heal agent finalizes it. The agent job is capped at 45 minutes, so a
+# beacon stuck on "pending" past this window means the healer crashed or
+# failed — without this check a daily gate refresh would mask a perpetually
+# failing healer forever (codex P1).
+SELFHEAL_PENDING_MAX_AGE_H = 3
 SELFHEAL_SOURCE = "_selfheal_liveness"
 
 
@@ -178,6 +184,23 @@ def selfheal_liveness_verdict(
     if run_at is None:
         return None
     age_h = (now - run_at).total_seconds() / 3600.0
+    # Stuck "pending": the gate found red and dispatched the healer, but no
+    # final beacon arrived within the healer's runtime budget — the healer
+    # crashed or failed. Fires well before the 26h staleness rule so a fresh
+    # gate heartbeat every morning can't mask a dead healer (codex P1).
+    if beacon.get("outcome") == "pending" and age_h > SELFHEAL_PENDING_MAX_AGE_H:
+        return {
+            "workflow": SELFHEAL_SOURCE,
+            "file": None,
+            "category": "failing",
+            "conclusion": "stuck_pending_heal",
+            "run_url": None,
+            "run_created_at": None,
+            "consecutive_failures": 0,
+            "last_success_url": None,
+            "last_success_at": beacon.get("run_at"),
+            "age_hours": round(age_h, 1),
+        }
     if age_h <= SELFHEAL_MAX_AGE_H:
         return None
     return {

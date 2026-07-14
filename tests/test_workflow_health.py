@@ -206,6 +206,44 @@ class TestSelfHealLiveness:
     def test_unparseable_beacon_is_quiet(self):
         assert selfheal_liveness_verdict({"run_at": "not-a-date"}, now=NOW) is None
 
+    def test_stuck_pending_beacon_flags_before_staleness(self):
+        """Economics P0.5 (codex P1): on red days the gate writes
+        outcome="pending" and the heal agent finalizes. A beacon stuck
+        pending past the healer's runtime budget means the healer died —
+        it must alarm HOURS before the 26h staleness rule, or the next
+        morning's gate heartbeat masks a forever-failing healer."""
+        from scripts.workflow_health import SELFHEAL_PENDING_MAX_AGE_H
+
+        run_at = NOW.timestamp() - (SELFHEAL_PENDING_MAX_AGE_H + 1) * 3600
+        beacon = {
+            "run_at": datetime.fromtimestamp(run_at, tz=timezone.utc).isoformat(),
+            "outcome": "pending",
+            "failing": 2,
+        }
+        v = selfheal_liveness_verdict(beacon, now=NOW)
+        assert v is not None
+        assert v["conclusion"] == "stuck_pending_heal"
+        assert v["category"] == "failing"
+
+    def test_fresh_pending_beacon_is_quiet(self):
+        """A pending beacon within the healer's runtime budget is normal."""
+        run_at = NOW.timestamp() - 0.5 * 3600
+        beacon = {
+            "run_at": datetime.fromtimestamp(run_at, tz=timezone.utc).isoformat(),
+            "outcome": "pending",
+        }
+        assert selfheal_liveness_verdict(beacon, now=NOW) is None
+
+    def test_finalized_ok_beacon_not_pending_flagged(self):
+        """An ok beacon older than the pending window but fresher than 26h
+        stays quiet — pending rules only bind pending outcomes."""
+        run_at = NOW.timestamp() - 10 * 3600
+        beacon = {
+            "run_at": datetime.fromtimestamp(run_at, tz=timezone.utc).isoformat(),
+            "outcome": "ok",
+        }
+        assert selfheal_liveness_verdict(beacon, now=NOW) is None
+
 
 class TestPlanWorkflowIssueActions:
     # Signature: plan_workflow_issue_actions(failing, recovered, open_issues).
