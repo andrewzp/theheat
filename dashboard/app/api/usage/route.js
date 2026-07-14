@@ -19,6 +19,9 @@ const DEFAULT_BUDGET_USD = 14.0
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 function isValidDayKey(day) {
   if (typeof day !== "string" || !DAY_KEY_RE.test(day)) return false
+  // JS Date accepts year 0000; Python's date.fromisoformat floors at year
+  // 0001 — mirror the stricter side so both readers agree (codex r2).
+  if (day.startsWith("0000-")) return false
   const parsed = new Date(`${day}T00:00:00Z`)
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day
 }
@@ -74,6 +77,7 @@ export async function GET(request) {
     return Response.json({
       // Echo the clock the computation used, so consumers (and tests) can
       // verify the projection deterministically instead of guessing our now.
+      month: monthPrefix.slice(0, 7),
       as_of_day: now.getUTCDate(),
       days_in_month: daysInMonth,
       budget_usd: budgetUsd,

@@ -55,18 +55,18 @@ def test_budget_default_and_override(monkeypatch):
 
 
 def test_levels_at_exact_70_and_90_boundaries(monkeypatch):
-    """codex P2: pin the EXACT >= boundaries — a >=→> regression must fail.
-    $14 budget: 70% = $9.80, 90% = $12.60."""
-    monkeypatch.delenv("THEHEAT_MONTHLY_BUDGET_USD", raising=False)
-    assert budget.budget_status(_state(1.0, days=7), now=NOW)["level"] == "ok"
-    just_under_70 = _state(9.79 / 7, days=7)
-    assert budget.budget_status(just_under_70, now=NOW)["level"] == "ok"
-    exactly_70 = _state(9.80 / 7, days=7)
-    assert budget.budget_status(exactly_70, now=NOW)["level"] == "warn_70"
-    just_under_90 = _state(12.59 / 7, days=7)
-    assert budget.budget_status(just_under_90, now=NOW)["level"] == "warn_70"
-    exactly_90 = _state(12.60 / 7, days=7)
-    assert budget.budget_status(exactly_90, now=NOW)["level"] == "alarm_90"
+    """codex P2 (r2): pin the EXACT >= boundaries with float-identical
+    ratios — a >=→> regression must fail. Budget $16 (a power of two) makes
+    16*0.7/16 recover the literal 0.7 double exactly, so pct == WARN_PCT
+    precisely at the boundary (with $14, 9.80/14 lands a ULP above 0.70 and
+    a > regression would sneak through)."""
+    monkeypatch.setenv("THEHEAT_MONTHLY_BUDGET_USD", "16")
+    assert (16 * 0.7) / 16 == 0.7 and (16 * 0.9) / 16 == 0.9  # test precondition
+    assert budget.budget_status(_state(11.2, days=1), now=NOW)["level"] == "warn_70"
+    assert budget.budget_status(_state(14.4, days=1), now=NOW)["level"] == "alarm_90"
+    # A hair under each boundary stays at the lower level.
+    assert budget.budget_status(_state(11.19, days=1), now=NOW)["level"] == "ok"
+    assert budget.budget_status(_state(14.39, days=1), now=NOW)["level"] == "warn_70"
 
 
 def test_month_sum_rejects_junk_day_keys_and_overflow():

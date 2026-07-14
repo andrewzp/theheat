@@ -56,6 +56,7 @@ function buildUsageState() {
         // neither pollute the MTD sum nor steal 14-day-slice slots.
         [`${monthPrefix}zz`]: { "writer|junk": { usd: 99.0 } },
         "9999-99-00": { "writer|junk": { usd: 99.0 } },
+        "0000-01-01": { "writer|junk": { usd: 99.0 } },
       },
     },
   }
@@ -63,18 +64,26 @@ function buildUsageState() {
 
 test("usage API sums the current month, rejects junk keys, and projects deterministically", async () => {
   setEnv()
-  const { monthPrefix, state } = buildUsageState()
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => gistResponse(state)
+  let monthPrefix, state, payload
   try {
     const { GET } = await importFresh("app/api/usage/route.js")
-    const response = await GET(
-      new Request("http://localhost/api/usage", {
-        headers: { authorization: basicAuth("reviewer", "secret-pass") },
-      }),
-    )
-    assert.equal(response.status, 200)
-    const payload = await response.json()
+    // Retry once if a UTC month rollover lands between the fixture build and
+    // the route's clock read (codex r2): the route echoes its month, so a
+    // mismatch is detectable and the second attempt cannot straddle again.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      ;({ monthPrefix, state } = buildUsageState())
+      globalThis.fetch = async () => gistResponse(state)
+      const response = await GET(
+        new Request("http://localhost/api/usage", {
+          headers: { authorization: basicAuth("reviewer", "secret-pass") },
+        }),
+      )
+      assert.equal(response.status, 200)
+      payload = await response.json()
+      if (`${payload.month}-` === monthPrefix) break
+    }
+    assert.equal(`${payload.month}-`, monthPrefix, "fixture and route month agree")
     // Only this month's VALID days count: 0.35 + 0.25 — neither the 2020 day
     // ($42) nor the two junk keys ($99 each).
     assert.ok(Math.abs(payload.mtd_usd - 0.6) < 1e-9)
@@ -83,7 +92,11 @@ test("usage API sums the current month, rejects junk keys, and projects determin
     const expected = (0.6 / payload.as_of_day) * payload.days_in_month
     assert.ok(Math.abs(payload.projected_usd - Number(expected.toFixed(2))) < 1e-9)
     // Junk keys never reach the recent series.
-    assert.ok(payload.recent_days.every((d) => d.day !== "9999-99-00" && !d.day.endsWith("zz")))
+    assert.ok(
+      payload.recent_days.every(
+        (d) => d.day !== "9999-99-00" && d.day !== "0000-01-01" && !d.day.endsWith("zz"),
+      ),
+    )
     const recent = payload.recent_days.find((d) => d.day === `${monthPrefix}02`)
     assert.ok(recent)
     assert.ok(Math.abs(recent.usd - 0.25) < 1e-9)
