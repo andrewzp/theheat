@@ -11,6 +11,230 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-14 — Daily corpus grading (3 fresh drafts; 5 carry-overs from Jul 9–11, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 8 pending drafts. 5
+of 8 exactly match prior grading cycles (same `draft_id`, score, text): Stevensville, Maryland
+`all_time_high` (A-, Jul 9), Riyadh, Saudi Arabia `dust_event` (B+, Jul 10), Tepee Creek,
+Montana `all_time_high` (B+, Jul 10), interior Alaska `fire` (B+, Jul 11), western Siberia
+3-signal `fire` cluster (B+, Jul 11) — carried over, not re-graded. **3 fresh**, all created
+2026-07-14: Randolph, Utah `all_time_high` (06:17 UTC), Basrah, Iraq `absolute_extreme` (06:19
+UTC), Ontario, Canada `fire` (14:01 UTC). This session found the `daily-plan-current` rolling
+branch itself had NOT gone stale across the 8-day gap since this routine's own docs record
+(Jul 6 → Jul 14 in `main`'s frozen copies) — the branch carries an unbroken run Jul 7–13,
+including the P_tier/P_dust/P9 code fixes (#386, #397) and every intervening cycle's grading.
+Rebased cleanly onto fresh `main` (docs-only, zero conflicts) before appending here.
+
+**Staleness review as of 2026-07-14 ~15:00 UTC:** western Siberia fire cluster
+(`draft_20260711_062452_120`, created Jul11T06:24Z) is now ~80.6h old and still carries
+present-tense "today" in its text ("Three fire signals in the same patch of western Siberia
+today") — the same strict bulk-reject candidate flagged Jul 13 (then ~56.6h), now unactioned
+for a 2nd consecutive cycle. Interior Alaska fire is the same ~80h age but contains no
+date/time language, so it stays clear under the established fire past-tense/no-reference
+carve-out. Stevensville, Riyadh dust_event, and Tepee Creek remain clear under the
+established past-tense-record carve-out regardless of age. Randolph, Basrah, and Ontario are
+all same-day fresh (<9h at grading). **Bulk-reject attempted:** `gh api -X PATCH
+gists/...` requires the `gh` CLI, confirmed absent this session (`which gh` → command not
+found); no gist-write tool is exposed via the GitHub MCP server tools loaded this session
+(repo/PR/issue tools only, no gist scope). Skipped per the hard constraints, logged rather
+than failing the cycle — **46th consecutive skip** (May 13 → Jul 14). Operator should reject
+the western Siberia fire cluster via dashboard.
+
+**Grade distribution (3 fresh drafts):** 1 A- / 1 B+ / 1 C+ / 0 B / 0 D-F.
+**A-rate: 33% (1/3).** Gap from resumption bar: 17 pp.
+
+**Headline finding: P_tier's tracking closes.** Basrah, Iraq `absolute_extreme` ([7], the
+exact signal type this proposal targeted) reaches pending with a clean sentence 1 — "3°C
+above the 47°C threshold where the body's cooling mechanisms begin to fail faster than they
+can recover" — no band-label citation ("Northern Subtropics"/"Northern Subtropical band"),
+just the raw number plus what it physically means to a human body, the same clean form as
+Jul 10's Ahvaz confirmation. This is the **2nd independent post-fix confirmation** on a named
+target type (Ahvaz Jul 10 + Basrah Jul 14), closing P_tier's tracking on the same
+2-independent-clean-cycles bar P_dust and P9 used. Basrah also lands a strong declarative
+P_close ("removes the ceiling") and grades A- — the corpus's 2nd A-grade `absolute_extreme`
+draft, both post-fix. Meanwhile Ontario's fire cluster draft breaks the fire category's
+6-cycle-long P5 self-selection streak: no ecosystem-specific mechanic at all, just a bare
+restatement of the 3-signal count as its close — the multi-fire-cluster framing, when used
+as the system clause on its own (per the writer's own stated reasoning: "the cluster
+enumeration is the system clause, requiring no invented context and no archive"), substitutes
+for reaching toward a mechanism rather than carrying one, unlike Jul 11's western Siberia
+cluster draft which proved the two are compatible.
+
+### A-grade drafts
+
+#### [7] Basrah, Iraq — absolute_extreme — 50.0°C (122.0°F) — **A-**
+
+> *Basrah, Iraq is forecast to hit 50°C (122°F) on July 14 — 3°C above the 47°C threshold
+> where the body's cooling mechanisms begin to fail faster than they can recover. The Gulf's
+> summer heat low pulls dry continental air across the Mesopotamian plain and removes the
+> ceiling.*
+
+**Score:** 85. Created 2026-07-14T06:19:22Z.
+
+Humor lens:
+- **Violation:** 50.0°C forecast, 3°C past the N Sub-tropical absolute-extreme band threshold
+  (47°C) — genuinely extraordinary, and the 8th+ Basra-area `absolute_extreme` corpus draft,
+  so the bar for a fresh angle is high.
+- **Benign?** Yes — flat clinical register throughout, no alarm language.
+- **Setup→Punchline?** Sentence 1 states the margin and reframes the internal 47°C threshold
+  as a physiological fact (when the body's cooling stops keeping up) instead of a
+  classification label. Sentence 2 supplies the causal mechanism (Gulf heat low, dry
+  continental air) and closes with a declarative consequence.
+- **P_tier check:** CLEAN — **2nd post-fix confirmation, closing the tracking** (see
+  Headline finding above and `docs/IMPROVEMENT_PLAN.md`). No "Northern Subtropics"/band-name
+  citation; the 47°C number stands on its own, explained in terms a reader can verify
+  (heat-stress physiology), exactly the distinction PR #386's "DETECTION PLUMBING IS NOT A
+  FACT" rule draws.
+- **P_close check:** POSITIVE. "Removes the ceiling" is a declarative physical-mechanism
+  consequence, same family as Congo fire's "broken convective lid" (Jun 29, A-) and this
+  cycle's own Stevensville "that buffer failed" (Jul 9, A-).
+- **Wodehouse rule?** Clean. No restate-math, no hedge words, no defensive closer.
+
+Not a full A: the physiological gloss on the 47°C threshold, while a clean and correct fix
+of the P_tier violation, still reads slightly explanatory in sentence 1 (a small
+science-teacher quality) rather than landing purely as voice — compare to Ahvaz's Jul 10
+confirmation, which used almost the same construction and was also capped at A-, not A, for
+the same reason. Also the 8th+ corpus draft from this general Iraq/Gulf `absolute_extreme`
+cluster; the text is genuinely fresh, but the region is showing up often enough that
+fatigue is a fair concern independent of this draft's own quality.
+
+### B+-grade drafts
+
+#### [6] Randolph, Utah — all_time_high — 100°F (37.8°C) — **B+**
+
+> *Randolph, Utah hit 100°F (37.8°C) on July 12 — hottest daily maximum in 134 years of
+> records, 3°F above the 1893 mark. At 6,300 feet in the Bear River Range foothills,
+> high-desert elevation normally bleeds off the heat that pools across the Great Basin
+> floor.*
+
+**Score:** 91. Created 2026-07-14T06:17:42Z.
+
+Humor lens:
+- **Violation:** 134-year archive, a 133-year-old record broken by 3°F — elite-tier severity
+  (91), genuinely rare.
+- **P_compound check:** FAILING — the standard archive+margin double-qualifier ("hottest
+  daily maximum in 134 years of records, 3°F above the 1893 mark"), the 10th cycle of this
+  exact construction.
+- **P_close check:** FAILING (implied-consequence form). "High-desert elevation normally
+  bleeds off the heat that pools across the Great Basin floor" states the mechanism as a
+  general norm but never declares that the buffer failed *this time* — the reader has to
+  infer it from the headline number alone, the same gap this proposal has tracked since
+  Jun 7.
+- **Notable — near-verbatim echo of this same city's own prior corpus draft:** Jun 24's
+  Randolph, Utah `monthly_high` (B+) closed with "normally blunts the heat"; this draft, a
+  different record type (`all_time_high`) on the same station 20 days later, closes with
+  "normally bleeds off the heat that pools across the Great Basin floor" — same "normally
+  [verb]s the heat" shape, same implied-not-declared gap, same city. Distinct from A6 (which
+  tracks the *fire*-category permafrost mechanic reused across *different* locations) — this
+  is one location reusing its own construction across different draft *events*. Filed as new
+  awaiting-evidence item **A7** (see `docs/IMPROVEMENT_PLAN.md`); watching for a 2nd location
+  before promoting.
+- **Wodehouse rule?** Clean otherwise — no restate-math, no forced imagery.
+
+Elite score and a real elevation-specific mechanism, but the same P_compound + implied-close
+combination that has produced B/B+ throughout this proposal's 10-cycle history (most
+recently this same combination on Tepee Creek, Jul 10).
+
+### C+-grade drafts
+
+#### [8] Ontario, Canada — fire — 2,374.8 MW (+883.7, +817.1 MW) — **C+**
+
+> *Ontario is burning at 2,374.8 MW — very-high-intensity, satellite-confirmed. Two nearby
+> fires in the same region registered 883.7 and 817.1 MW the same day. Three simultaneous
+> signals above 800 MW in one Canadian afternoon.*
+
+**Score:** 83. Created 2026-07-14T14:01:56Z.
+
+Humor lens:
+- **Violation:** 2,374.8 MW — "power-plant-scale fire intensity" per the score's own reasons
+  — plus two companion fires above 800 MW, a genuinely extraordinary same-day cluster
+  (severity 100, confidence 97%).
+- **Benign?** Yes.
+- **Setup→Punchline?** No real punchline. Sentence 3 ("Three simultaneous signals above 800
+  MW in one Canadian afternoon") restates the count already given in sentences 1–2 rather
+  than landing a mechanism or a consequence.
+- **P_close check:** FAILING/absent — no forest type, no permafrost/peat framing, nothing
+  ecosystem-specific at all. Contrast with this cycle's OTHER multi-fire-cluster carry-over
+  (Jul 11's western Siberia draft, B+), which anchored its own 3-signal cluster in "peat that
+  took centuries to accumulate" — proof the cluster format and a named mechanic are
+  compatible. This is the first cluster-format fire draft in the corpus with zero named
+  mechanic.
+- **P5 check: BREAKS the fire self-selection streak** (6 consecutive confirming cycles, Jun
+  25 → Jul 11) for the first time. The writer's own stated reasoning for this draft ("the
+  cluster enumeration is the system clause, requiring no invented context and no archive")
+  shows it substituted raw enumeration for reaching toward ecosystem specificity — a genuine
+  counter-instance, not a data gap, since fire has reliably self-selected on every other
+  corpus instance including the SAME cycle's other cluster draft.
+- **Wodehouse rule?** No violation in the traditional "trying too hard" sense — but the
+  under-shoot (not reaching for anything at all) is a version of the same failure. The data
+  alone ends up carrying a draft that peer instances in this exact category consistently
+  push further.
+
+Strong signal, weakest close in the fire category to date — the first fire draft in the
+corpus whose second sentence adds no mechanism, incongruity, or consequence, only a repeated
+number.
+
+### Patterns / operational notes
+
+1. **P_tier's tracking closes — headline of this cycle.** Basrah [7] is the 2nd independent
+   post-fix confirmation on a named target type (after Ahvaz, Jul 10), on the same
+   2-independent-clean-cycles bar P_dust and P9 used. All three of this plan's shipped code
+   fixes (#386 ×2, #397) are now empirically CONFIRMED. See `docs/IMPROVEMENT_PLAN.md` for
+   the updated status.
+
+2. **P5 counter-instance: fire's self-selection streak breaks.** Ontario [8] is the first
+   fire draft in the corpus with zero named mechanic — notable because it happens in the
+   SAME cycle as evidence (this cycle's carry-over, western Siberia) that the multi-fire-
+   cluster framing and a real mechanic are NOT mutually exclusive. The gap looks angle-
+   specific (bare enumeration vs. enumeration-plus-mechanism), not category-specific.
+
+3. **New watch-item A7: location-level phrase reuse across different record types.**
+   Randolph, Utah's [6] "normally bleeds off the heat" echoes its own Jun 24 corpus draft's
+   "normally blunts the heat" — same city, same rhetorical shape, 20 days and a different
+   record type apart. Distinct from A6 (fire-category, cross-location). One instance; filed
+   as awaiting-evidence, not yet promoted.
+
+4. **Western Siberia fire cluster staleness — 2nd consecutive cycle unactioned.** Flagged
+   Jul 13 at ~56.6h; today at ~80.6h with "today" still present-tense in the text. Write
+   still unavailable this session (46th consecutive skip). Operator should reject via
+   dashboard independent of any A-rate/posting decision.
+
+### Followups (in priority order)
+
+1. **Operator: reject western Siberia fire cluster manually via dashboard** — now ~80.6h
+   old with present-tense "today" still in the text, unactioned for a 2nd consecutive cycle.
+2. **P_close, P_compound, and the newly-filed A7 remain the highest-leverage unimplemented
+   items** — see `docs/IMPROVEMENT_PLAN.md` for full specs, now that P_tier/P_dust/P9 have
+   all closed their tracking.
+3. **Watch for a 3rd instance of A6's phrase-reuse pattern** (permafrost-carbon fire
+   mechanic) and a 2nd instance of A7's pattern (location-level construction reuse) before
+   promoting either to an active proposal.
+4. **Bot commit note:** `main`'s `VERSION` now reads `0.9.100.0` (was `0.9.97.0` as of the
+   Jul 8 BRIEFING.md snapshot this plan has been citing) — no newer BRIEFING.md handoff doc
+   confirmed on `main` this session; the intervening commits are a new `heat_records_cluster`
+   signal type (#414, default-OFF, manual-approval-only, no instance in today's queue) plus
+   unrelated economics/handoff docs work. Not expected to affect today's grading.
+
+### Numbers
+
+- Pending drafts in queue: 8 (3 fresh; 5 carry-overs, exact match to Jul 9–11's graded
+  batch)
+- Fresh drafts graded: 3
+- A-rate: 33% (1/3)
+- Grade distribution: 1 A- / 1 B+ / 1 C+
+- Active proposals: **P_tier CONFIRMED** (2nd post-fix confirmation, tracking closed);
+  P_close 22nd cycle (1 positive: Basrah; 1 failing: Randolph); P_compound 10th cycle
+  (Randolph, standard double-qualifier); P5 (fire self-selection streak breaks via Ontario,
+  1st counter-instance in 6 cycles); A4/A5/A6 not tested (no target-type draft); new A7 filed
+  (Randolph phrase echo, 1 instance)
+- Staleness bulk-reject: **1 strict candidate** (western Siberia fire cluster, ~80.6h old,
+  present-tense "today" — 2nd consecutive cycle unactioned); write skipped — `gh` CLI absent,
+  no gist-write MCP tool available (46th consecutive skip, May 13 → Jul 14)
+- Operational anomalies: none new this cycle; `main` docs freshness note logged above (not
+  an anomaly, just worth periodic fast-forwarding per the Jul 13 entry's recommendation)
+
+---
+
 ## 2026-07-13 — Daily corpus grading (0 fresh drafts; 5 carry-overs from Jul 12, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 5 pending —
