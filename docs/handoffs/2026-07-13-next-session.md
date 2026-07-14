@@ -26,16 +26,23 @@ writer at samples=2 ~$15–25 + daily unpinned self-heal agent ~$5–15 + evalua
 outspends the product ~2:1). The plan lands at **~$9–12/month (~15–18%)** with the Sonnet voice
 untouched.
 
-**Canonical plan (read it, it has the reasoning + rejected ideas + arithmetic):**
-[docs/superpowers/plans/economics/PLAN-25-PERCENT.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/economics/PLAN-25-PERCENT.md)
+**Canonical plan (SUPERSEDES the 25% plan — reconciled against the external cross-model audit,
+every claim code-verified 2026-07-13):**
+[docs/superpowers/plans/economics/PLAN-ECONOMICS-MASTER-v3.md](/Users/andrewpuschel/Documents/Claude/theheat/docs/superpowers/plans/economics/PLAN-ECONOMICS-MASTER-v3.md)
 
-- **P0** (no quality surface): voice-regression nightly→PR-gated + weekly 10-bundle canary;
-  self-heal keyless red-gate + Haiku pin; `THEHEAT_WRITER_SAMPLES` 2→1; token-usage ledger in state
-  + dashboard/sentinel cost line; Console auto-reload (Andrew).
-- **P1**: evaluator instrument → delete (separate PRs; likely a voice WIN — its virality rubric is
-  a pre-house-voice register with rewrite power).
-- **P2**: Batch API for the writer path (50% off, kills the ~$10/mo cache-rewarm floor).
-- Optional, Andrew-gated: Haiku-for-routine tiering via the pre-writer editorial score.
+- **P0** (stop-loss): `THEHEAT_WRITER_SAMPLES=1` **paired with** `THEHEAT_CRITIC_REVISE_ENABLED=0`
+  (samples=1 alone ACTIVATES the revise rewrite lane — never split the pair); cycle-level billing
+  circuit breaker (07-13 fired 6 paid attempts after the first billing error); `max_retries=0` on
+  the writer's Anthropic client (one retry owner); voice-regression nightly→auto PR gate on
+  prompt/writer paths + 3-fixture daily canary (red on billing = the outage tripwire) + weekly
+  full; self-heal keyless red-gate (gate job writes the beacon) + Haiku pin; ledger MVP in state;
+  Console auto-reload/cap (Andrew).
+- **P1**: ledger dashboard + caps/alerts; DELETE the dead legacy pipeline (evaluator has zero live
+  callers — it was never costing $3/mo; removing it is hygiene, not savings).
+- **P2**: Batch API writer lane (50% off, stacks with caching, kills the ~$10/mo rewarm floor;
+  autoship freshness guard) + structured outputs for the JSON-parse lane.
+- **P3**: frozen replay corpus — the gate for ANY future taste-bearing experiment.
+- Held levers (OFF): Haiku tiering, Sonnet 5 challenger, per-signal prompt compilation.
 
 ## What happened this session (all MERGED unless noted)
 
@@ -97,7 +104,8 @@ untouched.
 > handoff — re-verify, a parallel NWS-fix session (task_9776e21d) may have landed.
 >
 > **READ FIRST, in order:** (1) `docs/handoffs/2026-07-13-next-session.md` — the open threads + full
-> state. (2) `docs/superpowers/plans/economics/PLAN-25-PERCENT.md` — the costed plan with reasoning.
+> state. (2) `docs/superpowers/plans/economics/PLAN-ECONOMICS-MASTER-v3.md` — the reconciled master
+> plan (supersedes PLAN-25-PERCENT.md; every claim code-verified).
 > (3) `docs/superpowers/plans/front-page-parity/INDEX.md` §Standing rules. Also read the memories
 > `reference_theheat_drafting_health` and `feedback_theheat_one_house_voice`.
 >
@@ -105,15 +113,22 @@ untouched.
 > `gh workflow run voice-regression.yml` and confirm green; confirm new drafts appear in the state
 > gist (latest `drafts[*].created_at` past the top-up). If the balance is still empty, STOP and tell me.
 >
-> **THEN — THE OPEN THREAD: execute the 25% plan. Pasting this prompt green-lights P0 and P1.**
-> P0: (a) voice-regression nightly→PR-gated on `src/two_bot/prompts/**` + `writer.py` + weekly
-> 10-bundle canary; (b) self-heal: keyless red-check gate job + pin `--model claude-haiku-4-5`;
-> (c) `gh variable set THEHEAT_WRITER_SAMPLES --body 1 --repo andrewzp/theheat`; (d) token-usage
-> ledger (writer/evaluator `usage` → state per-day counters → dashboard + sentinel `$ est./month`
-> line). P1: evaluator instrumentation PR (log rewrite rate + diffs), then a SEPARATE delete PR only
-> after the data is in (show me the data first). P2 (Batch API writer path) is designed in the plan —
-> build it after P0+P1 land, its own session is fine. The optional Haiku-tiering lever stays OFF
-> unless I say otherwise.
+> **THEN — THE OPEN THREAD: execute the economics MASTER plan (v3). Pasting this prompt
+> green-lights P0 and P1 as specified in PLAN-ECONOMICS-MASTER-v3.md §3.** Headlines, but the plan
+> file is authoritative: P0 = (a) the PAIRED flag flip in one step —
+> `gh variable set THEHEAT_WRITER_SAMPLES --body 1` AND
+> `gh variable set THEHEAT_CRITIC_REVISE_ENABLED --body 0` (never one without the other; samples=1
+> alone activates the critic-REVISE rewrite lane); (b) cycle-level billing circuit breaker in the
+> refill drain + non-refill path; (c) `max_retries=0` on the writer's Anthropic client; (d)
+> voice-regression: nightly cron → auto PR gate on `src/two_bot/prompts/**` + `writer.py`, plus a
+> daily 3-fixture canary that fails RED on billing/auth errors, plus a weekly full run; (e)
+> self-heal: keyless red-gate job that also writes SELFHEAL_BEACON, agent only on red, pinned
+> `--model claude-haiku-4-5`; (f) ledger MVP (per-call `usage` → state). P1 = ledger dashboard +
+> caps/alerts, and the dead-legacy-pipeline DELETE PR (generator/evaluator — zero live callers,
+> verified; no instrumentation needed, it never runs). P2 (Batch API writer lane + structured
+> outputs) is designed in the plan — its own session after 48h of P0 funnel data, show me the
+> drafts/day readout first. Held levers (Haiku tiering, Sonnet 5 challenger, prompt compilation)
+> stay OFF unless I say otherwise.
 >
 > **HOW (binds — INDEX §Standing rules):** the `cd … && PATH=…` prefix on every command; before every
 > push ruff + mypy + `THEHEAT_TIME_TRAVEL_DAYS=90` pytest green; codex-xhigh on any diff touching
