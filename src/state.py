@@ -892,8 +892,8 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
     drain-pruned days on every write (codex P1 — reproduced as 45→46 days).
     """
     from src.two_bot.usage_ledger import (
-        _DAY_KEY_RE,
         LLM_USAGE_RETENTION_DAYS,
+        _is_valid_day_key,
         _valid_agg,
     )
 
@@ -901,9 +901,10 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
     nxt_d = nxt if isinstance(nxt, dict) else {}
     merged: dict = {}
     for day in set(base_d) | set(nxt_d):
-        # Corrupt (non-ISO) day keys are dropped, not merged: a lexicographic
-        # prune over junk keys would evict real days (codex r2 P2).
-        if not (isinstance(day, str) and _DAY_KEY_RE.match(day)):
+        # Corrupt day keys are dropped, not merged — canonical-date validated,
+        # since shape-valid junk ("9999-99-00") sorts above real days and a
+        # lexicographic prune would evict them (codex r2/r3 P2).
+        if not _is_valid_day_key(day):
             continue
         b_day = base_d.get(day)
         n_day = nxt_d.get(day)

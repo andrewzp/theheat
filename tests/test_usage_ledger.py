@@ -64,18 +64,23 @@ def test_corrupt_day_keys_cannot_evict_real_days():
     non-ISO day keys are dropped at drain AND skipped at merge."""
     from src.state import _merge_llm_usage
 
-    state: dict = {"llm_usage": {f"z{i:02d}": {"writer|m": _agg()} for i in range(45)}}
+    # Both non-shaped junk AND shape-valid non-dates (codex r3: "9999-99-00"
+    # matches the regex, sorts above today, and evicted the real bucket).
+    junk_keys = [f"z{i:02d}" for i in range(23)] + [f"9999-99-{i:02d}" for i in range(22)]
+    state: dict = {"llm_usage": {k: {"writer|m": _agg()} for k in junk_keys}}
     usage_ledger.record_usage("writer", "claude-sonnet-4-6", input_tokens=100)
     assert usage_ledger.drain_into_state(state) == 1
     days = list(state["llm_usage"].keys())
-    assert all(day.startswith("20") for day in days), f"junk keys survived: {days[:3]}"
-    assert len(days) == 1, "today's real bucket must survive; junk dropped"
+    assert len(days) == 1, f"today's real bucket must survive; junk dropped: {days[:3]}"
+    assert usage_ledger._is_valid_day_key(days[0])
 
+    # Merge: ISO-shaped junk split across BOTH sides must vanish too.
     merged = _merge_llm_usage(
-        {"zzz": {"writer|m": _agg()}, "2026-07-14": {"writer|m": _agg(calls=2)}},
-        {"2026-07-14": {"writer|m": _agg(calls=3)}},
+        {"zzz": {"writer|m": _agg()}, "9999-99-01": {"writer|m": _agg()},
+         "2026-07-14": {"writer|m": _agg(calls=2)}},
+        {"9999-99-02": {"writer|m": _agg()}, "2026-07-14": {"writer|m": _agg(calls=3)}},
     )
-    assert "zzz" not in merged
+    assert set(merged) == {"2026-07-14"}
     assert merged["2026-07-14"]["writer|m"]["calls"] == 3
 
 
