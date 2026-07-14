@@ -145,6 +145,7 @@ def _draft_kwargs_for(candidate: "TriageCandidateBundle") -> dict:
 
 def _abort_cycle_on_billing(
     bot_state: BotState,
+    current_run: dict | None,
     funnel_sink: dict | None,
     remaining: list,
     aborted_event_id: str,
@@ -177,6 +178,10 @@ def _abort_cycle_on_billing(
         aborted_event_id=aborted_event_id,
         skipped=len(remaining),
     )
+    # Volume telemetry (codex r3 P2): billing-aborted candidates must not be
+    # misread as triage cuts — funnel_rates subtracts this from triage_cut.
+    for skipped_candidate in remaining:
+        _bump_source_field_in_run(current_run, skipped_candidate.source, "billing_aborted")
     if funnel_sink is not None:
         from src.orchestrator import funnel as _funnel
 
@@ -363,7 +368,8 @@ def _refill_drain(
 
         if cand_result.get("kill_stage") == "budget_exhausted":
             _abort_cycle_on_billing(
-                bot_state, funnel_sink, ranked[idx + 1 :], candidate.event_id,
+                bot_state, current_run, funnel_sink,
+                ranked[idx + 1 :], candidate.event_id,
             )
             break
 
@@ -489,6 +495,8 @@ def _drain_and_write_triage_queue(
             f"[triage] billing latch tripped earlier this run; skipping "
             f"drain of {len(queue)} candidate(s)"
         )
+        for candidate in queue:
+            _bump_source_field_in_run(current_run, candidate.source, "billing_aborted")
         if funnel_sink is not None:
             from src.orchestrator import funnel as _funnel
 
@@ -599,7 +607,8 @@ def _drain_and_write_triage_queue(
 
         if cand_result.get("kill_stage") == "budget_exhausted":
             _abort_cycle_on_billing(
-                bot_state, funnel_sink, survivors[idx + 1 :], candidate.event_id,
+                bot_state, current_run, funnel_sink,
+                survivors[idx + 1 :], candidate.event_id,
             )
             break
 

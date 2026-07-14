@@ -165,6 +165,44 @@ test("funnel API surfaces recent shadow slates", async () => {
   }
 })
 
+test("funnel API excludes billing-aborted candidates from triage_cut", async () => {
+  setEnv()
+  const billingState = {
+    ...FUNNEL_STATE,
+    run_history: [
+      runWithFunnel(
+        "r_billing",
+        recentTs,
+        {
+          observed: 50, promoted: 5, triaged_in: 3, triaged_out: 1,
+          billing_aborted: 2, writer_attempted: 1, drafted: 0,
+          passes: {},
+          kills: { budget_exhausted: 1, billing_cycle_abort: 1 },
+        },
+        [],
+      ),
+    ],
+  }
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => gistResponse(billingState)
+  try {
+    const { GET } = await importFresh("app/api/funnel/route.js")
+    const response = await GET(
+      new Request("http://localhost/api/funnel", {
+        headers: { authorization: basicAuth("reviewer", "secret-pass") },
+      }),
+    )
+    const payload = await response.json()
+    // A billing outage must not read as an editorial triage cap.
+    assert.equal(payload.funnel.billing_aborted, 2)
+    assert.equal(payload.rates.billing_aborted, 2)
+    assert.equal(payload.rates.triage_cut, 0)
+    assert.equal(payload.rates.triage_cap_rate, 0)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test("funnel API requires auth", async () => {
   setEnv()
   const originalFetch = globalThis.fetch

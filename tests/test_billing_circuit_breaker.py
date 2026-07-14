@@ -421,6 +421,34 @@ def test_call_with_retries_billing_400_single_attempt(monkeypatch):
     assert len(attempts) == 1, "billing errors must not burn retries"
 
 
+def test_billing_abort_volume_not_misread_as_triage_cut(monkeypatch):
+    """codex r3 P2: billing-aborted candidates must not inflate triage_cut —
+    a billing outage must not read as an editorial cap on the dashboard."""
+    from src.orchestrator import common, funnel
+
+    bot_state = _fresh_state()
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+        _candidate(event_id="e3", total=85),
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+
+    calls: list = []
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+    monkeypatch.setattr(common, "_try_two_bot_draft", _billing_kill_fake(calls))
+
+    sink = funnel.new_funnel()
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=sink)
+    frozen = funnel.finalize_funnel(sink, current_run, bot_state)
+    rates = funnel.funnel_rates(frozen)
+
+    assert frozen["billing_aborted"] == 2
+    assert rates["billing_aborted"] == 2
+    assert rates["triage_cut"] == 0, "billing skips are not editorial cuts"
+
+
 def test_latch_blocks_subsequent_drains_in_same_cycle(monkeypatch):
     """codex r2 P1: in `both` mode the cli runs alerts THEN leaderboard on
     the same bot_state. After the alerts drain aborts on billing, a later
@@ -455,6 +483,9 @@ def test_latch_blocks_subsequent_drains_in_same_cycle(monkeypatch):
     assert drafted == 0
     assert calls == ["e1"], "latched drain must make zero writer calls"
     assert len(_abort_rows(bot_state)) == 1, "no duplicate abort row"
+    # Volume telemetry: 1 skipped by the abort (e2) + 2 by the latched drain.
+    source_entry = current_run["sources"][0]
+    assert source_entry.get("billing_aborted") == 3
 
 
 def test_latch_never_persists_through_state_merge():

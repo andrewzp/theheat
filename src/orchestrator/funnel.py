@@ -47,6 +47,7 @@ _VOLUME_KEYS: tuple[str, ...] = (
     "promoted",
     "triaged_in",
     "triaged_out",
+    "billing_aborted",
     "writer_attempted",
     "drafted",
 )
@@ -251,7 +252,11 @@ def funnel_rates(funnel: dict) -> dict:
 
     triaged_in = int(funnel.get("triaged_in", 0) or 0)
     triaged_out = int(funnel.get("triaged_out", 0) or 0)
-    triage_cut = max(triaged_in - triaged_out, 0)
+    # Billing-aborted candidates were skipped by the circuit breaker, not cut
+    # by triage — excluding them keeps a billing outage from reading as an
+    # editorial cap on the dashboard (codex r3 P2).
+    billing_aborted = int(funnel.get("billing_aborted", 0) or 0)
+    triage_cut = max(triaged_in - triaged_out - billing_aborted, 0)
     writer_attempted = int(funnel.get("writer_attempted", 0) or 0)
     drafted = int(funnel.get("drafted", 0) or 0)
 
@@ -262,6 +267,7 @@ def funnel_rates(funnel: dict) -> dict:
         "stages": stages,
         "triage_cut": triage_cut,
         "triage_cap_rate": (None if triaged_in == 0 else triage_cut / triaged_in),
+        "billing_aborted": billing_aborted,
         "draft_yield": (None if writer_attempted == 0 else drafted / writer_attempted),
     }
 
