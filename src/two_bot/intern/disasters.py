@@ -57,6 +57,7 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
         headline_metric={"label": "event_type", "value": alert.event_type},
         current_facts=[
             {"label": "event_type", "value": alert.event_type},
+            {"label": "emergency_designation", "value": alert.emergency_designation},
             {"label": "area", "value": alert.area},
             {"label": "severity", "value": alert.severity},
             {"label": "max_wind_gust", "value": alert.max_wind_gust},

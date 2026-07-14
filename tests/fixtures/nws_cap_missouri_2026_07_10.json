@@ -1,0 +1,676 @@
+{
+  "_note": "Real CAP alert payloads captured from https://api.weather.gov/alerts?area=MO&start=2026-07-09T12:00:00Z&end=2026-07-11T00:00:00Z on 2026-07-10 \u2014 the southeastern Missouri 1-in-1,000-year flash flood (Iron/Reynolds counties). NWS encodes flash-flood/tornado emergencies as ordinary Warning events plus damage-threat parameters and emergency wording; the event values 'Flash Flood Emergency'/'Tornado Emergency' never appear. Geometry polygons are dropped (unused). The two *_synthetic entries are the real KSGF TO.W.0073 product with damage threat/wording edited on, because no real tornado emergency existed in the capture window. Tests rewrite the 2026-07-09/10/11 timestamps today-relative at load time.",
+  "alerts": {
+    "ff_emergency_initial_alert": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.db43c1c7cd369b84aaf1dfd7f0eb83ad1815beb1.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.db43c1c7cd369b84aaf1dfd7f0eb83ad1815beb1.001.1",
+        "areaDesc": "Iron, MO; Reynolds, MO",
+        "geocode": {
+          "SAME": [
+            "029093",
+            "029179"
+          ],
+          "UGC": [
+            "MOC093",
+            "MOC179"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC093",
+          "https://api.weather.gov/zones/county/MOC179"
+        ],
+        "references": [],
+        "sent": "2026-07-10T04:16:00-05:00",
+        "effective": "2026-07-10T04:16:00-05:00",
+        "onset": "2026-07-10T04:16:00-05:00",
+        "expires": "2026-07-10T10:15:00-05:00",
+        "ends": "2026-07-10T10:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Immediate",
+        "event": "Flash Flood Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS St Louis MO",
+        "headline": "Flash Flood Warning issued July 10 at 4:16AM CDT until July 10 at 10:15AM CDT by NWS St Louis MO",
+        "description": "FFWLSX\n\nThe National Weather Service in St Louis has issued a\n\n* Flash Flood Warning for...\nIron County in southeastern Missouri...\nNortheastern Reynolds County in southeastern Missouri...\n\n* Until 1015 AM CDT.\n\n* At 416 AM CDT, local law enforcement reported thunderstorms\nproducing heavy rain across the warned area. Between 5 and 9 inches\nof rain have fallen. The expected rainfall rate is 1 to 2 inches in\n1 hour. Additional rainfall amounts of 1 to 3 inches are possible\nin the warned area. Flash flooding is ongoing or expected to begin\nshortly.\n\nFLASH FLOOD EMERGENCY for Numerous locations in northwest and\nsouthern Iron County, and northeast Reynolds County. This is a\nPARTICULARLY DANGEROUS SITUATION. SEEK HIGHER GROUND NOW!\n\nHAZARD...Life threatening flash flooding. Thunderstorms producing\nflash flooding.\n\nSOURCE...Law enforcement reported.\n\nIMPACT...This is a PARTICULARLY DANGEROUS SITUATION. SEEK HIGHER\nGROUND NOW! Life threatening flash flooding of low water\ncrossings, small creeks and streams, urban areas,\nhighways, streets and underpasses.\n\n* Some locations that will experience flash flooding include...\nViburnum, Annapolis, Glover, Oates, Bixby, Lesterville, Black,\nHogan, Chloride and Sabula.\n\nThis includes the following State Parks...\nJohnsons Shut-Ins State Park and Taum Sauk Mountain State Park.",
+        "instruction": "Move to higher ground now! This is an extremely dangerous and\nlife-threatening situation. Do not attempt to travel unless you are\nfleeing an area subject to flooding or under an evacuation order.",
+        "response": "Avoid",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "FFWLSX"
+          ],
+          "WMOidentifier": [
+            "WGUS53 KLSX 100916"
+          ],
+          "NWSheadline": [
+            "FLASH FLOOD EMERGENCY FOR NUMEROUS LOCATIONS IN NORTHWEST AND SOUTHERN IRON COUNTY, AND NORTHEAST REYNOLDS COUNTY"
+          ],
+          "flashFloodDetection": [
+            "OBSERVED"
+          ],
+          "flashFloodDamageThreat": [
+            "CATASTROPHIC"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.NEW.KLSX.FF.W.0050.260710T0916Z-260710T1515Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-10T10:15:00-05:00"
+          ],
+          "WEAHandling": [
+            "Imminent Threat"
+          ],
+          "CMAMtext": [
+            "NWS: FLASH FLOOD EMERGENCY this area til 10:15 AM CDT. Avoid flooded areas."
+          ],
+          "CMAMlongtext": [
+            "National Weather Service: A FLASH FLOOD EMERGENCY is in effect for this area until 10:15 AM CDT. This is an extremely dangerous and life-threatening situation. Do not attempt to travel unless you are fleeing an area subject to flooding or under an evacuation order."
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "FFW"
+          ],
+          "NationalWeatherService": [
+            "FFW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.50b06279cfe6d109724e04f0448b769227695c23.001.1",
+        "replacedAt": "2026-07-10T20:16:00-05:00"
+      },
+      "geometry": null
+    },
+    "ff_emergency_update": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.eaa84b05b7b25759b2acc8ccb174b09d34fe288d.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.eaa84b05b7b25759b2acc8ccb174b09d34fe288d.001.1",
+        "areaDesc": "Iron, MO; Reynolds, MO",
+        "geocode": {
+          "SAME": [
+            "029093",
+            "029179"
+          ],
+          "UGC": [
+            "MOC093",
+            "MOC179"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC093",
+          "https://api.weather.gov/zones/county/MOC179"
+        ],
+        "references": [
+          {
+            "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.84aecec2e2d4d12b4d4bc856125036d07e546380.001.1",
+            "identifier": "urn:oid:2.49.0.1.840.0.84aecec2e2d4d12b4d4bc856125036d07e546380.001.1",
+            "sender": "w-nws.webmaster@noaa.gov",
+            "sent": "2026-07-10T09:20:00-05:00"
+          }
+        ],
+        "sent": "2026-07-10T11:42:00-05:00",
+        "effective": "2026-07-10T11:42:00-05:00",
+        "onset": "2026-07-10T11:42:00-05:00",
+        "expires": "2026-07-10T14:15:00-05:00",
+        "ends": "2026-07-10T14:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Immediate",
+        "event": "Flash Flood Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS St Louis MO",
+        "headline": "Flash Flood Warning issued July 10 at 11:42AM CDT until July 10 at 2:15PM CDT by NWS St Louis MO",
+        "description": "FFWLSX\n\nThe National Weather Service in St Louis has extended the\n\n* Flash Flood Warning for...\nIron County in southeastern Missouri...\nNortheastern Reynolds County in southeastern Missouri...\n\n* Until 215 PM CDT.\n\n* At 1142 AM CDT, local law enforcement reported flash flooding\nacross the warned area. Between 6 and 11 inches of rain have\nfallen. Additional rainfall amounts up to 1 inch are possible in\nthe warned area. Flash flooding is already occurring.\n\nFLASH FLOOD EMERGENCY for Numerous locations in northwest and\nsouthern Iron County, and northeast Reynolds County. This is a\nPARTICULARLY DANGEROUS SITUATION. SEEK HIGHER GROUND NOW!\n\nHAZARD...Life threatening flash flooding.\n\nSOURCE...Law enforcement reported.\n\nIMPACT...This is a PARTICULARLY DANGEROUS SITUATION. SEEK HIGHER\nGROUND NOW! Life threatening flash flooding of low water\ncrossings, small creeks and streams, urban areas,\nhighways, streets and underpasses.\n\n* Some locations that will experience flash flooding include...\nViburnum, Annapolis, Glover, Oates, Bixby, Lesterville, Black,\nHogan, Chloride and Sabula.\n\nThis includes the following State Parks...\nJohnsons Shut-Ins State Park and Taum Sauk Mountain State Park.",
+        "instruction": "Move to higher ground now! This is an extremely dangerous and\nlife-threatening situation. Do not attempt to travel unless you are\nfleeing an area subject to flooding or under an evacuation order.\n\nTurn around, don't drown when encountering flooded roads. Most flood\ndeaths occur in vehicles.\n\nBe aware of your surroundings and do not drive on flooded roads.\n\nIn hilly terrain there are hundreds of low water crossings which are\npotentially dangerous in heavy rain. Do not attempt to cross flooded\nroads. Find an alternate route.\n\nFlooding is occurring or is imminent. It is important to know where\nyou are relative to streams, rivers, or creeks which can become\nkillers in heavy rains. Campers and hikers should avoid streams or\ncreeks.",
+        "response": "Avoid",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "FFWLSX"
+          ],
+          "WMOidentifier": [
+            "WGUS53 KLSX 101642"
+          ],
+          "NWSheadline": [
+            "FLASH FLOOD EMERGENCY FOR NUMEROUS LOCATIONS IN NORTHWEST AND SOUTHERN IRON COUNTY, AND NORTHEAST REYNOLDS COUNTY"
+          ],
+          "flashFloodDetection": [
+            "OBSERVED"
+          ],
+          "flashFloodDamageThreat": [
+            "CATASTROPHIC"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.EXT.KLSX.FF.W.0050.000000T0000Z-260710T1915Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-10T14:15:00-05:00"
+          ],
+          "WEAHandling": [
+            "Imminent Threat"
+          ],
+          "expiredReferences": [
+            "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.0d0afb4f60c861fac92dd6b099aa71d98f954196.001.1,2026-07-10T05:44:00-05:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.db43c1c7cd369b84aaf1dfd7f0eb83ad1815beb1.001.1,2026-07-10T04:16:00-05:00"
+          ],
+          "CMAMtext": [
+            "NWS: FLASH FLOOD EMERGENCY this area til 2:15 PM CDT. Avoid flooded areas."
+          ],
+          "CMAMlongtext": [
+            "National Weather Service: A FLASH FLOOD EMERGENCY is in effect for this area until 2:15 PM CDT. This is an extremely dangerous and life-threatening situation. Do not attempt to travel unless you are fleeing an area subject to flooding or under an evacuation order."
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "FFW"
+          ],
+          "NationalWeatherService": [
+            "FFW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.50b06279cfe6d109724e04f0448b769227695c23.001.1",
+        "replacedAt": "2026-07-10T20:16:00-05:00"
+      },
+      "geometry": null
+    },
+    "ff_considerable_update": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f2517ee6079c9047a24e85f73ed9ee3bfcc13a0a.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.f2517ee6079c9047a24e85f73ed9ee3bfcc13a0a.001.1",
+        "areaDesc": "Iron, MO; Reynolds, MO",
+        "geocode": {
+          "SAME": [
+            "029093",
+            "029179"
+          ],
+          "UGC": [
+            "MOC093",
+            "MOC179"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC093",
+          "https://api.weather.gov/zones/county/MOC179"
+        ],
+        "references": [
+          {
+            "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.ef554f120b7eb392b0aa2f41a0ae8ff0ff7ede70.001.1",
+            "identifier": "urn:oid:2.49.0.1.840.0.ef554f120b7eb392b0aa2f41a0ae8ff0ff7ede70.001.1",
+            "sender": "w-nws.webmaster@noaa.gov",
+            "sent": "2026-07-10T13:46:00-05:00"
+          }
+        ],
+        "sent": "2026-07-10T15:47:00-05:00",
+        "effective": "2026-07-10T15:47:00-05:00",
+        "onset": "2026-07-10T15:47:00-05:00",
+        "expires": "2026-07-10T16:15:00-05:00",
+        "ends": "2026-07-10T16:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Immediate",
+        "event": "Flash Flood Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS St Louis MO",
+        "headline": "Flash Flood Warning issued July 10 at 3:47PM CDT until July 10 at 4:15PM CDT by NWS St Louis MO",
+        "description": "At 347 PM CDT, local law enforcement reported flash flooding across\nthe warned area. Between 6 and 11 inches of rain have fallen. Flash\nflooding is already occurring.\n\nHAZARD...Life threatening flash flooding. Heavy rain producing flash\nflooding.\n\nSOURCE...Law enforcement reported.\n\nIMPACT...Life threatening flash flooding of creeks and streams, urban\nareas, highways, streets and underpasses.\n\nSome locations that will experience flash flooding include...\nViburnum, Annapolis, Glover, Oates, Bixby, Lesterville, Black,\nHogan, Chloride and Sabula.\n\nThis includes the following State Parks...\nJohnsons Shut-Ins State Park and Taum Sauk Mountain State Park.",
+        "instruction": "Turn around, don't drown when encountering flooded roads. Most flood\ndeaths occur in vehicles.\n\nBe aware of your surroundings and do not drive on flooded roads.\n\nIn hilly terrain there are hundreds of low water crossings which are\npotentially dangerous in heavy rain. Do not attempt to cross flooded\nroads. Find an alternate route.\n\nFlooding is occurring or is imminent. It is important to know where\nyou are relative to streams, rivers, or creeks which can become\nkillers in heavy rains. Campers and hikers should avoid streams or\ncreeks.",
+        "response": "Avoid",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "FFSLSX"
+          ],
+          "WMOidentifier": [
+            "WGUS73 KLSX 102047"
+          ],
+          "NWSheadline": [
+            "FLASH FLOOD WARNING REMAINS IN EFFECT UNTIL 415 PM CDT THIS AFTERNOON FOR IRON AND NORTHEASTERN REYNOLDS COUNTIES"
+          ],
+          "flashFloodDetection": [
+            "OBSERVED"
+          ],
+          "flashFloodDamageThreat": [
+            "CONSIDERABLE"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM",
+            "CMAS"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.CON.KLSX.FF.W.0050.000000T0000Z-260710T2115Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-10T16:15:00-05:00"
+          ],
+          "expiredReferences": [
+            "w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.eaa84b05b7b25759b2acc8ccb174b09d34fe288d.001.1,2026-07-10T11:42:00-05:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.84aecec2e2d4d12b4d4bc856125036d07e546380.001.1,2026-07-10T09:20:00-05:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.0d0afb4f60c861fac92dd6b099aa71d98f954196.001.1,2026-07-10T05:44:00-05:00 w-nws.webmaster@noaa.gov,urn:oid:2.49.0.1.840.0.db43c1c7cd369b84aaf1dfd7f0eb83ad1815beb1.001.1,2026-07-10T04:16:00-05:00"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "FFS"
+          ],
+          "NationalWeatherService": [
+            "FFW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.50b06279cfe6d109724e04f0448b769227695c23.001.1",
+        "replacedAt": "2026-07-10T20:16:00-05:00"
+      },
+      "geometry": null
+    },
+    "ff_routine_alert": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.5c4ef6a57fbf53ed6bd1f7584d00dfd747a037e6.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.5c4ef6a57fbf53ed6bd1f7584d00dfd747a037e6.001.1",
+        "areaDesc": "Cooper, MO; Howard, MO; Pettis, MO; Saline, MO",
+        "geocode": {
+          "SAME": [
+            "029053",
+            "029089",
+            "029159",
+            "029195"
+          ],
+          "UGC": [
+            "MOC053",
+            "MOC089",
+            "MOC159",
+            "MOC195"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC053",
+          "https://api.weather.gov/zones/county/MOC089",
+          "https://api.weather.gov/zones/county/MOC159",
+          "https://api.weather.gov/zones/county/MOC195"
+        ],
+        "references": [],
+        "sent": "2026-07-10T17:42:00-05:00",
+        "effective": "2026-07-10T17:42:00-05:00",
+        "onset": "2026-07-10T17:42:00-05:00",
+        "expires": "2026-07-10T23:45:00-05:00",
+        "ends": "2026-07-10T23:45:00-05:00",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Severe",
+        "certainty": "Likely",
+        "urgency": "Immediate",
+        "event": "Flash Flood Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Kansas City/Pleasant Hill MO",
+        "headline": "Flash Flood Warning issued July 10 at 5:42PM CDT until July 10 at 11:45PM CDT by NWS Kansas City/Pleasant Hill MO",
+        "description": "FFWEAX\n\nThe National Weather Service in Pleasant Hill has issued a\n\n* Flash Flood Warning for...\nNorthwestern Cooper County in central Missouri...\nSouth Central Howard County in central Missouri...\nNorthern Pettis County in central Missouri...\nSouth Central Saline County in central Missouri...\n\n* Until 1145 PM CDT Friday.\n\n* At 542 PM CDT, Doppler radar indicated thunderstorms producing\nheavy rain across the warned area. Between 1 and 3 inches of rain\nhave fallen. Additional rainfall amounts of 1 to 2 inches are\npossible in the warned area. Flash flooding is ongoing or expected\nto begin shortly.\n\nHAZARD...Flash flooding caused by thunderstorms.\n\nSOURCE...Radar indicated.\n\nIMPACT...Flash flooding of small creeks and streams, urban areas,\nhighways, streets and underpasses as well as other poor\ndrainage and low-lying areas.\n\n* Some locations that will experience flash flooding include...\nBoonville, Pilot Grove, Houstonia, Hughesville, Blackwater and\nLamine.",
+        "instruction": "Turn around, don't drown when encountering flooded roads. Most flood\ndeaths occur in vehicles.",
+        "response": "Avoid",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "FFWEAX"
+          ],
+          "WMOidentifier": [
+            "WGUS53 KEAX 102242"
+          ],
+          "flashFloodDetection": [
+            "RADAR INDICATED"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM",
+            "CMAS"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.NEW.KEAX.FF.W.0050.260710T2242Z-260711T0445Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-10T23:45:00-05:00"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "FFW"
+          ],
+          "NationalWeatherService": [
+            "FFW"
+          ]
+        }
+      },
+      "geometry": null
+    },
+    "tornado_routine_alert": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1",
+        "areaDesc": "Benton, MO",
+        "geocode": {
+          "SAME": [
+            "029015"
+          ],
+          "UGC": [
+            "MOC015"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC015"
+        ],
+        "references": [],
+        "sent": "2026-07-09T20:27:00-05:00",
+        "effective": "2026-07-09T20:27:00-05:00",
+        "onset": "2026-07-09T20:27:00-05:00",
+        "expires": "2026-07-09T21:15:00-05:00",
+        "ends": "2026-07-09T21:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Extreme",
+        "certainty": "Observed",
+        "urgency": "Immediate",
+        "event": "Tornado Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Springfield MO",
+        "headline": "Tornado Warning issued July 9 at 8:27PM CDT until July 9 at 9:15PM CDT by NWS Springfield MO",
+        "description": "TORSGF\n\nThe National Weather Service in Springfield has issued a\n\n* Tornado Warning for...\nNortheastern Benton County in central Missouri...\n\n* Until 915 PM CDT.\n\n* At 827 PM CDT, a severe thunderstorm capable of producing a tornado\nwas located near Cole Camp, or 14 miles northeast of Warsaw, moving\nsoutheast at 15 mph.\n\nHAZARD...Tornado.\n\nSOURCE...Radar indicated rotation.\n\nIMPACT...Flying debris will be dangerous to those caught without\nshelter. Mobile homes will be damaged or destroyed.\nDamage to roofs, windows, and vehicles will occur.  Tree\ndamage is likely.\n\n* Locations impacted include...\nCrockerville and Zora.",
+        "instruction": "TAKE COVER NOW! Move to a basement or an interior room on the lowest\nfloor of a sturdy building. Avoid windows. If you are outdoors, in a\nmobile home, or in a vehicle, move to the closest substantial shelter\nand protect yourself from flying debris.",
+        "response": "Shelter",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "TORSGF"
+          ],
+          "WMOidentifier": [
+            "WFUS53 KSGF 100127"
+          ],
+          "eventMotionDescription": [
+            "2026-07-10T01:27:00-00:00...storm...306DEG...12KT...38.39,-93.19"
+          ],
+          "maxHailSize": [
+            "Up to .75"
+          ],
+          "tornadoDetection": [
+            "RADAR INDICATED"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.NEW.KSGF.TO.W.0073.260710T0127Z-260710T0215Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-09T21:15:00-05:00"
+          ],
+          "WEAHandling": [
+            "Imminent Threat"
+          ],
+          "CMAMtext": [
+            "NWS: TORNADO WARNING in this area til 9:15 PM CDT. Take shelter now. Check media."
+          ],
+          "CMAMlongtext": [
+            "National Weather Service: TORNADO WARNING in this area until 9:15 PM CDT. Take shelter now in a basement or an interior room on the lowest floor of a sturdy building. If you are outdoors, in a mobile home, or in a vehicle, move to the closest substantial shelter and protect yourself from flying debris. Check media."
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "TOR"
+          ],
+          "NationalWeatherService": [
+            "TOW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.bf6a601f6c97d81c8e8bd494d4d7447071acd5fb.001.1",
+        "replacedAt": "2026-07-09T20:52:00-05:00"
+      },
+      "geometry": null
+    },
+    "tornado_emergency_update_synthetic": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1.synthetic-emergency",
+        "areaDesc": "Benton, MO",
+        "geocode": {
+          "SAME": [
+            "029015"
+          ],
+          "UGC": [
+            "MOC015"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC015"
+        ],
+        "references": [],
+        "sent": "2026-07-09T20:27:00-05:00",
+        "effective": "2026-07-09T20:27:00-05:00",
+        "onset": "2026-07-09T20:27:00-05:00",
+        "expires": "2026-07-09T21:15:00-05:00",
+        "ends": "2026-07-09T21:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Update",
+        "category": "Met",
+        "severity": "Extreme",
+        "certainty": "Observed",
+        "urgency": "Immediate",
+        "event": "Tornado Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Springfield MO",
+        "headline": "Tornado Warning issued July 9 at 8:27PM CDT until July 9 at 9:15PM CDT by NWS Springfield MO",
+        "description": "This is a TORNADO EMERGENCY for the surrounding area. TAKE COVER NOW!\n\nTORSGF\n\nThe National Weather Service in Springfield has issued a\n\n* Tornado Warning for...\nNortheastern Benton County in central Missouri...\n\n* Until 915 PM CDT.\n\n* At 827 PM CDT, a severe thunderstorm capable of producing a tornado\nwas located near Cole Camp, or 14 miles northeast of Warsaw, moving\nsoutheast at 15 mph.\n\nHAZARD...Tornado.\n\nSOURCE...Radar indicated rotation.\n\nIMPACT...Flying debris will be dangerous to those caught without\nshelter. Mobile homes will be damaged or destroyed.\nDamage to roofs, windows, and vehicles will occur.  Tree\ndamage is likely.\n\n* Locations impacted include...\nCrockerville and Zora.",
+        "instruction": "TAKE COVER NOW! Move to a basement or an interior room on the lowest\nfloor of a sturdy building. Avoid windows. If you are outdoors, in a\nmobile home, or in a vehicle, move to the closest substantial shelter\nand protect yourself from flying debris.",
+        "response": "Shelter",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "TORSGF"
+          ],
+          "WMOidentifier": [
+            "WFUS53 KSGF 100127"
+          ],
+          "eventMotionDescription": [
+            "2026-07-10T01:27:00-00:00...storm...306DEG...12KT...38.39,-93.19"
+          ],
+          "maxHailSize": [
+            "Up to .75"
+          ],
+          "tornadoDetection": [
+            "RADAR INDICATED"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.CON.KSGF.TO.W.0073.260710T0127Z-260710T0215Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-09T21:15:00-05:00"
+          ],
+          "WEAHandling": [
+            "Imminent Threat"
+          ],
+          "CMAMtext": [
+            "NWS: TORNADO WARNING in this area til 9:15 PM CDT. Take shelter now. Check media."
+          ],
+          "CMAMlongtext": [
+            "National Weather Service: TORNADO WARNING in this area until 9:15 PM CDT. Take shelter now in a basement or an interior room on the lowest floor of a sturdy building. If you are outdoors, in a mobile home, or in a vehicle, move to the closest substantial shelter and protect yourself from flying debris. Check media."
+          ],
+          "tornadoDamageThreat": [
+            "CATASTROPHIC"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "TOR"
+          ],
+          "NationalWeatherService": [
+            "TOW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.bf6a601f6c97d81c8e8bd494d4d7447071acd5fb.001.1",
+        "replacedAt": "2026-07-09T20:52:00-05:00"
+      },
+      "geometry": null
+    },
+    "tornado_pds_alert_synthetic": {
+      "properties": {
+        "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1",
+        "@type": "wx:Alert",
+        "id": "urn:oid:2.49.0.1.840.0.f4ec2b9a717bfe9b8b6086d09ad6c75eddbffb10.001.1.synthetic-pds",
+        "areaDesc": "Benton, MO",
+        "geocode": {
+          "SAME": [
+            "029015"
+          ],
+          "UGC": [
+            "MOC015"
+          ]
+        },
+        "affectedZones": [
+          "https://api.weather.gov/zones/county/MOC015"
+        ],
+        "references": [],
+        "sent": "2026-07-09T20:27:00-05:00",
+        "effective": "2026-07-09T20:27:00-05:00",
+        "onset": "2026-07-09T20:27:00-05:00",
+        "expires": "2026-07-09T21:15:00-05:00",
+        "ends": "2026-07-09T21:15:00-05:00",
+        "status": "Actual",
+        "messageType": "Alert",
+        "category": "Met",
+        "severity": "Extreme",
+        "certainty": "Observed",
+        "urgency": "Immediate",
+        "event": "Tornado Warning",
+        "sender": "w-nws.webmaster@noaa.gov",
+        "senderName": "NWS Springfield MO",
+        "headline": "Tornado Warning issued July 9 at 8:27PM CDT until July 9 at 9:15PM CDT by NWS Springfield MO",
+        "description": "This is a PARTICULARLY DANGEROUS SITUATION. TAKE COVER NOW!\n\nTORSGF\n\nThe National Weather Service in Springfield has issued a\n\n* Tornado Warning for...\nNortheastern Benton County in central Missouri...\n\n* Until 915 PM CDT.\n\n* At 827 PM CDT, a severe thunderstorm capable of producing a tornado\nwas located near Cole Camp, or 14 miles northeast of Warsaw, moving\nsoutheast at 15 mph.\n\nHAZARD...Tornado.\n\nSOURCE...Radar indicated rotation.\n\nIMPACT...Flying debris will be dangerous to those caught without\nshelter. Mobile homes will be damaged or destroyed.\nDamage to roofs, windows, and vehicles will occur.  Tree\ndamage is likely.\n\n* Locations impacted include...\nCrockerville and Zora.",
+        "instruction": "TAKE COVER NOW! Move to a basement or an interior room on the lowest\nfloor of a sturdy building. Avoid windows. If you are outdoors, in a\nmobile home, or in a vehicle, move to the closest substantial shelter\nand protect yourself from flying debris.",
+        "response": "Shelter",
+        "note": null,
+        "parameters": {
+          "AWIPSidentifier": [
+            "TORSGF"
+          ],
+          "WMOidentifier": [
+            "WFUS53 KSGF 100127"
+          ],
+          "eventMotionDescription": [
+            "2026-07-10T01:27:00-00:00...storm...306DEG...12KT...38.39,-93.19"
+          ],
+          "maxHailSize": [
+            "Up to .75"
+          ],
+          "tornadoDetection": [
+            "RADAR INDICATED"
+          ],
+          "BLOCKCHANNEL": [
+            "EAS",
+            "NWEM"
+          ],
+          "EAS-ORG": [
+            "WXR"
+          ],
+          "VTEC": [
+            "/O.NEW.KSGF.TO.W.0074.260710T0127Z-260710T0215Z/"
+          ],
+          "eventEndingTime": [
+            "2026-07-09T21:15:00-05:00"
+          ],
+          "WEAHandling": [
+            "Imminent Threat"
+          ],
+          "CMAMtext": [
+            "NWS: TORNADO WARNING in this area til 9:15 PM CDT. Take shelter now. Check media."
+          ],
+          "CMAMlongtext": [
+            "National Weather Service: TORNADO WARNING in this area until 9:15 PM CDT. Take shelter now in a basement or an interior room on the lowest floor of a sturdy building. If you are outdoors, in a mobile home, or in a vehicle, move to the closest substantial shelter and protect yourself from flying debris. Check media."
+          ],
+          "tornadoDamageThreat": [
+            "CONSIDERABLE"
+          ]
+        },
+        "scope": "Public",
+        "code": "IPAWSv1.0",
+        "language": "en-US",
+        "web": "http://www.weather.gov",
+        "eventCode": {
+          "SAME": [
+            "TOR"
+          ],
+          "NationalWeatherService": [
+            "TOW"
+          ]
+        },
+        "replacedBy": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.bf6a601f6c97d81c8e8bd494d4d7447071acd5fb.001.1",
+        "replacedAt": "2026-07-09T20:52:00-05:00"
+      },
+      "geometry": null
+    }
+  }
+}

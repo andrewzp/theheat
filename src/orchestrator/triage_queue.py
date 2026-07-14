@@ -401,12 +401,18 @@ def _drain_and_write_triage_queue(
 
     Called at the END of run_alerts(), after all source runners have completed.
 
+    In BOTH modes, certain rejections (pending/posted duplicates, dead
+    cooldowns — ``can_draft_candidate``) and same-cycle duplicate event_ids
+    are filtered out before anything else: they would spend a writer call
+    only to be rejected by ``save_draft``, and under triage they would
+    consume capped survivor slots.
+
     When triage is ENABLED (THEHEAT_TRIAGE_ENABLED=1):
         - Calls triage.select_survivors() to rank + cap
         - Only survivors reach _try_two_bot_draft()
 
     When triage is DISABLED (default / kill-switch OFF):
-        - Writes everything in queue order (legacy behaviour)
+        - Writes the remaining queue in order (legacy behaviour)
 
     If triage raises, logs the error and falls through to legacy (writes
     everything). Triage MUST NOT take down the whole cron.
@@ -496,14 +502,72 @@ def _drain_and_write_triage_queue(
 
         _funnel.capture_slate(funnel_sink, queue)
 
-    queued_by_source = Counter(candidate.source for candidate in queue)
-    for source, count in queued_by_source.items():
-        _bump_source_field_in_run(current_run, source, "triaged_in", count)
+    # Certain rejections are filtered BEFORE the billing latch and survivor
+    # selection: they are free deterministic gates (pending/posted
+    # duplicates, dead cooldowns, same-cycle duplicate event_ids), so a
+    # latched cycle must not mislabel them as billing impact, and under
+    # triage they must not consume capped survivor slots (a few persistent-
+    # lifecycle duplicates would otherwise starve every fresh candidate at
+    # the global cap). The in-loop recheck below stays — an earlier
+    # survivor drafting can make a later duplicate certain mid-drain.
+    from src.orchestrator.draft_save import can_draft_candidate
+
+    ctx = _current_suppression_ctx() or {}
+    run_id = ctx.get("run_id")
+
+    def _pre_writer_reject(
+        candidate: "TriageCandidateBundle", reason: str, *, record_terminal: bool = True
+    ) -> None:
+        # $0 LLM — record at the specific certain-rejection stage.
+        _record_downstream_suppression(
+            bot_state=bot_state,
+            source=candidate.source,
+            run_id=run_id,
+            event_id=candidate.event_id,
+            score=candidate.score,
+            kill_stage=reason,
+            kill_reason=f"pre-writer: {reason}",
+            summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
+        )
+        if record_terminal and funnel_sink is not None:
+            from src.orchestrator import funnel as _funnel
+
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, reason)
+
+    # Same-cycle duplicate ids: keep the copy triage would rank highest —
+    # keeping the first-encountered low-score copy could cost the event
+    # its capped slot entirely.
+    best_duplicate: dict[str, "TriageCandidateBundle"] = {}
+    for candidate in queue:
+        if not candidate.event_id:
+            continue
+        best = best_duplicate.get(candidate.event_id)
+        if best is None or (candidate.score.total, candidate.created_at or "") > (
+            best.score.total,
+            best.created_at or "",
+        ):
+            best_duplicate[candidate.event_id] = candidate
+
+    admissible = []
+    for candidate in queue:
+        if candidate.event_id and best_duplicate.get(candidate.event_id) is not candidate:
+            # A discarded copy is not a distinct slate event: recording a
+            # terminal under the shared id would mask the kept copy's real
+            # outcome (the billing abort path is first-write-wins).
+            _pre_writer_reject(candidate, "duplicate_draft", record_terminal=False)
+            continue
+        can_draft, reason = can_draft_candidate(bot_state, candidate)
+        if can_draft:
+            admissible.append(candidate)
+        else:
+            _pre_writer_reject(candidate, reason)
+    queue = admissible
 
     # Cycle-scoped billing latch (codex r2 P1): an earlier drain this run
-    # proved the balance dead; every candidate here would re-discover it at
-    # one paid call each. Skip the whole slate — the first abort row already
-    # tells the story, so no duplicate suppression is recorded.
+    # proved the balance dead; every remaining candidate would re-discover
+    # it at one paid call each. Skip the rest of the slate — the first
+    # abort row already tells the story, so no duplicate suppression is
+    # recorded.
     if state_dict.get("_billing_exhausted_latch"):
         print(
             f"[triage] billing latch tripped earlier this run; skipping "
@@ -511,8 +575,10 @@ def _drain_and_write_triage_queue(
         )
         for candidate in queue:
             _bump_source_field_in_run(current_run, candidate.source, "billing_aborted")
-            # Counted in triaged_in above but never selected/attempted:
-            # pair with triaged_out so the skip doesn't read as a triage cut.
+            # Never selected/attempted: pair triaged_in with triaged_out so
+            # the skip doesn't read as a triage cut. (Self-paired here —
+            # the regular triaged_in count below is never reached.)
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_in")
             _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
         if funnel_sink is not None:
             from src.orchestrator import funnel as _funnel
@@ -524,6 +590,14 @@ def _drain_and_write_triage_queue(
                     funnel_sink, candidate.event_id, "billing_abort"
                 )
         return 0
+
+    # Counted AFTER the pre-filter: rejected candidates never entered the
+    # triage stage, and the funnel derives triage_cap_rate from
+    # triaged_in - triaged_out — counting them would report cap cuts that
+    # never happened.
+    queued_by_source = Counter(candidate.source for candidate in queue)
+    for source, count in queued_by_source.items():
+        _bump_source_field_in_run(current_run, source, "triaged_in", count)
 
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.
@@ -564,6 +638,14 @@ def _drain_and_write_triage_queue(
 
     drafted_count = 0
     for idx, candidate in enumerate(survivors):
+        # Recheck the pre-writer predicate ($0 LLM): an earlier survivor
+        # drafting the same event mid-drain makes this one a certain
+        # duplicate that save_draft would reject after the writer ran.
+        can_draft, reason = can_draft_candidate(bot_state, candidate)
+        if not can_draft:
+            _pre_writer_reject(candidate, reason)
+            continue
+
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         draft_kwargs = {
             "legacy_type": candidate.legacy_type,

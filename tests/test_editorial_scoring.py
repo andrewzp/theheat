@@ -21,6 +21,7 @@ from src.editorial.scoring import (
     score_record_streak,
     score_regional_sst_anomaly,
     score_seasonal_snow_record,
+    score_severe_weather,
     score_simultaneous_records,
     score_snow_extreme,
     score_synthesis_marine_compound,
@@ -492,3 +493,66 @@ class TestCycloneLandThreatScore:
             landmass_country="Mexico",
         )
         assert score.timeliness == 75
+
+
+class TestScoreSevereWeatherEmergency:
+    """NWS emergencies arrive as ordinary Warnings + a designation; scoring
+    must give the promoted Warning the weight the event map intends for the
+    emergency tier (a Flash Flood Warning alone would fall back to 78)."""
+
+    def test_promoted_flash_flood_emergency_scores_like_literal_event(self):
+        promoted = score_severe_weather(
+            "Flash Flood Warning", "Severe",
+            emergency_designation="Flash Flood Emergency",
+        )
+        literal = score_severe_weather("Flash Flood Emergency", "Severe")
+        assert promoted.severity == literal.severity
+        assert promoted.total == literal.total
+
+    def test_promoted_emergency_outscores_plain_warning(self):
+        promoted = score_severe_weather(
+            "Flash Flood Warning", "Severe",
+            emergency_designation="Flash Flood Emergency",
+        )
+        plain = score_severe_weather("Flash Flood Warning", "Severe")
+        assert promoted.total > plain.total
+
+    def test_tornado_emergency_scores_emergency_tier(self):
+        tornado = score_severe_weather(
+            "Tornado Warning", "Extreme",
+            emergency_designation="Tornado Emergency",
+        )
+        flash_flood = score_severe_weather("Flash Flood Emergency", "Extreme")
+        assert tornado.severity == flash_flood.severity
+
+    def test_designation_leads_reasons(self):
+        score = score_severe_weather(
+            "Flash Flood Warning", "Severe",
+            emergency_designation="Flash Flood Emergency",
+        )
+        assert score.reasons[0] == "Flash Flood Emergency"
+        assert "Flash Flood Warning" in score.reasons
+
+    def test_pds_scores_below_emergency_tier(self):
+        pds = score_severe_weather(
+            "Tornado Warning", "Severe",
+            emergency_designation="Particularly Dangerous Situation",
+        )
+        emergency = score_severe_weather(
+            "Tornado Warning", "Severe",
+            emergency_designation="Tornado Emergency",
+        )
+        assert pds.total < emergency.total
+        assert pds.reasons[0] == "Particularly Dangerous Situation"
+
+    def test_empty_designation_is_noop(self):
+        assert score_severe_weather("Blizzard Warning", "Severe") == score_severe_weather(
+            "Blizzard Warning", "Severe", emergency_designation=""
+        )
+
+    def test_literal_emergency_event_does_not_duplicate_reason(self):
+        score = score_severe_weather(
+            "Flash Flood Emergency", "Extreme",
+            emergency_designation="Flash Flood Emergency",
+        )
+        assert score.reasons.count("Flash Flood Emergency") == 1

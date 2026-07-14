@@ -175,6 +175,104 @@ All notable changes to this project will be documented in this file.
   `gh workflow enable <name>`. Restore the crons by reverting this commit.
   Cost while stopped: $0/month (was ~$50–70/month measured).
 
+### NWS severe-weather: promote emergencies riding ordinary Warning products (2026-07-13)
+
+- **Fixes the missed 2026-07-10 Missouri flash-flood emergency** (Iron/Reynolds
+  counties, 1-in-1,000-year rainfall, dozens rescued, zero bot coverage): the
+  `TRACKED_EVENTS` entries "Flash Flood Emergency"/"Tornado Emergency" were dead —
+  the NWS API never emits those `properties.event` values. Emergencies ride
+  ordinary Warning products: event="Flash Flood Warning" with
+  `flashFloodDamageThreat=["CATASTROPHIC"]` and "FLASH FLOOD EMERGENCY" wording
+  (tornado analogous). Verified against api.weather.gov during the event.
+- **Emergency-semantics promotion** (`src/data/nws_alerts.py`): a Flash Flood /
+  Tornado Warning is promoted IFF it carries the CATASTROPHIC damage-threat
+  parameter or emergency wording ("FLASH FLOOD EMERGENCY" / "TORNADO EMERGENCY";
+  "PARTICULARLY DANGEROUS SITUATION" promotes one tier lower), with strict
+  event↔evidence pairing (a TORFF Flash Flood Warning that *mentions* the
+  co-located TORNADO EMERGENCY is not itself one). Routine Warnings stay
+  skipped; the event-name whitelist is unchanged for real event types.
+- **Updates fetched, emergency-only**: emergency upgrades arrive as
+  `messageType=Update` mid-lifecycle (all four MO emergency re-issuances were
+  Updates — a message_type=alert fetch never sees an upgrade). The fetch now
+  includes updates, admitted through the emergency path only; tracked events
+  still enter at initial issuance only.
+- **VTEC-stable dedup**: promoted emergencies dedup on the VTEC event tracking
+  number (`nws_vtec:KLSX.FF.W.0050:2026`) so one emergency drafts once across
+  its whole Alert→Update lifecycle (each CAP message otherwise carries a fresh
+  id). Codex-review hardening: terminated VTEC codes (CAN/UPG/EXP) are skipped
+  when an active code is present; a missing/malformed VTEC degrades to a
+  day-scoped office+event key (never per-message ids); PDS-tier ids carry a
+  `:pds` suffix so a later catastrophic upgrade re-drafts (the upgrade is the
+  news); within-fetch dedup keys designated warnings by lifecycle id, not
+  (event, area); id separators avoid underscores so `two_bot.memory._event_base`
+  does not truncate the key; PDS wording promotes only alongside the event's
+  own damage-threat tag (a routine Warning can *mention* a nearby PDS product).
+- **Fetch narrowed server-side**: the alert+update fetch now filters by event
+  name (`event=` param, verified live: 28 features vs 333 unfiltered), keeping
+  outbreak payloads far from the API's collection limit.
+- **Pre-writer duplicate gate in the default drain**: the default triage drain
+  now applies `can_draft_candidate` before invoking the writer (the refill
+  drain already did), so persistent-lifecycle events — active NWS warnings,
+  promoted emergencies — re-enqueued each cron cycle no longer spend a writer
+  call just to be rejected as pending duplicates by `save_draft`. Certain
+  rejections are filtered *before* capped survivor selection too — at the
+  global cap of 3, a few pending duplicates would otherwise starve every
+  fresh candidate out of the slate.
+- **Third codex round**: lifecycle coalescing is now eviction-aware — every
+  message of an emergency-capable warning participates and the LATEST decides
+  the tier (superseded messages linger in `/alerts/active`, verified live: 37
+  of 224 lifecycles appeared twice+; a downgraded warning must not emit a
+  stale present-tense emergency, and an all-terminal-VTEC expiration product
+  never promotes); message ordering compares UTC instants, not ISO strings
+  (DST); a schema-drifted `parameters` field on a TRACKED feature no longer
+  aborts the whole payload (emergency-capable features fail closed instead —
+  identity loss there strands stale emergencies, as does a lifecycle whose
+  messages mix VTEC and fallback keys); an emergency upgrade retires its own
+  still-pending PDS draft
+  (`superseded_by_emergency_upgrade`) so the stale tier can't crowd the
+  upgrade out of the pending-type cap; the drain pre-filter also coalesces
+  same-cycle duplicate event_ids and counts `triaged_in` after filtering so
+  `triage_cap_rate` reports only real cap cuts.
+- **Second codex round**: emergency wording now matches only the product's own
+  headline surfaces (`NWSheadline` + headline — the narrative can reference a
+  co-located product or announce "the FLASH FLOOD EMERGENCY has ended";
+  NWSheadline is rewritten on downgrade, verified on the MO thread); PDS needs
+  the affirmative "THIS IS A PARTICULARLY DANGEROUS SITUATION" declaration
+  plus the event's own tag; newline-packed multi-VTEC values are split before
+  code selection; one warning's PDS + catastrophic messages in a single payload
+  coalesce to one candidate — the latest message decides the tier, ties go
+  to the higher tier (superseded by the round-4/5 eviction-aware model);
+  a PDS downgrade of an already-surfaced emergency is skipped (tier moves are
+  monotonic upward).
+- **Scoring + writer honesty**: `score_severe_weather` scores the promoted
+  designation at the emergency tier the event map intended (96; PDS 92) and
+  leads its reasons with it; `SevereWeatherAlert.emergency_designation` flows
+  into the story bundle and review context so the writer carries the
+  designation honestly (event_type stays the literal NWS value).
+- Tests: real captured CAP payloads from the MO event
+  (`tests/fixtures/nws_cap_missouri_2026_07_10.json`, timestamps rewritten
+  today-relative at load); 70+ new tests across the branch after five
+  codex-xhigh hardening rounds.
+- **Fourth/fifth codex rounds — lifecycle reconciliation**: every pending
+  designated-tier draft must be re-attested by the current fetch at ITS
+  tier. `fetch_alerts(lifecycle_out=...)` reports each emergency-capable
+  lifecycle's CURRENT tier; the runner rejects pending drafts whose warning
+  changed tier or ended — downgrade/cancellation/expiry
+  (`nws_lifecycle_downgraded`) and upgrade
+  (`superseded_by_emergency_upgrade`, freeing the pending-type-cap slot the
+  replacement needs BEFORE admission). Both reasons are **redraftable**
+  (`draft_save._REDRAFTABLE_REJECTIONS`): they mean "the warning changed",
+  not "editorially killed", so a recurring tier (PDS → emergency → PDS)
+  drafts honestly again while operator/TTL rejections keep blocking. The
+  posted-emergency-only monotonic skip replaces the pending-inclusive one.
+  Census guards: a featureless 200 raises (schema drift, not a quiet day);
+  a paginated payload sets `CENSUS_INCOMPLETE_KEY` and reconciliation is
+  skipped; `lifecycle_out` fills only after freshness validation.
+  Same-cycle duplicate coalescing keeps the best-scored copy; discarded
+  copies leave no slate terminal (the billing abort path is
+  first-write-wins); the drain pre-filter runs before the billing latch so
+  duplicates are never mislabeled as billing impact.
+
 ### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)
 
 - **(voice, prompt-only)**: the `## Heat records cluster bundles` section of

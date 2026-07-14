@@ -1534,7 +1534,7 @@ class TestRunAlerts:
         monkeypatch.setattr(main.methane, "detect_milestone", lambda readings, **kwargs: None)
         monkeypatch.setattr(main.coral_dhw, "fetch_coral_dhw", lambda: [])
         monkeypatch.setattr(main.coral_dhw, "detect_dhw_thresholds", lambda readings, last_tiers=None: [])
-        monkeypatch.setattr(main.nws_alerts, "fetch_alerts", lambda: [])
+        monkeypatch.setattr(main.nws_alerts, "fetch_alerts", lambda **kwargs: [])
         monkeypatch.setattr(main.gdacs, "fetch_disasters", lambda min_severity=None: [])
         monkeypatch.setattr(main.copernicus_ems, "fetch_active_flood_activations", lambda: [])
         monkeypatch.setattr(main.copernicus_ems, "detect_flood_events", lambda activations, tiers=None: [])
