@@ -14,7 +14,12 @@ All notable changes to this project will be documented in this file.
   fired after the first "credit balance is too low" error because each queued
   candidate independently re-discovered the same dead balance. The drain now always
   requests `result_out`, so the breaker sees kill stages even with funnel telemetry
-  off.
+  off. The abort also trips a cycle-scoped latch (transient `_billing_exhausted_latch`
+  state key, dropped by `_merge_state` on write): in `both` mode the leaderboard
+  drain after alerts skips its slate instead of re-probing the dead balance (codex
+  r2 P1). Suppression append+trim is now guarded by one shared lock — the cap trim
+  replaces the list object, so unsynchronized worker-thread appends could drop rows
+  (codex r2 P2).
 - **(writer)**: `max_retries=0` on the Anthropic client — `call_with_retries`
   (3 attempts, billing-aware) is the single transport-retry owner; the SDK default
   (2) silently stacked a second transport layer under it (3 SDK attempts × 3 outer

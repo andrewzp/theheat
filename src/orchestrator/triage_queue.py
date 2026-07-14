@@ -165,6 +165,13 @@ def _abort_cycle_on_billing(
         f"{aborted_event_id or 'unknown'}; aborting cycle "
         f"({len(remaining)} queued candidate(s) skipped)"
     )
+    # Trip the cycle-scoped latch (codex r2 P1): later drains in this SAME
+    # cli run (leaderboard after alerts in `both` mode) skip their slates
+    # instead of re-probing the dead balance at one paid call each. A
+    # transient '_' key: _merge_state drops non-MERGE_SPEC keys on write and
+    # sqlite persists only listed keys, so the latch lives exactly one
+    # process — the next cron re-probes with a single attempt by design.
+    cast(dict, bot_state)["_billing_exhausted_latch"] = True
     _record_billing_cycle_abort_suppression(
         bot_state,
         aborted_event_id=aborted_event_id,
@@ -472,6 +479,26 @@ def _drain_and_write_triage_queue(
     queued_by_source = Counter(candidate.source for candidate in queue)
     for source, count in queued_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_in", count)
+
+    # Cycle-scoped billing latch (codex r2 P1): an earlier drain this run
+    # proved the balance dead; every candidate here would re-discover it at
+    # one paid call each. Skip the whole slate — the first abort row already
+    # tells the story, so no duplicate suppression is recorded.
+    if state_dict.get("_billing_exhausted_latch"):
+        print(
+            f"[triage] billing latch tripped earlier this run; skipping "
+            f"drain of {len(queue)} candidate(s)"
+        )
+        if funnel_sink is not None:
+            from src.orchestrator import funnel as _funnel
+
+            for candidate in queue:
+                if candidate.event_id in funnel_sink.get("_slate_terminal", {}):
+                    continue
+                _funnel.record_slate_terminal(
+                    funnel_sink, candidate.event_id, "billing_abort"
+                )
+        return 0
 
     # Phase C: generate-and-select refill loop (flag default OFF). Owns its own
     # ranking, success-aware caps, pre-writer predicate and stop condition.

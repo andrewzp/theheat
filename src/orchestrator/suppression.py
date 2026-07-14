@@ -6,11 +6,18 @@ import contextlib
 import contextvars
 import os
 import secrets
+import threading
 
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.common import _utc_now_iso
 from src.state import MAX_SUPPRESSIONS
 from src.state_schema import BotState
+
+# One lock for EVERY suppressions append+trim (codex r2 P2): source runners
+# write from worker threads, and the cap trim REPLACES the list object — an
+# unsynchronized appender still holding the old reference loses its row at
+# MAX_SUPPRESSIONS. Shared by triage.py's cap-suppression writer too.
+_SUPPRESSIONS_LOCK = threading.Lock()
 
 
 _CURRENT_SUPPRESSION_CTX: dict | None = None
@@ -112,10 +119,9 @@ def _record_suppression(
     summary: str | None,
 ) -> None:
     """Append an editorial-gate near-miss suppression record (stage=score_gate)."""
-    suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
-    suppressions.append({
+    row = {
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
         "run_id": run_id,
@@ -127,9 +133,12 @@ def _record_suppression(
         "threshold": _score_int(score, "threshold"),
         "reasons": _score_reasons(score),
         "summary": summary,
-    })
-    if len(suppressions) > MAX_SUPPRESSIONS:
-        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    }
+    with _SUPPRESSIONS_LOCK:
+        suppressions = bot_state.setdefault("suppressions", [])
+        suppressions.append(row)
+        if len(suppressions) > MAX_SUPPRESSIONS:
+            bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
     from src.orchestrator import funnel as _funnel
 
     _funnel.record_kill(bot_state, "score_gate")
@@ -152,7 +161,6 @@ def _record_downstream_suppression(
     from score-gate near-misses; ``score_total`` is preserved so the
     dashboard can show "passing score 80, killed in writer".
     """
-    suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
     # Bet A A2: a rescued score's provenance must survive a downstream kill —
@@ -165,7 +173,7 @@ def _record_downstream_suppression(
     reasons.extend(
         r for r in _score_reasons(score) if r.startswith("news_boost=")
     )
-    suppressions.append({
+    row = {
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
         "run_id": run_id,
@@ -177,9 +185,12 @@ def _record_downstream_suppression(
         "threshold": _score_int(score, "threshold"),
         "reasons": reasons,
         "summary": summary,
-    })
-    if len(suppressions) > MAX_SUPPRESSIONS:
-        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    }
+    with _SUPPRESSIONS_LOCK:
+        suppressions = bot_state.setdefault("suppressions", [])
+        suppressions.append(row)
+        if len(suppressions) > MAX_SUPPRESSIONS:
+            bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
     from src.orchestrator import funnel as _funnel
 
     _funnel.record_kill(bot_state, kill_stage)
@@ -220,10 +231,9 @@ def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None
     the suppression ledger and the source-health dashboard surface the
     failure.
     """
-    suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
-    suppressions.append({
+    row = {
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
         "run_id": None,
@@ -235,9 +245,12 @@ def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None
         "threshold": 0,
         "reasons": [err_text] if err_text else [],
         "summary": None,
-    })
-    if len(suppressions) > MAX_SUPPRESSIONS:
-        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    }
+    with _SUPPRESSIONS_LOCK:
+        suppressions = bot_state.setdefault("suppressions", [])
+        suppressions.append(row)
+        if len(suppressions) > MAX_SUPPRESSIONS:
+            bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
     from src.orchestrator import funnel as _funnel
 
     _funnel.record_kill(bot_state, "triage_error")
@@ -258,10 +271,9 @@ def _record_billing_cycle_abort_suppression(
     motivating incident (2026-07-13T21:02Z) fired six paid attempts after the
     first "credit balance is too low" error because nothing owned the cycle.
     """
-    suppressions = bot_state.setdefault("suppressions", [])
     ts = _utc_now_iso()
     rand = secrets.token_hex(4)
-    suppressions.append({
+    row = {
         "id": f"supp_{ts}_{rand}",
         "ts": ts,
         "run_id": None,
@@ -277,9 +289,12 @@ def _record_billing_cycle_abort_suppression(
             f"{skipped} queued candidate(s) skipped"
         ],
         "summary": None,
-    })
-    if len(suppressions) > MAX_SUPPRESSIONS:
-        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    }
+    with _SUPPRESSIONS_LOCK:
+        suppressions = bot_state.setdefault("suppressions", [])
+        suppressions.append(row)
+        if len(suppressions) > MAX_SUPPRESSIONS:
+            bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
     from src.orchestrator import funnel as _funnel
 
     _funnel.record_kill(bot_state, "billing_cycle_abort")

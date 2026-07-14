@@ -334,7 +334,16 @@ def test_abort_suppression_row_shape_and_cap(monkeypatch):
 
     common._drain_and_write_triage_queue(bot_state, current_run)
 
-    assert len(bot_state["suppressions"]) <= MAX_SUPPRESSIONS
+    suppressions = bot_state["suppressions"]
+    assert len(suppressions) == MAX_SUPPRESSIONS, (
+        "append at cap must evict to exactly the cap, not truncate further"
+    )
+    ids = [r["id"] for r in suppressions]
+    assert "supp_old_0" not in ids, "the OLDEST row is the one evicted"
+    assert ids[0] == "supp_old_1", "eviction preserves order and recent history"
+    assert suppressions[-1]["stage"] == "billing_cycle_abort", (
+        "the abort row lands newest"
+    )
     rows = _abort_rows(bot_state)
     assert len(rows) == 1
     row = rows[0]
@@ -410,6 +419,55 @@ def test_call_with_retries_billing_400_single_attempt(monkeypatch):
     with pytest.raises(BudgetExhaustedError):
         _call_anthropic("user prompt")
     assert len(attempts) == 1, "billing errors must not burn retries"
+
+
+def test_latch_blocks_subsequent_drains_in_same_cycle(monkeypatch):
+    """codex r2 P1: in `both` mode the cli runs alerts THEN leaderboard on
+    the same bot_state. After the alerts drain aborts on billing, a later
+    drain must make ZERO writer calls and record ZERO additional abort rows
+    — the latch is a transient state key scoped to this process's cycle."""
+    from src.orchestrator import common
+
+    bot_state = _fresh_state()
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+
+    calls: list = []
+    monkeypatch.setattr(common, "_try_two_bot_draft", _billing_kill_fake(calls))
+
+    # Drain 1 (alerts): trips the breaker + the latch.
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+    ]
+    common._drain_and_write_triage_queue(bot_state, current_run)
+    assert calls == ["e1"]
+    assert bot_state.get("_billing_exhausted_latch") is True
+
+    # Drain 2 (leaderboard, same bot_state): must not re-probe the balance.
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e3", total=95),
+        _candidate(event_id="e4", total=88),
+    ]
+    drafted = common._drain_and_write_triage_queue(bot_state, current_run)
+
+    assert drafted == 0
+    assert calls == ["e1"], "latched drain must make zero writer calls"
+    assert len(_abort_rows(bot_state)) == 1, "no duplicate abort row"
+
+
+def test_latch_never_persists_through_state_merge():
+    """The latch must die with the process: _merge_state drops keys outside
+    MERGE_SPEC, so the next cron re-probes billing with one fresh attempt."""
+    from src.state import _merge_state
+
+    bot_state = _fresh_state()
+    bot_state["_billing_exhausted_latch"] = True
+
+    merged = _merge_state(bot_state, bot_state)
+
+    assert "_billing_exhausted_latch" not in merged
 
 
 def test_writer_anthropic_client_owns_zero_transport_retries(monkeypatch):
