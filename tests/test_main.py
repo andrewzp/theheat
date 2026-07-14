@@ -185,6 +185,8 @@ class TestCycloneAlerts:
             event_id="nhc_tier_al012026_12_cat4",
             review_context=ANY,
             cooldown_exempt=True,
+            # The drain always requests result_out now (billing circuit breaker).
+            result_out=ANY,
         )
         source = next(item for item in current_run["sources"] if item["source"] == "nhc")
         assert source["observed"] == 1
@@ -1058,6 +1060,8 @@ class TestCH4Alerts:
             legacy_type="ch4_milestone",
             event_id="ch4_milestone_1940ppb",
             review_context=ANY,
+            # The drain always requests result_out now (billing circuit breaker).
+            result_out=ANY,
         )
         assert state["ch4_last_milestone"] == 1940
         assert state["ch4_annual_count"][str(date.today().year)] == 1

@@ -20,6 +20,33 @@ All notable changes to this project will be documented in this file.
   Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
   (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
 
+### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
+
+- **(orchestrator)**: cycle-level billing circuit breaker in both triage drain paths
+  (`_refill_drain` + the legacy loop): the first `kill_stage == "budget_exhausted"`
+  aborts the remaining slate, records ONE `billing_cycle_abort` suppression row, and
+  marks the never-attempted remainder `billing_abort` in the funnel slate view.
+  Motivated by 2026-07-13T21:02Z: six paid writer attempts (six distinct request_ids)
+  fired after the first "credit balance is too low" error because each queued
+  candidate independently re-discovered the same dead balance. The drain now always
+  requests `result_out`, so the breaker sees kill stages even with funnel telemetry
+  off. The abort also trips a cycle-scoped latch (transient `_billing_exhausted_latch`
+  state key, dropped by `_merge_state` on write): in `both` mode the leaderboard
+  drain after alerts skips its slate instead of re-probing the dead balance (codex
+  r2 P1). Suppression append+trim is now guarded by one shared lock — the cap trim
+  replaces the list object, so unsynchronized worker-thread appends could drop rows
+  (codex r2 P2).
+- **(writer)**: `max_retries=0` on the Anthropic client — `call_with_retries`
+  (3 attempts, billing-aware) is the single transport-retry owner; the SDK default
+  (2) silently stacked a second transport layer under it (3 SDK attempts × 3 outer
+  attempts = up to 9 transport calls per sample). Also corrected the stale
+  "~5,700 tokens" prompt-cache note to the measured ~15.1k tokens (2026-07-13).
+- **(telemetry)**: new `billing_aborted` funnel volume (python `funnel_rates` +
+  dashboard mirror + rollup) so billing-skipped candidates are visible and never
+  misread as editorial `triage_cut` (codex r3/r4).
+
+### Newsworthiness tests — single-clock (UTC) date derivation (2026-07-14)
+
 - **(tests-only)**: `test_record_news_events_stamps_and_merges` asserted the
   UTC-stamped `retrieved_at` against machine-local `date.today()` — the two
   disagree for hours around local midnight (surfaced as the one full-suite

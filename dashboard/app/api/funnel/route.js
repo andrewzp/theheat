@@ -19,6 +19,7 @@ const VOLUME_KEYS = [
   "promoted",
   "triaged_in",
   "triaged_out",
+  "billing_aborted",
   "writer_attempted",
   "drafted",
 ]
@@ -83,6 +84,9 @@ function funnelRates(funnel) {
   }
   const triagedIn = Number(funnel.triaged_in) || 0
   const triagedOut = Number(funnel.triaged_out) || 0
+  // billing_aborted is informational — billing-skipped candidates are already
+  // counted in triaged_out at bump time. Mirror of funnel.py funnel_rates.
+  const billingAborted = Number(funnel.billing_aborted) || 0
   const triageCut = Math.max(triagedIn - triagedOut, 0)
   const writerAttempted = Number(funnel.writer_attempted) || 0
   const drafted = Number(funnel.drafted) || 0
@@ -93,6 +97,7 @@ function funnelRates(funnel) {
     stages,
     triage_cut: triageCut,
     triage_cap_rate: triagedIn === 0 ? null : triageCut / triagedIn,
+    billing_aborted: billingAborted,
     draft_yield: writerAttempted === 0 ? null : drafted / writerAttempted,
   }
 }
