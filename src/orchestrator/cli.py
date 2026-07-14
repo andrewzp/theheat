@@ -7,6 +7,7 @@ import sys
 from collections.abc import Callable
 
 from src import credentials, state
+from src.orchestrator import budget
 from src.state_schema import BotState
 from src.two_bot import usage_ledger
 
@@ -57,6 +58,15 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     drained = usage_ledger.drain_into_state(bot_state)
     if drained:
         print(f"[main] usage ledger: {drained} call(s) recorded")
+
+    # Economics P1.1: budget watch — surfaces 70%/90% alerts through the
+    # source-health lane (sentinel auto-issues + dashboard). Never raises.
+    budget_state = budget.record_budget_health(bot_state)
+    print(
+        f"[main] budget: est ${budget_state['mtd_usd']:.2f} MTD "
+        f"({budget_state['pct_of_budget']:.0%} of ${budget_state['budget_usd']:.0f}), "
+        f"projected ${budget_state['projected_usd']:.2f}/mo [{budget_state['level']}]"
+    )
 
     if not state.write_state(bot_state):
         print("[main] WARNING: State write failed, retrying...")
