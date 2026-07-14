@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+import pytest
+
 from src.editorial.scoring._shared import EditorialScore
 from src.state import DEFAULT_STATE
 from src.two_bot.types import StoryBundle, TriageCandidateBundle
@@ -207,6 +209,207 @@ def test_successful_drafts_do_not_trip_breaker(monkeypatch):
     assert drafted == 2
     assert calls == ["e1", "e2"]
     assert _abort_rows(bot_state) == []
+
+
+def test_billing_abort_never_overwrites_resolved_terminals(monkeypatch):
+    """codex P1 regression: duplicate event_ids are expected in the ranked
+    queue — a candidate that already resolved (drafted) must keep its true
+    terminal when the abort marks the skipped remainder."""
+    from src.orchestrator import common, funnel
+
+    bot_state = _fresh_state()
+    # e1 drafts; e2 billing-kills; the queue carries a DUPLICATE e1 after e2.
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+        _candidate(event_id="e1", total=85),
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+
+    def fake_try(bundle, state, score, *, result_out=None, **kwargs):
+        if bundle.event_id == "e1":
+            if result_out is not None:
+                result_out["stage_outcomes"] = {"writer": "pass"}
+            return True
+        if result_out is not None:
+            result_out["kill_stage"] = "budget_exhausted"
+            result_out["kill_reason"] = "credit balance is too low"
+        return False
+
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
+    monkeypatch.setattr(common, "_try_two_bot_draft", fake_try)
+
+    sink = funnel.new_funnel()
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=sink)
+
+    terminals = sink.get("_slate_terminal", {})
+    assert terminals.get("e1") == "drafted", (
+        "a resolved terminal must survive the billing abort"
+    )
+    assert terminals.get("e2") == "budget_exhausted"
+
+
+def test_legacy_drain_non_billing_kills_do_not_trip_breaker(monkeypatch):
+    """codex P2: the legacy loop's breaker condition is duplicated code — pin
+    that ordinary kills keep it walking there too."""
+    from src.orchestrator import common
+
+    bot_state = _fresh_state()
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+        _candidate(event_id="e3", total=85),
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+
+    calls: list = []
+
+    def honesty_kill_fake(bundle, state, score, *, result_out=None, **kwargs):
+        calls.append(bundle.event_id)
+        if result_out is not None:
+            result_out["kill_stage"] = "honesty_gate"
+            result_out["kill_reason"] = "forbidden claim: 'heat dome'"
+        return False
+
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setattr(common, "_try_two_bot_draft", honesty_kill_fake)
+
+    common._drain_and_write_triage_queue(bot_state, current_run)
+
+    assert calls == ["e1", "e2", "e3"]
+    assert _abort_rows(bot_state) == []
+
+
+def test_legacy_drain_marks_funnel_terminals_on_abort(monkeypatch):
+    """codex P2: funnel-terminal marking on abort, legacy path."""
+    from src.orchestrator import common, funnel
+
+    bot_state = _fresh_state()
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+        _candidate(event_id="e3", total=85),
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+
+    calls: list = []
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setattr(common, "_try_two_bot_draft", _billing_kill_fake(calls))
+
+    sink = funnel.new_funnel()
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=sink)
+
+    assert calls == ["e1"]
+    terminals = sink.get("_slate_terminal", {})
+    assert terminals.get("e1") == "budget_exhausted"
+    assert terminals.get("e2") == "billing_abort"
+    assert terminals.get("e3") == "billing_abort"
+
+
+def test_abort_suppression_row_shape_and_cap(monkeypatch):
+    """codex P2: pin the row shape and the MAX_SUPPRESSIONS eviction so a
+    malformed or unbounded implementation cannot pass."""
+    from src.orchestrator import common
+    from src.state import MAX_SUPPRESSIONS
+
+    bot_state = _fresh_state()
+    # Pre-fill the ledger to the cap: the abort append must evict, not grow.
+    bot_state["suppressions"] = [
+        {"id": f"supp_old_{i}", "ts": "2026-06-01T00:00:00Z", "stage": "writer"}
+        for i in range(MAX_SUPPRESSIONS)
+    ]
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="e1", total=99),
+        _candidate(event_id="e2", total=90),
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+
+    calls: list = []
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setattr(common, "_try_two_bot_draft", _billing_kill_fake(calls))
+
+    common._drain_and_write_triage_queue(bot_state, current_run)
+
+    assert len(bot_state["suppressions"]) <= MAX_SUPPRESSIONS
+    rows = _abort_rows(bot_state)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["id"].startswith("supp_")
+    assert isinstance(row["ts"], str) and row["ts"]
+    assert row["run_id"] is None
+    assert row["source"] == "billing"
+    assert row["stage"] == "billing_cycle_abort"
+    assert row["event_id"] == "e1"
+    assert row["category"] is None
+    assert row["score_total"] == 0
+    assert row["threshold"] == 0
+    assert row["summary"] is None
+    assert isinstance(row["reasons"], list) and len(row["reasons"]) == 1
+    assert "1 queued candidate(s) skipped" in row["reasons"][0]
+
+
+def test_call_with_retries_transient_gets_three_attempts(monkeypatch):
+    """codex P2: pin the single-transport-owner behavior — a transient
+    provider error gets exactly 3 outer attempts through _call_anthropic."""
+    import anthropic
+    from anthropic.types import TextBlock  # noqa: F401 — real import guards env
+
+    attempts: list = []
+
+    class _FlakyMessages:
+        def create(self, **kwargs):
+            attempts.append(1)
+            raise RuntimeError("transient boom")
+
+    class _FakeClient:
+        def __init__(self, **kwargs):
+            self.messages = _FlakyMessages()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(anthropic, "Anthropic", _FakeClient)
+    monkeypatch.setattr("src.two_bot.retry.time.sleep", lambda s: None)
+
+    from src.two_bot.writer import _call_anthropic
+
+    with pytest.raises(RuntimeError, match="transient boom"):
+        _call_anthropic("user prompt")
+    assert len(attempts) == 3, "call_with_retries owns exactly 3 attempts"
+
+
+def test_call_with_retries_billing_400_single_attempt(monkeypatch):
+    """codex P2: a billing 400 short-circuits on the FIRST attempt and
+    surfaces as BudgetExhaustedError — no paid re-confirmation of the bill."""
+    import anthropic
+
+    from src.two_bot.retry import BudgetExhaustedError
+
+    attempts: list = []
+
+    class _BrokeMessages:
+        def create(self, **kwargs):
+            attempts.append(1)
+            raise RuntimeError(
+                "Error code: 400 — Your credit balance is too low to access "
+                "the Anthropic API."
+            )
+
+    class _FakeClient:
+        def __init__(self, **kwargs):
+            self.messages = _BrokeMessages()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setattr(anthropic, "Anthropic", _FakeClient)
+    monkeypatch.setattr("src.two_bot.retry.time.sleep", lambda s: None)
+
+    from src.two_bot.writer import _call_anthropic
+
+    with pytest.raises(BudgetExhaustedError):
+        _call_anthropic("user prompt")
+    assert len(attempts) == 1, "billing errors must not burn retries"
 
 
 def test_writer_anthropic_client_owns_zero_transport_retries(monkeypatch):

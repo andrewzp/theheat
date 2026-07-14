@@ -17,7 +17,8 @@ All notable changes to this project will be documented in this file.
   off.
 - **(writer)**: `max_retries=0` on the Anthropic client — `call_with_retries`
   (3 attempts, billing-aware) is the single transport-retry owner; the SDK default
-  (2) silently stacked a second transport layer under it. Also corrected the stale
+  (2) silently stacked a second transport layer under it (3 SDK attempts × 3 outer
+  attempts = up to 9 transport calls per sample). Also corrected the stale
   "~5,700 tokens" prompt-cache note to the measured ~15.1k tokens (2026-07-13).
 
 ### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)

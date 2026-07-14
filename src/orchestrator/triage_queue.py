@@ -174,6 +174,11 @@ def _abort_cycle_on_billing(
         from src.orchestrator import funnel as _funnel
 
         for skipped_candidate in remaining:
+            # Never overwrite a resolved terminal (codex P1): duplicate
+            # event_ids are expected in the ranked queue, and a candidate
+            # that already drafted / killed must keep its true outcome.
+            if skipped_candidate.event_id in funnel_sink.get("_slate_terminal", {}):
+                continue
             _funnel.record_slate_terminal(
                 funnel_sink, skipped_candidate.event_id, "billing_abort"
             )

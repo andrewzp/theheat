@@ -124,7 +124,8 @@ def _call_anthropic(user_prompt: str) -> str:
     # "drafts vanish on slow API days" failure mode.
     # max_retries=0: call_with_retries (3 attempts, billing-aware) is the
     # single transport-retry owner. The SDK default (2) stacked a second
-    # transport layer under it — up to 6 provider calls per sample before
+    # transport layer under it — 3 SDK attempts inside each of the 3
+    # call_with_retries attempts, up to 9 transport calls per sample before
     # the JSON/length retry lanes even started (economics P0, 2026-07-13).
     client = anthropic.Anthropic(api_key=api_key, timeout=180.0, max_retries=0)
     # The writer system prompt is large (~15.1k tokens, measured 2026-07-13
