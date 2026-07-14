@@ -257,6 +257,30 @@ def build_workflow_issue_body(v: Mapping[str, Any]) -> str:
     if v["workflow"] == SELFHEAL_SOURCE:
         age = v.get("age_hours")
         age_note = f"{age}h old" if age is not None else "missing"
+        if v.get("conclusion") == "stuck_pending_heal":
+            # Economics P0.5 (codex r2 P2): a stuck-pending beacon means the
+            # gate FOUND red and dispatched the healer, which then died — a
+            # different failure from "never checked in", needing a different
+            # operator response.
+            return "\n".join([
+                "**The self-heal HEALER started and never finished** "
+                f"(beacon stuck on `pending` {age_note}; threshold "
+                f"{SELFHEAL_PENDING_MAX_AGE_H}h).",
+                "",
+                "The keyless gate detected red workflows and dispatched the "
+                "heal agent, but no finalizing beacon arrived — the agent "
+                "crashed or failed (bad ANTHROPIC_API_KEY, runner death, "
+                "agent error). The red workflows it was dispatched for are "
+                "still unfixed.",
+                "",
+                "- **What to do:** open the latest `workflow-self-heal` run, "
+                "read the `heal` job's log, fix its failure cause, re-run; "
+                "check `docs/runbooks/workflow-self-heal.md` §5.",
+                f"- **Gate beacon (pending):** `{v.get('last_success_at') or 'unknown'}`",
+                "",
+                "_Auto-filed by the workflow-health observer. Auto-closes when "
+                "a finalized beacon lands._",
+            ])
         return "\n".join([
             "**The self-heal routine's heartbeat is stale** "
             f"(last beacon {age_note}; threshold {SELFHEAL_MAX_AGE_H}h).",

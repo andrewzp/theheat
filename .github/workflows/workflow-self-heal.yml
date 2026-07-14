@@ -77,13 +77,20 @@ jobs:
               RED_NAMES="${RED_NAMES},${wf}(disabled:${state})"; return 0
             fi
 
-            # exclude_pull_requests=true (codex P1): a fork PR whose branch is
-            # named "main" must not contribute runs that mask a production
-            # failure or hand attacker-controlled logs to the PAT-backed healer.
+            # Reject PR-triggered runs by EVENT (codex r2 P1): a fork PR
+            # whose branch is named "main" must not contribute runs that mask
+            # a production failure or hand attacker-controlled logs to the
+            # PAT-backed healer. Note exclude_pull_requests=true would NOT do
+            # this — per GitHub's docs it only omits the response's
+            # pull_requests arrays, not the runs themselves.
             local runs_json
-            runs_json=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&per_page=50&exclude_pull_requests=true" 2>/dev/null) || {
+            runs_json=$(gh api "repos/${REPO}/actions/workflows/${wf}/runs?branch=main&per_page=50" 2>/dev/null) || {
               echo "::warning::${wf}: could not list runs — counting as red"
               RED_NAMES="${RED_NAMES},${wf}(fetch_error)"; return 0
+            }
+            runs_json=$(echo "$runs_json" | jq '{workflow_runs: [.workflow_runs[]
+              | select(.event != "pull_request" and .event != "pull_request_target")]}' 2>/dev/null) || {
+              RED_NAMES="${RED_NAMES},${wf}(parse_error)"; return 0
             }
 
             # A stale schedule is an outage even when no run is marked failed

@@ -244,6 +244,26 @@ class TestSelfHealLiveness:
         }
         assert selfheal_liveness_verdict(beacon, now=NOW) is None
 
+    def test_stuck_pending_issue_body_names_the_healer_not_the_schedule(self):
+        """codex r2 P2: the stuck-pending verdict must not reuse the 26h
+        stale-heartbeat body — the operator response is different (read the
+        heal job's log, not 'confirm the routine exists')."""
+        from scripts.workflow_health import (
+            SELFHEAL_PENDING_MAX_AGE_H,
+            build_workflow_issue_body,
+        )
+
+        body = build_workflow_issue_body({
+            "workflow": SELFHEAL_SOURCE,
+            "conclusion": "stuck_pending_heal",
+            "age_hours": 4.0,
+            "last_success_at": "2026-06-17T12:00:00Z",
+        })
+        assert "HEALER started and never finished" in body
+        assert f"{SELFHEAL_PENDING_MAX_AGE_H}h" in body
+        assert "26" not in body, "must not cite the staleness threshold"
+        assert "heal" in body and "log" in body
+
 
 class TestPlanWorkflowIssueActions:
     # Signature: plan_workflow_issue_actions(failing, recovered, open_issues).
