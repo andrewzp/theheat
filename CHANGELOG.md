@@ -32,6 +32,59 @@ All notable changes to this project will be documented in this file.
   `src.voice.generator` mypy override, and `era_anchors.json` `_meta` all
   updated.
 
+### Economics P0.4 — voice-regression: nightly cron → PR gate + daily canary + weekly full (2026-07-14)
+
+- **(workflow + tests)**: the full 39-replay suite no longer burns ~$1 every night.
+  New trigger set: **automatic `pull_request` gate** on the writer path
+  (`src/two_bot/prompts/**`, `src/two_bot/writer.py` — a keyless `changes` job
+  detects it; the `voice-check` label still opts in any other PR, and now persists
+  across pushes), **weekly full run** (Sunday 09:00 UTC), and a **daily 3-fixture
+  canary** (09:17 UTC, new `voice_canary` marker + `tests/voice_regression/test_canary.py`).
+  The canary is the billing-outage tripwire the nightly suite used to be by
+  accident (2026-07-11: balance hit $0 and this was the only loud signal): it fails
+  RED on any provider/auth error AND on a missing key, requires ≥2/3 historically
+  strong fixtures to produce a safety-passing tweet, and never blesses unsafe copy.
+  Stale "$6/month" header replaced with honest base+per-event math: ≈$6.4/month
+  fixed (weekly full + Mon–Sat canary; Sunday's canary is skipped — the full
+  suite covers it) + ~$1 per qualifying writer-path PR event (was ~$30/month
+  nightly regardless) — applies when the workflow is re-enabled after the #441
+  production stop. Per-PR concurrency cancels stale paid runs on rapid pushes.
+  Round 2 (codex): the canary's ≥2/3 production assertion gained ONE bounded
+  re-sample of only the fixtures that killed — single-sampling kills are
+  legitimate (this suite once spent five days red on exactly that) while
+  broken-lane kills are deterministic, so a repeated failure is the real
+  signal; its provider-error promise is scoped honestly to UNRECOVERED errors
+  (call_with_retries absorbs transients); stale daily-replay references in
+  README, bot.yml's CI comment, and the replay module docstring corrected.
+
+### Economics P0.5 — self-heal: keyless red-gate + Haiku pin; agent only on red (2026-07-14)
+
+- **(workflow + runbook)**: `workflow-self-heal.yml` split into two jobs. A keyless
+  `gate` job ($0, no model call) checks the five monitored workflows via `gh api` —
+  latest decisive conclusion on main, staleness vs expected cadence (a dead
+  scheduler is an outage even with no failed run), and disabled state — and writes
+  the `SELFHEAL_BEACON` heartbeat itself, so green days never start the agent
+  (previously an unpinned agent ran daily, green or not; one observed green-day run
+  selected an Opus-class model for "nothing is red"). The `heal` agent job runs
+  only when the gate found red, pinned `--model claude-haiku-4-5` (mechanical
+  triage; JUDGMENT items are PR-and-stop anyway) and receives the gate's red list
+  in its prompt. Runbook §5 updated: the gate owns the daily heartbeat; the agent
+  still writes its final beacon (real `outcome` + `fixed`) on runs it executes.
+  Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
+  (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
+  Round 2 (codex): red days write `outcome:"pending"` and the heal agent
+  finalizes it — the observer + dashboard now alarm on a beacon stuck pending
+  >3h (`stuck_pending_heal` / red dot), so a fresh morning gate heartbeat can
+  never mask a forever-failing healer; the runs query gains
+  `exclude_pull_requests=true` (fork PRs on a branch named `main` must not
+  mask production failures or feed the PAT-backed healer) and `per_page=50`
+  with no-decisive-in-window counting RED; every jq/date parse is guarded so
+  a parse failure counts that workflow red instead of aborting the gate (a
+  dead gate would skip the healer); a failed beacon write files ONE
+  deduplicated alarm issue with the default token (a never-written beacon is
+  deliberately quiet in the observer, so silent write failures were
+  invisible).
+
 ### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
 
 - **(orchestrator)**: cycle-level billing circuit breaker in both triage drain paths
