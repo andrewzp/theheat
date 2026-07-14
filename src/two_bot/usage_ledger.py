@@ -23,6 +23,7 @@ honest "unknown" beats a fabricated price.
 from __future__ import annotations
 
 import math
+import re
 import threading
 from datetime import datetime, timezone
 from typing import Any
@@ -44,6 +45,12 @@ _BUFFER_CAP = 500
 LLM_USAGE_RETENTION_DAYS = 45
 
 _AGG_INT_FIELDS = ("in", "cached_in", "cache_write", "out")
+
+# Ledger day keys must be ISO dates. Corrupt keys are DROPPED at prune time:
+# a lexicographic prune over unvalidated keys would let 45 high-sorting junk
+# keys ("z00"...) evict today's real bucket while the drain reports success
+# (codex r2 P2).
+_DAY_KEY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Token clamp: negative counts (corrupt provider payloads) price as 0, and an
 # absurdly large count must not overflow the usd float into Infinity — not
@@ -175,6 +182,10 @@ def drain_into_state(state: Any) -> int:
             for field in _AGG_INT_FIELDS:
                 agg[field] += row[field]
             agg["usd"] = round(agg["usd"] + row["usd"], 6)
+        for day in list(ledger.keys()):
+            if not (isinstance(day, str) and _DAY_KEY_RE.match(day)):
+                print(f"[usage_ledger] dropping corrupt day key {day!r}")
+                del ledger[day]
         for day in sorted(ledger.keys())[:-LLM_USAGE_RETENTION_DAYS]:
             del ledger[day]
         return len(rows)

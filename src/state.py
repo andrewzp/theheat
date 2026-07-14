@@ -891,12 +891,20 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
     prune HERE, not only at drain: a plain overlay merge resurrects
     drain-pruned days on every write (codex P1 — reproduced as 45→46 days).
     """
-    from src.two_bot.usage_ledger import LLM_USAGE_RETENTION_DAYS, _valid_agg
+    from src.two_bot.usage_ledger import (
+        _DAY_KEY_RE,
+        LLM_USAGE_RETENTION_DAYS,
+        _valid_agg,
+    )
 
     base_d = base if isinstance(base, dict) else {}
     nxt_d = nxt if isinstance(nxt, dict) else {}
     merged: dict = {}
     for day in set(base_d) | set(nxt_d):
+        # Corrupt (non-ISO) day keys are dropped, not merged: a lexicographic
+        # prune over junk keys would evict real days (codex r2 P2).
+        if not (isinstance(day, str) and _DAY_KEY_RE.match(day)):
+            continue
         b_day = base_d.get(day)
         n_day = nxt_d.get(day)
         b_day = b_day if isinstance(b_day, dict) else {}

@@ -59,6 +59,26 @@ def test_merge_stale_overlay_cannot_roll_a_day_backwards():
     assert set(merged["2026-07-14"]) == {"writer|claude-sonnet-4-6", "critic|gemini-2.5-pro"}
 
 
+def test_corrupt_day_keys_cannot_evict_real_days():
+    """codex r2 P2: 45 high-sorting junk keys must not prune away today —
+    non-ISO day keys are dropped at drain AND skipped at merge."""
+    from src.state import _merge_llm_usage
+
+    state: dict = {"llm_usage": {f"z{i:02d}": {"writer|m": _agg()} for i in range(45)}}
+    usage_ledger.record_usage("writer", "claude-sonnet-4-6", input_tokens=100)
+    assert usage_ledger.drain_into_state(state) == 1
+    days = list(state["llm_usage"].keys())
+    assert all(day.startswith("20") for day in days), f"junk keys survived: {days[:3]}"
+    assert len(days) == 1, "today's real bucket must survive; junk dropped"
+
+    merged = _merge_llm_usage(
+        {"zzz": {"writer|m": _agg()}, "2026-07-14": {"writer|m": _agg(calls=2)}},
+        {"2026-07-14": {"writer|m": _agg(calls=3)}},
+    )
+    assert "zzz" not in merged
+    assert merged["2026-07-14"]["writer|m"]["calls"] == 3
+
+
 def test_merge_tolerates_corrupt_shapes():
     from src.state import _merge_llm_usage
 
