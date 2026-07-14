@@ -3,11 +3,14 @@ name: voice-regression
 # Live writer-replay regression + daily billing canary.
 #
 # Cost (measured 2026-07-13 — the previous header's "$6/month" was 5× stale
-# against the observed ~$30/month nightly bill):
-#   weekly full suite   ~$1.00/run × 4.3/mo  ≈ $4.3/month
-#   daily canary        ~$0.08/run × 30/mo   ≈ $2.4/month
-#   PR-gated full runs  ~$1.00 × writer-path PRs (typically 0–4/mo)
-#   total ≈ $7–9/month worst case, ~$5–7 typical (was ~$30/month nightly).
+# against the observed ~$30/month nightly bill). Stated as base + per-event,
+# because PR runs bill per qualifying EVENT (opened/synchronize/reopened/
+# labeled), not per PR:
+#   weekly full suite    ~$1.00/run × 4.3/mo               ≈ $4.3/month
+#   daily canary         ~$0.08/run × 26/mo (skips Sunday) ≈ $2.1/month
+#   fixed base                                             ≈ $6.4/month
+#   + ~$1.00 per qualifying writer-path PR event (a busy month with ~5
+#     such events ≈ $11–12 total; was ~$30/month nightly regardless).
 #
 # Triggers (economics master plan P0.4):
 #   - pull_request (automatic) when the PR touches the writer prompt or the
@@ -18,7 +21,7 @@ name: voice-regression
 #     discipline treats ANY red check as blocking (INDEX §Standing rules).
 #   - pull_request with label `voice-check`: opt-in full run for any other
 #     PR (label persists across pushes).
-#   - schedule daily 09:17 UTC: 3-fixture billing + voice canary — the
+#   - schedule 09:17 UTC Mon–Sat: 3-fixture billing + voice canary — the
 #     outage tripwire. 2026-07-11: the Anthropic balance hit $0 and drafting
 #     stopped SILENTLY (bot.yml tolerates writer failures); the nightly full
 #     suite was the only loud signal. The canary keeps that tripwire at ~3%
@@ -29,7 +32,7 @@ name: voice-regression
 
 on:
   schedule:
-    - cron: '17 9 * * *'   # daily canary (3 fixtures)
+    - cron: '17 9 * * 1-6'   # daily canary (3 fixtures; Sunday covered by the full suite)
     - cron: '0 9 * * 0'    # weekly full suite (Sunday)
   workflow_dispatch: {}
   pull_request:
@@ -96,7 +99,7 @@ jobs:
 
   canary:
     # Daily 3-fixture billing + voice canary — the outage tripwire.
-    if: github.event_name == 'schedule' && github.event.schedule == '17 9 * * *'
+    if: github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -16,9 +16,18 @@ All notable changes to this project will be documented in this file.
   accident (2026-07-11: balance hit $0 and this was the only loud signal): it fails
   RED on any provider/auth error AND on a missing key, requires ≥2/3 historically
   strong fixtures to produce a safety-passing tweet, and never blesses unsafe copy.
-  Stale "$6/month" header replaced with measured math: ≈$5–7/month typical
-  (was ~$30/month) — applies when the workflow is re-enabled after the #441
+  Stale "$6/month" header replaced with honest base+per-event math: ≈$6.4/month
+  fixed (weekly full + Mon–Sat canary; Sunday's canary is skipped — the full
+  suite covers it) + ~$1 per qualifying writer-path PR event (was ~$30/month
+  nightly regardless) — applies when the workflow is re-enabled after the #441
   production stop. Per-PR concurrency cancels stale paid runs on rapid pushes.
+  Round 2 (codex): the canary's ≥2/3 production assertion gained ONE bounded
+  re-sample of only the fixtures that killed — single-sampling kills are
+  legitimate (this suite once spent five days red on exactly that) while
+  broken-lane kills are deterministic, so a repeated failure is the real
+  signal; its provider-error promise is scoped honestly to UNRECOVERED errors
+  (call_with_retries absorbs transients); stale daily-replay references in
+  README, bot.yml's CI comment, and the replay module docstring corrected.
 
 ### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
 
