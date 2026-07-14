@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P0.6 — per-call LLM usage ledger MVP (2026-07-14)
+
+- **(telemetry + state)**: new `src/two_bot/usage_ledger.py` — every paid writer
+  call (Anthropic `usage`, Gemini `usage_metadata`) is buffered thread-safely and
+  folded into a new `llm_usage` state key at cycle end (cli drain before
+  `write_state`): day → `"stage|model"` → `{calls, in, cached_in, cache_write,
+  out, usd}`. Estimates use live-verified 2026-07-13 pricing (Sonnet 4.6 / Haiku
+  4.5); unknown models record tokens with `usd=0.0` — the Console is the invoice,
+  the ledger is the trend. Pruned to 45 days ≈ single-digit KB (state-size watch
+  #390). Full state wiring: `DEFAULT_STATE` + `MERGE_SPEC` (per-day overlay;
+  runs are serialized by the bot concurrency group) + `BotState` schema + sqlite
+  `_METADATA_JSON_KEYS` persistence. Ends the stale-comment era: spend becomes a
+  measured number the P1 dashboard line can read.
+
 ### Economics P1.2 — dead legacy pipeline deleted (2026-07-14)
 
 - **(deletion, no behavior change)**: removed `src/voice/generator.py` (1,745

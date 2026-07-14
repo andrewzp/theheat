@@ -125,6 +125,10 @@ DEFAULT_STATE: BotState = {
     "publish_ledger": {},
     # Public engagement metrics for posted X tweets, keyed by tweet_id.
     "tweet_metrics": {},
+    # Per-day LLM usage ledger (economics P0.6): day → "stage|model" →
+    # {calls, in, cached_in, cache_write, out, usd}. Pruned to
+    # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
+    "llm_usage": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -873,6 +877,55 @@ def _merge_last_good(base: Any, nxt: Any) -> dict:
     return out
 
 
+def _merge_llm_usage(base: Any, nxt: Any) -> dict:
+    """Merge the day-keyed LLM usage ledger (economics P0.6).
+
+    Per (day, "stage|model", counter): element-wise MAX. Counters increase
+    monotonically within a day for any single writer lineage, so serialized
+    bot cycles merge exactly (max == the newer snapshot), and a STALE overlay
+    from a concurrent state writer that recorded no usage (e.g. the
+    reject-all-drafts operator tool — its own concurrency group) can no
+    longer roll a day bucket backwards (codex P1). Two writers that both
+    ADDED usage from one base undercount by the smaller increment — bounded,
+    never inflated, fine for a directional ledger. Union of days + newest-N
+    prune HERE, not only at drain: a plain overlay merge resurrects
+    drain-pruned days on every write (codex P1 — reproduced as 45→46 days).
+    """
+    from src.two_bot.usage_ledger import (
+        LLM_USAGE_RETENTION_DAYS,
+        _is_valid_day_key,
+        _valid_agg,
+    )
+
+    base_d = base if isinstance(base, dict) else {}
+    nxt_d = nxt if isinstance(nxt, dict) else {}
+    merged: dict = {}
+    for day in set(base_d) | set(nxt_d):
+        # Corrupt day keys are dropped, not merged — canonical-date validated,
+        # since shape-valid junk ("9999-99-00") sorts above real days and a
+        # lexicographic prune would evict them (codex r2/r3 P2).
+        if not _is_valid_day_key(day):
+            continue
+        b_day = base_d.get(day)
+        n_day = nxt_d.get(day)
+        b_day = b_day if isinstance(b_day, dict) else {}
+        n_day = n_day if isinstance(n_day, dict) else {}
+        day_out: dict = {}
+        for key in set(b_day) | set(n_day):
+            b_agg = _valid_agg(deepcopy(b_day.get(key, {})))
+            n_agg = _valid_agg(deepcopy(n_day.get(key, {})))
+            out = {
+                field: max(b_agg[field], n_agg[field])
+                for field in ("calls", "in", "cached_in", "cache_write", "out")
+            }
+            out["usd"] = max(b_agg["usd"], n_agg["usd"])
+            day_out[key] = out
+        merged[day] = day_out
+    for day in sorted(merged.keys())[:-LLM_USAGE_RETENTION_DAYS]:
+        del merged[day]
+    return merged
+
+
 def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
     """Per-tweet metrics merge: keep the row sampled at the newest timestamp."""
 
@@ -1340,6 +1393,15 @@ def _prepare_merged_write(
 
 
 def write_state(state: BotState) -> bool:
+    # Economics P0.6: fold any buffered per-call LLM usage into the state
+    # about to be written. Structural (not call-site-dependent): EVERY
+    # state-writing process persists its own spend; never raises; a second
+    # write in the same run drains an empty buffer. Dryruns and replay
+    # suites never call write_state, so their spend deliberately stays out
+    # of state (Console + workflow logs cover them).
+    from src.two_bot import usage_ledger as _usage_ledger
+
+    _usage_ledger.drain_into_state(state)
     normalized = _normalize_state(state)
     if _configured_backend() == "sqlite":
         if not DB_PATH:
@@ -1825,6 +1887,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "last_good_readings": _merge_last_good,
     "publish_ledger": _strat_dict_overlay,
     "tweet_metrics": _merge_tweet_metrics,
+    "llm_usage": _merge_llm_usage,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),

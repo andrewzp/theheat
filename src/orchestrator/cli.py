@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 from src import credentials, state
 from src.state_schema import BotState
+from src.two_bot import usage_ledger
 
 
 RunMode = Callable[..., BotState]
@@ -50,6 +51,12 @@ def main(dispatchers: dict[str, RunMode]) -> None:
 
     if any(source.get("status") in {"failed", "partial_failure"} for source in current_run.get("sources", [])):
         final_status = "partial_failure"
+
+    # Economics P0.6: fold this run's buffered per-call LLM usage into
+    # state["llm_usage"] before the save. Never raises; a no-call run drains 0.
+    drained = usage_ledger.drain_into_state(bot_state)
+    if drained:
+        print(f"[main] usage ledger: {drained} call(s) recorded")
 
     if not state.write_state(bot_state):
         print("[main] WARNING: State write failed, retrying...")

@@ -249,6 +249,7 @@ class BotState(TypedDict, total=False):
     last_good_readings: dict[str, dict]
     publish_ledger: dict[str, dict]
     tweet_metrics: dict[str, TweetMetric]
+    llm_usage: dict[str, dict]
     _state_rev: int
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]
