@@ -148,6 +148,27 @@ def test_billing_abort_marks_remaining_slate_in_funnel(monkeypatch):
     assert terminals.get("e3") == "billing_abort"
 
 
+def test_funnel_rates_keeps_editorial_cuts_visible_alongside_billing(monkeypatch):
+    """codex r4 P2 exact scenario: 5 triaged in, triage selected 3 survivors
+    (2 REAL editorial cuts), billing aborted 2 of the survivors. The rates
+    must report triage_cut=2 — never let the billing skips swallow it."""
+    from src.orchestrator import funnel
+
+    rates = funnel.funnel_rates({
+        "triaged_in": 5,
+        "triaged_out": 3,
+        "billing_aborted": 2,
+        "writer_attempted": 1,
+        "drafted": 0,
+        "passes": {},
+        "kills": {"budget_exhausted": 1, "billing_cycle_abort": 1},
+    })
+
+    assert rates["triage_cut"] == 2, "real editorial cuts stay visible"
+    assert rates["triage_cap_rate"] == pytest.approx(2 / 5)
+    assert rates["billing_aborted"] == 2
+
+
 def test_non_billing_kills_do_not_trip_breaker(monkeypatch):
     """An ordinary writer kill must NOT abort the cycle."""
     from src.orchestrator import common
@@ -307,6 +328,11 @@ def test_legacy_drain_marks_funnel_terminals_on_abort(monkeypatch):
     assert terminals.get("e1") == "budget_exhausted"
     assert terminals.get("e2") == "billing_abort"
     assert terminals.get("e3") == "billing_abort"
+    # Volumes (codex r4 P2): the legacy loop pre-counted all 3 survivors in
+    # triaged_out — the abort adds billing_aborted only, no double count.
+    source_entry = current_run["sources"][0]
+    assert source_entry.get("triaged_out") == 3
+    assert source_entry.get("billing_aborted") == 2
 
 
 def test_abort_suppression_row_shape_and_cap(monkeypatch):
@@ -445,6 +471,9 @@ def test_billing_abort_volume_not_misread_as_triage_cut(monkeypatch):
     rates = funnel.funnel_rates(frozen)
 
     assert frozen["billing_aborted"] == 2
+    # Refill counts triaged_out per attempt (1) + per billing skip (2), so
+    # the skips leave the cut denominator instead of being subtracted later.
+    assert frozen["triaged_out"] == 3
     assert rates["billing_aborted"] == 2
     assert rates["triage_cut"] == 0, "billing skips are not editorial cuts"
 
@@ -483,9 +512,11 @@ def test_latch_blocks_subsequent_drains_in_same_cycle(monkeypatch):
     assert drafted == 0
     assert calls == ["e1"], "latched drain must make zero writer calls"
     assert len(_abort_rows(bot_state)) == 1, "no duplicate abort row"
-    # Volume telemetry: 1 skipped by the abort (e2) + 2 by the latched drain.
+    # Volume telemetry: 1 skipped by the abort (e2) + 2 by the latched drain;
+    # triaged_out pairs each skip (plus e1's attempt) so nothing reads as a cut.
     source_entry = current_run["sources"][0]
     assert source_entry.get("billing_aborted") == 3
+    assert source_entry.get("triaged_out") == 4
 
 
 def test_latch_never_persists_through_state_merge():

@@ -149,6 +149,8 @@ def _abort_cycle_on_billing(
     funnel_sink: dict | None,
     remaining: list,
     aborted_event_id: str,
+    *,
+    bump_triaged_out: bool,
 ) -> None:
     """Cycle-level billing circuit breaker (economics P0).
 
@@ -160,6 +162,13 @@ def _abort_cycle_on_billing(
     Records one stage-level suppression; when funnel telemetry is on, the
     never-attempted remainder is marked ``billing_abort`` so the slate view
     explains why those candidates have no writer outcome.
+
+    ``bump_triaged_out`` keeps ``triage_cut = triaged_in - triaged_out``
+    exact in both drains (codex r4 P2): a billing-skipped candidate exited
+    triage via billing, not an editorial cut, so it must be counted in
+    ``triaged_out`` — but the legacy loop already counted every survivor
+    there up front, so only the refill loop (which counts per attempt)
+    passes True.
     """
     print(
         f"[triage] billing circuit breaker: budget exhausted on "
@@ -178,10 +187,14 @@ def _abort_cycle_on_billing(
         aborted_event_id=aborted_event_id,
         skipped=len(remaining),
     )
-    # Volume telemetry (codex r3 P2): billing-aborted candidates must not be
-    # misread as triage cuts — funnel_rates subtracts this from triage_cut.
+    # Volume telemetry (codex r3/r4 P2): billing-skipped candidates are
+    # visible as billing_aborted and — where not already counted — leave the
+    # triage_cut denominator via triaged_out, so an outage never reads as an
+    # editorial cap and real editorial cuts stay visible.
     for skipped_candidate in remaining:
         _bump_source_field_in_run(current_run, skipped_candidate.source, "billing_aborted")
+        if bump_triaged_out:
+            _bump_source_field_in_run(current_run, skipped_candidate.source, "triaged_out")
     if funnel_sink is not None:
         from src.orchestrator import funnel as _funnel
 
@@ -370,6 +383,7 @@ def _refill_drain(
             _abort_cycle_on_billing(
                 bot_state, current_run, funnel_sink,
                 ranked[idx + 1 :], candidate.event_id,
+                bump_triaged_out=True,  # refill counts triaged_out per attempt
             )
             break
 
@@ -497,6 +511,9 @@ def _drain_and_write_triage_queue(
         )
         for candidate in queue:
             _bump_source_field_in_run(current_run, candidate.source, "billing_aborted")
+            # Counted in triaged_in above but never selected/attempted:
+            # pair with triaged_out so the skip doesn't read as a triage cut.
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
         if funnel_sink is not None:
             from src.orchestrator import funnel as _funnel
 
@@ -609,6 +626,9 @@ def _drain_and_write_triage_queue(
             _abort_cycle_on_billing(
                 bot_state, current_run, funnel_sink,
                 survivors[idx + 1 :], candidate.event_id,
+                # Legacy pre-counts every survivor in triaged_out — bumping
+                # again would hide real editorial cuts (codex r4 P2).
+                bump_triaged_out=False,
             )
             break
 

@@ -84,10 +84,10 @@ function funnelRates(funnel) {
   }
   const triagedIn = Number(funnel.triaged_in) || 0
   const triagedOut = Number(funnel.triaged_out) || 0
-  // Billing-aborted candidates were skipped by the circuit breaker, not cut
-  // by triage — mirror of src/orchestrator/funnel.py funnel_rates.
+  // billing_aborted is informational — billing-skipped candidates are already
+  // counted in triaged_out at bump time. Mirror of funnel.py funnel_rates.
   const billingAborted = Number(funnel.billing_aborted) || 0
-  const triageCut = Math.max(triagedIn - triagedOut - billingAborted, 0)
+  const triageCut = Math.max(triagedIn - triagedOut, 0)
   const writerAttempted = Number(funnel.writer_attempted) || 0
   const drafted = Number(funnel.drafted) || 0
   return {

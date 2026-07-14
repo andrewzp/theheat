@@ -165,8 +165,12 @@ test("funnel API surfaces recent shadow slates", async () => {
   }
 })
 
-test("funnel API excludes billing-aborted candidates from triage_cut", async () => {
+test("funnel API keeps billing skips out of triage_cut without hiding real cuts", async () => {
   setEnv()
+  // The producer counts billing-skipped candidates in triaged_out at bump
+  // time, so billing_aborted is informational and never subtracted here.
+  // Scenario (codex r4): 5 in, 3 survivors selected (2 REAL editorial cuts),
+  // billing aborted 2 survivors — the 2 editorial cuts must stay visible.
   const billingState = {
     ...FUNNEL_STATE,
     run_history: [
@@ -174,7 +178,7 @@ test("funnel API excludes billing-aborted candidates from triage_cut", async () 
         "r_billing",
         recentTs,
         {
-          observed: 50, promoted: 5, triaged_in: 3, triaged_out: 1,
+          observed: 50, promoted: 5, triaged_in: 5, triaged_out: 3,
           billing_aborted: 2, writer_attempted: 1, drafted: 0,
           passes: {},
           kills: { budget_exhausted: 1, billing_cycle_abort: 1 },
@@ -193,11 +197,12 @@ test("funnel API excludes billing-aborted candidates from triage_cut", async () 
       }),
     )
     const payload = await response.json()
-    // A billing outage must not read as an editorial triage cap.
     assert.equal(payload.funnel.billing_aborted, 2)
     assert.equal(payload.rates.billing_aborted, 2)
-    assert.equal(payload.rates.triage_cut, 0)
-    assert.equal(payload.rates.triage_cap_rate, 0)
+    // The 2 editorial cuts survive; the 2 billing skips (inside triaged_out)
+    // never inflate them.
+    assert.equal(payload.rates.triage_cut, 2)
+    assert.ok(Math.abs(payload.rates.triage_cap_rate - 2 / 5) < 1e-9)
   } finally {
     globalThis.fetch = originalFetch
   }
