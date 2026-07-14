@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P0.5 — self-heal: keyless red-gate + Haiku pin; agent only on red (2026-07-14)
+
+- **(workflow + runbook)**: `workflow-self-heal.yml` split into two jobs. A keyless
+  `gate` job ($0, no model call) checks the five monitored workflows via `gh api` —
+  latest decisive conclusion on main, staleness vs expected cadence (a dead
+  scheduler is an outage even with no failed run), and disabled state — and writes
+  the `SELFHEAL_BEACON` heartbeat itself, so green days never start the agent
+  (previously an unpinned agent ran daily, green or not; one observed green-day run
+  selected an Opus-class model for "nothing is red"). The `heal` agent job runs
+  only when the gate found red, pinned `--model claude-haiku-4-5` (mechanical
+  triage; JUDGMENT items are PR-and-stop anyway) and receives the gate's red list
+  in its prompt. Runbook §5 updated: the gate owns the daily heartbeat; the agent
+  still writes its final beacon (real `outcome` + `fixed`) on runs it executes.
+  Cost: gate $0 daily; heal ≈ $0.02–0.10/run × ~1–2 red days/week ≈ **$0.2–0.8/month**
+  (was ~$5–15/month) — applies when re-enabled after the #441 production stop.
+  Round 2 (codex): red days write `outcome:"pending"` and the heal agent
+  finalizes it — the observer + dashboard now alarm on a beacon stuck pending
+  >3h (`stuck_pending_heal` / red dot), so a fresh morning gate heartbeat can
+  never mask a forever-failing healer; the runs query gains
+  `exclude_pull_requests=true` (fork PRs on a branch named `main` must not
+  mask production failures or feed the PAT-backed healer) and `per_page=50`
+  with no-decisive-in-window counting RED; every jq/date parse is guarded so
+  a parse failure counts that workflow red instead of aborting the gate (a
+  dead gate would skip the healer); a failed beacon write files ONE
+  deduplicated alarm issue with the default token (a never-written beacon is
+  deliberately quiet in the observer, so silent write failures were
+  invisible).
+
 ### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
 
 - **(orchestrator)**: cycle-level billing circuit breaker in both triage drain paths
