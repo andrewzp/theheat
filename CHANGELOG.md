@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P0 — writer stop-loss: cycle billing breaker + one retry owner (2026-07-13)
+
+- **(orchestrator)**: cycle-level billing circuit breaker in both triage drain paths
+  (`_refill_drain` + the legacy loop): the first `kill_stage == "budget_exhausted"`
+  aborts the remaining slate, records ONE `billing_cycle_abort` suppression row, and
+  marks the never-attempted remainder `billing_abort` in the funnel slate view.
+  Motivated by 2026-07-13T21:02Z: six paid writer attempts (six distinct request_ids)
+  fired after the first "credit balance is too low" error because each queued
+  candidate independently re-discovered the same dead balance. The drain now always
+  requests `result_out`, so the breaker sees kill stages even with funnel telemetry
+  off.
+- **(writer)**: `max_retries=0` on the Anthropic client — `call_with_retries`
+  (3 attempts, billing-aware) is the single transport-retry owner; the SDK default
+  (2) silently stacked a second transport layer under it. Also corrected the stale
+  "~5,700 tokens" prompt-cache note to the measured ~15.1k tokens (2026-07-13).
+
 ### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)
 
 - **(voice, prompt-only)**: the `## Heat records cluster bundles` section of

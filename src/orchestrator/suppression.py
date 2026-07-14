@@ -243,6 +243,48 @@ def _record_triage_error_suppression(bot_state: BotState, err_text: str) -> None
     _funnel.record_kill(bot_state, "triage_error")
 
 
+def _record_billing_cycle_abort_suppression(
+    bot_state: BotState,
+    *,
+    aborted_event_id: str,
+    skipped: int,
+) -> None:
+    """Append ONE ``stage='billing_cycle_abort'`` row when the drain stops a
+    cycle on its first budget_exhausted kill (economics P0 circuit breaker).
+
+    Cycle-level, not candidate-level: the aborting candidate already has its
+    own ``budget_exhausted`` row from ``_try_two_bot_draft``; rows for the
+    never-attempted remainder would flood the ledger with the same fact. The
+    motivating incident (2026-07-13T21:02Z) fired six paid attempts after the
+    first "credit balance is too low" error because nothing owned the cycle.
+    """
+    suppressions = bot_state.setdefault("suppressions", [])
+    ts = _utc_now_iso()
+    rand = secrets.token_hex(4)
+    suppressions.append({
+        "id": f"supp_{ts}_{rand}",
+        "ts": ts,
+        "run_id": None,
+        "source": "billing",
+        "stage": "billing_cycle_abort",
+        "event_id": aborted_event_id or None,
+        "category": None,
+        "score_total": 0,
+        "threshold": 0,
+        "reasons": [
+            f"cycle aborted after budget_exhausted on "
+            f"{aborted_event_id or 'unknown'}; "
+            f"{skipped} queued candidate(s) skipped"
+        ],
+        "summary": None,
+    })
+    if len(suppressions) > MAX_SUPPRESSIONS:
+        bot_state["suppressions"] = suppressions[-MAX_SUPPRESSIONS:]
+    from src.orchestrator import funnel as _funnel
+
+    _funnel.record_kill(bot_state, "billing_cycle_abort")
+
+
 def _should_draft(
     score: EditorialScore,
     event_id: str = "",

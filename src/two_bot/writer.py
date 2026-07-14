@@ -122,8 +122,13 @@ def _call_anthropic(user_prompt: str) -> str:
     # cap. Sonnet 4.6's variance under load is wider than 90s; 180s is
     # well-tolerated by GitHub Actions cron headroom and prevents the
     # "drafts vanish on slow API days" failure mode.
-    client = anthropic.Anthropic(api_key=api_key, timeout=180.0)
-    # The writer system prompt is large (~5,700 tokens) and byte-identical
+    # max_retries=0: call_with_retries (3 attempts, billing-aware) is the
+    # single transport-retry owner. The SDK default (2) stacked a second
+    # transport layer under it — up to 6 provider calls per sample before
+    # the JSON/length retry lanes even started (economics P0, 2026-07-13).
+    client = anthropic.Anthropic(api_key=api_key, timeout=180.0, max_retries=0)
+    # The writer system prompt is large (~15.1k tokens, measured 2026-07-13
+    # — an earlier "~5,700" note here was 2.6× stale) and byte-identical
     # across every call in a cron. Marking it for ephemeral prompt caching
     # cuts input-token cost ~90% on the cached prefix for repeat calls
     # within the 5-minute TTL.
