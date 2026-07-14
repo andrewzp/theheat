@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Production stop — all bot.yml schedules removed (2026-07-14)
+
+- **(ops, workflow-only)**: removed the three `bot.yml` crons (hourly
+  `auto_publish_due` posting lane, 12:00 UTC leaderboard, 4-hourly alert/drafting
+  cycles) on Andrew's instruction to stop automated activities until the
+  economics P0 (PLAN-ECONOMICS-MASTER-v3) lands. `pull_request` CI (the required
+  `test` check) and `workflow_dispatch` manual ops are untouched. The five other
+  scheduled workflows (voice-regression, workflow-self-heal,
+  source-health-sentinel, refresh-thresholds, time-travel-canary) were disabled
+  the same night via `gh workflow disable` — no commit needed, re-enable with
+  `gh workflow enable <name>`. Restore the crons by reverting this commit.
+  Cost while stopped: $0/month (was ~$50–70/month measured).
+
 ### Heat records-cluster writer voice — realigned to the house signature move (#414 follow-up) (2026-07-09)
 
 - **(voice, prompt-only)**: the `## Heat records cluster bundles` section of

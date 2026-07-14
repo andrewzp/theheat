@@ -1,14 +1,15 @@
 name: theheat-bot
 
 on:
-  schedule:
-    # Auto-approval queue processing (hourly)
-    - cron: '30 * * * *'
-    # Daily leaderboard: 12:00 UTC (~8 AM ET)
-    - cron: '0 12 * * *'
-    # Alert polling: every 4 hours
-    - cron: '0 0,4,8,16,20 * * *'
-    # Note: the 12:00 UTC slot handles both leaderboard + alerts
+  # Schedules removed 2026-07-14 — production stop (Andrew: stop automated
+  # activities until the economics P0 lands, PLAN-ECONOMICS-MASTER-v3).
+  # Cost while stopped: $0/month. Restore by reverting this commit; the
+  # removed triggers were:
+  #   - cron: '30 * * * *'          # auto-approval queue processing (hourly)
+  #   - cron: '0 12 * * *'          # daily leaderboard 12:00 UTC
+  #   - cron: '0 0,4,8,16,20 * * *' # alert polling every 4 hours
+  # The mode-selection and failure-issue steps below keep their schedule
+  # branches so the revert is a clean one-block restore.
   pull_request:
     branches: [main]
   workflow_dispatch:
