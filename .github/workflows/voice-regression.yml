@@ -15,7 +15,10 @@ name: voice-regression
 # Triggers (economics master plan P0.4):
 #   - pull_request (automatic) when the PR touches the writer prompt or the
 #     writer itself: src/two_bot/prompts/** or src/two_bot/writer.py. The
-#     suite goes red on the exact PRs that can break the voice. Advisory
+#     suite goes red on the exact PRs that can break the voice. Same-repo
+#     PRs only: forks receive no secrets, so the paid job would fail on a
+#     missing key with no way to self-green — it is skipped for forks (the
+#     required `test` check still covers them). Advisory
 #     gate: the repo's only *required* check is `test` (a path-filtered
 #     required check would wedge unrelated PRs as "expected"), but merge
 #     discipline treats ANY red check as blocking (INDEX §Standing rules).
@@ -75,6 +78,7 @@ jobs:
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'schedule' && github.event.schedule == '0 9 * * 0') ||
         (github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
           (github.event.action != 'labeled' || github.event.label.name == 'voice-check') &&
           (needs.changes.outputs.writer_paths == 'true' ||
            contains(github.event.pull_request.labels.*.name, 'voice-check')))
