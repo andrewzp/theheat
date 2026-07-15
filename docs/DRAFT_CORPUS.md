@@ -11,6 +11,96 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-15 — Daily corpus grading (0 fresh drafts; 6 carry-overs from Jul 9–14, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending drafts —
+**contracted from Jul 14's 8.** Two drafts have dropped from the queue since Jul 14: Randolph,
+Utah `all_time_high` (B+, graded Jul 14) and Ontario, Canada `fire` cluster (C+, graded
+Jul 14) are both absent, cause unconfirmed. The remaining 6 are an exact match to prior
+grading (same `draft_id`, score, text) — Stevensville, Maryland `all_time_high` (A-, graded
+Jul 9), Riyadh, Saudi Arabia `dust_event` (B+, graded Jul 10), Tepee Creek, Montana
+`all_time_high` (B+, graded Jul 10), interior Alaska `fire` (B+, graded Jul 11), western
+Siberia 3-signal `fire` cluster (B+, graded Jul 11), Basrah, Iraq `absolute_extreme`
+(A-, graded Jul 14). No re-grading performed; all 6 grades stand on their original record.
+
+**Staleness review as of 2026-07-15 ~15:07 UTC:** western Siberia fire cluster
+(`draft_20260711_062452_120`, created Jul11T06:24:52Z) is now ~104.7h old and still carries
+present-tense "today" in its text ("Three fire signals in the same patch of western Siberia
+today") — the same strict bulk-reject candidate flagged Jul 13 (~56.6h) and Jul 14 (~80.6h),
+now unactioned for a **3rd consecutive cycle**. Interior Alaska fire is the same ~104h age but
+contains no date/time language, so it stays clear under the established fire past-tense/
+no-reference carve-out. Stevensville, Riyadh dust_event, and Tepee Creek remain clear under
+the established past-tense-record carve-out regardless of age. Basrah is <9h old (Jul 14
+creation). **Bulk-reject attempted:** `gh api -X PATCH gists/...` requires the `gh` CLI,
+confirmed absent this session (`which gh` → command not found); no gist-write tool is exposed
+via the GitHub MCP server tools loaded this session (repo/PR/issue tools only, no gist scope).
+Skipped per the hard constraints, logged rather than failing the cycle — **47th consecutive
+skip** (May 13 → Jul 15). Operator should reject the western Siberia fire cluster via
+dashboard; it has now sat unactioned across three grading cycles.
+
+**Grade distribution:** 0 fresh drafts to grade. **A-rate: N/A.** Most recent measured cycle
+remains Jul 14 (33%, 1/3).
+
+**Headline: queue contraction, not a voice observation.** With P_tier, P_dust, and P9 all
+CONFIRMED and tracking closed as of Jul 14, and zero fresh drafts today, there is no new
+voice evidence this cycle. The one notable event is operational: Randolph and Ontario's
+disappearance from the queue is another instance of the unexplained single/multi-draft
+contraction pattern already logged for Anchorage (Jul 10→11) and Ahvaz (Jul 11→12) — cause
+still unconfirmed (bulk-reject, bulk-publish, or TTL/other sweep). Losing Ontario specifically
+removes the corpus's cleanest live test case for P5's fire-self-selection-streak break (still
+counted as evidence from Jul 14's grading; the corpus record doesn't depend on the draft
+remaining in the pending queue). Losing Randolph similarly doesn't erase A7's first instance,
+logged Jul 14.
+
+### Patterns / operational notes
+
+1. **Queue contraction, 3rd occurrence of the pattern.** Anchorage (Jul 10→11), Ahvaz
+   (Jul 11→12), now Randolph + Ontario (Jul 14→15) — all unexplained, all single-or-few-draft
+   drops between consecutive daily pulls with no corresponding rejection-event or staleness
+   trigger visible from the gist. Worth the operator checking the dashboard's own audit trail
+   for these four IDs if a pattern beyond coincidence is suspected.
+
+2. **Western Siberia fire cluster — 3rd consecutive cycle unactioned.** Flagged Jul 13
+   (~56.6h), Jul 14 (~80.6h), now Jul 15 (~104.7h) with "today" still present-tense in the
+   text. Write still unavailable this session (47th consecutive skip). Operator should reject
+   via dashboard independent of any A-rate/posting decision — this is now the longest-running
+   unactioned staleness candidate since the Basra-area cluster flagged Jul 1–6 (finally cleared
+   by the Jul 7 `main` merge / forecast-elapsed auto-reject fix, PR #385).
+
+### Followups (in priority order)
+
+1. **Operator: reject western Siberia fire cluster manually via dashboard** — now ~104.7h old
+   with present-tense "today" still in the text, unactioned for a 3rd consecutive cycle.
+2. **P_close and P_compound remain the highest-leverage unimplemented items** now that
+   P_tier/P_dust/P9 have all closed their tracking — see `docs/IMPROVEMENT_PLAN.md` for full
+   specs.
+3. **Watch for a 3rd instance of A6's phrase-reuse pattern** (permafrost-carbon fire mechanic)
+   and a 2nd instance of A7's pattern (location-level construction reuse) before promoting
+   either to an active proposal — note both source drafts (the Jul 11 pair for A6, Randolph for
+   A7) may no longer be in the live pending queue, but the corpus record stands.
+4. **Operator: investigate the recurring queue-contraction pattern** (Anchorage, Ahvaz, now
+   Randolph + Ontario) if an explanation isn't already visible from the dashboard's own audit
+   trail — 4 unexplained single/multi-draft drops across 5 cycles is enough to be worth a look.
+
+### Numbers
+
+- Pending drafts in queue: 6 (contracted from Jul 14's 8; 0 fresh; 6 carry-overs, exact match
+  to prior grading)
+- Fresh drafts graded: 0
+- A-rate: N/A (0 fresh); most recent measured cycle Jul 14, 33% (1/3)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle. **P_tier, P_dust, P9 remain CONFIRMED**
+  (tracking closed). P_close (22 cycles, unchanged), P_compound (10 cycles, unchanged), P5
+  (unchanged, Jul 14's counter-instance evidence stands despite Ontario's queue drop), A4/A5/
+  A6/A7 all unchanged from Jul 14.
+- Staleness bulk-reject: **1 strict candidate** (western Siberia fire cluster, ~104.7h old,
+  present-tense "today" — 3rd consecutive cycle unactioned); write skipped — `gh` CLI absent,
+  no gist-write MCP tool available (47th consecutive skip, May 13 → Jul 15)
+- Operational anomalies: queue contraction (Randolph + Ontario dropped, cause unconfirmed) —
+  4th/5th instance of this plan's recurring unexplained-contraction pattern
+
+---
+
 ## 2026-07-14 — Daily corpus grading (3 fresh drafts; 5 carry-overs from Jul 9–11, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 8 pending drafts. 5

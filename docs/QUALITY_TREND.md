@@ -68,6 +68,7 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-07-12 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 5 pending — exact match to 5 of Jul 11's 6 graded drafts (Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, interior Alaska fire B+, western Siberia fire cluster B+); no re-grading performed, all grades stand. **Ahvaz, Iran `absolute_extreme` (A-) drops from the queue** — cause unconfirmed, 2nd consecutive cycle of unexplained single-draft contraction (after Anchorage's Jul 10→11 departure). Losing Ahvaz costs the corpus its best open P_tier test case (it was 1 of 2 confirmations needed to close that proposal's tracking); its Jul 10 grade record is unaffected, but closing P_tier now needs a fresh target-type draft. No active-proposal evidence updates (P_close/P_compound/P5/P_tier/P_dust/P9/A4/A5/A6 all unchanged from Jul 11). 0 staleness candidates (Stevensville/Riyadh/Tepee Creek past-tense carve-out; both fires <33h, western Siberia's "today" still under the 48h line, watch ~2026-07-13T06:25Z). `gh` CLI absent, 44th consecutive skip. |
 | 2026-07-13 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Jul 12's 5 graded drafts (same `draft_id`s, scores, text); no re-grading performed, all grades stand. No active-proposal evidence updates (P_close/P_compound/P5/P_tier/P_dust/P9/A4/A5/A6 all unchanged from Jul 12). **1 strict staleness bulk-reject candidate newly identified:** western Siberia fire cluster, now ~56.6h old with "today" still in the text — crosses exactly the threshold flagged proactively in the Jul 11 and Jul 12 entries. Write skipped: `gh` CLI absent, no gist-write tool available via the GitHub MCP server this session (45th consecutive skip, May 13 → Jul 13) — logged for operator manual reject. Interior Alaska fire (same ~56.6h age, no date/time language) and the three past-tense record drafts (Stevensville/Riyadh/Tepee Creek) remain clear under the established carve-out. **Docs-freshness note:** `main`'s copies of these three docs were still at their Jul 6 state at session start (the #384 merge was a one-time snapshot, not a standing sync) — confirmed the rolling `daily-plan-current` branch itself has run every day since with no gap (Jul 7–12 all present); rebased this session's work onto fresh `main` cleanly, no re-grading performed. |
 | 2026-07-14 | 3 | 1 | 1 | 1 | 0 | **33%** | ✗ | 8 pending (5 carry-overs from Jul 9–11, unchanged; 3 fresh). **Headline: P_tier's tracking closes.** 1 A-: Basrah, Iraq absolute_extreme ("3°C above the 47°C threshold where the body's cooling mechanisms begin to fail faster than they can recover" — clean of band-label jargon, the **2nd independent post-fix confirmation** on a named target type after Jul 10's Ahvaz, closing P_tier's tracking on the same 2-clean-cycles bar P_dust/P9 used; declarative P_close "removes the ceiling"). 1 B+: Randolph, Utah all_time_high (134yr archive, standard P_compound double-qualifier, 10th cycle; P_close implied/failing — "normally bleeds off the heat" echoes this same city's own Jun 24 draft's "normally blunts the heat" near-verbatim, 20 days apart, different record type — new watch-item **A7** filed). 1 C+: Ontario, Canada fire cluster (2,374.8/883.7/817.1 MW — **P5 counter-instance**, breaks the fire category's 6-cycle self-selection streak; bare 3-signal-count restatement with zero ecosystem-specific mechanic, unlike this same cycle's western Siberia carry-over which proved cluster framing and a real mechanic are compatible). P_close 22nd cycle (1 positive, 1 failing). P_compound 10th cycle. **All three of this plan's shipped code fixes (P_tier, P_dust, P9) are now CONFIRMED.** 46th consecutive `gh` staleness skip — 1 strict candidate (western Siberia fire cluster, ~80.6h, "today" still present-tense, 2nd consecutive cycle unactioned). |
+| 2026-07-15 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue **contracted from Jul 14's 8 to 6** — Randolph, Utah all_time_high (B+) and Ontario, Canada fire cluster (C+) both drop, cause unconfirmed (3rd/4th instance of this plan's recurring unexplained queue-contraction pattern, after Anchorage Jul 10→11 and Ahvaz Jul 11→12). Remaining 6 are an exact match to prior grading (Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, interior Alaska fire B+, western Siberia fire cluster B+, Basrah absolute_extreme A-); no re-grading performed, all grades stand. No active-proposal evidence updates — P_close/P_compound/P5/A4/A5/A6/A7 all unchanged from Jul 14; P_tier/P_dust/P9 remain CONFIRMED, tracking closed. **Western Siberia fire cluster now unactioned for a 3rd consecutive cycle** (~104.7h old, "today" still present-tense). `gh` CLI absent, 47th consecutive skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -77,6 +78,31 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-07-15 — Staleness bulk-reject: 1 strict candidate identified (3rd consecutive cycle unactioned); write skipped (47th consecutive skip)
+
+**Status:** 6 pending drafts reviewed (0 fresh; 6 carry-overs from Jul 9–14). 1 strict
+bulk-reject candidate: **western Siberia fire cluster** (`draft_20260711_062452_120`, created
+Jul11T06:24:52Z, ~104.7h old, "Three fire signals in the same patch of western Siberia
+**today**" — present-tense date-baked language, forecast event long over). Flagged Jul 13
+(~56.6h) and Jul 14 (~80.6h), now unactioned for a **3rd consecutive cycle**. Interior Alaska
+fire (same ~104h age) contains no date/time language and stays clear under the established
+carve-out; Stevensville/Riyadh dust_event/Tepee Creek remain clear under the past-tense-record
+carve-out regardless of age; Basrah is <9h old. **Write attempted and skipped:** `gh api -X
+PATCH gists/...` requires the `gh` CLI, confirmed absent this session (`which gh` → command
+not found); no gist-write tool is exposed via the GitHub MCP server tools loaded this session
+(repo/PR/issue tools only, no gist scope). Per the hard constraints, logged rather than failing
+the cycle — **47th consecutive skip** (May 13 → Jul 15). Operator should reject the western
+Siberia fire cluster via dashboard; it has now sat unactioned across three grading cycles, the
+longest-running unactioned candidate since the Basra-area cluster flagged Jul 1–6 (cleared by
+the Jul 7 `main` merge / PR #385's forecast-elapsed auto-reject).
+
+**Separately (not a staleness rejection, logging for the record):** Randolph, Utah
+`all_time_high` (B+, graded Jul 14) and Ontario, Canada `fire` cluster (C+, graded Jul 14) are
+both absent from today's pull — cause unconfirmed (bulk-reject, bulk-publish, or TTL/other
+sweep not observable from the gist). This is the 3rd/4th instance of an unexplained
+queue-contraction pattern this plan has logged, after Anchorage (Jul 10→11) and Ahvaz
+(Jul 11→12); see `docs/DRAFT_CORPUS.md` Jul 15 entry, Followup #4.
 
 ### 2026-07-14 — Staleness bulk-reject: 1 strict candidate identified (2nd consecutive cycle unactioned); write skipped (46th consecutive skip)
 

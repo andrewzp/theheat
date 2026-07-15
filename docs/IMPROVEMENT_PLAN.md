@@ -2,6 +2,25 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 15: 0 fresh drafts; queue contracted from 8 to 6 (Randolph, Utah `all_time_high` B+
+> and Ontario, Canada `fire` C+ both drop, cause unconfirmed).** Remaining 6 pending are an
+> exact match to prior grading — Stevensville, Maryland `all_time_high` (A-, Jul 9), Riyadh,
+> Saudi Arabia `dust_event` (B+, Jul 10), Tepee Creek, Montana `all_time_high` (B+, Jul 10),
+> interior Alaska `fire` (B+, Jul 11), western Siberia 3-signal `fire` cluster (B+, Jul 11),
+> Basrah, Iraq `absolute_extreme` (A-, Jul 14); no re-grading performed, all grades stand.
+> Randolph and Ontario's disappearance is another instance of this plan's recurring
+> unexplained queue-contraction pattern (after Anchorage Jul 10→11, Ahvaz Jul 11→12) — losing
+> Ontario in particular removes the corpus's cleanest live P5 counter-instance test case from
+> the pending queue, though the Jul 14 grading record and its evidence stand regardless of
+> queue presence. No active-proposal evidence updates this cycle (no fresh drafts): **P_close**
+> (22 cycles), **P_compound** (10 cycles), **P5**, **A4/A5/A6/A7** all retain their Jul 14
+> counts and "Last seen" dates. P_tier/P_dust/P9 remain CONFIRMED, tracking closed. **Western
+> Siberia fire cluster crosses into a 3rd consecutive unactioned staleness cycle** (~104.7h old
+> at grading, present-tense "today" still in the text; flagged Jul 13 at ~56.6h, Jul 14 at
+> ~80.6h). Write attempted and skipped — `gh` CLI absent, no gist-write tool available via the
+> GitHub MCP server this session (**47th consecutive skip**, May 13 → Jul 15). Operator should
+> reject the western Siberia draft via dashboard, independent of any A-rate/posting decision.
+>
 > **Jul 14: 3 fresh drafts, 5 carry-overs, 33% A-rate. Headline: P_tier's tracking closes —
 > all three of this plan's shipped code fixes (P_tier, P_dust, P9) are now CONFIRMED.** Basrah,
 > Iraq `absolute_extreme` ([7], A-) is the 2nd independent post-fix confirmation on a named
@@ -365,32 +384,33 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.100.0` per `main`'s `VERSION` file (checked 2026-07-14; was `0.9.97.0` per the `BRIEFING.md` snapshot this plan cited through Jul 13 — no newer handoff doc confirmed this session). Intervening `main` commits since Jul 8: a new `heat_records_cluster` signal type (#414, PR-A/B/C, tier-aware/global/significance-gated, **default-OFF `THEHEAT_RECORDS_CLUSTER_ENABLED`, manual-approval-only** — no instance in today's queue) plus unrelated economics-plan and handoff-docs work. Since the Jul 7 cycle: PR #392 (row 6 editor brief), **PR #397 (row 7 precip four-moves — P9 fix)**, PR #398/#399 (row 14 fire geocode + per-country cap), PR #402/**#404** (row 11 marine + **cyclone four-moves, all 5 kinds**), PR #408 (precip 300mm-threshold cross-gate), PR #409 (coral DHW `_stress_level_for_dhw` full NOAA scale), PR #412 (row 9 engagement-metrics lane). Bet A fully live: `THEHEAT_NEWS_BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`. Prior: 0.9.86.0 (Jul 7) — #384 `main` merge, #385 forecast-elapsed staleness sweep, #386 detection-plumbing ban + dust PM10 WHO anchor (P_tier + P_dust fix), #387 critic carve-out, #388 `cyclone_land_threat`. |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **33% (1/3, Jul 14).** 1 A-: Basrah `absolute_extreme` (P_tier's 2nd post-fix confirmation, closing its tracking). 1 B+: Randolph `all_time_high` (P_compound + P_close implied). 1 C+: Ontario fire cluster (P5 counter-instance — no named mechanic). Prior: no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3)**. |
-| Gap | **17pp below bar** (50% − 33%, Jul 14, n=3). Small-n; the fix-confirmation news (P_tier closing) is the more durable signal this cycle than the A-rate number itself. P_close and P_compound are now the highest-leverage *unimplemented* levers with all three shipped code fixes (P_tier, P_dust, P9) confirmed. A6 still needs a 3rd instance to promote; new A7 needs a 2nd. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 14 all below/no-data or half-boundary except Jun 29. **Queue at 8 pending as of Jul 14** (5 carry-overs from Jul 9–11 unchanged + 3 fresh: Basrah A-, Randolph B+, Ontario C+). **1 draft (western Siberia fire cluster) is a strict staleness bulk-reject candidate for a 2nd consecutive cycle** — recommend the operator action this independent of the A-rate/posting question. |
+| Last cycle A-rate | **No fresh drafts Jul 15.** Most recent measured: **33% (1/3, Jul 14)** — 1 A-: Basrah `absolute_extreme` (P_tier's 2nd post-fix confirmation, closing its tracking). 1 B+: Randolph `all_time_high` (P_compound + P_close implied). 1 C+: Ontario fire cluster (P5 counter-instance — no named mechanic). Prior: no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts**. |
+| Gap | **17pp below bar** (50% − 33%, most recent measured cycle Jul 14, n=3). No fresh measurement Jul 15. P_close and P_compound are now the highest-leverage *unimplemented* levers with all three shipped code fixes (P_tier, P_dust, P9) confirmed. A6 still needs a 3rd instance to promote; new A7 needs a 2nd. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 14 all below/no-data or half-boundary except Jun 29, Jul 15 no fresh drafts. **Queue contracted to 6 pending as of Jul 15** (down from 8 Jul 14 — Randolph B+ and Ontario C+ both dropped, cause unconfirmed). **1 draft (western Siberia fire cluster) is a strict staleness bulk-reject candidate for a 3rd consecutive cycle** — recommend the operator action this independent of the A-rate/posting question. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **8 pending as of Jul 14 grading** (1 A- Stevensville MD all_time_high, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT all_time_high, 2 B+ fire [interior Alaska, western Siberia 3-signal cluster], 1 A- Basrah absolute_extreme [new], 1 B+ Randolph UT all_time_high [new], 1 C+ Ontario fire cluster [new]). **1 of the 8 (western Siberia fire cluster) is a strict staleness bulk-reject candidate** (>48h old, ~80.6h, present-tense "today" still in the text, 2nd consecutive cycle unactioned) — flagged for operator, write unavailable this session. Bot at 0.9.100.0 per `main`'s `VERSION` (was 0.9.97.0 through Jul 13); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking is now CLOSED** (2 independent post-fix confirmations: Ahvaz Jul 10, Basrah Jul 14) — no further target-type draft needed for this proposal. |
+| Queue status | **6 pending as of Jul 15 grading** (contracted from 8 Jul 14; Randolph UT all_time_high and Ontario fire cluster both dropped): 1 A- Stevensville MD all_time_high, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT all_time_high, 2 B+ fire [interior Alaska, western Siberia 3-signal cluster], 1 A- Basrah absolute_extreme. **1 of the 6 (western Siberia fire cluster) is a strict staleness bulk-reject candidate** (>48h old, ~104.7h, present-tense "today" still in the text, 3rd consecutive cycle unactioned) — flagged for operator, write unavailable this session. Bot at 0.9.100.0 per `main`'s `VERSION` (no newer handoff doc confirmed this session); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking is now CLOSED** (2 independent post-fix confirmations: Ahvaz Jul 10, Basrah Jul 14) — no further target-type draft needed for this proposal. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 14: **P_dust, P9, and P_tier are all now CONFIRMED,
-tracking closed** — Basrah, Iraq `absolute_extreme` is the 2nd independent post-fix
+Ordered by leverage. Priority as of Jul 15 (unchanged from Jul 14 — zero fresh drafts means no
+new evidence to reorder against): **P_dust, P9, and P_tier remain CONFIRMED, tracking
+closed** — Basrah, Iraq `absolute_extreme` (Jul 14) is the 2nd independent post-fix
 confirmation on a named target type (after Jul 10's Ahvaz), meeting the same
 2-independent-clean-cycles bar P_dust and P9 used to close their own tracking (see
 `docs/DRAFT_CORPUS.md` Jul 14 entry).
 With all three shipped code fixes closed, the remaining *unimplemented* active proposals,
-reordered by current leverage: **P_close** (22 cycles, last evidence Jul 14: 1 positive
+carried forward at Jul 14's leverage: **P_close** (22 cycles, last evidence Jul 14: 1 positive
 [Basrah] / 1 failing [Randolph]) > **P_compound** (10 cycles, last evidence Jul 14: Randolph,
-standard double-qualifier) > **P5** (fire's 6-cycle self-selection streak breaks for the
-first time via Ontario's cluster-enumeration-only draft — a fresh counter-instance worth
-tracking alongside the established dust_event gap). **A4, A5, and A6 not tested this cycle**
-(no `air_quality_hazard` or `cyclone_land_threat` draft, and no 3rd permafrost-carbon fire
-instance, Jul 14). **New awaiting-evidence item A7 filed** (Randolph, Utah reuses its own
-Jun 24 corpus draft's "normally [verb]s the heat" construction near-verbatim 20 days later on
-a different record type — 1 instance, watching for a 2nd location before promotion). **One
+standard double-qualifier) > **P5** (fire's 6-cycle self-selection streak broke for the
+first time via Ontario's cluster-enumeration-only draft — Ontario has since dropped from the
+pending queue, Jul 15, but the Jul 14 grading record and evidence stand). **A4, A5, and A6 not
+tested this cycle** (no fresh drafts at all, Jul 15). **Awaiting-evidence item A7** (Randolph,
+Utah reused its own Jun 24 corpus draft's "normally [verb]s the heat" construction
+near-verbatim 20 days later on a different record type — 1 instance, watching for a 2nd
+location before promotion; Randolph has also since dropped from the pending queue). **One
 operational item, not a voice proposal:** the western Siberia fire cluster draft remains a
-strict staleness bulk-reject candidate for a 2nd consecutive cycle (see Current state and
+strict staleness bulk-reject candidate for a 3rd consecutive cycle (see Current state and
 `docs/QUALITY_TREND.md`) — flagged for the operator, independent of proposal leverage.
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
