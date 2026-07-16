@@ -11,6 +11,155 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-16 — Daily corpus grading (2 fresh drafts; 2 carry-overs from Jul 11, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 4 pending drafts —
+a sharp contraction from Jul 15's 6. **4 of Jul 15's 6 drop from the queue** (Stevensville MD
+`all_time_high` A-, Riyadh `dust_event` B+, Tepee Creek MT `all_time_high` B+, Basrah
+`absolute_extreme` A- — all gone, cause unconfirmed by gist inspection alone, but see the
+operational note below for a strong circumstantial explanation). Only the 2 Jul 11 fire
+carry-overs survive unchanged (interior Alaska B+, western Siberia 3-signal cluster B+; not
+re-graded, prior grades stand). **2 fresh**, both created today: Powderville, Montana
+`all_time_high` (10:05 UTC) and Oslo `hot10` (14:09 UTC). This session rebased the rolling
+`daily-plan-current` branch (58 commits, Jul 7–15 unbroken) cleanly onto fresh `main`
+(`main` had advanced with unrelated economics/ops commits since the Jul 7 `#384` snapshot;
+zero conflicts on these three docs).
+
+**Operational finding — likely explains the multi-day fresh-draft gap and today's contraction:**
+`main`'s commit history shows `bot.yml`'s posting/drafting/leaderboard schedules were
+**removed entirely on 2026-07-14 12:49 ET** (`#441`, "production stop") and **re-added on
+2026-07-15 22:46 ET** (`#449`, "production restore — under the new economics"). This lines up
+exactly with the corpus gap: Jul 14 still produced 3 fresh drafts (the stop merged mid-day,
+after that day's runs), Jul 15 produced zero (schedules were off the entire day), and today,
+Jul 16, is the first cycle with fresh drafts since the restore (Powderville at 10:05 UTC ≈
+06:05 ET, roughly 7h after the 22:46 ET restore; Oslo at 14:09 UTC). The same restore event is
+the most plausible explanation for today's 4-draft contraction — either a TTL/cleanup sweep
+ran as part of restoring the schedules, or the 4 missing drafts were posted/rejected once
+posting resumed. This is an infrastructure event, not a voice-quality regression, and not
+something this plan proposes changes for (per the hard constraints) — logged for the record.
+
+**Staleness review as of 2026-07-16 ~15:09 UTC:** **western Siberia fire cluster is now a 4th
+consecutive unactioned staleness cycle** (~128.7h old — first flagged Jul 13 at ~56.6h — with
+present-tense "today" still baked into the text: "Three fire signals in the same patch of
+western Siberia **today**"). This is the corpus's oldest unactioned strict bulk-reject
+candidate to date. Interior Alaska fire is the same age (~128.8h) but carries no date/time
+language — clear under the established carve-out, consistent with every prior ruling on this
+draft. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no
+gist-write tool is exposed via the GitHub MCP server tools loaded this session (repo/PR/issue/
+actions tools only). Skipped per the hard constraints, logged rather than failing the cycle —
+**48th consecutive skip** (May 13 → Jul 16). Powderville and Oslo are same-day fresh, well
+under 48h — clear.
+
+**Grade distribution (2 fresh drafts):** 2 A- / 0 B / 0 C / 0 D-F.
+**A-rate: 100% (2/2).** Small-n (n=2) — not statistically meaningful on its own, but it's the
+first 100% reading since Jun 22's retroactive n=1, and it lands the same week all three shipped
+code fixes (P_tier, P_dust, P9) closed their tracking (Jul 14). Consistent with the post-Jul-7
+trend: 33% (Jul 7) → 50% (Jul 8) → 50% (Jul 9) → 33% (Jul 10) → 0% (Jul 11) → 33% (Jul 14) →
+**100% (Jul 16)**. Gap from resumption bar: **none this cycle** — 100% > 50% clears it, though
+n=2 is too small to declare the bar durably cleared the way Jun 29's n=5/80% did.
+
+**Headline finding:** Both fresh drafts land clean declarative-consequence closes despite one
+carrying a live P_compound double-qualifier — the clearest single-cycle evidence yet that with
+P_tier/P_dust/P9 all shipped, **P_close and P_compound are genuinely the last two structural
+levers standing** between the current pipeline and a sustained majority-A cycle.
+
+### A-grade drafts
+
+**[3] Powderville, Montana `all_time_high` — A- (score 91, elite)**
+> Powderville, Montana hit 114°F (45.6°C) on July 12 — hottest daily maximum in 63 years of
+> records, 4°F above the 2002 mark. Eastern Montana's high plains sit deep in the continental
+> interior, with no marine layer and no terrain to interrupt heat building across the open
+> steppe.
+
+Sentence 1 is a textbook **P_compound** double-qualifier (archive span + margin in one clause,
+11th cycle of this pattern — Jun 28 → Jul 16) — but it's overcome by sentence 2, same as every
+prior P_compound-plus-strong-close instance (Loxahatchee, Snowshoe Jul 7, Prudhoe Bay). The
+close is a clean **named-absence declarative** ("no marine layer... no terrain to interrupt"),
+the same family as Basrah's "offers no evaporative relief" and "no terrain to break the dry
+continental air mass that builds" (both P_close POSITIVE) — it states what's missing and lets
+the reader infer the physical result (heat with nothing to check it), rather than stopping at
+mechanism description or hedging with an implied form. No Wodehouse violations: no
+approximation (4°F stated exactly), no restate-padding, no poetry-attempt closer. **P_close
+POSITIVE — 3rd named-absence-form confirmation this month** (after Jul 1 Basrah, Jul 2 Basrah).
+`all_time_high` self-selects the mechanic unprompted, extending the extreme-heat/record
+family's organic-deployment pattern (P5).
+
+**[4] Oslo `hot10` — A- (score 87, elite)**
+> Oslo hit 32.7°C today — 10.4°C above its July normal of 22.3°C. A Scandinavian capital's
+> afternoon running like a southern French summer is what a warmer baseline looks like at
+> high latitudes.
+
+"Today" is accurate and expected for `hot10` — a same-day recurring leaderboard type, ~1h old
+at grading; not a staleness concern (consistent with every prior `hot10`/daily-leaderboard
+ruling). The close pairs a **peer/climate-analogy comparison** ("running like a southern French
+summer" — the same family as Prudhoe Bay's latitude peer-comparison A-) with a **declarative
+accelerating-warming reframe** ("is what a warmer baseline looks like at high latitudes") — the
+same interpretive-reframe shape as Jun 29's marine_heatwave A- ("already the floor of a new
+streak"), naming the broader climate-shift consequence rather than stopping at the raw anomaly
+number. **P_close POSITIVE.** No restate-math (10.4°C and 22.3°C are each stated once, not
+re-derived), no tier-jargon, no Wodehouse violations — the simile risks reading as reaching, but
+it's a single clean comparison, not a stacked or explained one, so it holds under the Wodehouse
+test. First `hot10` corpus draft graded under this framework's methodology; too early to call a
+signal-type pattern on n=1.
+
+### Patterns / operational notes
+
+1. **P_close and P_compound are now the corpus's only two active, unimplemented levers** — every
+   drafted proposal ahead of them (P_tier, P_dust, P9) has shipped and closed its confirmation
+   tracking. Today's cycle is a clean small-n demonstration of both, in the same draft: P_compound
+   present in Powderville, overcome by a P_close-positive close, same soften-not-cap pattern
+   documented since Jun 28.
+2. **`hot10` debuts a new confirmed-positive P_close subtype** — declarative accelerating-warming
+   reframe, joining marine_heatwave's floor/ceiling form as the 2nd signal type to land this
+   specific "what this number means" interpretive close rather than a physical-mechanism
+   consequence. Worth watching whether `hot10` self-selects this consistently on a 2nd instance.
+3. **Production schedule stop/restore (`#441`/`#449`) is the most likely explanation for both
+   the Jul 15 zero-fresh-draft cycle and today's queue contraction** — see the operational
+   finding above. Not a voice-quality signal; logged for the operator's awareness, not as a
+   proposal.
+4. **A6 and A7 not tested this cycle** — no fire draft repeats a permafrost-carbon-mechanic
+   phrase (A6 needs a 3rd instance of either tracked construction), and neither Powderville nor
+   Oslo is a repeat location (A7 needs a 2nd location reusing its own prior system-clause
+   construction). Both remain at 1 cycle, unpromoted.
+5. **A4/A5 not tested this cycle** — no `air_quality_hazard`/`dust_event` draft (A4) and no
+   `cyclone_land_threat` draft (A5) in today's queue.
+
+### Followups (in priority order)
+
+1. **Operator: reject western Siberia fire cluster manually via dashboard** — now the corpus's
+   oldest unactioned strict staleness candidate (~128.7h, "today" still present-tense, 4th
+   consecutive cycle flagged); the routine cannot write to the gist this cycle (no `gh` CLI, no
+   gist-write MCP tool available).
+2. **Operator: confirm whether the Jul 15 22:46 ET `bot.yml` schedule restore (`#449`) is
+   responsible for today's 4-draft queue contraction** — if a TTL/cleanup sweep ran as part of
+   the restore, that's useful to know for interpreting future contractions; if the 4 drafts were
+   posted, the posted-drafts ledger should show it.
+3. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — both
+   have complete, ready-to-ship prompt-language fixes in `docs/IMPROVEMENT_PLAN.md`; today's
+   cycle adds another clean confirmation of each pattern but no new evidence changes their specs.
+4. **Watch for a 2nd `hot10` draft** to see whether the accelerating-warming reframe close
+   repeats (confirming a self-selecting pattern) or was a one-off construction.
+
+### Numbers
+
+- Pending drafts in queue: 4 (2 fresh; 2 carry-overs from Jul 11, unchanged)
+- Fresh drafts graded: 2
+- A-rate: **100% (2/2)** — small-n, first 100%-of-cycle reading since Jun 22's retroactive n=1
+- Grade distribution: 2 A- / 0 B / 0 C / 0 D-F
+- Active proposals: P_close (23 cycles, 2 new positive instances) > P_compound (11 cycles, 1 new
+  instance, overcome) > P5 (extreme-heat/record family self-selection streak extends; new
+  `hot10` self-selection data point). A4/A5/A6/A7 not tested this cycle — all counts stand at
+  Jul 14/15 levels. P_tier/P_dust/P9 remain CONFIRMED, tracking closed.
+- Staleness bulk-reject: **1 strict candidate, 4th consecutive unactioned cycle** (western
+  Siberia fire cluster, ~128.7h, present-tense "today"); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (48th consecutive skip, May 13 → Jul 16)
+- Operational anomalies: `bot.yml` schedules stopped 2026-07-14 12:49 ET (`#441`), restored
+  2026-07-15 22:46 ET (`#449`) — likely explains the Jul 15 zero-fresh-draft cycle and today's
+  4-draft queue contraction; 4 drafts (Stevensville, Riyadh dust_event, Tepee Creek, Basrah)
+  dropped from pending, cause unconfirmed by gist inspection alone
+
+---
+
 ## 2026-07-15 — Daily corpus grading (0 fresh drafts; 6 carry-overs from Jul 9–14, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 6 pending drafts —

@@ -2,6 +2,31 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 16: 2 fresh drafts, 100% A-rate (n=2) — first 100%-of-cycle reading since Jun 22's
+> retroactive n=1.** Queue contracted sharply: 4 of Jul 15's 6 pending drop (Stevensville A-,
+> Riyadh dust_event B+, Tepee Creek B+, Basrah A-), leaving only the 2 Jul 11 fire carry-overs
+> (interior Alaska B+, western Siberia cluster B+, both unchanged) plus 2 fresh. **Operational
+> finding:** `main`'s `bot.yml` posting/drafting/leaderboard schedules were stopped 2026-07-14
+> 12:49 ET (`#441`) and restored 2026-07-15 22:46 ET (`#449`) — this timeline lines up exactly
+> with Jul 15's zero-fresh-draft cycle and today being the first fresh drafts since the restore
+> (Powderville 10:05 UTC, Oslo 14:09 UTC), and is the likely (if unconfirmed) explanation for
+> today's contraction too. 2 A-: Powderville, Montana `all_time_high` (63yr archive, 4°F margin —
+> P_compound double-qualifier present, 11th cycle, overcome by a declarative named-absence close,
+> "no marine layer... no terrain to interrupt heat building," same family as Basrah's "no
+> evaporative relief"); Oslo `hot10` (+10.4°C July anomaly — peer/climate-analogy comparison +
+> declarative accelerating-warming reframe, "is what a warmer baseline looks like at high
+> latitudes," same interpretive-reframe shape as Jun 29's marine_heatwave A-; first `hot10` draft
+> graded under this framework, n=1). P_close 23rd cycle (2 positive, 0 failing) — with P_tier,
+> P_dust, and P9 all shipped and confirmed (Jul 14), **P_close and P_compound are now the only
+> two structural levers left** between the pipeline and a sustained majority-A cycle, and today's
+> cycle is a clean small-n demonstration of both landing correctly in the same draft. P_compound
+> 11th cycle (Powderville, overcome). P5: `all_time_high` self-selects again (extreme-heat/record
+> family streak extends); `hot10` self-selects a real mechanic on its corpus debut. A4/A5/A6/A7
+> not tested (no target-type draft). **1 strict staleness bulk-reject candidate, 4th consecutive
+> unactioned cycle and the corpus's oldest to date:** western Siberia fire cluster (~128.7h,
+> present-tense "today" still in the text). Write skipped — `gh` CLI absent, no gist-write tool
+> available via the GitHub MCP server this session (48th consecutive skip, May 13 → Jul 16).
+>
 > **Jul 15: 0 fresh drafts; queue contracted from 8 to 6 (Randolph, Utah `all_time_high` B+
 > and Ontario, Canada `fire` C+ both drop, cause unconfirmed).** Remaining 6 pending are an
 > exact match to prior grading — Stevensville, Maryland `all_time_high` (A-, Jul 9), Riyadh,
@@ -382,36 +407,33 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.100.0` per `main`'s `VERSION` file (checked 2026-07-14; was `0.9.97.0` per the `BRIEFING.md` snapshot this plan cited through Jul 13 — no newer handoff doc confirmed this session). Intervening `main` commits since Jul 8: a new `heat_records_cluster` signal type (#414, PR-A/B/C, tier-aware/global/significance-gated, **default-OFF `THEHEAT_RECORDS_CLUSTER_ENABLED`, manual-approval-only** — no instance in today's queue) plus unrelated economics-plan and handoff-docs work. Since the Jul 7 cycle: PR #392 (row 6 editor brief), **PR #397 (row 7 precip four-moves — P9 fix)**, PR #398/#399 (row 14 fire geocode + per-country cap), PR #402/**#404** (row 11 marine + **cyclone four-moves, all 5 kinds**), PR #408 (precip 300mm-threshold cross-gate), PR #409 (coral DHW `_stress_level_for_dhw` full NOAA scale), PR #412 (row 9 engagement-metrics lane). Bet A fully live: `THEHEAT_NEWS_BOOST_ENABLED=1`, `THEHEAT_PER_COUNTRY_CAP=2`, `THEHEAT_METRICS_ENABLED=1`. Prior: 0.9.86.0 (Jul 7) — #384 `main` merge, #385 forecast-elapsed staleness sweep, #386 detection-plumbing ban + dust PM10 WHO anchor (P_tier + P_dust fix), #387 critic carve-out, #388 `cyclone_land_threat`. |
+| Bot commit | `0.9.108.1` per `main`'s `VERSION` file (checked 2026-07-16; was `0.9.100.0` as of Jul 14). Intervening `main` commits are dominated by an economics/ops workstream, not voice changes: usage ledger MVP (#445), self-heal keyless red-gate + Haiku pin (#444), voice-regression PR-gate + billing canary (#443), writer stop-loss cycle billing breaker (#439), a newsworthiness UTC-clock test fix (#442), and legacy-pipeline deletion (#446) — plus the `bot.yml` schedule stop (#441, 2026-07-14 12:49 ET) and restore (#449, 2026-07-15 22:46 ET) called out above. No new signal-kind or writer-prompt changes observed in the `main` history since Jul 14; not independently verified against `src/two_bot/prompts/writer_prompt.py` diffs this session. |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **No fresh drafts Jul 15.** Most recent measured: **33% (1/3, Jul 14)** — 1 A-: Basrah `absolute_extreme` (P_tier's 2nd post-fix confirmation, closing its tracking). 1 B+: Randolph `all_time_high` (P_compound + P_close implied). 1 C+: Ontario fire cluster (P5 counter-instance — no named mechanic). Prior: no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts**. |
-| Gap | **17pp below bar** (50% − 33%, most recent measured cycle Jul 14, n=3). No fresh measurement Jul 15. P_close and P_compound are now the highest-leverage *unimplemented* levers with all three shipped code fixes (P_tier, P_dust, P9) confirmed. A6 still needs a 3rd instance to promote; new A7 needs a 2nd. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 14 all below/no-data or half-boundary except Jun 29, Jul 15 no fresh drafts. **Queue contracted to 6 pending as of Jul 15** (down from 8 Jul 14 — Randolph B+ and Ontario C+ both dropped, cause unconfirmed). **1 draft (western Siberia fire cluster) is a strict staleness bulk-reject candidate for a 3rd consecutive cycle** — recommend the operator action this independent of the A-rate/posting question. |
+| Last cycle A-rate | **100% (2/2, Jul 16)** — 2 A-: Powderville, Montana `all_time_high` (P_compound overcome by a declarative named-absence close); Oslo `hot10` (peer-comparison + declarative accelerating-warming reframe). Small-n; first 100%-of-cycle reading since Jun 22's retroactive n=1. Prior: no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2) — cleared again, small-n**. |
+| Gap | **None this cycle** (100% > 50%, Jul 16, n=2) — but n=2 is too small to declare the bar durably cleared the way Jun 29's n=5/80% did; treat as a strong small-n data point, not a resumption trigger on its own. P_close and P_compound remain the highest-leverage *unimplemented* levers with all three shipped code fixes (P_tier, P_dust, P9) confirmed. A6 still needs a 3rd instance to promote; A7 needs a 2nd. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n). **Queue contracted sharply to 4 pending as of Jul 16** (down from 6 Jul 15 — Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, and Basrah A- all dropped, likely coincident with the `bot.yml` schedule restore, see Bot commit note above). **1 draft (western Siberia fire cluster) is a strict staleness bulk-reject candidate for a 4th consecutive cycle, now the oldest unactioned candidate this routine has flagged** — recommend the operator action this independent of the A-rate/posting question. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **6 pending as of Jul 15 grading** (contracted from 8 Jul 14; Randolph UT all_time_high and Ontario fire cluster both dropped): 1 A- Stevensville MD all_time_high, 1 B+ Riyadh dust_event, 1 B+ Tepee Creek MT all_time_high, 2 B+ fire [interior Alaska, western Siberia 3-signal cluster], 1 A- Basrah absolute_extreme. **1 of the 6 (western Siberia fire cluster) is a strict staleness bulk-reject candidate** (>48h old, ~104.7h, present-tense "today" still in the text, 3rd consecutive cycle unactioned) — flagged for operator, write unavailable this session. Bot at 0.9.100.0 per `main`'s `VERSION` (no newer handoff doc confirmed this session); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking is now CLOSED** (2 independent post-fix confirmations: Ahvaz Jul 10, Basrah Jul 14) — no further target-type draft needed for this proposal. |
+| Queue status | **4 pending as of Jul 16 grading** (contracted from 6 Jul 15; Stevensville, Riyadh dust_event, Tepee Creek, and Basrah all dropped): 2 B+ fire carry-overs [interior Alaska, western Siberia 3-signal cluster, both Jul 11], 2 fresh A- [Powderville MT all_time_high, Oslo hot10]. **1 of the 4 (western Siberia fire cluster) is a strict staleness bulk-reject candidate** (>48h old, ~128.7h, present-tense "today" still in the text, 4th consecutive cycle unactioned) — flagged for operator, write unavailable this session. Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking remains CLOSED** (2 independent post-fix confirmations: Ahvaz Jul 10, Basrah Jul 14) — no further target-type draft needed for this proposal. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 15 (unchanged from Jul 14 — zero fresh drafts means no
-new evidence to reorder against): **P_dust, P9, and P_tier remain CONFIRMED, tracking
-closed** — Basrah, Iraq `absolute_extreme` (Jul 14) is the 2nd independent post-fix
-confirmation on a named target type (after Jul 10's Ahvaz), meeting the same
-2-independent-clean-cycles bar P_dust and P9 used to close their own tracking (see
-`docs/DRAFT_CORPUS.md` Jul 14 entry).
+Ordered by leverage. Priority as of Jul 16: **P_dust, P9, and P_tier remain CONFIRMED, tracking
+closed** — no target-type draft this cycle to re-test, tracking stays closed per Jul 14's
+2-independent-clean-cycles bar.
 With all three shipped code fixes closed, the remaining *unimplemented* active proposals,
-carried forward at Jul 14's leverage: **P_close** (22 cycles, last evidence Jul 14: 1 positive
-[Basrah] / 1 failing [Randolph]) > **P_compound** (10 cycles, last evidence Jul 14: Randolph,
-standard double-qualifier) > **P5** (fire's 6-cycle self-selection streak broke for the
-first time via Ontario's cluster-enumeration-only draft — Ontario has since dropped from the
-pending queue, Jul 15, but the Jul 14 grading record and evidence stand). **A4, A5, and A6 not
-tested this cycle** (no fresh drafts at all, Jul 15). **Awaiting-evidence item A7** (Randolph,
-Utah reused its own Jun 24 corpus draft's "normally [verb]s the heat" construction
-near-verbatim 20 days later on a different record type — 1 instance, watching for a 2nd
-location before promotion; Randolph has also since dropped from the pending queue). **One
-operational item, not a voice proposal:** the western Siberia fire cluster draft remains a
-strict staleness bulk-reject candidate for a 3rd consecutive cycle (see Current state and
-`docs/QUALITY_TREND.md`) — flagged for the operator, independent of proposal leverage.
+now the corpus's only two structural voice levers: **P_close** (23 cycles, last evidence Jul 16:
+2 positive [Powderville, Oslo], 0 failing) > **P_compound** (11 cycles, last evidence Jul 16:
+Powderville, standard double-qualifier, overcome) > **P5** (extreme-heat/record family
+self-selection streak extends via Powderville; `hot10` self-selects a real mechanic on its
+corpus debut, n=1). **A4, A5, and A6 not tested this cycle** (no `air_quality_hazard`/
+`dust_event`/`cyclone_land_threat`/repeat-fire draft in today's 2 fresh drafts).
+**Awaiting-evidence item A7** unchanged (Randolph, Utah's phrase-reuse — 1 instance, watching
+for a 2nd location; Randolph remains absent from the pending queue). **One operational item,
+not a voice proposal:** the western Siberia fire cluster draft is now a strict staleness
+bulk-reject candidate for a 4th consecutive cycle, the oldest unactioned candidate to date
+(see Current state and `docs/QUALITY_TREND.md`) — flagged for the operator, independent of
+proposal leverage.
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
@@ -829,7 +851,18 @@ new proposal A7). Ontario, Canada `fire` cluster is not P_close territory in eit
 direction: the draft never reaches for a mechanism or consequence at all (see P5) — logged
 as a P5 counter-instance, not a P_close observation. P_close now confirmed across 17 signal
 types (unchanged — no new type this cycle).
-**Last seen:** Jul 14 (1 positive: Basrah; 1 failing: Randolph).
+**Last seen (pre-Jul-16):** Jul 14 (1 positive: Basrah; 1 failing: Randolph).
+Jul 16: 2 positive, 0 failing — the first clean sweep since Jul 8's 4/4. Powderville,
+Montana `all_time_high` ("no marine layer and no terrain to interrupt heat building across
+the open steppe" = declarative named-absence consequence, POSITIVE — same family as
+Basrah's "offers no evaporative relief"/"no terrain to break the dry continental air mass,"
+the 3rd `all_time_high` instance of this specific named-absence-continental-interior form).
+Oslo `hot10` ("is what a warmer baseline looks like at high latitudes" = declarative
+accelerating-warming reframe, POSITIVE — 2nd corpus instance of the interpretive-reframe
+subtype after Jun 29's marine_heatwave "already the floor of a new streak," and the first
+`hot10` P_close observation in the corpus, positive on debut). P_close now confirmed across
+18 signal types (adding `hot10`).
+**Last seen:** Jul 16 (2 positive: Powderville, Oslo; 0 failing).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -850,16 +883,17 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage *unimplemented* active
-proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 22 cycles of
-evidence, 49+ drafts, same gap to A across every signal type it's been
+proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 23 cycles of
+evidence, 51+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
 absolute_extreme, fire_footprint, cyclone_rapid_intensification, record, cyclone_landfall,
-cyclone_land_threat — 17 confirmed types). The
-permafrost-carbon fire mechanic (5 instances, all B+/A-) and the buffer-failure mechanic
-(Galapagos, Congo fire, Stevensville, Basrah, all A-/A-range) are the clearest existence-proofs in
-the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
-already sound.
+cyclone_land_threat, hot10 — 18 confirmed types). The
+permafrost-carbon fire mechanic (5 instances, all B+/A-), the buffer-failure mechanic
+(Galapagos, Congo fire, Stevensville, Basrah, all A-/A-range), and the named-absence
+continental-interior form (Basrah ×2, Powderville, all A-/B-range) are the clearest
+existence-proofs in the corpus that a declarative-consequence close reliably lifts a draft
+once the mechanism is already sound.
 
 ### ~~P_dust~~ — Dust_event drafts lack calibrating comparison anchor — **SHIPPED 2026-07-07 (PR #386), CONFIRMED 2026-07-10 (2 independent clean cycles)**
 
@@ -1355,9 +1389,20 @@ self-selects a clean declarative mechanic unprompted, extending the extreme-heat
 streak; Randolph's `all_time_high` self-selects a real elevation mechanism but only reaches
 the implied form (see P_close), consistent with `all_time_high` remaining the more
 inconsistent record-family member (per Jul 10's note).
-**Last seen:** Jul 14 (fire self-selection streak breaks for the first time via Ontario's
-cluster-enumeration-only draft, after 6 consecutive confirming cycles Jun 25 → Jul 11;
-dust_event gap not tested this cycle — no dust_event draft).
+**Last seen (pre-Jul-16):** Jul 14 (fire self-selection streak breaks for the first time via
+Ontario's cluster-enumeration-only draft, after 6 consecutive confirming cycles Jun 25 →
+Jul 11; dust_event gap not tested this cycle — no dust_event draft).
+Jul 16: `all_time_high` self-selects a real named-absence mechanism unprompted (Powderville —
+"no marine layer and no terrain to interrupt heat building") — extends the extreme-heat/
+record family's organic-deployment pattern. **`hot10` self-selects a real mechanic on its
+corpus debut** (Oslo — peer/climate-analogy comparison + declarative accelerating-warming
+reframe), joining fire/absolute_extreme/air_quality_hazard/marine_heatwave as another
+self-selecting type on first appearance; n=1, watching for a 2nd instance before calling it
+a confirmed streak the way fire's was before Jul 14's break. dust_event gap not tested this
+cycle (no dust_event draft); fire self-selection not tested (no fresh fire draft, only
+carry-overs already counted at Jul 11's grading).
+**Last seen:** Jul 16 (`all_time_high` self-selects again; `hot10` self-selects on debut,
+n=1; dust_event/fire gaps not retested this cycle).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -1459,8 +1504,18 @@ also see new proposal A7 for the same draft's separate phrase-echo concern), so 
 grades only B+ — the same double-qualifier-plus-failing-close combination as Jul 8's
 Snowshoe and Jul 10's Tepee Creek. Basrah's `absolute_extreme` draft this cycle is not
 P_compound territory (single margin qualifier only, no archive-span field in the bundle).
-**Last seen:** Jul 14 (10 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9,
-Jul 10, Jul 14).
+**Last seen (pre-Jul-16):** Jul 14 (10 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
+Jul 8, Jul 9, Jul 10, Jul 14).
+Jul 16: Powderville, Montana `all_time_high` — "hottest daily maximum in 63 years of
+records, 4°F above the 2002 mark" — standard double-qualifier form, 11th cycle. This time
+overcome: the close is a declarative named-absence consequence (see P_close), so the draft
+grades A- despite the compound opener — same soften-not-cap outcome as Loxahatchee, Snowshoe
+Jul 7, Prudhoe Bay, and Stevensville's triple-stack. Oslo `hot10` carries no archive-span
+field in its bundle (a daily-anomaly leaderboard type, not a record type) — not P_compound
+territory, consistent with how absolute_extreme/cyclone/dust_event/air_quality_hazard types
+have never triggered this pattern.
+**Last seen:** Jul 16 (11 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9,
+Jul 10, Jul 14, Jul 16).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 record-type framing section:
@@ -1477,7 +1532,7 @@ already solid. Immediate two-observation confirmation within a single cycle sugg
 double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
 monthly_high, country_record signal types where both archive depth and margin are available.
 
-**Status:** Drafted. Awaiting human implementation. 10 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9, Jul 10, Jul 14), 2 sub-forms live (standard double-qualifier, and Jul 9's triple-qualifier escalation). One of the two highest-leverage unimplemented proposals alongside P_close, now that P9/P_dust/P_tier have all closed their tracking.
+**Status:** Drafted. Awaiting human implementation. 11 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9, Jul 10, Jul 14, Jul 16), 2 sub-forms live (standard double-qualifier, and Jul 9's triple-qualifier escalation). One of the two highest-leverage unimplemented proposals alongside P_close, now that P9/P_dust/P_tier have all closed their tracking.
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
