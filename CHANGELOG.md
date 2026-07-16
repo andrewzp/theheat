@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Production restore — bot.yml schedules re-added (2026-07-16)
+
+- **(ops, workflow-only)**: restored the three `bot.yml` crons (hourly
+  `auto_publish_due`, 12:00 UTC leaderboard, 4-hourly alert/drafting cycles)
+  on Andrew's "restore" — the economics P0+P1 train is merged, so production
+  resumes under the new architecture: samples=1 + revise=0, cycle billing
+  breaker, single transport-retry owner, usage ledger + budget watch.
+  Expected run-rate ~$18–23/month (plan §4 "After P0") vs ~$50–70 before the
+  stop. The five disabled workflows are re-enabled via `gh workflow enable`
+  (state-level, no commit) and the claude.ai daily-plan routine re-enabled
+  via RemoteTrigger — all in the same restore.
+- **(fix, codex r1)**: the 12:00 UTC mode selection now matches
+  `github.event.schedule == '0 12 * * *'` instead of the runner wall-clock
+  hour — a GitHub cron delay past 13:00 previously degraded the run to
+  alerts-only and silently skipped that day's leaderboard.
+
 ### Economics P1.1 — budget watch: 70%/90% alerts + usage dashboard line (2026-07-14)
 
 - **(telemetry)**: new `src/orchestrator/budget.py` reads the P0.6 ledger and
