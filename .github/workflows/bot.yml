@@ -1,15 +1,18 @@
 name: theheat-bot
 
 on:
-  # Schedules removed 2026-07-14 — production stop (Andrew: stop automated
-  # activities until the economics P0 lands, PLAN-ECONOMICS-MASTER-v3).
-  # Cost while stopped: $0/month. Restore by reverting this commit; the
-  # removed triggers were:
-  #   - cron: '30 * * * *'          # auto-approval queue processing (hourly)
-  #   - cron: '0 12 * * *'          # daily leaderboard 12:00 UTC
-  #   - cron: '0 0,4,8,16,20 * * *' # alert polling every 4 hours
-  # The mode-selection and failure-issue steps below keep their schedule
-  # branches so the revert is a clean one-block restore.
+  # Schedules RESTORED 2026-07-16 (Andrew: "restore") after the 2026-07-14
+  # production stop — economics P0+P1 landed (#439/#443–#447), so cycles now
+  # run under samples=1 + revise=0, the cycle billing breaker, and the usage
+  # ledger. Expected run-rate ~$18–23/month (PLAN-ECONOMICS-MASTER-v3 §4).
+  schedule:
+    # Auto-approval queue processing (hourly)
+    - cron: '30 * * * *'
+    # Daily leaderboard: 12:00 UTC (~8 AM ET)
+    - cron: '0 12 * * *'
+    # Alert polling: every 4 hours
+    - cron: '0 0,4,8,16,20 * * *'
+    # Note: the 12:00 UTC slot handles both leaderboard + alerts
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -144,8 +147,11 @@ jobs:
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "30 * * * *" ]; then
             echo "mode=auto_publish_due" >> $GITHUB_OUTPUT
-          elif [ "$(date -u +%H)" = "12" ]; then
-            # 12:00 UTC run = leaderboard + alerts
+          elif [ "${{ github.event.schedule }}" = "0 12 * * *" ]; then
+            # 12:00 UTC slot = leaderboard + alerts. Match the schedule string,
+            # not the runner clock: GitHub can delay top-of-hour crons past the
+            # hour, and a wall-clock check ($(date -u +%H) = 12) then silently
+            # degraded the run to alerts-only, skipping the day's leaderboard.
             echo "mode=both" >> $GITHUB_OUTPUT
           else
             echo "mode=alerts" >> $GITHUB_OUTPUT
