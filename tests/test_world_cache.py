@@ -28,7 +28,8 @@ def test_merge_newer_as_of_wins_and_unions_cities():
 
 def test_select_stale_prefers_urgent_then_oldest_and_caps():
     world = [{"city": c, "country": "X", "lat": "0", "lon": "0"} for c in ["Madrid", "Lyon", "Zzz", "Aaa"]]
-    cache = {"Madrid": {"as_of": "2026-06-25"}, "Lyon": {"as_of": "2026-04-01"}, "Aaa": {"as_of": "2026-04-01"}}
+    # cache keyed by world_key (city|country)
+    cache = {"Madrid|X": {"as_of": "2026-06-25"}, "Lyon|X": {"as_of": "2026-04-01"}, "Aaa|X": {"as_of": "2026-04-01"}}
     out = select_stale_cities(cache, world, ttl_days=30, budget=2, today="2026-06-26", urgent_order=["Lyon", "Madrid"])
     names = [c["city"] for c in out]
     assert "Lyon" in names and "Madrid" not in names and len(out) == 2
@@ -37,14 +38,14 @@ def test_select_stale_prefers_urgent_then_oldest_and_caps():
 def test_provisional_suppresses_all_time_and_monthly_re_fire():
     base = CityThresholds(city="Madrid", as_of="2026-06-01", years_of_data=30,
         all_time_max=(44.0, 2023), monthly_max={"06": (43.0, 2019)}).to_dict()
-    cache = {"Madrid": base}
+    cache = {"Madrid|Spain": base}   # world cache is keyed by world_key (city|country)
     fc = {"max_c": 45.5, "min_c": 20.0, "tw_max_c": 10.0}
-    b1 = evaluate_city("Madrid", "Spain", fc, CityThresholds.from_dict(cache["Madrid"]), lat=40.4, lon=-3.7, today=_date(2026, 6, 26))
+    b1 = evaluate_city("Madrid", "Spain", fc, CityThresholds.from_dict(cache["Madrid|Spain"]), lat=40.4, lon=-3.7, today=_date(2026, 6, 26))
     assert b1.all_time_high and b1.monthly_high
     apply_provisional(cache, b1, today="2026-06-26")
-    b2 = evaluate_city("Madrid", "Spain", fc, CityThresholds.from_dict(cache["Madrid"]), lat=40.4, lon=-3.7, today=_date(2026, 6, 27))
+    b2 = evaluate_city("Madrid", "Spain", fc, CityThresholds.from_dict(cache["Madrid|Spain"]), lat=40.4, lon=-3.7, today=_date(2026, 6, 27))
     assert b2.all_time_high is None and b2.monthly_high is None
-    assert cache["Madrid"]["all_time_max"][0] == 45.5 and cache["Madrid"]["monthly_max"]["06"][0] == 45.5
+    assert cache["Madrid|Spain"]["all_time_max"][0] == 45.5 and cache["Madrid|Spain"]["monthly_max"]["06"][0] == 45.5
 
 
 def test_apply_provisional_preserving_as_of_branches():
@@ -62,30 +63,61 @@ def test_apply_provisional_preserving_as_of_branches():
         return evaluate_city("C", "Spain", fc, CityThresholds.from_dict(entry),
                              lat=40.0, lon=-3.0, today=today_d)
 
+    ck = "C|Spain"   # world cache key = world_key(bundle.city, bundle.country)
+
     # (a) warmed -> as_of advances regardless of prior staleness
-    cache = {"C": base(stale)}
-    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+    cache = {ck: base(stale)}
+    apply_provisional_preserving_as_of(cache, bundle(cache[ck]), today=today,
                                        advance_as_of=True, ttl_days=30)
-    assert cache["C"]["as_of"] == today and cache["C"]["all_time_max"] == [50.0, 2026]
+    assert cache[ck]["as_of"] == today and cache[ck]["all_time_max"] == [50.0, 2026]
 
     # (b) not warmed + prior STALE -> as_of rolled back, record still stamped
-    cache = {"C": base(stale)}
-    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+    cache = {ck: base(stale)}
+    apply_provisional_preserving_as_of(cache, bundle(cache[ck]), today=today,
                                        advance_as_of=False, ttl_days=30)
-    assert cache["C"]["as_of"] == stale and cache["C"]["all_time_max"] == [50.0, 2026]
+    assert cache[ck]["as_of"] == stale and cache[ck]["all_time_max"] == [50.0, 2026]
 
     # (c) not warmed + prior FRESH -> as_of advances (dominant production path)
-    cache = {"C": base(today)}
-    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+    cache = {ck: base(today)}
+    apply_provisional_preserving_as_of(cache, bundle(cache[ck]), today=today,
                                        advance_as_of=False, ttl_days=30)
-    assert cache["C"]["as_of"] == today and cache["C"]["all_time_max"] == [50.0, 2026]
+    assert cache[ck]["as_of"] == today and cache[ck]["all_time_max"] == [50.0, 2026]
 
     # (d) not warmed + prior as_of falsy -> stays stale (as_of=""), NOT advanced to today.
     # Advancing would mark unconfirmed climatology fresh (false freshness); keeping it
     # stale leaves the city eligible for re-warming so the archive confirms the record.
     entry = base(stale)
     entry["as_of"] = ""
-    cache = {"C": entry}
-    apply_provisional_preserving_as_of(cache, bundle(cache["C"]), today=today,
+    cache = {ck: entry}
+    apply_provisional_preserving_as_of(cache, bundle(cache[ck]), today=today,
                                        advance_as_of=False, ttl_days=30)
-    assert cache["C"]["as_of"] == "" and cache["C"]["all_time_max"] == [50.0, 2026]
+    assert cache[ck]["as_of"] == "" and cache[ck]["all_time_max"] == [50.0, 2026]
+
+
+def test_read_cache_drops_legacy_bare_city_keys(monkeypatch):
+    """One-time migration: legacy bare-city keys (pre city|country re-key) are dropped on
+    read so write_cache can't merge them back and inflate cached_count."""
+    import json
+    from src.orchestrator import world_cache as wc
+
+    payload = {"files": {wc.WORLD_CACHE_FILENAME: {"content": json.dumps({
+        "Barcelona": {"city": "Barcelona", "as_of": "2026-06-01"},        # legacy bare key
+        "Barcelona|Spain": {"city": "Barcelona", "as_of": "2026-06-20"},  # composite (kept)
+        "Barcelona|Venezuela": {"city": "Barcelona", "as_of": "2026-06-20"},
+        "_meta": {"cached_count": 2, "as_of": "2026-06-20"},
+    })}}}
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return payload
+
+    monkeypatch.setattr(wc, "GIST_ID", "gid")
+    monkeypatch.setattr(wc, "GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(wc, "_headers", lambda: {})
+    monkeypatch.setattr(wc.requests, "get", lambda *a, **k: _Resp())
+
+    out = wc.read_cache()
+    assert set(out) == {"Barcelona|Spain", "Barcelona|Venezuela", "_meta"}  # bare "Barcelona" dropped

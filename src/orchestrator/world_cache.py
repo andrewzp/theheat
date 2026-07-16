@@ -12,6 +12,18 @@ WORLD_CACHE_FILENAME = "world_threshold_cache.json"
 _META_KEY = "_meta"
 
 
+def world_key(city, country) -> str:
+    """Stable per-city identity for the world cache: ``"<city>|<country>"``.
+
+    ``(city, country)`` is unique across the curated city list, so this disambiguates
+    genuinely-distinct cities that share a name across countries (e.g. Barcelona
+    Spain vs Barcelona Venezuela). The bare ``city`` remains the DISPLAY name; this
+    composite is the cache/forecast/dedup IDENTITY. The ``"|"`` separator is also the
+    migration marker read_cache uses to drop legacy bare-city keys.
+    """
+    return f"{city}|{country}"
+
+
 def _as_of(e):
     return str((e or {}).get("as_of") or "")
 
@@ -74,15 +86,25 @@ def _is_stale(entry, *, ttl_days, today):
 
 
 def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_order):
+    # Identity (cache lookup + dedup) is keyed by world_key so two genuinely-distinct
+    # same-name cities are both eligible; urgent-order RANKING stays keyed on the bare
+    # display city (URGENT_WORLD_HEAT_CITIES is bare names; it only orders warming).
     rank = {name: i for i, name in enumerate(urgent_order)}
-    stale = [c for c in world_cities if _is_stale(cache.get(c.get("city")), ttl_days=ttl_days, today=today)]
-    stale.sort(key=lambda c: (rank.get(c.get("city"), len(urgent_order)), _as_of(cache.get(c.get("city"))), c.get("city")))
+    stale = [
+        c for c in world_cities
+        if _is_stale(cache.get(world_key(c.get("city"), c.get("country"))), ttl_days=ttl_days, today=today)
+    ]
+    stale.sort(key=lambda c: (
+        rank.get(c.get("city"), len(urgent_order)),
+        _as_of(cache.get(world_key(c.get("city"), c.get("country")))),
+        c.get("city"),
+    ))
     out, seen = [], set()
     for c in stale:
-        name = c.get("city")
-        if name in seen:
+        key = world_key(c.get("city"), c.get("country"))
+        if key in seen:
             continue
-        seen.add(name)
+        seen.add(key)
         out.append(c)
         if len(out) >= budget:
             break
@@ -94,9 +116,9 @@ def _year(today: str) -> int:
 
 
 def apply_provisional(cache: dict, bundle, *, today: str) -> None:
-    city = bundle.city
-    entry = cache.get(city)
-    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=city, as_of=today, years_of_data=0)
+    key = world_key(bundle.city, bundle.country)   # composite identity; bundle.city stays display
+    entry = cache.get(key)
+    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=bundle.city, as_of=today, years_of_data=0)
     if bundle.all_time_high is not None:
         t.all_time_max = (bundle.all_time_high.new_temp_c, _year(today))
     if bundle.all_time_low is not None:
@@ -106,7 +128,7 @@ def apply_provisional(cache: dict, bundle, *, today: str) -> None:
     if bundle.monthly_low is not None:
         t.monthly_min[f"{bundle.monthly_low.month:02d}"] = (bundle.monthly_low.new_temp_c, _year(today))
     t.as_of = today
-    cache[city] = t.to_dict()
+    cache[key] = t.to_dict()
 
 
 def apply_provisional_preserving_as_of(cache, bundle, *, today, advance_as_of, ttl_days) -> None:
@@ -121,13 +143,13 @@ def apply_provisional_preserving_as_of(cache, bundle, *, today, advance_as_of, t
     prior ``as_of`` is falsy (missing/empty) is kept stale (``as_of=""``), NOT advanced
     to today — advancing would mark unconfirmed climatology fresh (false freshness).
     """
-    city = bundle.city
-    prior = cache.get(city)
+    key = world_key(bundle.city, bundle.country)
+    prior = cache.get(key)
     prior_as_of = (prior or {}).get("as_of")
     prior_stale = _is_stale(prior, ttl_days=ttl_days, today=today)
     apply_provisional(cache, bundle, today=today)        # writes record fields + as_of=today
     if not advance_as_of and prior_stale:
-        cache[city]["as_of"] = prior_as_of or ""         # keep stale + not-warmed warm-eligible
+        cache[key]["as_of"] = prior_as_of or ""          # keep stale + not-warmed warm-eligible
 
 
 WORLD_COVERAGE_FLOOR = 0.85
@@ -196,7 +218,14 @@ def read_cache() -> dict:
         else:
             content = meta["content"]
         data = json.loads(content)
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        # One-time migration: drop legacy bare-city keys (pre city|country re-key). They
+        # are unreachable under composite keys and, left in place, would be merged back by
+        # write_cache and inflate cached_count (breaking steady-state detection). Keeping
+        # only composite ("|") keys + _meta means the next write rewrites the gist
+        # composite-only; the few legacy entries simply re-warm.
+        return {k: v for k, v in data.items() if k == _META_KEY or "|" in str(k)}
     except (requests.RequestException, ValueError, KeyError):
         return {}
 
