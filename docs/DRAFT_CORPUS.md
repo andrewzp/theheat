@@ -11,6 +11,215 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-17 — Daily corpus grading (5 fresh drafts; 2 carry-overs from Jul 11, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending drafts —
+expanded from Jul 16's 4. The 2 Jul 11 fire carry-overs survive unchanged (interior Alaska
+`fire` B+, western Siberia 3-signal `fire` cluster B+; not re-graded, prior grades stand).
+**5 fresh**: Bandar-E Mahshahr, Iran `absolute_extreme` (Jul 16 17:15 UTC — 1 day old at
+grading, carried forward from yesterday's post-cutoff window), Basrah, Iraq `absolute_extreme`
+(Jul 17 02:02 UTC), Deaver, Wyoming `all_time_high` (Jul 17 06:16 UTC), Al Basrah, Iraq
+`absolute_extreme` (Jul 17 09:57 UTC), Tunis `hot10` (Jul 17 13:56 UTC). This is the largest
+fresh-draft batch since Jul 8's 8, and the first n=5+ cycle since Jul 5. Continuing to grade on
+the unmerged `daily-plan-current` rolling branch (rebase onto fresh `main` this session was a
+no-op — `main` had advanced with unrelated economics/ops commits [#443, #445, #446, #447, #449]
+since Jul 16's clean rebase, but none touch these three docs; zero conflicts).
+
+**Staleness review as of 2026-07-17 ~15:10 UTC:** **western Siberia fire cluster crosses into a
+5th consecutive unactioned staleness cycle, extending its own record as the corpus's oldest
+candidate** (`draft_20260711_062452_120`, created Jul11T06:24:52Z, ~152.8h old — first flagged
+Jul 13 at ~56.6h) — present-tense "today" is still baked into the text ("Three fire signals in
+the same patch of western Siberia **today**"). Interior Alaska fire is the same ~152.8h age but
+carries no date/time language, so it stays clear under the established carve-out, unchanged
+across 6 grading cycles now. All 5 fresh drafts are same-day or 1-day-old, well under 48h — no
+new staleness candidates. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` →
+command not found); no gist-write tool is exposed via the GitHub MCP server tools loaded this
+session (repo/PR/issue/actions tools only). Skipped per the hard constraints, logged rather than
+failing the cycle — **49th consecutive skip** (May 13 → Jul 17). Operator: this draft has now
+sat unactioned longer than any prior staleness candidate this routine has tracked; recommend
+rejecting it via dashboard independent of any other decision.
+
+**Grade distribution (5 fresh drafts):** 4 A- / 1 B+ / 0 B / 0 C / 0 D-F.
+**A-rate: 80% (4/5).** Gap from resumption bar: **none this cycle** — 80% clears the 50% bar
+with a more statistically meaningful sample than Jul 16's n=2. This is the second clean
+bar-clearing since Jun 29's 80%/n=5, and the first n≥5 clearance since then (Jul 16's 100% was
+n=2). Consistent with the post-fix trend accelerating: 33%→50%→50%→33%→0%→(gap)→33%→(gap)→100%
+(Jul 7→16) → **80% (Jul 17, n=5)**.
+
+**Headline finding:** With P_tier, P_dust, and P9 all shipped and confirmed, this cycle is the
+first genuinely large-n demonstration that the remaining pipeline lands clean majority-A output
+on its own: 4 of 5 fresh drafts land declarative P_close closes with zero Wodehouse violations
+(no approximation, no restate-padding, no poetry-attempt closers, no defensive justification).
+The one B+ ([4] Basrah) fails not on a shipped-and-reopened proposal but on a **stranded
+mechanic** — its strongest declarative clause ("shade and stillness stop being enough") is
+buried mid-sentence-1 as a qualifier, while the actual closer (sentence 2's final clause) is a
+hedged, non-declarative form. This is a structurally different problem from P_close's usual
+implied-vs-declarative gap: the declarative move *exists* in the draft, it's just not in the
+closer position. **New pattern: 3 of 3 fresh `absolute_extreme` drafts this cycle share an
+opener skeleton** ("[City], [Country] is forecast to hit XX.X°C (YYY°F) [on Date/today] —
+[above/just inside] the 47°C threshold where...") — first same-cycle convergence of this shape,
+logged as new awaiting-evidence item A8 below, alongside a 2nd occurrence (after Jul 10's Ahvaz)
+of a "shade and [rest/stillness] stop being enough" survivability-threshold clause reused across
+different cities.
+
+### A-grade drafts
+
+**[3] Bandar-E Mahshahr, Iran `absolute_extreme` — A- (score 84)**
+> Bandar-E Mahshahr, Iran is forecast to hit 48.4°C (119°F) on July 16 — above the 47°C
+> threshold where the Persian Gulf heat basin regularly produces some of the world's highest
+> wet-bulb readings. Shallow Gulf waters layer humidity onto desert heat; the air has nowhere
+> to cool.
+
+Sentence 1's tail clause is genuine world-knowledge framing (regional wet-bulb context, not an
+internal tier/band label — clean of P_tier, matching the confirmed post-fix form: "the 47°C
+threshold where [region] historically/regularly [does X]," same shape as Jul 10 Ahvaz and Jul 14
+Basrah). The close lands where it should: "the air has nowhere to cool" is a direct
+**named-absence declarative** — same family as Basrah's "no evaporative relief" and Powderville's
+"no terrain to interrupt heat building" — stating what's missing and letting the reader supply
+the consequence, not stopping at mechanism description. No Wodehouse violations: 48.4°C stated
+exactly, no restate-padding, no poetry attempt. **P_close POSITIVE.** `absolute_extreme`
+self-selects the mechanic unprompted, extending the extreme-heat family's organic-deployment
+streak (P5).
+
+**[5] Deaver, Wyoming `all_time_high` — A- (score 91, batch high)**
+> Deaver, Wyoming hit 109°F (42.8°C) on July 13 — hottest daily maximum in 111 years of records,
+> 3°F above the 1925 mark. The Bighorn Basin sits in the rain shadow of three surrounding
+> ranges, and the terrain that blocks moisture also traps heat.
+
+Textbook **P_compound** double-qualifier in sentence 1 (archive span + margin in one clause —
+111 years is the longest archive depth in the corpus to date — 12th cycle of this pattern, Jun
+28 → Jul 17) — overcome by sentence 2's clean declarative close, same soften-not-cap pattern as
+every prior P_compound-plus-strong-close instance (Loxahatchee, Snowshoe, Prudhoe Bay,
+Powderville). "The terrain that blocks moisture also traps heat" states a direct verb-phrase
+consequence ("traps heat") rather than merely describing geography — passes the "delete the
+system clause" test (removing it leaves "so what?"). **P_close POSITIVE.** No Wodehouse
+violations. `all_time_high` self-selects again, 2nd consecutive cycle (after Powderville Jul 16).
+
+**[6] Al Basrah, Iraq `absolute_extreme` — A- (score 84)**
+> Al Basrah, Iraq is forecast to hit 48°C (118°F) on July 17 — a degree above the 47°C threshold
+> where southern Iraq's humidity turns the Shatt al-Arab delta into one of the few places on
+> earth where outdoor survival becomes genuinely contested.
+
+Single-sentence construction — setup (temp + threshold) and punchline (survival contested) land
+in the same clause with no stranding. "One of the few places on earth where outdoor survival
+becomes genuinely contested" is the batch's most direct stakes claim: a global superlative with
+no hedge, no approximation, no internal tier-jargon (clean P_tier form, matching the confirmed
+fix). **P_close POSITIVE — strongest declarative form in today's batch.** Likely a
+duplicate-signal-generation pair with [4] Basrah (same metro area/city under a transliteration
+variant, ~8h apart, 47.9°C vs 48°C) — see Patterns below; graded independently per the Jul 3
+Canadian Arctic precedent, and the two drafts' quality diverges sharply (this one lands the
+punch, [4] doesn't), so independent grading is the right call here too.
+
+**[7] Tunis `hot10` — A- (score 87)**
+> Tunis hit 45.2°C today — 12.4°C above its July normal of 32.8°C. Across 10 cities on four
+> continents, every anomaly on today's leaderboard sits 8.6°C or more above normal; heat this
+> far from seasonal average has stopped arriving one city at a time.
+
+Sentence 1 repeats the exact opener skeleton Oslo used Jul 16 ("[City] hit X°C today — Y°C
+above its July normal of Z°C") — 2 of 2 corpus `hot10` drafts now share this structure; worth
+watching for a 3rd before calling it a P9-style convergence risk (the three stated numbers
+[actual/anomaly/normal] are the necessary framing for an anomaly-leaderboard type, not
+restate-math the way precipitation's redundant margin was — consistent with Jul 16's ruling on
+Oslo). Sentence 2 breaks new ground: rather than Oslo's single-city peer comparison, it reaches
+for a **leaderboard-aggregate reframe** — describing the whole 10-city cohort's pattern rather
+than just Tunis — landing on a declarative systemic-consequence close ("heat this far from
+seasonal average has stopped arriving one city at a time"). **P_close POSITIVE**, and a
+genuinely new move worth tracking if a 2nd instance appears (candidate addition to P5's move
+palette). No restate-math beyond the necessary anomaly framing, no Wodehouse violations.
+
+### B-grade draft
+
+**[4] Basrah, Iraq `absolute_extreme` — B+ (score 84)**
+> Basrah, Iraq is forecast to hit 47.9°C (118°F) today — just inside the band where shade and
+> stillness stop being enough. In the lower Mesopotamian plain, the Tigris and Euphrates add
+> humidity to the heat; the wet-bulb load here is rarely what the dry number suggests.
+
+**Stranded mechanic.** The draft's one genuinely declarative move — "shade and stillness stop
+being enough," a real threshold-crossing consequence statement — is buried as a tail-clause
+qualifier in sentence 1, not placed in the closer. The actual closer (sentence 2's final clause,
+"the wet-bulb load here is rarely what the dry number suggests") is a hedged, epistemic form —
+"rarely" softens it, and it describes data-interpretation uncertainty rather than naming a
+physical consequence. **P_close FAILING** (weak/hedged close, despite a real declarative
+elsewhere in the draft) — the punch exists but doesn't land where it should. Also: "shade and
+stillness stop being enough" is a near-verbatim reuse of Jul 10 Ahvaz's A- close, "shade and
+rest alone stop being enough" — 2nd instance of this specific survivability-threshold
+construction, on a different city, 7 days apart (see new A8 below). Real ecosystem specificity
+(Tigris/Euphrates humidity mechanism) keeps this off a lower grade. No P_tier violation (clean
+post-fix form, no internal band-label citation).
+
+### Patterns / operational notes
+
+1. **First large-n (n=5) bar-clearing cycle since the Jun 29 baseline.** 80% A-rate with a
+   5-draft sample is a materially stronger signal than Jul 16's 100%/n=2 — with all three
+   shipped code fixes (P_tier, P_dust, P9) holding clean across every applicable draft today,
+   P_close and P_compound (both present today, both overcome/positive in every instance) look
+   increasingly like soft, not hard, gaps at the pipeline's current quality level.
+2. **New A8 filed** — `absolute_extreme` shows both a same-cycle opener-skeleton convergence (3
+   of 3 fresh drafts today) and a cross-cycle reused declarative clause ("shade and
+   [rest/stillness] stop being enough," Jul 10 Ahvaz → Jul 17 Basrah). Same underlying shape as
+   A6 (fire's permafrost-carbon phrase reuse) and A7 (Randolph's self-reuse) — the writer's own
+   prior sentence shapes calcifying into reusable templates, this time for `absolute_extreme`'s
+   survivability-threshold framing specifically.
+3. **Likely duplicate-signal generation: [4] Basrah and [6] Al Basrah.** Same metro area
+   (transliteration variants of the same city), forecasts 8 hours apart on the same day
+   (47.9°C vs 48°C) — the same operational anomaly class logged repeatedly since early July
+   (Ft Green, original Basrah/Al Başrah al Qadīmah pair, Canadian Arctic fire). Not a voice
+   proposal; logged for the record. Notable: the two drafts' quality diverges sharply (A- vs
+   B+), which is itself evidence that grading duplicates independently (rather than assuming
+   near-identical quality) is the right methodology.
+4. **Signal-mix monoculture this cycle:** 3 of 5 fresh drafts are `absolute_extreme`, all in the
+   Persian Gulf/lower-Mesopotamian heat basin (Bandar-E Mahshahr Iran, Basrah + Al Basrah Iraq).
+   Not a voice proposal (diversity gating is architecture, out of scope per hard constraints) —
+   logged as a data-mix observation relevant to interpreting today's high A-rate: 3 of today's
+   4 A-grades share a signal type and region, so the 80% figure leans on that type's current
+   strength more than a fully diverse batch would.
+5. **`hot10` self-selects for a 2nd consecutive instance** (Tunis, after Oslo Jul 16) —
+   confirms `hot10` as a self-selecting type alongside fire/absolute_extreme/air_quality_hazard/
+   marine_heatwave, no longer n=1.
+6. **Zero Wodehouse violations, 2nd consecutive cycle** (Jul 16, now Jul 17) — the single most
+   predictive failure mode per `brand/HUMOR_RESEARCH.md` continues to hold clean.
+7. **Western Siberia fire cluster is now the corpus's longest-unactioned staleness candidate**
+   (5 consecutive flagged cycles, Jul 13→17, ~152.8h) — see Followups.
+
+### Followups (in priority order)
+
+1. **Operator: reject western Siberia fire cluster manually via dashboard** — now unactioned for
+   5 consecutive cycles (~152.8h, "today" still present-tense), the longest-standing candidate
+   this routine has flagged; the routine cannot write to the gist this cycle (no `gh` CLI, no
+   gist-write MCP tool available).
+2. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — today's
+   cycle adds 4 new P_close-positive instances (1 failing) and 1 more overcome P_compound
+   instance; both proposals' prompt-language fixes in `docs/IMPROVEMENT_PLAN.md` are unchanged
+   and ready to ship.
+3. **Watch for a 3rd `hot10` draft** to see whether the shared opener skeleton (Oslo/Tunis) is
+   necessary-framing (as ruled Jul 16) or drifts toward P9-style convergence risk if a 3rd
+   instance repeats it with no new second-sentence move.
+4. **Watch for a 3rd instance of the "shade and [rest/stillness] stop being enough" construction**
+   (Ahvaz Jul 10, Basrah Jul 17) — 2 instances now meets A8's promotion bar on that axis alone;
+   see new A8 entry in `docs/IMPROVEMENT_PLAN.md`.
+
+### Numbers
+
+- Pending drafts in queue: 7 (5 fresh; 2 carry-overs from Jul 11, unchanged)
+- Fresh drafts graded: 5
+- A-rate: **80% (4/5)** — bar cleared, first n≥5 clearance since Jun 29
+- Grade distribution: 4 A- / 1 B+ / 0 B / 0 C / 0 D-F
+- Active proposals: P_close (24 cycles, 4 new positive/1 failing) > P_compound (12 cycles, 1 new
+  instance, overcome) > P5 (`all_time_high`/`absolute_extreme` self-selection continues; `hot10`
+  confirms 2nd self-selecting instance). A4/A5/A6/A7 not tested this cycle (no target-type
+  draft). **New A8 filed** (`absolute_extreme` opener-skeleton + reused survivability-threshold
+  clause). P_tier/P_dust/P9 remain CONFIRMED, tracking closed — all 3 `absolute_extreme` drafts
+  today stayed clean of P_tier's banned form, further supporting the fix.
+- Staleness bulk-reject: **1 strict candidate, 5th consecutive unactioned cycle, now the
+  corpus's oldest** (western Siberia fire cluster, ~152.8h, present-tense "today"); write
+  skipped — `gh` CLI absent, no gist-write MCP tool available (49th consecutive skip, May 13 →
+  Jul 17)
+- Operational anomalies: likely duplicate-signal generation ([4] Basrah / [6] Al Basrah, same
+  metro area, 8h apart); signal-mix monoculture (3 of 5 fresh drafts `absolute_extreme`, all
+  Persian Gulf/lower-Mesopotamian)
+
+---
+
 ## 2026-07-16 — Daily corpus grading (2 fresh drafts; 2 carry-overs from Jul 11, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 4 pending drafts —
