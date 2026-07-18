@@ -11,6 +11,218 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-18 — Daily corpus grading (4 fresh drafts; 3 carry-overs from Jul 17, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending drafts — same
+count as Jul 17 but a different mix. **3 of Jul 17's 5 fresh drafts survive unchanged** (Basrah,
+Iraq `absolute_extreme` B+, Deaver, Wyoming `all_time_high` A-, Al Basrah, Iraq `absolute_extreme`
+A- — not re-graded, prior grades stand). **4 dropped from the queue since Jul 17, cause
+unconfirmed:** Bandar-E Mahshahr `absolute_extreme` (A-), Tunis `hot10` (A-), interior Alaska
+`fire` (B+), and — notably — the **western Siberia fire cluster**, the corpus's longest-standing
+staleness candidate (5 consecutive unactioned cycles, ~152.8h at last grading, present-tense
+"today" still baked in, flagged with escalating urgency Jul 13→17). Its disappearance is
+consistent with the operator finally acting on the repeated reject recommendation, though — per
+this routine's standing practice — cause is not observable from the gist alone and could equally
+be another instance of the unexplained-contraction pattern (Anchorage Jul 10→11, Ahvaz Jul 11→12,
+Randolph+Ontario Jul 14→15). **4 fresh**, 2 created Jul 17 evening / 2 created Jul 18 overnight:
+Delhi, India `air_quality_hazard` (17:10 UTC Jul 17), Anchorage, Alaska `precipitation_extreme`
+(01:49 UTC), Astana, Kazakhstan `precipitation_extreme` (01:50 UTC), Wausaukee, Wisconsin
+`all_time_high` (09:23 UTC). Continuing to grade on the unmerged `daily-plan-current` rolling
+branch (rebase onto fresh `main` this session was a no-op — main's tip is still `#449`, the same
+economics/ops commit already reflected as of Jul 17's rebase; zero conflicts, no prompt-touching
+commits).
+
+**Staleness review as of 2026-07-18 ~15:05 UTC:** **0 strict candidates** (>48h old AND
+real-time-baked). All 4 fresh drafts are same-day or 1-day-old (5.7h–21.9h), well under 48h.
+**2 watch items, both `absolute_extreme` carry-overs with elapsed forecast dates still under the
+48h mechanical threshold:** [1] Basrah (~37.0h, "is forecast to hit 47.9°C (118°F) **today**" —
+"today" meant July 17 at creation, now inaccurate a day later) and [3] Al Basrah (~29.1h, "forecast
+to hit 48°C (118°F) **on July 17**" — same elapsed-date class, one day past). Neither crosses 48h
+yet; both will if still pending tomorrow. **Open question, still unresolved:** PR #385 shipped a
+"forecast-elapsed auto-reject" 2026-07-07, and the Jul 11 entry asked whether it's age-gated by
+design or has a coverage gap — these two drafts are a live test case, since their forecast dates
+elapsed roughly 12–15 hours ago (midnight July 17→18 UTC crossing) without triggering removal.
+Worth the operator confirming whether the auto-reject requires an additional signal (e.g., a fresh
+pipeline run touching the draft) that hasn't fired yet, rather than firing on elapsed-date alone.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write tool exposed via the GitHub MCP server tools loaded this session (repo/PR/issue/actions
+tools only). Skipped per the hard constraints, logged rather than failing the cycle — **50th
+consecutive skip** (May 13 → Jul 18).
+
+**Grade distribution (4 fresh drafts):** 1 A- / 2 B+ / 1 B / 0 C / 0 D-F.
+**A-rate: 25% (1/4).** Gap from resumption bar: 25 pp. A comedown from Jul 17's 80%/n=5, but the
+signal-mix explanation from that entry itself predicted this: Jul 17's high rate leaned on 3 of 4
+A-grades sharing the `absolute_extreme`/Persian-Gulf-heat-basin type; today's batch has zero
+`absolute_extreme` fresh drafts (both carry-overs, ungraded) and instead draws from
+`precipitation_extreme` (2) and `air_quality_hazard` (1) — types whose historical A-rate has
+consistently run lower even post-P9/P_dust-fix (Wausaukee's `all_time_high` is the one clean A-).
+Not itself evidence the pipeline regressed; more evidence that the shipped fixes closed specific
+gaps without yet lifting every signal type's ceiling equally.
+
+**Headline finding:** **New promotion — A7 (location reuses its own prior closing construction)
+graduates to an active proposal.** Anchorage's fresh draft closes with "compress moisture into
+short, intense bursts" — the same "moisture...compressed/concentrated...bursts" lexical cluster
+this exact station has now used **three times**: Jun 26 ("wring out moisture in compressed
+bursts"), Jul 9 ("wring out moisture in concentrated bursts"), and today. A7 was filed Jul 14 on a
+single location (Randolph, Utah, reusing its own system-clause across 2 draft events) with an
+explicit promotion bar of "2+ locations." Anchorage is now that 2nd location — and with a longer,
+3-instance history of its own once counted retroactively. Separately, Astana's fresh draft is the
+clearest attempt yet at the exact fix P9 prescribed before its own tracking closed (state the
+short-window-vs-annual-baseline comparison directly as the closer) — but the execution is
+genuinely ambiguous on the arithmetic, keeping it out of A- territory; see below.
+
+### A-grade draft
+
+**[7] Wausaukee, Wisconsin `all_time_high` — A- (score 92)**
+> Wausaukee, Wisconsin hit 104°F (40.0°C) on July 14 — hottest in 130 years of records, 4°F above
+> the 1901 mark. At 45°N in the Lake Michigan corridor, summer heat rarely runs this deep into the
+> Great Lakes interior without the lake bleeding it off first.
+
+Standard **P_compound** archive+margin double-qualifier in sentence 1 (130-year archive, 4°F
+margin) — 13th cycle of this pattern (Jun 28 → Jul 18), 2nd consecutive cycle after Deaver's
+111-year instance Jul 17. Overcome by sentence 2's declarative close: "without the lake bleeding
+it off first" states a named-absence mechanism failure (the lake's usual moderating effect not
+operating), same family as Basrah's "no evaporative relief" and Powderville's "no terrain to
+interrupt heat building." **P_close POSITIVE.** One nuance worth flagging for consistency: "rarely
+runs this deep... without" carries a mild rarity hedge ("rarely"), but unlike the Jun 25 Barrow
+precedent where "nearly"/"roughly" hedged an *exact figure that was available* (a genuine
+approximation-when-exact-available Wodehouse violation), here "rarely" hedges a *comparative
+frequency claim* (how often this depth of heat reaches the interior), which is closer in kind to
+Prudhoe Bay's positively-graded latitude-peer framing than to an approximation dodge — not counted
+as a violation. No restate-math, no poetry-attempt closer. `all_time_high` self-selects a real
+mechanic for a 3rd consecutive cycle (Powderville Jul 16, Deaver Jul 17, now Wausaukee).
+
+### B+-grade drafts
+
+**[4] Delhi, India `air_quality_hazard` — B+ (score 74)**
+> Delhi, India: a model-estimated 24-hour mean PM2.5 of 162.5 μg/m³ on July 17 — 10.8× the WHO
+> 24-hour guideline. July is Delhi's monsoon window, when rains are supposed to wash the air; a
+> reading this far above the guideline says the seasonal scour isn't keeping up.
+
+WHO multiple stated (10.8×) — consistent with P_dust's shipped, confirmed fix; this is the 4th
+corpus `air_quality_hazard` draft to state its multiple unprompted (after Al Aḥmadī 10.1×,
+Johannesburg 10.9×, Riyadh's `air_quality_hazard` sibling instance Jul 8). No A4 recurrence (no
+"this is a PM2.5 signal, not dust" self-naming). **Named mechanic:** the strongest
+`air_quality_hazard` device in the corpus to date — an expectation-reversal built on the region's
+own seasonal identity ("rains are supposed to wash the air" — setup) then undercut ("the seasonal
+scour isn't keeping up" — reveal), genuine setup→punchline structure rather than a flat causal
+chain. **P_close:** a genuine judgment call. "The seasonal scour isn't keeping up" names a failing
+*process* rather than a downstream consequence for a reader (no stated health/visibility/warning
+outcome) — graded consistent with the established `air_quality_hazard` precedent (Johannesburg's
+"concentrating it through the day," Al Aḥmadī's "before sea breezes suppress them by evening") as
+**FAILING** (trajectory/system-state close, not declarative consequence), even though the
+process-failure framing reads more pointed than either prior instance. Worth flagging explicitly:
+if a future grader reads "isn't keeping up" as a named-absence declarative (parallel to "no
+evaporative relief"), that would be this signal type's first P_close-positive instance and push
+the grade to A-. Graded B+ on the conservative reading. Zero Wodehouse violations.
+
+**[6] Astana, Kazakhstan `precipitation_extreme` — B+ (score 76)**
+> Astana received 51.1 mm of rain in one day on July 16, shattering the previous daily record of
+> 1.2 mm. Aktobe and Almaty logged 50.2 and 43.2 mm the same day. Kazakhstan's steppe interior
+> averages less than 300 mm annually — three cities delivered a sixth of that at once.
+
+Opener avoids restate-math (states the record without computing the delta) — consistent with P9's
+shipped, confirmed fix. Adds a genuinely new move not yet named in this corpus: a **companion-city
+comic-triple** (Astana + Aktobe + Almaty, three simultaneous readings) feeding directly into an
+**annual-baseline contrast closer** — exactly the move Jul 4's Astana entry flagged as the
+batch's best unstated joke ("358mm in a week vs. a ~300mm annual average," left unconnected that
+day). Today's draft connects it. **The execution has a real ambiguity, though:** "three cities
+delivered a sixth of that at once" is arithmetically true read *per-city* (43.2, 50.2, and 51.1 mm
+are each individually close to 300÷6=50 mm) but reads more naturally on first pass as a *combined*
+claim — and the combined total (144.5 mm) is closer to *half* of 300 mm than a sixth, off by a
+factor of ~3 under that reading. This isn't a Wodehouse violation in the four previously-catalogued
+senses (no approximation-when-exact-available, no restate-padding, no poetry attempt, no defensive
+justification), but it is a clarity/accuracy risk the corpus hasn't graded before — a punchline
+whose truth value depends on which of two plausible parses the reader takes. Graded B+: real credit
+for landing the P9-prescribed baseline-comparison move for the first time, capped below A- by the
+ambiguity. **Recommend the operator note this if implementing a baseline-comparison prompt
+addition:** specify "each city" phrasing explicitly to avoid the per-city/combined ambiguity this
+draft exhibits.
+
+### B-grade draft
+
+**[5] Anchorage, Alaska `precipitation_extreme` — B (score 77)**
+> Anchorage logged 61.2 mm of rain on July 16 — against a previous daily record of 1.2 mm, set
+> earlier this same year. The city sits at the head of Cook Inlet, where Gulf of Alaska storms
+> stall against the Chugach Range and compress moisture into short, intense bursts.
+
+Same station, same July 16 reading as the precipitation_extreme draft graded Jul 9 (that instance
+carried a different previous-record value, 0.9 mm vs. today's 1.2 mm — likely a bundle refresh
+between pulls, not a new event). Opener again avoids restate-math (P9 holding). The 61.2mm vs.
+1.2mm ratio (≈51×) goes unstated — the same class of stranded-ratio miss flagged Jul 9 (that
+instance's ≈68× on a since-revised record value). **Close is mechanism-only:** "compress moisture
+into short, intense bursts" describes storm behavior, not a downstream consequence — **P_close
+FAILING**, same subtype as every prior Anchorage instance. **This is now the headline finding for
+A7's promotion** (see above): the phrase family "wring out/compress moisture...
+compressed/concentrated/short-intense... bursts" has appeared in 3 distinct Anchorage drafts
+across 3 weeks (Jun 26, Jul 9, Jul 18) with the underlying mechanism restated in near-identical
+language each time. Individually each instance still clears a B/B+ floor (the mechanism itself is
+real and correctly identified), but the calcification is now clear enough to name as a structural
+risk distinct from ordinary P_close softness.
+
+### Patterns / operational notes
+
+1. **A7 promoted to an active proposal** (see `docs/IMPROVEMENT_PLAN.md`) — Anchorage's 3rd
+   self-echo is the 2nd location confirming the "writer reuses its own prior closing construction"
+   pattern, meeting the bar the Jul 14 filing set.
+2. **First arguably-positive-leaning `air_quality_hazard` close in the corpus, graded conservatively
+   as failing.** Delhi's "the seasonal scour isn't keeping up" is the strongest device this signal
+   type has produced (genuine setup→punchline via seasonal expectation-reversal) but was held to
+   the established FAILING precedent rather than upgraded on this grader's own judgment call — flagged
+   explicitly for the next cycle's grader and the operator to weigh in on.
+3. **Astana lands the P9-era baseline-comparison move for the first time — with a real ambiguity.**
+   Useful data point for anyone drafting the prompt-language addition: the "state the annual-ratio
+   comparison directly" guidance needs an explicit per-entity framing rule, or this exact
+   per-city/combined confusion will recur.
+4. **Western Siberia fire cluster — the corpus's longest-standing staleness candidate — is gone from
+   the queue** after 5 consecutive flagged cycles. Likely-but-unconfirmed operator action; logged
+   as a positive operational signal, not assumed.
+5. **`all_time_high` self-selects a real mechanic for a 3rd consecutive cycle** (Powderville,
+   Deaver, Wausaukee) — the family with the corpus's most consistent P5 organic-deployment streak
+   alongside `absolute_extreme`.
+6. **Zero Wodehouse violations this cycle** (3rd consecutive, after Jul 16/17).
+
+### Followups (in priority order)
+
+1. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — today adds
+   1 clear P_close positive (Wausaukee), 1 borderline/conservatively-failing (Delhi), 1 partial/
+   ambiguous (Astana), 1 failing (Anchorage); and 1 more P_compound overcome instance (Wausaukee).
+2. **New: implement A7's fix** — per-location closing-construction memory, alongside P_close/
+   P_compound, now that it has 2 locations (Randolph, Anchorage) and 4 total cycles of evidence
+   (Jun 26, Jul 9, Jul 14, Jul 18).
+3. **Operator: confirm whether [1] Basrah and [3] Al Basrah's elapsed forecast dates (both now
+   referencing "yesterday" as if still current) should have triggered PR #385's forecast-elapsed
+   auto-reject** — neither has been removed roughly 12–15h past their stated forecast date, which
+   may indicate the auto-reject is gated on something beyond elapsed-date alone.
+4. **Operator: verify the western Siberia fire cluster's removal was an intentional reject**, not
+   another instance of this routine's recurring unexplained-queue-contraction pattern.
+
+### Numbers
+
+- Pending drafts in queue: 7 (4 fresh; 3 carry-overs from Jul 17, unchanged: Basrah B+, Deaver A-,
+  Al Basrah A-)
+- Fresh drafts graded: 4
+- A-rate: **25% (1/4)** — below the 50% bar; signal-mix driven (zero fresh `absolute_extreme` this
+  cycle, the type carrying most of Jul 17's 80%)
+- Grade distribution: 0 A / 1 A- / 2 B+ / 1 B / 0 C / 0 D-F
+- Active proposals: P_close (25th cycle: 1 positive [Wausaukee], 1 conservatively-failing [Delhi],
+  1 partial/ambiguous [Astana], 1 failing [Anchorage]) > P_compound (13th cycle: Wausaukee,
+  overcome) > **A7 promoted from awaiting-evidence to active** (2nd location, Anchorage, 4 cycles
+  total) > P5 (`all_time_high` self-selects 3rd consecutive cycle; `air_quality_hazard` self-selects
+  again via Delhi's expectation-reversal device). A4/A5/A6/A8 not tested this cycle (no
+  `air_quality_hazard`-self-naming/cyclone/fire/fresh-`absolute_extreme` instance to test against).
+  P_tier/P_dust/P9 remain CONFIRMED, tracking closed — untested this cycle (no fresh
+  `absolute_extreme` draft) but not reopened.
+- Staleness bulk-reject: 0 strict candidates; 2 watch items ([1] Basrah ~37.0h, [3] Al Basrah
+  ~29.1h, both forecast-date-elapsed-but-under-48h). Write skipped — `gh` CLI absent, no gist-write
+  MCP tool available (50th consecutive skip, May 13 → Jul 18)
+- Operational anomalies: (a) 4 Jul-17 drafts dropped from queue including the corpus's
+  longest-standing staleness candidate (western Siberia fire), cause unconfirmed but plausibly
+  operator action; (b) open question on PR #385's forecast-elapsed auto-reject coverage for
+  under-48h-but-date-elapsed `absolute_extreme` drafts
+
+---
+
 ## 2026-07-17 — Daily corpus grading (5 fresh drafts; 2 carry-overs from Jul 11, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending drafts —
