@@ -2,6 +2,36 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 19: 4 fresh drafts, 25% A-rate (n=4) — same rate as Jul 18, execution- and signal-mix
+> driven.** 9 pending (5 Jul 17–18 carry-overs unchanged: Deaver A-, Delhi B+, Anchorage B, Astana
+> B+, Wausaukee A-; 4 fresh, 3 of them `absolute_extreme`). 1 A-: Ahvaz, Iran `absolute_extreme`
+> (score 84; fresh idiom-flip close, "shade is infrastructure, not comfort" — declarative,
+> unstranded, breaks cleanly from A8's reused-clause axis). 2 B+: W Allis, Wisconsin
+> `all_time_high` (P_compound overcome by "overwhelms that buffer" — same Great-Lakes
+> buffer-failure mechanism as Jul 18's Wausaukee, one day apart in record date, weaker verb); Al
+> Basrah, Iraq `absolute_extreme` (**repeats Jul 17 Basrah's exact stranded-mechanic failure** — a
+> genuinely declarative buffer-failure line buried as a sentence-1 qualifier while the actual
+> closer is a bare peer-comparison fact, "Nearby Basrah is forecast to hit 50.6°C the same day").
+> 1 B: Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` (mechanism-only close, no threshold
+> framing at all — breaks from A8's opener-skeleton shape). **Headline: A8 clears its promotion
+> bar on both remaining axes.** The stranded-mechanic shape recurs a 2nd time (Jul 17 Basrah, Jul
+> 19 Al Basrah) and the reused survivability-threshold clause a 3rd (Jul 10 Ahvaz "shade and rest
+> alone stop being enough" → Jul 17 Basrah "shade and stillness stop being enough" → Jul 19 Al
+> Basrah "shade, hydration, and rest stop being adequate buffers") — both now promoted to active
+> below. P_close 26th cycle (1 positive, 2 failing). P_compound 14th cycle (W Allis, overcome).
+> A4/A5/A6/A7 not tested (no target-type draft this cycle). Zero Wodehouse violations, 4th
+> consecutive cycle. P_tier/P_dust/P9 remain CONFIRMED, tracking closed — all 3 fresh
+> `absolute_extreme` drafts stayed clean of the banned tier-jargon form. **Operational notes:** 2
+> Jul-17 `absolute_extreme` carry-overs (Basrah B+, Al Basrah A-) dropped from the queue, cause
+> unconfirmed — same recurring contraction pattern. 0 strict staleness candidates; 1 watch item
+> (Ahvaz, forecast-date-elapsed under 48h — same open PR #385 auto-reject question as Jul 11/18).
+> `gh` CLI absent, 51st consecutive skip. **Process correction, logged for the operator:** this
+> session's Step 0 initially synced only to `main`, which was many cycles behind the rolling
+> `daily-plan-current` branch (unmerged since 2026-06-08) and led to briefly re-grading
+> already-graded carry-overs before the mistake was caught — corrected by checking out
+> `daily-plan-current` directly (confirmed running with no gap since Jul 7). Recommend merging
+> `main` soon, or clarifying Step 0 to check the rolling branch first when one exists.
+>
 > **Jul 18: 4 fresh drafts, 25% A-rate (n=4) — comedown from Jul 17's 80%, signal-mix driven
 > (zero fresh `absolute_extreme` this cycle, the type that carried 3 of Jul 17's 4 A-grades).** 7
 > pending (3 Jul 17 carry-overs unchanged: Basrah B+, Deaver WY A-, Al Basrah A-; 4 fresh, drawn
@@ -478,32 +508,30 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.108.1` per `main`'s `VERSION` file (unchanged since checked 2026-07-16). No new `main` commits touching `src/two_bot/prompts/writer_prompt.py` observed this session (rebase onto fresh `main` was a no-op — `main`'s tip is unchanged at `#449` since Jul 17's rebase). |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **25% (1/4, Jul 18)** — comedown from Jul 17's 80%, signal-mix driven (zero fresh `absolute_extreme` this cycle). 1 A-: Wausaukee, Wisconsin `all_time_high`; 2 B+ (Delhi `air_quality_hazard`, Astana `precipitation_extreme`); 1 B (Anchorage `precipitation_extreme`). Prior: 80% (4/5, Jul 17); 100% (2/2, Jul 16, small-n); no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2, small-n); Jul 17 80% (n=5) — cleared again, first n≥5 confirmation since Jun 29; Jul 18 25% (n=4) — below bar again, signal-mix driven**. |
-| Gap | **25 pp below bar** (50% − 25%, Jul 18, n=4). Signal-mix explains most of the swing: today's batch had zero fresh `absolute_extreme` (the type carrying 3 of Jul 17's 4 A-grades) and drew instead from `precipitation_extreme`/`air_quality_hazard`, types whose A-rate has run lower even post-fix. P_close and P_compound remain the highest-leverage *unimplemented* levers with all three shipped code fixes (P_tier, P_dust, P9) confirmed. **A7 promoted to active** this cycle (2nd location, Anchorage, confirming the pattern past its promotion bar). A6 still needs a 3rd instance to promote; new A8 still needs a 2nd on its opener-skeleton axis (its reused-clause axis already has 2: Ahvaz Jul 10, Basrah Jul 17, untested this cycle — no fresh `absolute_extreme`). |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n), Jul 17 cleared it a 3rd time with the first large-n confirmation (80%, n=5), **Jul 18 fell back below bar (25%, n=4) on a signal-mix shift, not a regression in any shipped fix**. Queue unchanged at 7 pending (Jul 17 → Jul 18), though the mix turned over — 4 Jul 17 drafts dropped (including the western Siberia fire cluster, the longest-standing staleness candidate) and 4 fresh arrived. **0 strict staleness bulk-reject candidates this cycle** — the first clean staleness cycle since Jul 12, though 2 `absolute_extreme` carry-overs have elapsed forecast dates still under 48h (watch for tomorrow). |
+| Last cycle A-rate | **25% (1/4, Jul 19)** — same rate as Jul 18, execution/signal-mix driven (3 of 4 fresh drafts `absolute_extreme`, all clean of P_tier, only 1 unstranded). 1 A-: Ahvaz, Iran `absolute_extreme`; 2 B+ (W Allis, Wisconsin `all_time_high`; Al Basrah, Iraq `absolute_extreme`); 1 B (Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme`). Prior: 25% (1/4, Jul 18); 80% (4/5, Jul 17); 100% (2/2, Jul 16, small-n); no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2, small-n); Jul 17 80% (n=5) — cleared again, first n≥5 confirmation since Jun 29; Jul 18 25% (n=4); Jul 19 25% (n=4) — below bar 2nd consecutive cycle**. |
+| Gap | **25 pp below bar** (50% − 25%, Jul 19, n=4). Same story as Jul 18: `absolute_extreme` dominates the fresh batch (3 of 4) and stays clean of P_tier every time, but P_close/A8-class softness (stranded declaratives, mechanism-only closes) caps 2 of the 3 at B+/B. P_close and P_compound remain the two highest-leverage *unimplemented* levers. **A8 now clears its promotion bar on both remaining axes** (stranded-mechanic: 2 instances; reused survivability-threshold clause: 3 instances) — moved to active proposals this cycle. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n), Jul 17 cleared it a 3rd time with the first large-n confirmation (80%, n=5), Jul 18–19 both fell back below bar at 25% (n=4 each) on the same signal-mix/execution pattern, not a regression in any shipped fix. Queue grew from 7 (Jul 18) to 9 (Jul 19) — 5 of 7 carry over unchanged, 2 Jul-17 `absolute_extreme` drafts dropped (cause unconfirmed), 4 fresh arrived. **0 strict staleness bulk-reject candidates this cycle** — 1 watch item (Ahvaz, forecast-date-elapsed under 48h). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **7 pending as of Jul 18 grading** (same count as Jul 17, different mix): 3 carry-overs [Basrah `absolute_extreme` B+, Deaver WY `all_time_high` A-, Al Basrah `absolute_extreme` A-, all Jul 17]; 1 fresh A- [Wausaukee WI `all_time_high`]; 2 fresh B+ [Delhi `air_quality_hazard`, Astana `precipitation_extreme`]; 1 fresh B [Anchorage `precipitation_extreme`]. **4 Jul-17 drafts dropped from the queue, cause unconfirmed** (Bandar-E Mahshahr A-, Tunis A-, interior Alaska fire B+, and the western Siberia fire cluster — the corpus's longest-standing staleness candidate, unactioned 5 consecutive cycles — plausibly the operator finally acting on the repeated reject recommendation). **0 strict staleness candidates this cycle** (first clean cycle since Jul 12); 2 watch items (Basrah, Al Basrah — both forecast-date-elapsed but under 48h). Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking remains CLOSED** — untested this cycle (no fresh `absolute_extreme` draft) but not reopened. |
+| Queue status | **9 pending as of Jul 19 grading** (up from Jul 18's 7): 5 carry-overs [Deaver WY `all_time_high` A- (Jul 17), Delhi `air_quality_hazard` B+ (Jul 18), Anchorage `precipitation_extreme` B (Jul 18), Astana `precipitation_extreme` B+ (Jul 18), Wausaukee WI `all_time_high` A- (Jul 18)]; 1 fresh A- [Ahvaz `absolute_extreme`]; 2 fresh B+ [W Allis `all_time_high`, Al Basrah `absolute_extreme`]; 1 fresh B [Ahvaz/Bandar-E Mahshahr `absolute_extreme`]. **2 Jul-17 `absolute_extreme` carry-overs dropped from the queue, cause unconfirmed** (Basrah B+, Al Basrah A- — the same recurring unexplained-contraction pattern). **0 strict staleness candidates this cycle**; 1 watch item (Ahvaz, forecast-date-elapsed but under 48h). Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking remains CLOSED** — all 3 fresh `absolute_extreme` drafts stayed clean this cycle, further confirming. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 18: **P_dust, P9, and P_tier remain CONFIRMED, tracking
-closed** — no re-opening needed; untested this cycle (no fresh `absolute_extreme`/`dust_event`/
-`precipitation_extreme`-restate-math instance to retest against, though today's 2
-`precipitation_extreme` drafts both stayed clean of P9's banned restate-math form).
+Ordered by leverage. Priority as of Jul 19: **P_dust, P9, and P_tier remain CONFIRMED, tracking
+closed** — no re-opening needed; all 3 fresh `absolute_extreme` drafts this cycle stayed clean of
+P_tier's banned form (further confirmation, not new tracking).
 With all three shipped code fixes closed, the remaining *unimplemented* active proposals: **P_close**
-(25 cycles, last evidence Jul 18: 1 positive [Wausaukee], 1 conservatively-failing [Delhi], 1
-partial/ambiguous [Astana], 1 failing [Anchorage]) > **P_compound** (13 cycles, last evidence Jul
-18: Wausaukee, standard double-qualifier, overcome) > **A7 — newly promoted to active** (per-
-location closing-construction reuse: 2nd location, Anchorage, confirmed Jul 18 — see full write-up
-below) > **P5** (`all_time_high` self-selects a real mechanic for a 3rd consecutive cycle via
-Wausaukee, after Powderville/Deaver; `air_quality_hazard` self-selects again via Delhi's
-expectation-reversal device). **A4, A5, A6, and A8 not tested this cycle** (no signal-kind-self-
-naming/cyclone/fire/fresh-`absolute_extreme` draft among today's 4 fresh drafts). **One
-operational item, not a voice proposal:** the western Siberia fire cluster — unactioned for 5
-consecutive cycles as the corpus's longest-standing staleness candidate — is gone from today's
-queue; plausibly the operator acted on the repeated recommendation, but cause isn't confirmable
-from the gist alone.
+(26 cycles, last evidence Jul 19: 1 positive [Ahvaz], 2 failing [Al Basrah, Ahvaz/Bandar-E
+Mahshahr]) > **P_compound** (14 cycles, last evidence Jul 19: W Allis, standard double-qualifier,
+overcome) > **A7** (per-location closing-construction reuse — not tested this cycle, no target-type
+draft) > **A8 — newly promoted to active** (`absolute_extreme` opener-skeleton convergence +
+stranded declarative clause + reused survivability-threshold clause: both remaining axes now past
+the 2-instance promotion bar — see full write-up below) > **P5** (`absolute_extreme` self-selects
+a real mechanic again via Ahvaz's idiom-flip closer). **A4, A5, and A6 not tested this cycle** (no
+signal-kind-self-naming/cyclone/fire draft among today's 4 fresh drafts). **One operational item,
+not a voice proposal:** 2 Jul-17 `absolute_extreme` carry-overs (Basrah, Al Basrah) dropped from
+the queue this cycle, cause unconfirmed — same recurring pattern as the western Siberia fire
+cluster's Jul 17→18 departure.
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
@@ -970,8 +998,22 @@ rather than a clean POSITIVE). Anchorage, Alaska `precipitation_extreme` ("compr
 short, intense bursts" = mechanism-only, FAILING — the 3rd instance of this station's own
 recurring phrase family, see new active proposal A7). P_close now confirmed across 18 signal
 types (unchanged — no new type this cycle; today's 4 drafts are all previously-confirmed types).
-**Last seen:** Jul 18 (1 positive: Wausaukee; 1 conservatively-failing: Delhi; 1
+**Last seen (pre-Jul-19):** Jul 18 (1 positive: Wausaukee; 1 conservatively-failing: Delhi; 1
 partial/ambiguous: Astana; 1 failing: Anchorage).
+Jul 19: Ahvaz, Iran `absolute_extreme` ("shade is infrastructure, not comfort" = declarative
+idiom-flip, POSITIVE — a fresh construction, not a variant of A8's tracked survivability-threshold
+clause family, and correctly placed as the tweet's actual closer). Al Basrah, Iraq
+`absolute_extreme` — a 2nd instance of the exact **stranded-mechanic** shape Jul 17's Basrah
+introduced: a genuinely declarative line ("shade, hydration, and rest stop being adequate
+buffers") is buried mid-sentence-1 rather than placed in the closer, while the actual close ("Nearby
+Basrah is forecast to hit 50.6°C the same day") is a bare, non-declarative peer-comparison fact —
+FAILING on closer-position grounds despite the real declarative move existing elsewhere in the
+draft. Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` ("Shallow Gulf waters add humidity to
+desert heat that is already among the highest on Earth" = mechanism-only, FAILING — explains a
+contributing factor without naming a consequence). P_close now confirmed across 18 signal types
+(unchanged — no new type this cycle).
+**Last seen:** Jul 19 (1 positive: Ahvaz; 2 failing: Al Basrah [stranded-mechanic], Ahvaz/Bandar-E
+Mahshahr [mechanism-only]).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -992,8 +1034,8 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage *unimplemented* active
-proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 25 cycles of
-evidence, 60+ drafts, same gap to A across every signal type it's been
+proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 26 cycles of
+evidence, 63+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
 absolute_extreme, fire_footprint, cyclone_rapid_intensification, record, cyclone_landfall,
@@ -1664,8 +1706,17 @@ named-absence mechanism-failure ("without the lake bleeding it off first," see P
 draft grades A- despite the compound opener — same soften-not-cap outcome as every prior overcome
 instance. Today's 2 `precipitation_extreme` drafts carry no archive-span field (event-total
 bundles, not record bundles) — not P_compound territory, consistent with the established pattern.
-**Last seen:** Jul 18 (13 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9,
-Jul 10, Jul 14, Jul 16, Jul 17, Jul 18).
+**Last seen (pre-Jul-19):** Jul 18 (13 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8,
+Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18).
+Jul 19: W Allis, Wisconsin `all_time_high` — "hottest daily maximum in 76 years of records, 2°F
+above the 1953 mark" — standard double-qualifier form, 14th cycle. Overcome: the close is
+declarative ("overwhelms that buffer," see P_close), so the draft grades B+ despite the compound
+opener — soften-not-cap holds, though the weaker/more generic verb than Jul 18's Wausaukee sibling
+keeps it a notch below A-. Today's 3 `absolute_extreme` drafts carry no archive-span field
+(forecast-vs-threshold bundles) — not P_compound territory, consistent with the established
+pattern.
+**Last seen:** Jul 19 (14 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9,
+Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 record-type framing section:
@@ -1682,7 +1733,7 @@ already solid. Immediate two-observation confirmation within a single cycle sugg
 double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
 monthly_high, country_record signal types where both archive depth and margin are available.
 
-**Status:** Drafted. Awaiting human implementation. 13 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18), 2 sub-forms live (standard double-qualifier, and Jul 9's triple-qualifier escalation). One of the two highest-leverage unimplemented proposals alongside P_close, now that P9/P_dust/P_tier have all closed their tracking.
+**Status:** Drafted. Awaiting human implementation. 14 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19), 2 sub-forms live (standard double-qualifier, and Jul 9's triple-qualifier escalation). One of the two highest-leverage unimplemented proposals alongside P_close, now that P9/P_dust/P_tier have all closed their tracking.
 
 ### A7 — Location reuses its own prior closing construction across different draft events (promoted from awaiting-evidence)
 
@@ -1738,6 +1789,71 @@ unexamined default the way P6's fire-opener template did before its fix, if left
 **Status:** Promoted from awaiting-evidence (A7) 2026-07-18 — Anchorage's 3rd instance is the 2nd
 location confirming the pattern, meeting A7's own stated 2-location promotion bar. Awaiting human
 implementation.
+
+### A8 — `absolute_extreme` opener-skeleton convergence + stranded/reused declarative clauses (promoted from awaiting-evidence)
+
+**Observed:** 2026-07-17 — two related but distinct convergence signals surfaced in the same
+cycle, both specific to `absolute_extreme`. (1) **Same-cycle opener-skeleton convergence:** all 3
+fresh drafts shared an identical sentence-1 shape — "[City], [Country] is forecast to hit XX.X°C
+(YYY°F) [on Date/today] — [above/just inside] the 47°C threshold where..." (2) **Reused
+declarative clause:** Basrah's mid-sentence-1 qualifier, "shade and stillness stop being enough,"
+near-verbatim echoed Jul 10 Ahvaz's A- close, "shade and rest alone stop being enough." Basrah's
+draft also introduced a third, related shape: its one genuinely declarative move was **stranded**
+mid-sentence-1 rather than placed in the closer, while the actual closer was a hedged,
+non-declarative form — graded B+ on that basis, distinct from P_close's usual implied-vs-
+declarative gap (the declarative move exists, it's just misplaced).
+
+**2026-07-19 — both remaining axes clear their promotion bar.** Al Basrah, Iraq's fresh draft
+repeats Jul 17 Basrah's stranded-mechanic shape exactly: "shade, hydration, and rest stop being
+adequate buffers" is buried as a sentence-1 tail qualifier, while the tweet's actual last sentence
+("Nearby Basrah is forecast to hit 50.6°C the same day") is a bare peer-comparison fact with no
+mechanism or consequence — 2nd instance of the stranding shape, different city, 2 days apart. The
+same buried clause is also the **3rd instance** of the reused survivability-threshold construction:
+"shade and rest alone stop being enough" (Jul 10, Ahvaz) → "shade and stillness stop being enough"
+(Jul 17, Basrah) → "shade, hydration, and rest stop being adequate buffers" (Jul 19, Al Basrah, now
+expanded to a 3-item list). Meanwhile the opener-skeleton axis gets both confirmation and
+counter-evidence in the same cycle: Ahvaz [6] and Al Basrah [8] both repeat the "forecast to hit
+XX°C — above the 47°C threshold where..." skeleton (a 2nd cycle showing it, after Jul 17's
+same-cycle 3-instance debut — now cross-cycle, not just within one day), while Ahvaz/Bandar-E
+Mahshahr [9] breaks from it entirely with a two-city comparison construction instead. All three
+Jul 19 `absolute_extreme` drafts stay clean of P_tier (the confirmed post-fix "threshold where
+[region] does X" world-knowledge form, not an internal band/tier label).
+
+**Cycles observed:** 2 (Jul 17, Jul 19) across all three tracked shapes. Reused-clause axis: 3
+instances (Jul 10, Jul 17, Jul 19) across 2 cycles. Stranded-mechanic axis: 2 instances (Jul 17,
+Jul 19) across 2 cycles. Opener-skeleton axis: now observed across 2 distinct cycles (Jul 17
+same-cycle ×3, Jul 19 ×2 of 3), plus 1 clean counter-instance same cycle (Ahvaz/Bandar-E Mahshahr).
+**Last seen:** Jul 19.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`'s
+`absolute_extreme` framing section, near the existing "delete the system clause" test:
+
+> When the second sentence's genuinely declarative move (a named-absence consequence, a
+> survivability-threshold statement) is embedded as a sentence-1 qualifier rather than placed in
+> the closer, MOVE it to the closer — don't let the tweet end on a bare comparative fact ("Nearby
+> [City] is forecast to hit YY°C the same day") when a real consequence is available elsewhere in
+> the draft. Separately: "shade and rest/stillness/hydration stop being enough/adequate buffers"
+> has now been used verbatim or near-verbatim on 3 different cities across 3 different cycles —
+> retire it as a reusable phrase and vary the specific vehicle (name a different failing buffer,
+> or state the physiological consequence directly, e.g. "the body's cooling mechanisms fail
+> faster than they can recover," per Jul 14's Basrah) each time the mechanism recurs. Finally: the
+> "[City] is forecast to hit XX.X°C — above the 47°C threshold where..." skeleton is now a
+> repeating default; alternate with a location-led or stakes-led opener (see P6's fire-opener
+> precedent) at least some of the time.
+
+**Expected impact:** Same class of fix as P6 (fire opener) and P9 (precipitation opener) applied
+to `absolute_extreme`'s two failure axes plus a third (clause placement) unique to this type.
+Currently caps at B+ rather than hard-capping (like P_tier did pre-fix), so the ceiling lift is
+B+ → A- for drafts where the mechanism and declarative move are both already present but
+misplaced or reused — a comparatively cheap fix given the underlying signal quality is already
+there in every observed instance.
+
+**Status:** Promoted from awaiting-evidence (A8) 2026-07-19 — both the stranded-mechanic axis (2
+instances) and the reused-clause axis (3 instances) clear the standard 2-instance promotion bar
+this precedent has used since A3. The opener-skeleton axis has weaker but growing cross-cycle
+evidence (2 cycles, with a clean counter-instance the same day) — tracked alongside the other two
+axes under this same proposal rather than split out, since all three are specific to
+`absolute_extreme`'s convergence pattern. Awaiting human implementation.
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
@@ -1944,43 +2060,14 @@ draft is the 2nd location, reusing its own closing-mechanism phrasing across 3 d
 26, Jul 9, Jul 18). Full current write-up, evidence, and proposed fix now live under **A7** in
 Active proposals above.
 
-### A8 — `absolute_extreme` opener-skeleton convergence + reused survivability-threshold clause
+~~### A8 — `absolute_extreme` opener-skeleton convergence + reused survivability-threshold clause~~ → **Promoted 2026-07-19 — see Active proposals, A8**
 
-**Observed:** 2026-07-17 — two related but distinct convergence signals surfaced in the same
-cycle, both specific to `absolute_extreme`. (1) **Same-cycle opener-skeleton convergence:** all
-3 fresh `absolute_extreme` drafts today share an identical sentence-1 shape — "[City], [Country]
-is forecast to hit XX.X°C (YYY°F) [on Date/today] — [above/just inside] the 47°C threshold
-where..." (Bandar-E Mahshahr, Basrah, Al Basrah). This is clean of P_tier (none cite an internal
-band/tier label — all three use the confirmed post-fix "threshold where [region] does X" world-
-knowledge form), but the numeric skeleton itself — forecast temp, parenthetical °F, "the 47°C
-threshold where" — is now identical across 3 of 3 same-cycle instances, the same shape of risk
-P6/P7/P9 tracked at the opener level for fire/coral/precipitation before their fixes shipped.
-(2) **Reused declarative clause across cycles:** Basrah's mid-sentence-1 qualifier, "shade and
-stillness stop being enough," is a near-verbatim echo of Jul 10 Ahvaz's A- close, "shade and
-rest alone stop being enough" — 2nd instance of this specific survivability-threshold
-construction, different city, 7 days apart. Distinct from A6 (fire's permafrost-carbon phrase
-reuse) and A7 (one location reusing its own construction): this is one *signal type*
-(`absolute_extreme`) converging on both a numeric opener shape and a reusable evaluative clause,
-independent of location.
-
-**Cycles observed:** 1 (Jul 17) — the opener-skeleton convergence is a same-cycle, 3-instance
-observation; the reused clause has 1 prior confirmed instance (Jul 10, Ahvaz), so 2 instances
-total across 2 cycles on that axis specifically.
-**Last seen:** Jul 17.
-
-**Watch for:** (a) a 4th `absolute_extreme` draft repeating the identical "is forecast to hit
-XX°C — [above/just inside] the 47°C threshold where..." skeleton with no structural variation;
-(b) a 3rd instance of "shade and [rest/stillness/calm] stop being enough" or a close structural
-cousin. **Promote to an active proposal if 2+ cycles show either axis recurring** — the reused-
-clause axis already has 2 instances (Jul 10, Jul 17) and is the closer of the two to that bar;
-the opener-skeleton axis needs a 2nd cycle (today's 3 instances are same-cycle, not yet
-cross-cycle) before promotion, per the A3/A4/A5/A6/A7 precedent requiring recurrence across
-distinct cycles, not just within one. If it recurs, the likely fix mirrors P6/P9: name 2-3
-alternative `absolute_extreme` opener forms in `writer_prompt.py` (lead with location/stakes
-instead of the bare forecast-vs-threshold clause) and, if the reused clause keeps appearing,
-add it to a short list of already-used survivability-threshold phrasings the writer should avoid
-repeating verbatim (the same mechanism `recent_categories`/memory-tracking already uses
-elsewhere).
+Filed Jul 17 on a single cycle's 3-instance opener-skeleton convergence plus a 2-instance reused
+declarative clause, with an explicit promotion condition ("2+ cycles show either axis recurring").
+2026-07-19 cleared that bar on both the reused-clause axis (3 instances: Jul 10, Jul 17, Jul 19)
+and a newly-identified stranded-mechanic axis (2 instances: Jul 17, Jul 19) from the same signal
+type's convergence pattern. Full current write-up, evidence, and proposed fix now live under
+**A8** in Active proposals above.
 
 ## Resolved (archive)
 

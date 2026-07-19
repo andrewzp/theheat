@@ -11,6 +11,196 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-19 — Daily corpus grading (4 fresh drafts; 5 carry-overs from Jul 17–18, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 9 pending drafts —
+expanded from Jul 18's 7. **5 of Jul 18's 7 survive unchanged**: Deaver, Wyoming `all_time_high`
+A- (Jul 17), Delhi, India `air_quality_hazard` B+ (Jul 18), Anchorage, Alaska
+`precipitation_extreme` B (Jul 18), Astana, Kazakhstan `precipitation_extreme` B+ (Jul 18),
+Wausaukee, Wisconsin `all_time_high` A- (Jul 18) — not re-graded, prior grades stand. **2 of
+Jul 18's carry-overs drop from the queue, cause unconfirmed:** Basrah, Iraq `absolute_extreme`
+B+ (47.9°C forecast "today"=July 17) and Al Basrah, Iraq `absolute_extreme` A- (48°C forecast
+July 17) — the same class of unexplained single/multi-draft queue contraction logged repeatedly
+since Jul 10 (Anchorage, Ahvaz, Randolph+Ontario, the 4 Jul-17 drafts). **4 fresh**: Ahvaz, Iran
+`absolute_extreme` (16:55 UTC Jul 18 — created ~2h after Jul 18's grading cutoff, so genuinely new
+today), W Allis, Wisconsin `all_time_high` (01:56 UTC Jul 19), Al Basrah, Iraq `absolute_extreme`
+(01:58 UTC Jul 19 — a new forecast/value, 50.5°C for July 19, distinct from the Jul 17 Al Basrah
+draft that just dropped from the queue), Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` (09:53
+UTC Jul 19). This session started from a stale base — `main`'s copies of these three docs were
+still frozen at their Jul 6 state, and an initial Step 0 sync to `main` (per the routine's stated
+protocol) produced a full re-grade of already-graded carry-overs before this was caught. Corrected
+by checking out the actual rolling `daily-plan-current` branch, which has run every day with no
+gap (Jul 7–18 all present, confirming the routine itself never stopped — only `main` is behind).
+Rebasing this session's work onto fresh `main` was a no-op (`main`'s tip unchanged at `#449`).
+
+**Staleness review as of 2026-07-19 ~15:08 UTC:** **0 strict candidates** (>48h old AND
+real-time-baked). [1] Deaver (~56.9h) crosses 48h but is past-tense/historical ("hit 109°F... on
+July 13") — clear under the established carve-out. All 4 fresh drafts are same-day or 1-day-old
+(5.2h–22.2h), well under 48h. **1 watch item:** [6] Ahvaz `absolute_extreme` forecasts "July 18,"
+now yesterday relative to this grading (~22.2h old, under the 48h mechanical threshold) — the
+same forecast-date-elapsed-but-not-yet-stale pattern flagged repeatedly for this signal type
+(same open question from Jul 18's followups: whether PR #385's forecast-elapsed auto-reject
+should have caught it already). **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh`
+→ command not found); no gist-write tool exposed via the GitHub MCP server tools loaded this
+session. Skipped per the hard constraints, logged rather than failing the cycle — **51st
+consecutive skip** (May 13 → Jul 19).
+
+**Grade distribution (4 fresh drafts):** 1 A- / 2 B+ / 1 B / 0 C / 0 D-F.
+**A-rate: 25% (1/4).** Gap from resumption bar: 25 pp. Same signal-mix story as Jul 18: with
+P_tier/P_dust/P9 all shipped and confirmed, the remaining gap is P_close/P_compound/A7/A8-class
+softness, not a hard rule violation — 3 of today's 4 fresh drafts are `absolute_extreme`, all
+clean of P_tier, but only 1 lands a clean unstranded declarative close.
+
+**Headline finding:** **A8's "stranded declarative clause" shape recurs for a 2nd time, and its
+reused survivability-threshold clause recurs for a 3rd** — both now comfortably past the
+2-instance promotion bar. [8] Al Basrah repeats Jul 17 Basrah's exact stranding failure: a
+genuinely declarative buffer-failure line ("shade, hydration, and rest stop being adequate
+buffers") sits buried as a sentence-1 tail qualifier, while the tweet's actual last sentence is a
+bare, non-declarative peer-comparison fact ("Nearby Basrah is forecast to hit 50.6°C the same
+day") — same shape, different city, 2 days apart. Separately, that same buried clause is also the
+**3rd instance** of A8's tracked survivability-threshold construction ("shade and rest alone stop
+being enough" Jul 10 Ahvaz → "shade and stillness stop being enough" Jul 17 Basrah → "shade,
+hydration, and rest stop being adequate buffers" Jul 19 Al Basrah), extended to a 3-item list this
+time. Meanwhile [6] Ahvaz breaks from both patterns cleanly — a fresh idiom-flip closer ("shade is
+infrastructure, not comfort") that neither strands its declarative move nor reuses prior phrasing
+— and [9] Ahvaz/Bandar-E Mahshahr breaks from A8's opener-skeleton shape entirely (a two-city
+comparison instead of the "forecast to hit XX°C — above the 47°C threshold where..." form),
+showing the signal type hasn't fully calcified even as two of its failure axes solidify.
+
+### A-grade draft
+
+**[6] Ahvaz, Iran `absolute_extreme` — A- (score 84)**
+> Ahvaz, Iran is forecast at 47.8°C (118°F) on July 18 — above the 47°C threshold where the
+> Khuzestan plain's superheated air stops allowing meaningful sweat evaporation. At this
+> temperature, shade is infrastructure, not comfort.
+
+Clean of P_tier (confirmed post-fix "threshold where [region] does X" world-knowledge form — no
+internal band/tier label). Repeats A8's opener-skeleton shape ("[City], [Country] is forecast at
+XX.X°C (YYY°F) on [Date] — above the 47°C threshold where...") but breaks from its reused-clause
+axis entirely: "shade is infrastructure, not comfort" is a genuine, fresh idiom-flip — reframing
+shade from a comfort amenity into a survival necessity — not a variant of the "shade and rest stop
+being enough" family tracked below. It's also the actual last sentence of the tweet, so unlike [8]
+below, the declarative move lands where it should. **P_close POSITIVE.** No Wodehouse violations.
+`absolute_extreme` self-selects a real mechanic again.
+
+### B+-grade drafts
+
+**[7] W Allis, Wisconsin `all_time_high` — B+ (score 90)**
+> W Allis, Wisconsin hit 104°F (40°C) on July 15 — hottest daily maximum in 76 years of records,
+> 2°F above the 1953 mark. Lake Michigan's onshore flow normally caps Milwaukee-area summer heat;
+> breaking 104°F here takes a continental push that overwhelms that buffer.
+
+Standard **P_compound** archive+margin double-qualifier in sentence 1 (14th cycle of this
+pattern). Overcome by a declarative buffer-failure close ("overwhelms that buffer") — same
+named-absence family as Jul 18's Wausaukee ("without the lake bleeding it off first") and this
+signal type's other buffer-failure A-graded closes — **P_close POSITIVE**, but a flatter, more
+generic verb than Wausaukee's, and W Allis/Wausaukee are both Wisconsin `all_time_high` drafts
+built on the identical "Great Lakes onshore flow normally caps heat, a continental push overwhelms
+it" mechanism, one day apart in underlying record date (July 14/15). Not A7 territory (that
+proposal tracks one *location* reusing its own phrasing; this is two different locations sharing a
+regional mechanism) but worth flagging as an adjacent risk shape — if a 3rd Great-Lakes-region
+`all_time_high` repeats this same buffer-failure construction, it may be worth a dedicated watch
+item. Graded a half-step below Wausaukee on execution strength alone, same as prior
+same-mechanism sibling pairs (Jul 3 Canadian Arctic fire).
+
+**[8] Al Basrah, Iraq `absolute_extreme` — B+ (score 86)**
+> Al Basrah, Iraq is forecast for 50.5°C (123°F) on July 19 — 3.5°C above the 47°C threshold
+> where shade, hydration, and rest stop being adequate buffers. Nearby Basrah is forecast to
+> hit 50.6°C the same day.
+
+Clean of P_tier. Repeats A8's opener-skeleton shape and, more significantly, **repeats Jul 17
+Basrah's exact stranded-mechanic failure**: the genuinely declarative line ("shade, hydration, and
+rest stop being adequate buffers") is buried as a sentence-1 tail qualifier rather than placed in
+the closer. The tweet's actual last sentence — "Nearby Basrah is forecast to hit 50.6°C the same
+day" — is a bare peer-comparison fact with no mechanism or consequence attached. **P_close
+FAILING** on closer-position grounds, same as Jul 17 Basrah, despite a real declarative move
+existing elsewhere in the draft. Also the **3rd instance** of A8's tracked survivability-threshold
+clause family (Jul 10 Ahvaz "shade and rest alone stop being enough" → Jul 17 Basrah "shade and
+stillness stop being enough" → this draft's 3-item "shade, hydration, and rest"). Also continues
+the long-running Basra-area duplicate/near-duplicate location cluster. Graded B+, matching Jul 17
+Basrah's grade for the same underlying failure shape.
+
+### B-grade draft
+
+**[9] Ahvaz, Iran / Bandar-E Mahshahr, Iran `absolute_extreme` — B (score 85)**
+> Ahvaz, Iran is forecast to hit 51.2°C (124°F) on July 19 — and Bandar-E Mahshahr, on the
+> Persian Gulf coast, at 49.8°C (122°F) the same day. Shallow Gulf waters add humidity to
+> desert heat that is already among the highest on Earth.
+
+Clean of P_tier — and clean of A8's opener-skeleton shape too: a two-city forecast comparison
+instead of the "forecast to hit XX°C — above the 47°C threshold where..." construction [6] and
+[8] both use this same cycle, useful counter-evidence that the signal type hasn't fully converged
+on one opener form. **P_close FAILING:** "Shallow Gulf waters add humidity to desert heat that is
+already among the highest on Earth" explains a contributing physical factor (why humidity is
+high) without landing a consequence — mechanism-only, the same gap as most of this signal type's
+non-A-grade instances. Real specificity (two named cities, Gulf-coast humidity mechanism) without
+a punchline to carry it past mechanism-only.
+
+### Patterns / operational notes
+
+1. **A8's stranded-mechanic axis confirmed a 2nd time; its reused-clause axis confirmed a 3rd.**
+   [8] Al Basrah repeats both of Jul 17 Basrah's failure shapes on a different city 2 days later —
+   the strongest evidence yet that `absolute_extreme`'s survivability-threshold construction is
+   calcifying on two independent axes at once (see `docs/IMPROVEMENT_PLAN.md` for the extended
+   A8 write-up).
+2. **[6] Ahvaz and [9] Ahvaz/Bandar-E Mahshahr both break from at least one A8 axis**, showing
+   the signal type still produces genuine variation alongside the calcifying instances — worth
+   tracking whether the ratio of clean-to-converged instances shifts over the next several cycles.
+3. **A new adjacent-location buffer-failure pairing**: W Allis and Wausaukee, both Wisconsin
+   `all_time_high` drafts one day apart in record date, share the identical "Great Lakes normally
+   caps heat, a continental push overwhelms it" mechanism (not verbatim phrasing, so not strictly
+   A7 territory, which requires one location reusing its own construction) — logged as a
+   observation to watch, not yet a proposal.
+4. **Basra-area/Persian-Gulf `absolute_extreme` cluster continues** — 2 more instances this
+   cycle (Al Basrah, Ahvaz/Bandar-E Mahshahr) alongside the 2 that dropped from the queue
+   (Basrah, Al Basrah from Jul 17) — consistent with the long-running duplicate-signal-generation
+   operational note, not a voice proposal.
+5. **Zero Wodehouse violations, 4th consecutive cycle** (Jul 16/17/18, now Jul 19).
+
+### Followups (in priority order)
+
+1. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — today
+   adds 1 clear P_close positive (Ahvaz [6]), 2 failing (Al Basrah stranded, Ahvaz/Bandar-E
+   Mahshahr mechanism-only); 1 more P_compound overcome instance (W Allis).
+2. **A8 now meets its promotion bar on both remaining axes** (reused-clause: 3 instances Jul
+   10/17/19; stranded-mechanic: 2 instances Jul 17/19) — recommend moving A8 fully into the active
+   proposals' implementation-ready tier alongside P_close/P_compound/A7.
+3. **Operator: confirm whether [6] Ahvaz's elapsed forecast date (July 18) should have triggered
+   PR #385's forecast-elapsed auto-reject** — same open question carried from Jul 18 (and Jul 11)
+   regarding two other `absolute_extreme` drafts that also weren't auto-rejected on schedule.
+4. **Operator: confirm whether the 2 dropped Jul-17 `absolute_extreme` carry-overs (Basrah,
+   Al Basrah) were intentional rejections** or another instance of this routine's recurring
+   unexplained-queue-contraction pattern.
+5. **This session's Step 0 sync surfaced a process gap worth the operator's attention:** syncing
+   to `main` alone is not sufficient to find this routine's actual continuous state — the rolling
+   `daily-plan-current` branch must be checked out directly, since `main` has been many cycles
+   behind it since 2026-06-08. Recommend either merging `main` soon or adjusting Step 0's
+   instructions to check out `daily-plan-current` when it exists, before reading any of the three
+   tracked docs.
+
+### Numbers
+
+- Pending drafts in queue: 9 (4 fresh; 5 carry-overs from Jul 17–18, unchanged: Deaver A-, Delhi
+  B+, Anchorage B, Astana B+, Wausaukee A-)
+- Fresh drafts graded: 4
+- A-rate: **25% (1/4)** — same as Jul 18, below the 50% bar; signal-mix/execution driven (3 of 4
+  fresh drafts `absolute_extreme`, all clean of P_tier, only 1 lands an unstranded declarative
+  close)
+- Grade distribution: 0 A / 1 A- / 2 B+ / 1 B / 0 C / 0 D-F
+- Active proposals: P_close (26th cycle: 1 positive [Ahvaz], 2 failing [Al Basrah, Ahvaz/Bandar-E
+  Mahshahr]) > P_compound (14th cycle: W Allis, overcome) > A8 (both remaining axes now past
+  promotion bar — see Followups) > P5 (`absolute_extreme` self-selects again via Ahvaz's
+  idiom-flip). A4/A5/A6/A7 not tested this cycle (no target-type draft). P_tier/P_dust/P9 remain
+  CONFIRMED, tracking closed — all 3 fresh `absolute_extreme` drafts today stayed clean.
+- Staleness bulk-reject: 0 strict candidates; 1 watch item ([6] Ahvaz, forecast-date-elapsed but
+  under 48h). `gh` CLI absent, 51st consecutive skip (May 13 → Jul 19)
+- Operational anomalies: (a) 2 Jul-17 `absolute_extreme` carry-overs dropped from the queue,
+  cause unconfirmed; (b) this session's Step 0 sync initially missed the rolling
+  `daily-plan-current` branch's continuous state — corrected before any docs were finalized, see
+  Followups #5
+
+---
+
 ## 2026-07-18 — Daily corpus grading (4 fresh drafts; 3 carry-overs from Jul 17, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 7 pending drafts — same
