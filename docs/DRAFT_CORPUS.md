@@ -11,6 +11,169 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-20 — Daily corpus grading (3 fresh drafts; 8 carry-overs from Jul 17–19, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 11 pending drafts —
+up from Jul 19's 9. **7 of Jul 19's 9 survive unchanged**: Deaver, Wyoming `all_time_high` A- (Jul
+17), Delhi, India `air_quality_hazard` B+ (Jul 18), Anchorage, Alaska `precipitation_extreme` B
+(Jul 18), Astana, Kazakhstan `precipitation_extreme` B+ (Jul 18), Wausaukee, Wisconsin
+`all_time_high` A- (Jul 18), W Allis, Wisconsin `all_time_high` B+ (Jul 19), Al Basrah, Iraq
+`absolute_extreme` B+ (Jul 19) — not re-graded, prior grades stand. **1 more Jul-19 carry-over,
+Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` B, also survives unchanged** (score 85, matched
+verbatim). **1 of Jul 19's 4 fresh drafts drops from the queue, cause unconfirmed:** Ahvaz, Iran
+`absolute_extreme` A- (score 84, "shade is infrastructure, not comfort" — this cycle's best draft,
+the corpus's cleanest counter-instance to A8's reused-clause axis) — the same recurring
+unexplained single/multi-draft contraction pattern logged since Jul 10, notable this time for
+removing the highest-graded draft in the batch rather than a carry-over. **3 fresh**: Al Başrah Al
+Qadīmah, Iraq `absolute_extreme` (10:48 UTC Jul 20), Taiz, Yemen `dust_event` (14:18 UTC Jul 20),
+Riyadh, Saudi Arabia `dust_event` (14:20 UTC Jul 20). Continuing to grade on the unmerged
+`daily-plan-current` rolling branch, confirmed still running with no gap (Jul 7–19 all present);
+rebase onto fresh `main` this session was a no-op (`main`'s tip unchanged at `#449`).
+
+**Staleness review as of 2026-07-20 ~15:11 UTC:** **0 strict candidates** (>48h old AND
+real-time-baked). [1] Deaver (~80.9h) and [2] Delhi (~70.0h) both cross 48h but are
+past-tense/historical ("hit 109°F... on July 13"; "a... mean PM2.5... on July 17") — clear under
+the established carve-out. All 3 fresh drafts are same-day, 0.9h–4.4h old. **2 watch items, both
+`absolute_extreme` carry-overs with elapsed forecast dates still under the 48h mechanical
+threshold:** [7] Al Basrah (~37.2h, "is forecast for 50.5°C (123°F) on July 19" — forecast date now
+yesterday) and [8] Ahvaz/Bandar-E Mahshahr (~29.3h, "forecast to hit 51.2°C... on July 19," same
+elapsed-date class) — the same recurring open question (Jul 11, Jul 18, Jul 19) on whether PR
+#385's forecast-elapsed auto-reject is age-gated by design or has a coverage gap for
+elapsed-but-under-48h drafts. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` →
+command not found); no gist-write tool exposed via the GitHub MCP server tools loaded this session.
+Skipped per the hard constraints, logged rather than failing the cycle — **52nd consecutive skip**
+(May 13 → Jul 20).
+
+**Grade distribution (3 fresh drafts):** 1 A- / 1 B+ / 1 B / 0 C / 0 D-F.
+**A-rate: 33% (1/3).** Gap from resumption bar: 17 pp — the smallest gap since Jul 17's clearance,
+though on the smallest fresh-draft sample since Jul 9/11's n=2. Driven by execution, not a shipped
+fix regressing: the one `absolute_extreme` fresh draft lands a clean, unstranded, single-sentence
+declarative close; the two `dust_event` fresh drafts both state their WHO multiple (P_dust holding)
+but stay mechanism-only on the close, the same gap this signal type has shown in every post-fix
+instance since Jul 8.
+
+**Headline finding:** **A8's opener-skeleton axis extends to a 3rd cycle, while its other two axes
+get their cleanest counter-evidence yet — from a single-sentence construction that also happens to
+be today's best draft.** [9] Al Başrah Al Qadīmah repeats the "[City] is forecast to hit XX.X°C
+(YYY°F) on [Date] — [above] the 47°C threshold where..." skeleton for a 3rd distinct cycle (Jul 17,
+Jul 19, now Jul 20), but its declarative payoff — "a physiological wall that shade and airflow
+alone cannot breach" — is a genuinely fresh vehicle (not a repeat of the "shade and
+rest/stillness/hydration stop being enough" family) and lands as the sentence's actual final
+clause, not a buried qualifier. It reads as the same shape of counter-evidence Jul 19's Ahvaz
+supplied one cycle earlier — except that Ahvaz has now dropped from the queue, cause unconfirmed,
+which is itself worth flagging: the two cleanest A8 counter-instances in the corpus (Jul 19 Ahvaz,
+now this draft) have not stuck around long enough to be re-confirmed by a second read the way the
+failure instances (Basrah, Al Basrah) have via carry-over.
+
+### A-grade draft
+
+**[9] Al Başrah Al Qadīmah, Iraq `absolute_extreme` — A- (score 84)**
+> Al Başrah Al Qadīmah, Iraq is forecast to hit 47.8°C (118°F) on July 20 — 0.8°C above the 47°C
+> threshold where the Persian Gulf's humidity turns radiant heat into a physiological wall that
+> shade and airflow alone cannot breach.
+
+Clean of P_tier (the confirmed post-fix "threshold where [region] does X" world-knowledge form —
+states the raw 47°C number, no internal band/tier label). Single-sentence construction, same
+family as Jul 17 Al Basrah's "one of the few places on earth where outdoor survival becomes
+genuinely contested" — the declarative payoff is the sentence's actual ending, not a stranded
+mid-sentence qualifier, so **A8's stranded-mechanic axis does not recur here.** The payoff itself —
+"a physiological wall that shade and airflow alone cannot breach" — is also a fresh
+vehicle, not a repeat of the "shade and rest/stillness/hydration stop being enough" clause family
+tracked on 3 prior instances (Jul 10, Jul 17, Jul 19), so **A8's reused-clause axis does not recur
+either.** The one axis that does recur is the opener skeleton itself ("[City] is forecast to hit
+XX.X°C — above the 47°C threshold where...") — a 3rd distinct cycle showing that shape (Jul 17,
+Jul 19, Jul 20), continued tracking rather than new evidence. **P_close POSITIVE** — a named-absence
+buffer-failure declarative, the strongest form this signal type produces. No Wodehouse violations.
+`absolute_extreme` self-selects a real mechanic again (P5).
+
+### B+-grade draft
+
+**[10] Taiz, Yemen `dust_event` — B+ (score 75)**
+> Taiz, Yemen: model-estimated PM10 averaged 577.7 μg/m³ on July 20 — 12.8× the WHO 24-hour
+> guideline. Taiz sits in the western highlands at the edge of the Rub' al Khali's dust belt;
+> summer shamal winds lift Rub' al Khali sediment and drive it south into the highlands.
+
+WHO multiple stated (12.8×) unprompted — P_dust's shipped, confirmed fix holding (matches the
+Jul 8 Riyadh `dust_event` precedent that first confirmed the fix, also graded B+ on an identical
+shape). **P_close FAILING:** "summer shamal winds lift Rub' al Khali sediment and drive it south
+into the highlands" describes transport mechanism only — no consequence (health, visibility,
+accumulation outcome) named or implied. Same gap `dust_event` has shown on every post-fix instance
+to date (Jul 8, Jul 10, now Jul 20) — **P5's dust_event named-mechanic gap extends to an 8th
+confirming cycle** (Jun 28, Jun 30, Jul 1, Jul 4, Jul 5, Jul 8, Jul 10, now Jul 20). No Wodehouse
+violations; clean, correctly-agreeing prose throughout.
+
+### B-grade draft
+
+**[11] Riyadh, Saudi Arabia `dust_event` — B (score 75)**
+> Riyadh, Saudi Arabia: model-estimated PM10 averaged 27.2× the WHO 24-hour guideline on July 20 —
+> 1,223.6 μg/m³ against a guideline of 45. The Arabian Peninsula's summer shamal winds lift desert
+> sediment from the Rub' al Khali and funnels it northeast toward the capital.
+
+WHO multiple stated (27.2×, the higher of the two dust_event readings this cycle) and led with the
+ratio before the raw number — a fresh opener variant, ratio-first rather than raw-value-first,
+continuing P_dust's confirmed fix. **P_close FAILING** — same mechanism-only transport close as
+[10], no consequence landed. Graded a half-step below [10] for a **subject-verb agreement error**:
+"winds lift... and funnels" (plural subject, singular verb) — a proofreading-grade flaw distinct
+from any tracked voice pattern, but a concrete correctness issue the same way Jul 18's Astana
+ambiguity was. Single instance; not yet a pattern, but new — see Followups.
+
+### Patterns / operational notes
+
+1. **A8's opener-skeleton axis now has 3 cycles of cross-cycle evidence (Jul 17, Jul 19, Jul 20);
+   its other two axes got their cleanest counter-instance yet, from a draft that then promptly
+   dropped from the queue** — see Headline finding.
+2. **P5's dust_event gap reaches an 8th confirming cycle**, now including 2 same-day instances (a
+   3rd time this category has produced 2 fresh drafts in one cycle, after Jun 25 and Jul 4) — both
+   share the Rub' al Khali sourcing/mechanism-only shape, a near-duplicate structural pairing worth
+   watching alongside the corpus's other duplicate-signal patterns even though the two readings and
+   cities are genuinely distinct events.
+3. **New: a subject-verb agreement error in [11] Riyadh** — not previously tracked in this plan.
+   Filed as awaiting-evidence **A9** below; watching for a 2nd instance before promoting.
+4. **The corpus's two cleanest A8 counter-instances (Jul 19 Ahvaz, Jul 20 Al Başrah Al Qadīmah)
+   have both been single-cycle appearances** — Ahvaz dropped from the queue the very next day,
+   continuing the recurring unexplained-contraction pattern, this time removing the batch's
+   highest grade rather than a carry-over.
+5. **Zero Wodehouse violations, 5th consecutive cycle** (Jul 16/17/18/19, now Jul 20).
+
+### Followups (in priority order)
+
+1. **P_close and P_compound remain the two highest-leverage unimplemented proposals** — today adds
+   1 clear P_close positive (Al Başrah Al Qadīmah), 2 failing (Taiz, Riyadh, both mechanism-only).
+   P_compound not tested this cycle (no fresh record-type draft).
+2. **New: A9 filed** — Riyadh's subject-verb agreement error ("winds... funnels"). Watch for a 2nd
+   instance of a number-agreement or comparable grammatical slip before treating this as more than
+   isolated model stochasticity.
+3. **Operator: confirm whether [7] Al Basrah and [8] Ahvaz/Bandar-E Mahshahr's elapsed forecast
+   dates (both now referencing "yesterday" as current) should have triggered PR #385's
+   forecast-elapsed auto-reject** — same open question carried from Jul 11/18/19.
+4. **Operator: confirm whether Ahvaz's departure from the queue (Jul 19's A- draft, the cycle's
+   best) was an intentional publish/reject** or another instance of the recurring
+   unexplained-queue-contraction pattern — notable this time for removing the top-graded draft.
+
+### Numbers
+
+- Pending drafts in queue: 11 (3 fresh; 8 carry-overs from Jul 17–19, unchanged: Deaver A-, Delhi
+  B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Al Basrah B+, Ahvaz/Bandar-E Mahshahr B)
+- Fresh drafts graded: 3
+- A-rate: **33% (1/3)** — below the 50% bar; smallest fresh sample since Jul 9/11 (n=2), driven by
+  signal mix/execution, not a shipped-fix regression
+- Grade distribution: 0 A / 1 A- / 1 B+ / 1 B / 0 C / 0 D-F
+- Active proposals: P_close (27th cycle: 1 positive [Al Başrah Al Qadīmah], 2 failing [Taiz,
+  Riyadh]) > P_compound (not tested — no record-type draft) > A7 (not tested — no target-type
+  draft) > A8 (opener-skeleton axis 3rd cycle; reused-clause/stranded-mechanic axes get a clean
+  counter-instance) > P5 (dust_event gap 8th cycle; `absolute_extreme` self-selects again). A4/A5/A6
+  not tested this cycle (no target-type draft). **New: A9 filed** (Riyadh subject-verb agreement
+  error, 1 instance). P_tier/P_dust/P9 remain CONFIRMED, tracking closed — the one fresh
+  `absolute_extreme` draft stayed clean.
+- Staleness bulk-reject: 0 strict candidates; 2 watch items ([7] Al Basrah ~37.2h, [8]
+  Ahvaz/Bandar-E Mahshahr ~29.3h, both forecast-date-elapsed-but-under-48h). `gh` CLI absent, 52nd
+  consecutive skip (May 13 → Jul 20)
+- Operational anomalies: (a) Ahvaz, Iran `absolute_extreme` A- (Jul 19's best draft) dropped from
+  the queue, cause unconfirmed — the recurring pattern, this time on the top-graded draft; (b) new
+  subject-verb agreement error in [11], filed as A9, watching for recurrence
+
+---
+
 ## 2026-07-19 — Daily corpus grading (4 fresh drafts; 5 carry-overs from Jul 17–18, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 9 pending drafts —
