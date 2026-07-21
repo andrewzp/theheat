@@ -11,6 +11,149 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-21 — Daily corpus grading (1 fresh draft; 9 carry-overs from Jul 17–20, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 10 pending drafts —
+down from Jul 20's 11. **9 of Jul 20's 11 survive unchanged**: Deaver, Wyoming `all_time_high`
+A- (Jul 17), Delhi, India `air_quality_hazard` B+ (Jul 18), Anchorage, Alaska
+`precipitation_extreme` B (Jul 18), Astana, Kazakhstan `precipitation_extreme` B+ (Jul 18),
+Wausaukee, Wisconsin `all_time_high` A- (Jul 18), W Allis, Wisconsin `all_time_high` B+ (Jul
+19), Al Başrah Al Qadīmah, Iraq `absolute_extreme` A- (Jul 20), Taiz, Yemen `dust_event` B+ (Jul
+20), Riyadh, Saudi Arabia `dust_event` B (Jul 20) — not re-graded, prior grades stand. **2 of
+Jul 19's carry-overs drop from the queue, cause unconfirmed:** Al Basrah, Iraq `absolute_extreme`
+B+ and Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` B — both were flagged as staleness
+**watch items** at Jul 20's grading (~37.2h and ~29.3h, both forecast-date-elapsed-but-under-48h)
+and have now vanished between pulls, same recurring unexplained-contraction pattern logged
+since Jul 10, notable this time for happening to be exactly the two open watch-item questions —
+plausibly (not confirmed) PR #385's forecast-elapsed auto-reject catching them once they crossed
+48h, which would finally answer the question this corpus has repeated every cycle since Jul 11.
+**1 fresh**: Barrow, Alaska `precipitation_extreme` (01:58 UTC Jul 21). Continuing to grade on
+the unmerged `daily-plan-current` rolling branch (PR #207), confirmed still running with no gap
+(Jul 7–20 all present, checked out directly rather than trusting `main`, which remains stale at
+its Jul 6 state — see Followups); rebase onto fresh `main` this session was a no-op (`main`'s
+tip unchanged at `#449`).
+
+**Staleness review as of 2026-07-21 ~15:09 UTC:** **0 strict candidates** (>48h old AND
+real-time-baked/forecast-elapsed). [1] Deaver (~104.9h) and [2] Delhi (~94.0h) both cross 48h but
+are past-tense/historical ("hit 109°F... on July 13"; a mean PM2.5 "on July 17") — clear under the
+established carve-out. [7] Al Başrah Al Qadīmah (~28.3h, "is forecast to hit 47.8°C... on July
+20" — the forecast date is now yesterday) is a **watch item**: forecast-elapsed but under the 48h
+mechanical threshold, same class as the two drafts that just dropped from the queue above — worth
+watching closely at tomorrow's pull. [8]/[9] Taiz and Riyadh dust_event drafts (~24.8h) reference
+"July 20" as a same/prior-day model-estimated reading, not a live forecast — clear. The fresh
+Barrow draft is ~13.2h old. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` →
+command not found); no gist-write tool exposed via the GitHub MCP server tools loaded this
+session. Skipped per the hard constraints, logged rather than failing the cycle — **53rd
+consecutive skip** (May 13 → Jul 21).
+
+**Grade distribution (1 fresh draft):** 0 A / 0 A- / 1 B+ / 0 B / 0 B- / 0 C / 0 D-F.
+**A-rate: 0% (0/1).** Gap from resumption bar: 50 pp — the widest gap since Jul 11's 0% (n=2), on
+the smallest fresh-draft sample of the corpus's history (n=1, tying Jun 22's retroactive n=1).
+Not a regression in any shipped fix; the sole fresh draft is capped by an unimplemented pattern
+(A7), not by P_tier/P_dust/P9.
+
+**Headline finding:** **Barrow, Alaska becomes A7's third confirmed location — and its cleanest
+instance yet, because this time the reused construction is the exact sentence shape that closed
+out P9's tracking in the first place.** Today's draft states 71.2 mm of rain against a 110 mm
+annual average and closes "this single day delivered nearly two-thirds of that." Compare Jul 8's
+`docs/DRAFT_CORPUS.md` entry, the cycle that first confirmed PR #397's precipitation fix clean:
+same city, same 71.2 mm headline figure, same ~110 mm annual baseline, same two-thirds fraction,
+closing "one storm just delivered two-thirds of a normal year in a day" — graded A- at the time as
+"the first genuinely clean `precipitation_extreme` draft in the corpus's history." Today's version
+is a near-paraphrase of that exact sentence, 13 days later, on the same station. Separately from
+the voice question: the headline number (71.2 mm) and annual baseline (110 mm) matching exactly
+across two nominally distinct events (July 6 vs. July 19) is itself worth flagging as a possible
+data-pipeline anomaly, not just a phrasing coincidence — see Followups.
+
+### B+-grade draft
+
+**[10] Barrow, Alaska `precipitation_extreme` — B+ (score 78)**
+> Barrow, Alaska recorded 71.2 mm of rain on July 19 — against a prior daily record of just 1.9
+> mm set earlier this same year. Barrow sits on the Arctic Ocean at 71°N, where the annual
+> precipitation average is roughly 110 mm; this single day delivered nearly two-thirds of that.
+
+**P9 check: CLEAN.** No restate-math — the draft states both the 71.2 mm total and the 1.9 mm
+prior record without deriving the 69.3 mm margin. **P_close check: POSITIVE** on its own terms —
+"delivered nearly two-thirds of that" is a declarative annual-ratio consequence, the exact move
+PR #397 prescribes, and by the standard this plan applied to Jul 8's near-identical Barrow draft
+("not stranded or hedged") this reads as unhedged despite the "roughly"/"nearly" qualifiers. **A8
+n/a** (wrong signal type). **A7 — this is the finding.** Set the two closers side by side:
+
+- Jul 8: *"one storm just delivered two-thirds of a normal year in a day."*
+- Jul 21 (today): *"this single day delivered nearly two-thirds of that."*
+
+Same city, same fraction, same rhetorical shape (single-event-vs-annual-total, stated as a
+completed delivery). This is Barrow's own prior construction, reused almost verbatim 13 days
+later — a **3rd location** for A7, joining Anchorage (×3) and Randolph (×1), and the most direct
+recurrence yet: Anchorage's and Randolph's repeats varied the wording more than this one does.
+Graded B+ rather than A- on that basis, consistent with how every other confirmed A7 instance has
+graded (never above B+) even when the underlying mechanism executes cleanly. No Wodehouse
+violations independent of the reuse question. `precipitation_extreme` self-selects a real
+mechanic again (P5) — but it's the same mechanic wearing the same clothes.
+
+### Patterns / operational notes
+
+1. **A7 gains its 3rd location and cleanest instance** — see Headline finding and the B+ writeup
+   above. This is now evidence across 3 stations (Anchorage ×3, Randolph ×1, Barrow ×1) and, for
+   the first time, a case where the reused sentence is otherwise a fully clean, fix-confirming
+   execution rather than one already capped by a separate P_close failure.
+2. **Possible data anomaly, logged not diagnosed:** today's Barrow draft's headline number (71.2
+   mm) and annual baseline (110 mm) are identical to Jul 8's Barrow draft, despite different event
+   dates (July 19 vs. July 6) and different stated prior daily records (1.9 mm vs. 0.0 mm). Could
+   be a genuine coincidence (Barrow is a small station; two independent 71.2 mm days sixteen days
+   apart is unusual but not impossible), or could indicate a source/bundle issue re-serving a
+   stale reading under a new date stamp. Not diagnosable from the gist alone — flagged for the
+   operator to check against the raw GPM/GHCN feed, same treatment this corpus has given other
+   duplicate-signal anomalies (Ft Green, Basrah, Canadian Arctic fire) without asserting a cause.
+3. **The recurring unexplained-queue-contraction pattern this time resolves an open question
+   rather than raising a new one:** the two drafts that dropped were exactly the two forecast-
+   elapsed watch items flagged at Jul 20's grading. If confirmed as PR #385's auto-reject firing
+   (rather than operator/dashboard action), this closes the "does the auto-reject cover elapsed-
+   but-under-48h drafts" question this corpus has asked every cycle since Jul 11 — worth the
+   operator confirming either way.
+4. **Zero Wodehouse violations, 6th consecutive cycle** (Jul 16–20, now Jul 21).
+5. **Smallest fresh-draft sample in the corpus's history (n=1)**, tying Jun 22's retroactive
+   n=1. A-rate at this sample size (0%) is not a meaningful trend signal on its own — it reflects
+   one draft's specific A7 cap, not a regression in any shipped fix.
+
+### Followups (in priority order)
+
+1. **A7 is now a 3-location, cross-mechanism pattern** (record-opener reuse at Randolph,
+   precipitation-mechanism reuse at Anchorage ×3, and now precipitation annual-ratio reuse at
+   Barrow) — the highest-confidence unimplemented proposal to promote alongside P_close and
+   P_compound; today's instance is the cleanest illustration yet of exactly what the proposed fix
+   describes ("the mechanism can recur; the sentence shape shouldn't").
+2. **Operator: check the raw source for Barrow's July 19 vs. July 6 readings** — both cite an
+   identical 71.2 mm/110 mm pairing; confirm these are genuinely two distinct rain days and not a
+   stale-data reissue.
+3. **Operator: confirm whether Al Basrah's and Ahvaz/Bandar-E Mahshahr's departure from the queue
+   was PR #385's forecast-elapsed auto-reject firing** — this would resolve the open question
+   carried since Jul 11 either way.
+4. **P_close and P_compound remain the two highest-leverage unimplemented proposals** after
+   P_close and A7; P_compound not tested this cycle (no fresh record-type draft).
+
+### Numbers
+
+- Pending drafts in queue: 10 (1 fresh; 9 carry-overs from Jul 17–20, unchanged: Deaver A-, Delhi
+  B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Al Başrah Al Qadīmah A-, Taiz B+, Riyadh B)
+- Fresh drafts graded: 1
+- A-rate: **0% (0/1)** — smallest fresh sample in the corpus's history; not a regression signal
+- Grade distribution: 0 A / 0 A- / 1 B+ / 0 B / 0 B- / 0 C / 0 D-F
+- Active proposals: P_close (28th cycle: n/a this cycle — the one fresh draft's close is P_close
+  POSITIVE but graded on A7 grounds instead) > P_compound (not tested — no record-type draft) >
+  **A7 (3rd location confirmed: Barrow, cleanest instance yet)** > A8 (not tested — no
+  `absolute_extreme` fresh draft) > P5 (dust_event gap not tested — no fresh dust_event draft;
+  `precipitation_extreme` self-selects again, same mechanic as before). A4/A5/A6/A9 not tested
+  this cycle (no target-type draft). P_tier/P_dust/P9 remain CONFIRMED, tracking closed — no
+  fresh instance to retest any of the three this cycle.
+- Staleness bulk-reject: 0 strict candidates; 1 watch item ([7] Al Başrah Al Qadīmah ~28.3h,
+  forecast-date-elapsed-but-under-48h). `gh` CLI absent, 53rd consecutive skip (May 13 → Jul 21)
+- Operational anomalies: (a) possible duplicate/stale-data reissue on Barrow's 71.2mm/110mm
+  figures matching Jul 8's draft exactly; (b) Al Basrah + Ahvaz/Bandar-E Mahshahr dropped from
+  queue, plausibly PR #385's auto-reject resolving a question open since Jul 11
+
+---
+
 ## 2026-07-20 — Daily corpus grading (3 fresh drafts; 8 carry-overs from Jul 17–19, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 11 pending drafts —
