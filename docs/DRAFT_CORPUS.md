@@ -11,6 +11,203 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-22 — Daily corpus grading (3 fresh drafts; 9 carry-overs from Jul 17–21, previously graded)
+
+**Context:** Gist read via git-clone path (success; no rate limit). Queue: 12 pending drafts — up
+from Jul 21's 10. Checked out `daily-plan-current` (PR #207) directly rather than trusting `main`
+(confirmed no gap: Jul 7–21 all present; rebase onto fresh `main` this session was a no-op — `main`
+tip unchanged at `#449`). **9 of Jul 21's 10 survive unchanged**: Deaver, Wyoming `all_time_high`
+A- (Jul 17), Delhi, India `air_quality_hazard` B+ (Jul 18), Anchorage, Alaska
+`precipitation_extreme` B (Jul 18), Astana, Kazakhstan `precipitation_extreme` B+ (Jul 18),
+Wausaukee, Wisconsin `all_time_high` A- (Jul 18), W Allis, Wisconsin `all_time_high` B+ (Jul 19),
+Taiz, Yemen `dust_event` B+ (Jul 20), Riyadh, Saudi Arabia `dust_event` B (Jul 20), Barrow, Alaska
+`precipitation_extreme` B+ (Jul 21) — not re-graded, prior grades stand. **1 of Jul 21's
+carry-overs drops from the queue, cause unconfirmed:** Al Başrah Al Qadīmah, Iraq `absolute_extreme`
+A- — the same recurring unexplained-contraction pattern logged since Jul 10, this time claiming
+the cycle's single strongest carry-over grade. **3 fresh**: Basrah, Iraq `absolute_extreme`
+(17:16 UTC Jul 21, created after Jul 21's ~15:09 UTC grading pull), Al Basrah, Iraq
+`absolute_extreme` (06:30 UTC Jul 22), Portland, Oregon `hot10` (14:13 UTC Jul 22).
+
+**Staleness review as of 2026-07-22 ~15:10 UTC:** **0 strict candidates** (>48h old AND
+real-time-baked/forecast-elapsed). [1] Deaver (~152.9h) and [2] Delhi (~141.9h) cross 48h but stay
+past-tense/historical ("hit 109°F... on July 13"; a mean PM2.5 "on July 17") — clear under the
+established carve-out. [7]/[8] Taiz and Riyadh `dust_event` (~48.9h) reference "July 20" as a
+same/prior-day model-estimated reading, not a live forecast — clear, same ruling as every prior
+`dust_event` cycle. **[10] Basrah is a new watch item**: created 17:16 UTC Jul 21 with "is forecast
+to hit 47.3°C (117°F) **today**" — "today" meant Jul 21 at creation and is now one calendar day
+stale (~22h old, under the 48h mechanical threshold but forecast-date-elapsed), the same class as
+the two drafts that dropped from the queue between Jul 20 and Jul 21. [11] Al Basrah (~8.7h,
+"today" = Jul 22) and [12] Portland (~1h, `hot10` same-day type) are both accurate. **Bulk-reject
+attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no gist-write tool exposed
+via the GitHub MCP server tools loaded this session (repo/PR/issue tools only, no gist scope).
+Skipped per the hard constraints, logged rather than failing the cycle — **54th consecutive skip**
+(May 13 → Jul 22).
+
+**Grade distribution (3 fresh drafts):** 2 A- / 0 B / 1 B+ / 0 B- / 0 C / 0 D-F.
+**A-rate: 67% (2/3) — BAR CLEARED**, the 4th clearance since Jun 29 (Jun 29 80%/n=5, Jul 16
+100%/n=2, Jul 17 80%/n=5, now Jul 22 67%/n=3). Small-n caveat applies (n=3, same size as Jul 3/Jul
+10/Jul 20, none of which cleared) — but this is the strongest same-size reading yet, and unlike
+Jul 16's n=2 it isn't the smallest sample in the corpus's history.
+
+**Headline finding:** **Basrah's fresh `absolute_extreme` draft is the strongest close this signal
+type has produced — a genuine named health-stakes consequence, not another mechanism restatement —
+and it clears A- with P_tier fully retired as a cap.** "Turns already-extreme heat into a wet-bulb
+emergency for anyone without shelter" names an actual physiological outcome (a wet-bulb emergency)
+rather than the type's usual named-absence form ("no evaporative relief," "the air has nowhere to
+cool") — a new, sharper vehicle for the same underlying mechanism. Meanwhile Al Basrah's fresh
+draft, forecasting a Basra-area reading 13 hours after Basrah's, reuses — not verbatim, but by a
+distinctive shared noun phrase — the exact subject "the body's cooling mechanisms" that Jul 14's
+Basrah draft used as A8's own *suggested alternative* to the "shade and X stop being enough"
+cliché; 8 days on, that alternative is already recurring on a different city. Portland's `hot10`
+draft debuts a genuinely new second-sentence move for the type (a same-day companion-city
+comparison, after Oslo's single-peer-analogy and Tunis's leaderboard-aggregate) while its
+sentence-1 skeleton repeats for a 3rd straight instance — resolving, not confirming, the "watch for
+a 3rd `hot10` draft" question filed Jul 17: the numeric-triad opener persists, but the type keeps
+finding a new second move each time, the opposite of P9-style stagnation.
+
+### A-grade drafts
+
+**[10] Basrah, Iraq `absolute_extreme` — A- (score 83)**
+> Basrah, Iraq is forecast to hit 47.3°C (117°F) today — crossing the 47°C threshold where the
+> Persian Gulf's trapped humidity turns already-extreme heat into a wet-bulb emergency for anyone
+> without shelter.
+
+**P_tier check: CLEAN.** "Crossing the 47°C threshold where [region] turns [condition] into [named
+outcome]" is the confirmed post-fix world-knowledge form (states the raw number, explains the
+physical mechanism at that number) — not an internal band/tier label citation. **P_close check:
+POSITIVE**, and the sharpest form this signal type has produced. Every prior `absolute_extreme`
+A-grade close has been a named-absence form ("the air has nowhere to cool," "no terrain to break
+the dry continental air mass") — this is the first to name an actual bad outcome directly (a
+wet-bulb emergency), one level more concrete than an absence statement. No hedge words. **A8
+stranded-mechanic axis: CLEAN** — the declarative payoff is the sentence's final clause, not a
+buried qualifier. **A8 reused-clause axis: CLEAN** — "wet-bulb emergency for anyone without
+shelter" is a fresh vehicle, distinct from the "shade and X stop being enough" family and from Al
+Basrah's "cooling mechanisms" reuse below. **A8 opener-skeleton axis: CONTINUES** ("[City] is
+forecast to hit XX.X°C (YYY°F) today — [verb]ing the 47°C threshold where...") — a 4th cycle
+showing this shape (Jul 17, Jul 19, Jul 20, now Jul 22) — consistent with precedent (Bandar-E
+Mahshahr Jul 17 repeated the same skeleton and still graded A-), this axis alone doesn't cap. No
+Wodehouse violations: single tight sentence, no restate-math, no approximation, no poetry-attempt
+closer. Not a full A only because — per this corpus's one standing exception (Nauru,
+`coral_bleaching`, "no adjacent reef system to reseed it") — that bar has proven very hard to
+clear; this is otherwise the cleanest `absolute_extreme` draft in the corpus's history.
+
+**[12] Portland, Oregon / Seattle, Washington `hot10` — A- (score 87)**
+> Portland, Oregon hit 39.4°C (103°F) today — 12.1°C above its July normal. Seattle ran 8.7°C
+> above its own normal the same afternoon. Two Pacific Northwest cities built around cool marine
+> summers, both deep inside heat ranges the coast is not designed to moderate.
+
+Sentence 1 repeats the "[City] hit X°C today — Y°C above its July normal[ of Z°C]" skeleton for a
+**3rd straight `hot10` cycle** (Oslo Jul 16, Tunis Jul 17, now Portland) — though this instance
+drops the "of Z°C" absolute-normal clause the other two stated, a minor variation. Per the
+established ruling (Oslo Jul 16, reaffirmed Tunis Jul 17), the numeric triad is necessary framing
+for an anomaly-leaderboard type, not restate-math — it isn't capping this draft either. Sentence 2
+is the genuinely new move: a **same-day companion-city comparison** (Seattle, "ran 8.7°C above its
+own normal the same afternoon") — a 3rd distinct second-sentence device for the type, after Oslo's
+single-peer-analogy and Tunis's leaderboard-aggregate reframe. The close names the region's
+identity and its failure directly — "cool marine summers... heat ranges the coast is not designed
+to moderate" — a **named-absence/negated-mechanism declarative**, the same family as Basrah's "no
+evaporative relief" and the Bandar-E Mahshahr "air has nowhere to cool" line, applied here to two
+cities at once. **P_close POSITIVE.** No restate-math beyond the two stated anomaly figures (12.1°C,
+8.7°C — neither derived from the other), no Wodehouse violations. **This is useful counter-evidence
+against the P9-style convergence risk flagged Jul 17**: a 3rd instance of the shared opener
+skeleton arrived alongside a 3rd distinct second-sentence mechanic, not a repeat of Oslo's or
+Tunis's — `hot10` is varying its punchline even as its numeric setup stabilizes into a stock form,
+which is the healthy version of what P6/P9 eventually had to fix by force.
+
+### B-grade draft
+
+**[11] Al Basrah, Iraq `absolute_extreme` — B+ (score 84)**
+> Al Basrah, Iraq is forecast to hit 48.1°C (119°F) today — 1.1°C above the 47°C threshold where
+> the body's cooling mechanisms begin to lose ground to the air around them.
+
+**P_tier check: CLEAN** — same confirmed post-fix threshold-as-world-knowledge form as [10].
+**P_close check: POSITIVE on its own terms** — "the body's cooling mechanisms begin to lose
+ground to the air around them" is a declarative physiological-failure statement (thermoregulation
+itself failing, not a further downstream consequence left unstated), though "begin to" is a mild
+hedge against a flatter form. **A8 reused-clause axis — a new sub-instance.** The subject noun
+phrase "the body's cooling mechanisms" is a verbatim 5-word match to Jul 14's Basrah draft ("the
+body's cooling mechanisms fail faster than they can recover") — the exact alternative A8's own
+proposed fix held up as the way to escape the "shade and X stop being enough" cliché. Eight days
+later, on a different Basra-area city, that alternative's subject phrase recurs with a different
+predicate ("begin to lose ground to the air around them" vs. "fail faster than they can recover").
+Weaker evidence than a full-clause repeat (the predicate genuinely varies), but a distinctive
+5-word noun phrase converging twice on the same metro area in 8 days is real signal that the
+writer is drawing on its own prior corpus text, not composing independently — worth tracking as a
+2nd reused-clause family alongside "shade and X," since the fix's own suggested escape route is
+already showing the same calcification risk it was meant to solve. Graded B+, consistent with
+every other A8-reused-clause instance regardless of underlying execution quality (Jul 17 Basrah,
+Jul 19 Al Basrah). Likely a duplicate-signal-generation pair with [10] Basrah — same metro area,
+forecasts ~13 hours apart, same "today" — graded independently per the established Jul 3/Jul 17
+precedent, and the two drafts' quality does diverge in kind (a fresh vehicle vs. a reused one),
+though both land in A-/B+ range this time.
+
+### Patterns / operational notes
+
+1. **Bar cleared a 4th time (67%, n=3)** — small-n, but the strongest same-size reading in the
+   corpus (Jul 3/Jul 10/Jul 20 were all n=3 and none cleared). With P_tier/P_dust/P9 all holding
+   clean and P_compound archived this cycle (see below), the ceiling on a good cycle is now set
+   almost entirely by P_close, A7, and A8 — all soft, non-hard-capping levers.
+2. **A8's reused-clause axis gains a 2nd family.** Distinct from "shade and X stop being enough"
+   (3 instances: Jul 10, Jul 17, Jul 19), "the body's cooling mechanisms [verb phrase]" now has 2
+   instances (Jul 14, Jul 22) on 2 different Basra-area cities — meeting the same 2-instance bar
+   that promoted the first family. Notable irony: this is the exact phrase A8's own fix cited as
+   the way to *avoid* the first cliché.
+3. **`hot10` resolves its own watch item positively** — 3 of 3 corpus drafts share the sentence-1
+   numeric-triad skeleton, but each has landed a genuinely distinct second-sentence device
+   (single-peer analogy, leaderboard-aggregate, companion-city). Continue watching a 4th instance,
+   but this is reassuring rather than concerning evidence.
+4. **Al Başrah Al Qadīmah's departure from the queue removes the strongest carry-over grade this
+   cycle carried** (A-, Jul 20) — same unexplained-contraction pattern as every recent cycle;
+   plausibly PR #385's auto-reject or an operator/dashboard action, not diagnosable from the gist.
+5. **Zero Wodehouse violations, 7th consecutive cycle** (Jul 16–21, now Jul 22).
+6. **Signal-mix note:** all 3 fresh drafts are extreme-heat-family types (`absolute_extreme` ×2,
+   `hot10` ×1) — no precipitation_extreme, dust_event, fire, or cyclone draft this cycle, so A4,
+   A5, A6, A9 are all untested again.
+7. **P_compound archived this cycle.** 3 consecutive fresh-draft cycles (Jul 20, Jul 21, Jul 22)
+   without a qualifying record-type draft meets the runbook's 3-cycle threshold — see
+   `docs/IMPROVEMENT_PLAN.md` Resolved section. Absence-of-opportunity (extreme-heat/`hot10`-heavy
+   signal mix), not a confirmed fix; reopen immediately if a record-type draft with a stacked
+   archive-depth + margin qualifier reappears.
+
+### Followups (in priority order)
+
+1. **Watch [10] Basrah at the next pull** — forecast-date-elapsed under 48h (~22h); becomes a
+   strict staleness candidate once it crosses 48h if still pending, same class as the two drafts
+   that dropped between Jul 20 and Jul 21.
+2. **Operator: confirm whether Al Başrah Al Qadīmah's departure from the queue was PR #385's
+   auto-reject firing** — the same open question this log has carried since Jul 11, this time
+   costing the cycle its single A- carry-over.
+3. **P_close, A7, and A8 remain the three highest-leverage unimplemented proposals** (P_compound
+   archived this cycle, absence-of-opportunity) — all have ready-to-ship prompt-language fixes in
+   `docs/IMPROVEMENT_PLAN.md`; today adds one new reused-clause sub-family to A8 but changes no
+   fix specs.
+4. **Watch for a 3rd instance of "the body's cooling mechanisms [verb phrase]"** on a 3rd
+   location — would confirm this as a standalone reused-clause family independent of "shade and
+   X," per the same 2-instance-then-track precedent A8's first family used.
+
+### Numbers
+
+- Pending drafts in queue: 12 (3 fresh; 9 carry-overs from Jul 17–21, unchanged: Deaver A-, Delhi
+  B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Taiz B+, Riyadh B, Barrow B+)
+- Fresh drafts graded: 3
+- A-rate: **67% (2/3) — BAR CLEARED**, 4th clearance since Jun 29 (small-n, but strongest n=3
+  reading in the corpus)
+- Grade distribution: 2 A- / 0 B / 1 B+ / 0 B- / 0 C / 0 D-F
+- Active proposals: P_close (29th cycle: 3 new positive instances) > A7 (not tested — no
+  repeat-location instance this cycle) > A8 (opener-skeleton axis 4th cycle; reused-clause axis
+  gains a 2nd family, "the body's cooling mechanisms," 2 instances) > P5 (extreme-heat family
+  self-selects again; `hot10` self-selects a genuinely new move for a 3rd straight cycle).
+  **P_compound archived this cycle** (3 consecutive cycles without a qualifying record-type
+  draft; see `docs/IMPROVEMENT_PLAN.md` Resolved section). A4/A5/A6/A9 not tested this cycle (no target-type
+  draft). P_tier/P_dust/P9 remain CONFIRMED, tracking closed.
+- Staleness bulk-reject: 0 strict candidates; 1 new watch item ([10] Basrah, ~22h,
+  forecast-date-elapsed under 48h). `gh` CLI absent, 54th consecutive skip (May 13 → Jul 22)
+- Operational anomalies: (a) Al Başrah Al Qadīmah dropped from queue, plausibly PR #385's
+  auto-reject; (b) [10] Basrah and [11] Al Basrah are a likely duplicate-signal-generation pair
+  (same metro area, ~13h apart, same forecast day) graded independently per established precedent
+
+---
+
 ## 2026-07-21 — Daily corpus grading (1 fresh draft; 9 carry-overs from Jul 17–20, previously graded)
 
 **Context:** Gist read via git-clone path (success; no rate limit). Queue: 10 pending drafts —

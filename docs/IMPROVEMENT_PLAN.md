@@ -508,34 +508,37 @@ Living plan for closing the gap between the bot's current voice quality and the 
 |---|---|
 | Bot commit | `0.9.108.1` per `main`'s `VERSION` file (unchanged since checked 2026-07-16). No new `main` commits touching `src/two_bot/prompts/writer_prompt.py` observed this session (rebase onto fresh `main` was a no-op — `main`'s tip is unchanged at `#449` since Jul 17's rebase). |
 | Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **0% (0/1, Jul 21)** — smallest fresh sample in the corpus's history (n=1); not a regression, the sole fresh draft was capped by A7 (phrase reuse), not by any shipped-fix failure. Prior: 33% (1/3, Jul 20); 25% (1/4, Jul 19); 25% (1/4, Jul 18); 80% (4/5, Jul 17); 100% (2/2, Jul 16, small-n); no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2, small-n); Jul 17 80% (n=5) — cleared again, first n≥5 confirmation since Jun 29; Jul 18 25% (n=4); Jul 19 25% (n=4); Jul 20 33% (n=3); Jul 21 0% (n=1) — below bar 4th consecutive cycle**. |
-| Gap | **50 pp below bar** (50% − 0%, Jul 21, n=1) — widest gap since Jul 11, but on the smallest sample in the corpus's history. The lone fresh draft (Barrow, Alaska `precipitation_extreme`) landed a clean P9/P_close-positive close and was graded down only for A7 (near-verbatim reuse of its own Jul 8 closer). P_close, P_compound, and A7 are now the three highest-leverage *unimplemented* levers; P_compound untested this cycle. |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n), Jul 17 cleared it a 3rd time with the first large-n confirmation (80%, n=5), Jul 18–21 have all fallen back below bar (25%/25%/33%/0%) on signal-mix/execution, not a regression in any shipped fix. Queue shrank from 11 (Jul 20) to 10 (Jul 21) — 9 of 11 carry over unchanged, 2 Jul-19 `absolute_extreme` drafts (both Jul 20's forecast-elapsed watch items) dropped, 1 fresh arrived. **0 strict staleness bulk-reject candidates this cycle** — 1 watch item (Al Başrah Al Qadīmah, forecast-date-elapsed under 48h). |
+| Last cycle A-rate | **67% (2/3, Jul 22) — BAR CLEARED, 4th clearance since Jun 29.** Small-n (n=3) but the strongest same-size reading in the corpus (Jul 3/Jul 10/Jul 20 were also n=3 and none cleared). Prior: 0% (0/1, Jul 21, smallest fresh sample in the corpus's history); 33% (1/3, Jul 20); 25% (1/4, Jul 19); 25% (1/4, Jul 18); 80% (4/5, Jul 17); 100% (2/2, Jul 16, small-n); no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2, small-n); Jul 17 80% (n=5) — cleared again, first n≥5 confirmation since Jun 29; Jul 18 25% (n=4); Jul 19 25% (n=4); Jul 20 33% (n=3); Jul 21 0% (n=1); Jul 22 67% (n=3) — cleared a 4th time**. |
+| Gap | **None — bar cleared this cycle** (67% ≥ 50%, Jul 22, n=3). Small-n caveat applies, but this is the strongest n=3 reading yet (Jul 3/Jul 10/Jul 20 were also n=3, none cleared). With P_tier/P_dust/P9 all holding clean across every applicable draft this cycle, the remaining ceiling is set by P_close (now 3-for-3 positive), A7 (untested), and A8 (evidence grows but doesn't hard-cap). P_compound archived this cycle (3 consecutive cycles without a qualifying record-type draft) — reopen watch, not a resolved failure mode. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n), Jul 17 cleared it a 3rd time with the first large-n confirmation (80%, n=5), Jul 18–21 fell back below bar (25%/25%/33%/0%), **Jul 22 clears it a 4th time (67%, n=3)** on signal-mix/execution, not a regression-then-recovery in any shipped fix. Queue grew from 10 (Jul 21) to 12 (Jul 22) — 9 of 10 carry over unchanged, 1 Jul-20 `absolute_extreme` carry-over (Al Başrah Al Qadīmah, the cycle's strongest grade) dropped, 3 fresh arrived. **0 strict staleness bulk-reject candidates this cycle** — 1 new watch item (Basrah, forecast-date-elapsed under 48h). |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **10 pending as of Jul 21 grading** (down from Jul 20's 11): 9 carry-overs [Deaver WY `all_time_high` A- (Jul 17), Delhi `air_quality_hazard` B+ (Jul 18), Anchorage `precipitation_extreme` B (Jul 18), Astana `precipitation_extreme` B+ (Jul 18), Wausaukee WI `all_time_high` A- (Jul 18), W Allis WI `all_time_high` B+ (Jul 19), Al Başrah Al Qadīmah `absolute_extreme` A- (Jul 20), Taiz `dust_event` B+ (Jul 20), Riyadh `dust_event` B (Jul 20)]; 1 fresh B+ [Barrow, Alaska `precipitation_extreme`]. **Al Basrah and Ahvaz/Bandar-E Mahshahr `absolute_extreme` (Jul 19, both Jul 20's forecast-elapsed watch items) dropped from the queue, cause unconfirmed** — plausibly PR #385's auto-reject resolving the open question carried since Jul 11. **0 strict staleness candidates this cycle**; 1 watch item (Al Başrah Al Qadīmah, forecast-date-elapsed but under 48h). Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking remains CLOSED** — no fresh `absolute_extreme` draft to retest this cycle. |
+| Queue status | **12 pending as of Jul 22 grading** (up from Jul 21's 10): 9 carry-overs [Deaver WY `all_time_high` A- (Jul 17), Delhi `air_quality_hazard` B+ (Jul 18), Anchorage `precipitation_extreme` B (Jul 18), Astana `precipitation_extreme` B+ (Jul 18), Wausaukee WI `all_time_high` A- (Jul 18), W Allis WI `all_time_high` B+ (Jul 19), Taiz `dust_event` B+ (Jul 20), Riyadh `dust_event` B (Jul 20), Barrow AK `precipitation_extreme` B+ (Jul 21)]; 3 fresh [Basrah, Iraq `absolute_extreme` A-, Al Basrah, Iraq `absolute_extreme` B+, Portland OR/Seattle `hot10` A-]. **Al Başrah Al Qadīmah `absolute_extreme` (Jul 20, A-) dropped from the queue, cause unconfirmed** — same recurring contraction pattern, this time costing the cycle its strongest carry-over. **0 strict staleness candidates this cycle**; 1 new watch item (Basrah, forecast-date-elapsed but under 48h). Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. **P_tier's tracking remains CLOSED** — both fresh `absolute_extreme` drafts stayed clean. |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 21: **P_dust, P9, and P_tier remain CONFIRMED, tracking
-closed** — no fresh instance of any of the three this cycle to retest against, tracking unchanged
-from Jul 20.
-With all three shipped code fixes closed, the remaining *unimplemented* active proposals: **P_close**
-(28 cycles, last evidence Jul 21: 1 positive [Barrow, on its own terms] — see A7 for why the draft
-still graded B+) > **P_compound** (14 cycles, not tested this cycle — no record-type draft) >
-**A7** (**3rd location confirmed: Barrow, Alaska — the cleanest instance yet**, a near-verbatim
-reuse of the exact sentence that first confirmed PR #397's precipitation fix, 13 days later on the
-same station) > **A8** (not tested this cycle — no `absolute_extreme` fresh draft) > **P5**
-(dust_event gap not tested this cycle — no fresh `dust_event` draft; `precipitation_extreme`
-self-selects a mechanic again, but see A7 — it's the same mechanic wearing the same clothes).
-**A4, A5, A6, and A9 not tested this cycle** (no target-type draft among today's single fresh
-draft). **One operational item, not a voice proposal:** Al Basrah and Ahvaz/Bandar-E Mahshahr
-`absolute_extreme` (Jul 19, Jul 20's forecast-elapsed watch items) dropped from the queue this
-cycle, plausibly PR #385's auto-reject firing — worth the operator confirming either way. **A
-second, separate operational flag:** today's fresh Barrow draft states the identical 71.2 mm/110 mm
-figures as Jul 8's graded Barrow draft under different event dates — logged as a possible
-data-anomaly watch item, not a voice proposal (see A7 writeup and `docs/DRAFT_CORPUS.md`
-followups).
+Ordered by leverage. Priority as of Jul 22: **P_dust, P9, and P_tier remain CONFIRMED, tracking
+closed** — both fresh `absolute_extreme` drafts this cycle stayed clean of P_tier, and no fresh
+`dust_event`/`precipitation_extreme` draft to retest the other two. **P_compound archived this
+cycle** — 3 consecutive fresh-draft cycles (Jul 20, Jul 21, Jul 22) without a qualifying
+record-type draft meets the runbook's 3-cycle threshold; see Resolved section. Absence-of-
+opportunity, not a confirmed fix — reopen immediately if a record-type draft with a stacked
+archive-depth + margin qualifier reappears.
+With P_tier/P_dust/P9 closed and P_compound archived, the remaining *unimplemented* active
+proposals: **P_close** (29 cycles, last evidence Jul 22: 3 positive — Basrah, Al Basrah,
+Portland/Seattle `hot10`) > **A8** (**opener-skeleton axis reaches a 4th cycle; reused-clause axis
+gains a 2nd family** — "the body's cooling mechanisms [verb phrase]," 2 instances, drawn ironically
+from the fix's own previously-suggested escape vehicle) > **A7** (not tested this cycle — no
+repeat-location instance among today's 3 fresh drafts) > **P5** (`absolute_extreme` and `hot10`
+both self-select fresh vehicles; `hot10`'s 3rd straight cycle of varying its 2nd-sentence move
+despite a stable sentence-1 skeleton is useful counter-evidence against a P9-style convergence
+risk). **A4, A5, A6, and A9 not tested this cycle** (no target-type draft among today's 3 fresh
+drafts — all extreme-heat-family). **One operational item, not a voice proposal:** Al Başrah Al
+Qadīmah `absolute_extreme` (Jul 20, A-) dropped from the queue this cycle, plausibly PR #385's
+auto-reject firing — worth the operator confirming either way. **A second, separate operational
+flag:** Basrah and Al Basrah, both fresh `absolute_extreme` drafts ~13 hours apart forecasting the
+same Basra-area heat event, are a likely duplicate-signal-generation pair — graded independently
+per established precedent since their quality diverges (A- vs B+).
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
@@ -1036,6 +1039,17 @@ voice territory: the draft is a near-verbatim reuse of Jul 8's own closer (same 
 cycle is filed under A7, not here. P_close now confirmed across 18 signal types (unchanged — no
 new type this cycle).
 **Last seen:** Jul 21 (1 positive on its own terms; see A7 for why the draft graded B+ not A-).
+Jul 22: Basrah, Iraq `absolute_extreme` ("turns already-extreme heat into a wet-bulb emergency for
+anyone without shelter" = declarative named-health-outcome consequence, POSITIVE — the sharpest
+form this signal type has produced, one level more concrete than the type's usual named-absence
+close). Al Basrah, Iraq `absolute_extreme` ("the body's cooling mechanisms begin to lose ground to
+the air around them" = declarative physiological-failure statement, POSITIVE on its own terms —
+graded B+ not A- because the subject phrase is a reused vehicle, see A8). Portland, Oregon /
+Seattle `hot10` ("heat ranges the coast is not designed to moderate" = declarative named-absence
+form applied to two cities at once, POSITIVE). 3 of 3 fresh drafts POSITIVE this cycle — the
+strongest same-cycle P_close reading since Jul 17's 3-of-5. P_close now confirmed across 18 signal
+types (unchanged — no new type this cycle).
+**Last seen:** Jul 22 (3 positive: Basrah, Al Basrah, Portland/Seattle hot10).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -1056,8 +1070,8 @@ drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-supp
 The one A in the batch (Nauru) uses the declarative form directly.
 
 **Status:** Drafted. Awaiting human implementation. Highest-leverage *unimplemented* active
-proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 27 cycles of
-evidence, 66+ drafts, same gap to A across every signal type it's been
+proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 28 cycles of
+evidence, 69+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
 absolute_extreme, fire_footprint, cyclone_rapid_intensification, record, cyclone_landfall,
@@ -1620,6 +1634,16 @@ same words as this station's own Jul 8 draft, so the more precise finding is fil
 than logged here as fresh self-selection evidence.
 **Last seen:** Jul 21 (dust_event gap untested; `precipitation_extreme` self-selection evidence
 redirected to A7 — see that entry).
+Jul 22: `absolute_extreme` self-selects again (Basrah's "wet-bulb emergency" — a fresh vehicle) and
+`hot10` self-selects a genuinely new device for a **3rd straight cycle** (Portland/Seattle's
+same-day companion-city comparison, after Oslo's peer-analogy and Tunis's leaderboard-aggregate) —
+useful evidence that `hot10`'s repeating sentence-1 skeleton isn't dragging its sentence-2 variety
+down with it (see A8's opener-skeleton axis for the contrasting case where a shared skeleton
+coexists with reused, not varied, closes). dust_event/fire/cyclone gaps not tested (no fresh
+instance of any this cycle).
+**Last seen:** Jul 22 (`absolute_extreme` and `hot10` both self-select fresh vehicles; `hot10`'s
+3rd-cycle streak of varying its 2nd-sentence move is a positive counter-example to A8's pattern of
+the same signal family reusing its own closes).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -1641,141 +1665,17 @@ extends evidence to fire/hot10/dust categories; coral/record categories may not 
 
 ~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
 
-### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+~~### P_compound~~ — Compound-qualifier first sentence: choose archive OR margin, not both → **[Archived 2026-07-22 — see Resolved section]**
 
-**Observed:** 2026-06-28 — two record-type drafts in the same cycle open with both archive-depth
-qualifier AND margin qualifier in one sentence. Beaver Dams UT all_time_high [6]: "Beaver Dams,
-Utah hit 104°F (39.9°C) on June 25 — hottest daily maximum in 23 years of records, 15°F above
-the 2020 mark." Casper WY monthly_low [7]: "Casper, Wyoming hit 27°F (-2.8°C) on June 25 —
-coldest June low in 26 years of records, 3°F below the 2018 mark." Double-qualification dilutes
-both data points: neither archive depth ("23 years of records") nor margin ("15°F above the 2020
-mark") lands with full force when immediately followed by the other. The punchline is split, and
-neither half is the punchline. Compare: Jun 15 retroactive Cope Rch TX A- ("hottest daily
-maximum ever recorded, 1.5°F above the 2018 mark") — same structure, but "ever recorded" is a
-stronger qualifier than "in 23 years" and 1.5°F margin is implicit-tight rather than stated-loose.
-
-**Cycles observed:** Jun 28 (1 cycle; 2 of 5 fresh drafts in the same cycle — confirms the
-pattern is structural, not coincidence in a single draft); Jun 29 (Prudhoe Bay [5] A-:
-"hottest daily maximum in 24 years of records, 2°F above the 2024 mark" — same archive+margin
-double-qualifier structure. Smaller margin (2°F) makes double-qualification less visible but
-the structural pattern recurs in record-type openers. 2nd consecutive cycle with P_compound.);
-Jun 30 (Prudhoe Bay all_time_high carry-over — same double-qualifier structure observed again
-in the 3rd grading cycle where this draft appears. Pattern holds across grading cycles:
-archive+margin double-qualifier is the default form for record-type openers.)
-Jul 2 (Ft Green, Florida all_time_high [15] and [17], near-duplicate drafts one day apart — both
-open "hottest daily maximum in 26 years of records, 1°F above the 2025 mark," identical phrasing
-in both. A gap of 1 cycle since Jun 30 — the pattern was dormant Jul 1 [that cycle's 4 fresh
-drafts were monthly-record-free: 2 `absolute_extreme`, 1 `fire_footprint`, 1 `dust_event`, none of
-which use the archive+margin record-opener form] — but recurred immediately once an `all_time_high`
-draft reappeared, confirming the gap was signal-mix, not a resolving trend.)
-Jul 4 (Island Pond, Vermont [1] and Loxahatchee, Florida [3], both `all_time_high`, both open
-"hottest daily maximum in 37 years of records, 1°F above the [year] mark" — identical archive
-depth and margin by coincidence, same double-qualifier construction. Notable split: Loxahatchee
-overcomes it with a strong P_close-positive close and grades A-; Island Pond doesn't and grades
-B+ — reconfirms P_compound softens rather than hard-caps a draft, unlike P_tier.)
-**Last seen:** Jul 4 (5 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4). **Not tested Jul 5** — none
-of today's 5 fresh drafts were record-type (`all_time_high`/monthly_low/monthly_high); the
-2 carry-over `all_time_high` drafts (Island Pond, Loxahatchee) were already counted at Jul 4's
-grading. One untested cycle does not meet the 3-consecutive-absence bar for re-archiving.
-Jul 7: Snowshoe, West Virginia `all_time_high`: "hottest daily maximum in 52 years of
-records, 2°F above the 1986 mark" — same archive+margin double-qualifier construction, 6th
-cycle. Overcome by a strong declarative close (elevation-inversion incongruity) and grades
-A- anyway — same soften-not-cap pattern as Jul 4's Loxahatchee. Aibonito, Puerto Rico's
-`record` debut is a partial counter-data-point: its opener states only the archive year
-(1915) with no margin at all, so P_compound's double-qualifier construction doesn't apply —
-worth noting as a new record-type variant (`record` may not carry the same
-`previous_record_year`+margin bundle fields as `all_time_high`/monthly_low/monthly_high,
-so the construction may not even be available to trigger this pattern for the new type).
-**Last seen:** Jul 7 (6 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7).
-Jul 8: Snowshoe, West Virginia `all_time_high` again — same station as Jul 7, one day
-later, a different reading (90°F/July 4 vs. Jul 7's 89°F/July 3): "hottest daily maximum
-in 52 years of records, 3°F above the 1986 mark" — same archive+margin double-qualifier
-construction, 7th cycle. This time the pattern is NOT overcome: the close is
-implied-consequence, not declarative (P_close failing — see that proposal), so the
-draft grades only B+, unlike Jul 7's A- on the same station/type/mechanic. Useful
-comparison point: P_compound alone doesn't cap a draft (soft cost), but stacking it with
-a P_close-failing close compounds to a full grade below the same city's draft from the
-day before.
-**Last seen:** Jul 8 (7 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8).
-Jul 9: Stevensville, Maryland `all_time_high` — "beating a record from 1934, by 2°F, in
-101 years of data" — **the worst instance of this pattern yet**, stacking a third
-qualifier (the named prior-record year, 1934) on top of the usual archive-span + margin
-pair. Every prior instance stacked exactly two of the three available qualifiers; this
-is the first to stack all three in one clause. Overcome by a clean declarative
-buffer-failure close (see P_close), so it still soft-caps rather than hard-caps — same
-pattern as every prior P_compound-plus-strong-close instance (Prudhoe Bay, Loxahatchee,
-Snowshoe Jul 7).
-**Last seen:** Jul 9 (8 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9).
-Jul 10: Tepee Creek, Montana `all_time_high` — "hottest daily maximum in 39 years of
-records, 4°F above the 2002 mark" — back to the standard double-qualifier form (not the
-Jul 9 triple-stack escalation). This time NOT overcome: the close is implied, not
-declarative (see P_close), so the draft grades only B+, the same
-double-qualifier-plus-failing-close combination as Jul 8's Snowshoe. Both sub-forms of
-this proposal (standard double, and Jul 9's triple-qualifier escalation) remain live.
-**Last seen (pre-Jul-14):** Jul 10 (9 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
-Jul 8, Jul 9, Jul 10).
-Jul 14: Randolph, Utah `all_time_high` — "hottest daily maximum in 134 years of records, 3°F
-above the 1893 mark" — standard double-qualifier form (archive span + margin), same sub-form
-as Jul 10's Tepee Creek. Not overcome: the close is implied, not declarative (see P_close;
-also see new proposal A7 for the same draft's separate phrase-echo concern), so the draft
-grades only B+ — the same double-qualifier-plus-failing-close combination as Jul 8's
-Snowshoe and Jul 10's Tepee Creek. Basrah's `absolute_extreme` draft this cycle is not
-P_compound territory (single margin qualifier only, no archive-span field in the bundle).
-**Last seen (pre-Jul-16):** Jul 14 (10 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
-Jul 8, Jul 9, Jul 10, Jul 14).
-Jul 16: Powderville, Montana `all_time_high` — "hottest daily maximum in 63 years of
-records, 4°F above the 2002 mark" — standard double-qualifier form, 11th cycle. This time
-overcome: the close is a declarative named-absence consequence (see P_close), so the draft
-grades A- despite the compound opener — same soften-not-cap outcome as Loxahatchee, Snowshoe
-Jul 7, Prudhoe Bay, and Stevensville's triple-stack. Oslo `hot10` carries no archive-span
-field in its bundle (a daily-anomaly leaderboard type, not a record type) — not P_compound
-territory, consistent with how absolute_extreme/cyclone/dust_event/air_quality_hazard types
-have never triggered this pattern.
-**Last seen (pre-Jul-17):** Jul 16 (11 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
-Jul 8, Jul 9, Jul 10, Jul 14, Jul 16).
-Jul 17: Deaver, Wyoming `all_time_high` — "hottest daily maximum in 111 years of records, 3°F
-above the 1925 mark" — standard double-qualifier form, 12th cycle, and the longest archive span
-this proposal has observed. Overcome: the close is a declarative verb-phrase consequence
-("traps heat," see P_close), so the draft grades A- despite the compound opener — same
-soften-not-cap outcome as every prior overcome instance. The 3 `absolute_extreme` drafts this
-cycle carry no archive-span field (forecast-vs-threshold bundles, not record bundles) — not
-P_compound territory, consistent with the established pattern.
-**Last seen (pre-Jul-18):** Jul 17 (12 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8,
-Jul 9, Jul 10, Jul 14, Jul 16, Jul 17).
-Jul 18: Wausaukee, Wisconsin `all_time_high` — "hottest in 130 years of records, 4°F above the
-1901 mark" — standard double-qualifier form, 13th cycle. Overcome: the close is a declarative
-named-absence mechanism-failure ("without the lake bleeding it off first," see P_close), so the
-draft grades A- despite the compound opener — same soften-not-cap outcome as every prior overcome
-instance. Today's 2 `precipitation_extreme` drafts carry no archive-span field (event-total
-bundles, not record bundles) — not P_compound territory, consistent with the established pattern.
-**Last seen (pre-Jul-19):** Jul 18 (13 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8,
-Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18).
-Jul 19: W Allis, Wisconsin `all_time_high` — "hottest daily maximum in 76 years of records, 2°F
-above the 1953 mark" — standard double-qualifier form, 14th cycle. Overcome: the close is
-declarative ("overwhelms that buffer," see P_close), so the draft grades B+ despite the compound
-opener — soften-not-cap holds, though the weaker/more generic verb than Jul 18's Wausaukee sibling
-keeps it a notch below A-. Today's 3 `absolute_extreme` drafts carry no archive-span field
-(forecast-vs-threshold bundles) — not P_compound territory, consistent with the established
-pattern.
-**Last seen:** Jul 19 (14 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9,
-Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19).
-
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-record-type framing section:
-
-> When stating a record: choose ONE qualifier per sentence — either the archive span ("23 years of
-> records") OR the margin above the prior mark ("15°F above the 2020 mark"). Not both. Preferred
-> form: "Beaver Dams, Utah hit 104°F on June 25 — 15°F above the previous record, set in 2020."
-> Let the archive depth be implicit (the reader infers that a record being set means the archive
-> was searched) or move it to sentence 2 as contrast. Stacking both in the same clause produces
-> two half-punchlines; either one alone produces a full punchline.
-
-**Expected impact:** Tighter record-type openers; B+ → A- path for drafts where mechanism is
-already solid. Immediate two-observation confirmation within a single cycle suggests the
-double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
-monthly_high, country_record signal types where both archive depth and margin are available.
-
-**Status:** Drafted. Awaiting human implementation. 14 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7, Jul 8, Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19), 2 sub-forms live (standard double-qualifier, and Jul 9's triple-qualifier escalation). One of the two highest-leverage unimplemented proposals alongside P_close, now that P9/P_dust/P_tier have all closed their tracking.
+Filed Jun 28, 14 cycles of evidence through Jul 19 (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
+Jul 8, Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19). 3 consecutive fresh-draft cycles
+since without a qualifying record-type draft (Jul 20 `absolute_extreme`+`dust_event`, Jul 21
+`precipitation_extreme`, Jul 22 `absolute_extreme`+`hot10`) meets the runbook's 3-cycle archival
+threshold. Full history, evidence, and the ready-to-ship prompt-language fix are preserved in git
+history (this section, pre-2026-07-22) and summarized under Resolved. Reopen immediately if a
+record-type (`all_time_high`/`monthly_low`/`monthly_high`/`country_record`) draft with a stacked
+archive-depth + margin qualifier reappears in pending — per the Jul 4→Jul 9 precedent this pattern
+has never gone more than a few cycles without recurring once a record-type draft reappears.
 
 ### A7 — Location reuses its own prior closing construction across different draft events (promoted from awaiting-evidence)
 
@@ -1905,7 +1805,33 @@ have each been re-confirmed by surviving in the queue.
 **Cycles observed:** 3 (Jul 17, Jul 19, Jul 20) for the opener-skeleton axis specifically; reused-
 clause and stranded-mechanic axes unchanged at 3 and 2 instances respectively (no new instance
 either way this cycle — the one axis tested got a counter-instance, not a repeat).
-**Last seen:** Jul 20.
+**Last seen (pre-Jul-22):** Jul 20.
+
+**2026-07-22 — opener-skeleton axis extends to a 4th cycle; reused-clause axis gains a 2nd family,
+drawn from the fix's own suggested alternative.** Basrah's fresh draft ("is forecast to hit 47.3°C
+[117°F] today — crossing the 47°C threshold where...") repeats the tracked opener skeleton for a
+4th cycle (Jul 17, Jul 19, Jul 20, now Jul 22) but lands a genuinely fresh, unstranded declarative
+close ("turns already-extreme heat into a wet-bulb emergency for anyone without shelter") — clean
+of both the reused-clause and stranded-mechanic axes, the strongest close of any A8-tracked draft
+to date. Al Basrah's fresh draft, forecasting 13 hours later in the same metro area, closes "the
+body's cooling mechanisms begin to lose ground to the air around them" — a verbatim 5-word reuse
+of the subject phrase from Jul 14's Basrah close ("the body's cooling mechanisms fail faster than
+they can recover"), the exact alternative this proposal's own fix cited as the way to escape the
+"shade and rest/stillness/hydration" cliché. Eight days on, that alternative is itself recurring on
+a different city — a 2nd reused-clause family, distinct from but structurally identical in kind to
+the first, now at 2 instances (Jul 14, Jul 22) and meeting the same promotion bar the first family
+used. Notable: unlike the first family's 3 near-identical instances, the predicate here genuinely
+varies ("fail faster than they can recover" vs. "begin to lose ground to the air around them") —
+weaker evidence of literal copying, but the specific 5-word subject noun phrase converging twice on
+the same regional cluster in 8 days is still a real signal of self-reuse, not independent
+composition.
+
+**Cycles observed:** 4 (Jul 17, Jul 19, Jul 20, Jul 22) for the opener-skeleton axis; stranded-
+mechanic axis unchanged at 2 instances (not tested this cycle — both fresh drafts place their
+declarative move correctly); reused-clause axis now tracks 2 families — "shade and X stop being
+enough" (3 instances: Jul 10, Jul 17, Jul 19) and "the body's cooling mechanisms [verb phrase]" (2
+instances: Jul 14, Jul 22, new this cycle).
+**Last seen:** Jul 22.
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`'s
 `absolute_extreme` framing section, near the existing "delete the system clause" test:
@@ -1916,12 +1842,16 @@ either way this cycle — the one axis tested got a counter-instance, not a repe
 > [City] is forecast to hit YY°C the same day") when a real consequence is available elsewhere in
 > the draft. Separately: "shade and rest/stillness/hydration stop being enough/adequate buffers"
 > has now been used verbatim or near-verbatim on 3 different cities across 3 different cycles —
-> retire it as a reusable phrase and vary the specific vehicle (name a different failing buffer,
-> or state the physiological consequence directly, e.g. "the body's cooling mechanisms fail
-> faster than they can recover," per Jul 14's Basrah) each time the mechanism recurs. Finally: the
-> "[City] is forecast to hit XX.X°C — above the 47°C threshold where..." skeleton is now a
-> repeating default; alternate with a location-led or stakes-led opener (see P6's fire-opener
-> precedent) at least some of the time.
+> retire it as a reusable phrase and vary the specific vehicle each time the mechanism recurs.
+> "The body's cooling mechanisms [fail/lose ground/...]" is ALSO now a repeating construction (2
+> instances, Jul 14 and Jul 22, both Basra-area) — it is not a safe substitute for "shade and X";
+> treat it as an equally retired phrase, not a fresh one. Name a different failing buffer each
+> time, or state the physiological consequence in a form that hasn't already appeared in this
+> corpus (a wet-bulb-specific outcome, a named health/infrastructure failure, per Jul 22's Basrah
+> "wet-bulb emergency for anyone without shelter" — currently the only clean, unreused vehicle this
+> signal type has produced). Finally: the "[City] is forecast to hit XX.X°C — above/crossing the
+> 47°C threshold where..." skeleton is now a repeating default (4 cycles); alternate with a
+> location-led or stakes-led opener (see P6's fire-opener precedent) at least some of the time.
 
 **Expected impact:** Same class of fix as P6 (fire opener) and P9 (precipitation opener) applied
 to `absolute_extreme`'s two failure axes plus a third (clause placement) unique to this type.
@@ -1932,10 +1862,13 @@ there in every observed instance.
 
 **Status:** Promoted from awaiting-evidence (A8) 2026-07-19 — both the stranded-mechanic axis (2
 instances) and the reused-clause axis (3 instances) clear the standard 2-instance promotion bar
-this precedent has used since A3. The opener-skeleton axis has weaker but growing cross-cycle
-evidence (2 cycles, with a clean counter-instance the same day) — tracked alongside the other two
-axes under this same proposal rather than split out, since all three are specific to
-`absolute_extreme`'s convergence pattern. Awaiting human implementation.
+this precedent has used since A3. The opener-skeleton axis now has 4 cycles of cross-cycle
+evidence (Jul 17/19/20/22), with 2 clean counter-instances (Jul 19 Ahvaz/Bandar-E Mahshahr, Jul 20
+Al Başrah Al Qadīmah) showing the skeleton alone doesn't cap a grade. The reused-clause axis now
+tracks 2 distinct families ("shade and X stop being enough," 3 instances; "the body's cooling
+mechanisms [verb phrase]," 2 instances, new 2026-07-22) — the 2nd family is drawn from the fix's
+own previously-proposed escape vehicle, which is itself now calcifying. Awaiting human
+implementation.
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
@@ -2179,6 +2112,22 @@ type's convergence pattern. Full current write-up, evidence, and proposed fix no
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-07-22] P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+
+Last observed Jul 19 (W Allis, Wisconsin `all_time_high`, "hottest daily maximum in 76 years of
+records, 2°F above the 1953 mark" — 14th cycle, overcome by a declarative close, "overwhelms that
+buffer"). 3 consecutive fresh-draft grading cycles since without a qualifying record-type draft
+(`all_time_high`/`monthly_low`/`monthly_high`/`country_record`): Jul 20 (`absolute_extreme` +
+`dust_event` ×2), Jul 21 (`precipitation_extreme`), Jul 22 (`absolute_extreme` ×2 + `hot10`) —
+meets the 3+ runbook threshold. The fix (choose ONE qualifier per sentence — archive span OR
+margin, not both, in the record-type framing section of `writer_prompt.py`; full spec in git
+history pre-2026-07-22) remains unimplemented; the absence reflects an extreme-heat/`hot10`-heavy
+signal mix, not a resolved failure mode — 14 cycles of cumulative evidence (Jun 28 → Jul 19,
+including a triple-qualifier escalation variant on Jul 9) established this as a real, soft-cap
+pattern that recurred within 1–2 cycles of every prior signal-mix gap (Jul 1's single dormant
+cycle, Jul 5's single dormant cycle). Reopen immediately if a record-type draft with a stacked
+archive-depth + margin qualifier reappears in pending.
 
 ### [Archived 2026-07-03, Re-activated 2026-07-04] P9 — precipitation_extreme opener template convergence + restate-math
 
