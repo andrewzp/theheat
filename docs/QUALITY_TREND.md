@@ -60,6 +60,23 @@ We grade drafts on an A through F rubric in `docs/DRAFT_CORPUS.md` (the longitud
 | 2026-07-04 | 10 | 2 | 4 | 0 | 0 | **20%** | ✗ | **Complete queue turnover** — all 20 of Jul 3's pending drafts (including the 4 stale reject-candidates) are gone; 10 fresh drafts, zero carry-overs; cause unconfirmed (bulk-reject/publish/TTL — operator should verify). Largest statistically-meaningful sample since Jun 29 (n=5). 2 A-: Typhoon Bavi (2nd `cyclone_rapid_intensification` draft — avoids the P_tier violation that capped Jul 3's 1st instance at C+, lands the type's first P_close-positive close: "storms... can intensify faster than forecasters or ships can react"); Loxahatchee FL all_time_high ("the column runs free" overcomes a P_compound double-qualifier opener). 2 B+: Island Pond VT all_time_high (P_compound, P_close failing/hedged); Antwerpen precip — **value-identical re-issue of the Jun 30 B+ draft under a new draft_id**, graded on precedent not fresh evidence. 6 B: Barrow + Astana precip (**P9 reopened** — both repeat the archived opener-template + restate-math pattern on the very first reappearance, exactly as the Jul 3 archive note predicted; Astana's close is P_close FAILING at a new low — a bare fact with no mechanism or consequence, stranding the batch's best joke: 358mm/week vs ~300mm/year); Basrah + Al Başrah al Qadīmah absolute_extreme (4th/5th Basra-area instances, both repeat the P_tier tier-jargon leak, P_tier caps at B regardless of P_close quality — consistent with [11]/[16] precedent); Rocky Mountains CO fire (mid-latitude drought-mechanism-only class, same as Jun 30's Colorado B-, graded B on slightly better ecosystem specificity); Urumqi dust_event (P_dust confirmed again, no WHO anchor). P_close 15th cycle (3 positive, 6 failing). P_tier 6th cycle / 9 instances / still 4 signal types. P_compound 5th cycle. P9 reopened after 1 cycle archived. `gh` CLI absent, 36th consecutive skip. |
 | 2026-07-05 | 5 | 1 | 3 | 1 | 0 | **20%** | ✗ | 15 pending (10 carry-overs from Jul 4, unchanged; 5 fresh). 1 A-: eastern Siberia fire (556.1 MW; "doesn't just burn the surface — it thaws the ground beneath it" — 4th corpus confirmation that the permafrost-carbon fire mechanic reliably clears P_close, joining Jun 25 Siberia and Jul 3 Canadian Arctic ×2). 1 B+: Johannesburg air_quality_hazard (10.9× WHO stated, richer causal chain than Jun 24's Al Aḥmadī — "Highveld winter" + household-burning source attribution — but P_close failing, accumulation-not-consequence close). 1 B: Doha, Qatar absolute_extreme — **P_tier confirmed outside the Basra-area cluster for the first time** (same tier-jargon phrase on a city 1,500+ km from Basrah), P_close positive (best close of the signal type yet — "closing off the evaporative cooling that makes extreme dry heat survivable") but still capped at B, reconfirming P_tier is a hard ceiling regardless of close quality. 1 B-: 3rd Urumqi dust_event draft — same station, 3rd distinct reading, near-verbatim repeat of the same resolution-form close for a 3rd time (new duplicate-location subtype: frozen mechanism, varying reading). 1 C+: Phalodi, India dust_event (10th dust_event corpus draft, no WHO anchor, resolution-form close, no named mechanic). P_close 16th cycle (2 positive, 3 failing). P_tier 7th cycle / 10 instances / 1st cross-location confirmation. P_dust 9th cycle (11 of 11 dust_event instances without WHO anchor). P9/P_compound not tested this cycle (no precipitation_extreme or record-type draft). `gh` CLI absent, 37th consecutive skip. **Operational note: `main` still unmerged since Jun 8 — 28 consecutive daily cycles stranded on `daily-plan-current`.** |
 | 2026-07-06 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same `draft_id`s, scores, text); no re-grading performed, all grades stand. No active-proposal evidence updates (P_close/P_tier/P_dust/P9/P_compound/P5 all unchanged from Jul 5). **2 strict staleness bulk-reject candidates newly identified:** [4] Basrah and [6] Al Başrah al Qadīmah `absolute_extreme`, both >48h old (56.2h/52.8h) with a forecast date (July 4) now 2 days elapsed — same Basra-area class flagged Jul 1–3. Write skipped: `gh` CLI absent, no gist-write tool available via the GitHub MCP server this session (38th consecutive skip, May 13 → Jul 6) — logged for operator manual reject. [15] Doha's forecast date (July 5) has also elapsed but is under 48h — flagged to watch, not yet a strict candidate. **Operational note: `main` still unmerged since Jun 8 — 29 consecutive daily cycles stranded on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle.** |
+| 2026-07-07 | 6 | 2 | 4 | 0 | 0 | **33%** | ✗ | **Complete queue turnover (2nd occurrence)** — all 15 Jul-6 drafts gone (incl. the 2 unactionable Basra-class staleness candidates), 6 fresh drafts, all created same-day. **Major overnight pipeline push:** `main` merged (#384) — the 29-cycle unmerged saga is over; P_tier + P_dust SHIPPED as code (#386, "detection-plumbing ban + dust PM10 WHO anchor," merged 05:06:48Z); Basra-class staleness got a structural pipeline fix (#385, forecast-elapsed auto-reject, merged 04:55:15Z) — likely explains the turnover. 2 A-: Snowshoe, WV all_time_high (P_compound present but overcome — "89°F is the kind of reading the valley floor expects, not the ridge," declarative elevation-inversion); Soweto, South Africa air_quality_hazard (**first A- for this signal type** — "nowhere to vent," WHO 10.3×). 3 B: Ahvaz, Iran absolute_extreme (pre-fix, P_tier violation caps a strong "no relief from elevation or sea" close); Aibonito, Puerto Rico `record` (**new signal type debut** — day-of-year record, mechanism-only/expository close, P_close 15th confirmed type); Riyadh, Saudi Arabia air_quality_hazard (post-fix, but "This is a PM2.5 signal, not dust" is a fresh self-reference variant — new proposal **A4** filed). 1 B-: Zaragoza, Spain absolute_extreme (pre-fix, P_tier violation on a **new band name** "northern mid-latitudes," weak mechanism-only close). **Fix-timing straddle:** the 2 pre-fix absolute_extreme drafts (03:39/03:40 UTC) show the violation exactly as expected; the 4 post-fix drafts (07:44–14:56 UTC) are all non-targeted types, so neither fix is empirically confirmed yet — first real test awaits the next `absolute_extreme`/`fire_footprint`/`cyclone_rapid_intensification`/`regional_sst_anomaly` draft (P_tier) or `dust_event` draft (P_dust). P_close 17th cycle (3 positive: Snowshoe, Soweto, Ahvaz; 3 failing: Zaragoza, Aibonito, Riyadh). P_compound 6th cycle (Snowshoe). `air_quality_hazard` self-selects for a 4th consecutive cycle. 39th consecutive `gh` staleness skip (0 candidates — all same-day fresh). |
+| 2026-07-08 | 8 | 4 | 4 | 0 | 0 | **50%** | ✗ | **Complete queue turnover (3rd occurrence)** — all 6 Jul-7 drafts gone, 8 fresh drafts, all created same-day, all safely post-fix for every item shipped since Jul 5 (P_tier/P_dust via #386, precip four-moves/P9 via #397, cyclone four-moves via #404). Closest approach to the bar since Jun 29's 80% clearance; 50% is exactly half, not a majority, so the bar is technically not cleared. 4 A-: Barrow AK precip (71.2mm/day, prior record 0.0mm, "one storm just delivered two-thirds of a normal year in a day" — first fully clean precipitation_extreme draft in corpus history); Astana precip (51.1mm, "roughly a sixth of a typical year's rain," same clean form); Anchorage precip (370.4mm/7d, ratio-anchor leads sentence 1, declarative orographic-compression close — best-constructed of the three); Riyadh air_quality_hazard (10× WHO, "basin-scale loading, not a street-corner spike" — new scale-honesty-contrast close subtype, A4 does not recur). 3 B+: Snowshoe WV all_time_high (P_compound 7th cycle; P_close FAILING — a materially weaker close than this same station's Jul 7 A- draft one day earlier); Typhoon Bavi `cyclone_landfall` (**new signal type**, P_close POSITIVE "sustain major typhoon strength almost to the coast," but a 2nd raw-JTWC-URL bundle-leak bug); Riyadh dust_event (**P_dust fix empirically confirmed for the first time** — 27.9× WHO PM10 stated, closing the 11-for-11 gap tracked since Jun 13; P_close still FAILING, mechanism-only, unaffected by the WHO-anchor fix). 1 B: Typhoon Bavi `cyclone_land_threat` (**new signal type**, the kind PR #388 added to close the "Bavi gap" — forecast-tense rules followed precisely, but P_close FAILING on a purely expository debut close, same as every other type's first appearance). P_close 18th cycle (5 positive, 3 failing; 16th/17th confirmed signal types via the two new cyclone kinds). P_compound 7th cycle. **P_dust and P9 empirically confirmed clean for the first time** (1 cycle each). P_tier not tested on a named target type this cycle. Operator notes: possible Bavi landfall/land_threat bundle-sequencing inconsistency (verify advisory timestamps before publishing both); 2nd raw-URL bundle leak (flag to engineer). 40th consecutive `gh` staleness skip (0 candidates — all same-day fresh). |
+| 2026-07-09 | 2 | 1 | 1 | 0 | 0 | **50%** | ✗ | **Complete queue turnover (4th occurrence)** — all 8 Jul-8 drafts gone, 2 fresh drafts, both created same-day (03:26–03:29 UTC). n=2, so 50% is 1 draft, not a majority — 2nd consecutive cycle landing exactly on the half-boundary (after Jul 8's 4/8). 1 A-: Stevensville, Maryland all_time_high (103°F, "beating a record from 1934, by 2°F, in 101 years of data" — **worst P_compound instance yet**, a triple-stacked qualifier one past every prior double-qualifier instance; overcome by a clean buffer-failure declarative close, "that buffer failed," same shape as Jun 29's Congo fire A-). 1 B: Anchorage, Alaska precipitation_extreme (61.2mm/day against a 0.9mm prior record — exactly 68×, the corpus's most dramatic precip ratio, left unstated; P9-clean of restate-math and the legacy template, but P_close FAILING on "wring out moisture in concentrated bursts" — one word from Jun 26's own Anchorage draft, "wring out moisture in compressed bursts," and notably weaker than this same station's Jul 8 A- draft two days earlier). **P9 gets its 2nd independent clean cycle (Jul 8 3/3 + Jul 9 1/1) — tracking closes, see IMPROVEMENT_PLAN.md.** P_close 19th cycle (1 positive, 1 failing). P_compound 8th cycle (new worst instance). P_tier/P_dust/A4/A5 not tested (no target-type draft). 41st consecutive `gh` staleness skip (0 candidates — both same-day fresh). |
+| 2026-07-10 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | **Complete-turnover streak breaks** — 2 of Jul 9's 2 drafts survive as carry-overs (Stevensville A-, Anchorage B, unchanged), first non-full-turnover cycle since Jul 6. 3 fresh: 1 A-, Ahvaz, Iran absolute_extreme (47.1°C forecast — **first post-fix P_tier confirmation on a named target type**, no band-label jargon this time vs. this same city's Jul 7 pre-fix "absolute-extreme threshold for the Northern Subtropics"; declarative close "where shade and rest alone stop being enough" — first A-grade `absolute_extreme` draft in the corpus). 2 B+: Riyadh dust_event (24.9× WHO stated — **2nd post-fix P_dust confirmation, tracking closes** on the same 2-clean-cycles bar P9 used; close still structural not declarative); Tepee Creek, MT all_time_high (standard P_compound double-qualifier + implied P_close, same combination that's produced B/B+ throughout this proposal). P_close 20th cycle. P_tier: 1st post-fix confirmation (parallels P_dust's Jul 8 milestone — watch for a 2nd before moving to Resolved). P_dust: 2nd post-fix confirmation, tracking closes. P_compound 9th cycle. A4/A5 not tested (no air_quality_hazard/cyclone_land_threat draft). 0 staleness candidates (oldest carry-over ~35.7h); `gh` CLI absent, 42nd consecutive skip. |
+| 2026-07-11 | 2 | 0 | 2 | 0 | 0 | **0%** | ✗ | 6 pending (4 carry-overs from Jul 9/10 unchanged: Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, Ahvaz A-; 2 fresh, both `fire`). Anchorage precipitation_extreme (B) drops from the queue — cause unconfirmed. 2 B+: interior Alaska fire (926.3 MW, 66°N, "doesn't just consume trees — it burns into the organic layer above the frozen ground" — 6th permafrost-carbon-mechanic instance, P_close positive-but-weak, same tier as Jul 3's near-dup); western Siberia fire, a 3-signal comic-triple cluster (1,387.9/958.0/720.7 MW, "burning across peat that took centuries to accumulate" — same declarative-but-weak P_close form). **New: A6 filed** — both closes independently reuse a prior corpus draft's exact phrasing on a different fire event (Alaska echoes Jul 5 eastern Siberia's "doesn't just X — it Y" construction; Siberia echoes Jul 3's near-dup "...that took centuries to accumulate" clause) — the permafrost-carbon mechanic, this plan's most reliable fire A-grade path, shows its first sign of curdling into a reused phrase bank across different events, not just the already-tracked within-location duplicate-generation anomaly. P_close 21st cycle (2 positive, both weak-declarative form). P5: fire self-selects again (5th/6th consecutive confirming cycle). P_tier/P_dust/P9/P_compound/A4/A5 not tested (no target-type draft this cycle). 0 staleness candidates (Stevensville/Riyadh past-tense carve-out regardless of age; Tepee Creek/Ahvaz/fires all <29h); `gh` CLI absent, 43rd consecutive skip. Operator note: Ahvaz's forecast date (July 10) elapsed but sits under 48h — worth confirming whether PR #385's forecast-elapsed auto-reject is age-gated by design. |
+| 2026-07-12 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. 5 pending — exact match to 5 of Jul 11's 6 graded drafts (Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, interior Alaska fire B+, western Siberia fire cluster B+); no re-grading performed, all grades stand. **Ahvaz, Iran `absolute_extreme` (A-) drops from the queue** — cause unconfirmed, 2nd consecutive cycle of unexplained single-draft contraction (after Anchorage's Jul 10→11 departure). Losing Ahvaz costs the corpus its best open P_tier test case (it was 1 of 2 confirmations needed to close that proposal's tracking); its Jul 10 grade record is unaffected, but closing P_tier now needs a fresh target-type draft. No active-proposal evidence updates (P_close/P_compound/P5/P_tier/P_dust/P9/A4/A5/A6 all unchanged from Jul 11). 0 staleness candidates (Stevensville/Riyadh/Tepee Creek past-tense carve-out; both fires <33h, western Siberia's "today" still under the 48h line, watch ~2026-07-13T06:25Z). `gh` CLI absent, 44th consecutive skip. |
+| 2026-07-13 | 0 | — | — | — | — | **N/A** | — | No fresh drafts — queue is an exact match to Jul 12's 5 graded drafts (same `draft_id`s, scores, text); no re-grading performed, all grades stand. No active-proposal evidence updates (P_close/P_compound/P5/P_tier/P_dust/P9/A4/A5/A6 all unchanged from Jul 12). **1 strict staleness bulk-reject candidate newly identified:** western Siberia fire cluster, now ~56.6h old with "today" still in the text — crosses exactly the threshold flagged proactively in the Jul 11 and Jul 12 entries. Write skipped: `gh` CLI absent, no gist-write tool available via the GitHub MCP server this session (45th consecutive skip, May 13 → Jul 13) — logged for operator manual reject. Interior Alaska fire (same ~56.6h age, no date/time language) and the three past-tense record drafts (Stevensville/Riyadh/Tepee Creek) remain clear under the established carve-out. **Docs-freshness note:** `main`'s copies of these three docs were still at their Jul 6 state at session start (the #384 merge was a one-time snapshot, not a standing sync) — confirmed the rolling `daily-plan-current` branch itself has run every day since with no gap (Jul 7–12 all present); rebased this session's work onto fresh `main` cleanly, no re-grading performed. |
+| 2026-07-14 | 3 | 1 | 1 | 1 | 0 | **33%** | ✗ | 8 pending (5 carry-overs from Jul 9–11, unchanged; 3 fresh). **Headline: P_tier's tracking closes.** 1 A-: Basrah, Iraq absolute_extreme ("3°C above the 47°C threshold where the body's cooling mechanisms begin to fail faster than they can recover" — clean of band-label jargon, the **2nd independent post-fix confirmation** on a named target type after Jul 10's Ahvaz, closing P_tier's tracking on the same 2-clean-cycles bar P_dust/P9 used; declarative P_close "removes the ceiling"). 1 B+: Randolph, Utah all_time_high (134yr archive, standard P_compound double-qualifier, 10th cycle; P_close implied/failing — "normally bleeds off the heat" echoes this same city's own Jun 24 draft's "normally blunts the heat" near-verbatim, 20 days apart, different record type — new watch-item **A7** filed). 1 C+: Ontario, Canada fire cluster (2,374.8/883.7/817.1 MW — **P5 counter-instance**, breaks the fire category's 6-cycle self-selection streak; bare 3-signal-count restatement with zero ecosystem-specific mechanic, unlike this same cycle's western Siberia carry-over which proved cluster framing and a real mechanic are compatible). P_close 22nd cycle (1 positive, 1 failing). P_compound 10th cycle. **All three of this plan's shipped code fixes (P_tier, P_dust, P9) are now CONFIRMED.** 46th consecutive `gh` staleness skip — 1 strict candidate (western Siberia fire cluster, ~80.6h, "today" still present-tense, 2nd consecutive cycle unactioned). |
+| 2026-07-15 | 0 | — | — | — | — | **N/A** | — | No fresh drafts. Queue **contracted from Jul 14's 8 to 6** — Randolph, Utah all_time_high (B+) and Ontario, Canada fire cluster (C+) both drop, cause unconfirmed (3rd/4th instance of this plan's recurring unexplained queue-contraction pattern, after Anchorage Jul 10→11 and Ahvaz Jul 11→12). Remaining 6 are an exact match to prior grading (Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, interior Alaska fire B+, western Siberia fire cluster B+, Basrah absolute_extreme A-); no re-grading performed, all grades stand. No active-proposal evidence updates — P_close/P_compound/P5/A4/A5/A6/A7 all unchanged from Jul 14; P_tier/P_dust/P9 remain CONFIRMED, tracking closed. **Western Siberia fire cluster now unactioned for a 3rd consecutive cycle** (~104.7h old, "today" still present-tense). `gh` CLI absent, 47th consecutive skip. |
+| 2026-07-16 | 2 | 2 | 0 | 0 | 0 | **100%** | ✓ (n=2) | 4 pending (2 carry-overs from Jul 11 unchanged: interior Alaska fire B+, western Siberia fire cluster B+; 2 fresh). **4 of Jul 15's 6 drop from the queue** (Stevensville A-, Riyadh dust_event B+, Tepee Creek B+, Basrah A-) — cause unconfirmed by gist inspection, but coincides with `bot.yml`'s posting/drafting/leaderboard schedules being stopped 2026-07-14 12:49 ET (`#441`) and restored 2026-07-15 22:46 ET (`#449`), which also explains Jul 15's zero-fresh-draft cycle and today being the first fresh drafts since the restore. 2 A-: Powderville, Montana all_time_high (score 91; 63yr archive, 4°F margin — P_compound double-qualifier present, 11th cycle, overcome by a clean named-absence declarative close, "no marine layer... no terrain to interrupt heat building," same family as Basrah's "no evaporative relief"); Oslo hot10 (score 87; +10.4°C July anomaly — peer/climate-analogy comparison + declarative accelerating-warming reframe, "is what a warmer baseline looks like at high latitudes," same interpretive-reframe shape as Jun 29's marine_heatwave A-; first `hot10` draft graded under this framework). **First 100%-of-cycle A-rate since Jun 22's retroactive n=1** — small-n, not durable confirmation, but the cleanest evidence yet that with P_tier/P_dust/P9 all shipped and confirmed (Jul 14), P_close and P_compound are the only two structural levers left between the pipeline and a sustained majority-A cycle. P_close 23rd cycle (2 positive, 0 failing). P_compound 11th cycle (1 instance, overcome). A4/A5/A6/A7 not tested (no target-type draft). **1 strict staleness bulk-reject candidate, 4th consecutive unactioned cycle:** western Siberia fire cluster (~128.7h, "today" still present-tense — the corpus's oldest unactioned candidate to date). `gh` CLI absent, 48th consecutive skip. |
+| 2026-07-17 | 5 | 4 | 1 | 0 | 0 | **80%** | ✓ | 7 pending (2 carry-overs from Jul 11 unchanged: interior Alaska fire B+, western Siberia fire cluster B+; 5 fresh — largest batch since Jul 8's 8). 4 A-: Bandar-E Mahshahr, Iran absolute_extreme (score 84; "the air has nowhere to cool" — named-absence declarative, clean P_tier form); Deaver, Wyoming all_time_high (score 91, batch high; 111yr archive — longest in corpus — P_compound overcome by "the terrain that blocks moisture also traps heat"); Al Basrah, Iraq absolute_extreme (score 84; "one of the few places on earth where outdoor survival becomes genuinely contested" — batch's strongest declarative, single-sentence construction); Tunis hot10 (score 87; leaderboard-aggregate reframe — "heat this far from seasonal average has stopped arriving one city at a time," 1st cross-cohort close in the corpus, new candidate move). 1 B+: Basrah, Iraq absolute_extreme (score 84; **stranded mechanic** — the real declarative move, "shade and stillness stop being enough," is buried in sentence 1 instead of the closer; actual close is hedged/non-declarative, P_close FAILING; near-verbatim reuse of Jul 10 Ahvaz's "shade and rest alone stop being enough" — 2nd instance, new watch-item **A8** filed alongside a same-cycle 3-of-3 `absolute_extreme` opener-skeleton convergence). **First n≥5 bar-clearing cycle since Jun 29's 80%/n=5** — a materially stronger read than Jul 16's small-n 100%. P_close 24th cycle (4 positive, 1 failing). P_compound 12th cycle (1 instance, overcome). Zero Wodehouse violations, 2nd consecutive cycle. Likely duplicate-signal generation ([4]/[6], same metro area 8h apart) and a signal-mix monoculture (3 of 5 fresh `absolute_extreme`, all Persian Gulf/lower-Mesopotamian) logged as operational notes, not voice proposals. **Western Siberia fire cluster now unactioned for a 5th consecutive cycle, the corpus's longest-standing candidate** (~152.8h, "today" still present-tense). `gh` CLI absent, 49th consecutive skip. |
+| 2026-07-18 | 4 | 1 | 3 | 0 | 0 | **25%** | ✗ | 7 pending (3 carry-overs from Jul 17 unchanged: Basrah absolute_extreme B+, Deaver all_time_high A-, Al Basrah absolute_extreme A-; 4 fresh). **Comedown from Jul 17's 80%, signal-mix driven** — zero fresh `absolute_extreme` this cycle (the type carrying 3 of Jul 17's 4 A-grades), drafts instead drawn from `precipitation_extreme` (2) and `air_quality_hazard` (1). 1 A-: Wausaukee, Wisconsin all_time_high (score 92; P_compound double-qualifier overcome by "without the lake bleeding it off first" — named-absence declarative). 2 B+: Delhi, India air_quality_hazard (score 74; WHO 10.8× stated, strongest `air_quality_hazard` device yet — monsoon expectation-reversal, "rains are supposed to wash the air... the seasonal scour isn't keeping up" — graded conservatively P_close FAILING per established precedent, though this grader flags it as a genuine judgment call that could be read as this type's first P_close-positive instance); Astana, Kazakhstan precipitation_extreme (score 76; lands the P9-era baseline-comparison move for the first time — companion-city triple [Aktobe/Almaty] + annual-baseline contrast, "three cities delivered a sixth of that at once" — but the arithmetic is ambiguous per-city vs. combined, capping it below A-). 1 B: Anchorage, Alaska precipitation_extreme (score 77; mechanism-only close, 51× ratio unstated, P_close FAILING). **Headline: A7 promoted to an active proposal** — Anchorage's close is the 3rd instance (Jun 26 → Jul 9 → Jul 18) of the same "moisture...compressed/concentrated...bursts" phrase family on one station, the 2nd location (after Randolph) confirming the "writer reuses its own prior closing construction" pattern past its Jul 14 promotion bar. P_close 25th cycle (1 positive, 1 conservatively-failing, 1 partial/ambiguous, 1 failing). P_compound 13th cycle (Wausaukee, overcome). Zero Wodehouse violations, 3rd consecutive cycle. **4 Jul-17 drafts dropped from the queue, cause unconfirmed** — Bandar-E Mahshahr A-, Tunis A-, interior Alaska fire B+, and notably the western Siberia fire cluster (the corpus's longest-standing staleness candidate, 5 consecutive unactioned cycles), plausibly operator action on the repeated reject recommendation. 0 strict staleness candidates; 2 watch items (Basrah ~37.0h, Al Basrah ~29.1h, both forecast-date-elapsed-but-under-48h — open question on whether PR #385's auto-reject should have caught these). `gh` CLI absent, 50th consecutive skip. |
+| 2026-07-19 | 4 | 1 | 3 | 0 | 0 | **25%** | ✗ | 9 pending (5 carry-overs from Jul 17–18 unchanged: Deaver A-, Delhi B+, Anchorage B, Astana B+, Wausaukee A-; 4 fresh). **Same 25% as Jul 18** — 3 of 4 fresh drafts `absolute_extreme`, all clean of P_tier, but only 1 lands an unstranded declarative close. 1 A-: Ahvaz, Iran absolute_extreme (score 84; fresh idiom-flip close "shade is infrastructure, not comfort" — declarative, unstranded, breaks from A8's reused-clause axis entirely). 2 B+: W Allis, Wisconsin all_time_high (score 90; P_compound overcome by "overwhelms that buffer" — same Great-Lakes buffer-failure mechanism as Jul 18's Wausaukee, one day apart in record date, weaker/more generic verb); Al Basrah, Iraq absolute_extreme (score 86; **repeats Jul 17 Basrah's exact stranded-mechanic failure** — a genuine declarative buffer-failure line buried as a sentence-1 qualifier while the actual closer is a bare peer-comparison fact — and is the 3rd instance of A8's tracked survivability-threshold clause family). 1 B: Ahvaz/Bandar-E Mahshahr, Iran absolute_extreme (score 85; mechanism-only close, no threshold framing at all — breaks from A8's opener-skeleton shape, useful diversity counter-evidence within the same cycle). **Headline: A8's stranded-mechanic axis confirmed a 2nd time (Jul 17, Jul 19) and its reused-clause axis a 3rd (Jul 10, Jul 17, Jul 19) — both now past the standard 2-instance promotion bar.** P_close 26th cycle (1 positive, 2 failing). P_compound 14th cycle (W Allis, overcome). Zero Wodehouse violations, 4th consecutive cycle. 2 Jul-17 `absolute_extreme` carry-overs (Basrah B+, Al Basrah A-) dropped from the queue, cause unconfirmed — same recurring contraction pattern. 0 strict staleness candidates; 1 watch item (Ahvaz, forecast-date-elapsed under 48h). `gh` CLI absent, 51st consecutive skip. **Process note:** this session's Step 0 sync initially checked out only `main`, which is many cycles behind the rolling `daily-plan-current` branch (unmerged since 2026-06-08) — corrected before finalizing, see `docs/DRAFT_CORPUS.md` followups. |
+| 2026-07-20 | 3 | 1 | 2 | 0 | 0 | **33%** | ✗ | 11 pending (8 carry-overs from Jul 17–19 unchanged: Deaver A-, Delhi B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Al Basrah B+, Ahvaz/Bandar-E Mahshahr B; 3 fresh). Smallest gap from bar since Jul 17's clearance (17pp), on the smallest fresh sample since Jul 9/11 (n=2/n=2 → here n=3). 1 A-: Al Başrah Al Qadīmah, Iraq absolute_extreme (score 84; single-sentence declarative close, "a physiological wall that shade and airflow alone cannot breach" — fresh vehicle, breaks from both A8's reused-clause and stranded-mechanic axes while continuing its opener-skeleton axis for a 3rd cycle). 1 B+: Taiz, Yemen dust_event (score 75; 12.8× WHO stated, P_dust holding; mechanism-only P_close FAILING). 1 B: Riyadh, Saudi Arabia dust_event (score 75; 27.2× WHO stated, same mechanism-only close, docked a half-step for a subject-verb agreement error — "winds... funnels" — filed as new awaiting-evidence item A9). P_close 27th cycle (1 positive, 2 failing). P_compound/A7 not tested (no target-type draft). P5's dust_event named-mechanic gap reaches an 8th confirming cycle; `absolute_extreme` self-selects again. Zero Wodehouse violations, 5th consecutive cycle. Ahvaz, Iran absolute_extreme A- (Jul 19's best draft) dropped from the queue, cause unconfirmed — same recurring contraction pattern, this time removing the top grade rather than a carry-over. 0 strict staleness candidates; 2 watch items (Al Basrah ~37.2h, Ahvaz/Bandar-E Mahshahr ~29.3h, both forecast-date-elapsed-but-under-48h). `gh` CLI absent, 52nd consecutive skip. |
+| 2026-07-21 | 1 | 0 | 1 | 0 | 0 | **0%** | ✗ | 10 pending (9 carry-overs from Jul 17–20 unchanged: Deaver A-, Delhi B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Al Başrah Al Qadīmah A-, Taiz B+, Riyadh B; 1 fresh). Smallest fresh sample in the corpus's history (n=1). 1 B+: Barrow, Alaska precipitation_extreme (score 78; clean P9 — no restate-math; P_close POSITIVE on its own terms, "delivered nearly two-thirds of that" is the declarative annual-ratio move — but graded B+ not A- because it's a near-verbatim reuse of Jul 8's Barrow draft's exact closer, "one storm just delivered two-thirds of a normal year in a day," on the same station, same 71.2mm/110mm figures, 13 days apart). **Barrow becomes A7's 3rd confirmed location** (after Anchorage ×3, Randolph ×1) and its cleanest instance — the reused sentence is otherwise a fully clean, fix-confirming execution, not one already capped by a separate failure. The exact figure match (71.2mm total, 110mm annual baseline) across nominally distinct event dates (July 6 vs. July 19) is separately flagged as a possible data anomaly, not diagnosed. 2 Jul-19 carry-overs (Al Basrah B+, Ahvaz/Bandar-E Mahshahr B) — both Jul 20's forecast-elapsed watch items — dropped from the queue, plausibly PR #385's auto-reject resolving the open question carried since Jul 11. Zero Wodehouse violations, 6th consecutive cycle. 0 strict staleness candidates; 1 watch item (Al Başrah Al Qadīmah ~28.3h, forecast-date-elapsed-but-under-48h). `gh` CLI absent, 53rd consecutive skip. |
+| 2026-07-22 | 3 | 2 | 1 | 0 | 0 | **67%** | ✓ | 12 pending (9 carry-overs from Jul 17–21 unchanged: Deaver A-, Delhi B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Taiz B+, Riyadh B, Barrow B+; 3 fresh). **BAR CLEARED — 4th clearance since Jun 29** (Jun 29 80%/n=5, Jul 16 100%/n=2, Jul 17 80%/n=5, now Jul 22 67%/n=3 — small-n but the strongest n=3 reading yet; Jul 3/Jul 10/Jul 20 were all n=3 and none cleared). 2 A-: Basrah, Iraq absolute_extreme (score 83; "turns already-extreme heat into a wet-bulb emergency for anyone without shelter" — the sharpest close this signal type has produced, a named health-stakes outcome rather than another named-absence form; P_tier clean, both A8 axes clean, only the opener-skeleton axis repeats and that alone doesn't cap); Portland, Oregon / Seattle hot10 (score 87; debuts a same-day companion-city comparison — "Seattle ran 8.7°C above its own normal the same afternoon" — a 3rd distinct second-sentence device for the type after Oslo's peer-analogy and Tunis's leaderboard-aggregate, closing on a named-absence declarative, "heat ranges the coast is not designed to moderate"; resolves Jul 17's "watch for a 3rd hot10 draft" question in the type's favor — sentence-1 skeleton repeats a 3rd time but sentence 2 keeps varying). 1 B+: Al Basrah, Iraq absolute_extreme (score 84; P_close positive on its own terms but its subject phrase "the body's cooling mechanisms" is a verbatim 5-word reuse of Jul 14 Basrah's close — the exact alternative A8's own fix proposed to escape the "shade and X stop being enough" cliché, now itself recurring 8 days later on a 2nd Basra-area city; new A8 reused-clause sub-family, 2 instances). Likely duplicate-signal pair with Basrah (same metro area, ~13h apart, same forecast day) graded independently per established precedent — quality diverges (A- vs B+). Al Başrah Al Qadīmah absolute_extreme A- (Jul 20) dropped from the queue, cause unconfirmed, costing the cycle its strongest carry-over grade. Zero Wodehouse violations, 7th consecutive cycle. 0 strict staleness candidates; 1 new watch item (Basrah ~22h, forecast-date-elapsed under 48h). `gh` CLI absent, 54th consecutive skip. |
+| 2026-07-23 | 4 | 2 | 1 | 1 | 0 | **50%** | ✗ | 14 pending (10 carry-overs from Jul 17–22 unchanged: Deaver A-, Delhi B+, Anchorage B, Astana B+, Wausaukee A-, W Allis B+, Taiz B+, Riyadh B, Barrow B+, Al Basrah absolute_extreme B+; 4 fresh). 50% is exactly half, not a majority — bar not cleared, same convention as Jul 8/Jul 9. 2 A-: Al Başrah Al Qadīmah, Iraq absolute_extreme (score 83; "the body cannot shed [heat] by sweating alone" — clean P_tier, clean stranded-mechanic, declarative and specific; new A8 watch note — "wet-bulb" language recurs 2 days running on 2 different Basra-area cities, non-verbatim but conceptually overlapping); Pikine, Senegal monthly_high (score 80; "heat records here say the rains are arriving into a warmer baseline" — declarative interpretive reframe, POSITIVE; **carries a P_compound double-qualifier — REOPENS the proposal one cycle after its Jul 22 archival**, same archive→reopen-next-cycle timing as P9's Jul 3→Jul 4). 1 B+: Doha, Qatar absolute_extreme (score 83; breaks A8's opener-skeleton axis with a fresh same-number dry/humid contrast device; P_close declarative but abstract, "a different physiological burden entirely" names no specific outcome). 1 C+: Capitol Hill 1, N. Mariana Islands record (score 73; 2nd corpus instance of this type; explicit-gap-math Wodehouse violation, 36.1−31.7=4.4 all three numbers stated — **breaks a 7-cycle clean Wodehouse streak**; P_close hedged, "little oceanic buffer"). **2 of Jul 22's 3 fresh drafts (both A-grades — Basrah absolute_extreme, Portland/Seattle hot10) dropped from the queue in a single day**, cause unconfirmed — costliest instance yet of the recurring contraction pattern. P_close 30th cycle (2 positive, 1 partial, 1 hedged-weak). A8 opener-skeleton axis 5th cycle (Jul 17/19/20/22/23) with a clean counter-instance (Doha) same cycle. P_tier remains CONFIRMED/clean (2 fresh absolute_extreme drafts both clean). P_dust/P9/A7/A4/A5/A6/A9 not tested (no target-type draft). 0 strict staleness candidates; 1 continuing watch item (Al Basrah, ~32.7h, forecast-date-elapsed under 48h, now surviving into a 2nd day unlike several recent same-class watch items). `gh` CLI absent, 55th consecutive skip. |
 
 **Trend interpretation:**
 The Apr 25 jump to 43% was real but came from a small cohort (7 drafts) and didn't sustain into Apr 27. The Apr 27 regression has named causes (Sonnet rewrite path, verb-list gap in opener regex, era-anchor over-deployment, political anchor curation error). All four have proposed fixes documented in `docs/DRAFT_CORPUS.md` Apr 27 implications section. Next data point: tomorrow's scheduled grader (fires 2026-04-27 06:00 UTC) on the Apr 26-27 cycle output under v2.5 + post-humor-lens fixes.
@@ -69,6 +86,311 @@ We've been in the 9-43% band for three cycles. Need to clear 50% sustained.
 ## Rejection events
 
 Drafts that got rejected, with dates.
+
+### 2026-07-23 — Staleness bulk-reject: 0 strict candidates; 1 continuing watch item; write skipped (55th consecutive skip)
+
+**Status:** 14 pending drafts reviewed (4 fresh; 10 carry-overs from Jul 17–22). 0 strict candidates
+(>48h old AND real-time-baked/forecast-elapsed). Deaver (~153.0h), Delhi (~142.1h), Anchorage/Astana
+(~133.4h), Wausaukee (~125.9h), and W Allis (~109.3h) all cross 48h but stay past-tense/historical —
+clear under the established carve-out. Taiz/Riyadh dust_event (~72.9h) reference "July 20" as a
+same/prior-day model-estimated reading, not a live forecast — clear, now extended well past 72h
+without incident. Barrow (~61.3h) is past-tense — clear. **[10] Al Basrah continues as a watch item,
+now in its 2nd day** (created 06:30 UTC Jul 22, "is forecast to hit 48.1°C... today" — "today" meant
+Jul 22, now ~32.7h old, under the 48h mechanical threshold but forecast-date-elapsed by a full
+calendar day). Notably it has now survived longer than several recent same-class watch items that
+vanished from the queue before ever crossing 48h — worth tracking whether it follows the same path or
+becomes this cycle's first strict candidate at the next pull. Doha (~13.2h) and Al Başrah Al Qadīmah
+(~8.7h) are both same-day-accurate. Capitol Hill (~4.9h) and Pikine (~1.1h) are both past-tense
+historical record framing — clear. Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI
+not installed in this remote execution environment; no gist-write tool exposed via the GitHub MCP
+server tools loaded this session. **55th consecutive skip** (May 13 → Jul 23).
+
+**Separately (not a staleness rejection, logging for the record):** 2 of Jul 22's 3 fresh drafts —
+Basrah, Iraq `absolute_extreme` (A-) and Portland, Oregon / Seattle `hot10` (A-), both of that
+cycle's A-grades — are absent from this pull. Cause unconfirmed, same class of unexplained
+contraction logged repeatedly since Jul 10, this time the costliest instance (both A-grades from a
+single cycle gone at once).
+
+### 2026-07-22 — Staleness bulk-reject: 0 strict candidates; 1 new watch item; write skipped (54th consecutive skip)
+
+**Status:** 12 pending drafts reviewed (3 fresh; 9 carry-overs from Jul 17–21). 0 strict candidates
+(>48h old AND real-time-baked/forecast-elapsed). Deaver (~152.9h) and Delhi (~141.9h) cross 48h but
+stay past-tense/historical — clear under the established carve-out. Taiz/Riyadh dust_event
+(~48.9h) reference "July 20" as a same/prior-day model-estimated reading, not a live forecast —
+clear. **1 new watch item:** Basrah, Iraq `absolute_extreme` (created 17:16 UTC Jul 21, "is
+forecast to hit 47.3°C (117°F) **today**" — "today" meant Jul 21 and is now one calendar day
+elapsed, ~22h old at this grading, under the 48h mechanical threshold) — same class as the drafts
+that dropped from the queue between Jul 20 and Jul 21 after crossing this exact watch-item state.
+Al Basrah (~8.7h, "today" = Jul 22) and Portland `hot10` (~1h, same-day leaderboard type) are both
+accurate, no staleness concern. Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI
+not installed in this remote execution environment; no gist-write tool exposed via the GitHub MCP
+server tools loaded this session. **54th consecutive skip** (May 13 → Jul 22). Operator should
+watch Basrah at the next pull — it will likely cross 48h before then, same pattern as its two
+predecessors.
+
+### 2026-07-21 — Staleness bulk-reject: 0 strict candidates; 1 watch item; write skipped (53rd consecutive skip)
+
+**Status:** 10 pending drafts reviewed (1 fresh; 9 carry-overs from Jul 17–20). 0 strict candidates
+(>48h old AND real-time-baked/forecast-elapsed). Deaver (~104.9h) and Delhi (~94.0h) both cross 48h
+but are past-tense/historical — clear under the established carve-out. Taiz/Riyadh dust_event
+(~24.8h) reference a same/prior-day model-estimated reading, not a live forecast — clear. The
+fresh Barrow draft is ~13.2h old. **1 watch item:** Al Başrah Al Qadīmah `absolute_extreme`
+(~28.3h, "is forecast to hit 47.8°C... on July 20" — forecast date now yesterday) — forecast-
+elapsed but under the 48h mechanical threshold, same class as the two drafts (Al Basrah,
+Ahvaz/Bandar-E Mahshahr) that were watch items at Jul 20's grading and have since dropped from the
+queue entirely — plausibly PR #385's auto-reject firing once they crossed 48h, which would answer
+the open question this log has carried since Jul 11 (see `docs/DRAFT_CORPUS.md` Jul 21 followups).
+Bulk-reject attempted via `gh api -X PATCH gists/...` — `gh` CLI not installed in this remote
+execution environment. **53rd consecutive skip** (May 13 → Jul 21). Operator should confirm
+whether the two departed drafts were the auto-reject or a manual/dashboard action.
+
+### 2026-07-20 — Staleness bulk-reject: 0 strict candidates; 2 watch items; write skipped (52nd consecutive skip)
+
+**Status:** 11 pending drafts reviewed (3 fresh; 8 carry-overs from Jul 17–19). 0 strict candidates
+(>48h old AND real-time-baked). Deaver (~80.9h) and Delhi (~70.0h) both cross 48h but are
+past-tense/historical — clear under the established carve-out. All 3 fresh drafts are same-day
+(0.9h–4.4h old). **2 watch items, both `absolute_extreme` carry-overs with elapsed forecast dates
+still under the 48h mechanical threshold:** Al Basrah, Iraq (~37.2h, "is forecast for 50.5°C
+(123°F) on July 19" — forecast date now a day stale) and Ahvaz/Bandar-E Mahshahr, Iran (~29.3h,
+"forecast to hit 51.2°C... on July 19," same elapsed-date class). Neither crosses 48h yet. Same
+open question carried from Jul 11/18/19 on whether PR #385's forecast-elapsed auto-reject is
+age-gated by design or has a coverage gap for elapsed-but-under-48h drafts. Write not attempted —
+nothing qualifies regardless of tooling. `gh` CLI confirmed absent; no gist-write tool available
+via the GitHub MCP server this session — 52nd consecutive skip (May 13 → Jul 20).
+
+**Separately (not a staleness rejection, logging for the record):** Ahvaz, Iran `absolute_extreme`
+A- (Jul 19's best-graded draft, score 84) is absent from this pull — cause unconfirmed, same class
+of unexplained contraction logged repeatedly since Jul 10, notable this time for removing the
+top-graded draft in the batch rather than a carry-over.
+
+### 2026-07-19 — Staleness bulk-reject: 0 strict candidates; 1 watch item; write skipped (51st consecutive skip)
+
+**Status:** 9 pending drafts reviewed (4 fresh; 5 carry-overs from Jul 17–18). 0 strict candidates
+(>48h old AND real-time-baked). [1] Deaver crosses 48h (~56.9h) but is past-tense/historical ("hit
+109°F... on July 13") — clear under the established carve-out. All 4 fresh drafts are same-day or
+1-day-old (5.2h–22.2h). **1 watch item:** [6] Ahvaz, Iran `absolute_extreme` forecasts "July 18,"
+now yesterday relative to this grading (~22.2h old, under the 48h threshold) — same
+forecast-date-elapsed-but-not-yet-stale pattern flagged for this signal type across several prior
+cycles (Jul 11, Jul 18); the open question of whether PR #385's forecast-elapsed auto-reject
+should have caught it remains unresolved. Write not attempted — nothing qualifies regardless of
+tooling. `gh` CLI confirmed absent (`which gh` → not found); no gist-write tool available via the
+GitHub MCP server this session — 51st consecutive skip (May 13 → Jul 19).
+
+**Separately (not a staleness rejection, logging for the record):** 2 of Jul 18's carry-overs
+(Basrah `absolute_extreme` B+, Al Basrah `absolute_extreme` A-, both from Jul 17) are absent from
+this pull — cause unconfirmed, same class of unexplained contraction logged repeatedly since
+Jul 10.
+
+**Process note:** this session's Step 0 initially synced only to `main` per the routine's stated
+protocol, which produced a stale base (`main`'s copies of these docs were still at their Jul 6
+state) and led to an incorrect full re-grade of drafts already graded on the rolling
+`daily-plan-current` branch through Jul 18. Caught before finalizing; corrected by checking out
+`daily-plan-current` directly, which has run continuously with no gap since Jul 7. Recommend the
+operator either merge `main` soon or clarify Step 0 to check out the rolling branch first when one
+exists.
+
+### 2026-07-18 — Staleness bulk-reject: 0 strict candidates; 2 watch items; write skipped (50th consecutive skip)
+
+**Status:** 7 pending drafts reviewed (4 fresh; 3 carry-overs from Jul 17). 0 strict candidates
+(>48h old AND real-time-baked) — all 4 fresh drafts are same-day or 1-day-old (5.7h–21.9h). **2
+watch items, both carry-over `absolute_extreme` drafts with elapsed forecast dates still under
+the 48h mechanical threshold:** Basrah, Iraq (`draft_20260717_020203_127`, created
+2026-07-17T02:02:03Z, ~37.0h old — "is forecast to hit 47.9°C (118°F) **today**," where "today"
+meant July 17 at creation and is now a day stale) and Al Basrah, Iraq (`draft_20260717_095705_129`,
+created 2026-07-17T09:57:05Z, ~29.1h old — "forecast to hit 48°C (118°F) **on July 17**," same
+elapsed-date class). Neither crosses 48h yet — will if still pending tomorrow. Notable: PR #385's
+forecast-elapsed auto-reject (shipped 2026-07-07) has not removed either draft roughly 12–15h past
+their stated forecast date, an open question first raised Jul 11 about whether that mechanism is
+age-gated by design or has a coverage gap for elapsed-but-under-48h drafts — flagged again for the
+operator. **Separately (not a staleness rejection, logging for the record):** the western Siberia
+fire cluster — Jul 13–17's strict bulk-reject candidate, unactioned for 5 consecutive cycles and
+the corpus's longest-standing candidate — is gone from today's queue, along with 3 other Jul 17
+drafts (Bandar-E Mahshahr, Tunis, interior Alaska fire). Plausibly the operator finally acting on
+the repeated recommendation; cause is not observable from the gist alone, so not asserted as
+confirmed. Write not attempted (0 qualifying candidates). `gh` CLI absent — 50th consecutive skip
+(May 13 → Jul 18).
+
+### 2026-07-17 — Staleness bulk-reject: 1 strict candidate identified (5th consecutive cycle unactioned, now the corpus's oldest); write skipped (49th consecutive skip)
+
+**Status:** 7 pending drafts reviewed (5 fresh; 2 carry-overs from Jul 11). 1 strict bulk-reject
+candidate, unchanged identity from the last four cycles: **western Siberia fire cluster**
+(`draft_20260711_062452_120`, created 2026-07-11T06:24:52Z, ~152.8h old at grading — first
+flagged Jul 13 at ~56.6h, now the 5th consecutive cycle unactioned, extending its own record as
+the corpus's oldest unactioned strict candidate). Text still reads "Three fire signals in the
+same patch of western Siberia **today**" — present-tense, real-time-baked, now describing a fire
+event over 6 days stale. Interior Alaska fire (`draft_20260711_062334_119`, same ~152.8h age)
+contains no date/time language — clear under the established carve-out, consistent with every
+prior ruling on this draft since Jul 11 (6 consecutive cycles now). All 5 fresh drafts (Bandar-E
+Mahshahr ~21.9h, Basrah ~13.1h, Deaver ~8.9h, Al Basrah ~5.2h, Tunis ~1.2h) are well under 48h —
+clear. **Bulk-reject attempted:** `gh api -X PATCH gists/...` requires the `gh` CLI, confirmed
+absent this session (`which gh` → command not found); no gist-write tool is exposed via the
+GitHub MCP server tools loaded this session (repo/PR/issue/actions tools only, no gist scope).
+Skipped per the hard constraints, logged rather than failing the cycle — **49th consecutive
+skip** (May 13 → Jul 17). Operator: this draft has now sat unactioned longer than any prior
+staleness candidate this routine has flagged; recommend rejecting it via dashboard.
+
+### 2026-07-16 — Staleness bulk-reject: 1 strict candidate identified (4th consecutive cycle unactioned, oldest to date); write skipped (48th consecutive skip)
+
+**Status:** 4 pending drafts reviewed (2 fresh; 2 carry-overs from Jul 11). 1 strict bulk-reject
+candidate, unchanged identity from the last three cycles: **western Siberia fire cluster**
+(`draft_20260711_062452_120`, created 2026-07-11T06:24:52Z, ~128.7h old at grading —
+first flagged Jul 13 at ~56.6h, now the 4th consecutive cycle unactioned and the corpus's
+oldest unactioned strict candidate to date). Text still reads "Three fire signals in the same
+patch of western Siberia **today**" — present-tense, real-time-baked, now describing a fire
+event over 5 days stale. Interior Alaska fire (`draft_20260711_062334_119`, same ~128.8h age)
+contains no date/time language — clear under the established carve-out, consistent with every
+prior ruling on this draft since Jul 11. Powderville and Oslo are both same-day fresh (~5.1h
+and ~1.0h respectively) — clear. **Bulk-reject attempted:** `gh api -X PATCH gists/...` requires
+the `gh` CLI, confirmed absent this session (`which gh` → command not found); no gist-write tool
+is exposed via the GitHub MCP server tools loaded this session (repo/PR/issue/actions tools
+only, no gist scope). Skipped per the hard constraints, logged rather than failing the cycle —
+**48th consecutive skip** (May 13 → Jul 16). Operator should reject the western Siberia draft
+via dashboard; it is now the single oldest unactioned item this routine has ever flagged.
+
+### 2026-07-15 — Staleness bulk-reject: 1 strict candidate identified (3rd consecutive cycle unactioned); write skipped (47th consecutive skip)
+
+**Status:** 6 pending drafts reviewed (0 fresh; 6 carry-overs from Jul 9–14). 1 strict
+bulk-reject candidate: **western Siberia fire cluster** (`draft_20260711_062452_120`, created
+Jul11T06:24:52Z, ~104.7h old, "Three fire signals in the same patch of western Siberia
+**today**" — present-tense date-baked language, forecast event long over). Flagged Jul 13
+(~56.6h) and Jul 14 (~80.6h), now unactioned for a **3rd consecutive cycle**. Interior Alaska
+fire (same ~104h age) contains no date/time language and stays clear under the established
+carve-out; Stevensville/Riyadh dust_event/Tepee Creek remain clear under the past-tense-record
+carve-out regardless of age; Basrah is <9h old. **Write attempted and skipped:** `gh api -X
+PATCH gists/...` requires the `gh` CLI, confirmed absent this session (`which gh` → command
+not found); no gist-write tool is exposed via the GitHub MCP server tools loaded this session
+(repo/PR/issue tools only, no gist scope). Per the hard constraints, logged rather than failing
+the cycle — **47th consecutive skip** (May 13 → Jul 15). Operator should reject the western
+Siberia fire cluster via dashboard; it has now sat unactioned across three grading cycles, the
+longest-running unactioned candidate since the Basra-area cluster flagged Jul 1–6 (cleared by
+the Jul 7 `main` merge / PR #385's forecast-elapsed auto-reject).
+
+**Separately (not a staleness rejection, logging for the record):** Randolph, Utah
+`all_time_high` (B+, graded Jul 14) and Ontario, Canada `fire` cluster (C+, graded Jul 14) are
+both absent from today's pull — cause unconfirmed (bulk-reject, bulk-publish, or TTL/other
+sweep not observable from the gist). This is the 3rd/4th instance of an unexplained
+queue-contraction pattern this plan has logged, after Anchorage (Jul 10→11) and Ahvaz
+(Jul 11→12); see `docs/DRAFT_CORPUS.md` Jul 15 entry, Followup #4.
+
+### 2026-07-14 — Staleness bulk-reject: 1 strict candidate identified (2nd consecutive cycle unactioned); write skipped (46th consecutive skip)
+
+**Status:** 8 pending drafts reviewed (3 fresh, created 2026-07-14, oldest ~9h/newest ~1h at
+grading; 5 carry-overs from Jul 9–11, ~28h–80h old). 1 strict bulk-reject candidate, unchanged
+from Jul 13 and now older: **western Siberia fire cluster** (created Jul11T06:24:52Z, ~80.6h
+old, "Three fire signals in the same patch of western Siberia **today**" — present-tense
+"today" now misdates the event by more than three days). Interior Alaska fire (same ~80.6h
+creation window) still does not qualify — no date or time-of-day language. Stevensville,
+Riyadh dust_event, and Tepee Creek remain clear under the established past-tense-record
+carve-out regardless of age. Randolph, Basrah, and Ontario are all same-day fresh and clear.
+**Write attempted and skipped:** `gh api -X PATCH gists/...` requires the `gh` CLI, confirmed
+absent this session (`which gh` → command not found); no gist-write tool is exposed via the
+GitHub MCP server tools loaded this session (repo/PR/issue tools only, no gist scope). Per the
+hard constraints, logged rather than failing the cycle — **46th consecutive skip** (May 13 →
+Jul 14). Operator should reject the western Siberia fire cluster via dashboard; it has now
+been an identified strict candidate for 2 consecutive cycles without action.
+
+### 2026-07-13 — Staleness bulk-reject: 1 strict candidate identified; write skipped (45th consecutive skip)
+
+**Status:** 5 pending drafts reviewed — exact match to Jul 12's graded batch, no new drafts.
+1 strict bulk-reject candidate identified: **western Siberia fire cluster** (created
+Jul11T06:24:52Z, ~56.6h old, "Three fire signals in the same patch of western Siberia
+**today**" — present-tense "today" now misdates the event by more than two days). Crosses
+both the 48h mechanical threshold and carries real-time-baked content — the same two-part
+strict test applied to every prior bulk-reject candidate in this log. Flagged as approaching
+this line in the Jul 11 and Jul 12 entries; it has now arrived. Interior Alaska fire (same
+~56.6h creation window) does not qualify — no date or time-of-day language at all. Stevensville
+(~107.6h), Riyadh (~95.6h), and Tepee Creek (~76.0h) all remain clear under the established
+past-tense-dated-report carve-out regardless of age. **Write attempted and skipped:**
+`gh api -X PATCH gists/...` requires the `gh` CLI, confirmed absent this session (`which gh` →
+command not found); no gist-write tool is exposed via the GitHub MCP server tools loaded this
+session (repo/PR/issue tools only, no gist scope). Per the hard constraints, logged rather than
+failing the cycle — **45th consecutive skip** (May 13 → Jul 13). Operator should reject the
+western Siberia fire cluster draft via dashboard.
+
+### 2026-07-12 — Staleness bulk-reject: 0 candidates; gh CLI absent (44th consecutive skip)
+
+**Status:** 5 pending drafts reviewed (5 of Jul 11's 6, Ahvaz dropped out — see corpus entry).
+Stevensville (~83.9h), Riyadh (~71.9h), and Tepee Creek (~52.3h) are all >48h old but each cites
+a specific past date rather than real-time language — the established carve-out, unchanged from
+every prior ruling on this distinction. Interior Alaska fire (~32.9h) is fresh and clear.
+Western Siberia fire cluster (~32.9h) still contains "today" but remains under the 48h
+threshold — same watch flagged Jul 11, now due around 2026-07-13T06:25Z if still pending.
+**0 strict bulk-reject candidates.** `gh` CLI confirmed absent — 44th consecutive skip (May 13
+→ Jul 12).
+
+### 2026-07-11 — Staleness bulk-reject: 0 candidates; gh CLI absent (43rd consecutive skip)
+
+**Status:** 6 pending drafts reviewed. Stevensville MD (~59.7h) and Riyadh dust_event
+(~47.7h) are both past-tense dated reports with no real-time-baked language — the
+established all_time_high/dust_event carve-out applies regardless of age. Tepee Creek MT
+and Ahvaz Iran (~28.1h) and the 2 fresh fire drafts (~8.7-8.8h) are all well under 48h.
+Ahvaz's forecast date (July 10) has elapsed by one day but the draft is under 48h — not a
+strict candidate; flagged for the operator as a possible gap in PR #385's forecast-elapsed
+auto-reject (see `docs/DRAFT_CORPUS.md` Jul 11 entry). 0 bulk-reject candidates by policy;
+write path not attempted since nothing qualified. `gh` CLI confirmed absent (`which gh` →
+command not found); no gist-write tool exposed via the GitHub MCP tools loaded this session.
+43rd consecutive skip (May 13 → Jul 11).
+
+### 2026-07-10 — Staleness bulk-reject: 0 candidates; gh CLI absent (42nd consecutive skip)
+
+**Status:** 5 pending drafts reviewed — 2 carry-overs from Jul 9 (Stevensville MD, Anchorage
+AK, ~35.7h old at grading, both historical-observation framing, no elapsed forecast date)
+plus 3 fresh (Riyadh dust_event ~23.7h; Tepee Creek MT and Ahvaz Iran ~4h). None cross 48h.
+Ahvaz's forecast date (July 10) is today — accurate, not stale. 0 bulk-reject candidates by
+policy; write path not attempted since nothing qualified. `gh` CLI confirmed absent (`which
+gh` → command not found) — 42nd consecutive skip (May 13 → Jul 10).
+
+**Notable:** 2 of Jul 9's 2 drafts survive as carry-overs — first cycle since Jul 6 that
+isn't a complete queue turnover (breaks the Jul 3→4/Jul 6→7/Jul 7→8/Jul 8→9 streak).
+
+### 2026-07-09 — Staleness bulk-reject: 0 candidates; gh CLI absent (41st consecutive skip)
+
+**Status:** 2 pending drafts reviewed, both created 2026-07-09 (~11-12h old at grading).
+Neither crosses 48h; neither contains an elapsed forecast date (Stevensville all_time_high
+cites a past observation date, July 5; Anchorage precipitation_extreme cites a past
+observation date, July 7 — both historical, not forward-forecast). 0 bulk-reject
+candidates by policy. `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write tool exposed via the GitHub MCP tools loaded this session — 41st consecutive
+skip (May 13 → Jul 9); write path not attempted (nothing qualifies this cycle regardless).
+
+**Notable:** all 8 of Jul 8's pending drafts are gone from the queue — 4th complete
+queue turnover event (after Jul 3→4, Jul 6→7, Jul 7→8). Cause unconfirmed from the gist
+alone, consistent with all three prior turnover events.
+
+### 2026-07-08 — Staleness bulk-reject: 0 candidates; gh CLI absent (40th consecutive skip)
+
+**Status:** 8 pending drafts reviewed, all created 2026-07-08 (oldest ~12h, newest
+~15min at grading). None cross 48h; none contain elapsed forecast dates (Typhoon Bavi's
+`cyclone_land_threat` draft is correctly forecast-tense — "forecast to pass... in
+roughly 60 hours," not a past-due date). 0 bulk-reject candidates by policy. `gh` CLI
+confirmed absent (`which gh` → command not found); no gist-write tool exposed via the
+GitHub MCP tools loaded this session — 40th consecutive skip (May 13 → Jul 8); write
+path not attempted (nothing qualifies this cycle regardless).
+
+**Notable:** all 6 of Jul 7's pending drafts are gone from the queue — 3rd complete
+queue turnover event (after Jul 3→4 and Jul 6→7). Consistent with the pattern PR #385's
+forecast-elapsed sweep established: drafts appear to clear the queue quickly once
+graded/actioned rather than accumulating as carry-overs, though the exact mechanism
+(publish vs. reject vs. TTL) remains unconfirmed from the gist alone.
+
+### 2026-07-07 — Staleness bulk-reject: 0 candidates; queue turned over structurally (39th consecutive `gh` skip)
+
+**Status:** 6 pending drafts reviewed, all created 2026-07-07 (oldest ~11h, newest ~15min
+at grading). None cross 48h; none contain elapsed forecast dates. 0 bulk-reject
+candidates by policy. `gh` CLI still absent — 39th consecutive skip (May 13 → Jul 7);
+write path not attempted (nothing qualifies this cycle regardless).
+
+**Notable:** the 2 strict candidates flagged Jul 6 ([4] Basrah, [6] Al Başrah al
+Qadīmah `absolute_extreme`, both >48h old with elapsed forecast dates) are **gone from
+the queue** as of this pull, along with all 13 other Jul-6 carry-overs — a complete
+queue turnover. PR #385 ("forecast-elapsed sweep — elapsed-forecast drafts auto-reject,
+the Basrah class," merged 2026-07-07T04:55:15Z) shipped a provenance-aware structural
+fix for exactly this pattern at the triage drain step, hours before this grading run.
+Whether that PR is what cleared them (vs. operator dashboard action, vs. an unrelated
+TTL sweep) isn't directly observable from the gist alone, but the timing and the exact
+match to the targeted failure class make it the most likely explanation. If confirmed
+over subsequent cycles, this closes the operational (not voice-quality) half of the
+Basra-area staleness problem this routine has flagged in every cycle since Jul 1.
 
 ### 2026-07-06 — Staleness bulk-reject: 2 strict candidates identified; write skipped (38th consecutive skip)
 
