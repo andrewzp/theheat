@@ -436,7 +436,11 @@ def _refill_drain(
             # The deterministic out-of-scope guard (earthquakes) reports
             # kill_stage="writer" WITHOUT a model call — recording it would
             # claim savings that never existed (codex r2 P2), so those
-            # signal_kinds never enter the cache.
+            # signal_kinds never enter the cache. And the pipeline's OWN
+            # cache-eligibility disposition is required (codex r8): infra-
+            # shaped kills (parse/length exhaustion) and critic-influenced
+            # kills surface under cacheable stage names but set
+            # cacheable=False at the kill site — default-deny here.
             from src.two_bot.writer import OUT_OF_SCOPE_SIGNAL_KINDS
 
             kill_stage = cand_result.get("kill_stage") or ""
@@ -444,6 +448,7 @@ def _refill_drain(
             if (
                 candidate.event_id
                 and kill_stage in _negcache.CACHEABLE_KILL_STAGES
+                and cand_result.get("cacheable") is True
                 and signal_kind not in OUT_OF_SCOPE_SIGNAL_KINDS
             ):
                 _negcache.record_kill(

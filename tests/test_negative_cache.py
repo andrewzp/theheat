@@ -57,12 +57,16 @@ def _entry(sha: str, *, at: datetime, kills: int = 2, epoch: str | None = None) 
     }
 
 
-def _writer_kill_fake(calls: list):
+def _writer_kill_fake(calls: list, *, cacheable: bool = True):
+    """Simulates an EDITORIAL writer kill by default (the pipeline sets
+    cacheable=True only for model-verdict kills — codex r8)."""
+
     def fake_try(bundle, state, score, *, result_out=None, **kwargs):
         calls.append(bundle.event_id)
         if result_out is not None:
             result_out["kill_stage"] = "writer"
             result_out["kill_reason"] = "all writer samples killed: routine value"
+            result_out["cacheable"] = cacheable
         return False
 
     return fake_try
@@ -536,6 +540,60 @@ def test_refill_drain_does_not_cache_drafted_candidates(monkeypatch):
 
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake_success)
     assert bot_state["writer_negative_cache"] == {}
+
+
+def test_infra_shaped_kill_is_not_recorded(monkeypatch):
+    """A kill without the pipeline's cacheable=True disposition (parse or
+    length exhaustion, critic-influenced text) must never arm the cache,
+    even under a cacheable stage name (codex r8 P1)."""
+    bot_state = _fresh_state()
+    calls: list = []
+    infra_fake = _writer_kill_fake(calls, cacheable=False)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], infra_fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], infra_fake)
+    assert bot_state["writer_negative_cache"] == {}
+    assert calls == ["e1", "e1"], "infra kills keep the lane open"
+
+
+def test_pipeline_sets_cacheable_disposition(monkeypatch):
+    """generate_draft marks editorial writer kills cacheable=True and
+    infra-shaped (parse-exhausted) kills cacheable=False (codex r8 P1)."""
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot import writer as writer_mod
+    from src.two_bot.types import MemorySlice, WriterResult
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice", lambda s, b: MemorySlice()
+    )
+
+    def editorial_kill(bundle, memory, **kwargs):
+        return WriterResult(
+            tweet=None, kill_reason="no extraordinary angle", angle_chosen="",
+            era_anchor_used=None, peer_comparison_used=None,
+            reasoning="routine", kill_is_editorial=True,
+        )
+
+    def infra_kill(bundle, memory, **kwargs):
+        return WriterResult(
+            tweet=None, kill_reason="writer returned invalid JSON across 2 attempts",
+            angle_chosen="", era_anchor_used=None, peer_comparison_used=None,
+            reasoning="parse retry exhausted",  # kill_is_editorial defaults False
+        )
+
+    out: dict = {}
+    monkeypatch.setattr(writer_mod, "write_tweet", editorial_kill)
+    monkeypatch.setattr(pipeline_mod.writer, "write_tweet", editorial_kill)
+    assert pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "writer" and out["cacheable"] is True
+
+    out = {}
+    monkeypatch.setattr(pipeline_mod.writer, "write_tweet", infra_kill)
+    assert pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "writer" and out["cacheable"] is False
 
 
 def test_out_of_scope_writer_kill_is_not_recorded(monkeypatch):

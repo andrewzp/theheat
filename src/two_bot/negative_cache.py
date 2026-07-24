@@ -1,11 +1,16 @@
 """Cross-cycle negative cache for killed writer candidates (economics P1.3).
 
-A candidate that dies at a paid pipeline stage (writer / critic / fact-check /
-safety / honesty gates) is very likely to die the same way when the drain
+A candidate that dies at a cacheable paid pipeline stage (writer /
+fact-check / safety / honesty gates — the critic is EXCLUDED, see
+``CACHEABLE_KILL_STAGES``) is very likely to die the same way when the drain
 re-attempts it a few hours later with identical material facts — sources
 re-emit persistent events every cycle, and ``attempted_event_ids`` only
 dedups within ONE cycle. Week-1 post-restore funnel data showed exactly this
 shape, the pre-registered trigger for P1.3 in PLAN-ECONOMICS-MASTER-v3 §3.
+Stage membership alone is not sufficient to record a kill: the pipeline also
+sets an explicit per-kill ``cacheable`` disposition (codex r8), so
+infra-shaped kills (parse/length exhaustion) and critic-influenced kills —
+which can surface under cacheable stage names — never arm the cache.
 
 Because the gates are STOCHASTIC (the writer samples; critic/fact-check judge
 one sampled tweet), one kill is deliberately NOT enough to suppress a story —

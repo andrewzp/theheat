@@ -212,6 +212,12 @@ const METADATA_JSON_KEYS = [
   "data_source_failures",
   "source_health",
   "publish_ledger",
+  // Per-day LLM usage ledger (economics P0.6) — was missing from this
+  // allowlist since #445; a dashboard sqlite round-trip silently dropped it.
+  "llm_usage",
+  // Cross-cycle negative cache (economics P1.3) — durable; dropping it on a
+  // dashboard sqlite round-trip would re-open the re-attempt burn (codex r8).
+  "writer_negative_cache",
   "_state_rev",
 ]
 

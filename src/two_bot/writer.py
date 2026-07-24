@@ -106,6 +106,12 @@ def _parse_writer_json(raw: str) -> WriterResult:
             peer_comparison_used=parsed.get("peer_comparison_used"),
             reasoning=parsed.get("reasoning") or "",
             cited_impact=cited_impact if isinstance(cited_impact, bool) else None,
+            # A parsed tweet=null is the MODEL's editorial verdict — the only
+            # writer-kill class the negative cache may arm on (codex r8).
+            # Every other kill constructor in this module (out-of-scope,
+            # JSON-parse exhaustion, length exhaustion) leaves the default
+            # False.
+            kill_is_editorial=parsed.get("tweet") is None,
         )
     except TypeError as exc:
         raise ValueError("Writer response is missing required fields") from exc
