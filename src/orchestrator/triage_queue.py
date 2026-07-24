@@ -237,6 +237,11 @@ def _refill_drain(
     from src.orchestrator import funnel as _funnel
     from src.orchestrator import triage as _triage
     from src.orchestrator.draft_save import can_draft_candidate
+    from src.two_bot import negative_cache as _negcache
+
+    # Economics P1.3: sweep TTL-expired negative-cache entries once per drain
+    # so the skip predicate below only ever consults live entries.
+    _negcache.prune(bot_state)
 
     try:
         ranked = _triage.select_survivors(bot_state, queue, refill=True)
@@ -298,6 +303,18 @@ def _refill_drain(
         # can_draft_candidate wouldn't catch it). (codex)
         if candidate.event_id and candidate.event_id in attempted_event_ids:
             _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
+            continue
+
+        # Economics P1.3: cross-CYCLE analog of the check above. An event
+        # killed at a paid stage in a recent cycle with byte-identical
+        # material facts re-enters the queue every cycle (sources re-emit
+        # persistent events) and would re-die at the same gate. Skip it as a
+        # $0 pre-writer kill until its facts change or the TTL lapses.
+        negcache_reason = _negcache.should_skip(
+            bot_state, candidate.event_id, candidate.bundle
+        )
+        if negcache_reason is not None:
+            _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 
         category = getattr(getattr(candidate, "bundle", None), "signal_kind", "") or ""
@@ -378,6 +395,20 @@ def _refill_drain(
                     candidate.on_draft_success()
                 except Exception as cb_exc:  # noqa: BLE001
                     print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+        else:
+            # Economics P1.3: remember paid-stage kills so later cycles skip
+            # re-attempting this bundle while its material facts are unchanged.
+            # Transient stages (budget_exhausted, pipeline_error) and save-side
+            # rejections are deliberately not cacheable (see negative_cache).
+            kill_stage = cand_result.get("kill_stage") or ""
+            if candidate.event_id and kill_stage in _negcache.CACHEABLE_KILL_STAGES:
+                _negcache.record_kill(
+                    bot_state,
+                    candidate.event_id,
+                    _negcache.bundle_fingerprint(candidate.bundle),
+                    kill_stage,
+                    cand_result.get("kill_reason") or "",
+                )
 
         if cand_result.get("kill_stage") == "budget_exhausted":
             _abort_cycle_on_billing(

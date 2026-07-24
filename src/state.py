@@ -129,6 +129,10 @@ DEFAULT_STATE: BotState = {
     # {calls, in, cached_in, cache_write, out, usd}. Pruned to
     # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
     "llm_usage": {},
+    # Cross-cycle negative cache for paid-stage writer kills (economics P1.3):
+    # event_id → {sha, stage, reason, at, hits}. TTL'd (48h default) + capped
+    # at negative_cache.NEGATIVE_CACHE_MAX_ENTRIES — small and self-cleaning.
+    "writer_negative_cache": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -923,6 +927,38 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
         merged[day] = day_out
     for day in sorted(merged.keys())[:-LLM_USAGE_RETENTION_DAYS]:
         del merged[day]
+    return merged
+
+
+def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
+    """Union of negative-cache entries; per event_id keep the entry recorded
+    at the newest ``at`` (economics P1.3). TTL is enforced at READ time
+    (``negative_cache.should_skip``) and at drain-time prune — the merge only
+    caps size, newest-first, so a concurrent writer that recorded nothing
+    can't resurrect an unbounded store. Malformed entries are dropped."""
+    from src.two_bot.negative_cache import NEGATIVE_CACHE_MAX_ENTRIES
+
+    base_d = base if isinstance(base, dict) else {}
+    nxt_d = nxt if isinstance(nxt, dict) else {}
+    merged: dict = {}
+    for event_id in set(base_d) | set(nxt_d):
+        a = base_d.get(event_id)
+        b = nxt_d.get(event_id)
+        a = a if isinstance(a, dict) and isinstance(a.get("at"), str) else None
+        b = b if isinstance(b, dict) and isinstance(b.get("at"), str) else None
+        if a is None and b is None:
+            continue
+        if a is None:
+            merged[event_id] = deepcopy(b)
+        elif b is None:
+            merged[event_id] = deepcopy(a)
+        else:
+            # ISO-8601 UTC strings compare correctly as strings.
+            merged[event_id] = deepcopy(a if str(a["at"]) >= str(b["at"]) else b)
+    if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
+        oldest_first = sorted(merged.keys(), key=lambda k: str(merged[k].get("at") or ""))
+        for key in oldest_first[: len(merged) - NEGATIVE_CACHE_MAX_ENTRIES]:
+            del merged[key]
     return merged
 
 
@@ -1888,6 +1924,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "publish_ledger": _strat_dict_overlay,
     "tweet_metrics": _merge_tweet_metrics,
     "llm_usage": _merge_llm_usage,
+    "writer_negative_cache": _merge_writer_negative_cache,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),

@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P1.3 — cross-cycle negative cache for paid-stage kills (2026-07-23)
+
+- **(cost control, pre-writer)**: `src/two_bot/negative_cache.py` +
+  `state["writer_negative_cache"]` — an event killed at a paid stage
+  (writer/critic/fact-check/safety/honesty gates) is skipped as a $0
+  `negative_cache` pre-writer kill on later cycles while its bundle
+  fingerprint (sha256 of the canonical bundle JSON — exactly what the writer
+  would see) is unchanged and the entry is under the TTL
+  (`THEHEAT_NEGATIVE_CACHE_TTL_H`, default 48h). Changed facts re-open the
+  lane immediately. Transient stages (`budget_exhausted`, `pipeline_error`)
+  and save-side rejections are never cached. Kill-switch:
+  `THEHEAT_NEGATIVE_CACHE_ENABLED=0` (default ON). Store is capped at 200
+  entries, newest-first, pruned at drain start and in the state merge.
+  Week-1 post-restore funnel showed the pre-registered trigger (same event
+  re-killed at the writer across cycles) at ~67 writer calls/day vs the $14
+  budget — this is the plan's data-gated P1.3, now data-justified.
+
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 
 - **(ops, workflow-only)**: restored the three `bot.yml` crons (hourly

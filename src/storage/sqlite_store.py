@@ -178,6 +178,9 @@ _METADATA_JSON_KEYS = (
     # Per-day LLM usage ledger (economics P0.6) — must persist or every
     # sqlite round-trip zeroes the month's spend history.
     "llm_usage",
+    # Cross-cycle negative cache (economics P1.3) — must persist or every
+    # sqlite round-trip forgets paid-stage kills and the re-attempt burn returns.
+    "writer_negative_cache",
     "_state_rev",
     # Reanalysis regional-anomaly onset guard — must persist (§E) so a sustained
     # spell stays suppressed across restarts. The transient _reganom_live_cache is
