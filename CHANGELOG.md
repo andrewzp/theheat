@@ -25,8 +25,17 @@ All notable changes to this project will be documented in this file.
   post-pipeline cyclone-advisory safety kill now populates
   `result_out.kill_stage="safety"` (was invisible as `save_rejected`).
   Kill-switch: `THEHEAT_NEGATIVE_CACHE_ENABLED=0`; knobs: `..._TTL_H`,
-  `..._MIN_KILLS`. Week-1 post-restore funnel showed the plan's
-  pre-registered trigger at ~67 writer calls/day vs the $14 budget.
+  `..._MIN_KILLS` (floor 2 — the one-kill invariant is not tunable). Codex
+  r2 hardening: decision epoch folds in repo VERSION (any shipped gate/code
+  change rotates it) + `THEHEAT_CRITIC_ENABLED` (disabling an over-killing
+  critic reopens candidates); expired evidence never resurrects (a
+  TTL-stale prior kill restarts the count); entry validation is semantic
+  (cacheable stage required, true-int kills in clamp, non-empty epoch);
+  eviction sorts parsed instants, not ISO strings; the deterministic
+  out-of-scope writer guard (earthquakes — no model call) never enters the
+  cache; reads are strictly non-mutating. Week-1 post-restore funnel showed
+  the plan's pre-registered trigger at ~67 writer calls/day vs the $14
+  budget.
 
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 

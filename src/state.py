@@ -977,7 +977,13 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
             continue  # TTL-expired (or future-stamped) — do not resurrect
         merged[event_id] = chosen
     if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
-        oldest_first = sorted(merged.keys(), key=lambda k: str(merged[k].get("at") or ""))
+        # Parsed-instant sort (codex r2 P2): raw ISO strings with mixed
+        # offsets would evict newer instants over older ones.
+        def _instant(key: str) -> datetime:
+            at = parse_at(merged[key].get("at"))
+            return at if at is not None else datetime.min.replace(tzinfo=UTC)
+
+        oldest_first = sorted(merged.keys(), key=_instant)
         for key in oldest_first[: len(merged) - NEGATIVE_CACHE_MAX_ENTRIES]:
             del merged[key]
     return merged

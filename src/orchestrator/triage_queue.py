@@ -402,8 +402,19 @@ def _refill_drain(
             # re-attempting this bundle while its material facts are unchanged.
             # Transient stages (budget_exhausted, pipeline_error) and save-side
             # rejections are deliberately not cacheable (see negative_cache).
+            # The deterministic out-of-scope guard (earthquakes) reports
+            # kill_stage="writer" WITHOUT a model call — recording it would
+            # claim savings that never existed (codex r2 P2), so those
+            # signal_kinds never enter the cache.
+            from src.two_bot.writer import OUT_OF_SCOPE_SIGNAL_KINDS
+
             kill_stage = cand_result.get("kill_stage") or ""
-            if candidate.event_id and kill_stage in _negcache.CACHEABLE_KILL_STAGES:
+            signal_kind = getattr(candidate.bundle, "signal_kind", "") or ""
+            if (
+                candidate.event_id
+                and kill_stage in _negcache.CACHEABLE_KILL_STAGES
+                and signal_kind not in OUT_OF_SCOPE_SIGNAL_KINDS
+            ):
                 _negcache.record_kill(
                     bot_state,
                     candidate.event_id,

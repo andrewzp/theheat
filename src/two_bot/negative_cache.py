@@ -82,15 +82,16 @@ def ttl_hours() -> float:
 
 def min_kills() -> int:
     """Kills of the same (facts, epoch) required before the skip activates.
-    Default 2: one stochastic kill must never suppress a story (supply is
-    the bottleneck); two independent samplings dead on identical facts is
-    strong evidence the third buys nothing."""
+    Default 2; the FLOOR is also 2 — "one stochastic kill never suppresses a
+    story" is an invariant, not a tunable (codex r2 P1): supply is the
+    bottleneck, and a mis-set env var must not quietly re-open that failure
+    mode. The knob only goes UP (more evidence required)."""
     raw = os.environ.get("THEHEAT_NEGATIVE_CACHE_MIN_KILLS", "").strip()
     try:
         value = int(raw) if raw else _DEFAULT_MIN_KILLS
     except ValueError:
         return _DEFAULT_MIN_KILLS
-    return max(1, min(value, 10))
+    return max(2, min(value, 10))
 
 
 def bundle_fingerprint(bundle: Any) -> str:
@@ -107,29 +108,47 @@ def bundle_fingerprint(bundle: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-_PROMPT_SHA: str | None = None
+_STATIC_EPOCH: str | None = None
 
 
 def decision_epoch() -> str:
-    """Fingerprint of the non-bundle decision context: writer model, writer
-    system prompt, and the sampling/revise flags. Any change rotates the
-    epoch and implicitly invalidates every cached kill (codex r1 P1). Env
-    flags are read per call (cheap) so tests and cycle-level flag flips take
-    effect immediately; the prompt sha is computed once per process."""
-    global _PROMPT_SHA
-    try:
-        if _PROMPT_SHA is None:
-            from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+    """Fingerprint of the non-bundle decision context (codex r1+r2 P1):
 
-            _PROMPT_SHA = hashlib.sha256(
+    - STATIC per deploy: repo VERSION (every code PR bumps it — so ANY
+      shipped change to the writer/critic/fact-check/safety/honesty code or
+      prompts rotates the epoch), the writer model id, and the writer
+      system-prompt sha (belt-and-braces; prompt edits ride code PRs).
+    - RUNTIME flags, read per call so cycle-level flips take effect
+      immediately: writer samples, critic-revise, and THEHEAT_CRITIC_ENABLED
+      (disabling an over-killing critic MUST reopen cached candidates).
+
+    The MemorySlice is deliberately excluded (see module docstring): its
+    rotating fields would neuter the cache; min_kills + TTL bound that
+    residual staleness. Returns "" on failure (callers no-op)."""
+    global _STATIC_EPOCH
+    try:
+        if _STATIC_EPOCH is None:
+            from pathlib import Path
+
+            from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
+            from src.two_bot.writer import WRITER_MODEL
+
+            prompt_sha = hashlib.sha256(
                 WRITER_SYSTEM_PROMPT.encode("utf-8")
             ).hexdigest()[:16]
-        from src.two_bot.writer import WRITER_MODEL
-
+            try:
+                version = (
+                    Path(__file__).resolve().parents[2].joinpath("VERSION")
+                    .read_text().strip()
+                )
+            except OSError:
+                version = "unknown"
+            _STATIC_EPOCH = f"{version}|{WRITER_MODEL}|{prompt_sha}"
         samples = os.environ.get("THEHEAT_WRITER_SAMPLES", "").strip()
         revise = os.environ.get("THEHEAT_CRITIC_REVISE_ENABLED", "").strip()
+        critic = os.environ.get("THEHEAT_CRITIC_ENABLED", "").strip()
         return hashlib.sha256(
-            f"{WRITER_MODEL}|{_PROMPT_SHA}|s={samples}|r={revise}".encode()
+            f"{_STATIC_EPOCH}|s={samples}|r={revise}|c={critic}".encode()
         ).hexdigest()[:16]
     except Exception as exc:  # noqa: BLE001
         print(f"[negative_cache] epoch error (ignored): {exc!r}")
@@ -137,11 +156,19 @@ def decision_epoch() -> str:
 
 
 def _cache_dict(bot_state: Any) -> dict:
+    """WRITE-path getter: ensures the key exists. Read paths must use
+    ``_cache_view`` — inserting on read made should_skip impure (codex r2)."""
     cache = bot_state.get("writer_negative_cache") if hasattr(bot_state, "get") else None
     if not isinstance(cache, dict):
         cache = {}
         bot_state["writer_negative_cache"] = cache
     return cache
+
+
+def _cache_view(bot_state: Any) -> dict:
+    """READ-path getter: never mutates state; missing/corrupt → empty view."""
+    cache = bot_state.get("writer_negative_cache") if hasattr(bot_state, "get") else None
+    return cache if isinstance(cache, dict) else {}
 
 
 def parse_at(raw: object) -> datetime | None:
@@ -159,16 +186,29 @@ def parse_at(raw: object) -> datetime | None:
 
 
 def valid_entry(entry: object) -> bool:
-    """Structural validity shared by the merge and read paths: malformed
-    entries are dropped, never trusted (codex r1 P2)."""
+    """Structural validity shared by the merge and read paths: malformed or
+    out-of-contract entries are dropped, never trusted (codex r1+r2 P2).
+    Beyond shape this enforces the SEMANTIC contract: the stage must be one
+    this cache is allowed to hold (a structurally-clean ``budget_exhausted``
+    row from a corrupt overlay must not suppress), kills is a true int
+    (bool is an int subclass) inside the clamp, and the epoch is non-empty
+    (an empty epoch means the decision context was unknowable)."""
+    if not isinstance(entry, dict):
+        return False
+    sha = entry.get("sha")
+    epoch = entry.get("epoch")
+    stage = entry.get("stage")
+    kills = entry.get("kills")
     return (
-        isinstance(entry, dict)
-        and isinstance(entry.get("sha"), str)
-        and bool(entry.get("sha"))
-        and isinstance(entry.get("epoch"), str)
+        isinstance(sha, str)
+        and len(sha) == 64
+        and isinstance(epoch, str)
+        and bool(epoch)
+        and isinstance(stage, str)
+        and stage in CACHEABLE_KILL_STAGES
         and parse_at(entry.get("at")) is not None
-        and isinstance(entry.get("kills"), int)
-        and entry.get("kills", 0) >= 1
+        and type(kills) is int
+        and 1 <= kills <= _KILLS_CLAMP
     )
 
 
@@ -188,7 +228,7 @@ def should_skip(
     try:
         if not enabled() or not event_id:
             return None
-        entry = _cache_dict(bot_state).get(event_id)
+        entry = _cache_view(bot_state).get(event_id)
         if not valid_entry(entry):
             return None
         assert isinstance(entry, dict)
@@ -239,6 +279,7 @@ def record_kill(
             return
         cache = _cache_dict(bot_state)
         prior = cache.get(event_id)
+        current = now or datetime.now(timezone.utc)
         kills = 1
         if (
             valid_entry(prior)
@@ -246,13 +287,22 @@ def record_kill(
             and prior.get("sha") == sha
             and prior.get("epoch") == epoch
         ):
-            kills = min(int(prior.get("kills") or 0) + 1, _KILLS_CLAMP)
+            # Evidence must itself be FRESH: a prior kill older than the TTL
+            # is expired evidence — incrementing it would let two kills 60h
+            # apart activate the skip (codex r2: expired-evidence
+            # resurrection). Stale prior → the count restarts at 1.
+            prior_at = parse_at(prior.get("at"))
+            if (
+                prior_at is not None
+                and timedelta(0) <= (current - prior_at) <= timedelta(hours=ttl_hours())
+            ):
+                kills = min(int(prior.get("kills") or 0) + 1, _KILLS_CLAMP)
         cache[event_id] = {
             "sha": sha,
             "epoch": epoch,
             "stage": str(stage)[:_STAGE_MAX_LEN],
             "reason": str(reason or "")[:_REASON_MAX_LEN],
-            "at": (now or datetime.now(timezone.utc)).isoformat(),
+            "at": current.isoformat(),
             "kills": kills,
         }
         prune(bot_state, now=now)
@@ -279,9 +329,14 @@ def prune(bot_state: Any, *, now: datetime | None = None) -> int:
                 del cache[key]
                 removed += 1
         if len(cache) > NEGATIVE_CACHE_MAX_ENTRIES:
-            oldest_first = sorted(
-                cache.keys(), key=lambda k: str(cache[k].get("at") or "")
-            )
+            # Sort by PARSED instant, not the raw string — mixed offsets
+            # would otherwise evict a newer instant over an older one
+            # (codex r2 P2). Everything here survived valid_entry above.
+            def _instant(key: str) -> datetime:
+                at = parse_at(cache[key].get("at"))
+                return at if at is not None else datetime.min.replace(tzinfo=timezone.utc)
+
+            oldest_first = sorted(cache.keys(), key=_instant)
             for key in oldest_first[: len(cache) - NEGATIVE_CACHE_MAX_ENTRIES]:
                 del cache[key]
                 removed += 1
