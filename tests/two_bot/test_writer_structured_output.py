@@ -114,3 +114,78 @@ def test_parse_accepts_schema_shaped_kill(monkeypatch):
     assert result.tweet is None
     assert result.kill_reason == "no extraordinary angle"
     assert result.cited_impact is None
+
+
+# ------------------------------------------------- refusal / empty content
+
+from src.two_bot.types import MemorySlice, StoryBundle  # noqa: E402
+
+
+def _bundle() -> StoryBundle:
+    return StoryBundle(
+        signal_kind="fire", where="Testville", when="2026-07-23",
+        event_id="evt-refusal", headline_metric={"label": "FRP", "value": 100},
+        current_facts=[],
+    )
+
+
+def _fake_anthropic_factory(monkeypatch, responses: list):
+    """Patch anthropic.Anthropic so each create() pops the next canned
+    (stop_reason, content_blocks) pair. Codex r1 P1: an empty-content
+    refusal is a SUCCESSFUL response — it must route into the JSON-retry
+    lane, never raise IndexError into pipeline_error."""
+    import anthropic
+
+    calls: list = []
+
+    class _FakeMessages:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            stop_reason, content = responses.pop(0)
+            response = MagicMock()
+            response.stop_reason = stop_reason
+            response.content = content
+            return response
+
+    class _FakeAnthropic:
+        def __init__(self, *args, **kwargs):
+            self.messages = _FakeMessages()
+
+    monkeypatch.setattr(anthropic, "Anthropic", _FakeAnthropic)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    return calls
+
+
+def test_persistent_refusal_becomes_clean_writer_kill(monkeypatch):
+    """Every attempt refused with empty content → clean KILL with a reason
+    (tweet=None), not an exception escaping to pipeline_error."""
+    _fake_anthropic_factory(
+        monkeypatch,
+        [("refusal", [])] * (writer.JSON_PARSE_RETRY_BUDGET + 1),
+    )
+    result = writer.write_tweet(_bundle(), MemorySlice())
+    assert result.tweet is None
+    assert result.kill_reason is not None
+    assert "invalid JSON" in result.kill_reason
+
+
+def test_empty_content_recovers_on_parse_retry(monkeypatch):
+    """First response empty, second valid → the retry lane recovers and the
+    tweet ships (no lost supply on a one-off empty response)."""
+    from anthropic.types import TextBlock
+
+    good = TextBlock(
+        text=(
+            '{"tweet":"Testville hit a number.","kill_reason":null,'
+            '"angle_chosen":"plain_number","era_anchor_used":null,'
+            '"peer_comparison_used":null,"reasoning":"fits",'
+            '"cited_impact":null}'
+        ),
+        type="text",
+    )
+    calls = _fake_anthropic_factory(
+        monkeypatch, [("end_turn", []), ("end_turn", [good])]
+    )
+    result = writer.write_tweet(_bundle(), MemorySlice())
+    assert result.tweet == "Testville hit a number."
+    assert len(calls) == 2

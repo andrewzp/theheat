@@ -15,9 +15,14 @@ All notable changes to this project will be documented in this file.
   against ~36 design attempts, and the JSON lane was one of the two
   multipliers. The 280-char cap deliberately stays in the length-retry lane
   (`maxLength` is not enforced server-side). Schema includes `cited_impact`
-  (required-with-null): with `additionalProperties: false`, omitting it would
-  have rejected every Bet-A impact-lane draft. Prompt text, model, gates, and
-  the Gemini fallback are unchanged.
+  (required-with-null): with `additionalProperties: false`, omitting it from
+  the schema would suppress the writer's citation self-report and force every
+  Bet-A impact-lane draft down the conservative manual-review path. Refusal
+  hardening rode along (codex r1 P1): an empty-content `stop_reason: refusal`
+  response — a successful HTTP 200 — now routes into the JSON-retry →
+  clean-KILL lane instead of escaping as an `IndexError` pipeline_error;
+  `anthropic>=0.77` floor pinned (output_config arrival). Prompt text, model,
+  gates, and the Gemini fallback are unchanged.
 
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 

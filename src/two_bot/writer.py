@@ -213,6 +213,22 @@ def _call_anthropic(user_prompt: str) -> str:
             )
     except Exception as exc:  # noqa: BLE001 — accounting never breaks the call
         print(f"[usage_ledger] anthropic usage extraction error (ignored): {exc!r}")
+    # Refusal / empty-content route (codex r1 P1): a safety refusal is a
+    # SUCCESSFUL HTTP 200 whose content may be EMPTY (and, with structured
+    # outputs, need not match the schema). Indexing content[0] here raised
+    # IndexError → pipeline_error, bypassing the JSON-retry → clean-KILL net
+    # this path advertises. Returning "" routes it into exactly that net:
+    # _parse_writer_json("") raises ValueError, the parse lane retries once,
+    # and an unresolved refusal becomes a clean writer KILL with a reason —
+    # the same contract as the 2026-05-12 empty-output incident this lane
+    # was built for.
+    if getattr(response, "stop_reason", None) == "refusal" or not response.content:
+        print(
+            f"[two_bot.writer] Anthropic returned "
+            f"{'refusal' if getattr(response, 'stop_reason', None) == 'refusal' else 'empty content'}"
+            f" (stop_reason={getattr(response, 'stop_reason', None)!r})"
+        )
+        return ""
     # response.content is a list of block types — narrow to TextBlock.
     # We don't request thinking / tool use, so the first block is always text;
     # the explicit check is for static type safety + future-proofing.
