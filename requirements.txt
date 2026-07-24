@@ -1,7 +1,9 @@
 tweepy>=4.14,<5
 atproto>=0.0.61
 google-genai>=1.0
-anthropic>=0.42
+# >=0.77: output_config (structured outputs) reaches messages.create — an
+# older satisfied env would TypeError on the kwarg outside every retry lane.
+anthropic>=0.77
 requests>=2.31
 Pillow==12.2.0
 # GPM IMERG alternate fetch (THEHEAT_GPM_SOURCE=datapool|s3): single daily-grid
