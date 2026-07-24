@@ -68,7 +68,7 @@ def _writer_kill_fake(calls: list):
     return fake_try
 
 
-def _run_refill(monkeypatch, bot_state, queue, fake_try):
+def _run_refill(monkeypatch, bot_state, queue, fake_try, *, funnel_sink=None):
     from src.orchestrator import common
 
     bot_state["_triage_queue"] = list(queue)
@@ -76,7 +76,9 @@ def _run_refill(monkeypatch, bot_state, queue, fake_try):
     monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
     monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "1")
     monkeypatch.setattr(common, "_try_two_bot_draft", fake_try)
-    return common._drain_and_write_triage_queue(bot_state, current_run)
+    return common._drain_and_write_triage_queue(
+        bot_state, current_run, funnel_sink=funnel_sink
+    )
 
 
 # ---------------------------------------------------------------- unit layer
@@ -329,6 +331,23 @@ def test_epoch_rotates_on_gate_model_change(monkeypatch):
     assert e1 and e2 and e1 != e2
 
 
+def test_epoch_rotates_on_safety_llm_change(monkeypatch):
+    """Safety's Layer-2 is a Gemini LLM whenever the module holds a key —
+    its model and enabled-state are verdict context (codex r4 P1)."""
+    from src.voice import safety as safety_mod
+
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setattr(safety_mod, "GEMINI_SAFETY_MODEL", "gemini-9.9-safety-test")
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+    # Enabled-state flip (key present <-> absent) also rotates.
+    monkeypatch.setattr(safety_mod, "GEMINI_API_KEY", "")
+    e3 = negative_cache.decision_epoch()
+    monkeypatch.setattr(safety_mod, "GEMINI_API_KEY", "test-key")
+    e4 = negative_cache.decision_epoch()
+    assert e3 != e4
+
+
 def test_version_read_failure_disables_caching(monkeypatch):
     """A VERSION read failure must fail OPEN (epoch "", cache no-ops) — a
     stable "unknown" epoch would defeat deploy rotation (codex r3 P2)."""
@@ -409,9 +428,11 @@ def test_duplicate_queue_rows_count_one_cache_skip(monkeypatch):
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
     # Cycle 3: the SAME event appears twice in the ranked queue.
+    funnel_sink: dict = {"_slate_ids": {"e1"}}
     _run_refill(
         monkeypatch, bot_state,
         [_candidate(event_id="e1"), _candidate(event_id="e1")], fake,
+        funnel_sink=funnel_sink,
     )
     assert calls == ["e1", "e1"], "no paid attempts in cycle 3"
     rows = bot_state.get("suppressions", [])
@@ -425,6 +446,9 @@ def test_duplicate_queue_rows_count_one_cache_skip(monkeypatch):
     ]
     assert len(negcache_rows) == 1, "exactly one skip replaced a potential writer call"
     assert len(dup_rows) == 1, "the duplicate row is a duplicate_draft, not a second skip"
+    # First terminal wins (codex r4 P2): the duplicate row must not
+    # overwrite the event's slate terminal.
+    assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
 
 
 def test_refill_drain_reattempts_when_facts_change(monkeypatch):

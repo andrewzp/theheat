@@ -281,7 +281,14 @@ def _refill_drain(
             kill_reason=reason,
             summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
         )
-        if sink_active:
+        # First terminal wins (codex P1.3 r4 P2, mirroring the billing-abort
+        # rule): record_slate_terminal is last-write-wins, so a duplicate
+        # queue row's later kill (e.g. duplicate_draft after a
+        # negative_cache skip) must not overwrite the event's true outcome.
+        # The suppression row above still records every kill.
+        if sink_active and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
 
     def _cut(candidate: "TriageCandidateBundle", reason: str) -> None:

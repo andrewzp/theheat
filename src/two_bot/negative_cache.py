@@ -141,6 +141,7 @@ def decision_epoch() -> str:
         from src.two_bot.critic import CRITIC_MODEL
         from src.two_bot.fact_check import FACT_CHECKER_MODEL
         from src.two_bot.writer import WRITER_MODEL
+        from src.voice import safety as _safety
 
         version = (
             Path(__file__).resolve().parents[2].joinpath("VERSION")
@@ -151,8 +152,16 @@ def decision_epoch() -> str:
         samples = os.environ.get("THEHEAT_WRITER_SAMPLES", "").strip()
         revise = os.environ.get("THEHEAT_CRITIC_REVISE_ENABLED", "").strip()
         critic = os.environ.get("THEHEAT_CRITIC_ENABLED", "").strip()
+        # Safety's Layer-2 is a Gemini LLM whenever the module sees a key
+        # (codex r4 P1) — its model AND its effective enabled-state are
+        # verdict context. Read the MODULE attributes safety actually gates
+        # on (not the env directly) so the epoch matches the gate's own
+        # behavior; the key VALUE never enters the hash input.
+        GEMINI_SAFETY_MODEL = _safety.GEMINI_SAFETY_MODEL
+        safety_on = "1" if getattr(_safety, "GEMINI_API_KEY", "") else "0"
         return hashlib.sha256(
             f"{version}|{WRITER_MODEL}|{CRITIC_MODEL}|{FACT_CHECKER_MODEL}|"
+            f"{GEMINI_SAFETY_MODEL}|g={safety_on}|"
             f"{_PROMPT_SHA}|s={samples}|r={revise}|c={critic}".encode()
         ).hexdigest()[:16]
     except Exception as exc:  # noqa: BLE001
