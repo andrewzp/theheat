@@ -295,7 +295,13 @@ def _refill_drain(
         _triage._record_triage_suppression(
             bot_state, candidate, cap=per_cat_cap, global_cap=target, reason=reason,
         )
-        if sink_active:
+        # First terminal wins here too (codex P1.3 r5 P2): once the ceiling
+        # is reached, a trailing duplicate of an event that already resolved
+        # (e.g. negative_cache) must not have its terminal overwritten with
+        # triage_cap.
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
     drafted_count = 0

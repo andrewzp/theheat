@@ -451,6 +451,39 @@ def test_duplicate_queue_rows_count_one_cache_skip(monkeypatch):
     assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
 
 
+def test_ceiling_cut_preserves_resolved_terminal(monkeypatch):
+    """Non-adjacent duplicate past the drafts ceiling: _cut()'s triage_cap
+    must not overwrite an event's resolved negative_cache terminal
+    (codex r5 P2)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setenv("THEHEAT_DRAFTS_TARGET_PER_CYCLE", "1")
+    bot_state = _fresh_state()
+    kill_calls: list = []
+    kill_fake = _writer_kill_fake(kill_calls)
+    # Arm the cache for e1 with two kill cycles.
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], kill_fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], kill_fake)
+
+    def mixed_fake(bundle, state, score, *, result_out=None, **kwargs):
+        if bundle.event_id == "e2":
+            return True  # drafts — hits the target ceiling of 1
+        if result_out is not None:
+            result_out["kill_stage"] = "writer"
+            result_out["kill_reason"] = "kill"
+        return False
+
+    funnel_sink: dict = {"_slate_ids": {"e1", "e2"}}
+    # Queue: e1 (cached → skip, terminal resolves), e2 (drafts → ceiling),
+    # then a NON-ADJACENT duplicate e1 that lands in _cut(global_cap).
+    _run_refill(
+        monkeypatch, bot_state,
+        [_candidate(event_id="e1"), _candidate(event_id="e2"),
+         _candidate(event_id="e1")],
+        mixed_fake, funnel_sink=funnel_sink,
+    )
+    assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
+
+
 def test_refill_drain_reattempts_when_facts_change(monkeypatch):
     monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
     bot_state = _fresh_state()

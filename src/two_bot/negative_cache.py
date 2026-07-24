@@ -118,9 +118,10 @@ def decision_epoch() -> str:
       writer/critic/fact-check/safety/honesty code or prompts rotates the
       epoch). A VERSION read failure returns "" — fail-open/no-op, NOT a
       stable "unknown" that would defeat deploy rotation (codex r3).
-    - The effective verdict-producing model ids: writer, critic, and
-      fact-checker (module constants resolve their env overrides), plus the
-      writer system-prompt sha (cached — the only expensive input).
+    - The effective verdict-producing model ids: writer, critic,
+      fact-checker, AND the safety Layer-2 Gemini model with its
+      enabled-state (module constants resolve their env overrides), plus
+      the writer system-prompt sha (cached — the only expensive input).
     - Runtime flags read per call: writer samples, critic-revise, and
       THEHEAT_CRITIC_ENABLED (disabling an over-killing critic MUST reopen
       cached candidates).
