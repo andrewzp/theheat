@@ -8,18 +8,25 @@ All notable changes to this project will be documented in this file.
 
 - **(cost control, pre-writer)**: `src/two_bot/negative_cache.py` +
   `state["writer_negative_cache"]` — an event killed at a paid stage
-  (writer/critic/fact-check/safety/honesty gates) is skipped as a $0
-  `negative_cache` pre-writer kill on later cycles while its bundle
-  fingerprint (sha256 of the canonical bundle JSON — exactly what the writer
-  would see) is unchanged and the entry is under the TTL
-  (`THEHEAT_NEGATIVE_CACHE_TTL_H`, default 48h). Changed facts re-open the
-  lane immediately. Transient stages (`budget_exhausted`, `pipeline_error`)
-  and save-side rejections are never cached. Kill-switch:
-  `THEHEAT_NEGATIVE_CACHE_ENABLED=0` (default ON). Store is capped at 200
-  entries, newest-first, pruned at drain start and in the state merge.
-  Week-1 post-restore funnel showed the pre-registered trigger (same event
-  re-killed at the writer across cycles) at ~67 writer calls/day vs the $14
-  budget — this is the plan's data-gated P1.3, now data-justified.
+  (writer/critic/fact-check/safety/honesty gates) **`min_kills` times
+  (default 2)** on a byte-identical bundle fingerprint under the same
+  **decision epoch** (writer model + system-prompt sha + sampling/revise
+  flags) is skipped as a $0 `negative_cache` pre-writer kill until its facts
+  change, the epoch rotates, or the TTL lapses
+  (`THEHEAT_NEGATIVE_CACHE_TTL_H`, default 48h). One stochastic kill never
+  suppresses a story — supply is the bottleneck; two independent samplings
+  dead on identical facts activate the skip, saving the modal waste
+  (attempts 3+ at ~6 cycles/day). The read predicate is pure; TTL/validity
+  pruning runs in the drain AND inside the state merge (stale overlays
+  can't resurrect deleted entries); the check sits at the paid boundary,
+  after every cheaper $0 predicate, so savings are never misattributed
+  (all per codex r1). Transient stages (`budget_exhausted`,
+  `pipeline_error`) and save-side rejections are never cached; the
+  post-pipeline cyclone-advisory safety kill now populates
+  `result_out.kill_stage="safety"` (was invisible as `save_rejected`).
+  Kill-switch: `THEHEAT_NEGATIVE_CACHE_ENABLED=0`; knobs: `..._TTL_H`,
+  `..._MIN_KILLS`. Week-1 post-restore funnel showed the plan's
+  pre-registered trigger at ~67 writer calls/day vs the $14 budget.
 
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 

@@ -305,18 +305,6 @@ def _refill_drain(
             _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
             continue
 
-        # Economics P1.3: cross-CYCLE analog of the check above. An event
-        # killed at a paid stage in a recent cycle with byte-identical
-        # material facts re-enters the queue every cycle (sources re-emit
-        # persistent events) and would re-die at the same gate. Skip it as a
-        # $0 pre-writer kill until its facts change or the TTL lapses.
-        negcache_reason = _negcache.should_skip(
-            bot_state, candidate.event_id, candidate.bundle
-        )
-        if negcache_reason is not None:
-            _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
-            continue
-
         category = getattr(getattr(candidate, "bundle", None), "signal_kind", "") or ""
         draft_type = getattr(candidate, "legacy_type", "") or ""
 
@@ -354,6 +342,20 @@ def _refill_drain(
         can_draft, reason = can_draft_candidate(bot_state, candidate)
         if not can_draft:
             _pre_writer_kill(candidate, reason, f"pre-writer: {reason}")
+            continue
+
+        # Economics P1.3: LAST $0 predicate, immediately before the paid
+        # boundary (codex r1 P2: checking earlier let cheaper deterministic
+        # kills — caps, cooldowns, dup-events — be misattributed to the
+        # cache, overstating its savings). An event killed at a paid stage
+        # min_kills+ times on byte-identical facts under the current decision
+        # epoch re-enters the queue every cycle; skip re-buying it until its
+        # facts change, the epoch rotates, or the TTL lapses.
+        negcache_reason = _negcache.should_skip(
+            bot_state, candidate.event_id, candidate.bundle
+        )
+        if negcache_reason is not None:
+            _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 
         _bump_source_field_in_run(current_run, candidate.source, "triaged_out")

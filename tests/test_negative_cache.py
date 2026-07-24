@@ -1,12 +1,14 @@
 """Economics P1.3: cross-cycle negative cache for paid-stage writer kills.
 
-Pins the contract: a candidate killed at a paid stage (writer/critic/
-fact-check/safety/honesty) is skipped as a $0 ``negative_cache`` pre-writer
-kill on later cycles while its material facts are byte-identical and the
-entry is inside the TTL; changed facts, TTL expiry, transient stages, and
-the kill-switch all re-open the lane. The store is capped and self-pruning,
-and the state merge keeps the newest entry per event without resurrecting
-an unbounded store.
+Pins the hardened contract (codex r1): the skip activates only after
+``min_kills`` (default 2) kills of the same (event_id, bundle sha, decision
+epoch) — one stochastic kill never suppresses a story; changed facts or a
+rotated decision epoch (model/prompt/flags) restart the evidence; the read
+predicate is pure; TTL expiry, malformed entries, and the size cap are
+enforced in the drain prune AND inside the state merge (no resurrection
+from stale overlays); the drain checks the cache as the LAST $0 predicate
+before the paid boundary so cheaper deterministic kills are never
+misattributed to it.
 """
 
 from __future__ import annotations
@@ -48,6 +50,13 @@ def _candidate(*, event_id: str, dhw: int = 8, total: int = 80) -> TriageCandida
     )
 
 
+def _entry(sha: str, *, at: datetime, kills: int = 2, epoch: str | None = None) -> dict:
+    return {
+        "sha": sha, "epoch": epoch if epoch is not None else negative_cache.decision_epoch(),
+        "stage": "writer", "reason": "dull", "at": at.isoformat(), "kills": kills,
+    }
+
+
 def _writer_kill_fake(calls: list):
     def fake_try(bundle, state, score, *, result_out=None, **kwargs):
         calls.append(bundle.event_id)
@@ -80,25 +89,67 @@ def test_fingerprint_is_deterministic_and_fact_sensitive():
     assert a1 == a2 and a1 != b and len(a1) == 64
 
 
-def test_record_then_skip_then_facts_change_reopens():
+def test_min_kills_gate_one_kill_never_skips():
+    """A single stochastic kill records evidence but must not suppress."""
     state = _fresh_state()
-    bundle = _bundle("e1", dhw=8)
-    negative_cache.record_kill(
-        state, "e1", negative_cache.bundle_fingerprint(bundle), "writer", "dull",
-    )
+    bundle = _bundle("e1")
+    sha = negative_cache.bundle_fingerprint(bundle)
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    assert state["writer_negative_cache"]["e1"]["kills"] == 1
+    assert negative_cache.should_skip(state, "e1", bundle) is None
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    assert state["writer_negative_cache"]["e1"]["kills"] == 2
     assert negative_cache.should_skip(state, "e1", bundle) is not None
-    # Material facts changed → fingerprint differs → re-attempt allowed.
+
+
+def test_changed_facts_restart_evidence_and_reopen():
+    state = _fresh_state()
+    sha8 = negative_cache.bundle_fingerprint(_bundle("e1", dhw=8))
+    negative_cache.record_kill(state, "e1", sha8, "writer", "dull")
+    negative_cache.record_kill(state, "e1", sha8, "writer", "dull")
+    assert negative_cache.should_skip(state, "e1", _bundle("e1", dhw=8)) is not None
+    # Facts change: no skip, and a new kill restarts the count at 1.
     assert negative_cache.should_skip(state, "e1", _bundle("e1", dhw=9)) is None
+    sha9 = negative_cache.bundle_fingerprint(_bundle("e1", dhw=9))
+    negative_cache.record_kill(state, "e1", sha9, "critic", "meh")
+    assert state["writer_negative_cache"]["e1"]["kills"] == 1
 
 
-def test_ttl_expiry_reopens_and_prune_removes(monkeypatch):
+def test_epoch_rotation_invalidates(monkeypatch):
+    """A sampling-flag flip (part of the decision epoch) reopens the lane
+    and restarts the evidence count (codex r1 P1: decision context)."""
+    state = _fresh_state()
+    bundle = _bundle("e1")
+    sha = negative_cache.bundle_fingerprint(bundle)
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    assert negative_cache.should_skip(state, "e1", bundle) is not None
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "2")
+    assert negative_cache.should_skip(state, "e1", bundle) is None
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    assert state["writer_negative_cache"]["e1"]["kills"] == 1
+
+
+def test_should_skip_is_pure():
+    """The read predicate must not mutate state (codex r1 P2)."""
+    state = _fresh_state()
+    bundle = _bundle("e1")
+    sha = negative_cache.bundle_fingerprint(bundle)
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    before = deepcopy(state["writer_negative_cache"])
+    assert negative_cache.should_skip(state, "e1", bundle) is not None
+    assert state["writer_negative_cache"] == before
+
+
+def test_ttl_expiry_reopens_and_prune_removes():
     state = _fresh_state()
     bundle = _bundle("e1")
     old = datetime.now(timezone.utc) - timedelta(hours=72)
-    negative_cache.record_kill(
-        state, "e1", negative_cache.bundle_fingerprint(bundle), "critic", "meh",
-        now=old,
-    )
+    sha = negative_cache.bundle_fingerprint(bundle)
+    negative_cache.record_kill(state, "e1", sha, "critic", "meh", now=old)
+    negative_cache.record_kill(state, "e1", sha, "critic", "meh", now=old)
     assert negative_cache.should_skip(state, "e1", bundle) is None  # 72h > 48h TTL
     removed = negative_cache.prune(state)
     assert removed == 1 and state["writer_negative_cache"] == {}
@@ -120,11 +171,7 @@ def test_kill_switch_disables_both_sides(monkeypatch):
     monkeypatch.setenv("THEHEAT_NEGATIVE_CACHE_ENABLED", "0")
     negative_cache.record_kill(state, "e1", sha, "writer", "dull")
     assert state["writer_negative_cache"] == {}
-    # Pre-existing entries stop skipping too.
-    state["writer_negative_cache"]["e1"] = {
-        "sha": sha, "stage": "writer", "reason": "dull",
-        "at": datetime.now(timezone.utc).isoformat(), "hits": 0,
-    }
+    state["writer_negative_cache"]["e1"] = _entry(sha, at=datetime.now(timezone.utc))
     assert negative_cache.should_skip(state, "e1", bundle) is None
 
 
@@ -144,33 +191,65 @@ def test_cap_evicts_oldest_first():
 # --------------------------------------------------------------- merge layer
 
 
-def test_merge_keeps_newest_per_event_and_caps():
-    now = datetime.now(timezone.utc)
-    older = {"sha": "a" * 64, "stage": "writer", "reason": "x",
-             "at": (now - timedelta(hours=2)).isoformat(), "hits": 0}
-    newer = {"sha": "b" * 64, "stage": "critic", "reason": "y",
-             "at": now.isoformat(), "hits": 3}
-    merged = _merge_writer_negative_cache({"e1": older}, {"e1": newer, "junk": "nope"})
+def test_merge_newest_wins_by_parsed_instant_not_string():
+    """An entry stamped with a +02:00 offset must lose to a LATER UTC
+    instant even though its string sorts higher (codex r1 P2)."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    utc_newer = _entry("b" * 64, at=now)
+    # Same wall-clock string minus 2h in real terms, but "2026-…+02:00"
+    # string-compares above the UTC form on many layouts.
+    offset_older = dict(
+        _entry("a" * 64, at=now),
+        at=now.astimezone(timezone(timedelta(hours=2))).replace(
+            microsecond=0
+        ).isoformat(),
+    )
+    # offset_older's instant == now; make it strictly older:
+    offset_older["at"] = (
+        (now - timedelta(hours=1)).astimezone(timezone(timedelta(hours=2))).isoformat()
+    )
+    merged = _merge_writer_negative_cache({"e1": offset_older}, {"e1": utc_newer})
     assert merged["e1"]["sha"] == "b" * 64
-    assert "junk" not in merged  # malformed entries dropped
+
+
+def test_merge_takes_max_kills_for_same_evidence():
+    now = datetime.now(timezone.utc)
+    epoch = negative_cache.decision_epoch()
+    a = _entry("c" * 64, at=now - timedelta(minutes=5), kills=3, epoch=epoch)
+    b = _entry("c" * 64, at=now, kills=2, epoch=epoch)
+    merged = _merge_writer_negative_cache({"e1": a}, {"e1": b})
+    assert merged["e1"]["kills"] == 3  # newest entry, max count
+
+
+def test_merge_does_not_resurrect_expired_and_drops_malformed():
+    """A stale overlay must not bring back TTL-expired or junk entries
+    (codex r1 P2 — reproduced pre-fix)."""
+    old = datetime.now(timezone.utc) - timedelta(hours=100)
+    expired = _entry("d" * 64, at=old)
+    merged = _merge_writer_negative_cache({"e1": expired, "junk": "nope"}, {})
+    assert merged == {}
 
 
 # --------------------------------------------------------------- drain layer
 
 
-def test_refill_drain_skips_recent_identical_kill(monkeypatch):
-    """Cycle 1 kills at the writer; cycle 2 with identical facts spends $0."""
+def test_refill_drain_two_kills_then_skip(monkeypatch):
+    """Kill 1 records; kill 2 (cycle 2) activates; cycle 3 spends $0."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
     bot_state = _fresh_state()
     calls: list = []
     fake = _writer_kill_fake(calls)
 
-    drafted = _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
-    assert drafted == 0 and calls == ["e1"]
-    assert "e1" in bot_state["writer_negative_cache"]
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1"]
+    assert bot_state["writer_negative_cache"]["e1"]["kills"] == 1
 
-    drafted = _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
-    assert drafted == 0
-    assert calls == ["e1"], "cycle 2 must not re-spend a writer call on unchanged facts"
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1", "e1"], "one kill must NOT suppress (supply safety)"
+    assert bot_state["writer_negative_cache"]["e1"]["kills"] == 2
+
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1", "e1"], "after two kills on identical facts, cycle 3 is $0"
     negcache_rows = [
         s for s in bot_state.get("suppressions", [])
         if s.get("kill_stage") == "negative_cache"
@@ -180,13 +259,16 @@ def test_refill_drain_skips_recent_identical_kill(monkeypatch):
 
 
 def test_refill_drain_reattempts_when_facts_change(monkeypatch):
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
     bot_state = _fresh_state()
     calls: list = []
     fake = _writer_kill_fake(calls)
 
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    # Two kills on dhw=8 — but the story's facts move on:
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=11)], fake)
-    assert calls == ["e1", "e1"], "changed material facts must re-open the writer lane"
+    assert calls == ["e1", "e1", "e1"], "changed material facts must re-open the lane"
 
 
 def test_refill_drain_does_not_cache_drafted_candidates(monkeypatch):
@@ -199,3 +281,80 @@ def test_refill_drain_does_not_cache_drafted_candidates(monkeypatch):
 
     _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake_success)
     assert bot_state["writer_negative_cache"] == {}
+
+
+def test_negcache_checked_only_at_the_paid_boundary(monkeypatch):
+    """When a cheaper $0 predicate (can_draft_candidate) already kills the
+    candidate, the cache must not even be consulted (codex r1 P2:
+    misattribution overstates savings)."""
+    from src.orchestrator import draft_save
+    from src.two_bot import negative_cache as negcache_mod
+
+    bot_state = _fresh_state()
+    consulted: list = []
+    real_should_skip = negcache_mod.should_skip
+
+    def spy_should_skip(*args, **kwargs):
+        consulted.append(True)
+        return real_should_skip(*args, **kwargs)
+
+    monkeypatch.setattr(negcache_mod, "should_skip", spy_should_skip)
+    monkeypatch.setattr(
+        draft_save, "can_draft_candidate", lambda state, cand: (False, "cooldown")
+    )
+    calls: list = []
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], _writer_kill_fake(calls))
+    assert calls == [], "can_draft rejection must stop before any paid attempt"
+    assert consulted == [], "negcache must not be consulted before cheaper predicates"
+
+
+def test_dispatch_advisory_safety_kill_populates_result_out(monkeypatch):
+    """The post-pipeline cyclone-advisory safety rejection must surface
+    kill_stage=safety in result_out (codex r1 P2: it read as save_rejected
+    and was invisible to the funnel and the cache)."""
+    import importlib
+
+    from src.orchestrator import two_bot_dispatch
+    from src.two_bot import pipeline as pipeline_mod
+
+    # test_main's wrappers run main._sync_compat_globals(), which pushes
+    # main's (sometimes test-patched) globals onto the orchestrator modules
+    # and never restores them — a stale fake _try_two_bot_draft can linger
+    # on this module. Reload to get the real, current function — and restore
+    # the module's ORIGINAL dict afterwards, because downstream shim tests
+    # assert object identity across common/dispatch (a reload that leaks
+    # would trade one pollution for another).
+    saved_dict = dict(two_bot_dispatch.__dict__)
+    two_bot_dispatch = importlib.reload(two_bot_dispatch)
+    try:
+        # _try_two_bot_draft imports generate_draft function-locally from the
+        # pipeline module, so the patch must land on the SOURCE module.
+        monkeypatch.setattr(
+            pipeline_mod,
+            "generate_draft",
+            lambda bundle, state, result_out=None: {
+                "text": "t", "event_id": "e1", "type": "cyclone",
+                "two_bot_metadata": {},
+            },
+        )
+        # Force the advisory append to change the text, then fail safety.
+        monkeypatch.setattr(
+            two_bot_dispatch, "_append_cyclone_advisory_url", lambda t, b, lt: t + " URL"
+        )
+        monkeypatch.setattr(
+            two_bot_dispatch, "run_safety_pipeline", lambda t: (False, "banned phrase")
+        )
+        result_out: dict = {}
+        ok = two_bot_dispatch._try_two_bot_draft(
+            _bundle("e1"), _fresh_state(), _score(), event_id="e1",
+            legacy_type="cyclone", review_context={}, result_out=result_out,
+        )
+        assert ok is False
+        assert result_out.get("kill_stage") == "safety"
+        assert "banned" in result_out.get("kill_reason", "")
+    finally:
+        # Monkeypatch teardown runs AFTER this finally and must find the
+        # attributes it saved — restore the pre-reload dict last-write-wins
+        # so shim identity tests downstream still see the original objects.
+        two_bot_dispatch.__dict__.clear()
+        two_bot_dispatch.__dict__.update(saved_dict)

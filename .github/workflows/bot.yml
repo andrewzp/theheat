@@ -263,11 +263,12 @@ jobs:
           THEHEAT_WRITER_SAMPLES: ${{ vars.THEHEAT_WRITER_SAMPLES || '1' }}
           THEHEAT_CRITIC_REVISE_ENABLED: ${{ vars.THEHEAT_CRITIC_REVISE_ENABLED || '0' }}
           # Economics P1.3 — cross-cycle negative cache for paid-stage writer
-          # kills. Code default is ON (cost control, safe-direction false
-          # positives); this is the operator kill-switch + TTL knob.
+          # kills. Code default is ON; skip activates only after MIN_KILLS
+          # kills on identical facts + decision epoch (supply safety).
           # Rollback: gh variable set THEHEAT_NEGATIVE_CACHE_ENABLED --body 0 --repo andrewzp/theheat
           THEHEAT_NEGATIVE_CACHE_ENABLED: ${{ vars.THEHEAT_NEGATIVE_CACHE_ENABLED || '1' }}
           THEHEAT_NEGATIVE_CACHE_TTL_H: ${{ vars.THEHEAT_NEGATIVE_CACHE_TTL_H || '48' }}
+          THEHEAT_NEGATIVE_CACHE_MIN_KILLS: ${{ vars.THEHEAT_NEGATIVE_CACHE_MIN_KILLS || '2' }}
           THEHEAT_MAX_DRAFTS_PER_CYCLE: ${{ vars.THEHEAT_MAX_DRAFTS_PER_CYCLE || '3' }}
           THEHEAT_ENGAGEMENT_WINDOW_ENABLED: ${{ vars.THEHEAT_ENGAGEMENT_WINDOW_ENABLED || '0' }}
           # Reanalysis regional-anomaly signal (Part B, PR #203). manual_only +

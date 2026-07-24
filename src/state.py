@@ -931,30 +931,51 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
 
 
 def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
-    """Union of negative-cache entries; per event_id keep the entry recorded
-    at the newest ``at`` (economics P1.3). TTL is enforced at READ time
-    (``negative_cache.should_skip``) and at drain-time prune — the merge only
-    caps size, newest-first, so a concurrent writer that recorded nothing
-    can't resurrect an unbounded store. Malformed entries are dropped."""
-    from src.two_bot.negative_cache import NEGATIVE_CACHE_MAX_ENTRIES
+    """Merge the cross-cycle negative cache (economics P1.3).
+
+    Per event_id: structurally VALIDATE both sides (malformed dropped, never
+    trusted), keep the entry with the newest PARSED instant (offset-safe —
+    string comparison would let a "+02:00" suffix defeat newest-wins), and
+    when both sides describe the same (sha, epoch) evidence take the MAX
+    kill count (two writers incrementing from one base under-count by the
+    smaller increment — bounded, never inflated; mirrors _merge_llm_usage).
+    TTL-expiry and the size cap are enforced HERE as well as at drain time:
+    a merge without its own prune resurrects drain-pruned entries on every
+    write from a stale overlay (codex r1 P2 — reproduced)."""
+    from src.two_bot.negative_cache import (
+        NEGATIVE_CACHE_MAX_ENTRIES,
+        parse_at,
+        ttl_hours,
+        valid_entry,
+    )
 
     base_d = base if isinstance(base, dict) else {}
     nxt_d = nxt if isinstance(nxt, dict) else {}
+    now = datetime.now(UTC)
+    ttl = timedelta(hours=ttl_hours())
     merged: dict = {}
     for event_id in set(base_d) | set(nxt_d):
         a = base_d.get(event_id)
         b = nxt_d.get(event_id)
-        a = a if isinstance(a, dict) and isinstance(a.get("at"), str) else None
-        b = b if isinstance(b, dict) and isinstance(b.get("at"), str) else None
+        a = a if valid_entry(a) else None
+        b = b if valid_entry(b) else None
         if a is None and b is None:
             continue
-        if a is None:
-            merged[event_id] = deepcopy(b)
-        elif b is None:
-            merged[event_id] = deepcopy(a)
+        if a is None or b is None:
+            chosen = deepcopy(a if b is None else b)
+            assert chosen is not None  # both-None handled above
         else:
-            # ISO-8601 UTC strings compare correctly as strings.
-            merged[event_id] = deepcopy(a if str(a["at"]) >= str(b["at"]) else b)
+            a_at, b_at = parse_at(a["at"]), parse_at(b["at"])
+            assert a_at is not None and b_at is not None  # valid_entry guarantees
+            chosen = deepcopy(a if a_at >= b_at else b)
+            if a.get("sha") == b.get("sha") and a.get("epoch") == b.get("epoch"):
+                chosen["kills"] = max(int(a["kills"]), int(b["kills"]))
+        at = parse_at(chosen["at"])
+        assert at is not None
+        age = now - at
+        if age < timedelta(0) or age > ttl:
+            continue  # TTL-expired (or future-stamped) — do not resurrect
+        merged[event_id] = chosen
     if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
         oldest_first = sorted(merged.keys(), key=lambda k: str(merged[k].get("at") or ""))
         for key in oldest_first[: len(merged) - NEGATIVE_CACHE_MAX_ENTRIES]:
