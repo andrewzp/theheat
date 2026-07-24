@@ -32,8 +32,13 @@ so including them would neuter the cache — the min-kills requirement plus a
 short TTL bound the residual staleness instead.
 
 Deliberately NOT cached: ``budget_exhausted`` and ``pipeline_error``
-(transient — retrying is the point), and save-side rejections (the $0
-``can_draft_candidate`` predicates already handle those deterministically).
+(transient — retrying is the point), save-side rejections (the $0
+``can_draft_candidate`` predicates already handle those deterministically),
+and editorial kills issued while the bundle's category sat in the slice's
+24h ``recent_categories`` cooldown (codex r9: the prompt orders tweet=null
+in that window, so the verdict expires with the cooldown — a 48h TTL would
+suppress up to ~32h past it; ``WriterResult.kill_context_scoped`` carries
+the disposition from the kill site).
 
 ``THEHEAT_NEGATIVE_CACHE_ENABLED=0`` is the kill-switch; entries expire by
 TTL (default 48h), the store is capped newest-first, and pruning runs both
@@ -312,11 +317,17 @@ def record_kill(
         prior = cache.get(event_id)
         current = now or datetime.now(timezone.utc)
         kills = 1
+        # Evidence identity is (sha, epoch, STAGE) — codex r9: a writer kill
+        # plus a fact-check kill on the same facts are two DIFFERENT failure
+        # modes, and the fact-check attempt proves the writer passed once.
+        # Counting them toward one threshold would suppress without any mode
+        # having repeated; a stage change restarts the evidence at 1.
         if (
             valid_entry(prior)
             and isinstance(prior, dict)
             and prior.get("sha") == sha
             and prior.get("epoch") == epoch
+            and prior.get("stage") == str(stage)[:_STAGE_MAX_LEN]
         ):
             # Evidence must itself be FRESH: a prior kill older than the TTL
             # is expired evidence — incrementing it would let two kills 60h

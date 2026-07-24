@@ -85,6 +85,22 @@ def _run_refill(monkeypatch, bot_state, queue, fake_try, *, funnel_sink=None):
     )
 
 
+def _run_legacy(monkeypatch, bot_state, queue, fake_try, *, funnel_sink=None):
+    """Drive the LEGACY drain (THEHEAT_REFILL_ENABLED=0) — the production
+    workflow DEFAULT when the repo variable is unset. The cache must protect
+    both drain paths (codex r9: this one previously re-bought every kill)."""
+    from src.orchestrator import common
+
+    bot_state["_triage_queue"] = list(queue)
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setattr(common, "_try_two_bot_draft", fake_try)
+    return common._drain_and_write_triage_queue(
+        bot_state, current_run, funnel_sink=funnel_sink
+    )
+
+
 # ---------------------------------------------------------------- unit layer
 
 
@@ -335,9 +351,12 @@ def test_parse_at_overflow_boundary_returns_none():
     assert merged == {}
 
 
-def test_epoch_rotates_on_gate_model_change(monkeypatch):
-    """Critic/fact-check model changes produce verdicts under a different
-    regime — cached kills must not outlive them (codex r3 P1)."""
+def test_epoch_rotates_on_critic_model_change(monkeypatch):
+    """A critic model change produces verdicts under a different regime —
+    cached kills must not outlive it (codex r3 P1). (Renamed from the
+    over-claiming *_gate_model_change — it only ever mutated the critic;
+    the writer / fact-checker / prompt / revise-flag / VERSION rotations
+    now have their own tests below, codex r9.)"""
     from src.two_bot import critic as critic_mod
 
     e1 = negative_cache.decision_epoch()
@@ -703,3 +722,360 @@ def test_dispatch_advisory_safety_kill_populates_result_out(monkeypatch):
         # still see the original objects.
         two_bot_dispatch.__dict__.clear()
         two_bot_dispatch.__dict__.update(saved_dict)
+
+
+# ------------------------------------------------------------- codex r9 layer
+
+
+def test_legacy_drain_two_kills_then_skip(monkeypatch):
+    """The LEGACY drain (refill flag OFF — the workflow default) must skip
+    and record exactly like the refill drain (codex r9 P1: it previously
+    went straight to the paid writer with an armed cache)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1"]
+    assert bot_state["writer_negative_cache"]["e1"]["kills"] == 1
+
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1", "e1"], "one kill must NOT suppress (supply safety)"
+    assert bot_state["writer_negative_cache"]["e1"]["kills"] == 2
+
+    funnel_sink: dict = {"_slate_ids": {"e1"}}
+    _run_legacy(
+        monkeypatch, bot_state, [_candidate(event_id="e1")], fake,
+        funnel_sink=funnel_sink,
+    )
+    assert calls == ["e1", "e1"], "after two kills on identical facts, cycle 3 is $0"
+    negcache_rows = [
+        s for s in bot_state.get("suppressions", [])
+        if (s.get("kill_stage") or s.get("stage")) == "negative_cache"
+    ]
+    assert negcache_rows, "the skip must be visible as a negative_cache suppression"
+    assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
+
+
+def test_legacy_kills_arm_refill_skips_and_vice_versa(monkeypatch):
+    """Evidence is one shared store: kills recorded by the legacy drain must
+    activate the refill drain's skip (same state key, same disposition)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    assert calls == ["e1", "e1"], "refill must honor legacy-recorded evidence"
+
+
+def test_legacy_drain_writer_attempted_not_bumped_on_skip(monkeypatch):
+    """A $0 negative-cache skip is not a writer attempt — the telemetry
+    counter must reflect paid attempts only (legacy accounting parity)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+
+    from src.orchestrator import common
+
+    bot_state["_triage_queue"] = [_candidate(event_id="e1")]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setattr(common, "_try_two_bot_draft", fake)
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=None)
+    source_row = current_run["sources"][0]
+    assert calls == ["e1", "e1"], "cycle 3 must be a $0 skip"
+    assert source_row.get("writer_attempted", 0) == 0, (
+        "a negative-cache skip is not a writer attempt"
+    )
+
+
+def test_mixed_stage_kills_do_not_pool(monkeypatch):
+    """A writer kill plus a fact-check kill on the same facts are two
+    DIFFERENT failure modes — and the fact-check attempt proves the writer
+    passed once. They must not pool toward one activation threshold
+    (codex r9 P1): a stage change restarts the evidence."""
+    state = _fresh_state()
+    bundle = _bundle("e1")
+    sha = negative_cache.bundle_fingerprint(bundle)
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull")
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "claim mismatch")
+    entry = state["writer_negative_cache"]["e1"]
+    assert entry["kills"] == 1 and entry["stage"] == "fact_check", (
+        "a different stage restarts the evidence at 1"
+    )
+    assert negative_cache.should_skip(state, "e1", bundle) is None
+    # The SAME mode repeating is real evidence.
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "claim mismatch")
+    assert state["writer_negative_cache"]["e1"]["kills"] == 2
+    assert negative_cache.should_skip(state, "e1", bundle) is not None
+
+
+def test_merge_does_not_pool_kills_across_stages():
+    """The state merge's max-kills reconciliation applies only to identical
+    (sha, epoch, STAGE) evidence — an older cross-stage row must not donate
+    its higher count to the surviving entry (codex r9 P1)."""
+    now = datetime.now(timezone.utc)
+    a = {"e1": _entry("a" * 64, at=now, kills=1)}  # stage "writer", newest
+    b_entry = _entry("a" * 64, at=now - timedelta(hours=1), kills=5)
+    b_entry["stage"] = "fact_check"
+    b = {"e1": b_entry}
+    merged = _merge_writer_negative_cache(a, b)
+    assert merged["e1"]["stage"] == "writer"
+    assert merged["e1"]["kills"] == 1, (
+        "cross-stage kills must not pool through the merge"
+    )
+
+
+def test_cooldown_scoped_editorial_kill_sets_context_flag(monkeypatch):
+    """An editorial kill issued while the bundle's category sits in the 24h
+    ``recent_categories`` cooldown is (possibly) cooldown-caused — the
+    writer must mark it context-scoped so it never arms the 48h cache
+    (codex r9 P1: up to ~32h of wrongful suppression past the cooldown)."""
+    from src.two_bot import memory as memory_mod
+    from src.two_bot import writer as writer_mod
+    from src.two_bot.types import MemorySlice
+
+    kill_json = (
+        '{"tweet": null, "kill_reason": "category cooldown — already posted '
+        'coral within 24h", "angle_chosen": "", "era_anchor_used": null, '
+        '"peer_comparison_used": null, "reasoning": "cooldown"}'
+    )
+    monkeypatch.setattr(writer_mod, "_call_writer_provider", lambda p: kill_json)
+    bundle = _bundle("e1")
+    category = memory_mod._signal_kind_to_category(bundle.signal_kind)
+
+    hot = writer_mod.write_tweet(bundle, MemorySlice(recent_categories=[category]))
+    assert hot.kill_is_editorial is True
+    assert hot.kill_context_scoped is True
+
+    cold = writer_mod.write_tweet(bundle, MemorySlice(recent_categories=["other"]))
+    assert cold.kill_is_editorial is True
+    assert cold.kill_context_scoped is False
+
+
+def test_pipeline_cooldown_scoped_kill_not_cacheable(monkeypatch):
+    """A slate containing any cooldown-scoped verdict must not be cacheable —
+    the suppression would outlive the cooldown that (possibly) caused it
+    (codex r9 P1)."""
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot.types import MemorySlice, WriterResult
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice", lambda s, b: MemorySlice()
+    )
+
+    def scoped_kill(bundle, memory, **kwargs):
+        return WriterResult(
+            tweet=None, kill_reason="category cooldown", angle_chosen="",
+            era_anchor_used=None, peer_comparison_used=None, reasoning="cooldown",
+            kill_is_editorial=True, kill_context_scoped=True,
+        )
+
+    out: dict = {}
+    monkeypatch.setattr(pipeline_mod.writer, "write_tweet", scoped_kill)
+    assert pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "writer" and out["cacheable"] is False
+
+
+def test_missing_tweet_field_is_parse_error_not_editorial(monkeypatch):
+    """A writer response that OMITS the ``tweet`` field is a contract
+    violation, not an editorial verdict — it must route into the JSON-retry
+    lane, never into the cache (codex r9 P2)."""
+    import pytest
+
+    from src.two_bot import writer as writer_mod
+
+    with pytest.raises(ValueError, match="missing required field 'tweet'"):
+        writer_mod._parse_writer_json('{"kill_reason": "routine value"}')
+
+    # The explicit-null form remains the model's editorial verdict.
+    explicit = writer_mod._parse_writer_json(
+        '{"tweet": null, "kill_reason": "routine value", "angle_chosen": "", '
+        '"era_anchor_used": null, "peer_comparison_used": null, "reasoning": ""}'
+    )
+    assert explicit.kill_is_editorial is True
+
+    # End to end: a provider that persistently omits the field exhausts the
+    # JSON-retry lane and surfaces as an INFRA kill (not cacheable).
+    from src.two_bot.types import MemorySlice
+
+    monkeypatch.setattr(
+        writer_mod, "_call_writer_provider",
+        lambda p: '{"kill_reason": "routine value"}',
+    )
+    result = writer_mod.write_tweet(_bundle("e1"), MemorySlice())
+    assert result.tweet is None
+    assert result.kill_is_editorial is False
+    assert "invalid JSON" in (result.kill_reason or "")
+
+
+def test_dispatch_safety_kill_carries_cacheable_disposition(monkeypatch):
+    """The post-pipeline advisory-URL safety kill must carry an honest
+    cacheable disposition: True for uncritiqued text, False when the
+    pipeline reports critic-shaped text, False (default-deny) when the
+    pipeline reported nothing (codex r9 P2 — r8's gate silently dropped
+    these kills for want of the key)."""
+    import importlib
+
+    from src.orchestrator import two_bot_dispatch
+    from src.two_bot import pipeline as pipeline_mod
+
+    saved_dict = dict(two_bot_dispatch.__dict__)
+    two_bot_dispatch = importlib.reload(two_bot_dispatch)
+    try:
+        with monkeypatch.context() as mp:
+            def fake_generate(critic_shaped):
+                def _g(bundle, state, result_out=None):
+                    if result_out is not None and critic_shaped is not None:
+                        result_out["critic_shaped"] = critic_shaped
+                    return {
+                        "text": "t", "event_id": "e1", "type": "cyclone",
+                        "two_bot_metadata": {},
+                    }
+                return _g
+
+            mp.setattr(
+                two_bot_dispatch, "_append_cyclone_advisory_url",
+                lambda t, b, lt: t + " URL",
+            )
+            mp.setattr(
+                two_bot_dispatch, "run_safety_pipeline",
+                lambda t: (False, "banned phrase"),
+            )
+
+            for critic_shaped, expected in [
+                (False, True),   # clean pipeline text → safety verdict cacheable
+                (True, False),   # critic-shaped text → rolling context, never
+                (None, False),   # pipeline silent → default-deny
+            ]:
+                mp.setattr(
+                    pipeline_mod, "generate_draft", fake_generate(critic_shaped)
+                )
+                result_out: dict = {}
+                ok = two_bot_dispatch._try_two_bot_draft(
+                    _bundle("e1"), _fresh_state(), _score(), event_id="e1",
+                    legacy_type="cyclone", review_context={}, result_out=result_out,
+                )
+                assert ok is False
+                assert result_out.get("kill_stage") == "safety"
+                assert result_out.get("cacheable") is expected, (
+                    f"critic_shaped={critic_shaped} must yield cacheable={expected}"
+                )
+    finally:
+        two_bot_dispatch.__dict__.clear()
+        two_bot_dispatch.__dict__.update(saved_dict)
+
+
+def test_pipeline_reports_critic_shaped_on_success(monkeypatch):
+    """generate_draft must tell the dispatch layer whether the final text
+    was critic-shaped — slate selection and revise both count; a plain
+    single-sample pass does not (codex r9 P2)."""
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot.types import MemorySlice, WriterResult
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "0")
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice", lambda s, b: MemorySlice()
+    )
+    # The downstream gates are not under test — pass them (the real
+    # fact-checker needs GEMINI_API_KEY).
+    from src.two_bot.types import FactCheckResult
+
+    monkeypatch.setattr(
+        pipeline_mod, "_check_safety_honesty_fact",
+        lambda *a, **k: FactCheckResult(passed=True, failures=[], raw_response="{}"),
+    )
+
+    def good_draft(bundle, memory, **kwargs):
+        return WriterResult(
+            tweet="a fine tweet", kill_reason=None, angle_chosen="a",
+            era_anchor_used=None, peer_comparison_used=None, reasoning="",
+        )
+
+    out: dict = {}
+    monkeypatch.setattr(pipeline_mod.writer, "write_tweet", good_draft)
+    draft = pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out)
+    assert draft is not None
+    assert out.get("critic_shaped") is False, (
+        "single sample, critic disabled → the text is not critic-shaped"
+    )
+
+
+# -------------------------------------------------- codex r9 epoch coverage
+
+
+def test_epoch_rotates_on_writer_model_change(monkeypatch):
+    from src.two_bot import writer as writer_mod
+
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setattr(writer_mod, "WRITER_MODEL", "claude-test-9-9")
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+
+
+def test_epoch_rotates_on_fact_checker_model_change(monkeypatch):
+    from src.two_bot import fact_check as fact_check_mod
+
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setattr(fact_check_mod, "FACT_CHECKER_MODEL", "gemini-9.9-fc-test")
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+
+
+def test_epoch_rotates_on_prompt_change(monkeypatch):
+    """A writer system-prompt edit rotates the epoch. The module caches the
+    prompt sha — the test resets the cache around each controlled value;
+    monkeypatch teardown restores the real cached sha afterwards."""
+    from src.two_bot.prompts import writer_prompt as prompt_mod
+
+    monkeypatch.setattr(prompt_mod, "WRITER_SYSTEM_PROMPT", "prompt A")
+    monkeypatch.setattr(negative_cache, "_PROMPT_SHA", None)
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setattr(prompt_mod, "WRITER_SYSTEM_PROMPT", "prompt B")
+    negative_cache._PROMPT_SHA = None
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+
+
+def test_epoch_rotates_on_revise_flag_change(monkeypatch):
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "0")
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+
+
+def test_epoch_rotates_on_version_change(monkeypatch):
+    """A deploy (VERSION bump) rotates the epoch — every code PR bumps
+    VERSION, so any shipped change to gate code invalidates prior evidence."""
+    from pathlib import Path
+
+    real_read_text = Path.read_text
+    forced: dict = {"value": None}
+
+    def fake_read_text(self, *args, **kwargs):
+        if self.name == "VERSION" and forced["value"] is not None:
+            return forced["value"]
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    forced["value"] = "9.9.9-epoch-a"
+    e1 = negative_cache.decision_epoch()
+    forced["value"] = "9.9.9-epoch-b"
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2

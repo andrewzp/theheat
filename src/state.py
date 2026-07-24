@@ -936,9 +936,12 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
     Per event_id: structurally VALIDATE both sides (malformed dropped, never
     trusted), keep the entry with the newest PARSED instant (offset-safe —
     string comparison would let a "+02:00" suffix defeat newest-wins), and
-    when both sides describe the same (sha, epoch) evidence take the MAX
-    kill count (two writers incrementing from one base under-count by the
-    smaller increment — bounded, never inflated; mirrors _merge_llm_usage).
+    when both sides describe the same (sha, epoch, stage) evidence take the
+    MAX kill count (two writers incrementing from one base under-count by
+    the smaller increment — bounded, never inflated; mirrors
+    _merge_llm_usage). Stage is part of the evidence identity (codex r9):
+    kills at different stages are different failure modes and must not
+    pool toward one activation threshold.
     TTL-expiry and the size cap are enforced HERE as well as at drain time:
     a merge without its own prune resurrects drain-pruned entries on every
     write from a stale overlay (codex r1 P2 — reproduced)."""
@@ -982,7 +985,11 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
             a_at, b_at = parse_at(a["at"]), parse_at(b["at"])
             assert a_at is not None and b_at is not None  # _fresh guarantees
             chosen = deepcopy(a if a_at >= b_at else b)
-            if a.get("sha") == b.get("sha") and a.get("epoch") == b.get("epoch"):
+            if (
+                a.get("sha") == b.get("sha")
+                and a.get("epoch") == b.get("epoch")
+                and a.get("stage") == b.get("stage")
+            ):
                 chosen["kills"] = max(int(a["kills"]), int(b["kills"]))
         merged[event_id] = chosen
     if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:

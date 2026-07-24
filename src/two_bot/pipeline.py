@@ -321,16 +321,27 @@ def generate_draft(
             # Cacheable only when EVERY sample's kill was the model's own
             # editorial verdict — a single infra-shaped kill (parse/length
             # exhaustion) in the slate means transient trouble, not a
-            # settled editorial "no" (codex P1.3 r8).
+            # settled editorial "no" (codex P1.3 r8) — AND no sample's
+            # verdict was scoped to the transient 24h category cooldown
+            # (codex r9): a cooldown-caused "no" expires with the cooldown,
+            # while the cache TTL would outlive it by up to ~44h.
             _record_kill(
                 "writer", reason,
-                cacheable=all(r.kill_is_editorial for r in writer_results),
+                cacheable=(
+                    all(r.kill_is_editorial for r in writer_results)
+                    and not any(r.kill_context_scoped for r in writer_results)
+                ),
             )
             return None
         _mark_stage("writer", "pass")
 
         writer_result = viable_results[0]
         slate_critic_result = None
+        # Economics P1.3 (codex r9): tracks whether the critic's revise pass
+        # produced the final text — combined with slate selection below, it
+        # feeds result_out["critic_shaped"] so post-pipeline kill sites can
+        # set an honest cacheable disposition.
+        revise_adopted = False
         if samples > 1 and _critic_enabled():
             candidate_texts = [result.tweet for result in viable_results if result.tweet is not None]
             slate_critic_result = critic.critic_select_slate(
@@ -407,6 +418,7 @@ def generate_draft(
                     return None
                 revised_tweet = revised.tweet
                 writer_result = revised
+                revise_adopted = True
                 fact_result = _check_safety_honesty_fact(
                     revised_tweet,
                     bundle,
@@ -459,6 +471,14 @@ def generate_draft(
         elif slate_critic_result is not None:
             metadata["critic"] = slate_critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL
+        # Economics P1.3 (codex r9): expose whether the FINAL text was shaped
+        # by the critic (slate selection or an adopted revise). Post-pipeline
+        # kill sites (the dispatch layer's advisory-URL safety re-check) need
+        # it to set an honest cacheable disposition on their own kills.
+        if result_out is not None:
+            result_out["critic_shaped"] = (
+                slate_critic_result is not None or revise_adopted
+            )
         return {
             "type": bundle.signal_kind,
             "text": writer_result.tweet,

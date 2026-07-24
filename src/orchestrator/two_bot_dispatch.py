@@ -144,6 +144,14 @@ def _try_two_bot_draft(
             # and the negative cache both missed the true stage.
             pipeline_result["kill_stage"] = "safety"
             pipeline_result["kill_reason"] = safety_reason or "unknown"
+            # Cacheable disposition (codex r9): the advisory-URL append is
+            # deterministic, so this safety verdict is as stable as the
+            # pipeline's own — UNLESS the underlying text was critic-shaped
+            # (slate selection / revise), whose rolling context must not arm
+            # the cache. Default-deny when the pipeline didn't report.
+            pipeline_result["cacheable"] = not pipeline_result.get(
+                "critic_shaped", True
+            )
             ctx = _current_suppression_ctx()
             if ctx is not None:
                 _record_downstream_suppression(

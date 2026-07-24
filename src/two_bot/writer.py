@@ -96,6 +96,12 @@ def _parse_writer_json(raw: str) -> WriterResult:
         raise ValueError("Writer returned invalid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Writer response must be a JSON object")
+    # The verdict-bearing field must be PRESENT (its value may be null).
+    # A response that OMITS ``tweet`` entirely is a contract violation —
+    # treating it as an editorial kill let malformed output arm the
+    # negative cache (codex r9); it belongs to the JSON-retry lane instead.
+    if "tweet" not in parsed:
+        raise ValueError("Writer response is missing required field 'tweet'")
     cited_impact = parsed.get("cited_impact")
     try:
         return WriterResult(
@@ -106,12 +112,12 @@ def _parse_writer_json(raw: str) -> WriterResult:
             peer_comparison_used=parsed.get("peer_comparison_used"),
             reasoning=parsed.get("reasoning") or "",
             cited_impact=cited_impact if isinstance(cited_impact, bool) else None,
-            # A parsed tweet=null is the MODEL's editorial verdict — the only
-            # writer-kill class the negative cache may arm on (codex r8).
-            # Every other kill constructor in this module (out-of-scope,
-            # JSON-parse exhaustion, length exhaustion) leaves the default
-            # False.
-            kill_is_editorial=parsed.get("tweet") is None,
+            # An EXPLICIT parsed tweet=null is the MODEL's editorial verdict —
+            # the only writer-kill class the negative cache may arm on
+            # (codex r8; presence enforced above, codex r9). Every other kill
+            # constructor in this module (out-of-scope, JSON-parse exhaustion,
+            # length exhaustion) leaves the default False.
+            kill_is_editorial=parsed["tweet"] is None,
         )
     except TypeError as exc:
         raise ValueError("Writer response is missing required fields") from exc
@@ -297,6 +303,17 @@ def write_tweet(
             f"[Revision context: {revision_constraint}]"
         )
 
+    # Economics P1.3 (codex r9): an editorial kill issued while the bundle's
+    # category sits in the slice's 24h ``recent_categories`` cooldown may be
+    # cooldown-caused (the prompt orders tweet=null in that window), so it
+    # expires with the cooldown and must not arm the 48h negative cache.
+    # Computed once — the slice is fixed for all retry attempts.
+    from src.two_bot.memory import _signal_kind_to_category
+
+    category_cooldown_active = (
+        _signal_kind_to_category(bundle.signal_kind) in memory.recent_categories
+    )
+
     last_overlong_tweet: str | None = None
     last_parse_error: str | None = None
     for attempt in range(LENGTH_RETRY_BUDGET + 1):
@@ -359,6 +376,8 @@ def write_tweet(
 
         # Kill or fits — return as-is.
         if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:
+            if result.kill_is_editorial and category_cooldown_active:
+                result.kill_context_scoped = True
             return result
 
         # Over-length — remember and retry.
