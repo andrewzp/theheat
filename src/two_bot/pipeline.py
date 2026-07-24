@@ -188,16 +188,21 @@ def _check_safety_honesty_fact(
     bundle: StoryBundle,
     state: BotState,
     *,
-    record_kill: Callable[[str, str], None],
+    record_kill: Callable[..., None],
     mark_stage: Callable[[str, str], None] | None = None,
+    cacheable_kills: bool = True,
 ) -> FactCheckResult | None:
+    """``cacheable_kills`` is False when the tweet under test was shaped by
+    the critic (slate selection or a revise pass) — such kills carry the
+    critic's rolling pending-queue context and must not arm the cross-cycle
+    negative cache (codex P1.3 r8)."""
     safety_passed, safety_reason = run_safety_pipeline(tweet)
     if not safety_passed:
         print(
             f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
             f"draft: {safety_reason}"
         )
-        record_kill("safety", safety_reason or "unknown")
+        record_kill("safety", safety_reason or "unknown", cacheable=cacheable_kills)
         return None
 
     forbidden_hit = _forbidden_claim_violation(tweet, bundle)
@@ -206,7 +211,10 @@ def _check_safety_honesty_fact(
             f"[two_bot.pipeline] Honesty gate rejected {bundle.signal_kind} "
             f"draft: forbidden claim {forbidden_hit!r}"
         )
-        record_kill("honesty_gate", f"forbidden claim: {forbidden_hit!r}")
+        record_kill(
+            "honesty_gate", f"forbidden claim: {forbidden_hit!r}",
+            cacheable=cacheable_kills,
+        )
         return None
 
     cross_signal_hit = _cross_signal_violation(tweet, bundle)
@@ -215,7 +223,11 @@ def _check_safety_honesty_fact(
             f"[two_bot.pipeline] Cross-signal honesty gate rejected "
             f"{bundle.signal_kind} draft: {cross_signal_hit!r}"
         )
-        record_kill("cross_signal", f"unverifiable cross-signal claim: {cross_signal_hit!r}")
+        record_kill(
+            "cross_signal",
+            f"unverifiable cross-signal claim: {cross_signal_hit!r}",
+            cacheable=cacheable_kills,
+        )
         return None
 
     fact_result = fact_check.fact_check(tweet, [], bundle, state)
@@ -227,7 +239,11 @@ def _check_safety_honesty_fact(
         )
         if mark_stage is not None:
             mark_stage("fact_check", "kill")
-        record_kill("fact_check", failures_str or "unknown")
+        # A parse-exhausted checker is an infra failure, not a verdict.
+        record_kill(
+            "fact_check", failures_str or "unknown",
+            cacheable=cacheable_kills and not fact_result.parse_failed,
+        )
         return None
     if mark_stage is not None:
         mark_stage("fact_check", "pass")
@@ -270,10 +286,16 @@ def generate_draft(
     # stage counts a candidate once. Mirrored into result_out for the drain.
     stage_outcomes: dict[str, str] = {}
 
-    def _record_kill(stage: str, reason: str) -> None:
+    def _record_kill(stage: str, reason: str, *, cacheable: bool = False) -> None:
         if result_out is not None:
             result_out["kill_stage"] = stage
             result_out["kill_reason"] = reason
+            # Economics P1.3 (codex r8): explicit cache-eligibility set HERE,
+            # where the kill's semantics are known — never inferred from the
+            # stage name downstream. False for every infra-shaped kill
+            # (parse/length exhaustion) and for any kill influenced by the
+            # critic's rolling pending-queue context.
+            result_out["cacheable"] = cacheable
 
     def _mark_stage(stage: str, outcome: str) -> None:
         stage_outcomes[stage] = outcome
@@ -296,12 +318,30 @@ def generate_draft(
             reason = "all writer samples killed: " + "; ".join(kill_reasons)
             print(f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: {reason}")
             _mark_stage("writer", "kill")
-            _record_kill("writer", reason)
+            # Cacheable only when EVERY sample's kill was the model's own
+            # editorial verdict — a single infra-shaped kill (parse/length
+            # exhaustion) in the slate means transient trouble, not a
+            # settled editorial "no" (codex P1.3 r8) — AND no sample's
+            # verdict was scoped to the transient 24h category cooldown
+            # (codex r9): a cooldown-caused "no" expires with the cooldown,
+            # while the cache TTL would outlive it by up to ~44h.
+            _record_kill(
+                "writer", reason,
+                cacheable=(
+                    all(r.kill_is_editorial for r in writer_results)
+                    and not any(r.kill_context_scoped for r in writer_results)
+                ),
+            )
             return None
         _mark_stage("writer", "pass")
 
         writer_result = viable_results[0]
         slate_critic_result = None
+        # Economics P1.3 (codex r9): tracks whether the critic's revise pass
+        # produced the final text — combined with slate selection below, it
+        # feeds result_out["critic_shaped"] so post-pipeline kill sites can
+        # set an honest cacheable disposition.
+        revise_adopted = False
         if samples > 1 and _critic_enabled():
             candidate_texts = [result.tweet for result in viable_results if result.tweet is not None]
             slate_critic_result = critic.critic_select_slate(
@@ -329,6 +369,10 @@ def generate_draft(
             state,
             record_kill=_record_kill,
             mark_stage=_mark_stage,
+            # A critic-SELECTED sample carries the slate critic's rolling
+            # pending-queue context — its downstream kills must not arm the
+            # negative cache (codex P1.3 r8).
+            cacheable_kills=slate_critic_result is None,
         )
         if fact_result is None:
             return None
@@ -367,17 +411,22 @@ def generate_draft(
                     )
                     # Terminal outcome is a writer kill — overwrite the earlier
                     # writer pass so the candidate isn't double-counted.
+                    # NOT cacheable: the revise prompt embeds the critic's
+                    # instruction (rolling pending-queue context).
                     _mark_stage("writer", "kill")
                     _record_kill("writer", revised.kill_reason or "unknown")
                     return None
                 revised_tweet = revised.tweet
                 writer_result = revised
+                revise_adopted = True
                 fact_result = _check_safety_honesty_fact(
                     revised_tweet,
                     bundle,
                     state,
                     record_kill=_record_kill,
                     mark_stage=_mark_stage,
+                    # Revised text is critic-shaped — kills not cacheable.
+                    cacheable_kills=False,
                 )
                 if fact_result is None:
                     return None
@@ -422,6 +471,14 @@ def generate_draft(
         elif slate_critic_result is not None:
             metadata["critic"] = slate_critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL
+        # Economics P1.3 (codex r9): expose whether the FINAL text was shaped
+        # by the critic (slate selection or an adopted revise). Post-pipeline
+        # kill sites (the dispatch layer's advisory-URL safety re-check) need
+        # it to set an honest cacheable disposition on their own kills.
+        if result_out is not None:
+            result_out["critic_shaped"] = (
+                slate_critic_result is not None or revise_adopted
+            )
         return {
             "type": bundle.signal_kind,
             "text": writer_result.tweet,

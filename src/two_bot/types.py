@@ -127,6 +127,23 @@ class WriterResult:
     # regex sweep in save_draft cross-checks it (either signal forces
     # manual_only; a missing field on an enriched draft fails closed).
     cited_impact: bool | None = None
+    # Economics P1.3 (codex r8): True ONLY when the kill is the MODEL's own
+    # editorial verdict (an EXPLICIT parsed tweet=null + kill_reason; a
+    # response merely MISSING the tweet field is a contract violation and
+    # never parses this far — codex r9). Infra-shaped kills (JSON-parse
+    # exhaustion, length-retry exhaustion, out-of-scope guard) leave this
+    # False so the cross-cycle negative cache never arms on a transient
+    # failure. Deliberately NOT serialized in to_dict.
+    kill_is_editorial: bool = False
+    # Economics P1.3 (codex r9): True when an editorial kill happened while
+    # the bundle's category sat in the MemorySlice's 24h ``recent_categories``
+    # cooldown — the prompt orders tweet=null in that window, so the verdict
+    # is (possibly) cooldown-caused, not fact-caused, and expires with the
+    # cooldown. The negative cache must not remember it: a 48h TTL would
+    # suppress up to ~32h after the cooldown cleared. The OTHER slice inputs
+    # (used anchors / framings / spent angles) are monotonic — they never
+    # un-spend, so kills under their pressure stay cacheable. NOT serialized.
+    kill_context_scoped: bool = False
 
     def __post_init__(self):
         if (self.tweet is None) == (self.kill_reason is None):
@@ -167,6 +184,11 @@ class FactCheckResult:
     failures: list[str]
     raw_response: str
     extracted_claims: list[ExtractedClaim] = field(default_factory=list)
+    # Economics P1.3 (codex r8): True when the failure is the checker's own
+    # parse-retry exhaustion (an infra failure, still fail-closed) rather
+    # than a factual verdict — the negative cache must not arm on it.
+    # Deliberately NOT serialized in to_dict (internal disposition only).
+    parse_failed: bool = False
 
     def to_dict(self) -> dict:
         return {

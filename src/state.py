@@ -129,6 +129,10 @@ DEFAULT_STATE: BotState = {
     # {calls, in, cached_in, cache_write, out, usd}. Pruned to
     # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
     "llm_usage": {},
+    # Cross-cycle negative cache for paid-stage writer kills (economics P1.3):
+    # event_id → {sha, epoch, stage, reason, at, kills}. TTL'd (48h default)
+    # + capped at negative_cache.NEGATIVE_CACHE_MAX_ENTRIES — self-cleaning.
+    "writer_negative_cache": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -923,6 +927,81 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
         merged[day] = day_out
     for day in sorted(merged.keys())[:-LLM_USAGE_RETENTION_DAYS]:
         del merged[day]
+    return merged
+
+
+def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
+    """Merge the cross-cycle negative cache (economics P1.3).
+
+    Per event_id: structurally VALIDATE both sides (malformed dropped, never
+    trusted), keep the entry with the newest PARSED instant (offset-safe —
+    string comparison would let a "+02:00" suffix defeat newest-wins), and
+    when both sides describe the same (sha, epoch, stage) evidence take the
+    MAX kill count (two writers incrementing from one base under-count by
+    the smaller increment — bounded, never inflated; mirrors
+    _merge_llm_usage). Stage is part of the evidence identity (codex r9):
+    kills at different stages are different failure modes and must not
+    pool toward one activation threshold.
+    TTL-expiry and the size cap are enforced HERE as well as at drain time:
+    a merge without its own prune resurrects drain-pruned entries on every
+    write from a stale overlay (codex r1 P2 — reproduced)."""
+    from src.two_bot.negative_cache import (
+        NEGATIVE_CACHE_MAX_ENTRIES,
+        parse_at,
+        ttl_hours,
+        valid_entry,
+    )
+
+    base_d = base if isinstance(base, dict) else {}
+    nxt_d = nxt if isinstance(nxt, dict) else {}
+    now = datetime.now(UTC)
+    ttl = timedelta(hours=ttl_hours())
+
+    def _fresh(entry: Any) -> Any:
+        """Validity AND freshness per side, BEFORE reconciliation: a stale
+        kills=2 row max()'d into a fresh restarted kills=1 row would revive
+        expired evidence with a fresh timestamp (codex r3 P1 — reproduced).
+        Expired or future-stamped sides simply don't participate."""
+        if not valid_entry(entry):
+            return None
+        at = parse_at(entry["at"])
+        if at is None:
+            return None
+        age = now - at
+        if age < timedelta(0) or age > ttl:
+            return None
+        return entry
+
+    merged: dict = {}
+    for event_id in set(base_d) | set(nxt_d):
+        a = _fresh(base_d.get(event_id))
+        b = _fresh(nxt_d.get(event_id))
+        if a is None and b is None:
+            continue
+        if a is None or b is None:
+            chosen = deepcopy(a if b is None else b)
+            assert chosen is not None  # both-None handled above
+        else:
+            a_at, b_at = parse_at(a["at"]), parse_at(b["at"])
+            assert a_at is not None and b_at is not None  # _fresh guarantees
+            chosen = deepcopy(a if a_at >= b_at else b)
+            if (
+                a.get("sha") == b.get("sha")
+                and a.get("epoch") == b.get("epoch")
+                and a.get("stage") == b.get("stage")
+            ):
+                chosen["kills"] = max(int(a["kills"]), int(b["kills"]))
+        merged[event_id] = chosen
+    if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
+        # Parsed-instant sort (codex r2 P2): raw ISO strings with mixed
+        # offsets would evict newer instants over older ones.
+        def _instant(key: str) -> datetime:
+            at = parse_at(merged[key].get("at"))
+            return at if at is not None else datetime.min.replace(tzinfo=UTC)
+
+        oldest_first = sorted(merged.keys(), key=_instant)
+        for key in oldest_first[: len(merged) - NEGATIVE_CACHE_MAX_ENTRIES]:
+            del merged[key]
     return merged
 
 
@@ -1888,6 +1967,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "publish_ledger": _strat_dict_overlay,
     "tweet_metrics": _merge_tweet_metrics,
     "llm_usage": _merge_llm_usage,
+    "writer_negative_cache": _merge_writer_negative_cache,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),

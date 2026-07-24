@@ -138,6 +138,20 @@ def _try_two_bot_draft(
     if final_text != draft["text"]:
         safety_passed, safety_reason = run_safety_pipeline(final_text)
         if not safety_passed:
+            # Populate result_out too (codex P1.3 r1 P2): without it the
+            # drain sees this post-pipeline safety kill as a bare False —
+            # indistinguishable from save_rejected — so the funnel terminal
+            # and the negative cache both missed the true stage.
+            pipeline_result["kill_stage"] = "safety"
+            pipeline_result["kill_reason"] = safety_reason or "unknown"
+            # Cacheable disposition (codex r9): the advisory-URL append is
+            # deterministic, so this safety verdict is as stable as the
+            # pipeline's own — UNLESS the underlying text was critic-shaped
+            # (slate selection / revise), whose rolling context must not arm
+            # the cache. Default-deny when the pipeline didn't report.
+            pipeline_result["cacheable"] = not pipeline_result.get(
+                "critic_shaped", True
+            )
             ctx = _current_suppression_ctx()
             if ctx is not None:
                 _record_downstream_suppression(

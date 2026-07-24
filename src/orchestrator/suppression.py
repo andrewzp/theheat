@@ -178,7 +178,7 @@ def _record_downstream_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
-        "stage": kill_stage,  # "writer" | "safety" | "honesty_gate" | "evidence_contract" | "fact_check" | "critic" | "budget_exhausted" | "pipeline_error" | "triage_cap" | "triage_error" | "unknown"
+        "stage": kill_stage,  # "writer" | "safety" | "honesty_gate" | "evidence_contract" | "fact_check" | "critic" | "budget_exhausted" | "billing_cycle_abort" | "pipeline_error" | "triage_cap" | "triage_error" | "negative_cache" | "unknown"
         "event_id": event_id or None,
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),

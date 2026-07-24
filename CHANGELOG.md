@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P1.3 — cross-cycle negative cache for paid-stage kills (2026-07-23)
+
+- **(cost control, pre-writer)**: `src/two_bot/negative_cache.py` +
+  `state["writer_negative_cache"]` — an event killed at a cacheable paid
+  stage (writer/fact-check/safety/honesty gates — critic excluded: its
+  verdicts weigh the rolling pending-queue context) **`min_kills` times
+  (default 2)** on a byte-identical bundle fingerprint under the same
+  **decision epoch** (writer model + system-prompt sha + sampling/revise
+  flags) is skipped as a $0 `negative_cache` pre-writer kill until its facts
+  change, the epoch rotates, or the TTL lapses
+  (`THEHEAT_NEGATIVE_CACHE_TTL_H`, default 48h). One stochastic kill never
+  suppresses a story — supply is the bottleneck; two independent samplings
+  dead on identical facts activate the skip, saving the modal waste
+  (attempts 3+ at ~6 cycles/day). The read predicate is pure; TTL/validity
+  pruning runs in the drain AND inside the state merge (stale overlays
+  can't resurrect deleted entries); the check sits at the paid boundary,
+  after every cheaper $0 predicate, so savings are never misattributed
+  (all per codex r1). Transient stages (`budget_exhausted`,
+  `pipeline_error`) and save-side rejections are never cached; the
+  post-pipeline cyclone-advisory safety kill now populates
+  `result_out.kill_stage="safety"` (was invisible as `save_rejected`).
+  Kill-switch: `THEHEAT_NEGATIVE_CACHE_ENABLED=0`; knobs: `..._TTL_H`,
+  `..._MIN_KILLS` (floor 2 — the one-kill invariant is not tunable). Codex
+  r2 hardening: the decision epoch folds in repo VERSION (any shipped
+  gate/code change rotates it), the writer/critic/fact-checker model ids,
+  the safety Layer-2 Gemini model + its enabled-state, the writer
+  system-prompt sha, and the samples/revise/`THEHEAT_CRITIC_ENABLED` flags
+  (disabling an over-killing critic reopens candidates); expired evidence
+  never resurrects (a TTL-stale prior kill restarts the count); entry
+  validation is semantic (cacheable stage required, true-int kills in
+  clamp, non-empty epoch); eviction sorts parsed instants, not ISO strings;
+  the deterministic out-of-scope writer guard (earthquakes — no model call)
+  never enters the cache; reads are strictly non-mutating. Codex r8:
+  stage names alone are not eligibility — every kill site sets an explicit
+  **`cacheable` disposition** (default-deny at the drain), so infra-shaped
+  kills (JSON-parse/length exhaustion, a parse-exhausted fact-checker) and
+  critic-influenced kills (slate-selected or revised text) never arm the
+  cache. Codex r9: evidence identity is **(sha, epoch, stage)** — kills at
+  different stages restart the count instead of pooling toward one
+  threshold (a fact-check kill proves the writer passed once), and the
+  state merge max-pools counts only on identical three-part evidence; the
+  **legacy drain (refill flag OFF) now runs the same skip predicate,
+  recording, and prune as the refill drain** via one shared eligibility
+  helper — cache behavior no longer depends on `THEHEAT_REFILL_ENABLED`;
+  **editorial kills issued during the 24h category cooldown are
+  context-scoped and never cached** (the cooldown clears at 24h; a cached
+  kill would suppress up to ~32h longer); a writer response *missing* the
+  `tweet` field is a parse error routed to the JSON-retry lane, never an
+  editorial verdict; the post-pipeline advisory-URL safety kill carries an
+  honest `cacheable` disposition via the pipeline's new
+  `critic_shaped` report. Week-1 post-restore funnel showed the plan's
+  pre-registered trigger at ~67 writer calls/day vs the $14 budget.
+
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 
 - **(ops, workflow-only)**: restored the three `bot.yml` crons (hourly

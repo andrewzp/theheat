@@ -286,6 +286,23 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
           at: "2026-06-12T12:00:00Z",
         },
       },
+      // Economics P0.6 ledger + P1.3 negative cache: durable Python-owned
+      // state a dashboard sqlite round-trip must never drop (codex P1.3 r8
+      // — both were absent from METADATA_JSON_KEYS).
+      llm_usage: {
+        "2026-07-23": {
+          "writer|claude-sonnet-4-6": {
+            calls: 22, in: 76998, cached_in: 328740, cache_write: 32874,
+            out: 13039, usd: 0.648477,
+          },
+        },
+      },
+      writer_negative_cache: {
+        ev_cached: {
+          sha: "a".repeat(64), epoch: "e1e1e1e1e1e1e1e1", stage: "writer",
+          reason: "routine value", at: "2026-07-23T12:00:00Z", kills: 2,
+        },
+      },
       _state_rev: 7,
     }
 
@@ -334,6 +351,8 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     assert.deepEqual(loaded.ozone_hole_last_peak, sourceState.ozone_hole_last_peak)
     assert.deepEqual(loaded.ozone_hole_annual_count, sourceState.ozone_hole_annual_count)
     assert.deepEqual(loaded.publish_ledger, sourceState.publish_ledger)
+    assert.deepEqual(loaded.llm_usage, sourceState.llm_usage)
+    assert.deepEqual(loaded.writer_negative_cache, sourceState.writer_negative_cache)
     assert.equal(loaded._state_rev, 7)
     assert.equal(loaded.suppressions.length, 1)
     assert.equal(loaded.suppressions[0].stage, "fact_check")
