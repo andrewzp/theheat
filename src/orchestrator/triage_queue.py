@@ -286,7 +286,7 @@ def _refill_drain(
         # queue row's later kill (e.g. duplicate_draft after a
         # negative_cache skip) must not overwrite the event's true outcome.
         # The suppression row above still records every kill.
-        if sink_active and candidate.event_id not in funnel_sink.get(
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
             "_slate_terminal", {}
         ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
