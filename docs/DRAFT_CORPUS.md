@@ -11,6 +11,104 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-24 — Daily corpus grading (0 fresh drafts; 11 carry-overs from Jul 17–23, previously graded)
+
+**Context:** Step 0 synced `main` (tip unchanged at `#449`), then checked out `daily-plan-current`
+directly per the established Jul 19+ process correction — confirmed no gap (Jul 7–23 all present;
+rebase onto fresh `main` a no-op). Gist read via git-clone path (success; no rate limit). Queue:
+**11 pending drafts — down from Jul 23's 14.** All 11 are an **exact subset** of Jul 23's graded
+batch (same `draft_id`s, scores, text): Delhi, India `air_quality_hazard` B+ (Jul 17), Anchorage,
+Alaska `precipitation_extreme` B (Jul 18), Astana, Kazakhstan `precipitation_extreme` B+ (Jul 18),
+Wausaukee, Wisconsin `all_time_high` A- (Jul 18), W Allis, Wisconsin `all_time_high` B+ (Jul 19),
+Taiz, Yemen `dust_event` B+ (Jul 20), Riyadh, Saudi Arabia `dust_event` B (Jul 20), Barrow, Alaska
+`precipitation_extreme` B+ (Jul 21), Doha, Qatar `absolute_extreme` B+ (Jul 23), Al Başrah Al
+Qadīmah, Iraq `absolute_extreme` A- (Jul 23), Capitol Hill 1, N. Mariana Islands `record` C+
+(Jul 23). **Zero fresh drafts; no re-grading performed — all 11 grades stand at Jul 23's levels.**
+
+**3 of Jul 23's 14 pending drafts are gone, cause unconfirmed:**
+
+- **Deaver, Wyoming `all_time_high` A-** (score 92, carried since Jul 17 — the longest-lived
+  draft in the current queue's history, surviving 7 consecutive grading cycles before vanishing).
+- **Al Basrah, Iraq `absolute_extreme` B+** (Jul 22 fresh — carried exactly 2 cycles).
+- **Pikine, Senegal `monthly_high` A-** (Jul 23 fresh — **graded for the first time yesterday and
+  already gone today**, the first same-day-as-grading disappearance this recurring contraction
+  pattern has produced; see Patterns below).
+
+**Staleness review as of 2026-07-24 ~15:10 UTC:** **0 strict candidates** (>48h old AND real-time-
+baked/forecast-elapsed). [1] Delhi (~166.0h), [2]/[3] Anchorage/Astana (~157.3h), [4] Wausaukee
+(~149.8h), [5] W Allis (~133.2h) all cross 48h by wide margins but stay past-tense/historical
+(record/measurement reports of a completed event) — clear under the established carve-out. [6]/[7]
+Taiz/Riyadh `dust_event` (~96.8h) reference "July 20" as a same/prior-day model-estimated reading,
+not a live forecast — clear, same ruling as every prior `dust_event` cycle, now extended past 96h
+without incident. [8] Barrow (~85.2h) references "July 19" in past tense — clear. **[9] Doha
+(~37.1h) and [10] Al Başrah Al Qadīmah (~32.6h) are two new watch items**: both forecast "July 23"
+— accurate at Jul 23's grading, now one calendar day stale, same forecast-date-elapsed-but-under-
+48h class the corpus has tracked continuously since Jul 20 (Al Basrah → Ahvaz/Bandar-E Mahshahr →
+Basrah → Al Basrah, each surviving 1–2 days as a watch item before either crossing 48h or vanishing
+from the queue first). [11] Capitol Hill (~28.8h) uses past-tense historical record framing ("hit
+36.1°C... on July 20") — clear. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` →
+command not found, exit 1); no gist-write tool exposed via the GitHub MCP server tools available
+this session (confirmed via keyword search — repo/PR/issue/actions tools only, no gist scope).
+Skipped per the hard constraints, logged rather than failing the cycle — **56th consecutive skip**
+(May 13 → Jul 24).
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **50% (2/4, 2026-07-23)** — bar not
+cleared (not a majority).
+
+### Patterns / operational notes
+
+1. **The recurring unexplained-contraction pattern produces its first same-day disappearance.**
+   Pikine's `monthly_high` A- was graded fresh yesterday (Jul 23) and is already gone from the
+   queue today — every prior instance of this pattern (logged continuously since Jul 10) involved
+   a draft surviving at least one full carry-over cycle before vanishing. This is a qualitative
+   escalation, not just another instance: whatever removes drafts from the gist queue (auto-reject,
+   auto-publish, TTL sweep, dashboard action) can now act within a single ~24h window on a draft
+   that was just praised as the cycle's headline finding. Recommend the operator treat this as a
+   priority item to diagnose — three consecutive-ish cycles (Jul 22→23 cost 2 A-grades in one day;
+   Jul 23→24 costs a 3rd, same-day) is the tightest and most costly clustering this pattern has shown.
+2. **Deaver, Wyoming's departure ends the queue's longest-carried draft.** 7 consecutive grading
+   cycles (Jul 17–23) as a stable A- carry-over, then gone — no different in kind from the broader
+   contraction pattern, but notable as the queue's oldest surviving member finally clearing.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or A4/A5/A6/A9. All retain their Jul 23 counts,
+   "Last seen" dates, and status unchanged. P_dust, P_tier, and P9 remain SHIPPED/CONFIRMED with
+   tracking closed (unchanged since their respective confirmation cycles).
+4. **`main` remains unmerged since 2026-06-08** — now 33+ consecutive daily cycles live only on
+   `daily-plan-current`. Repeating the standing operator recommendation to merge so `main`'s copy
+   of these three docs reflects reality.
+
+### Followups (in priority order)
+
+1. **Operator: diagnose the queue-contraction mechanism as a priority item.** The pattern has now
+   removed an A-grade within the same day it was graded (Pikine) — the fastest and most direct
+   evidence yet that whatever is pruning the gist queue is not a simple multi-day TTL sweep.
+   Confirm whether PR #385's forecast-elapsed auto-reject, a dashboard action, or something else is
+   responsible, and whether it is behaving as intended.
+2. **Operator: watch [9] Doha and [10] Al Başrah Al Qadīmah** — both forecast-date-elapsed,
+   currently under the 48h mechanical threshold; either becomes a strict staleness candidate at the
+   next pull if still pending, or (per the recent pattern) may vanish from the queue before reaching
+   that threshold.
+3. **P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented proposals**,
+   unchanged from Jul 23 — full specs in `docs/IMPROVEMENT_PLAN.md`.
+
+### Numbers
+
+- Pending drafts in queue: 11 (0 fresh; 11 carry-overs, exact subset of Jul 23's 14 graded batch)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 30 cycles, P_compound 15 cycles
+  cumulative/re-activated, A8 5 cycles on the opener-skeleton axis, A7/P5/A4/A5/A6/A9 unchanged —
+  all counts stand at Jul 23's levels; P_dust/P_tier/P9 remain SHIPPED/CONFIRMED)
+- Staleness bulk-reject: **0 strict candidates**; 2 new watch items (Doha ~37.1h, Al Başrah Al
+  Qadīmah ~32.6h, both forecast-date-elapsed under 48h); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (56th consecutive skip, May 13 → Jul 24)
+- Operational anomalies: **3 drafts dropped from the queue since Jul 23** (Deaver A- after 7
+  cycles carried, Al Basrah B+ after 2 cycles, Pikine A- the same day it was graded — a new,
+  faster variant of the recurring contraction pattern)
+
+---
+
 ## 2026-07-23 — Daily corpus grading (4 fresh drafts; 10 carry-overs from Jul 17–22, previously graded)
 
 **Context:** Step 0 synced `main` (tip unchanged at `#449`), then checked out `daily-plan-current`
