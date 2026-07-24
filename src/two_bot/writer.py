@@ -77,7 +77,46 @@ LENGTH_RETRY_BUDGET = 2
 # in WriterResult so the dashboard records a kill_reason instead of the
 # pipeline raising a ValueError. 1 retry is enough because the failure is
 # typically stochastic refusal — a second sampling usually produces JSON.
+# Economics P2.2: on the Anthropic path this lane is now a residual safety
+# net — structured outputs (WRITER_OUTPUT_SCHEMA below) constrain decoding
+# to schema-valid JSON, so the lane fires only on refusal-shaped responses
+# and on the Gemini fallback provider (which has no schema enforcement).
 JSON_PARSE_RETRY_BUDGET = 1
+
+# Economics P2.2: machine enforcement of the prompt's `# OUTPUT` contract
+# (writer_prompt.py). Passed as `output_config.format` (GA on the pinned
+# claude-sonnet-4-6; verified live 2026-07-13 in PLAN-ECONOMICS-MASTER-v3)
+# so the JSON-parse retry lane stops burning paid calls on non-JSON output.
+# Field-for-field this MUST stay in lockstep with _parse_writer_json and the
+# prompt's OUTPUT section: same six base fields, plus `cited_impact`, which
+# IMPACT_GUIDANCE asks for when a bundle carries human_impact — with
+# additionalProperties:false, omitting it here would make strict decoding
+# reject every impact-lane draft (Bet A A1). Required-with-null keeps the
+# key always present; the parser already maps null → None.
+# `maxLength` is deliberately absent: unsupported server-side, so the
+# 280-char cap remains the length-retry lane's job (semantic, not schema).
+WRITER_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "tweet": {"type": ["string", "null"]},
+        "kill_reason": {"type": ["string", "null"]},
+        "angle_chosen": {"type": "string"},
+        "era_anchor_used": {"type": ["string", "null"]},
+        "peer_comparison_used": {"type": ["string", "null"]},
+        "reasoning": {"type": "string"},
+        "cited_impact": {"type": ["boolean", "null"]},
+    },
+    "required": [
+        "tweet",
+        "kill_reason",
+        "angle_chosen",
+        "era_anchor_used",
+        "peer_comparison_used",
+        "reasoning",
+        "cited_impact",
+    ],
+    "additionalProperties": False,
+}
 
 
 def _bundle_json(bundle: StoryBundle) -> str:
@@ -146,6 +185,13 @@ def _call_anthropic(user_prompt: str) -> str:
                 }
             ],
             messages=[{"role": "user", "content": user_prompt}],
+            # Economics P2.2: constrained decoding to the writer contract.
+            # On a safety refusal the output may not match the schema — the
+            # existing _parse_writer_json ValueError path + JSON-retry lane
+            # stay in place as the net for exactly that case.
+            output_config={
+                "format": {"type": "json_schema", "schema": WRITER_OUTPUT_SCHEMA}
+            },
         ),
     )
     # Economics P0.6: every paid call lands in the usage ledger. The WHOLE

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Economics P2.2 — writer structured outputs (2026-07-23)
+
+- **(writer, mechanics-only — voice untouched)**: the Anthropic writer call now
+  passes `output_config.format` with `WRITER_OUTPUT_SCHEMA` (constrained
+  decoding, GA on the pinned `claude-sonnet-4-6`), machine-enforcing the
+  prompt's `# OUTPUT` JSON contract. The paid JSON-parse retry lane becomes a
+  residual safety net (refusal-shaped responses + the Gemini fallback path)
+  instead of a per-day cost multiplier — week-1 ledger measured ~67 calls/day
+  against ~36 design attempts, and the JSON lane was one of the two
+  multipliers. The 280-char cap deliberately stays in the length-retry lane
+  (`maxLength` is not enforced server-side). Schema includes `cited_impact`
+  (required-with-null): with `additionalProperties: false`, omitting it would
+  have rejected every Bet-A impact-lane draft. Prompt text, model, gates, and
+  the Gemini fallback are unchanged.
+
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 
 - **(ops, workflow-only)**: restored the three `bot.yml` crons (hourly
