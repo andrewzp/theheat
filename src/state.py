@@ -130,8 +130,8 @@ DEFAULT_STATE: BotState = {
     # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
     "llm_usage": {},
     # Cross-cycle negative cache for paid-stage writer kills (economics P1.3):
-    # event_id → {sha, stage, reason, at, hits}. TTL'd (48h default) + capped
-    # at negative_cache.NEGATIVE_CACHE_MAX_ENTRIES — small and self-cleaning.
+    # event_id → {sha, epoch, stage, reason, at, kills}. TTL'd (48h default)
+    # + capped at negative_cache.NEGATIVE_CACHE_MAX_ENTRIES — self-cleaning.
     "writer_negative_cache": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,

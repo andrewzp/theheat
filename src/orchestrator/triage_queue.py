@@ -401,7 +401,17 @@ def _refill_drain(
                 terminal = cand_result["kill_stage"]
             else:
                 terminal = "save_rejected"
-            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
+            # First terminal wins across EVERY recording path (codex P1.3
+            # r4–r6): duplicate event_ids with divergent category/gate
+            # attributes can route one row through a pre-writer terminal and
+            # a later row to the writer. Documented trade: the slate view
+            # keeps the FIRST resolution; the suppression ledger and
+            # stage_outcomes above still carry the paid attempt's full
+            # history.
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+                "_slate_terminal", {}
+            ):
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
 
         if drafted:
             drafted_count += 1

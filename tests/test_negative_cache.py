@@ -451,6 +451,24 @@ def test_duplicate_queue_rows_count_one_cache_skip(monkeypatch):
     assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
 
 
+def test_paid_result_respects_existing_terminal(monkeypatch):
+    """A same-ID row that reaches the writer after another row already
+    resolved a pre-writer terminal must not overwrite it (codex r6 P2);
+    the suppression ledger + stage_outcomes still carry the paid attempt."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    funnel_sink: dict = {"_slate_ids": {"e1"}, "_slate_terminal": {"e1": "triage_cap"}}
+
+    def fake_success(bundle, state, score, *, result_out=None, **kwargs):
+        return True
+
+    _run_refill(
+        monkeypatch, bot_state, [_candidate(event_id="e1")], fake_success,
+        funnel_sink=funnel_sink,
+    )
+    assert funnel_sink["_slate_terminal"]["e1"] == "triage_cap"
+
+
 def test_ceiling_cut_preserves_resolved_terminal(monkeypatch):
     """Non-adjacent duplicate past the drafts ceiling: _cut()'s triage_cap
     must not overwrite an event's resolved negative_cache terminal
