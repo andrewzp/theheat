@@ -355,6 +355,14 @@ def _refill_drain(
             bot_state, candidate.event_id, candidate.bundle
         )
         if negcache_reason is not None:
+            # Accounting parity with the billing-skip path (codex r3 P2):
+            # the event leaves triage via the cache, not an editorial cut —
+            # count triaged_out so triage_cut stays exact; and mark it
+            # attempted so a duplicate queue row records duplicate_draft
+            # instead of a second (savings-inflating) negative_cache kill.
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            if candidate.event_id:
+                attempted_event_ids.add(candidate.event_id)
             _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
             continue
 

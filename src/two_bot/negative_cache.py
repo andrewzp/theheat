@@ -108,47 +108,52 @@ def bundle_fingerprint(bundle: Any) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-_STATIC_EPOCH: str | None = None
+_PROMPT_SHA: str | None = None
 
 
 def decision_epoch() -> str:
-    """Fingerprint of the non-bundle decision context (codex r1+r2 P1):
+    """Fingerprint of the non-bundle decision context (codex r1–r3 P1):
 
-    - STATIC per deploy: repo VERSION (every code PR bumps it — so ANY
-      shipped change to the writer/critic/fact-check/safety/honesty code or
-      prompts rotates the epoch), the writer model id, and the writer
-      system-prompt sha (belt-and-braces; prompt edits ride code PRs).
-    - RUNTIME flags, read per call so cycle-level flips take effect
-      immediately: writer samples, critic-revise, and THEHEAT_CRITIC_ENABLED
-      (disabling an over-killing critic MUST reopen cached candidates).
+    - Repo VERSION (every code PR bumps it — ANY shipped change to
+      writer/critic/fact-check/safety/honesty code or prompts rotates the
+      epoch). A VERSION read failure returns "" — fail-open/no-op, NOT a
+      stable "unknown" that would defeat deploy rotation (codex r3).
+    - The effective verdict-producing model ids: writer, critic, and
+      fact-checker (module constants resolve their env overrides), plus the
+      writer system-prompt sha (cached — the only expensive input).
+    - Runtime flags read per call: writer samples, critic-revise, and
+      THEHEAT_CRITIC_ENABLED (disabling an over-killing critic MUST reopen
+      cached candidates).
 
     The MemorySlice is deliberately excluded (see module docstring): its
     rotating fields would neuter the cache; min_kills + TTL bound that
-    residual staleness. Returns "" on failure (callers no-op)."""
-    global _STATIC_EPOCH
+    residual staleness. Returns "" on any failure (callers no-op)."""
+    global _PROMPT_SHA
     try:
-        if _STATIC_EPOCH is None:
-            from pathlib import Path
+        from pathlib import Path
 
+        if _PROMPT_SHA is None:
             from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
-            from src.two_bot.writer import WRITER_MODEL
 
-            prompt_sha = hashlib.sha256(
+            _PROMPT_SHA = hashlib.sha256(
                 WRITER_SYSTEM_PROMPT.encode("utf-8")
             ).hexdigest()[:16]
-            try:
-                version = (
-                    Path(__file__).resolve().parents[2].joinpath("VERSION")
-                    .read_text().strip()
-                )
-            except OSError:
-                version = "unknown"
-            _STATIC_EPOCH = f"{version}|{WRITER_MODEL}|{prompt_sha}"
+        from src.two_bot.critic import CRITIC_MODEL
+        from src.two_bot.fact_check import FACT_CHECKER_MODEL
+        from src.two_bot.writer import WRITER_MODEL
+
+        version = (
+            Path(__file__).resolve().parents[2].joinpath("VERSION")
+            .read_text().strip()
+        )
+        if not version:
+            return ""
         samples = os.environ.get("THEHEAT_WRITER_SAMPLES", "").strip()
         revise = os.environ.get("THEHEAT_CRITIC_REVISE_ENABLED", "").strip()
         critic = os.environ.get("THEHEAT_CRITIC_ENABLED", "").strip()
         return hashlib.sha256(
-            f"{_STATIC_EPOCH}|s={samples}|r={revise}|c={critic}".encode()
+            f"{version}|{WRITER_MODEL}|{CRITIC_MODEL}|{FACT_CHECKER_MODEL}|"
+            f"{_PROMPT_SHA}|s={samples}|r={revise}|c={critic}".encode()
         ).hexdigest()[:16]
     except Exception as exc:  # noqa: BLE001
         print(f"[negative_cache] epoch error (ignored): {exc!r}")
@@ -173,16 +178,19 @@ def _cache_view(bot_state: Any) -> dict:
 
 def parse_at(raw: object) -> datetime | None:
     """Parse an entry timestamp to an aware UTC instant; None when invalid.
-    Shared with the state merge so both sides agree on validity."""
+    Shared with the state merge so both sides agree on validity. The WHOLE
+    conversion is guarded: ``astimezone`` raises OverflowError on boundary
+    stamps like ``0001-01-01T00:00:00+14:00`` — one corrupt persisted entry
+    must be dropped, never abort a state write (codex r3 P1)."""
     if not isinstance(raw, str) or not raw:
         return None
     try:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError, OSError):
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
 
 
 def valid_entry(entry: object) -> bool:
@@ -202,6 +210,7 @@ def valid_entry(entry: object) -> bool:
     return (
         isinstance(sha, str)
         and len(sha) == 64
+        and all(c in "0123456789abcdef" for c in sha)
         and isinstance(epoch, str)
         and bool(epoch)
         and isinstance(stage, str)

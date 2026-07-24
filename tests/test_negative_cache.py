@@ -295,6 +295,61 @@ def test_merge_does_not_resurrect_expired_and_drops_malformed():
     assert merged == {}
 
 
+def test_merge_stale_side_cannot_revive_kill_count():
+    """A TTL-stale kills=2 row max()'d into a fresh restarted kills=1 row
+    must NOT produce a fresh kills=2 (codex r3 P1 — reproduced pre-fix).
+    Each side is freshness-filtered BEFORE reconciliation."""
+    now = datetime.now(timezone.utc)
+    epoch = negative_cache.decision_epoch()
+    sha = "c" * 64
+    stale = _entry(sha, at=now - timedelta(hours=60), kills=2, epoch=epoch)
+    fresh = _entry(sha, at=now, kills=1, epoch=epoch)
+    merged = _merge_writer_negative_cache({"e1": stale}, {"e1": fresh})
+    assert merged["e1"]["kills"] == 1, "expired evidence must not resurrect via merge"
+
+
+def test_parse_at_overflow_boundary_returns_none():
+    """astimezone() raises OverflowError on boundary stamps — one corrupt
+    entry must be dropped, never abort a state write (codex r3 P1)."""
+    assert negative_cache.parse_at("0001-01-01T00:00:00+14:00") is None
+    # And the merge survives such an entry:
+    bad = dict(_entry("d" * 64, at=datetime.now(timezone.utc)), at="0001-01-01T00:00:00+14:00")
+    merged = _merge_writer_negative_cache({"e1": bad}, {})
+    assert merged == {}
+
+
+def test_epoch_rotates_on_gate_model_change(monkeypatch):
+    """Critic/fact-check model changes produce verdicts under a different
+    regime — cached kills must not outlive them (codex r3 P1)."""
+    from src.two_bot import critic as critic_mod
+
+    e1 = negative_cache.decision_epoch()
+    monkeypatch.setattr(critic_mod, "CRITIC_MODEL", "gemini-9.9-test")
+    e2 = negative_cache.decision_epoch()
+    assert e1 and e2 and e1 != e2
+
+
+def test_version_read_failure_disables_caching(monkeypatch):
+    """A VERSION read failure must fail OPEN (epoch "", cache no-ops) — a
+    stable "unknown" epoch would defeat deploy rotation (codex r3 P2)."""
+    from pathlib import Path
+
+    def _boom(self, *a, **k):
+        raise OSError("no VERSION")
+
+    monkeypatch.setattr(Path, "read_text", _boom)
+    assert negative_cache.decision_epoch() == ""
+    state = _fresh_state()
+    negative_cache.record_kill(state, "e1", "a" * 64, "writer", "dull")
+    assert state["writer_negative_cache"] == {}
+
+
+def test_sha_must_be_hex():
+    """64 arbitrary characters is not a fingerprint (codex r3 P2)."""
+    entry = _entry("z" * 64, at=datetime.now(timezone.utc))
+    assert not negative_cache.valid_entry(entry)
+
+
 def test_cap_eviction_orders_by_instant_not_string():
     """An offset-stamped OLDER instant must be evicted before a UTC NEWER
     one even though its raw string sorts higher (codex r2 P2)."""
@@ -340,6 +395,36 @@ def test_refill_drain_two_kills_then_skip(monkeypatch):
         or s.get("stage") == "negative_cache"
     ]
     assert negcache_rows, "the skip must be visible as a negative_cache suppression"
+
+
+def test_duplicate_queue_rows_count_one_cache_skip(monkeypatch):
+    """Two queue rows for one cached event: the first is the negative_cache
+    skip, the second must fall to the in-cycle duplicate_draft path —
+    double-counting would inflate claimed savings (codex r3 P2)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    # Two cycles of kills arm the cache.
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1")], fake)
+    # Cycle 3: the SAME event appears twice in the ranked queue.
+    _run_refill(
+        monkeypatch, bot_state,
+        [_candidate(event_id="e1"), _candidate(event_id="e1")], fake,
+    )
+    assert calls == ["e1", "e1"], "no paid attempts in cycle 3"
+    rows = bot_state.get("suppressions", [])
+    negcache_rows = [
+        s for s in rows
+        if (s.get("kill_stage") or s.get("stage")) == "negative_cache"
+    ]
+    dup_rows = [
+        s for s in rows
+        if (s.get("kill_stage") or s.get("stage")) == "duplicate_draft"
+    ]
+    assert len(negcache_rows) == 1, "exactly one skip replaced a potential writer call"
+    assert len(dup_rows) == 1, "the duplicate row is a duplicate_draft, not a second skip"
 
 
 def test_refill_drain_reattempts_when_facts_change(monkeypatch):

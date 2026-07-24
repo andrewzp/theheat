@@ -953,12 +953,26 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
     nxt_d = nxt if isinstance(nxt, dict) else {}
     now = datetime.now(UTC)
     ttl = timedelta(hours=ttl_hours())
+
+    def _fresh(entry: Any) -> Any:
+        """Validity AND freshness per side, BEFORE reconciliation: a stale
+        kills=2 row max()'d into a fresh restarted kills=1 row would revive
+        expired evidence with a fresh timestamp (codex r3 P1 — reproduced).
+        Expired or future-stamped sides simply don't participate."""
+        if not valid_entry(entry):
+            return None
+        at = parse_at(entry["at"])
+        if at is None:
+            return None
+        age = now - at
+        if age < timedelta(0) or age > ttl:
+            return None
+        return entry
+
     merged: dict = {}
     for event_id in set(base_d) | set(nxt_d):
-        a = base_d.get(event_id)
-        b = nxt_d.get(event_id)
-        a = a if valid_entry(a) else None
-        b = b if valid_entry(b) else None
+        a = _fresh(base_d.get(event_id))
+        b = _fresh(nxt_d.get(event_id))
         if a is None and b is None:
             continue
         if a is None or b is None:
@@ -966,15 +980,10 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
             assert chosen is not None  # both-None handled above
         else:
             a_at, b_at = parse_at(a["at"]), parse_at(b["at"])
-            assert a_at is not None and b_at is not None  # valid_entry guarantees
+            assert a_at is not None and b_at is not None  # _fresh guarantees
             chosen = deepcopy(a if a_at >= b_at else b)
             if a.get("sha") == b.get("sha") and a.get("epoch") == b.get("epoch"):
                 chosen["kills"] = max(int(a["kills"]), int(b["kills"]))
-        at = parse_at(chosen["at"])
-        assert at is not None
-        age = now - at
-        if age < timedelta(0) or age > ttl:
-            continue  # TTL-expired (or future-stamped) — do not resurrect
         merged[event_id] = chosen
     if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
         # Parsed-instant sort (codex r2 P2): raw ISO strings with mixed
