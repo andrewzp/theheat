@@ -7,8 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Economics P1.3 — cross-cycle negative cache for paid-stage kills (2026-07-23)
 
 - **(cost control, pre-writer)**: `src/two_bot/negative_cache.py` +
-  `state["writer_negative_cache"]` — an event killed at a paid stage
-  (writer/critic/fact-check/safety/honesty gates) **`min_kills` times
+  `state["writer_negative_cache"]` — an event killed at a cacheable paid
+  stage (writer/fact-check/safety/honesty gates — critic excluded: its
+  verdicts weigh the rolling pending-queue context) **`min_kills` times
   (default 2)** on a byte-identical bundle fingerprint under the same
   **decision epoch** (writer model + system-prompt sha + sampling/revise
   flags) is skipped as a $0 `negative_cache` pre-writer kill until its facts

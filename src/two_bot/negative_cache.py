@@ -48,8 +48,15 @@ from src.two_bot.json_utils import json_default
 
 # Paid-stage kills worth remembering across cycles. Everything else either
 # must retry (billing, transient errors) or is already a $0 predicate.
+# ``critic`` is deliberately EXCLUDED (codex r7): critic verdicts also weigh
+# today's pending-drafts context, which rolls over constantly — a cached
+# critic kill could suppress a story that became viable when the queue
+# changed, and critic kills are a tiny share of paid kills anyway (2 of the
+# last 100 suppressions at review time). The remaining stages judge the
+# tweet against the BUNDLE (fact_check) or against fixed rules (safety /
+# honesty / cross-signal), both fully covered by the fingerprint + epoch.
 CACHEABLE_KILL_STAGES = frozenset(
-    {"writer", "critic", "fact_check", "safety", "honesty_gate", "cross_signal"}
+    {"writer", "fact_check", "safety", "honesty_gate", "cross_signal"}
 )
 
 NEGATIVE_CACHE_MAX_ENTRIES = 200

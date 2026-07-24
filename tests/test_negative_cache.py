@@ -113,7 +113,7 @@ def test_changed_facts_restart_evidence_and_reopen():
     # Facts change: no skip, and a new kill restarts the count at 1.
     assert negative_cache.should_skip(state, "e1", _bundle("e1", dhw=9)) is None
     sha9 = negative_cache.bundle_fingerprint(_bundle("e1", dhw=9))
-    negative_cache.record_kill(state, "e1", sha9, "critic", "meh")
+    negative_cache.record_kill(state, "e1", sha9, "fact_check", "meh")
     assert state["writer_negative_cache"]["e1"]["kills"] == 1
 
 
@@ -173,8 +173,8 @@ def test_critic_kill_switch_rotates_epoch(monkeypatch):
     bundle = _bundle("e1")
     sha = negative_cache.bundle_fingerprint(bundle)
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "1")
-    negative_cache.record_kill(state, "e1", sha, "critic", "meh")
-    negative_cache.record_kill(state, "e1", sha, "critic", "meh")
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "meh")
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "meh")
     assert negative_cache.should_skip(state, "e1", bundle) is not None
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "0")
     assert negative_cache.should_skip(state, "e1", bundle) is None
@@ -215,8 +215,8 @@ def test_ttl_expiry_reopens_and_prune_removes():
     bundle = _bundle("e1")
     old = datetime.now(timezone.utc) - timedelta(hours=72)
     sha = negative_cache.bundle_fingerprint(bundle)
-    negative_cache.record_kill(state, "e1", sha, "critic", "meh", now=old)
-    negative_cache.record_kill(state, "e1", sha, "critic", "meh", now=old)
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "meh", now=old)
+    negative_cache.record_kill(state, "e1", sha, "fact_check", "meh", now=old)
     assert negative_cache.should_skip(state, "e1", bundle) is None  # 72h > 48h TTL
     removed = negative_cache.prune(state)
     assert removed == 1 and state["writer_negative_cache"] == {}
@@ -229,6 +229,17 @@ def test_transient_stages_are_not_cached():
     negative_cache.record_kill(state, "e1", sha, "pipeline_error", "boom")
     negative_cache.record_kill(state, "e1", sha, "save_rejected", "cooldown")
     assert state["writer_negative_cache"] == {}
+
+
+def test_critic_kills_are_not_cached():
+    """Critic verdicts weigh today's pending-drafts context, which rolls
+    over constantly — a cached critic kill could suppress a story that
+    became viable when the queue changed (codex r7 P2)."""
+    state = _fresh_state()
+    sha = negative_cache.bundle_fingerprint(_bundle("e1"))
+    negative_cache.record_kill(state, "e1", sha, "critic", "too similar to pending")
+    assert state["writer_negative_cache"] == {}
+    assert "critic" not in negative_cache.CACHEABLE_KILL_STAGES
 
 
 def test_kill_switch_disables_both_sides(monkeypatch):
