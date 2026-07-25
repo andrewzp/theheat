@@ -11,6 +11,125 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-25 — Daily corpus grading (0 fresh drafts; 5 carry-overs from Jul 19–23, previously graded)
+
+**Context:** Step 0's force-sync-to-`main` landed on the stale Jul 6 copies of these three docs —
+`main` has not merged the rolling branch since 2026-06-08, so a strict reading of Step 0 would have
+re-based this cycle off 19-day-old corpus/plan content. Per the Jul 19 process correction (logged
+in `docs/IMPROVEMENT_PLAN.md`), checked out `daily-plan-current` directly instead and attempted
+`git rebase origin/main` — it conflicted on the very first replayed commit (`docs/IMPROVEMENT_PLAN.md`,
+2026-07-07 entry) and was aborted per the runbook's documented fallback, leaving `daily-plan-current`
+unchanged at its Jul 24 tip (confirmed no gap: Jul 7–24 all present). Gist read via git-clone path
+(success; no rate limit). Queue: **5 pending drafts — down sharply from Jul 24's 11.** All 5 are an
+**exact subset** of Jul 19–23's graded batch (same `draft_id`s, scores, text): W Allis, Wisconsin
+`all_time_high` B+ (score 90, Jul 19), Taiz, Yemen `dust_event` B+ (score 75, Jul 20), Riyadh,
+Saudi Arabia `dust_event` B (score 75, Jul 20), Barrow, Alaska `precipitation_extreme` B+ (score
+78, Jul 21), Capitol Hill 1, N. Mariana Islands `record` C+ (score 73, Jul 23). **Zero fresh
+drafts; no re-grading performed — all 5 grades stand at their original grading-cycle levels.**
+
+**6 of Jul 24's 11 pending drafts are gone, cause unconfirmed — the largest single-cycle
+contraction the corpus has recorded:**
+
+- **Delhi, India `air_quality_hazard` B+** (carried since Jul 18 — 7 consecutive cycles, tied with
+  Wausaukee below for the longest run since Deaver's 7-cycle carry ended Jul 24).
+- **Wausaukee, Wisconsin `all_time_high` A-** (also carried since Jul 18 — 7 cycles, gone the same
+  cycle as Delhi; two long-lived drafts clearing the queue together for the first time).
+- **Anchorage, Alaska `precipitation_extreme` B** (carried since Jul 18 — 7 cycles).
+- **Astana, Kazakhstan `precipitation_extreme` B+** (carried since Jul 18 — 7 cycles).
+- **Doha, Qatar `absolute_extreme` B+** (Jul 23 fresh — carried exactly 2 cycles, one of the two
+  "watch item" forecast-elapsed drafts flagged in the Jul 24 entry).
+- **Al Başrah Al Qadīmah, Iraq `absolute_extreme` A-** (Jul 23 fresh — carried exactly 2 cycles,
+  the other Jul 24 watch item, and the second A-grade in as many cycles to vanish within 2 days of
+  being graded).
+
+Where Jul 23→24 dropped 3 drafts (the previous largest contraction on record), this cycle drops 6
+— exactly double — and for the first time takes out **four** carry-overs that had each survived a
+full 7 cycles, not just the queue's single oldest member. See Patterns below.
+
+**Staleness review as of 2026-07-25 ~15:05 UTC:** **0 strict candidates** (>48h old AND real-time-
+baked/forecast-elapsed). [1] W Allis (~157.1h) — "hit 104°F... on July 15," past-tense record
+report, clear under the established carve-out (same ruling every prior cycle since Jul 19). [2]/[3]
+Taiz/Riyadh `dust_event` (~120.8h/~120.7h) — "on July 20," same-day model-estimated reading, not a
+live forecast, clear per the standing `dust_event` ruling, now extended past 120h without incident.
+[4] Barrow (~109.1h) — "on July 19," past-tense measurement, clear. [5] Capitol Hill 1 (~52.7h) —
+"hit 36.1°C... on July 20," past-tense calendar-date record, clear. None of the 5 carry a live
+forecast-for-a-specific-future-date construction (the class that produced every strict candidate
+since Jul 1's Basra-area cluster) — consistent with the pattern that `all_time_high`/`record`/
+`dust_event`/`precipitation_extreme` types reporting a completed measurement don't trip the policy
+regardless of age, while `absolute_extreme` forecast drafts are the type that does. **Bulk-reject
+attempted:** `gh` CLI confirmed absent (`which gh` → exit 1, command not found); no gist-write tool
+exposed via the GitHub MCP server tools available this session (repo/PR/issue/actions tools only,
+no gist scope). Skipped per the hard constraints, logged rather than failing the cycle — **57th
+consecutive skip** (May 13 → Jul 25). Moot this cycle regardless: 0 candidates by policy even had
+write access been available.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **50% (2/4, 2026-07-23)** — bar not
+cleared (not a majority), unchanged since Jul 24 also produced zero fresh drafts.
+
+### Patterns / operational notes
+
+1. **The queue-contraction pattern roughly doubles in size this cycle (11→5, -6) — its largest
+   drop yet, and the first to remove multiple 7-cycle-old carry-overs at once.** Every prior
+   instance took out at most 1 long-lived draft per cycle (Deaver's single 7-cycle run ending Jul
+   24) alongside 1-2 younger ones; this cycle removes Delhi, Wausaukee, Anchorage, and Astana
+   together — all four had survived from Jul 18 through Jul 24 unchanged — plus both of Jul 24's
+   flagged forecast-elapsed watch items (Doha, Al Başrah Al Qadīmah), each within 2 days of being
+   graded. That the two freshest-flagged watch items vanished together with the four oldest
+   carry-overs suggests whatever prunes this queue isn't selecting narrowly by age or by the
+   forecast-elapsed signal alone — it's consistent with either a broad sweep (bulk-publish or a
+   wide TTL pass) or an operator dashboard action clearing most of the backlog at once, not with
+   PR #385's forecast-elapsed auto-reject acting alone (that would explain Doha/Al Başrah Al
+   Qadīmah but not the four past-tense, non-forecast carry-overs). This is now the second
+   consecutive cycle to escalate the same pattern (Jul 23→24 was the prior largest at -3); worth
+   the operator's continued priority attention, same recommendation as Jul 24.
+2. **Second consecutive zero-fresh-draft cycle** (Jul 24, Jul 25) — the corpus's second time this
+   has happened back-to-back (previously Jul 12–13). Combined with the sharp contraction, the
+   queue is both shrinking and not being replenished; if this continues, the queue empties entirely
+   within 1-2 more cycles at the current drain rate with no new drafts to replace it.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or A4/A5/A6/A9. All retain their Jul 23 counts,
+   "Last seen" dates, and status unchanged. P_dust, P_tier, and P9 remain SHIPPED/CONFIRMED with
+   tracking closed (unchanged since their respective confirmation cycles).
+4. **`main` remains unmerged since 2026-06-08** — now 34+ consecutive daily cycles live only on
+   `daily-plan-current`. Repeating the standing operator recommendation to merge so `main`'s copy
+   of these three docs reflects reality; this cycle's Step 0 conflict (see Context above) is a
+   direct symptom of that gap continuing to widen.
+
+### Followups (in priority order)
+
+1. **Operator: diagnose the queue-contraction mechanism — now the highest-priority operational
+   item, having doubled in size two cycles running.** This cycle took out 2 A-grades (Wausaukee,
+   Al Başrah Al Qadīmah) and 2 B+/B carry-overs with no fresh replacements, on top of Jul 23→24's
+   3-draft drop. If a bulk sweep or dashboard action is responsible, confirm it was intentional; if
+   it's PR #385's auto-reject over-firing on non-forecast-elapsed drafts, that's a regression from
+   its documented scope.
+2. **Operator: `main` remains unmerged since 2026-06-08** — 34+ consecutive daily cycles stranded
+   on `daily-plan-current`. The Step 0 rebase conflict this cycle is a concrete cost of the gap: it
+   forces every cycle's agent to abort a rebase and reason about which branch is authoritative
+   rather than working from a single up-to-date `main`.
+3. **P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented proposals**,
+   unchanged from Jul 23 — full specs in `docs/IMPROVEMENT_PLAN.md`.
+4. **Watch the queue size at the next pull.** At the current drain rate (14→11→5) with zero fresh
+   drafts for 2 consecutive cycles, the queue may reach 0 before new signals arrive.
+
+### Numbers
+
+- Pending drafts in queue: 5 (0 fresh; 5 carry-overs, exact subset of Jul 19–23's graded batch)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 30 cycles, P_compound 15 cycles
+  cumulative/re-activated, A8 5 cycles on the opener-skeleton axis, A7/P5/A4/A5/A6/A9 unchanged —
+  all counts stand at Jul 23's levels; P_dust/P_tier/P9 remain SHIPPED/CONFIRMED)
+- Staleness bulk-reject: **0 strict candidates**; write skipped — `gh` CLI absent, no gist-write
+  MCP tool available (57th consecutive skip, May 13 → Jul 25)
+- Operational anomalies: **6 drafts dropped from the queue since Jul 24** (Delhi B+, Wausaukee A-,
+  Anchorage B, Astana B+ — all 4 cycles-old since Jul 18 — plus Doha B+ and Al Başrah Al Qadīmah
+  A-, both 2-cycle-old watch items) — the largest single-cycle contraction recorded to date,
+  roughly double the prior record (Jul 23→24, -3)
+
+---
+
 ## 2026-07-24 — Daily corpus grading (0 fresh drafts; 11 carry-overs from Jul 17–23, previously graded)
 
 **Context:** Step 0 synced `main` (tip unchanged at `#449`), then checked out `daily-plan-current`
