@@ -936,17 +936,22 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
     Per event_id: structurally VALIDATE both sides (malformed dropped, never
     trusted), keep the entry with the newest PARSED instant (offset-safe —
     string comparison would let a "+02:00" suffix defeat newest-wins), and
-    when both sides describe the same (sha, epoch, stage) evidence take the
-    MAX kill count (two writers incrementing from one base under-count by
-    the smaller increment — bounded, never inflated; mirrors
-    _merge_llm_usage). Stage is part of the evidence identity (codex r9):
-    kills at different stages are different failure modes and must not
-    pool toward one activation threshold.
+    when both sides describe the same (sha, epoch, stage) evidence UNION
+    their individually-fresh kill stamps (codex r10 — deduped by parsed
+    instant, capped newest-first; two writers each recording real kills
+    yield the honest combined evidence, never an inflated count). Stage is
+    part of the evidence identity (codex r9): kills at different stages are
+    different failure modes and must not pool toward one activation
+    threshold. Every surviving entry's stamps are freshness-filtered here
+    (codex r10): a stale stamp must not ride a fresh entry back in and
+    count toward activation later.
     TTL-expiry and the size cap are enforced HERE as well as at drain time:
     a merge without its own prune resurrects drain-pruned entries on every
     write from a stale overlay (codex r1 P2 — reproduced)."""
     from src.two_bot.negative_cache import (
+        _KILLS_AT_CAP,
         NEGATIVE_CACHE_MAX_ENTRIES,
+        fresh_kill_instants,
         parse_at,
         ttl_hours,
         valid_entry,
@@ -981,6 +986,7 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
         if a is None or b is None:
             chosen = deepcopy(a if b is None else b)
             assert chosen is not None  # both-None handled above
+            stamps = fresh_kill_instants(chosen, now, ttl)
         else:
             a_at, b_at = parse_at(a["at"]), parse_at(b["at"])
             assert a_at is not None and b_at is not None  # _fresh guarantees
@@ -990,7 +996,19 @@ def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
                 and a.get("epoch") == b.get("epoch")
                 and a.get("stage") == b.get("stage")
             ):
-                chosen["kills"] = max(int(a["kills"]), int(b["kills"]))
+                stamps = sorted(
+                    set(fresh_kill_instants(a, now, ttl))
+                    | set(fresh_kill_instants(b, now, ttl)),
+                    reverse=True,
+                )
+            else:
+                stamps = fresh_kill_instants(chosen, now, ttl)
+        if not stamps:
+            continue  # every kill aged out — the entry is dead evidence
+        del stamps[_KILLS_AT_CAP:]
+        chosen["kills_at"] = [k.isoformat() for k in stamps]
+        chosen["kills"] = len(stamps)
+        chosen["at"] = stamps[0].isoformat()
         merged[event_id] = chosen
     if len(merged) > NEGATIVE_CACHE_MAX_ENTRIES:
         # Parsed-instant sort (codex r2 P2): raw ISO strings with mixed

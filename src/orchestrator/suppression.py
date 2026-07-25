@@ -178,7 +178,7 @@ def _record_downstream_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
-        "stage": kill_stage,  # "writer" | "safety" | "honesty_gate" | "evidence_contract" | "fact_check" | "critic" | "budget_exhausted" | "billing_cycle_abort" | "pipeline_error" | "triage_cap" | "triage_error" | "negative_cache" | "unknown"
+        "stage": kill_stage,  # "score_gate" | "writer" | "safety" | "honesty_gate" | "cross_signal" | "evidence_contract" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "billing_cycle_abort" | "pipeline_error" | "triage_cap" | "triage_error" | "cycle_cap" | "duplicate_draft" | "negative_cache" | "unknown" — keep in sync with PIPELINE.md §Suppression ledger (codex r10 P3: this comment is the declared source of truth and had drifted behind that list)
         "event_id": event_id or None,
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),

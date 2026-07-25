@@ -1,14 +1,18 @@
 """Economics P1.3: cross-cycle negative cache for paid-stage writer kills.
 
-Pins the hardened contract (codex r1): the skip activates only after
-``min_kills`` (default 2) kills of the same (event_id, bundle sha, decision
-epoch) — one stochastic kill never suppresses a story; changed facts or a
-rotated decision epoch (model/prompt/flags) restart the evidence; the read
-predicate is pure; TTL expiry, malformed entries, and the size cap are
-enforced in the drain prune AND inside the state merge (no resurrection
-from stale overlays); the drain checks the cache as the LAST $0 predicate
-before the paid boundary so cheaper deterministic kills are never
-misattributed to it.
+Pins the hardened contract (codex r1–r10): the skip activates only after
+``min_kills`` (default 2) INDIVIDUALLY TTL-fresh kills of the same
+(event_id, bundle sha, decision epoch, stage) — one stochastic kill never
+suppresses a story, different stages never pool, and every kill carries its
+own timestamp in ``kills_at``; changed facts, a rotated decision epoch
+(model/prompt/flags/VERSION), or a stage change restart the evidence; the
+read predicate is pure; per-kill TTL expiry, malformed entries, and the
+size cap are enforced in the drain prune AND inside the state merge (no
+resurrection from stale overlays); BOTH drain paths (refill and legacy)
+check the cache as the LAST $0 predicate before the paid boundary so
+cheaper deterministic kills are never misattributed to it, and a cache
+skip blocks only identical facts — a changed-facts sibling row keeps its
+paid attempt.
 """
 
 from __future__ import annotations
@@ -51,9 +55,12 @@ def _candidate(*, event_id: str, dhw: int = 8, total: int = 80) -> TriageCandida
 
 
 def _entry(sha: str, *, at: datetime, kills: int = 2, epoch: str | None = None) -> dict:
+    """One cache entry with ``kills`` per-kill stamps, newest == ``at``,
+    one minute apart (codex r10: each kill carries its own timestamp)."""
     return {
         "sha": sha, "epoch": epoch if epoch is not None else negative_cache.decision_epoch(),
         "stage": "writer", "reason": "dull", "at": at.isoformat(), "kills": kills,
+        "kills_at": [(at - timedelta(minutes=i)).isoformat() for i in range(kills)],
     }
 
 
@@ -310,13 +317,28 @@ def test_merge_newest_wins_by_parsed_instant_not_string():
     assert merged["e1"]["sha"] == "b" * 64
 
 
-def test_merge_takes_max_kills_for_same_evidence():
-    now = datetime.now(timezone.utc)
+def test_merge_unions_fresh_kill_stamps_for_same_evidence():
+    """Two writers each recording real kills yield the honest combined
+    evidence (codex r10): stamps union by parsed INSTANT (offset forms of
+    one instant dedup to one kill), newest first — never a naive max()
+    that attaches an old count to a new timestamp."""
+    now = datetime.now(timezone.utc).replace(microsecond=0)
     epoch = negative_cache.decision_epoch()
     a = _entry("c" * 64, at=now - timedelta(minutes=5), kills=3, epoch=epoch)
     b = _entry("c" * 64, at=now, kills=2, epoch=epoch)
+    # Overlap: b also carries a's newest instant in +02:00 form — one kill,
+    # not two.
+    b["kills_at"].append(
+        (now - timedelta(minutes=5))
+        .astimezone(timezone(timedelta(hours=2)))
+        .isoformat()
+    )
+    b["kills"] = len(b["kills_at"])
     merged = _merge_writer_negative_cache({"e1": a}, {"e1": b})
-    assert merged["e1"]["kills"] == 3  # newest entry, max count
+    # a: {-5m,-6m,-7m}; b: {0,-1m,-5m(offset dup)} → 5 distinct instants.
+    assert merged["e1"]["kills"] == 5
+    assert len(merged["e1"]["kills_at"]) == 5
+    assert merged["e1"]["at"] == now.isoformat()
 
 
 def test_merge_does_not_resurrect_expired_and_drops_malformed():
@@ -1058,6 +1080,239 @@ def test_epoch_rotates_on_revise_flag_change(monkeypatch):
     monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
     e2 = negative_cache.decision_epoch()
     assert e1 and e2 and e1 != e2
+
+
+def test_changed_facts_sibling_row_gets_its_paid_attempt(monkeypatch):
+    """A $0 cache skip must not consume the event's paid slot for the
+    cycle (codex r10 P1): with cached facts A skipped, a same-event row
+    with CHANGED facts (new fingerprint) must reach the writer — while an
+    identical-facts sibling still falls to duplicate_draft."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    # Arm the cache for facts A (dhw=8).
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    _run_refill(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    assert calls == ["e1", "e1"]
+
+    # Cycle 3: cached A, then identical A-dup, then CHANGED facts B.
+    funnel_sink: dict = {"_slate_ids": {"e1"}}
+    _run_refill(
+        monkeypatch, bot_state,
+        [
+            _candidate(event_id="e1", dhw=8),
+            _candidate(event_id="e1", dhw=8),
+            _candidate(event_id="e1", dhw=9),
+        ],
+        fake,
+        funnel_sink=funnel_sink,
+    )
+    assert calls == ["e1", "e1", "e1"], (
+        "changed facts must reach the writer despite the same-event cache skip"
+    )
+    rows = bot_state.get("suppressions", [])
+    stages = [(s.get("kill_stage") or s.get("stage")) for s in rows]
+    assert stages.count("negative_cache") == 1, "one skip for the cached facts"
+    assert stages.count("duplicate_draft") == 1, "identical sibling is a dup"
+    # First terminal wins: the event's slate terminal stays the first
+    # resolution (negative_cache), not B's later paid kill.
+    assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache"
+
+
+def test_legacy_changed_facts_sibling_and_first_terminal(monkeypatch):
+    """Legacy-path parity for codex r10: identical-facts sibling of a
+    cache-skipped event records duplicate_draft; changed facts reach the
+    writer; the paid result must NOT overwrite the first slate terminal
+    (codex r10 P2)."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+
+    funnel_sink: dict = {"_slate_ids": {"e1"}}
+    _run_legacy(
+        monkeypatch, bot_state,
+        [
+            _candidate(event_id="e1", dhw=8),
+            _candidate(event_id="e1", dhw=8),
+            _candidate(event_id="e1", dhw=9),
+        ],
+        fake,
+        funnel_sink=funnel_sink,
+    )
+    assert calls == ["e1", "e1", "e1"], "changed facts must reach the writer"
+    rows = bot_state.get("suppressions", [])
+    stages = [(s.get("kill_stage") or s.get("stage")) for s in rows]
+    assert stages.count("duplicate_draft") == 1
+    assert funnel_sink.get("_slate_terminal", {}).get("e1") == "negative_cache", (
+        "the paid result must not overwrite the first terminal (first wins)"
+    )
+
+
+def test_kill_chain_cannot_extend_evidence_past_ttl():
+    """Each kill participates only while INDIVIDUALLY fresh (codex r10 P1):
+    kills at t0 and t0+47h must not read as two fresh kills at t0+94h —
+    the rolling newest-stamp previously kept ancient evidence alive."""
+    t0 = datetime.now(timezone.utc) - timedelta(hours=94)
+    state = _fresh_state()
+    bundle = _bundle("e1")
+    sha = negative_cache.bundle_fingerprint(bundle)
+    negative_cache.record_kill(state, "e1", sha, "writer", "dull", now=t0)
+    negative_cache.record_kill(
+        state, "e1", sha, "writer", "dull", now=t0 + timedelta(hours=47)
+    )
+    # Shortly after the second kill BOTH are fresh — the skip is active.
+    assert negative_cache.should_skip(
+        state, "e1", bundle, now=t0 + timedelta(hours=47, minutes=30)
+    ) is not None
+    # At t0+94h only the second kill is inside the 48h window — one fresh
+    # kill must never suppress.
+    assert negative_cache.should_skip(
+        state, "e1", bundle, now=t0 + timedelta(hours=94)
+    ) is None
+
+
+def test_malformed_kill_reason_type_is_parse_error(monkeypatch):
+    """An explicit-null tweet with a non-string kill_reason (e.g. []) is a
+    contract violation, not an editorial verdict (codex r10 P2) — it must
+    route into the JSON-retry lane and surface as an INFRA kill."""
+    import pytest
+
+    from src.two_bot import writer as writer_mod
+
+    with pytest.raises(ValueError, match="kill_reason"):
+        writer_mod._parse_writer_json('{"tweet": null, "kill_reason": []}')
+    with pytest.raises(ValueError, match="kill_reason"):
+        writer_mod._parse_writer_json('{"tweet": null, "kill_reason": "  "}')
+    with pytest.raises(ValueError, match="'tweet' must be a string"):
+        writer_mod._parse_writer_json('{"tweet": 42, "kill_reason": null}')
+
+    from src.two_bot.types import MemorySlice
+
+    monkeypatch.setattr(
+        writer_mod, "_call_writer_provider",
+        lambda p: '{"tweet": null, "kill_reason": []}',
+    )
+    result = writer_mod.write_tweet(_bundle("e1"), MemorySlice())
+    assert result.tweet is None
+    assert result.kill_is_editorial is False, (
+        "malformed verdicts must never be cacheable editorial evidence"
+    )
+
+
+def test_mixed_slate_with_scoped_kill_is_not_cacheable(monkeypatch):
+    """One cooldown-scoped verdict anywhere in a multi-sample slate makes
+    the aggregate writer kill non-cacheable (codex r10 P2 pins the r9
+    ``any(...)`` rule — a single-sample test could not distinguish it)."""
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot.types import MemorySlice, WriterResult
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "2")
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice", lambda s, b: MemorySlice()
+    )
+
+    def _kill(scoped: bool) -> WriterResult:
+        return WriterResult(
+            tweet=None, kill_reason="no angle", angle_chosen="",
+            era_anchor_used=None, peer_comparison_used=None, reasoning="",
+            kill_is_editorial=True, kill_context_scoped=scoped,
+        )
+
+    # Thread-safe handout: each sampler pops one prepared result.
+    results = [_kill(True), _kill(False)]
+    monkeypatch.setattr(
+        pipeline_mod.writer, "write_tweet",
+        lambda bundle, memory, **kw: results.pop(),
+    )
+    out: dict = {}
+    assert pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "writer" and out["cacheable"] is False
+
+    # Control: two UNscoped editorial kills stay cacheable.
+    results = [_kill(False), _kill(False)]
+    out = {}
+    assert pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "writer" and out["cacheable"] is True
+
+
+def test_critic_shaped_true_for_slate_selection_and_revise(monkeypatch):
+    """The success report must be True on BOTH critic-shaping paths —
+    slate selection and an adopted revise (codex r10 P2 pins the r9
+    ``critic_shaped`` rule beyond the plain False case)."""
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot.types import CriticResult, FactCheckResult, MemorySlice, WriterResult
+
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice", lambda s, b: MemorySlice()
+    )
+    monkeypatch.setattr(
+        pipeline_mod, "_check_safety_honesty_fact",
+        lambda *a, **k: FactCheckResult(passed=True, failures=[], raw_response="{}"),
+    )
+
+    def good(text: str) -> WriterResult:
+        return WriterResult(
+            tweet=text, kill_reason=None, angle_chosen="a",
+            era_anchor_used=None, peer_comparison_used=None, reasoning="",
+        )
+
+    # --- Path 1: slate selection (samples=2, critic enabled). ---
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "2")
+    monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "1")
+    monkeypatch.setattr(
+        pipeline_mod.writer, "write_tweet",
+        lambda bundle, memory, **kw: good("sample tweet"),
+    )
+    monkeypatch.setattr(
+        pipeline_mod.critic, "critic_select_slate",
+        lambda *a, **k: CriticResult(
+            passed=True, kill_reason=None, raw_response="{}", verdict="PASS",
+            selected_index=1,
+        ),
+    )
+    out: dict = {}
+    draft = pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out)
+    assert draft is not None
+    assert out.get("critic_shaped") is True, "slate selection shapes the text"
+
+    # --- Path 2: adopted revise (samples=1, revise enabled). ---
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setenv("THEHEAT_CRITIC_REVISE_ENABLED", "1")
+    review_calls = {"n": 0}
+
+    def fake_review(*a, **k):
+        review_calls["n"] += 1
+        if review_calls["n"] == 1:
+            return CriticResult(
+                passed=False, kill_reason=None, raw_response="{}",
+                verdict="REVISE", revise_instruction="tighten the opener",
+            )
+        return CriticResult(
+            passed=True, kill_reason=None, raw_response="{}", verdict="PASS",
+        )
+
+    monkeypatch.setattr(pipeline_mod.critic, "critic_review", fake_review)
+    monkeypatch.setattr(
+        pipeline_mod.writer, "write_tweet",
+        lambda bundle, memory, **kw: (
+            good("revised tweet") if kw.get("revision_constraint") else good("first tweet")
+        ),
+    )
+    out = {}
+    draft = pipeline_mod.generate_draft(_bundle("e1"), _fresh_state(), result_out=out)
+    assert draft is not None
+    assert draft["text"] == "revised tweet"
+    assert out.get("critic_shaped") is True, "an adopted revise shapes the text"
 
 
 def test_epoch_rotates_on_version_change(monkeypatch):

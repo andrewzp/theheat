@@ -54,8 +54,20 @@ All notable changes to this project will be documented in this file.
   `tweet` field is a parse error routed to the JSON-retry lane, never an
   editorial verdict; the post-pipeline advisory-URL safety kill carries an
   honest `cacheable` disposition via the pipeline's new
-  `critic_shaped` report. Week-1 post-restore funnel showed the plan's
-  pre-registered trigger at ~67 writer calls/day vs the $14 budget.
+  `critic_shaped` report. Codex r10: **every kill carries its own
+  timestamp (`kills_at`) and only individually TTL-fresh kills count
+  toward activation** — a kill chain can no longer keep ancient evidence
+  alive through a rolling newest-stamp, and the state merge unions fresh
+  stamps instead of max-pooling counts; **a $0 cache skip blocks only
+  identical facts** — skips are remembered per fingerprint in BOTH drains,
+  so an identical-facts sibling row records `duplicate_draft` while a
+  changed-facts sibling keeps its paid attempt (changed-facts reopening
+  held); the legacy drain's paid-result funnel row honors
+  first-terminal-wins; the writer parse contract validates verdict field
+  TYPES (`tweet` string-or-null; a null tweet requires a non-empty string
+  `kill_reason`) so malformed verdicts route to the JSON-retry lane.
+  Week-1 post-restore funnel showed the plan's pre-registered trigger at
+  ~67 writer calls/day vs the $14 budget.
 
 ### Production restore — bot.yml schedules re-added (2026-07-16)
 

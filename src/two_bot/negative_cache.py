@@ -16,11 +16,15 @@ Because the gates are STOCHASTIC (the writer samples; critic/fact-check judge
 one sampled tweet), one kill is deliberately NOT enough to suppress a story —
 editorial supply is the known bottleneck, and a fresh sample might pass
 (codex r1 P1). The cache therefore activates only after ``min_kills``
-(default 2) kills of the same ``(event_id, bundle sha, decision epoch)``:
-the first kill records evidence, the second — two independent samplings dead
+(default 2) INDIVIDUALLY TTL-fresh kills of the same ``(event_id, bundle
+sha, decision epoch, stage)`` — stage joined the identity in codex r9
+(different stages are different failure modes; they never pool), and each
+kill carries its own timestamp in ``kills_at`` since codex r10 (a rolling
+newest-stamp let kill chains keep expired evidence alive). The first kill
+records evidence, the second — two independent samplings dead the same way
 on byte-identical facts — proves persistence, and attempts 3..N (the modal
 waste at ~6 cycles/day) are skipped as $0 ``negative_cache`` pre-writer
-kills until the facts change, the epoch changes, or the TTL lapses.
+kills until the facts change, the epoch changes, or the evidence ages out.
 
 The DECISION EPOCH folds in everything else the verdict depends on that the
 bundle doesn't carry: writer model, writer system prompt (sha), and the
@@ -73,6 +77,11 @@ NEGATIVE_CACHE_MAX_ENTRIES = 200
 _DEFAULT_TTL_HOURS = 48.0
 _DEFAULT_MIN_KILLS = 2
 _KILLS_CLAMP = 1_000_000
+# Per-kill timestamps kept per entry (codex r10: the activation threshold
+# counts only INDIVIDUALLY fresh kills, so each one needs its own stamp).
+# Must exceed min_kills' upper clamp (10) so the cap can never mask a real
+# activation; 12 stamps ≈ 300B/entry keeps state growth trivial (#390).
+_KILLS_AT_CAP = 12
 
 _STAGE_MAX_LEN = 40
 _REASON_MAX_LEN = 160
@@ -226,14 +235,17 @@ def valid_entry(entry: object) -> bool:
     Beyond shape this enforces the SEMANTIC contract: the stage must be one
     this cache is allowed to hold (a structurally-clean ``budget_exhausted``
     row from a corrupt overlay must not suppress), kills is a true int
-    (bool is an int subclass) inside the clamp, and the epoch is non-empty
-    (an empty epoch means the decision context was unknowable)."""
+    (bool is an int subclass) that EQUALS the per-kill stamp count
+    (codex r10 — the stamps are the evidence; a divergent summary int is
+    corrupt), every stamp parses, and the epoch is non-empty (an empty
+    epoch means the decision context was unknowable)."""
     if not isinstance(entry, dict):
         return False
     sha = entry.get("sha")
     epoch = entry.get("epoch")
     stage = entry.get("stage")
     kills = entry.get("kills")
+    kills_at = entry.get("kills_at")
     return (
         isinstance(sha, str)
         and len(sha) == 64
@@ -243,9 +255,32 @@ def valid_entry(entry: object) -> bool:
         and isinstance(stage, str)
         and stage in CACHEABLE_KILL_STAGES
         and parse_at(entry.get("at")) is not None
+        and isinstance(kills_at, list)
+        and 1 <= len(kills_at) <= _KILLS_AT_CAP
+        and all(parse_at(k) is not None for k in kills_at)
         and type(kills) is int
-        and 1 <= kills <= _KILLS_CLAMP
+        and kills == len(kills_at)
     )
+
+
+def fresh_kill_instants(
+    entry: dict, current: datetime, ttl: timedelta
+) -> list[datetime]:
+    """Parse an entry's per-kill stamps and keep only those individually
+    inside the TTL window, deduped by INSTANT (mixed offsets must not
+    double-count one kill), newest first. Shared by the read path, the
+    record path, the prune, and the state merge so every consumer agrees
+    on what evidence is still alive (codex r10)."""
+    seen: set[datetime] = set()
+    for raw in entry.get("kills_at") or []:
+        instant = parse_at(raw)
+        if instant is None:
+            continue
+        age = current - instant
+        if age < timedelta(0) or age > ttl:
+            continue
+        seen.add(instant)
+    return sorted(seen, reverse=True)
 
 
 def should_skip(
@@ -271,10 +306,16 @@ def should_skip(
         at = parse_at(entry.get("at"))
         assert at is not None
         current = now or datetime.now(timezone.utc)
+        ttl = timedelta(hours=ttl_hours())
         age = current - at
-        if age < timedelta(0) or age > timedelta(hours=ttl_hours()):
+        if age < timedelta(0) or age > ttl:
             return None
-        if int(entry.get("kills") or 0) < min_kills():
+        # Codex r10: the threshold counts only INDIVIDUALLY fresh kills. A
+        # rolling newest-timestamp let a kill chain (one every <TTL) keep
+        # ancient evidence alive: kills at t0 and t0+47h read as kills=2 at
+        # t0+94h even though only one sat inside the window.
+        fresh = fresh_kill_instants(entry, current, ttl)
+        if len(fresh) < min_kills():
             return None
         if entry.get("epoch") != decision_epoch():
             return None  # prompt/model/flags changed — decision context stale
@@ -284,7 +325,7 @@ def should_skip(
         stage = str(entry.get("stage") or "unknown")[:_STAGE_MAX_LEN]
         hours = age.total_seconds() / 3600
         return (
-            f"negative cache: killed at {stage} x{entry.get('kills')} "
+            f"negative cache: killed at {stage} x{len(fresh)} "
             f"(last {hours:.1f}h ago), material facts unchanged"
         )
     except Exception as exc:  # noqa: BLE001 — a cache bug must never block drafting
@@ -301,10 +342,12 @@ def record_kill(
     *,
     now: datetime | None = None,
 ) -> None:
-    """Remember a paid-stage kill. The kill count increments only while the
-    (sha, epoch) pair is unchanged — different facts or a rotated epoch
-    restart the evidence at 1. No-ops for non-cacheable stages, missing
-    ids/fingerprints, or when disabled. Never raises."""
+    """Remember a paid-stage kill. Evidence accumulates only while the
+    (sha, epoch, stage) identity is unchanged — different facts, a rotated
+    epoch, or a different stage restart the evidence — and each kill keeps
+    its own timestamp in ``kills_at`` (codex r10: only individually
+    TTL-fresh kills count toward activation). No-ops for non-cacheable
+    stages, missing ids/fingerprints, or when disabled. Never raises."""
     try:
         if not enabled() or not event_id or not sha:
             return
@@ -316,36 +359,37 @@ def record_kill(
         cache = _cache_dict(bot_state)
         prior = cache.get(event_id)
         current = now or datetime.now(timezone.utc)
-        kills = 1
+        ttl = timedelta(hours=ttl_hours())
+        stage_norm = str(stage)[:_STAGE_MAX_LEN]
+        stamps: list[datetime] = []
         # Evidence identity is (sha, epoch, STAGE) — codex r9: a writer kill
         # plus a fact-check kill on the same facts are two DIFFERENT failure
         # modes, and the fact-check attempt proves the writer passed once.
         # Counting them toward one threshold would suppress without any mode
-        # having repeated; a stage change restarts the evidence at 1.
+        # having repeated; a stage change restarts the evidence.
         if (
             valid_entry(prior)
             and isinstance(prior, dict)
             and prior.get("sha") == sha
             and prior.get("epoch") == epoch
-            and prior.get("stage") == str(stage)[:_STAGE_MAX_LEN]
+            and prior.get("stage") == stage_norm
         ):
-            # Evidence must itself be FRESH: a prior kill older than the TTL
-            # is expired evidence — incrementing it would let two kills 60h
-            # apart activate the skip (codex r2: expired-evidence
-            # resurrection). Stale prior → the count restarts at 1.
-            prior_at = parse_at(prior.get("at"))
-            if (
-                prior_at is not None
-                and timedelta(0) <= (current - prior_at) <= timedelta(hours=ttl_hours())
-            ):
-                kills = min(int(prior.get("kills") or 0) + 1, _KILLS_CLAMP)
+            # Evidence must itself be FRESH — per kill, not per entry
+            # (codex r2, generalized r10): each prior kill participates only
+            # while individually inside the TTL. A rolling newest-stamp let
+            # a chain of kills keep ancient evidence alive indefinitely.
+            stamps = fresh_kill_instants(prior, current, ttl)
+        stamps.insert(0, current)
+        stamps.sort(reverse=True)
+        del stamps[_KILLS_AT_CAP:]
         cache[event_id] = {
             "sha": sha,
             "epoch": epoch,
-            "stage": str(stage)[:_STAGE_MAX_LEN],
+            "stage": stage_norm,
             "reason": str(reason or "")[:_REASON_MAX_LEN],
-            "at": current.isoformat(),
-            "kills": kills,
+            "at": stamps[0].isoformat(),
+            "kills": len(stamps),
+            "kills_at": [k.isoformat() for k in stamps],
         }
         prune(bot_state, now=now)
     except Exception as exc:  # noqa: BLE001 — accounting must never break the drain
@@ -370,6 +414,20 @@ def prune(bot_state: Any, *, now: datetime | None = None) -> int:
             if at is None or (current - at) > ttl or (current - at) < timedelta(0):
                 del cache[key]
                 removed += 1
+                continue
+            # Trim individually-expired kill stamps (codex r10) so persisted
+            # entries carry only live evidence; an entry whose stamps all
+            # expired is dead even if its newest "at" survives clock skew.
+            assert isinstance(entry, dict)  # valid_entry held above
+            fresh = fresh_kill_instants(entry, current, ttl)
+            if not fresh:
+                del cache[key]
+                removed += 1
+                continue
+            if len(fresh) != len(entry.get("kills_at") or []):
+                entry["kills_at"] = [k.isoformat() for k in fresh]
+                entry["kills"] = len(fresh)
+                entry["at"] = fresh[0].isoformat()
         if len(cache) > NEGATIVE_CACHE_MAX_ENTRIES:
             # Sort by PARSED instant, not the raw string — mixed offsets
             # would otherwise evict a newer instant over an older one

@@ -159,7 +159,7 @@ Each stage has a specific job; failure at any stage kills the draft rather than 
 
 **Two-bot writer is live since 2026-05-04** (CHANGELOG 0.2.0.0). The voice generator is no longer reached on any live signal path — Sonnet 4.6 writes every audience-facing tweet, Gemini Flash runs claim extraction + fact-check, Gemini 2.5 Pro runs the second-pass editorial critic.
 
-**Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x; extended for `critic` stage in 0.7.1.0 / #120, `claim_extractor` + `budget_exhausted` in 0.7.2.0 / #126 + #127, `triage_cap` in 0.8.0.0 / #132, `triage_error` in 0.9.0.0 / PR #139, and `evidence_contract` in 0.9.0.0 / 00837f2). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate | writer | safety | honesty_gate | cross_signal | evidence_contract | claim_extractor | fact_check | critic | budget_exhausted | billing_cycle_abort | pipeline_error | triage_cap | triage_error | cycle_cap | negative_cache | unknown`) — the dashboard's `Suppressed` tab surfaces them in real time. The source-of-truth list of valid stages lives in the `stage` comment in `src/orchestrator/suppression.py` (the `_record_downstream_suppression` row builder); keep that comment in sync when adding stages.
+**Suppression ledger is live since 2026-05-08** (CHANGELOG 0.3.x; extended for `critic` stage in 0.7.1.0 / #120, `claim_extractor` + `budget_exhausted` in 0.7.2.0 / #126 + #127, `triage_cap` in 0.8.0.0 / #132, `triage_error` in 0.9.0.0 / PR #139, and `evidence_contract` in 0.9.0.0 / 00837f2). Every kill at any stage records a structured row in `bot_state.suppressions` with `stage` discriminator (`score_gate | writer | safety | honesty_gate | cross_signal | evidence_contract | claim_extractor | fact_check | critic | budget_exhausted | billing_cycle_abort | pipeline_error | triage_cap | triage_error | cycle_cap | duplicate_draft | negative_cache | unknown`) — the dashboard's `Suppressed` tab surfaces them in real time. The source-of-truth list of valid stages lives in the `stage` comment in `src/orchestrator/suppression.py` (the `_record_downstream_suppression` row builder); keep that comment in sync when adding stages.
 
 **BudgetExhaustedError tagging is live since 2026-05-17** (CHANGELOG 0.7.2.0 / #127). The retry helper at [src/two_bot/retry.py](/Users/andrewpuschel/Documents/Claude/theheat/src/two_bot/retry.py) now detects the Anthropic 400 "credit balance is too low" pattern, short-circuits the retry loop, and raises `BudgetExhaustedError`. The pipeline catches it before generic `Exception` and records `kill_stage="budget_exhausted"` — so the dashboard surfaces a billing outage distinctly from a model/code bug (the 2026-05-15 → 2026-05-17 outage produced 182 indistinguishable `pipeline_error` rows; this fix would have made it diagnosable in one row).
 
@@ -235,7 +235,10 @@ flowchart TD
 
     GATE1 -->|yes| INTERN["Intern (build_*_bundle)<br/>StoryBundle assembly:<br/>• state-name expansion (US)<br/>• station-name normalization (GHCN)<br/>• observation_kind: overnight/afternoon<br/>• audience_unit: F-first US, C-first else<br/>• temp_c + temp_f pre-computed"]:::gen
 
-    INTERN --> WRITER["Sonnet 4.6 Writer<br/>(call_with_retries 3×, 180s timeout)<br/>JSON output via loads_model_json:<br/>• fence-tolerant<br/>• preamble-tolerant<br/>• balanced-span extraction"]:::gen
+    INTERN --> NEGCACHE{"Cross-cycle negative cache<br/>(economics P1.3, LAST $0 predicate)<br/>min_kills fresh kills on same<br/>(sha, epoch, stage)?"}:::gate
+
+    NEGCACHE -.->|cached kill| SUPPNC[("suppressions<br/>stage=negative_cache")]:::state
+    NEGCACHE -->|miss| WRITER["Sonnet 4.6 Writer<br/>(call_with_retries 3×, 180s timeout)<br/>JSON output via loads_model_json:<br/>• fence-tolerant<br/>• preamble-tolerant<br/>• balanced-span extraction"]:::gen
 
     WRITER -.->|tweet=null<br/>+ kill_reason| SUPP2[("suppressions<br/>stage=writer")]:::state
     WRITER -->|tweet text| EXTRACT["Gemini Flash<br/>Claim extractor<br/>(90s timeout)"]:::gen

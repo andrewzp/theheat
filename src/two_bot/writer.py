@@ -96,12 +96,24 @@ def _parse_writer_json(raw: str) -> WriterResult:
         raise ValueError("Writer returned invalid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Writer response must be a JSON object")
-    # The verdict-bearing field must be PRESENT (its value may be null).
-    # A response that OMITS ``tweet`` entirely is a contract violation —
-    # treating it as an editorial kill let malformed output arm the
-    # negative cache (codex r9); it belongs to the JSON-retry lane instead.
+    # The verdict-bearing fields must be PRESENT and TYPE-VALID. A response
+    # that OMITS ``tweet``, gives it a non-string non-null value, or pairs
+    # an explicit null with a non-string/empty ``kill_reason`` is a
+    # contract violation — treating any of those as an editorial kill let
+    # malformed output arm the negative cache (codex r9 + r10: e.g.
+    # ``{"tweet": null, "kill_reason": []}``); they belong to the
+    # JSON-retry lane instead.
     if "tweet" not in parsed:
         raise ValueError("Writer response is missing required field 'tweet'")
+    tweet_val = parsed["tweet"]
+    if tweet_val is not None and not isinstance(tweet_val, str):
+        raise ValueError("Writer field 'tweet' must be a string or null")
+    if tweet_val is None:
+        kill_reason_val = parsed.get("kill_reason")
+        if not isinstance(kill_reason_val, str) or not kill_reason_val.strip():
+            raise ValueError(
+                "Writer kill verdict requires a non-empty string 'kill_reason'"
+            )
     cited_impact = parsed.get("cited_impact")
     try:
         return WriterResult(
