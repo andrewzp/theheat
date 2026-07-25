@@ -199,17 +199,37 @@ def extract_json_payload(raw: str, *, expected: str = "any") -> str:
     return text
 
 
-def _try_parse_span(span_text: str) -> Any:
+def _reject_duplicate_keys(pairs: list) -> dict:
+    """object_pairs_hook that refuses duplicate names at any nesting level.
+
+    Plain ``json.loads`` silently keeps the LAST duplicate, so
+    ``{"tweet":"viable","tweet":null,...}`` parsed as an editorial kill —
+    spoofable durable cache evidence (codex P1.3 r12 P2). Applied only
+    under the ``require_single_object`` verdict contract."""
+    seen: set = set()
+    out: dict = {}
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError(f"Duplicate JSON key in model response: {key!r}")
+        seen.add(key)
+        out[key] = value
+    return out
+
+
+def _try_parse_span(span_text: str, *, strict_pairs: bool = False) -> Any:
     """Try to parse span_text, applying comment/comma cleanup on first failure.
 
-    Raises json.JSONDecodeError if still invalid after cleanup.
+    Raises json.JSONDecodeError (or ValueError for duplicate keys under
+    ``strict_pairs``) if still invalid after cleanup.
     """
+    hook = _reject_duplicate_keys if strict_pairs else None
     try:
-        return json.loads(span_text)
+        return json.loads(span_text, object_pairs_hook=hook)
     except json.JSONDecodeError:
         cleaned = _strip_json_comments(span_text)
         cleaned = _strip_trailing_commas(cleaned)
-        return json.loads(cleaned)  # let this raise if still broken
+        # let this raise if still broken
+        return json.loads(cleaned, object_pairs_hook=hook)
 
 
 def loads_model_json(
@@ -237,16 +257,21 @@ def loads_model_json(
     for span in spans:
         candidate = text[span[0]:span[1]]
         try:
-            parsed = _try_parse_span(candidate)
+            parsed = _try_parse_span(candidate, strict_pairs=require_single_object)
         except (json.JSONDecodeError, ValueError) as exc:
             last_exc = exc
             continue
         if require_single_object and expected == "object":
-            for later in spans:
-                if later[0] < span[1]:
-                    continue  # inside or before the accepted span — not a sibling
+            # ANY other non-nested parseable object — before or after the
+            # accepted span, duplicate-keyed or not — makes the response
+            # ambiguous: two top-level objects means the model emitted two
+            # candidate verdicts, and picking either could turn the wrong
+            # one into durable cache evidence (codex r11+r12). Retry.
+            for other in spans:
+                if other[0] >= span[0] and other[1] <= span[1]:
+                    continue  # the accepted span itself, or nested inside it
                 try:
-                    _try_parse_span(text[later[0]:later[1]])
+                    _try_parse_span(text[other[0]:other[1]])
                 except (json.JSONDecodeError, ValueError):
                     continue
                 raise ValueError(
@@ -258,7 +283,7 @@ def loads_model_json(
     # No span parsed — try the whole (fence-stripped) text as last resort
     # so that clean responses with no unusual preamble still work.
     try:
-        return _try_parse_span(text)
+        return _try_parse_span(text, strict_pairs=require_single_object)
     except (json.JSONDecodeError, ValueError) as exc:
         last_exc = exc
 

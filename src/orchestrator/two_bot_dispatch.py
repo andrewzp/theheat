@@ -147,12 +147,14 @@ def _try_two_bot_draft(
             # Cacheable disposition (codex r9): the advisory-URL append is
             # deterministic, so this safety verdict is as stable as the
             # pipeline's own — UNLESS the underlying text was critic-shaped
-            # (slate selection / revise), whose rolling context must not arm
-            # the cache. STRICT default-deny (codex r11 P3): only the
-            # pipeline's explicit `critic_shaped=False` authorizes caching —
+            # (slate selection / revise) or written under an active category
+            # cooldown (codex r12), both transient contexts that must not
+            # arm the cache. STRICT default-deny (codex r11 P3): only the
+            # pipeline's explicit False on BOTH reports authorizes caching —
             # a missing key or any malformed value (None/0/"") denies.
             pipeline_result["cacheable"] = (
                 pipeline_result.get("critic_shaped") is False
+                and pipeline_result.get("cooldown_scoped") is False
             )
             ctx = _current_suppression_ctx()
             if ctx is not None:

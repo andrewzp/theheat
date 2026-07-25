@@ -8,11 +8,14 @@ own timestamp in ``kills_at``; changed facts, a rotated decision epoch
 (model/prompt/flags/VERSION), or a stage change restart the evidence; the
 read predicate is pure; per-kill TTL expiry, malformed entries, and the
 size cap are enforced in the drain prune AND inside the state merge (no
-resurrection from stale overlays); BOTH drain paths (refill and legacy)
-check the cache as the LAST $0 predicate before the paid boundary so
-cheaper deterministic kills are never misattributed to it, and a cache
-skip blocks only identical facts — a changed-facts sibling row keeps its
-paid attempt.
+resurrection from stale overlays); BOTH drain paths run prune + skip +
+record — the refill drain checks the cache as the LAST $0 predicate
+before the paid boundary (exact savings attribution), while the legacy
+drain partitions cache-dead rows out BEFORE cap selection (codex r11/r12:
+a $0 skip must not burn a capped survivor slot) — and a cache skip blocks
+only identical facts: a changed-facts sibling row keeps its paid attempt,
+and every verdict produced under the 24h category cooldown (null OR
+viable-then-killed downstream) is cooldown-scoped and never cacheable.
 """
 
 from __future__ import annotations
@@ -875,11 +878,11 @@ def test_cooldown_scoped_editorial_kill_sets_context_flag(monkeypatch):
 
     hot = writer_mod.write_tweet(bundle, MemorySlice(recent_categories=[category]))
     assert hot.kill_is_editorial is True
-    assert hot.kill_context_scoped is True
+    assert hot.cooldown_context_active is True
 
     cold = writer_mod.write_tweet(bundle, MemorySlice(recent_categories=["other"]))
     assert cold.kill_is_editorial is True
-    assert cold.kill_context_scoped is False
+    assert cold.cooldown_context_active is False
 
 
 def test_pipeline_cooldown_scoped_kill_not_cacheable(monkeypatch):
@@ -901,7 +904,7 @@ def test_pipeline_cooldown_scoped_kill_not_cacheable(monkeypatch):
         return WriterResult(
             tweet=None, kill_reason="category cooldown", angle_chosen="",
             era_anchor_used=None, peer_comparison_used=None, reasoning="cooldown",
-            kill_is_editorial=True, kill_context_scoped=True,
+            kill_is_editorial=True, cooldown_context_active=True,
         )
 
     out: dict = {}
@@ -959,10 +962,13 @@ def test_dispatch_safety_kill_carries_cacheable_disposition(monkeypatch):
         with monkeypatch.context() as mp:
             _ABSENT = object()
 
-            def fake_generate(critic_shaped):
+            def fake_generate(critic_shaped, cooldown_scoped=False):
                 def _g(bundle, state, result_out=None):
-                    if result_out is not None and critic_shaped is not _ABSENT:
-                        result_out["critic_shaped"] = critic_shaped
+                    if result_out is not None:
+                        if critic_shaped is not _ABSENT:
+                            result_out["critic_shaped"] = critic_shaped
+                        if cooldown_scoped is not _ABSENT:
+                            result_out["cooldown_scoped"] = cooldown_scoped
                     return {
                         "text": "t", "event_id": "e1", "type": "cyclone",
                         "two_bot_metadata": {},
@@ -978,16 +984,19 @@ def test_dispatch_safety_kill_carries_cacheable_disposition(monkeypatch):
                 lambda t: (False, "banned phrase"),
             )
 
-            for critic_shaped, expected in [
-                (False, True),     # explicit False → safety verdict cacheable
-                (True, False),     # critic-shaped text → rolling context, never
-                (_ABSENT, False),  # pipeline silent → default-deny
-                (None, False),     # malformed explicit values (codex r11 P3):
-                (0, False),        # only `is False` authorizes — any falsey
-                ("", False),       # non-boolean still denies
+            for critic_shaped, cooldown_scoped, expected in [
+                (False, False, True),    # both explicit False → cacheable
+                (True, False, False),    # critic-shaped → rolling context
+                (False, True, False),    # cooldown-shaped text (codex r12)
+                (_ABSENT, False, False), # pipeline silent → default-deny
+                (False, _ABSENT, False), # cooldown report missing → deny
+                (None, False, False),    # malformed explicit values
+                (0, False, False),       #   (codex r11 P3): only `is False`
+                ("", False, False),      #   authorizes — falsey still denies
             ]:
                 mp.setattr(
-                    pipeline_mod, "generate_draft", fake_generate(critic_shaped)
+                    pipeline_mod, "generate_draft",
+                    fake_generate(critic_shaped, cooldown_scoped),
                 )
                 result_out: dict = {}
                 ok = two_bot_dispatch._try_two_bot_draft(
@@ -1227,7 +1236,7 @@ def test_mixed_slate_with_scoped_kill_is_not_cacheable(monkeypatch):
         return WriterResult(
             tweet=None, kill_reason="no angle", angle_chosen="",
             era_anchor_used=None, peer_comparison_used=None, reasoning="",
-            kill_is_editorial=True, kill_context_scoped=scoped,
+            kill_is_editorial=True, cooldown_context_active=scoped,
         )
 
     # Thread-safe handout: each sampler pops one prepared result.
@@ -1456,3 +1465,142 @@ def test_ambiguous_multi_object_response_is_parse_error(monkeypatch):
     result = writer_mod.write_tweet(_bundle("e1"), MemorySlice())
     assert result.tweet is None
     assert result.kill_is_editorial is False
+
+
+# ------------------------------------------------------------ codex r13 layer
+
+
+def test_downstream_kill_under_cooldown_not_cacheable(monkeypatch):
+    """codex r12 P1: viable text WRITTEN under the 24h category cooldown was
+    shaped by that transient constraint — a downstream (safety) kill of it
+    must not arm the cache, exactly like a null verdict. Control: the same
+    kill without the cooldown stays cacheable."""
+    from src.two_bot import memory as memory_mod
+    from src.two_bot import pipeline as pipeline_mod
+    from src.two_bot import writer as writer_mod
+    from src.two_bot.types import MemorySlice
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "0")
+    monkeypatch.setattr(
+        pipeline_mod, "_audit_bundle_for_generation", lambda b, **k: True
+    )
+    viable_json = (
+        '{"tweet": "A viable tweet under cooldown", "kill_reason": null, '
+        '"angle_chosen": "a", "era_anchor_used": null, '
+        '"peer_comparison_used": null, "reasoning": ""}'
+    )
+    monkeypatch.setattr(writer_mod, "_call_writer_provider", lambda p: viable_json)
+    monkeypatch.setattr(
+        pipeline_mod, "run_safety_pipeline", lambda t: (False, "banned phrase")
+    )
+    bundle = _bundle("e1")
+    category = memory_mod._signal_kind_to_category(bundle.signal_kind)
+
+    # Cooldown ACTIVE at attempt time → safety kill is not cacheable.
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice",
+        lambda s, b: MemorySlice(recent_categories=[category]),
+    )
+    out: dict = {}
+    assert pipeline_mod.generate_draft(bundle, _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "safety" and out["cacheable"] is False
+
+    # Control: no cooldown → the same safety verdict is cacheable.
+    monkeypatch.setattr(
+        pipeline_mod.memory, "build_memory_slice",
+        lambda s, b: MemorySlice(recent_categories=["other"]),
+    )
+    out = {}
+    assert pipeline_mod.generate_draft(bundle, _fresh_state(), result_out=out) is None
+    assert out["kill_stage"] == "safety" and out["cacheable"] is True
+
+
+def test_duplicate_json_keys_are_parse_errors(monkeypatch):
+    """codex r12 P2: plain json.loads keeps the LAST duplicate key, so
+    {"tweet":"viable","tweet":null,...} spoofed an editorial kill. Under
+    the verdict contract duplicate names anywhere are a parse error →
+    JSON-retry lane."""
+    import pytest
+
+    from src.two_bot import writer as writer_mod
+
+    dup = (
+        '{"tweet": "Fresh viable story", "tweet": null, '
+        '"kill_reason": "routine value", "angle_chosen": "", '
+        '"era_anchor_used": null, "peer_comparison_used": null, "reasoning": ""}'
+    )
+    with pytest.raises(ValueError):
+        writer_mod._parse_writer_json(dup)
+
+    # End to end: the persistent dup-key provider exhausts the retry lane
+    # into an INFRA kill — never editorial evidence.
+    from src.two_bot.types import MemorySlice
+
+    monkeypatch.setattr(writer_mod, "_call_writer_provider", lambda p: dup)
+    result = writer_mod.write_tweet(_bundle("e1"), MemorySlice())
+    assert result.tweet is None
+    assert result.kill_is_editorial is False
+
+
+def test_fact_check_ambiguous_and_duplicate_responses_fail_closed(monkeypatch):
+    """codex r12 P2/P3: the fact-checker shares the single-verdict contract —
+    sibling objects AND duplicate `passed` keys must exhaust its retry lane
+    into parse_failed=True (fail-closed, never cacheable evidence)."""
+    from src.two_bot import fact_check as fact_check_mod
+
+    pass_obj = '{"passed": true, "failures": [], "extracted_claims": []}'
+    kill_obj = '{"passed": false, "failures": ["number mismatch"], "extracted_claims": []}'
+    dup_keys = '{"passed": true, "passed": false, "failures": [], "extracted_claims": []}'
+
+    for raw in (kill_obj + "\n" + pass_obj, dup_keys):
+        monkeypatch.setattr(fact_check_mod, "_call_gemini", lambda t, b, retry_suffix="": raw)
+        result = fact_check_mod.fact_check("A tweet.", [], _bundle("e1"), _fresh_state())
+        assert result.passed is False, "ambiguous verdicts must fail closed"
+        assert result.parse_failed is True, (
+            "ambiguous/dup-key verdicts are infra failures — never cacheable"
+        )
+
+
+def test_legacy_duplicate_reopened_row_does_not_burn_cap_slot(monkeypatch):
+    """codex r12 P1: a duplicate REOPENED row must resolve pre-cap — under
+    cap 2, [cached-A, changed-B, changed-B-dup, live-C] must buy B and C,
+    not let the B-dup burn C's slot. And codex r12 P2: partition rows count
+    in triaged_out so funnel triage_cut stays exact."""
+    from src.orchestrator import common
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="eA", dhw=8)], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="eA", dhw=8)], fake)
+    assert calls == ["eA", "eA"]
+
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="eA", dhw=8),  # cache-dead
+        _candidate(event_id="eA", dhw=9),  # reopened changed facts
+        _candidate(event_id="eA", dhw=9),  # duplicate reopened row
+        _candidate(event_id="eC", dhw=5),  # unrelated live candidate
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "2")
+    monkeypatch.setattr(common, "_try_two_bot_draft", fake)
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=None)
+
+    assert sorted(calls[2:]) == ["eA", "eC"], (
+        "the duplicate reopened row must not burn the cap slot C needs"
+    )
+    stages = [
+        (s.get("kill_stage") or s.get("stage"))
+        for s in bot_state.get("suppressions", [])
+    ]
+    assert stages.count("negative_cache") == 1
+    assert stages.count("duplicate_draft") == 1
+    source_row = current_run["sources"][0]
+    # triaged_in = 4 queue rows; triaged_out = 2 partition rows (cache-dead
+    # A + duplicate reopened B) + 2 survivors — triage_cut stays 0.
+    assert source_row.get("triaged_in") == 4
+    assert source_row.get("triaged_out") == 4

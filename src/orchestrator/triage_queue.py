@@ -689,19 +689,37 @@ def _drain_and_write_triage_queue(
 
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
 
-    # Fingerprint-scoped skip memory (codex r10): an identical-facts
-    # sibling of a cache-skipped event records duplicate_draft (never a
-    # second savings-inflating negative_cache row); a changed-facts
-    # sibling stays live and contends for a cap slot.
+    # Partition rules (codex r10–r12), in order per row:
+    #   1. The event already holds a LIVE row → duplicate_draft. One paid
+    #      shot per event per cycle; a second same-event row (identical OR
+    #      changed facts) must not burn a cap slot the attempted guard
+    #      would only reclaim after selection (codex r12 P1).
+    #   2. Identical facts to a cache-skipped row → duplicate_draft (never
+    #      a second savings-inflating negative_cache row, codex r10).
+    #   3. Cache-dead → negative_cache row + fingerprint skip memory.
+    #   4. Otherwise live — the event's one contender for a cap slot.
+    # Partition rows LEFT triage — bump triaged_out for them (codex r12
+    # P2: funnel triage_cut = triaged_in - triaged_out; unbumped cache
+    # resolutions read as editorial cap cuts, a cache-only slate showed
+    # triage_cap_rate=1.0). writer_attempted is never bumped here — no
+    # paid attempt happened.
     negcache_skipped_sha: dict[str, str] = {}
+    live_event_ids: set[str] = set()
     live_queue: list = []
     for candidate in queue:
+        if candidate.event_id and candidate.event_id in live_event_ids:
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
+            continue
         if (
             candidate.event_id
             and candidate.event_id in negcache_skipped_sha
             and _negcache.bundle_fingerprint(candidate.bundle)
             == negcache_skipped_sha[candidate.event_id]
         ):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _legacy_pre_writer_row(
                 candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
             )
@@ -710,18 +728,17 @@ def _drain_and_write_triage_queue(
             bot_state, candidate.event_id, candidate.bundle
         )
         if negcache_reason is not None:
-            # $0 pre-cap skip; writer_attempted is NOT bumped — no paid
-            # attempt happened — and triaged_out is not bumped either (the
-            # row never contends for a slot; triage accounting below only
-            # counts live candidates).
             if candidate.event_id:
                 negcache_skipped_sha[candidate.event_id] = (
                     _negcache.bundle_fingerprint(candidate.bundle)
                 )
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
             _legacy_pre_writer_row(
                 candidate, "negative_cache", f"pre-writer: {negcache_reason}"
             )
             continue
+        if candidate.event_id:
+            live_event_ids.add(candidate.event_id)
         live_queue.append(candidate)
 
     survivors = live_queue  # default: legacy passthrough

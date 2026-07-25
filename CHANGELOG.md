@@ -19,9 +19,12 @@ All notable changes to this project will be documented in this file.
   dead on identical facts activate the skip, saving the modal waste
   (attempts 3+ at ~6 cycles/day). The read predicate is pure; TTL/validity
   pruning runs in the drain AND inside the state merge (stale overlays
-  can't resurrect deleted entries); the check sits at the paid boundary,
-  after every cheaper $0 predicate, so savings are never misattributed
-  (all per codex r1). Transient stages (`budget_exhausted`,
+  can't resurrect deleted entries); in the REFILL drain the check sits at
+  the paid boundary, after every cheaper $0 predicate, so savings are
+  never misattributed (codex r1) — the LEGACY drain instead partitions
+  cache-dead rows out BEFORE cap selection (codex r11/r12: a $0 skip must
+  not burn a capped survivor slot; documented attribution trade: a row
+  both cache-dead and cap-doomed records negative_cache there). Transient stages (`budget_exhausted`,
   `pipeline_error`) and save-side rejections are never cached; the
   post-pipeline cyclone-advisory safety kill now populates
   `result_out.kill_stage="safety"` (was invisible as `save_rejected`).
@@ -55,7 +58,19 @@ All notable changes to this project will be documented in this file.
   `tweet` field is a parse error routed to the JSON-retry lane, never an
   editorial verdict; the post-pipeline advisory-URL safety kill carries an
   honest `cacheable` disposition via the pipeline's new
-  `critic_shaped` report. Codex r10: **every kill carries its own
+  `critic_shaped` report. Codex r12: **cooldown scope now covers every
+  verdict of an attempt made under the 24h category cooldown** — viable
+  text written around the cooldown constraint that later dies at
+  safety/honesty/fact-check (or the dispatch advisory re-check) is as
+  cooldown-shaped as a null, so `cooldown_context_active` stamps every
+  writer result and ANDs into every downstream cacheable disposition; the
+  legacy partition keeps ONE live row per event (a duplicate reopened row
+  can no longer burn a cap slot) and bumps `triaged_out` for partition
+  rows so funnel `triage_cut` stays exact; the single-verdict parse
+  contract also rejects **duplicate JSON keys** (plain json.loads kept the
+  last duplicate — `{"tweet":"viable","tweet":null,...}` spoofed an
+  editorial kill) and treats a sibling parseable object in ANY position
+  as ambiguous. Codex r10: **every kill carries its own
   timestamp (`kills_at`) and only individually TTL-fresh kills count
   toward activation** — a kill chain can no longer keep ancient evidence
   alive through a rolling newest-stamp, and the state merge unions fresh

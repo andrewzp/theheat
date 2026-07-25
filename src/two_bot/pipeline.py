@@ -321,15 +321,15 @@ def generate_draft(
             # Cacheable only when EVERY sample's kill was the model's own
             # editorial verdict — a single infra-shaped kill (parse/length
             # exhaustion) in the slate means transient trouble, not a
-            # settled editorial "no" (codex P1.3 r8) — AND no sample's
-            # verdict was scoped to the transient 24h category cooldown
-            # (codex r9): a cooldown-caused "no" expires with the cooldown,
-            # while the cache TTL would outlive it by up to ~44h.
+            # settled editorial "no" (codex P1.3 r8) — AND no sample ran
+            # under the transient 24h category cooldown (codex r9, widened
+            # r12): a cooldown-shaped "no" expires with the cooldown, while
+            # the cache TTL would outlive it by up to ~44h.
             _record_kill(
                 "writer", reason,
                 cacheable=(
                     all(r.kill_is_editorial for r in writer_results)
-                    and not any(r.kill_context_scoped for r in writer_results)
+                    and not any(r.cooldown_context_active for r in writer_results)
                 ),
             )
             return None
@@ -370,9 +370,14 @@ def generate_draft(
             record_kill=_record_kill,
             mark_stage=_mark_stage,
             # A critic-SELECTED sample carries the slate critic's rolling
-            # pending-queue context — its downstream kills must not arm the
-            # negative cache (codex P1.3 r8).
-            cacheable_kills=slate_critic_result is None,
+            # pending-queue context (codex r8), and text written under an
+            # active category cooldown was shaped by that transient
+            # constraint (codex r12) — downstream kills of either must not
+            # arm the negative cache.
+            cacheable_kills=(
+                slate_critic_result is None
+                and not writer_result.cooldown_context_active
+            ),
         )
         if fact_result is None:
             return None
@@ -471,14 +476,16 @@ def generate_draft(
         elif slate_critic_result is not None:
             metadata["critic"] = slate_critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL
-        # Economics P1.3 (codex r9): expose whether the FINAL text was shaped
-        # by the critic (slate selection or an adopted revise). Post-pipeline
-        # kill sites (the dispatch layer's advisory-URL safety re-check) need
-        # it to set an honest cacheable disposition on their own kills.
+        # Economics P1.3 (codex r9/r12): expose whether the FINAL text was
+        # shaped by the critic (slate selection or an adopted revise) and
+        # whether it was written under an active category cooldown.
+        # Post-pipeline kill sites (the dispatch layer's advisory-URL safety
+        # re-check) need BOTH to set an honest cacheable disposition.
         if result_out is not None:
             result_out["critic_shaped"] = (
                 slate_critic_result is not None or revise_adopted
             )
+            result_out["cooldown_scoped"] = writer_result.cooldown_context_active
         return {
             "type": bundle.signal_kind,
             "text": writer_result.tweet,

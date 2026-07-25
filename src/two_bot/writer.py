@@ -319,11 +319,13 @@ def write_tweet(
             f"[Revision context: {revision_constraint}]"
         )
 
-    # Economics P1.3 (codex r9): an editorial kill issued while the bundle's
-    # category sits in the slice's 24h ``recent_categories`` cooldown may be
-    # cooldown-caused (the prompt orders tweet=null in that window), so it
-    # expires with the cooldown and must not arm the 48h negative cache.
-    # Computed once — the slice is fixed for all retry attempts.
+    # Economics P1.3 (codex r9, widened r12): EVERY verdict produced while
+    # the bundle's category sits in the slice's 24h ``recent_categories``
+    # cooldown is (possibly) cooldown-shaped — a null may be cooldown-caused
+    # and viable text was written around the cooldown constraint — so no
+    # kill of this attempt (at the writer OR any downstream gate) may arm
+    # the 48h negative cache. Computed once — the slice is fixed for all
+    # retry attempts — and stamped on every result below.
     from src.two_bot.memory import _signal_kind_to_category
 
     category_cooldown_active = (
@@ -386,14 +388,14 @@ def write_tweet(
                     f"json-parse retry exhausted; last error: "
                     f"{last_parse_error or 'unknown'}"
                 ),
+                cooldown_context_active=category_cooldown_active,
             )
 
         assert result is not None  # mypy: the break above guarantees result is set
 
-        # Kill or fits — return as-is.
+        # Kill or fits — return as-is (stamped with the cooldown context).
         if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:
-            if result.kill_is_editorial and category_cooldown_active:
-                result.kill_context_scoped = True
+            result.cooldown_context_active = category_cooldown_active
             return result
 
         # Over-length — remember and retry.
@@ -419,6 +421,7 @@ def write_tweet(
             if last_overlong_tweet
             else "length-cap retry exhausted"
         ),
+        cooldown_context_active=category_cooldown_active,
     )
 
 

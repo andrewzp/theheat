@@ -135,15 +135,18 @@ class WriterResult:
     # False so the cross-cycle negative cache never arms on a transient
     # failure. Deliberately NOT serialized in to_dict.
     kill_is_editorial: bool = False
-    # Economics P1.3 (codex r9): True when an editorial kill happened while
-    # the bundle's category sat in the MemorySlice's 24h ``recent_categories``
-    # cooldown — the prompt orders tweet=null in that window, so the verdict
-    # is (possibly) cooldown-caused, not fact-caused, and expires with the
-    # cooldown. The negative cache must not remember it: a 48h TTL would
-    # suppress up to ~32h after the cooldown cleared. The OTHER slice inputs
-    # (used anchors / framings / spent angles) are monotonic — they never
-    # un-spend, so kills under their pressure stay cacheable. NOT serialized.
-    kill_context_scoped: bool = False
+    # Economics P1.3 (codex r9, widened r12): True when THIS attempt ran
+    # while the bundle's category sat in the MemorySlice's 24h
+    # ``recent_categories`` cooldown — regardless of verdict. The prompt
+    # both orders tweet=null in that window AND constrains any viable text
+    # (different mechanic/geography/scale), so EVERY verdict produced under
+    # it is (possibly) cooldown-shaped: a null is possibly cooldown-caused,
+    # and viable-but-later-killed text was written around the constraint.
+    # Neither may arm the 48h negative cache — the suppression would outlive
+    # the 24h cooldown by up to ~44h. The OTHER slice inputs (used anchors /
+    # framings / spent angles) are monotonic — they never un-spend, so kills
+    # under their pressure stay cacheable. NOT serialized.
+    cooldown_context_active: bool = False
 
     def __post_init__(self):
         if (self.tweet is None) == (self.kill_reason is None):
