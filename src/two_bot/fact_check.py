@@ -94,7 +94,10 @@ def _parse_fact_check_json(
     require_extracted_claims: bool = False,
 ) -> tuple[bool, list[str], list[ExtractedClaim]]:
     try:
-        parsed = loads_model_json(raw, expected="object")
+        # require_single_object (codex r11): a fact-check verdict feeds the
+        # negative cache's cacheable disposition — an ambiguous kill-first/
+        # pass-last multi-object response must retry, not pick the first.
+        parsed = loads_model_json(raw, expected="object", require_single_object=True)
     except json.JSONDecodeError as exc:
         print(f"[two_bot.fact_check] Invalid JSON response: {raw}")
         raise ValueError("Fact-checker returned invalid JSON") from exc
@@ -230,7 +233,9 @@ def fact_check(
     # Retry budget exhausted — fail-closed with a clear failures entry so
     # the suppression dashboard categorizes it as a fact_check stage kill
     # (not pipeline_error). The draft is blocked; the human-approval queue
-    # never sees something the fact-checker couldn't read.
+    # never sees something the fact-checker couldn't read. parse_failed
+    # marks this as an INFRA failure so the cross-cycle negative cache
+    # never arms on it (codex P1.3 r8).
     return FactCheckResult(
         passed=False,
         failures=[
@@ -239,4 +244,5 @@ def fact_check(
         ],
         raw_response="(json-parse retry exhausted)",
         extracted_claims=extracted,
+        parse_failed=True,
     )

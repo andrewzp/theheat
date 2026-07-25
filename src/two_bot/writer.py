@@ -90,12 +90,34 @@ def _memory_json(memory: MemorySlice) -> str:
 
 def _parse_writer_json(raw: str) -> WriterResult:
     try:
-        parsed = loads_model_json(raw, expected="object")
+        # require_single_object (codex r11): a writer verdict can become
+        # durable negative-cache evidence — an ambiguous multi-object
+        # response (kill first, viable tweet second) must re-sample via the
+        # JSON-retry lane, never resolve to whichever object came first.
+        parsed = loads_model_json(raw, expected="object", require_single_object=True)
     except json.JSONDecodeError as exc:
         print(f"[two_bot.writer] Invalid JSON response: {raw}")
         raise ValueError("Writer returned invalid JSON") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Writer response must be a JSON object")
+    # The verdict-bearing fields must be PRESENT and TYPE-VALID. A response
+    # that OMITS ``tweet``, gives it a non-string non-null value, or pairs
+    # an explicit null with a non-string/empty ``kill_reason`` is a
+    # contract violation — treating any of those as an editorial kill let
+    # malformed output arm the negative cache (codex r9 + r10: e.g.
+    # ``{"tweet": null, "kill_reason": []}``); they belong to the
+    # JSON-retry lane instead.
+    if "tweet" not in parsed:
+        raise ValueError("Writer response is missing required field 'tweet'")
+    tweet_val = parsed["tweet"]
+    if tweet_val is not None and not isinstance(tweet_val, str):
+        raise ValueError("Writer field 'tweet' must be a string or null")
+    if tweet_val is None:
+        kill_reason_val = parsed.get("kill_reason")
+        if not isinstance(kill_reason_val, str) or not kill_reason_val.strip():
+            raise ValueError(
+                "Writer kill verdict requires a non-empty string 'kill_reason'"
+            )
     cited_impact = parsed.get("cited_impact")
     try:
         return WriterResult(
@@ -106,6 +128,12 @@ def _parse_writer_json(raw: str) -> WriterResult:
             peer_comparison_used=parsed.get("peer_comparison_used"),
             reasoning=parsed.get("reasoning") or "",
             cited_impact=cited_impact if isinstance(cited_impact, bool) else None,
+            # An EXPLICIT parsed tweet=null is the MODEL's editorial verdict —
+            # the only writer-kill class the negative cache may arm on
+            # (codex r8; presence enforced above, codex r9). Every other kill
+            # constructor in this module (out-of-scope, JSON-parse exhaustion,
+            # length exhaustion) leaves the default False.
+            kill_is_editorial=parsed["tweet"] is None,
         )
     except TypeError as exc:
         raise ValueError("Writer response is missing required fields") from exc
@@ -291,6 +319,19 @@ def write_tweet(
             f"[Revision context: {revision_constraint}]"
         )
 
+    # Economics P1.3 (codex r9, widened r12): EVERY verdict produced while
+    # the bundle's category sits in the slice's 24h ``recent_categories``
+    # cooldown is (possibly) cooldown-shaped — a null may be cooldown-caused
+    # and viable text was written around the cooldown constraint — so no
+    # kill of this attempt (at the writer OR any downstream gate) may arm
+    # the 48h negative cache. Computed once — the slice is fixed for all
+    # retry attempts — and stamped on every result below.
+    from src.two_bot.memory import _signal_kind_to_category
+
+    category_cooldown_active = (
+        _signal_kind_to_category(bundle.signal_kind) in memory.recent_categories
+    )
+
     last_overlong_tweet: str | None = None
     last_parse_error: str | None = None
     for attempt in range(LENGTH_RETRY_BUDGET + 1):
@@ -347,12 +388,14 @@ def write_tweet(
                     f"json-parse retry exhausted; last error: "
                     f"{last_parse_error or 'unknown'}"
                 ),
+                cooldown_context_active=category_cooldown_active,
             )
 
         assert result is not None  # mypy: the break above guarantees result is set
 
-        # Kill or fits — return as-is.
+        # Kill or fits — return as-is (stamped with the cooldown context).
         if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:
+            result.cooldown_context_active = category_cooldown_active
             return result
 
         # Over-length — remember and retry.
@@ -378,6 +421,7 @@ def write_tweet(
             if last_overlong_tweet
             else "length-cap retry exhausted"
         ),
+        cooldown_context_active=category_cooldown_active,
     )
 
 

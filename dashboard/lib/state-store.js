@@ -36,6 +36,14 @@ const DEFAULT_STATE = {
   data_source_failures: {},
   source_health: {},
   publish_ledger: {},
+  // Python-owned economics state (P0.6 ledger + P1.3 negative cache). The
+  // dashboard never writes these, but they MUST default here: mergeState
+  // materializes every PYTHON_OWNED_METADATA_KEYS entry from base state,
+  // and a missing default becomes an own-property `undefined` that
+  // JSON.stringify turns into an unbindable SQLite parameter on any
+  // fresh/pre-key database (codex P1.3 r11 P2 — cold-start crash).
+  llm_usage: {},
+  writer_negative_cache: {},
   _state_rev: 0,
   ocean_sst_streak: {
     seeded: false,
@@ -212,6 +220,12 @@ const METADATA_JSON_KEYS = [
   "data_source_failures",
   "source_health",
   "publish_ledger",
+  // Per-day LLM usage ledger (economics P0.6) — was missing from this
+  // allowlist since #445; a dashboard sqlite round-trip silently dropped it.
+  "llm_usage",
+  // Cross-cycle negative cache (economics P1.3) — durable; dropping it on a
+  // dashboard sqlite round-trip would re-open the re-attempt burn (codex r8).
+  "writer_negative_cache",
   "_state_rev",
 ]
 
@@ -536,7 +550,13 @@ function writeSqliteState(db, state) {
     db.exec("DELETE FROM metadata")
     insertMeta.run("last_hot10", JSON.stringify(normalized.last_hot10 || DEFAULT_STATE.last_hot10))
     METADATA_JSON_KEYS.forEach((key) => {
-      if (Object.prototype.hasOwnProperty.call(normalized, key)) {
+      // Belt to the DEFAULT_STATE suspenders (codex P1.3 r11 P2): an
+      // undefined value stringifies to undefined, which SQLite cannot
+      // bind — skip rather than crash the whole write.
+      if (
+        Object.prototype.hasOwnProperty.call(normalized, key)
+        && normalized[key] !== undefined
+      ) {
         insertMeta.run(key, JSON.stringify(normalized[key]))
       }
     })

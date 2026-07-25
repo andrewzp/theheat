@@ -250,6 +250,7 @@ class BotState(TypedDict, total=False):
     publish_ledger: dict[str, dict]
     tweet_metrics: dict[str, TweetMetric]
     llm_usage: dict[str, dict]
+    writer_negative_cache: dict[str, dict]
     _state_rev: int
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]
