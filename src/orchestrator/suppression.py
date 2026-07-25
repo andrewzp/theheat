@@ -178,7 +178,7 @@ def _record_downstream_suppression(
         "ts": ts,
         "run_id": run_id,
         "source": source,
-        "stage": kill_stage,  # "score_gate" | "writer" | "safety" | "honesty_gate" | "cross_signal" | "evidence_contract" | "claim_extractor" | "fact_check" | "critic" | "budget_exhausted" | "billing_cycle_abort" | "pipeline_error" | "triage_cap" | "triage_error" | "cycle_cap" | "duplicate_draft" | "negative_cache" | "unknown" — keep in sync with PIPELINE.md §Suppression ledger (codex r10 P3: this comment is the declared source of truth and had drifted behind that list)
+        "stage": kill_stage,  # "score_gate" | "bundle_build" | "writer" | "safety" | "honesty_gate" | "cross_signal" | "evidence_contract" | "fact_check" | "critic" | "budget_exhausted" | "billing_cycle_abort" | "pipeline_error" | "triage_cap" | "triage_error" | "annual_cap" | "cycle_cap" | "city_cooldown" | "duplicate_draft" | "duplicate_posted" | "same_day_dedup" | "same_day_posted" | "same_day_superseded" | "save_rejected" | "negative_cache" | "unknown" — keep in sync with PIPELINE.md §Suppression ledger (codex r10+r11 P3: this comment is the declared source of truth; claim_extractor removed with the legacy pipeline in #446)
         "event_id": event_id or None,
         "category": _score_field(score, "category"),
         "score_total": _score_int(score, "total"),

@@ -301,6 +301,7 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
         ev_cached: {
           sha: "a".repeat(64), epoch: "e1e1e1e1e1e1e1e1", stage: "writer",
           reason: "routine value", at: "2026-07-23T12:00:00Z", kills: 2,
+          kills_at: ["2026-07-23T12:00:00Z", "2026-07-23T08:00:00Z"],
         },
       },
       _state_rev: 7,
@@ -356,6 +357,41 @@ test("sqlite state store preserves Python-owned metadata keys", async () => {
     assert.equal(loaded._state_rev, 7)
     assert.equal(loaded.suppressions.length, 1)
     assert.equal(loaded.suppressions[0].stage, "fact_check")
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+})
+
+test("sqlite cold-start partial write survives Python-owned keys with no defaults", async () => {
+  // codex P1.3 r11 P2: on a FRESH (or pre-key) database, mergeState
+  // materializes every PYTHON_OWNED_METADATA_KEYS entry from base state.
+  // llm_usage / writer_negative_cache had no DEFAULT_STATE entries, so the
+  // very first dashboard-only write stringified `undefined` into an
+  // unbindable SQLite parameter and crashed the whole write.
+  const tmp = mkdtempSync(path.join(os.tmpdir(), "theheat-state-store-cold-"))
+  const dbPath = path.join(tmp, "state.sqlite")
+  process.env.THEHEAT_STATE_BACKEND = "sqlite"
+  process.env.THEHEAT_DB_PATH = dbPath
+  process.env.GIST_ID = ""
+  process.env.GITHUB_TOKEN = ""
+
+  try {
+    const stateStore = await importFresh("lib/state-store.js")
+    // First-ever write is dashboard-shaped: no Python-owned economics keys.
+    await stateStore.writeStateStore({
+      drafts: [
+        {
+          id: "draft_cold",
+          text: "Cold-start dashboard write",
+          status: "pending",
+          created_at: "2026-07-24T00:00:00Z",
+        },
+      ],
+    })
+    const loaded = await stateStore.readStateStore()
+    assert.equal(loaded.drafts.length, 1)
+    assert.deepEqual(loaded.llm_usage, {})
+    assert.deepEqual(loaded.writer_negative_cache, {})
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }

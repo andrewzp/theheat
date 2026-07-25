@@ -8,9 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - **(cost control, pre-writer)**: `src/two_bot/negative_cache.py` +
   `state["writer_negative_cache"]` — an event killed at a cacheable paid
-  stage (writer/fact-check/safety/honesty gates — critic excluded: its
-  verdicts weigh the rolling pending-queue context) **`min_kills` times
-  (default 2)** on a byte-identical bundle fingerprint under the same
+  stage (writer / fact-check / safety / honesty gate / cross-signal gate —
+  critic excluded: its verdicts weigh the rolling pending-queue context)
+  **`min_kills` times (default 2)** on a byte-identical bundle fingerprint under the same
   **decision epoch** (writer model + system-prompt sha + sampling/revise
   flags) is skipped as a $0 `negative_cache` pre-writer kill until its facts
   change, the epoch rotates, or the TTL lapses
@@ -44,7 +44,8 @@ All notable changes to this project will be documented in this file.
   cache. Codex r9: evidence identity is **(sha, epoch, stage)** — kills at
   different stages restart the count instead of pooling toward one
   threshold (a fact-check kill proves the writer passed once), and the
-  state merge max-pools counts only on identical three-part evidence; the
+  state merge reconciles evidence only on the identical three-part
+  identity (since r10 by unioning individually-fresh per-kill stamps); the
   **legacy drain (refill flag OFF) now runs the same skip predicate,
   recording, and prune as the refill drain** via one shared eligibility
   helper — cache behavior no longer depends on `THEHEAT_REFILL_ENABLED`;

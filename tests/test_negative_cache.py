@@ -957,9 +957,11 @@ def test_dispatch_safety_kill_carries_cacheable_disposition(monkeypatch):
     two_bot_dispatch = importlib.reload(two_bot_dispatch)
     try:
         with monkeypatch.context() as mp:
+            _ABSENT = object()
+
             def fake_generate(critic_shaped):
                 def _g(bundle, state, result_out=None):
-                    if result_out is not None and critic_shaped is not None:
+                    if result_out is not None and critic_shaped is not _ABSENT:
                         result_out["critic_shaped"] = critic_shaped
                     return {
                         "text": "t", "event_id": "e1", "type": "cyclone",
@@ -977,9 +979,12 @@ def test_dispatch_safety_kill_carries_cacheable_disposition(monkeypatch):
             )
 
             for critic_shaped, expected in [
-                (False, True),   # clean pipeline text → safety verdict cacheable
-                (True, False),   # critic-shaped text → rolling context, never
-                (None, False),   # pipeline silent → default-deny
+                (False, True),     # explicit False → safety verdict cacheable
+                (True, False),     # critic-shaped text → rolling context, never
+                (_ABSENT, False),  # pipeline silent → default-deny
+                (None, False),     # malformed explicit values (codex r11 P3):
+                (0, False),        # only `is False` authorizes — any falsey
+                ("", False),       # non-boolean still denies
             ]:
                 mp.setattr(
                     pipeline_mod, "generate_draft", fake_generate(critic_shaped)
@@ -1334,3 +1339,120 @@ def test_epoch_rotates_on_version_change(monkeypatch):
     forced["value"] = "9.9.9-epoch-b"
     e2 = negative_cache.decision_epoch()
     assert e1 and e2 and e1 != e2
+
+
+# ------------------------------------------------------------ codex r12 layer
+
+
+def test_legacy_triage_caps_do_not_burn_slots_on_cache_skip(monkeypatch):
+    """codex r11 P1: with triage caps ON (refill OFF), a cache-dead row must
+    not consume a capped survivor slot. Cached A + live C + changed-facts
+    A-sibling, same category, cap 2: C AND the sibling both reach the
+    writer; the cached row records negative_cache pre-cap."""
+    from src.orchestrator import common
+
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="eA", dhw=8)], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="eA", dhw=8)], fake)
+    assert calls == ["eA", "eA"]
+
+    bot_state["_triage_queue"] = [
+        _candidate(event_id="eA", dhw=8),  # cache-dead facts
+        _candidate(event_id="eC", dhw=5),  # unrelated live candidate
+        _candidate(event_id="eA", dhw=9),  # changed-facts sibling — reopened
+    ]
+    current_run = {"id": "r", "sources": [{"source": "coral_dhw", "drafted": 0}]}
+    monkeypatch.setenv("THEHEAT_TRIAGE_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_REFILL_ENABLED", "0")
+    monkeypatch.setenv("THEHEAT_PER_CATEGORY_CAP", "2")
+    monkeypatch.setattr(common, "_try_two_bot_draft", fake)
+    common._drain_and_write_triage_queue(bot_state, current_run, funnel_sink=None)
+
+    assert sorted(calls[2:]) == ["eA", "eC"], (
+        "the cache-dead row must not burn a cap slot — both live candidates "
+        "get their paid attempt"
+    )
+    stages = [
+        (s.get("kill_stage") or s.get("stage"))
+        for s in bot_state.get("suppressions", [])
+    ]
+    assert stages.count("negative_cache") == 1
+
+
+def test_legacy_reopened_event_single_paid_shot(monkeypatch):
+    """codex r11 P2: the fingerprint partition reopens changed facts, but a
+    queue carrying the reopened row TWICE buys exactly one attempt — the
+    second records duplicate_draft via the attempted guard."""
+    monkeypatch.setenv("THEHEAT_WRITER_SAMPLES", "1")
+    bot_state = _fresh_state()
+    calls: list = []
+    fake = _writer_kill_fake(calls)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+    _run_legacy(monkeypatch, bot_state, [_candidate(event_id="e1", dhw=8)], fake)
+
+    _run_legacy(
+        monkeypatch, bot_state,
+        [
+            _candidate(event_id="e1", dhw=8),  # cache-dead
+            _candidate(event_id="e1", dhw=9),  # reopened changed facts
+            _candidate(event_id="e1", dhw=9),  # identical reopened duplicate
+        ],
+        fake,
+    )
+    assert calls == ["e1", "e1", "e1"], (
+        "exactly ONE paid attempt for the reopened facts"
+    )
+    stages = [
+        (s.get("kill_stage") or s.get("stage"))
+        for s in bot_state.get("suppressions", [])
+    ]
+    assert stages.count("negative_cache") == 1
+    assert stages.count("duplicate_draft") == 1
+
+
+def test_ambiguous_multi_object_response_is_parse_error(monkeypatch):
+    """codex r11 P2: a kill-shaped object followed by a second parseable
+    object must re-sample via the JSON-retry lane — never resolve to
+    whichever object came first (either could be the model's real verdict,
+    and the kill shape would become durable cache evidence)."""
+    import pytest
+
+    from src.two_bot import writer as writer_mod
+    from src.two_bot.json_utils import loads_model_json
+
+    kill_obj = (
+        '{"tweet": null, "kill_reason": "routine value", "angle_chosen": "", '
+        '"era_anchor_used": null, "peer_comparison_used": null, "reasoning": ""}'
+    )
+    live_obj = (
+        '{"tweet": "Fresh viable story", "kill_reason": null, '
+        '"angle_chosen": "a", "era_anchor_used": null, '
+        '"peer_comparison_used": null, "reasoning": ""}'
+    )
+    with pytest.raises(ValueError, match="Ambiguous"):
+        loads_model_json(
+            kill_obj + "\n" + live_obj,
+            expected="object", require_single_object=True,
+        )
+    with pytest.raises(ValueError, match="Ambiguous"):
+        writer_mod._parse_writer_json(kill_obj + " " + live_obj)
+
+    # Harmless prose — including unbalanced braces — stays tolerated.
+    parsed = writer_mod._parse_writer_json(
+        "Here is the verdict:\n" + kill_obj + "\nprose tail with { an unclosed brace"
+    )
+    assert parsed.kill_is_editorial is True
+
+    # End to end: a persistently ambiguous provider exhausts the JSON-retry
+    # lane and surfaces as an INFRA kill — never cacheable evidence.
+    from src.two_bot.types import MemorySlice
+
+    monkeypatch.setattr(
+        writer_mod, "_call_writer_provider", lambda p: kill_obj + " " + live_obj
+    )
+    result = writer_mod.write_tweet(_bundle("e1"), MemorySlice())
+    assert result.tweet is None
+    assert result.kill_is_editorial is False

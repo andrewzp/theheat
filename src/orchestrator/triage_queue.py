@@ -650,111 +650,129 @@ def _drain_and_write_triage_queue(
             defer_callbacks=defer_callbacks, funnel_sink=funnel_sink,
         )
 
-    survivors = queue  # default: legacy passthrough
-    if triage_enabled:
-        try:
-            survivors = _triage.select_survivors(bot_state, queue)
-        except Exception as exc:
-            # Legacy passthrough preserves draft production (the cycle still
-            # produces drafts even if the triage stage breaks). But we MUST
-            # surface the failure to the dashboard — silent broken triage is
-            # worse than loud broken triage.
-            err_text = str(exc)[:200]
-            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(queue)} candidates)")
-            _record_triage_error_suppression(bot_state, err_text)
-            _state.record_source_health(bot_state, "triage", "degraded", err_text)
-            survivors = queue
-
-    survivor_by_source = Counter(candidate.source for candidate in survivors)
-    for source, survivor_count in survivor_by_source.items():
-        _bump_source_field_in_run(current_run, source, "triaged_out", survivor_count)
-
-    # Phase A: mark slate candidates the triage cap cut (drain-observed, not from
-    # the truncatable suppression ledger — triage_cap rows carry run_id=None).
-    if funnel_sink is not None:
-        from src.orchestrator import funnel as _funnel
-
-        survivor_ids = {candidate.event_id for candidate in survivors}
-        for candidate in queue:
-            if candidate.event_id not in survivor_ids:
-                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
-
-    drafted_count = 0
-    # Economics P1.3 (codex r9): the negative cache must protect BOTH drain
-    # paths — this legacy loop previously went straight to the paid writer,
-    # re-buying every cached kill whenever THEHEAT_REFILL_ENABLED=0. Sweep
-    # expired entries once, then consult the skip predicate per candidate.
+    # Economics P1.3 (codex r9–r11): the negative cache protects the legacy
+    # path too, and a $0 cache skip must not consume a capped survivor slot
+    # (codex r11 P1: caps ran BEFORE the cache check, so a cache-dead row
+    # burned the slot a changed-facts sibling needed and the slot was never
+    # backfilled). The cache therefore PARTITIONS the queue before cap
+    # selection: cache-dead rows and their identical-facts duplicates
+    # resolve here; only live candidates contend for cap slots.
+    # Attribution trade, documented: a row that is BOTH cache-dead and
+    # would have been cap-cut records negative_cache rather than triage_cap
+    # on this path — the refill drain keeps exact last-$0-predicate
+    # ordering; here the slot-backfill invariant wins.
     from src.two_bot import negative_cache as _negcache
 
     _negcache.prune(bot_state)
     negcache_run_id = (_current_suppression_ctx() or {}).get("run_id")
-    # Fingerprint-scoped skip memory, mirroring the refill drain (codex
-    # r10): an identical-facts sibling of a cache-skipped event records
-    # duplicate_draft (never a second savings-inflating negative_cache
-    # row); a changed-facts sibling keeps its paid shot.
+
+    def _legacy_pre_writer_row(
+        candidate: "TriageCandidateBundle", stage: str, reason: str
+    ) -> None:
+        """$0 suppression row + first-terminal-wins funnel row (legacy)."""
+        _record_downstream_suppression(
+            bot_state=bot_state,
+            source=candidate.source,
+            run_id=negcache_run_id,
+            event_id=candidate.event_id,
+            score=candidate.score,
+            kill_stage=stage,
+            kill_reason=reason,
+            summary=getattr(candidate.bundle, "where", None)
+            or candidate.city
+            or None,
+        )
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
+            from src.orchestrator import funnel as _funnel
+
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
+
+    # Fingerprint-scoped skip memory (codex r10): an identical-facts
+    # sibling of a cache-skipped event records duplicate_draft (never a
+    # second savings-inflating negative_cache row); a changed-facts
+    # sibling stays live and contends for a cap slot.
     negcache_skipped_sha: dict[str, str] = {}
-    for idx, candidate in enumerate(survivors):
+    live_queue: list = []
+    for candidate in queue:
         if (
             candidate.event_id
             and candidate.event_id in negcache_skipped_sha
             and _negcache.bundle_fingerprint(candidate.bundle)
             == negcache_skipped_sha[candidate.event_id]
         ):
-            _record_downstream_suppression(
-                bot_state=bot_state,
-                source=candidate.source,
-                run_id=negcache_run_id,
-                event_id=candidate.event_id,
-                score=candidate.score,
-                kill_stage="duplicate_draft",
-                kill_reason="pre-writer: duplicate event in slate",
-                summary=getattr(candidate.bundle, "where", None)
-                or candidate.city
-                or None,
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
             )
-            if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
-                "_slate_terminal", {}
-            ):
-                from src.orchestrator import funnel as _funnel
-
-                _funnel.record_slate_terminal(
-                    funnel_sink, candidate.event_id, "duplicate_draft"
-                )
             continue
         negcache_reason = _negcache.should_skip(
             bot_state, candidate.event_id, candidate.bundle
         )
         if negcache_reason is not None:
-            # $0 pre-writer skip. Legacy pre-counts every survivor in
-            # triaged_out above, so no extra bump (the billing-abort
-            # accounting rule); writer_attempted is NOT bumped — no paid
-            # attempt happened. First terminal wins on the funnel row,
-            # mirroring the refill drain.
+            # $0 pre-cap skip; writer_attempted is NOT bumped — no paid
+            # attempt happened — and triaged_out is not bumped either (the
+            # row never contends for a slot; triage accounting below only
+            # counts live candidates).
             if candidate.event_id:
                 negcache_skipped_sha[candidate.event_id] = (
                     _negcache.bundle_fingerprint(candidate.bundle)
                 )
-            _record_downstream_suppression(
-                bot_state=bot_state,
-                source=candidate.source,
-                run_id=negcache_run_id,
-                event_id=candidate.event_id,
-                score=candidate.score,
-                kill_stage="negative_cache",
-                kill_reason=f"pre-writer: {negcache_reason}",
-                summary=getattr(candidate.bundle, "where", None)
-                or candidate.city
-                or None,
+            _legacy_pre_writer_row(
+                candidate, "negative_cache", f"pre-writer: {negcache_reason}"
             )
-            if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            continue
+        live_queue.append(candidate)
+
+    survivors = live_queue  # default: legacy passthrough
+    if triage_enabled:
+        try:
+            survivors = _triage.select_survivors(bot_state, live_queue)
+        except Exception as exc:
+            # Legacy passthrough preserves draft production (the cycle still
+            # produces drafts even if the triage stage breaks). But we MUST
+            # surface the failure to the dashboard — silent broken triage is
+            # worse than loud broken triage.
+            err_text = str(exc)[:200]
+            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(live_queue)} candidates)")
+            _record_triage_error_suppression(bot_state, err_text)
+            _state.record_source_health(bot_state, "triage", "degraded", err_text)
+            survivors = live_queue
+
+    survivor_by_source = Counter(candidate.source for candidate in survivors)
+    for source, survivor_count in survivor_by_source.items():
+        _bump_source_field_in_run(current_run, source, "triaged_out", survivor_count)
+
+    # Phase A: mark slate candidates the triage cap cut (drain-observed, not
+    # from the truncatable suppression ledger — triage_cap rows carry
+    # run_id=None). LIVE candidates only: cache-partitioned rows already
+    # carry their own terminal, and first-terminal-wins (codex r10/r11) —
+    # a cap-cut changed-facts sibling of a skipped event must not overwrite
+    # the event's negative_cache resolution with triage_cap.
+    if funnel_sink is not None:
+        from src.orchestrator import funnel as _funnel
+
+        survivor_ids = {candidate.event_id for candidate in survivors}
+        for candidate in live_queue:
+            if candidate.event_id not in survivor_ids and candidate.event_id not in funnel_sink.get(
                 "_slate_terminal", {}
             ):
-                from src.orchestrator import funnel as _funnel
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
-                _funnel.record_slate_terminal(
-                    funnel_sink, candidate.event_id, "negative_cache"
-                )
+    drafted_count = 0
+    # One paid shot per event per cycle (codex r11 P2): the fingerprint
+    # partition reopens changed facts, but a reopened event must not be
+    # bought twice when the queue carries it twice — mirror the refill
+    # drain's attempted guard beyond the paid boundary.
+    attempted_event_ids: set[str] = set()
+    for idx, candidate in enumerate(survivors):
+        if candidate.event_id and candidate.event_id in attempted_event_ids:
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
             continue
+        if candidate.event_id:
+            attempted_event_ids.add(candidate.event_id)
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         draft_kwargs = {
             "legacy_type": candidate.legacy_type,

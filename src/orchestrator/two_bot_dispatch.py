@@ -148,9 +148,11 @@ def _try_two_bot_draft(
             # deterministic, so this safety verdict is as stable as the
             # pipeline's own — UNLESS the underlying text was critic-shaped
             # (slate selection / revise), whose rolling context must not arm
-            # the cache. Default-deny when the pipeline didn't report.
-            pipeline_result["cacheable"] = not pipeline_result.get(
-                "critic_shaped", True
+            # the cache. STRICT default-deny (codex r11 P3): only the
+            # pipeline's explicit `critic_shaped=False` authorizes caching —
+            # a missing key or any malformed value (None/0/"") denies.
+            pipeline_result["cacheable"] = (
+                pipeline_result.get("critic_shaped") is False
             )
             ctx = _current_suppression_ctx()
             if ctx is not None:

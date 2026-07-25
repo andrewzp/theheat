@@ -94,7 +94,10 @@ def _parse_fact_check_json(
     require_extracted_claims: bool = False,
 ) -> tuple[bool, list[str], list[ExtractedClaim]]:
     try:
-        parsed = loads_model_json(raw, expected="object")
+        # require_single_object (codex r11): a fact-check verdict feeds the
+        # negative cache's cacheable disposition — an ambiguous kill-first/
+        # pass-last multi-object response must retry, not pick the first.
+        parsed = loads_model_json(raw, expected="object", require_single_object=True)
     except json.JSONDecodeError as exc:
         print(f"[two_bot.fact_check] Invalid JSON response: {raw}")
         raise ValueError("Fact-checker returned invalid JSON") from exc

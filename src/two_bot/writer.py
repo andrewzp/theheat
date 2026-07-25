@@ -90,7 +90,11 @@ def _memory_json(memory: MemorySlice) -> str:
 
 def _parse_writer_json(raw: str) -> WriterResult:
     try:
-        parsed = loads_model_json(raw, expected="object")
+        # require_single_object (codex r11): a writer verdict can become
+        # durable negative-cache evidence — an ambiguous multi-object
+        # response (kill first, viable tweet second) must re-sample via the
+        # JSON-retry lane, never resolve to whichever object came first.
+        parsed = loads_model_json(raw, expected="object", require_single_object=True)
     except json.JSONDecodeError as exc:
         print(f"[two_bot.writer] Invalid JSON response: {raw}")
         raise ValueError("Writer returned invalid JSON") from exc

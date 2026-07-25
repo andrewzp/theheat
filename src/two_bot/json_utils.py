@@ -212,12 +212,23 @@ def _try_parse_span(span_text: str) -> Any:
         return json.loads(cleaned)  # let this raise if still broken
 
 
-def loads_model_json(raw: str, *, expected: str = "any") -> Any:
+def loads_model_json(
+    raw: str, *, expected: str = "any", require_single_object: bool = False
+) -> Any:
     """Parse model JSON despite common fences, preambles, comments, and commas.
 
     Tries each balanced span left-to-right; the first one that parses
     (after optional comment/comma cleanup) is returned.  Raises on total
     failure so callers always see an error instead of silent None.
+
+    ``require_single_object`` (codex P1.3 r11 P2): verdict parses whose
+    result can become durable negative-cache evidence (writer, fact-check)
+    must reject AMBIGUOUS responses — a kill-shaped object followed by a
+    second parseable object (e.g. a viable-tweet verdict) previously
+    resolved to whichever came first. With this flag, a second parseable
+    top-level object ANYWHERE after the accepted one raises ValueError so
+    the caller's JSON-retry lane re-samples instead of trusting either
+    object. Harmless prose braces that don't parse stay tolerated.
     """
     text = strip_markdown_fences(raw)
     spans = list(_iter_json_spans(text, expected))
@@ -226,10 +237,23 @@ def loads_model_json(raw: str, *, expected: str = "any") -> Any:
     for span in spans:
         candidate = text[span[0]:span[1]]
         try:
-            return _try_parse_span(candidate)
+            parsed = _try_parse_span(candidate)
         except (json.JSONDecodeError, ValueError) as exc:
             last_exc = exc
             continue
+        if require_single_object and expected == "object":
+            for later in spans:
+                if later[0] < span[1]:
+                    continue  # inside or before the accepted span — not a sibling
+                try:
+                    _try_parse_span(text[later[0]:later[1]])
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                raise ValueError(
+                    "Ambiguous model response: multiple parseable top-level "
+                    "JSON objects"
+                )
+        return parsed
 
     # No span parsed — try the whole (fence-stripped) text as last resort
     # so that clean responses with no unusual preamble still work.
