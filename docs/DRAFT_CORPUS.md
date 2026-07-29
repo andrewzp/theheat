@@ -11,6 +11,95 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-29 — Daily corpus grading (0 fresh drafts; 1 carry-over from Jul 23, previously graded)
+
+**Context:** Step 0 fetched and reset `main` — confirmed still at its stale Jul 6 state for these
+three docs (unmerged since 2026-06-08, now 38+ consecutive cycles stranded on the rolling branch).
+Checked out `daily-plan-current` directly per the Jul 19 process correction; attempted
+`git rebase origin/main`, hit the identical conflict every attempt since Jul 13 has hit
+(`docs/IMPROVEMENT_PLAN.md`'s 2026-07-07 entry replays first and collides with `main`'s stale
+copy), aborted per the runbook fallback, continued from the branch's Jul 28 tip unchanged
+(confirmed no gap: Jul 7–28 all present). Gist read via git-clone path (success; no rate limit).
+Queue: **1 pending draft — unchanged from Jul 28's 1, the queue's smallest recorded size, holding
+steady for the first time since the contraction pattern began.** The single remaining draft is an
+**exact match** to Jul 23's graded batch (same `draft_id`, score, text): Capitol Hill 1, Northern
+Mariana Islands `record` C+ (score 73, Jul 23). **Zero fresh drafts; no re-grading performed — the
+grade stands at its original grading-cycle level.**
+
+**Staleness review as of 2026-07-29 ~15:10 UTC:** **0 strict candidates** (>48h old AND real-time-
+baked/forecast-elapsed). [1] Capitol Hill 1 (~148.8h) — "hit 36.1°C... on July 20," past-tense
+calendar-date record, clear under the standing carve-out — now the corpus's oldest actively-carried
+draft, extended past 148h without incident. It carries no live forecast-for-a-still-pending-date
+construction. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → exit 1, command not
+found); `ToolSearch` for a gist-scoped tool this session again surfaced nothing (only the GitHub MCP
+server's repo/PR/issue/actions tools are available, no gist scope). Skipped per the hard
+constraints, logged rather than failing the cycle — **61st consecutive skip** (May 13 → Jul 29).
+Moot this cycle regardless: 0 candidates by policy even had write access been available.
+
+**A-rate:** — (no fresh drafts). Most recent graded cycle: **50% (2/4, 2026-07-23)** — bar not
+cleared (not a majority), unchanged since Jul 24–28 also produced zero fresh drafts.
+
+### Patterns / operational notes
+
+1. **Sixth consecutive zero-fresh-draft cycle (Jul 24–29) — a new record for the corpus's longest
+   dry spell**, surpassing Jul 28's own 5-cycle record (which itself surpassed the prior 4-cycle
+   high, the May 23–26 stretch). Six full cycles with no new signal reaching pending is
+   unprecedented in this corpus's history outside the multi-week Jun-era quiet spell, and unlike
+   that spell the queue hasn't actually gone to zero — a single draft has now survived six
+   consecutive pulls untouched.
+2. **The queue-contraction pattern stalls for the first time since it began.** Every cycle Jul
+   24–28 lost at least one draft (-3, -6, -1, -2, -1); today is the first cycle in that run where
+   the queue size didn't change at all (1 → 1). This breaks the "oldest survivor drops next" lead
+   the last three cycles (Jul 26–28) had been building — either the age-based-sweep hypothesis has
+   a floor it won't cross with only one draft left, or the contraction mechanism (still
+   unconfirmed against the actual pipeline config) has simply run out of anything eligible to drop.
+   Capitol Hill 1 is both the queue's sole occupant and its oldest member by a wide margin, so this
+   cycle offers no new evidence either way — only that whatever mechanism has been draining the
+   queue either can't or didn't act on the one draft left.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or A4/A5/A6/A9. All retain their Jul 23
+   counts, "Last seen" dates, and status unchanged. P_dust, P_tier, and P9 remain SHIPPED/CONFIRMED
+   with tracking closed.
+4. **`main` remains unmerged since 2026-06-08** — now 38+ consecutive daily cycles live only on
+   `daily-plan-current`. This cycle's Step 0 rebase conflict (identical to every attempt since Jul
+   13) is the same recurring symptom; repeating the standing operator recommendation to merge.
+
+### Followups (in priority order)
+
+1. **Operator: diagnose the queue-contraction mechanism** — still the single highest-priority
+   operational item, even though today's cycle produced no new contraction. Six consecutive
+   zero-fresh cycles combined with a queue that has been at 1 pending for two cycles running is
+   itself worth investigating on the supply side: is the pipeline drafting nothing, or is
+   everything drafted dying upstream of pending (evidence contract, writer self-kill, fact-check,
+   critic)? The gist alone can't distinguish these.
+2. **Operator: `main` remains unmerged since 2026-06-08** — 38+ consecutive daily cycles stranded
+   on `daily-plan-current`. Every cycle since Jul 13 has hit the identical rebase conflict; merging
+   would let a plain `git pull` replace the current abort-and-continue workaround.
+3. **P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented proposals**,
+   unchanged from Jul 23 — full specs in `docs/IMPROVEMENT_PLAN.md`.
+4. **Watch whether Capitol Hill 1 finally drops at the next pull.** If it does, the queue empties
+   entirely — the first genuinely empty queue since the Jun 21/22-era dry spell. If it doesn't,
+   that's a second data point against the pure age-based-sweep hypothesis (it would then have
+   survived at 148h+ while faster-aging drafts departed in July's earlier cycles).
+
+### Numbers
+
+- Pending drafts in queue: 1 (0 fresh; 1 carry-over, exact match to Jul 23's graded record)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 30 cycles, P_compound 15 cycles
+  cumulative/re-activated, A8 5 cycles on the opener-skeleton axis, A7/P5/A4/A5/A6/A9 unchanged —
+  all counts stand at Jul 23's levels; P_dust/P_tier/P9 remain SHIPPED/CONFIRMED)
+- Staleness bulk-reject: **0 strict candidates**; write skipped — `gh` CLI absent, no gist-write
+  MCP tool available (61st consecutive skip, May 13 → Jul 29)
+- Operational anomalies: **queue size unchanged for the first time since the contraction pattern
+  began** (1 → 1, after five straight cycles of contraction); 6th consecutive zero-fresh-draft
+  cycle (Jul 24–29), a new record for the corpus's longest dry spell; `main` unmerged since Jun 8,
+  now 38+ consecutive stranded cycles
+
+---
+
 ## 2026-07-28 — Daily corpus grading (0 fresh drafts; 1 carry-over from Jul 23, previously graded)
 
 **Context:** Step 0 fetched and reset `main` (confirmed still at its stale Jul 6 state for these
