@@ -11,6 +11,112 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-07-30 — Daily corpus grading (0 fresh drafts; queue genuinely empty for the first time since the Jun 21/22-era dry spell)
+
+**Context:** Step 0 fetched and reset `main` — confirmed still at its stale Jul 6 state for these
+three docs (unmerged since 2026-06-08, now 39+ consecutive cycles stranded on the rolling branch).
+Checked out `daily-plan-current` directly per the Jul 19 process correction; attempted
+`git rebase origin/main`, hit the identical conflict every attempt since Jul 13 has hit
+(`docs/IMPROVEMENT_PLAN.md`'s 2026-07-07 entry replays first and collides with `main`'s stale
+copy), aborted per the runbook fallback, continued from the branch's Jul 29 tip unchanged
+(confirmed no gap: Jul 7–29 all present). Gist read via git-clone path (success; no rate limit).
+**Queue: 0 pending drafts.** Capitol Hill 1, N. Mariana Islands `record` C+ — the queue's sole
+occupant across the last two cycles (Jul 28–29) and its oldest surviving draft at ~148.8h as of
+Jul 29 — is now `status: rejected` in the gist. This is the first genuinely empty pending queue
+this corpus has recorded since the multi-week Jun 21/22-era dry spell, and it closes the
+7-cycle contraction arc that began Jul 24 (14→11→5→4→2→1→1→0). The gist's most recent
+`created_at` timestamp across all 124 drafts (any status) is **2026-07-23T14:11:46Z** — no new
+draft has been created in this bot's queue for **7 days**, confirming the drought is total, not
+just a pending-queue artifact.
+
+**Root cause identified this cycle (not previously surfaced in this doc):** `BRIEFING.md` on
+`main` (2026-07-24 status block, unread by prior grading cycles in this chain) states the
+Anthropic API billing balance for this project **"emptied again 07-24"** — the second time this
+month, after a first empty-out triggered the 70%/90% budget-watch alert on 07-22
+([#461](https://github.com/andrewzp/theheat/issues/461)). `BRIEFING.md` explicitly names
+"Console auto-reload+cap" as **"the standing Andrew item"** — i.e., unresolved as of the last
+`main` session wrap (commit `4b4d965`, 2026-07-24, and no `main` commit has landed since). The
+writer (`ANTHROPIC_API_KEY`, Claude Sonnet 4.6) cannot draft without API credit. This lines up
+exactly with the observed timeline: last draft created Jul 23T14:11Z (before the balance emptied
+the next day), zero drafts every cycle since, and the pending queue's slow drain to zero over
+the following week reads as a TTL/contraction sweep eating carry-overs with nothing arriving to
+replace them — not a voice-quality or triage problem. **This reframes 7 cycles of "queue-
+contraction mechanism, cause unconfirmed" followups in this doc's recent history: the mechanism
+was very likely always the per-type pending TTL sweep operating normally on a queue no longer
+being replenished, and the actual root cause of the replenishment stopping is the billing
+outage, not a drafting-pipeline defect.** This is an infrastructure/billing finding, not a voice
+proposal — logged per the hard constraints (no code/architecture proposal warranted) but
+flagged prominently for the operator below, since it explains a full week of this plan's grading
+cycles producing zero evidence.
+
+**Staleness review as of 2026-07-30 ~15:08 UTC:** **0 candidates — moot.** 0 pending drafts to
+evaluate. **Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → exit 1, command not
+found); no gist-write MCP tool available this session (GitHub MCP server exposes only repo/PR/
+issue/actions tools, no gist scope). Skipped per the hard constraints, logged rather than failing
+the cycle — **62nd consecutive skip** (May 13 → Jul 30). Moot regardless: nothing to reject.
+
+**A-rate:** — (no fresh drafts; 0 pending). Most recent graded cycle: **50% (2/4, 2026-07-23)** —
+bar not cleared (not a majority), unchanged since Jul 24–29 also produced zero fresh drafts.
+
+### Patterns / operational notes
+
+1. **Seventh consecutive zero-fresh-draft cycle (Jul 24–30) — extends the corpus's longest dry
+   spell on record for the seventh straight day.** Unlike every prior dry-spell record set this
+   month, this one now has a named, specific, still-open cause (billing balance empty since
+   Jul 24) rather than an unconfirmed hypothesis.
+2. **The queue-contraction pattern reaches its logical endpoint: 0.** Six cycles of contraction
+   (Jul 24–29: -3, -6, -1, -2, -1, 0) culminated in the queue's last member, Capitol Hill 1,
+   finally being rejected between the Jul 29 and Jul 30 pulls. With the root cause now
+   identified as a billing outage rather than an unconfirmed drafting-pipeline defect, the
+   "oldest survivor drops first" pattern the last several cycles kept re-confirming is best
+   read as the per-type pending TTL sweep (`docs/IMPROVEMENT_PLAN.md`'s 0.9.6.0/0.9.16.0 fast
+   7d / coral-slow 21d config) doing exactly what it's designed to do on a starved queue, not a
+   new or mysterious mechanism.
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or A4/A5/A6/A9. All retain their Jul 23
+   counts, "Last seen" dates, and status unchanged. P_dust, P_tier, and P9 remain SHIPPED/CONFIRMED
+   with tracking closed.
+4. **`main` remains unmerged since 2026-06-08** — now 39+ consecutive daily cycles live only on
+   `daily-plan-current`. This cycle's Step 0 rebase conflict (identical to every attempt since Jul
+   13) is the same recurring symptom; repeating the standing operator recommendation to merge.
+
+### Followups (in priority order)
+
+1. **Operator: restore Anthropic API billing (Console auto-reload + spend cap).** This is now the
+   single highest-priority item in this plan, above every voice proposal below it. The pipeline
+   has produced zero drafts for 7 days because the writer has no credit, not because of a voice
+   or triage regression. `BRIEFING.md`'s own 2026-07-24 status block already names this as "the
+   standing Andrew item" — it has been sitting unresolved for at least 6 days as of this grading
+   run. Every voice-quality proposal in this plan is moot until drafting resumes.
+2. **Operator: `main` remains unmerged since 2026-06-08** — 39+ consecutive daily cycles stranded
+   on `daily-plan-current`. Every cycle since Jul 13 has hit the identical rebase conflict; merging
+   would let a plain `git pull` replace the current abort-and-continue workaround.
+3. **P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented voice proposals**,
+   unchanged from Jul 23 — full specs in `docs/IMPROVEMENT_PLAN.md`. Nothing to act on here until
+   billing is restored and fresh drafts resume.
+4. **Watch for the first fresh draft after billing is restored** — that will be the next
+   opportunity to test whether the "queue-contraction mechanism" hypothesis (TTL sweep vs.
+   something else) holds once the queue is being replenished again.
+
+### Numbers
+
+- Pending drafts in queue: **0** (first genuinely empty queue since the Jun 21/22-era dry spell)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 30 cycles, P_compound 15 cycles
+  cumulative/re-activated, A8 5 cycles on the opener-skeleton axis, A7/P5/A4/A5/A6/A9 unchanged —
+  all counts stand at Jul 23's levels; P_dust/P_tier/P9 remain SHIPPED/CONFIRMED)
+- Staleness bulk-reject: **0 candidates (queue empty)**; write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (62nd consecutive skip, May 13 → Jul 30)
+- Operational anomalies: **queue reached 0 pending for the first time since the Jun 21/22-era dry
+  spell**; 7th consecutive zero-fresh-draft cycle (Jul 24–30), a new record for the corpus's
+  longest dry spell; **root cause identified: Anthropic API billing balance emptied 2026-07-24
+  per `BRIEFING.md`, unresolved as of this cycle** — the writer cannot draft without credit;
+  `main` unmerged since Jun 8, now 39+ consecutive stranded cycles
+
+---
+
 ## 2026-07-29 — Daily corpus grading (0 fresh drafts; 1 carry-over from Jul 23, previously graded)
 
 **Context:** Step 0 fetched and reset `main` — confirmed still at its stale Jul 6 state for these
