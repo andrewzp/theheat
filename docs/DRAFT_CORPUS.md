@@ -11,6 +11,91 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-02 — Daily corpus grading (0 fresh drafts; 10th consecutive; billing outage still open, dry spell now 10 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+9 days. Checked out `daily-plan-current` directly, attempted `git rebase origin/main`, hit the
+identical conflict every attempt since Jul 13 has hit (collision on the Jul 7 entry replaying
+against `main`'s stale copy), aborted per the runbook fallback, continued from the branch's Aug 1
+tip unchanged (confirmed no gap: Jul 7–Aug 1 all present). Gist read via git-clone path (success;
+no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 1.** 114 total drafts of any status in the gist
+(74 rejected, 38 posted, 2 approved) — down from Aug 1's 117, consistent with the gist's rolling-
+window pruning, not new activity. The most recent `created_at` across all drafts, any status, is
+still **2026-07-23T14:11:46Z** — no draft has been created in **10 days**.
+
+**Billing outage: still open, confirmed continuing through this cycle, including a run that
+completed roughly 40 minutes before this grading pull.** The gist's `run_history` shows
+`run_both_20260802T132536Z` (started 13:25:36Z) as `partial_failure`, and a subsequent
+`run_auto_publish_due_20260802T140645Z` (14:06:45Z, success — "no drafts due," expected with an
+empty queue). The retained `suppressions` window (last 100, spanning 2026-08-01T20:43Z →
+2026-08-02T13:35Z) carries **5 `budget_exhausted` + 5 `billing_cycle_abort` pairs**, all citing the
+identical writer error (`"Your credit balance is too low to access the Anthropic API"`), skipping
+**321 queued candidates** across the window. The most recent abort (13:35:13Z) cites 70 candidates
+skipped in that single cycle alone, including a score-89 `all_time_high` event (Clinton Nas,
+Oklahoma) that cleared triage and died at the writer. The outage that began 2026-07-24 has now run
+uninterrupted for **10 days** with no sign of self-healing.
+
+**No new anomalies this cycle.** `state_size` "approaching gist inline cliff" warnings continue
+(most recently 14:06:49Z) — still a watch item, not yet a failure. GDACS GeoRSS schema-drift
+(flagged Aug 1) not visible in today's error tail but the underlying feed issue is unconfirmed
+resolved either way — not re-flagged as new, not marked closed.
+
+**Staleness review as of 2026-08-02 ~14:15 UTC:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **65th consecutive skip** (May 13 → Aug 2). Moot regardless: nothing to
+reject.
+
+**A-rate:** — (no fresh drafts; 0 pending). Most recent graded cycle remains **50% (2/4,
+2026-07-23)** — bar not cleared, unchanged since Jul 24.
+
+### Patterns / operational notes
+
+1. **Tenth consecutive zero-fresh-draft cycle (Jul 24–Aug 2)** — extends the corpus's longest dry
+   spell to a full 10 days, same single named cause, still unresolved.
+2. **Billing outage directly confirmed within the hour of this grading run** — the most recent
+   `billing_cycle_abort` (13:35:13Z) landed roughly 40 minutes before the `auto_publish_due` run
+   that immediately preceded this grading pull, and about 50 minutes before this cycle started.
+   This is the closest-in-time confirmation yet; there is no plausible window in which the outage
+   could have quietly resolved and gone unnoticed.
+3. **Cost, re-quantified:** 321 candidates discarded in the ~17-hour window covered by this cycle's
+   suppressions log alone. The pipeline continues to triage and score real signal (a score-89
+   `all_time_high` cleared `score_gate` and `triage_in` this cycle) — it is being thrown away at
+   the writer step every single time, at a steady rate, not decelerating.
+4. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or A4/A5/A6/A9. All retain their Jul 23
+   counts, "Last seen" dates, and status unchanged. P_dust, P_tier, and P9 remain SHIPPED/CONFIRMED
+   with tracking closed.
+5. **`main` remains unmerged since 2026-06-08** — now 42+ consecutive daily cycles live only on
+   `daily-plan-current`, and itself silent for 9+ days (no commit since the Jul 24 session wrap
+   that first surfaced the billing status).
+
+### Followups (in priority order)
+
+1. **Operator: restore Anthropic API billing (Console auto-reload + spend cap).** Still the single
+   highest-priority item in this plan, now unresolved for 10 consecutive days. Confirmed live and
+   ongoing within the hour of this grading run. Every triage cycle that reaches the writer still
+   aborts on the identical credit-balance error, discarding dozens to hundreds of queued candidates
+   each time. Nothing else in this plan matters until this is fixed.
+2. **Operator: `main` remains unmerged since 2026-06-08** — 42+ consecutive daily cycles stranded
+   on `daily-plan-current`, same rebase conflict every attempt since Jul 13.
+3. **P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented voice proposals**,
+   unchanged from Jul 23 — full specs in `docs/IMPROVEMENT_PLAN.md`. Nothing to act on here until
+   billing is restored and fresh drafts resume.
+
+### Numbers
+
+- Pending drafts in queue: **0** (unchanged from Aug 1; 10 days since the last draft was created)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (counts unchanged from Jul 23; P_dust/P_tier/P9
+  remain SHIPPED/CONFIRMED)
+- Staleness bulk-reject: **0 candidates (queue empty)**; write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (65th consecutive skip, May 13 → Aug 2)
+
 ## 2026-08-01 — Daily corpus grading (0 fresh drafts; 9th consecutive; billing outage still open, dry spell now 9 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
