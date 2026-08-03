@@ -11,6 +11,87 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-03 — Daily corpus grading (0 fresh drafts; 11th consecutive; billing outage still open, dry spell now 11 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+10 days. Checked out `daily-plan-current` directly, attempted `git rebase origin/main`, hit the
+identical conflict every attempt since Jul 13 has hit (collision on the Jul 7 entry replaying
+against `main`'s stale copy), aborted per the runbook fallback, continued from the branch's Aug 2
+tip unchanged (confirmed no gap: Jul 7–Aug 2 all present). Gist read via git-clone path (success;
+no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 2.** 101 total drafts of any status in the gist
+(61 rejected, 38 posted, 2 approved) — down from Aug 2's 114, consistent with the gist's rolling-
+window pruning, not new activity. The most recent `created_at` across all drafts, any status, is
+still **2026-07-23T14:11:46Z** — no draft has been created in **11 days**.
+
+**Billing outage: still open, confirmed continuing through this cycle across three separate runs
+today.** The gist's `run_history` shows all three of today's non-publish runs as `partial_failure`:
+`run_alerts_20260803T065241Z` (06:52Z), `run_alerts_20260803T111409Z` (11:14Z), and
+`run_both_20260803T144313Z` (14:43Z, the most recent). The retained `suppressions` window (last
+100, spanning 2026-08-03T11:22Z→14:49Z) carries exactly **2 `budget_exhausted` + 2
+`billing_cycle_abort` pairs**, both citing the identical writer error (`"Your credit balance is
+too low to access the Anthropic API"`). **New this cycle: a sharp escalation in candidates
+skipped per abort.** The 11:14Z run's abort skipped **2,945 queued candidates** in a single
+cycle (funnel: `observed: 57164, promoted: 3584, triaged_in: 2946, billing_aborted: 2945`) — an
+order of magnitude above every prior cycle's range (41–330, per the Jul 31–Aug 2 entries). The
+14:43Z run's abort was back to the normal range (54 skipped). Whether the 11:14Z spike reflects a
+genuine backlog surge (score-gate survivors piling up unprocessed across 10+ days of outage,
+periodically flushed into one triage pass) or a one-off batching artifact is not determinable from
+the gist alone — flagged for the operator as a new data point, not a new root cause; the root
+cause (Anthropic API billing balance empty since Jul 24) is unchanged.
+
+**New secondary anomaly (not billing-related):** the 11:14Z run's `gpm_imerg` source failed with
+`ConnectTimeout` ("GPM IMERG fetch hit 3 repeated ConnectTimeout failures for 2026-08-02") — a
+NASA GES DISC connectivity failure, off the draft-generation critical path (this source's data
+feeds precipitation_extreme events; no precipitation_extreme candidates were affected differently
+than any other type this cycle since the writer stage is what's actually blocked). Logged as an
+operational observation alongside the already-tracked GDACS GeoRSS schema-drift (last seen Aug 1)
+and `twitter_metrics` 401 (tracked as #452, recurs again in the 14:43Z run) — none of these are on
+the voice-quality path and none are new proposals.
+
+**Staleness review as of 2026-08-03 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **66th consecutive skip** (May 13 → Aug 3). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 2)
+- Fresh drafts graded: 0 (11th consecutive no-fresh-draft cycle, Jul 24–Aug 3)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (66th consecutive skip, May 13 → Aug 3)
+- Operational anomalies: billing outage now 11 days open (root cause unchanged, Jul 24 balance
+  empty); new data point — one abort this cycle skipped 2,945 candidates (10x+ the prior range);
+  new secondary anomaly — `gpm_imerg` ConnectTimeout in the 11:14Z run; `main` unmerged since
+  Jun 8, now 40+ consecutive stranded cycles
+
+### Followups (in priority order)
+
+1. **Operator: billing is still down 11 days after the Jul 24 outage began — this remains the
+   single highest-priority item in this plan.** Console auto-reload + spend cap is the standing
+   fix per BRIEFING.md's 2026-07-24 status block; no `main` commit has landed since to indicate
+   it's been actioned.
+2. **Operator: investigate the 2,945-candidate skip spike (11:14Z run).** If this recurs, it may
+   indicate the triage backlog is growing unbounded during the outage rather than being
+   discarded per-cycle — worth checking whether `score_gate` survivors are being re-queued across
+   runs instead of expiring.
+3. **Operator: `main` remains unmerged since 2026-06-08** — 40+ consecutive daily cycles stranded
+   on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle and the Jul 16/17/22
+   clearances a `main`-only view would never see.
+4. P_close, P_compound, A7, A8, P5 remain ready for implementation, unchanged from Jul 23's
+   evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
+
+---
+
 ## 2026-08-02 — Daily corpus grading (0 fresh drafts; 10th consecutive; billing outage still open, dry spell now 10 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
