@@ -11,6 +11,89 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-04 — Daily corpus grading (0 fresh drafts; 12th consecutive; billing outage still open, dry spell now 12 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+11 days. Checked out `daily-plan-current` directly, attempted `git rebase origin/main`, hit the
+identical conflict every attempt since Jul 13 has hit (collision on the Jul 7 entry replaying
+against `main`'s stale copy), aborted per the runbook fallback, continued from the branch's Aug 3
+tip unchanged. Gist read via git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 3.** 96 total drafts of any status in the gist (56
+rejected, 38 posted, 2 approved) — down from Aug 3's 101, consistent with the gist's rolling-
+window pruning, not new activity. The most recent `created_at` across all drafts, any status, is
+still **2026-07-23T14:11:46Z** — no draft has been created in **12 days**.
+
+**Billing outage: still open, and the escalation flagged Aug 3 has not recurred — cadence has
+stabilized into a regular pattern instead.** The gist's `run_history` shows one `partial_failure`
+today, `run_both_20260804T142004Z` (14:20:04Z); the retained `suppressions` window (last 100,
+spanning 2026-08-03T11:22Z→2026-08-04T14:25Z) carries exactly **4 `budget_exhausted` + 4
+`billing_cycle_abort` pairs**, all citing the identical writer error (`"Your credit balance is too
+low to access the Anthropic API"`), landing roughly every 4 hours across the day (02:02Z, 06:25Z,
+10:35Z, 14:25Z — consistent with automated retry scheduling hitting the same wall on every alerts
+run). Candidates skipped per abort: 48, 40, 38, 49 — all back inside the 41–330 normal range, no
+repeat of Aug 3's 2,945-candidate spike (that appears to have been a one-off, not the start of an
+unbounded-backlog trend, though one clean cycle isn't proof either way).
+
+**Notable: the same high-score candidate died at the writer three separate times today.** A
+score-91 `all_time_high` event, Randolph, Utah (`all_time_high_USC00427165_2026-08-01`), was the
+`budget_exhausted` victim in 3 of today's 4 aborts (06:25Z, 10:35Z, 14:25Z) — it cleared triage on
+Aug 1, has been sitting in the candidate queue ever since, and gets re-selected and re-killed on
+every subsequent run without ever reaching the writer successfully. This is exactly the class of
+signal (score ≥85, `all_time_record`) the corpus has repeatedly found A-grade-capable when the
+pipeline is healthy (see Jul 3/4/17 Loxahatchee, Island Pond, Cope Rch TX entries) — it is not a
+voice problem, the signal never gets a chance to become a draft at all. The 4th abort (02:02Z)
+killed a score-88 `absolute_extreme` cold event, La Paz, Bolivia — the corpus's first-ever
+sub-freezing `absolute_extreme` candidate by name, also lost before drafting.
+
+**No new secondary anomalies.** The `firms` (NASA FIRMS) and `gpm_imerg` (NASA GES DISC)
+transient fetch failures recur again today (01:51Z, 02:02Z respectively) — same intermittent
+connectivity class flagged Aug 1–3, off the draft-generation critical path, not re-flagged as new.
+34 `score_gate` suppressions also logged today (below-threshold fire/precipitation candidates in
+the Congo Basin and Angola) — routine triage behavior, unrelated to billing.
+
+**Staleness review as of 2026-08-04 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **67th consecutive skip** (May 13 → Aug 4). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 3)
+- Fresh drafts graded: 0 (12th consecutive no-fresh-draft cycle, Jul 24–Aug 4)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (67th consecutive skip, May 13 → Aug 4)
+- Operational anomalies: billing outage now 12 days open (root cause unchanged, Jul 24 balance
+  empty); cadence stabilized at ~1 abort/4h, no repeat of Aug 3's 2,945-candidate spike; same
+  score-91 Randolph, Utah candidate killed 3 times today without ever reaching the writer; `main`
+  unmerged since Jun 8, now 40+ consecutive stranded cycles
+
+### Followups (in priority order)
+
+1. **Operator: billing is still down 12 days after the Jul 24 outage began — this remains the
+   single highest-priority item in this plan.** Console auto-reload + spend cap is the standing
+   fix per BRIEFING.md's 2026-07-24 status block; no `main` commit has landed since to indicate
+   it's been actioned.
+2. **Operator: the Randolph, Utah `all_time_high` candidate (score 91) has now been killed at
+   the writer on repeat since Aug 1** — worth confirming whether the triage backlog re-queues the
+   same top candidate every run (in which case it will keep dying identically until billing is
+   restored) or whether this is coincidental re-selection.
+3. **Operator: `main` remains unmerged since 2026-06-08** — 40+ consecutive daily cycles stranded
+   on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle and the Jul 16/17/22
+   clearances a `main`-only view would never see.
+4. P_close, P_compound, A7, A8, P5 remain ready for implementation, unchanged from Jul 23's
+   evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
+
+---
+
 ## 2026-08-03 — Daily corpus grading (0 fresh drafts; 11th consecutive; billing outage still open, dry spell now 11 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
