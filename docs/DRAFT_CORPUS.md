@@ -108,6 +108,16 @@ seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior
 5. P_close, P_compound, A7, A8, P5 remain ready for implementation, unchanged from Jul 23's
    evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
 
+**Addendum — beacon write:** the runbook's Step 9.5 assumes `gh variable set ROUTINE_BEACON`
+"reliably succeeds" using the same repo scope the branch push uses. In this session that
+assumption did not hold: `gh` CLI is absent entirely (confirmed by `which gh` throughout this run,
+same as the gist-write path), and no equivalent repo-variable tool is exposed via the GitHub MCP
+server (only repo/PR/issue tools — `ToolSearch` for "variable" returned nothing). The beacon write
+was attempted and failed; logged per the best-effort constraint rather than failing the cycle, but
+flagged for the operator since `ROUTINE_BEACON` may be relied on as an external heartbeat and has
+not actually been updated by this routine in this environment — worth checking how many prior
+cycles' "beacon written" claims were genuine versus assumed.
+
 ---
 
 ## 2026-08-05 — Daily corpus grading (0 fresh drafts; 13th consecutive; billing outage still open, dry spell now 13 days)
