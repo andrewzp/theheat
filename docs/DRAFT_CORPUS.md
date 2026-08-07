@@ -11,6 +11,97 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-07 — Daily corpus grading (0 fresh drafts; 15th consecutive; billing outage still open, dry spell now 15 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+14 days. Checked out `daily-plan-current`, attempted `git rebase origin/main`, hit the identical
+conflict every attempt since Jul 13 has hit (first replayed commit, `docs/IMPROVEMENT_PLAN.md`),
+aborted per the runbook fallback, continued from the branch's Aug 6 tip unchanged (no gap: Jul
+7–Aug 6 all present). Gist read via git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 6.** 76 total drafts of any status in the gist (36
+rejected, 38 posted, 2 approved) — down from Aug 6's 85 (-9 rejected-status drafts), consistent
+with the gist's rolling-window pruning already noted Aug 3–6, not new activity. The most recent
+`created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been
+created in **15 days**.
+
+**Billing outage: still open, 2 aborts today instead of the ~4-hour/3-abort cadence held Aug
+4–6.** The gist's `run_history` shows one `partial_failure` today, `run_both_20260807T130808Z`
+(13:08:08Z); the retained `suppressions` window carries exactly **2 `budget_exhausted` + 2
+`billing_cycle_abort` pairs** today (08:55:48Z, 13:13:25Z — a wider ~4.3h gap than the tighter
+Aug 4–6 cadence, but still the same recurring pattern, not a new failure mode), both citing the
+identical writer error class established Jul 31 (`"credit balance is too low"`). Candidates
+skipped per abort: 405, 65 — the 405-candidate abort is the largest single-abort count since Aug
+3's 2,945-candidate spike day (though well below it), the 65-candidate abort is unremarkable.
+
+**Notable: the writer-killed `all_time_high` candidate changed stations for the first time since
+tracking began Aug 1.** Both of today's aborts cite `all_time_high_USC00059096_2026-08-03`
+(Williams Fk Dam, Colorado, score 92) — not Randolph, Utah's `USC00427165` station, which carried
+every abort Aug 1–6 (6 consecutive days). This is the first evidence the "which station wins
+triage and dies at the writer" slot rotates across stations day to day rather than being pinned
+to one location — consistent with the Aug 6 entry's hypothesis that the station regenerates a
+fresh top-ranked candidate daily (that hypothesis was about the *event* refreshing; today shows
+the *station* can also change). Practical effect unchanged: whichever station wins, it dies at
+the identical billing wall.
+
+**Anomaly resolved (or at least not observed today): gist state size warning.** 0 `state_size`
+"approaching gist inline cliff" warnings today — first zero-count day since Aug 3 (Aug 4: 30, Aug
+5: 16, Aug 6: 16). One data point; not enough to call it fixed, but worth noting the streak broke
+rather than climbing further.
+
+**Score-gate fire cluster persists, roughly steady.** 74 `fire`/`fire_footprint` score_gate
+suppressions today (59 fire + 15 fire_footprint) vs. Aug 6's 58 combined — comparable order of
+magnitude, still dominated by eastern Siberia (44 of today's fire-category suppressions tagged
+"eastern Siberia," scores 61–63 against the 64 threshold, 57 distinct event_ids), with a wider
+scatter of one-off near-misses today (Brazil, Pacific Northwest ×5, British Columbia, Congo
+Basin, Northern Territory ×2, Indonesia, plus two ungeocoded coordinate pairs). Same read as Aug
+6: routine triage behavior on a real active fire complex, off the billing-outage critical path.
+
+**Staleness review as of 2026-08-07 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **70th consecutive skip** (May 13 → Aug 7). Moot regardless: nothing to reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 6)
+- Fresh drafts graded: 0 (15th consecutive no-fresh-draft cycle, Jul 24–Aug 7)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (70th consecutive skip, May 13 → Aug 7)
+- Operational anomalies: billing outage now 15 days open (root cause unchanged, Jul 24 balance
+  empty); 2 aborts today (405, 65 candidates skipped) vs. Aug 4–6's steadier 3-abort/~4h cadence;
+  writer-killed candidate switched stations for the first time (Randolph UT → Williams Fk Dam CO);
+  `state_size` warning at 0 for the first time since Aug 3; eastern-Siberia fire score-gate
+  cluster persists at comparable scale (74 today vs. 58 Aug 6); `main` unmerged since Jun 8, now
+  42+ consecutive stranded cycles
+
+### Followups (in priority order)
+
+1. **Operator: billing is still down 15 days after the Jul 24 outage began — this remains the
+   single highest-priority item in this plan, and is now flagged directly to the operator outside
+   this PR given how long it has gone unactioned.** Console auto-reload + spend cap is the
+   standing fix per BRIEFING.md's 2026-07-24 status block; no `main` commit has landed since to
+   indicate it's been actioned.
+2. **Operator: today's 405-candidate abort is the largest single-abort skip count since Aug 3's
+   2,945-candidate outlier** — still well below that spike, but worth a glance if the pattern
+   recurs tomorrow.
+3. **Operator: the writer-killed candidate rotating stations (Randolph UT → Williams Fk Dam CO)
+   confirms the billing wall is blocking triage's current top pick generically, not one specific
+   stuck record** — no action needed, just updates the mental model of what's being lost.
+4. **Operator: `main` remains unmerged since 2026-06-08** — 42+ consecutive daily cycles stranded
+   on `daily-plan-current`, including the Jun 29 bar-clearing (80%) cycle and the Jul 16/17/22
+   clearances a `main`-only view would never see. The rolling PR accumulating these commits should
+   be merged (docs-only diff) so this history isn't only reachable via the branch.
+5. P_close, P_compound, A7, A8, P5 remain ready for implementation, unchanged from Jul 23's
+   evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
+
 ## 2026-08-06 — Daily corpus grading (0 fresh drafts; 14th consecutive; billing outage still open, dry spell now 14 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
