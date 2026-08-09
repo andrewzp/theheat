@@ -11,6 +11,89 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-09 — Daily corpus grading (0 fresh drafts; 17th consecutive; billing outage still open, dry spell now 17 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+16 days. Checked out `daily-plan-current` and attempted `git rebase origin/main`: the identical
+conflict recurred in `docs/IMPROVEMENT_PLAN.md` (same file/pattern as every attempt since Jul 13),
+aborted per the runbook fallback, continued from the branch's Aug 8 tip unchanged. Gist read via
+git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 8.** 67 total drafts of any status in the gist (27
+rejected, 38 posted, 2 approved) — down from Aug 8's 70 (-3 rejected-status drafts), consistent
+with the gist's rolling-window pruning, not new activity. The most recent `created_at` across all
+drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in **17 days**.
+
+**Billing outage: still open, same ~4-hour-ish cadence (3 aborts today), and the station-rotation
+pattern repeats verbatim from yesterday for the first time.** The retained `suppressions` window
+carries **3 `budget_exhausted` + 3 `billing_cycle_abort` pairs today** (05:04:58Z, 08:51:05Z,
+13:11:00Z), all citing the identical writer error class established Jul 31 (`"Your credit balance
+is too low to access the Anthropic API"`). Candidates skipped per abort: 33, 25, 39 (97 total) —
+well below Aug 3's spike, in the normal recent range. **The writer-killed candidate hit the exact
+same two-station sequence as Aug 8: La Paz, Bolivia `absextreme_cold` (score 86) for the first two
+aborts, then Victoria, Hong Kong `alltime_high` (score 86) for the third** — identical station
+identities and identical order to yesterday, the first time this recurring-station-rotation
+pattern has repeated verbatim across two consecutive days rather than picking a new station each
+day (Randolph UT ×6 days → Williams Fk Dam CO → La Paz/Victoria → La Paz/Victoria again). Reads as
+the same top-ranked triage slot regenerating a stable daily winner now that the US Western fire
+complex and eastern-Siberia cluster aren't displacing it, rather than a new failure mode.
+
+**Cross-checked again against GitHub issue #462**, still open, last updated **2026-08-09T13:28:14Z**
+(this morning) — its own text now cites **"4 draft(s) died with `budget_exhausted` in the last
+24h (latest 2026-08-09T13:11:00.083173Z)"**, which reconciles exactly against this session's gist
+read: 3 today (05:04Z/08:51Z/13:11Z) plus the last suppression from Aug 8's retained window
+(20:30:46Z, Macau `alltime_high`) falling inside the issue's trailing-24h count as of its 13:28Z
+update. **Issue #479 (`_pipeline_liveness`), the second sentinel opened Aug 8, auto-closed at
+2026-08-08T16:59:11Z** — confirms Aug 8's own hypothesis that it would clear once the alerts lane
+logged one fresh success, independent of the billing root cause. One open sentinel remains
+(#462), same as every cycle since Jul 23.
+
+**`state_size` warnings: 30 today (vs. 31 Aug 8), sizes 2,816,457–2,862,988 bytes (~2.82–2.86MB)** —
+a new high-water mark, continuing the climb flagged since Aug 8 against the 800KB threshold
+GitHub issue #390 raised Jul 7. Not yet an observed failure, but the trend keeps moving one
+direction only.
+
+**Staleness review as of 2026-08-09 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **72nd consecutive skip** (May 13 → Aug 9). Moot regardless: nothing to reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 8)
+- Fresh drafts graded: 0 (17th consecutive no-fresh-draft cycle, Jul 24–Aug 9)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (72nd consecutive skip, May 13 → Aug 9)
+- Operational anomalies: billing outage now 17 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (still open, updated this morning); sentinel #479
+  auto-closed Aug 8 as expected; writer-killed candidate repeated the exact same 2-station
+  sequence as Aug 8 (La Paz ×2 → Victoria) for the first time since tracking began Aug 1;
+  `state_size` warning at a new high (~2.86MB, 30 warnings); `main` unmerged since Jun 8, now 44+
+  consecutive stranded cycles
+
+### Followups (in priority order)
+
+1. **Operator: billing is still down 17 days after the Jul 24 outage began — this remains the
+   single highest-priority item in this plan.** GitHub issue #462 (open since Jul 23) is still
+   updating daily with matching timestamps; the gist's own suppression ledger independently
+   confirms the same three aborts today. Console auto-reload + spend cap remains the standing fix
+   per BRIEFING.md's 2026-07-24 status block.
+2. **Operator: the `state_size` gist-size trend flagged by issue #390 (Jul 7) is now at ~2.86MB**,
+   a new high, against an 800KB warning threshold — worth a look independent of the billing
+   outage, since gist size is a different failure mode (inline-payload cliff) than API budget.
+3. **Operator: `main` remains unmerged since 2026-06-08** — 44+ consecutive daily cycles stranded
+   on `daily-plan-current`. The rolling PR accumulating these commits should be merged (docs-only
+   diff) so this history isn't only reachable via the branch.
+4. P_close, P_compound, A7, A8, P5 remain ready for implementation, unchanged from Jul 23's
+   evidence counts — see `docs/IMPROVEMENT_PLAN.md` for full specs.
+
 ## 2026-08-08 — Daily corpus grading (0 fresh drafts; 16th consecutive; billing outage still open, dry spell now 16 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
