@@ -11,6 +11,88 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-12 — Daily corpus grading (0 fresh drafts; 20th consecutive; billing outage still open, dry spell now 20 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+19 days. Checked out `daily-plan-current` and, instead of repeating the rebase-fails-fall-back
+pattern of every cycle since Jul 13/17, ran `git merge origin/main`: one conflict landed, in this
+same `docs/IMPROVEMENT_PLAN.md` "Current state" table (same block that has conflicted on every
+prior attempt), resolved by keeping this branch's accumulated content. The merge — not previously
+diagnosed by this routine as anything beyond "rebase conflicted, kept branch as-is" — turns out to
+have had a real side effect: because every prior cycle aborted the rebase rather than resolving it,
+`daily-plan-current`'s copies of `BRIEFING.md`, `docs/handoffs/2026-07-24-next-session.md`, and
+`docs/superpowers/plans/economics/PLAN-ECONOMICS-MASTER-v3.md` had been silently frozen at
+pre-Jul-24 (or pre-existence) state for 19 days — `BRIEFING.md` in particular was carrying a
+stale Jul 8 status block and a Jul 8 dependency line. This merge restores `main`'s current content
+for all three out-of-scope files (no edits made to them — merge only, per the hard constraints on
+allowed file edits) and would have deleted/reverted them had the branch's now-19-day-old diff ever
+been merged as-is. Flagging this as an operational finding for the operator, not a voice proposal.
+Gist read via git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 11.** 62 total drafts of any status in the gist (22
+rejected, 38 posted, 2 approved) — identical to Aug 11's count, no rolling-window pruning this
+cycle. The most recent `created_at` across all drafts, any status, is still
+**2026-07-23T14:11:46Z** — no draft has been created in **20 days**.
+
+**Billing outage: still open, 4 aborts today (up from 3 yesterday), all on the same station for a
+2nd consecutive full day.** The retained `suppressions` window carries **4 `budget_exhausted` + 4
+`billing_cycle_abort` pairs today** (01:20:17Z, 05:35:43Z, 09:08:13Z, 13:21:52Z), all citing the
+identical writer error class established Jul 31 (`"Your credit balance is too low to access the
+Anthropic API"`). Candidates skipped per abort: 36, 27, 76, 42 (181 total) — inside the normal
+range, no repeat of Aug 3's 2,945-candidate spike. **The writer-killed candidate is again Williams
+Fk Dam, Colorado `all_time_high` (`all_time_high_USC00059096_2026-08-08`, score 93) for all four
+aborts** — the same station Aug 11 held for its first full day, now a 2nd consecutive full day at
+the same single candidate, the longest single-station hold observed in this corpus's tracking of
+the rotation pattern (Randolph UT ×6 days → Williams Fk Dam CO → La Paz/Victoria ×2 → La
+Paz/Williams Fk Dam CO → Williams Fk Dam CO ×2 full days).
+
+**Cross-checked against GitHub issue #462**, still open, updated **2026-08-12T13:54:05Z** (minutes
+after this cycle's final abort) — its own text cites **"6 draft(s) died with `budget_exhausted` in
+the last 24h (latest 2026-08-12T13:21:52.148338Z)"** — the latest timestamp matches this session's
+own read of the 13:21:52Z abort exactly. No second sentinel issue is open this cycle (#479 remains
+auto-closed since Aug 8). **GitHub issue #467** ("Workflow failing: voice-regression") remains
+open, updated 2026-08-12T10:32:17Z, same 20-consecutive-red-run streak first noted Aug 11 — same
+root cause (writer calls failing on missing credit).
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster grew from 14 to 15 items today**
+— the 14 items tracked since Aug 10 are all still present, plus one new entry
+(`fire_footprint_2026-COSJF-000536_tier0`, Colorado), all scoring 60–61 against the 72 threshold.
+Unlike Aug 11, no `record`-type or `fire`-type near-misses appear in today's suppressions pull —
+the suppressions list is a rolling cap (100 entries, oldest retained is now 2026-08-10), so their
+absence today isn't conclusive evidence they stopped, only that they didn't recur in this window.
+All off the draft-generation critical path regardless of billing.
+
+**`state_size` warnings: 24 today** (26 Aug 11, 30 Aug 9, 22 Aug 10), sizes up to **3,038,614 bytes
+(~3.04MB)** — a new peak byte size, continuing the climb flagged since Aug 4 against the 800KB
+threshold GitHub issue #390 raised Jul 7. 2 `gpm_imerg` transient HTTP 503 fetch failures also
+recurred today (01:19:55Z, 05:34:17Z) — same recurring class flagged Aug 1–3, off the
+draft-generation critical path.
+
+**Staleness review as of 2026-08-12 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → `command not found`); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **75th consecutive skip** (May 13 → Aug 12). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 11)
+- Fresh drafts graded: 0 (20th consecutive no-fresh-draft cycle, Jul 24–Aug 12)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (75th consecutive skip, May 13 → Aug 12)
+- Operational anomalies: billing outage now 20 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (still open, 6 deaths/24h, latest-death timestamp
+  matching this cycle's own read) and #467 (still red, same 20-run CI streak); `daily-plan-current`
+  ↔ `main` merge conflict (open since Jul 13/17) resolved this cycle, restoring `BRIEFING.md` +
+  2 other out-of-scope docs to current `main` content — see IMPROVEMENT_PLAN.md "Bot commit" row
+
 ## 2026-08-11 — Daily corpus grading (0 fresh drafts; 19th consecutive; billing outage still open, dry spell now 19 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
