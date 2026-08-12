@@ -232,7 +232,36 @@ at samples=1 — funnel telemetry watches drafts/day with an explicit re-enable 
 
 ## 8. Paste-ready kickoff (green-lights P0 + P1)
 
+> **STALE — P0+P1 executed 2026-07-14; see §9.** Kept for the record.
+
 > Pick up @theheat. Execute the economics master plan —
 > `docs/superpowers/plans/economics/PLAN-ECONOMICS-MASTER-v3.md` — P0 then P1, under the standing
 > rules in `docs/handoffs/2026-07-13-next-session.md`. P0.1's two flags flip together in one step.
 > Show me the funnel/drafts-per-day readout after 48h of P0 before starting P2.
+
+## 9. Execution status + measured corrections (2026-07-24)
+
+**Shipped:** P0.1 flags (2026-07-14 05:37Z) · P0.2+3 #439 · P0.4 #443 · P0.5 #444 · P0.6 #445 ·
+P1.1 #447 · P1.2 #446 — all codex-xhigh looped. Production was stopped mid-train on Andrew's
+order (#441, 2026-07-14) and restored 2026-07-16 (#449). P2.2 = #463 (structured outputs,
+codex-approved, billing-held on its voice gate). P1.3 = #464 (negative cache — the optional
+item's pre-registered trigger was observed in week-1 funnel data; hardened to min-kills=2 +
+decision-epoch under two codex rejection rounds). **P2.1 (Batch API lane) is the next build**
+— see `docs/handoffs/2026-07-24-next-session.md`.
+
+**Measured corrections to §1/§4 (week 1 post-restore, from the P0.6 ledger — the instrument
+this plan built):**
+
+- **Writer run-rate: ~$1.74/day ≈ $52–57/month annualized — ~4× the §4 "After P0" writer
+  estimate ($13–16).** Mechanism: §1's "typical ~10–20 calls/day" reflected pre-July success
+  rates; peak heat season keeps the refill queue deep, so every cycle drains to the ~6-attempt
+  cap, × ~1.85 avg provider-calls-per-attempt (JSON + length retry lanes). The ceiling math was
+  right; "typical" was seasonal.
+- The budget watch fired (#461) at the $14 line on 07-22 and the balance emptied 2026-07-24 —
+  the alarm chain worked end-to-end; the missing control is the Console auto-reload/cap (P0
+  item 7, Andrew-only, still undone as of this note).
+- **Revised landing zone:** #463 (retires the JSON-retry multiplier) + #464 (stops same-facts
+  re-buys) + P2.1 batch (×0.5) ≈ **$15–22/month at peak-season volume**; quieter seasons land
+  in §4's $11–17. If peak-season months matter, either accept 70%/90% alerts as the throttle
+  signal or raise `THEHEAT_MONTHLY_BUDGET_USD` toward the $18 hard-ceiling band (Andrew's
+  call). The held levers (§ Held) remain the next dial if a hard $14 must hold in July/August.
