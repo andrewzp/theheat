@@ -11,6 +11,80 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-13 — Daily corpus grading (0 fresh drafts; 21st consecutive; billing outage still open, dry spell now 21 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+20 days. Checked out `daily-plan-current`: `git merge-base --is-ancestor origin/main
+daily-plan-current` confirms `main` is already an ancestor (Aug 12's `git merge origin/main`
+carried it in), so this cycle's sync is clean — no conflict, no rebase/merge needed. Gist read via
+git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 12.** 61 total drafts of any status in the gist (21
+rejected, 38 posted, 2 approved) — down from Aug 12's 62 via rolling-window pruning (1 rejected
+entry dropped off). The most recent `created_at` across all drafts, any status, is still
+**2026-07-23T14:11:46Z** — no draft has been created in **21 days**.
+
+**Billing outage: still open, 4 aborts today (same count as yesterday), and the writer-killed
+candidate rotated back to a station last held 12+ days ago.** The retained `suppressions` window
+carries **4 `budget_exhausted` + 4 `billing_cycle_abort` pairs today** (01:18:12Z, 05:35:17Z,
+09:19:42Z, 13:23:11Z), all citing the identical writer error class established Jul 31
+(`"Your credit balance is too low to access the Anthropic API"`). Candidates skipped per abort:
+88, 57, 32, 37 (214 total) — up from yesterday's 181 but inside the normal range, no repeat of
+Aug 3's 2,945-candidate spike. **The writer-killed candidate switched off Williams Fk Dam, Colorado
+(held for the prior 2 full days) back to Randolph, Utah** (`all_time_high_USC00427165_2026-08-09`,
+score 91, a fresh candidate-refresh — the event_id date advanced to Aug 9) for all four aborts
+today — continuing the rotation this corpus has tracked since Aug 1: Randolph UT ×6 days →
+Williams Fk Dam CO → La Paz/Victoria ×2 → La Paz/Williams Fk Dam CO → Williams Fk Dam CO ×2 full
+days → **Randolph UT (return)**.
+
+**Cross-checked against GitHub issue #462**, still open, updated **2026-08-13T13:54:11Z** (~31 min
+after this cycle's final abort) — its own text cites **"5 draft(s) died with `budget_exhausted` in
+the last 24h (latest 2026-08-13T13:23:11.690013Z)"** — the latest timestamp matches this session's
+own read of the 13:23:11Z abort exactly. **GitHub issue #467** ("Workflow failing:
+voice-regression") remains open, updated 2026-08-13T10:33:33Z, same root cause (writer calls
+failing on missing credit).
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster grew from 15 to 16 items today**
+(all 15 items tracked since Aug 12 still present, plus one new entry not individually diffed
+here), all still scoring 60–61 against the 72 threshold. **`fire` near-misses: 10 today, a
+different geographic mix than Aug 11's Siberia/Northern Territory/Indonesia cluster** — Northern
+Territory Australia ×3 (scores 61–62), a DRC/Rwanda border cluster ×3 (score 63, new location hook
+for this corpus's tracking), plus Kimberley WA and central Siberia repeats (scores 61–63 vs.
+threshold 64). No `record`-type near-misses this cycle. All off the draft-generation critical path
+regardless of billing.
+
+**`state_size` warnings: 26 today**, sizes up to **3,100,331 bytes (~3.10MB)** — a new peak byte
+size, continuing the climb flagged since Aug 4 against the 800KB threshold GitHub issue #390
+raised Jul 7. **3 `gpm_imerg` transient HTTP 503 fetch failures** recurred today (05:33:45Z,
+09:17:00Z, 13:21:17Z), same recurring class flagged Aug 1–3. **2 GDACS GeoRSS schema-drift errors**
+also recurred (09:05:48Z, 13:17:01Z) — same low-priority anomaly last logged Aug 1, off the
+draft-generation critical path (GDACS is a disaster-alert feed, not part of draft generation).
+
+**Staleness review as of 2026-08-13 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → `command not found`); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **76th consecutive skip** (May 13 → Aug 13). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 12)
+- Fresh drafts graded: 0 (21st consecutive no-fresh-draft cycle, Jul 24–Aug 13)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (76th consecutive skip, May 13 → Aug 13)
+- Operational anomalies: billing outage now 21 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (still open, 5 deaths/24h, latest-death timestamp
+  matching this cycle's own read) and #467 (still red); writer-killed candidate rotated back to
+  Randolph, Utah after 2 full days on Williams Fk Dam, CO; `daily-plan-current` ↔ `main` sync clean
+  this cycle (no conflict — Aug 12's merge already carried `main`'s tip in as an ancestor)
+
 ## 2026-08-12 — Daily corpus grading (0 fresh drafts; 20th consecutive; billing outage still open, dry spell now 20 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
