@@ -11,6 +11,90 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-14 — Daily corpus grading (0 fresh drafts; 22nd consecutive; billing outage still open, dry spell now 22 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+21 days. Checked out `daily-plan-current`: `git merge-base --is-ancestor origin/main
+daily-plan-current` confirms `main` is already an ancestor (carried in by Aug 12's `git merge
+origin/main`), so this cycle's sync is clean — no conflict, no rebase/merge needed. Gist read via
+git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 13.** 61 total drafts of any status in the gist (21
+rejected, 38 posted, 2 approved) — unchanged from Aug 13, no rolling-window pruning this cycle.
+The most recent `created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no
+draft has been created in **22 days**.
+
+**Billing outage: still open, 4 aborts today (same count as yesterday), and the writer-killed
+candidate switched stations for the first time in 3 days.** The retained `suppressions` window
+carries **4 `budget_exhausted` + 4 `billing_cycle_abort` pairs today** (01:16:08Z, 05:31:24Z,
+09:05:48Z, 13:14:55Z), all citing the identical writer error class established Jul 31
+(`"Your credit balance is too low to access the Anthropic API"`). Candidates skipped per abort:
+34, 41, 48, 78 (201 total) — down from yesterday's 214 but inside the normal range, no repeat of
+Aug 3's 2,945-candidate spike. **The writer-killed candidate switched off Randolph, Utah (held
+yesterday's return day) onto a brand-new station, Webster Dam, Kansas**
+(`all_time_high_USC00148648_2026-08-10`, score 89) for all four aborts today — extending the
+rotation this corpus has tracked since Aug 1: Randolph UT ×6 days → Williams Fk Dam CO → La
+Paz/Victoria ×2 → La Paz/Williams Fk Dam CO → Williams Fk Dam CO ×2 full days → Randolph UT
+(1 day) → **Webster Dam, Kansas (new)**.
+
+**Cross-checked against GitHub issue #462**, still open, updated **2026-08-14T13:50:04Z** (~35 min
+after this cycle's final abort) — its own text cites **"6 draft(s) died with `budget_exhausted` in
+the last 24h (latest 2026-08-14T13:14:55.254864Z)"** — the latest timestamp matches this session's
+own read of the 13:14:55Z abort exactly. **GitHub issue #467** ("Workflow failing:
+voice-regression") remains open, updated 2026-08-14T10:30:42Z, still citing 20 consecutive failed
+runs — same root cause (writer calls failing on missing credit), the count itself frozen because
+the workflow can't produce a new outcome while billing stays down.
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster contracted from 16 to 15 items
+today** — the first contraction observed since this corpus began tracking the cluster Aug 6, all
+15 remaining items scoring 60/72 against the threshold. **`fire` near-misses: only 4 today (down
+from 10 yesterday), and the location mix turned over almost completely**: a Pantanal, Brazil
+event (`fire_-21.91_-55.36_2026-08-14`, score 63/64) recurring across the 05:27Z and 09:01Z runs —
+**a brand-new location hook for this corpus's tracking**, the first South American entry in the
+fire near-miss log; a Northern Territory, Australia event (score 63/64, continuing from Aug
+11–13's mix); and, in the 13:11Z run only, eastern Siberia (score 62/64) and the Kazakhstan
+steppe (score 63/64) reappearing. The Puerto Rico record/record_low pair
+(`cal_high_RQC00667292_2026-08-10` 66/72, `cal_low_RQC00669521_2026-08-10` 69/72) and the M3.8
+`usgs_earthquake` near-miss (57/70) repeated in all four runs today, unchanged from recent
+cycles. All off the draft-generation critical path regardless of billing.
+
+**`state_size` warnings: 26 today**, sizes up to **3,142,007 bytes (~3.14MB)** — a new peak byte
+size, continuing the climb flagged since Aug 4 against the 800KB threshold GitHub issue #390
+raised Jul 7. **3 `gpm_imerg` fetch failures** recurred today (01:15:36Z, 05:29:52Z, 09:05:17Z) —
+two are the familiar repeated-HTTP-503 class, but the 05:29:52Z failure is a new variant, **HTTP
+401** ("GPM IMERG city fetch failed after 1 failed: HTTP 401") — an authorization error rather
+than a transient server error, worth the operator's attention as a possible expired credential
+alongside the existing `EARTHDATA_TOKEN` entry already tracked in `source_health`. **4 GDACS
+GeoRSS schema-drift errors** also recurred (01:12:43Z, 05:27:23Z, 09:01:20Z, 13:11:45Z) — up from
+Aug 13's 2, same low-priority anomaly, off the draft-generation critical path.
+
+**Staleness review as of 2026-08-14 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → `command not found`); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **77th consecutive skip** (May 13 → Aug 14). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 13)
+- Fresh drafts graded: 0 (22nd consecutive no-fresh-draft cycle, Jul 24–Aug 14)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (77th consecutive skip, May 13 → Aug 14)
+- Operational anomalies: billing outage now 22 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (still open, 6 deaths/24h, latest-death timestamp
+  matching this cycle's own read) and #467 (still red); writer-killed candidate switched off
+  Randolph, Utah onto a new station, Webster Dam, Kansas; `fire_footprint` score-gate cluster
+  contracted 16→15 (first contraction observed); new Pantanal, Brazil fire near-miss location
+  hook; new HTTP 401 `gpm_imerg` failure variant (vs. the usual 503s); `daily-plan-current` ↔
+  `main` sync clean this cycle (no conflict)
+
 ## 2026-08-13 — Daily corpus grading (0 fresh drafts; 21st consecutive; billing outage still open, dry spell now 21 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
