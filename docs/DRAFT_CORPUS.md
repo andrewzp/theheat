@@ -11,6 +11,98 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-15 — Daily corpus grading (0 fresh drafts; 23rd consecutive; billing outage still open, dry spell now 23 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+22 days. Checked out `daily-plan-current`: `git merge-base --is-ancestor origin/main
+daily-plan-current` confirms `main` is already an ancestor (carried in by Aug 12's `git merge
+origin/main`), so this cycle's sync is clean — no conflict, no rebase/merge needed. Gist read via
+git-clone path (success; no rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 14.** 61 total drafts of any status in the gist (21
+rejected, 38 posted, 2 approved) — unchanged from Aug 14, no rolling-window pruning this cycle.
+The most recent `created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no
+draft has been created in **23 days**.
+
+**Billing outage: still open, 4 aborts today (same count as yesterday), and the writer-killed
+candidate cycled through three distinct stations in one day for the first time.** The retained
+`suppressions` window carries **4 `budget_exhausted` + 4 `billing_cycle_abort` pairs today**
+(00:48:47Z, 04:26:14Z, 08:25:45Z, 12:45:10Z), all citing the identical writer error class
+established Jul 31 (`"Your credit balance is too low to access the Anthropic API"`). Candidates
+skipped per abort: 80, 38, 27, 34 (179 total) — down from yesterday's 201, inside the normal
+range. **The writer-killed candidate opened on La Paz, Bolivia `absextreme_cold` (00:48Z, score
+88 — a station last carrying the rotation back in the Aug 8–9 window), switched to a brand-new
+station, Santiago de Cuba `alltime_high` (04:26Z, score 88, first appearance in this corpus's
+tracking), then returned to La Paz, Bolivia for both remaining aborts** (08:25Z, 12:45Z, score
+87) — the first three-station single-day sequence observed since the rotation pattern began
+tracking Aug 1.
+
+**Cross-checked against GitHub issue #462**, still open, updated **2026-08-15T13:48:41Z** (~1h
+after this cycle's final abort) — its own text cites **"6 draft(s) died with `budget_exhausted`
+in the last 24h (latest 2026-08-15T12:45:10.108815Z)"** — the latest timestamp matches this
+session's own read of the 12:45:10Z abort exactly. **GitHub issue #467** ("Workflow failing:
+voice-regression") remains open, updated 2026-08-15T09:46:40Z, still citing 20 consecutive
+failed runs — same root cause, frozen count, unchanged from prior cycles.
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster grew from 15 back to 16 items,
+joined by the first tier2-scored item observed in this cluster's tracking.** The 15 persistent
+tier0 items are unchanged (all still 60/72), joined today by `fire_footprint_2026-ORBUD-002696_
+tier2` (68/72, "124,935 ha cumulative burn area") — a materially larger, higher-scoring footprint
+from the same Oregon complex (`ORBUD`) that already contributes a tier0 item, still short of the
+72 threshold. **`fire` near-misses: 7 today (up from 4 yesterday), widest location mix yet**:
+Northern Territory, Australia (continuing); a new Western Australia location (first appearance);
+the recurring Amazon Basin, Brazil fire; a DRC–Rwanda border pair (matching Aug 13's mix); a
+brand-new Papua, Indonesia location (`"clear location hook: Indonesia"` — first Indonesia entry
+in this log); and a Siberian detection at a different longitude than Aug 14's (Ob River basin vs.
+Aug 14's Yakutia reading). **The Puerto Rico record/record_low pair** (`cal_high_RQC00667292_
+2026-08-10`, `cal_low_RQC00669521_2026-08-10`) **that repeated in all six Aug 14 runs is absent
+from every Aug 15 run** — the first day since it entered tracking that it hasn't recurred. **New:
+a M6.9 `usgs_earthquake` near-miss** (`us6000tkyk`, 66/70, PAGER green) **appeared in the 12:41Z
+run only**, replacing the M3.8 quake that had repeated across all four Aug 12–14 runs.
+
+**New anomaly: `ocean_sst_anomaly` failed outright in the 08:21Z run** — "all regions failed;
+NOAA STAR fallback failed: stale data: latest data point is 2025-12-31 (227 days old; max 5)" —
+the first `ocean_sst_anomaly` failure of any kind logged in this corpus's tracking (which began
+covering source-fetch anomalies Aug 1). A 227-day-stale fallback dataset is a distinct problem
+from the retry/timeout classes already tracked (gpm_imerg, GDACS) and worth the operator's
+attention as a possible dead upstream feed, not a transient blip. **`state_size` warnings: 36
+today (up from 26 yesterday), a new peak byte size of 3,156,360 bytes (~3.16MB)** — continuing
+the climb flagged since Aug 4 against the 800KB threshold GitHub issue #390 raised Jul 7; today's
+jump (26→36) is the largest single-day increase since tracking began. **1 `gpm_imerg` fetch
+failure** recurred (08:25Z, the familiar repeated-HTTP-503 class). **4 GDACS GeoRSS
+schema-drift errors** recurred (00:45Z, 04:22Z, 08:18Z, 12:41Z), unchanged from yesterday's count.
+
+**Staleness review as of 2026-08-15 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → `command not found`); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **78th consecutive skip** (May 13 → Aug 15). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5, A4, A5, A6, A9 — all retain their Jul 23 counts and "Last
+seen" dates unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 14)
+- Fresh drafts graded: 0 (23rd consecutive no-fresh-draft cycle, Jul 24–Aug 15)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (78th consecutive skip, May 13 → Aug 15)
+- Operational anomalies: billing outage now 23 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (timestamp-matched, 6 deaths/24h) and #467 (still
+  red, 20-run streak, frozen); writer-killed candidate cycled through 3 distinct stations in one
+  day for the first time (La Paz Bolivia → Santiago de Cuba [new] → La Paz Bolivia);
+  `fire_footprint` cluster grew 15→16 with the first tier2 item observed; new M6.9
+  `usgs_earthquake` near-miss replaced the M3.8 fixture; Puerto Rico record pair absent for the
+  first time since entering tracking; **new `ocean_sst_anomaly` hard failure (227-day-stale
+  fallback data) — first occurrence of this failure class**; `state_size` warnings jumped 26→36,
+  largest single-day increase yet; `daily-plan-current` ↔ `main` sync clean this cycle
+
+---
+
 ## 2026-08-14 — Daily corpus grading (0 fresh drafts; 22nd consecutive; billing outage still open, dry spell now 22 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
