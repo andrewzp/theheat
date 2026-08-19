@@ -11,6 +11,90 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-19 — Daily corpus grading (0 fresh drafts; 27th consecutive; billing outage still open, dry spell now 27 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+26 days. Checked out `daily-plan-current`, confirmed `git merge-base --is-ancestor origin/main
+daily-plan-current` holds (main's tip has been an ancestor since Aug 12's merge). `git rebase
+origin/main` was attempted anyway and **conflicted** in `docs/IMPROVEMENT_PLAN.md` on the same
+recurring pre-merge Jul 7 daily-plan commit documented every cycle since Jul 13/17 — aborted per
+the runbook fallback, moot given the ancestry check. Gist read via git-clone path (success, no
+rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 18.** Total draft count in the gist dropped from 49
+to **46** (38 posted, 6 rejected, 2 approved) — the `rejected` bucket lost 3 items, **breaking the
+exact 4-item/day pruning cadence for the first time in 4 consecutive days** (Aug 15→16→17→18 each
+removed exactly 4, always from `rejected`: 61→57→53→49; today is 49→46, a 3-item drop, same bucket).
+Posted (38) and approved (2) counts remain unchanged. Read as the same housekeeping sweep varying
+its batch size rather than a new mechanism — worth the operator confirming either way. The most
+recent `created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has
+been created in **27 days**.
+
+**Billing outage: still open, 4 `budget_exhausted`+`billing_cycle_abort` pairs today** (00:47:05Z,
+04:32:48Z, 08:30:34Z, 12:55:44Z aborts), same ~4/day cadence as Aug 17–18. Candidates skipped per
+abort: 78, 32, 34, 36 (180 total). **Cross-checked against GitHub issue #462**, updated
+**2026-08-19T13:22:26Z** (~27min after this cycle's final abort), independently citing **"6
+draft(s) died with `budget_exhausted` in the last 24h (latest 2026-08-19T12:55:44.069894Z)"** —
+timestamp-matched exactly to this session's own read. **GitHub issue #467** ("Workflow failing:
+voice-regression") remains open, updated 2026-08-19T09:55:09Z, same frozen content as every cycle
+since Jul 24.
+
+**The writer-killed candidate opened on a new station, then rotated: Valencia, Venezuela
+`alltime_high` (score 92) took the 00:47Z abort — the first non-US, non-`all_time_high`-typed
+candidate to die at the writer in this log's recent tracking — then switched to Vicksburg Caa Ap
+2, Mississippi `all_time_high` (`USW00093999`) for the remaining three aborts (04:32Z, 08:30Z,
+12:55Z).** A 1-then-3 split, the same shape as Aug 18's Mt Plymouth→Clinton Nas rotation, but both
+stations are new to this tracking window.
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster grew from 17 to 18 items**
+(+1, all in the tier0 band — now 16 tier0 items, up from 15) — its first growth day since Aug 18's
+first-ever static reading; same tier2 leader (Oregon `ORBUD-002696`, 68/72) and same tier1 member
+(Idaho `IDBOD-265460`, 64/72) held unchanged. **The `usgs_earthquake` near-miss reappeared after a
+2-day absence, but as a different event**: M5.9 `us6000tlrj` (60/70, PAGER yellow) — not a return
+of the M6.9 `us6000tkyk` that had recurred Aug 12–16, a genuinely new detection rather than the
+same one coming back. **`fire` near-misses fell to 4 (from 7), reconcentrating on a single
+cluster**: 3 of 4 are western Siberia coordinates, the 4th a Brazil (Maranhão) coordinate — the
+first Siberia-dominated day since the Kazakhstan-steppe cluster that ran Aug 15–17.
+
+**Visibility for `gpm_imerg`/`ocean_sst`/`firms` stayed lost this cycle** — the 50-entry `errors`
+window remains dominated by `state_size` (45 of 50 today) plus `gdacs` (5), continuing the
+oscillation flagged Aug 16/18. **`state_size` warnings: 34 today (down slightly from 36), but a
+new peak byte size of 3,238,215B (~3.24MB)** — up again from Aug 18's peak of 3,221,767B, the
+climb GitHub issue #390 flagged Jul 7 against an 800KB threshold still continuing with no sign of
+plateauing.
+
+**Staleness review as of 2026-08-19 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **82nd consecutive skip** (May 13 → Aug 19). Moot regardless: nothing to reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5 — all retain their Jul 23 counts and "Last seen" dates
+unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 18)
+- Fresh drafts graded: 0 (27th consecutive no-fresh-draft cycle, Jul 24–Aug 19)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (82nd consecutive skip, May 13 → Aug 19)
+- Operational anomalies: billing outage now 27 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (timestamp-matched, 6 deaths/24h, cadence steady at
+  ~4/day) and #467 (still red, frozen); **draft-count pruning event broke its 3-day exact-4/day
+  cadence** (49→46, a 3-item drop, still entirely from `rejected`); writer-killed candidate opened
+  on a new non-US station (Valencia, Venezuela) before rotating to Vicksburg Caa Ap 2, Mississippi;
+  `fire_footprint` cluster grew for the first time since Aug 10 (17→18, +1 tier0); `usgs_earthquake`
+  near-miss returned as a genuinely new M5.9 event, not the prior M6.9 reappearing; `fire`
+  near-misses reconcentrated on western Siberia (3 of 4); `state_size` hit a new peak byte size
+  (~3.24MB) on slightly fewer warnings (34 vs. 36); `daily-plan-current` ↔ `main` rebase conflicted
+  on the known recurring pattern, aborted per runbook fallback, moot (ancestry already confirmed
+  clean)
+
+---
+
 ## 2026-08-18 — Daily corpus grading (0 fresh drafts; 26th consecutive; billing outage still open, dry spell now 26 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
