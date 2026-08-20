@@ -11,6 +11,110 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-20 — Daily corpus grading (0 fresh drafts; 28th consecutive; billing outage still open, dry spell now 28 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+27 days. Checked out `daily-plan-current`; `git merge-base --is-ancestor origin/main
+daily-plan-current` holds (main's tip has been an ancestor since Aug 12's merge). `git rebase
+origin/main` was attempted anyway and **conflicted** in `docs/IMPROVEMENT_PLAN.md` on the same
+recurring pre-merge Jul 7 daily-plan commit documented every cycle since Jul 13/17 — aborted per
+the runbook fallback, moot given the ancestry check. Gist read via git-clone path (success, no
+rate limit).
+
+**Queue: 0 pending drafts, unchanged from Aug 19.** Total draft count in the gist dropped from 46
+to **45** (38 posted, 5 rejected, 2 approved) — again entirely from the `rejected` bucket, but at
+**-1**, the smallest drop yet. The five-day sequence now reads 61→57→53→49→46→45: **-4, -4, -4,
+-3, -1.** Aug 18's "fixed-rate scheduled sweep" hypothesis is falsified — the batch sizes are
+decaying, not fixed. The better read is an age- or TTL-cutoff sweep draining a finite backlog of
+old `rejected` entries, now nearly exhausted at 5 remaining. Posted (38) and approved (2) are
+unchanged across all five days. The most recent `created_at` across all drafts, any status, is
+still **2026-07-23T14:11:46Z** — no draft has been created in **28 days**.
+
+**Billing outage: still open, 4 `budget_exhausted`+`billing_cycle_abort` pairs today** (aborts at
+00:47:42Z, 04:36:52Z, 08:37:07Z, 13:02:08Z), same ~4/day cadence as Aug 17–19. **Candidates
+skipped per abort fell sharply: 31, 25, 26, 26 — 108 total, down from Aug 19's 180** and the
+lowest daily total in this tracking. Aug 19's 78-candidate outlier on the first abort is gone; the
+four aborts today sit in a tight 25–31 band. **Cross-checked against GitHub issue #462**, updated
+**2026-08-20T13:24:35Z** (~22min after this cycle's final abort), independently citing **"6
+draft(s) died with `budget_exhausted` in the last 24h (latest 2026-08-20T13:02:08.115432Z)"** —
+timestamp-matched exactly to this session's own read. **GitHub issue #467** ("Workflow failing:
+voice-regression") remains open, updated 2026-08-20T09:56:37Z, same frozen 20-consecutive-failed-
+run content as every cycle since Jul 24.
+
+**Two firsts in the writer-killed candidate slot.** The 00:47Z abort died on
+`all_time_high_USC00035189_2026-08-16` (score 88/80) — **the first candidate observed carrying an
+event date that lags its run by days** (an Aug 16 event still queued on an Aug 20 run, 4 days
+stale). Every previously logged writer-kill carried a same-day or next-day event date. Then the
+slot rotated to **`absextreme_cold_La_Paz_2026-08-20`** (score 88/78) for the remaining three
+aborts — **La Paz returns after a 4-day absence (last seen Aug 15–16), and this is the first
+cold-side `absolute_extreme` observed holding the slot**; every prior holder was a heat or
+all-time-high event. A 1-then-3 split for the third consecutive day (Aug 18 Mt Plymouth→Clinton
+Nas, Aug 19 Valencia→Vicksburg, Aug 20 USC00035189→La Paz) — the rotation shape is now the stable
+pattern, not the exception.
+
+**Score-gate near-misses: the US Western `fire_footprint` cluster is fully static at 18 items** —
+unchanged in both count and composition from Aug 19 (same tier2 leader, Oregon `ORBUD-002696` at
+124,935 ha/68/72; same tier1 member, Idaho `IDBOD-265460` at 63,951 ha/64/72; same 16 tier0 items
+by value, 43,377 ha down to 21,043 ha). This is the cluster's second fully-static day, after Aug
+18's first. **The `usgs_earthquake` near-miss is absent again** — Aug 19's genuinely-new M5.9
+`us6000tlrj` did not recur, a 1-day appearance rather than the M6.9's 5-day run. **`fire`
+near-misses fell to 2, the lowest count in this tracking** (from 4), and both sit at **63/64 — a
+single point under threshold**: the Northern Territory, Australia coordinate (`-12.76_132.76`,
+Australia returning after Aug 18's Western Australia set) and one western Siberia coordinate
+(`66.98_75.73`, the survivor of Aug 19's 3-coordinate Siberian cluster). Identical pair in both
+the 08:27Z and 12:53Z runs.
+
+**`gpm_imerg` visibility recovered this cycle — and shows a stuck target date.** After two cycles
+crowded out of the 50-entry `errors` window, `gpm_imerg` is back with 4 entries (00:47:13Z,
+04:35:45Z, 08:36:18Z, 13:01:32Z), and all four cite **"3 repeated HTTP 503 failures for
+`2026-08-18`"** — the same 2-day-old target date across runs spanning 12+ hours. The fetcher is
+not merely failing; it is re-attempting a fixed stale date rather than advancing, which would keep
+`precipitation_extreme` dark independent of the billing outage. Worth the operator's attention as
+a separate defect. `ocean_sst` and `firms` remain invisible in the window. **GDACS dropped to 1
+entry** (from 5), same GeoRSS-schema-drift message. **`state_size` warnings: 36 today (up from
+34), and a new peak byte size of 3,246,362B (~3.25MB)** — up again from Aug 19's 3,238,215B, the
+climb GitHub issue #390 flagged Jul 7 against an 800KB threshold still continuing with no
+plateau.
+
+**Staleness review as of 2026-08-20 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → command not found); no
+gist-write MCP tool available this session. Skipped per the hard constraints, logged rather than
+failing the cycle — **83rd consecutive skip** (May 13 → Aug 20). Moot regardless: nothing to
+reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5 — all retain their Jul 23 counts and "Last seen" dates
+unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 19)
+- Fresh drafts graded: 0 (28th consecutive no-fresh-draft cycle, Jul 24–Aug 20)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (83rd consecutive skip, May 13 → Aug 20)
+- Operational anomalies: billing outage now 28 days open (root cause unchanged, Jul 24 balance
+  empty), re-confirmed via GitHub issue #462 (timestamp-matched, 6 deaths/24h, cadence steady at
+  ~4/day) and #467 (still red, frozen); **candidates-skipped total fell to 108** (from 180), the
+  lowest in this tracking, in a tight 25–31 per-abort band; **the `rejected`-bucket drain
+  decelerated to -1** (46→45; five-day sequence -4/-4/-4/-3/-1 — falsifies the fixed-rate-sweep
+  read, now looks like a finite backlog nearly exhausted at 5 remaining); **writer-killed
+  candidate carried a 4-day-stale event date for the first time** (Aug 16 event on an Aug 20 run)
+  before rotating to La Paz, Bolivia — **the first cold-side `absolute_extreme` to hold the slot**,
+  returning after a 4-day absence; 1-then-3 rotation shape for a 3rd consecutive day;
+  `fire_footprint` cluster fully static at 18 items (2nd static day ever); `usgs_earthquake`
+  near-miss absent after a 1-day appearance; `fire` near-misses at 2 — lowest in tracking, both a
+  single point under threshold (63/64); **`gpm_imerg` visibility recovered and revealed a stuck
+  target date** (4 runs over 12+ hours all retrying `2026-08-18`, HTTP 503 — a defect separate
+  from the billing outage that would keep `precipitation_extreme` dark on its own); GDACS entries
+  down to 1; `state_size` hit a new peak byte size (~3.25MB) on 36 warnings; `daily-plan-current`
+  ↔ `main` rebase conflicted on the known recurring pattern, aborted per runbook fallback, moot
+  (ancestry already confirmed clean)
+
+---
+
 ## 2026-08-19 — Daily corpus grading (0 fresh drafts; 27th consecutive; billing outage still open, dry spell now 27 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
