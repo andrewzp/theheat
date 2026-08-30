@@ -11,6 +11,96 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-08-30 — Daily corpus grading (0 fresh drafts; 38th consecutive; billing outage still open, dry spell now 38 days)
+
+**Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
+37 days. Checked out `daily-plan-current`; `git rebase origin/main` conflicted on the same known
+pre-merge Jul 7 commit as every recent cycle; aborted per the runbook fallback.
+`git merge-base --is-ancestor origin/main daily-plan-current` confirms the conflict is moot —
+`main`'s tip is already an ancestor of this branch. Gist read via git-clone path (success, no rate
+limit).
+
+**Queue: 0 pending, unchanged from Aug 29.** Total draft count in the gist held flat at **40**
+(38 posted, 0 rejected, 2 approved) — an **8th consecutive day** with no drop. The most recent
+`created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been
+created in **38 days**.
+
+**Billing outage: still open, 4 `budget_exhausted`+`billing_cycle_abort` pairs visible in the
+retained suppressions window since the last pull** — 16:27:27Z and 22:12:39Z (Aug 29), then
+02:40:29Z and 09:40:35Z (Aug 30), 149 candidates skipped total (50/47/27/25). All four cite the
+identical writer error verbatim: *"anthropic writer: provider billing exhausted: ... 'Your credit
+balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or
+purchase credits.'"* **Cross-checked against GitHub issue #462**, updated **2026-08-30T12:03:27Z**,
+independently citing **"4 draft(s) died with `budget_exhausted` in the last 24h (latest
+2026-08-30T09:40:35.228757Z)"** — reconciles exactly: count and latest timestamp both match this
+session's read precisely. **GitHub issue #467** ("Workflow failing: voice-regression") remains
+open, still last updated **2026-08-29T14:35:41Z** — no new touch since yesterday's pull, the same
+20-consecutive-failed-run text. Issue #462 is now **38 days** old (opened Jul 23); issue #467 is
+now **37 days** old (opened Jul 24); neither has moved. **The rolling PR (#207) is still open,
+unmerged, since 2026-06-09** — **82 days** now.
+
+**The writer-killed slot rotated off the brand-new station from Aug 29 (`USC00341750`) onto
+another new station, then held it across the day boundary.** The first abort of this window
+(16:27:27Z Aug 29) died on `all_time_high_USS0011K13S_2026-08-26` — resolved via `candidates_log`
+to **Beaver Dams, Utah** (score 93/80) — and this candidate then held the slot across all 3
+subsequent aborts (22:12:39Z Aug 29, 02:40:29Z and 09:40:35Z Aug 30), the first time a writer-kill
+candidate has spanned this particular cycle boundary since Randolph UT did on Aug 26–27. Event
+date (Aug 26) is now **4 days stale** on today's last run.
+
+**Score-gate near-misses, read fresh from today's two `alerts` runs (02:35Z, 09:35Z UTC) — the
+`fire_footprint` cluster contracted by one item.** 19 items today (16 tier0, down from Aug 29's 20
+items/17 tier0) — the same tier2 leader, Oregon `ORBUD-002696`, unchanged at 124,992 ha (68/72),
+and the same 2 tier1 members, Idaho `IDBOD-265460` (63,951 ha, 64/72) and Utah `UTFIF-260341`
+(52,504 ha, 64/72), both unchanged to the hectare; one previously-present tier0 item dropped out of
+the list between pulls. **`fire` near-misses recovered to 5** (from Aug 29's visibility-artifact 0),
+all clustered on eastern Siberia coordinates (62–65°N, 110–116°E), scores 62–63/64. **A new
+score-gate category appeared for the first time in this tracking: `record`** — two `cal_high`
+near-misses on **Trujillo Alto, Puerto Rico** (`RQC00669521`, the recurring Puerto Rico near-miss
+fixture last seen intermittently in mid-August), scored 69/72, citing "36-year-old record" and
+"34-year-old record" respectively, present in both of today's alerts runs. **`usgs_earthquake` and
+the China `cyclone_land_threat` near-miss both remain absent**, and the `anomaly`-category cold
+near-miss on `RQC00660152` (absent since Aug 29) stays absent — no reappearance today.
+
+**`gpm_imerg`'s HTTP 401 auth failures continued, still tied to the same expired credential.**
+`credential_expiry.EARTHDATA_TOKEN` is unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **8
+days past expiry**, still unrenewed. `gdacs` continued its known GeoRSS schema-drift failure,
+unchanged.
+
+**`state_size`'s peak byte size climbed again to a new high, ~3.52MB (3,515,122B)**, above Aug
+29's reported peak of 3,483,091B — still no plateau in the climb GitHub issue #390 flagged Jul 7.
+
+**Staleness review as of 2026-08-30 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent; no gist-write MCP tool available this
+session. Skipped per the hard constraints, logged rather than failing the cycle — **93rd
+consecutive skip** (May 13 → Aug 30). Moot regardless: nothing to reject.
+
+**No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new observations
+for P_close, P_compound, A7, A8, P5 — all retain their Jul 23 counts and "Last seen" dates
+unchanged. P_dust/P_tier/P9 remain SHIPPED/CONFIRMED per their prior status.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Aug 29)
+- Fresh drafts graded: 0 (38th consecutive no-fresh-draft cycle, Jul 24–Aug 30)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4 — bar not cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all counts stand at Jul 23's levels)
+- Staleness bulk-reject: 0 candidates, moot (queue empty); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (93rd consecutive skip, May 13 → Aug 30)
+- Operational anomalies: billing outage now 38 days open (root cause unchanged, Jul 24 balance
+  empty); issue #462 fully reconciles with this session's read (4 deaths/24h, exact timestamp
+  match); #467 still red, 37 days old, no material update since Aug 29; writer-killed slot
+  rotated onto Beaver Dams, Utah (`USS0011K13S_2026-08-26`), held across the Aug 29→30 boundary,
+  now 4 days stale; `fire_footprint` cluster contracted 20→19 (17→16 tier0), tier1/tier2 leaders
+  unchanged; `fire` near-misses recovered to 5 (eastern Siberia cluster); a new `record`-category
+  near-miss appeared (Trujillo Alto, PR, recurring fixture); `usgs_earthquake`, China
+  `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all remain absent;
+  `gpm_imerg`'s HTTP 401 failures continue on the same `EARTHDATA_TOKEN` (now 8 days past expiry,
+  unrenewed); `state_size`'s peak byte size hit a new high (3,515,122B); gist total held flat at
+  40 an 8th day; rolling PR #207 now 82 days open, unmerged since Jun 9.
+
+---
+
 ## 2026-08-29 — Daily corpus grading (0 fresh drafts; 37th consecutive; billing outage still open, dry spell now 37 days)
 
 **Context:** Step 0 fetched and reset `main` — still at its Jul 24 tip (`4b4d965`), unchanged for
