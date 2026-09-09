@@ -245,8 +245,8 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
     except (ValueError, UnicodeError):
         return SafetyCheckResult("failed", None, "safety_invalid_input", model, text_sha, prompt_sha, at)
     try:
-        fields = [field for _, field, _, _ in Formatter().parse(SAFETY_PROMPT_TEMPLATE) if field is not None]
-        if fields != ["tweet"]:
+        fields = [(field, spec, conversion) for _, field, spec, conversion in Formatter().parse(SAFETY_PROMPT_TEMPLATE) if field is not None]
+        if fields != [("tweet", "", None)]:
             raise ValueError("Safety prompt must review the exact tweet")
         prompt = SAFETY_PROMPT_TEMPLATE.format(tweet=tweet)
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()

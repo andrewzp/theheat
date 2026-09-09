@@ -171,6 +171,9 @@ def _marked_due_draft(*, created_offset_h=0, attempted=False):
 
 def _run_due(bot_state, monkeypatch, post_result="posted"):
     from src.orchestrator import posting
+    # These cases isolate queue guards and delivery outcomes; safety failures
+    # exercise real provider outcomes in test_revision_posting.
+    monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
     calls = {"n": 0}
 
     def fake_post_approved(draft, state):
@@ -245,6 +248,7 @@ class TestProcessDueGuards:
         """The final sender owns durable attempt marking after revision checks."""
         monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
         from src.orchestrator import posting
+        monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
         bot_state = _fresh_state()
         draft = _marked_due_draft(created_offset_h=1)
         before_updated = draft["updated_at"]

@@ -167,7 +167,8 @@ def test_model_or_runtime_prompt_change_invalidates_reuse_and_editorial_policy(
 
 
 @pytest.mark.parametrize(
-    "template", ["A constant broken template", "Escaped {{tweet}}", "Wrong {text}"]
+    "template",
+    ["A constant broken template", "Escaped {{tweet}}", "Wrong {text}", "Clipped {tweet:.0}"],
 )
 def test_broken_prompt_cannot_pass_without_reviewing_text(monkeypatch, sdk, template):
     generate, _ = sdk

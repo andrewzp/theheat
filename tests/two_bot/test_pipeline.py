@@ -28,6 +28,16 @@ def _persisted_draft_from_pipeline_result(draft: dict) -> dict:
 
 
 @pytest.fixture(autouse=True)
+def _completed_safety_model_for_orchestration_fixtures(monkeypatch):
+    """Model behavior is isolated; real regex and downstream gates still run.
+
+    Required-check unavailability is exercised with the real model boundary in
+    test_safety_outcomes and test_revision_posting, not silently skipped here.
+    """
+    monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
+
+
+@pytest.fixture(autouse=True)
 def _critic_passes_in_pipeline_tests(monkeypatch, request):
     """Module-scoped autouse: pre-existing pipeline tests written before
     the F3 critic landed don't take ``mock_critic``, but their writer

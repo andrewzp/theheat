@@ -462,6 +462,8 @@ class TestSaveDraft:
         from src.editorial.scoring import score_cyclone_tier_crossing
         from src.editorial.revisions import review_is_current
         dispatch = self._dispatch_module()
+        # This fixture checks URL edits and invalidation, not model availability.
+        monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
         checked_text = "Beryl jumped to Category 4 in the Atlantic."
 
         monkeypatch.setattr(

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.17] - 2026-09-09
+
+- Require the safety model to complete with an unambiguous answer. Missing credentials, provider failures and invalid output block drafting/posting instead of becoming passes; existing posting paths revoke obsolete approval and retain the draft.
+- Reuse exact completed text/prompt/model checks for up to five minutes in a bounded process cache. Keep deterministic checks fresh, preserve completion time, and avoid inventing model usage on a cache hit. Pin one SDK attempt and a 90-second timeout.
+- Include the runtime safety prompt in editorial-policy identity and regenerate the dashboard manifest. Keep offline historical probes explicit about injected model results and their evidence limits.
+
 ## [0.9.108.16] - 2026-09-09
 
 - Bound news retrieval to six verification model requests and three distinct cited-page fetches. Give each story a turn before extra claims; reuse only identical impact/context/page checks within the retrieval. Unchecked claims remain excluded.

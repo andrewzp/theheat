@@ -420,8 +420,9 @@ class TestMonthRepetition:
 
 
 class TestSafetyPipeline:
-    def test_clean_tweet_blocks_without_required_model_check(self):
+    def test_clean_tweet_blocks_without_required_model_check(self, monkeypatch):
         # Clean prose still needs the required model check to complete.
+        monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "")
         passed, reason = run_safety_pipeline("Phoenix hit 119F. New record for April.")
         assert not passed and reason == "safety_unavailable: missing credential"
 
