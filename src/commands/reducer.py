@@ -84,7 +84,7 @@ def _target_drafts(state: dict, command: Command) -> list[dict]:
 
 
 def reduce_command(state: dict, command: Command, principal: Principal, *, now: datetime,
-                   policy: AutomaticPolicy = AutomaticPolicy()) -> Reduction:
+                   policy: AutomaticPolicy = AutomaticPolicy(), editorial_policy: dict | None = None) -> Reduction:
     """Apply all targets together or raise without changing caller-owned state."""
     if principal.subject != command.actor_subject:
         raise CommandError("forbidden", "The authenticated identity no longer matches this command")
@@ -118,10 +118,12 @@ def reduce_command(state: dict, command: Command, principal: Principal, *, now: 
             draft["selected_candidate_rank"] = selected["rank"]
             draft["candidate_score"] = deepcopy(selected.get("score"))
         elif action == "record_review":
-            record_human_review(draft, at=at)
+            if editorial_policy is None or payload.get("expected_policy_sha256") != fingerprint(editorial_policy):
+                raise CommandError("editorial_policy_changed", "Editorial policy changed since confirmation; review again")
+            record_human_review(draft, at=at, policy=editorial_policy)
             draft["review_binding"].update(reviewed_at=at, reviewer=principal.subject, reason=payload["reason"], command_id=command.command_id)
         elif action in {"approve_revision", "schedule_revision"}:
-            if not review_is_current(draft):
+            if not review_is_current(draft, policy=editorial_policy):
                 raise CommandError("review_required", "Review this exact text against its source evidence first")
             if action == "schedule_revision":
                 control = state.get("publication_control", {})
@@ -138,14 +140,14 @@ def reduce_command(state: dict, command: Command, principal: Principal, *, now: 
                 if approval_policy.get("can_auto_approve") is False:
                     raise CommandError("manual_only", "This story type requires manual approval")
                 revoke_approval(draft)
-                bind_reviewed_revision(draft, "auto", at=at, publication_epoch=policy.epoch)
+                bind_reviewed_revision(draft, "auto", at=at, publication_epoch=policy.epoch, policy=editorial_policy)
                 draft["auto_approve_at"] = utc_text(now + timedelta(minutes=payload["delay_minutes"]))
                 draft["auto_approve_requested_at"] = at
                 draft["approval_mode"] = "auto"
             else:
                 intent_id = str(uuid5(NAMESPACE_URL, f"theheat:{command.environment}:{command.command_id}:publish"))
                 revoke_approval(draft)
-                bind_reviewed_revision(draft, "manual", at=at, intent_id=intent_id)
+                bind_reviewed_revision(draft, "manual", at=at, intent_id=intent_id, policy=editorial_policy)
                 draft.update(status="approved", approved_at=at, approval_mode="manual", publish_requested_at=at)
             draft["approval_binding"].update(authorized_at=at, actor=principal.subject, reason=payload["reason"], command_id=command.command_id)
             draft["post_error"] = None

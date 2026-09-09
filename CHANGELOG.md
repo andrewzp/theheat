@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.11] - 2026-09-09
+
+### Current-policy approval and broader qualified source supply
+
+- Bind checks, human review and approval to the current prompts, models, checking settings and scientific rules. Dashboard confirmations carry the displayed policy identity; stale confirmations cannot attest to a newer policy. The final sender rechecks immediately before transport while preserving existing uncertain and confirmed receipts. Policy changes also reopen previously cached writer rejections.
+- Preserve qualified GHCN station signals for regional detection before individual story caps. Validate station/date/comparator evidence, including calendar and monthly coverage. Unqualified aggregate publication remains withheld, and archive fetches remain capped at 20 per run.
+- Inspect the entire valid rainfall watchlist when a daily grid is already downloaded. Invalid points cannot hide later valid entries; invalid grid shapes and nonfinite cells are refused. Each remote fallback remains limited to 75 cities, including previously unbounded configurations. Source access and product comparability remain separate unresolved requirements.
+- Validation on the integrated application tree: 3,360 offline Python tests and 293 dashboard tests passed, alongside build, generated contracts, standard Ruff and mypy (134 source files). Paid replay tests were excluded. Direct checks pass for changed source adapters; existing excluded-file diagnostics are documented in the P07 handoff.
+- Automatic publishing remains paused. This release adds no paid model stage, source backfill, public correction or graphics attachment. The latest existing scheduled writer canary still reported insufficient credits; writer access recovery is not established.
+
 ## [0.9.108.10] - 2026-09-09
 
 ### Bounded repeat attempts and first graphics previews

@@ -296,7 +296,12 @@ def generate_draft(
         if result_out is not None:
             result_out["stage_outcomes"] = stage_outcomes
 
+    from src.editorial.policy import current_editorial_policy
+    checked_policy = current_editorial_policy()
     try:
+        if checked_policy is None:
+            _record_kill("editorial_policy", "Current editorial policy cannot be established")
+            return None
         if not _audit_bundle_for_generation(bundle, record_kill=_record_kill, result_out=result_out):
             return None
 
@@ -465,6 +470,10 @@ def generate_draft(
         if checked_text is None:
             _record_kill("writer", "No checked text available for revision binding")
             return None
+        if current_editorial_policy() != checked_policy:
+            _record_kill("editorial_policy", "Editorial policy changed while checks were running; review again")
+            return None
+        metadata["reviewed_policy_sha256"] = fingerprint(checked_policy)
         metadata["reviewed_text_sha256"] = text_hash(checked_text)
         metadata["reviewed_bundle_sha256"] = fingerprint(metadata["bundle"])
         return {

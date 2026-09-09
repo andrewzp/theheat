@@ -218,6 +218,21 @@ def test_prompt_policy_model_and_actual_memory_changes_reopen(monkeypatch):
     assert cache.should_skip(state, "event", packet) is None
 
 
+def test_editorial_policy_only_change_or_unknown_policy_reopens_evidence_rejections(monkeypatch):
+    from src.editorial import policy
+
+    state, packet = deepcopy(DEFAULT_STATE), bundle()
+    seed(state, "event", packet)
+    assert cache.should_skip(state, "event", packet)
+    with monkeypatch.context() as scoped:
+        scoped.setattr(policy, "source_manifest", lambda: {"source_sha256": "f" * 64})
+        assert cache.should_skip(state, "event", packet) is None
+    assert cache.should_skip(state, "event", packet)
+    monkeypatch.setattr(policy, "current_editorial_policy", lambda: None)
+    assert cache.should_skip(state, "event", packet) is None
+    assert cache.decision_epoch() == ""
+
+
 def test_different_evidence_codes_and_zero_cost_contract_failures_cannot_arm_cache(monkeypatch):
     state, packet = deepcopy(DEFAULT_STATE), bundle()
     sha = cache.bundle_fingerprint(packet, state)

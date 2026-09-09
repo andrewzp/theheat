@@ -167,7 +167,8 @@ class SQLiteAuthority:
                     principal = resolve_principal(command.actor_subject)
                     if principal is None:
                         raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                    reduction = reduce_command(state, command, principal, now=clock, policy=policy)
+                    from src.editorial.policy import current_editorial_policy
+                    reduction = reduce_command(state, command, principal, now=clock, policy=policy, editorial_policy=current_editorial_policy())
                     result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                               "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
                     if reduction.changed_ids:

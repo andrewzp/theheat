@@ -7,16 +7,15 @@ months and is not suitable for "today" checks.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, MutableMapping
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from src.data import places
 from datetime import date, timedelta
-import csv
 import io
+import math
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 import requests
@@ -61,6 +60,8 @@ LAT_CELLS = 1800
 FILL_VALUE = -9999.0
 DEFAULT_RECORD_MARGIN_MM = 20.0
 DEFAULT_CITY_LIMIT = 75
+# Per-city remote requests remain bounded even when the local grid scans all cities.
+MAX_NETWORK_CITIES = 75
 DEFAULT_MAX_WORKERS = 8
 PRECIP_HISTORY_DAYS = 10
 STRICT_REPEATED_FAILURE_LIMIT = 3
@@ -150,6 +151,39 @@ def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
     return places.load_cities(cities_path)
 
 
+def _qualified_watchlist(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Keep distinct valid sampling identities; bad rows cannot dark the grid."""
+    qualified: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        try:
+            city, country = row["city"], row["country"]
+            if not all(isinstance(value, str) and value.strip() for value in (city, country)):
+                continue
+            if isinstance(row["lat"], bool) or isinstance(row["lon"], bool):
+                continue
+            # Registry lookup may fill absent coordinates; raw sampling rows
+            # must qualify their own explicit point before reserving a key.
+            places.sampling_point_id(row["lat"], row["lon"])
+            key = places.event_location_key(city, country, row["lat"], row["lon"])
+            if key in seen:
+                continue
+            seen.add(key)
+            qualified.append(dict(row))
+        except (KeyError, TypeError, ValueError, OverflowError):
+            continue
+    return qualified
+
+
+def _network_watchlist(rows: Iterable[Mapping[str, Any]], max_cities: int | None) -> list[dict[str, Any]]:
+    # None no longer removes the remote budget. Full local grid coverage does
+    # not authorize an unbounded fallback fan-out when the grid source fails.
+    if max_cities is not None and (type(max_cities) is not int or max_cities < 0):
+        raise ValueError("max_cities must be a nonnegative integer or None")
+    limit = min(max_cities if max_cities is not None else DEFAULT_CITY_LIMIT, MAX_NETWORK_CITIES)
+    return _qualified_watchlist(rows)[:limit]
+
+
 def fetch_daily_precip(
     cities: list[Mapping[str, Any]] | None = None,
     *,
@@ -166,7 +200,9 @@ def fetch_daily_precip(
     (NOT a deliberate skip — missing EARTHDATA_TOKEN propagates ``SourceSkipped``
     and never substitutes), falls through to the Open-Meteo model witness, whose
     readings are tagged ``source_leg="open_meteo"`` and later graded
-    ``model_fallback``. Return shape is unchanged.
+    ``model_fallback``. Downloaded grids inspect the entire qualified watchlist;
+    ``max_cities`` caps only per-city network paths, up to MAX_NETWORK_CITIES.
+    Return shape is unchanged.
     """
 
     def primary() -> list[CityPrecipReading]:
@@ -262,7 +298,7 @@ def _fetch_daily_precip_primary(
         )
     assert_freshness(requested_date, "gpm_imerg", max_age_days=6, today=today)
     rows = cities if cities is not None else load_cities()
-    selected = list(rows if max_cities is None else rows[:max_cities])
+    selected = _network_watchlist(rows, max_cities)
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
     failures = 0
     first_failure_detail: str | None = None
@@ -489,7 +525,7 @@ def _fetch_precip_open_meteo(
     event_id mirrors the primary so dedup is consistent. The detector still does
     the thresholding; this only supplies the daily readings."""
     rows = cities if cities is not None else load_cities()
-    selected = list(rows if max_cities is None else rows[:max_cities])
+    selected = _network_watchlist(rows, max_cities)
     target_date = (today or date.today()) - timedelta(days=1)
     date_key = target_date.isoformat()
     readings: list[CityPrecipReading] = []
@@ -827,11 +863,12 @@ def _fetch_daily_precip_grid(
     today: date | None = None,
 ) -> list[CityPrecipReading]:
     """Download the daily IMERG grid once (via ``source``) and subset every
-    monitored city locally. Raises _GridFetchUnavailable on any failure so the
-    caller can fall back to the legacy OPeNDAP per-city path.
+    qualified monitored city locally, independent of the per-city network cap.
+    Raises _GridFetchUnavailable on grid failure so the caller can fall back
+    to the bounded OPeNDAP per-city path.
     """
     rows = cities if cities is not None else load_cities()
-    selected = list(rows if max_cities is None else rows[:max_cities])
+    selected = _qualified_watchlist(rows)
     try:
         if target_date is not None:
             resolved_date = target_date
@@ -984,7 +1021,7 @@ def _fetch_grid_bytes_s3(*, target_date: date, product: str, token: str) -> byte
 
 def _subset_grid(
     grid_bytes: bytes,
-    cities: list[Mapping[str, Any]],
+    cities: Sequence[Mapping[str, Any]],
     *,
     resolved_date: date,
     product: str,
@@ -1005,15 +1042,15 @@ def _subset_grid(
     except OSError as exc:
         raise _GridParseError(f"could not open IMERG grid: {exc}") from exc
 
-    if grid.ndim != 3 or grid.shape[1] != LON_CELLS or grid.shape[2] != LAT_CELLS:
+    if grid.shape != (1, LON_CELLS, LAT_CELLS):
         raise _GridParseError(
             f"unexpected precipitation grid shape {tuple(grid.shape)}; "
-            f"expected (_, {LON_CELLS}, {LAT_CELLS})"
+            f"expected (1, {LON_CELLS}, {LAT_CELLS})"
         )
 
     date_key = resolved_date.isoformat()
     readings: list[CityPrecipReading] = []
-    for city in cities:
+    for city in _qualified_watchlist(cities):
         try:
             city_name = str(city["city"])
             country = str(city["country"])
@@ -1022,7 +1059,7 @@ def _subset_grid(
         except (KeyError, TypeError, ValueError):
             continue
         value = float(grid[0, _lon_index(lon), _lat_index(lat)])
-        if value <= FILL_VALUE:
+        if not math.isfinite(value) or value < 0:
             continue
         readings.append(
             CityPrecipReading(
@@ -1031,7 +1068,7 @@ def _subset_grid(
                 lat=lat,
                 lon=lon,
                 date=date_key,
-                mm_total=max(value, 0.0),
+                mm_total=value,
                 source_product=product,
                 event_id=f"gpm_imerg_{places.event_location_key(city_name, country, city["lat"], city["lon"])}_{date_key}",
             )
@@ -1084,7 +1121,7 @@ def _detect_rolling_accumulations(
     thresholds = {3: 150.0, 7: 300.0}
     for reading in readings:
         prior_rows = recent_by_city.get(_city_key(reading), [])
-        rows = [
+        rows: list[dict[str, Any]] = [
             {"date": str(row.get("date")), "mm": float(row.get("mm", 0.0))}
             for row in prior_rows
             if isinstance(row, Mapping) and row.get("date")

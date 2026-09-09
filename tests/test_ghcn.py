@@ -30,12 +30,12 @@ import pytest
 from src.data import ghcn as ghcn_module
 from src.data.ghcn import (
     ANOMALY_HOT_THRESHOLD_C,
-    _dedup_by_metro,
     _detect_signals_for_station as _detect_verified_signals,
     _fetch_recent_obs,
     _has_signal,
     check_extreme_signals_for_stations,
 )
+from src.orchestrator.caps import select_individual_station_bundles
 from src.data.ghcn_db import (
     load_thresholds,
     open_db,
@@ -511,13 +511,13 @@ def test_has_signal_false_when_no_events():
 
 
 # ---------------------------------------------------------------------------
-# _dedup_by_metro
+# select_individual_station_bundles
 # ---------------------------------------------------------------------------
 
-def test_dedup_keeps_top_2_per_country():
+def test_individual_selection_keeps_top_2_per_country():
     """3 US stations with signals → top 2 kept."""
     def _b(city, score_events):
-        b = ExtremeSignalBundle(city=city, country="United States")
+        b = ExtremeSignalBundle(city=city, country="United States", station_id=city)
         if score_events >= 1:
             b.calendar_date_high = object()  # type: ignore[assignment]
         if score_events >= 2:
@@ -527,7 +527,7 @@ def test_dedup_keeps_top_2_per_country():
         return b
 
     bundles = [_b("City A", 1), _b("City B", 3), _b("City C", 2)]
-    result = _dedup_by_metro(bundles, max_per_country=2)
+    result = select_individual_station_bundles(bundles, max_per_country=2)
     assert len(result) == 2
     cities = {b.city for b in result}
     assert "City B" in cities  # highest score
@@ -535,7 +535,7 @@ def test_dedup_keeps_top_2_per_country():
     assert "City A" not in cities
 
 
-def test_dedup_allows_multiple_countries():
+def test_individual_selection_allows_multiple_countries():
     """2 US + 2 Russia → all 4 kept (2 per country)."""
     us1 = ExtremeSignalBundle(city="Phoenix", country="United States")
     us1.all_time_high = object()  # type: ignore[assignment]
@@ -546,7 +546,9 @@ def test_dedup_allows_multiple_countries():
     ru2 = ExtremeSignalBundle(city="Oymyakon", country="Russia")
     ru2.all_time_low = object()  # type: ignore[assignment]
 
-    result = _dedup_by_metro([us1, us2, ru1, ru2], max_per_country=2)
+    for bundle in (us1, us2, ru1, ru2):
+        bundle.station_id = bundle.city
+    result = select_individual_station_bundles([us1, us2, ru1, ru2], max_per_country=2)
     assert len(result) == 4
 
 

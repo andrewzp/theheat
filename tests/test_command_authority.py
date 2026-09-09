@@ -9,10 +9,11 @@ from uuid import uuid4
 
 import pytest
 
+from src.editorial.policy import current_editorial_policy
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, canonical_json, utc_text
 from src.commands.sqlite_authority import SQLiteAuthority
-from src.editorial.revisions import draft_identity, initialize_revision, record_human_review
+from src.editorial.revisions import fingerprint, draft_identity, initialize_revision, record_human_review
 from tests.revision_helpers import model_review_context
 
 EDITOR = Principal("editor-fixture", "editor", "verified-local-fixture")
@@ -197,6 +198,8 @@ def test_unknown_publication_survives_every_mutation_attempt(tmp_path, action):
     initial = {"drafts": [draft], "publish_ledger": ledger}
     store = authority(tmp_path, initial)
     payload = {"text": "Edited text"} if action == "edit_revision" else {"reason": "Operator request"}
+    if payload.get("expected_policy_sha256") == "runtime-policy":
+        payload = {**payload, "expected_policy_sha256": fingerprint(current_editorial_policy())}
     cmd = command(draft, action, payload, principal=PUBLISHER)
     store.accept(cmd, PUBLISHER, now=NOW)
     assert store.consume(resolver, now=NOW)["code"] == "publication_unresolved"
@@ -245,7 +248,7 @@ def test_manual_review_and_approval_record_actual_actor_and_exact_intent(tmp_pat
     draft = story()
     del draft["review_binding"]
     store = authority(tmp_path, {"drafts": [draft]})
-    reviewed = command(draft, "record_review", {"confirmed": True, "reason": "Checked the source table"})
+    reviewed = command(draft, "record_review", {"confirmed": True, "reason": "Checked the source table", "expected_policy_sha256": fingerprint(current_editorial_policy())})
     store.accept(reviewed, EDITOR, now=NOW)
     assert store.consume(resolver, now=NOW)["status"] == "applied"
     current = store.read()[1]["drafts"][0]
@@ -331,12 +334,14 @@ def test_concurrent_duplicate_approvals_create_one_durable_intent(tmp_path):
 
 @pytest.mark.parametrize("action,payload", [
     ("edit_revision", {"text": "Revised from exact source."}),
-    ("record_review", {"confirmed": True, "reason": "Checked exact evidence"}),
+    ("record_review", {"confirmed": True, "reason": "Checked exact evidence", "expected_policy_sha256": "runtime-policy"}),
     ("approve_revision", {"reason": "Checked exact evidence"}),
     ("schedule_revision", {"delay_minutes": 30, "publication_epoch": "release-fixture", "reason": "Checked exact evidence"}),
 ])
 def test_reduction_never_reads_ambient_clock_or_publication_environment(monkeypatch, action, payload):
     draft = story()
+    if payload.get("expected_policy_sha256") == "runtime-policy":
+        payload = {**payload, "expected_policy_sha256": fingerprint(current_editorial_policy())}
     cmd = command(draft, action, payload, principal=PUBLISHER)
     initial = {"drafts": [draft]}
     def forbidden_clock():
@@ -344,10 +349,10 @@ def test_reduction_never_reads_ambient_clock_or_publication_environment(monkeypa
     monkeypatch.setattr("src.editorial.revisions._now", forbidden_clock)
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_ENABLED", "0")
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_EPOCH", "ambient-paused")
-    first = reduce_command(initial, cmd, PUBLISHER, now=NOW, policy=AutomaticPolicy(True, "release-fixture"))
+    first = reduce_command(initial, cmd, PUBLISHER, now=NOW, policy=AutomaticPolicy(True, "release-fixture"), editorial_policy=current_editorial_policy())
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_ENABLED", "1")
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_EPOCH", "ambient-different")
-    assert reduce_command(initial, cmd, PUBLISHER, now=NOW, policy=AutomaticPolicy(True, "release-fixture")) == first
+    assert reduce_command(initial, cmd, PUBLISHER, now=NOW, policy=AutomaticPolicy(True, "release-fixture"), editorial_policy=current_editorial_policy()) == first
 
 
 @pytest.mark.parametrize("control", [None, [], {"retired_epochs": None}, {"retired_epochs": [None]},
@@ -491,3 +496,34 @@ def test_malformed_nested_publication_conflicts_remain_untouched(tmp_path, confl
     assert result["status"] == "rejected" and result["code"] == "invalid_revision"
     assert store.result(cmd.command_id) == result
     assert store.read() == (0, initial)
+
+
+def test_queued_human_attestation_cannot_adopt_a_later_policy(tmp_path, monkeypatch):
+    from src.two_bot import writer
+    draft = story()
+    store = authority(tmp_path, {"drafts": [draft]})
+    cmd = command(draft, "record_review", {"confirmed": True, "reason": "Checked source under displayed policy", "expected_policy_sha256": fingerprint(current_editorial_policy())})
+    store.accept(cmd, EDITOR, now=NOW)
+    before = store.read()
+    monkeypatch.setattr(writer, "WRITER_MODEL", writer.WRITER_MODEL + "-changed")
+    result = store.consume(resolver, now=NOW)
+    assert result["status"] == "rejected" and result["code"] == "editorial_policy_changed"
+    assert store.read() == before
+
+
+def test_old_queued_human_review_is_terminally_refused_without_wedging_journal(tmp_path):
+    import json
+    draft = story()
+    cmd = command(draft, "record_review", {"confirmed": True, "reason": "Legacy reviewed source", "expected_policy_sha256": fingerprint(current_editorial_policy())})
+    old = cmd.as_dict()
+    del old["payload"]["expected_policy_sha256"]
+    stored = Command.from_stored(json.dumps(old))
+    store = authority(tmp_path, {"drafts": [draft]})
+    store.accept(stored, EDITOR, now=NOW)
+    next_command = command(draft)
+    store.accept(next_command, EDITOR, now=NOW)
+    result = store.consume(resolver, now=NOW)
+    assert result["status"] == "rejected" and result["code"] == "editorial_policy_changed"
+    assert store.result(stored.command_id) == result
+    assert store.read() == (0, {"drafts": [draft]})
+    assert store.consume(resolver, now=NOW)["status"] == "applied"

@@ -1,5 +1,6 @@
 """Explicit valid revision fixtures for mocked editorial/publication tests."""
 
+from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import (
     authorize_draft,
     fingerprint,
@@ -13,6 +14,7 @@ def model_review_context(text, *, passed=True, verdict="PASS"):
         "bundle": {},
         "fact_check": {"passed": True, "extracted_claims": []},
         "critic": {"passed": passed, "verdict": verdict},
+        "reviewed_policy_sha256": fingerprint(current_editorial_policy()),
         "reviewed_text_sha256": text_hash(text),
         "reviewed_bundle_sha256": fingerprint({}),
     }}
@@ -30,6 +32,7 @@ def bind_reviewed_draft(draft, mode="auto", intent_id=None):
     two_bot.setdefault("bundle", {})
     two_bot.setdefault("fact_check", {}).update(passed=True)
     two_bot.setdefault("critic", {}).update(passed=True, verdict="PASS")
+    two_bot["reviewed_policy_sha256"] = fingerprint(current_editorial_policy())
     two_bot["reviewed_text_sha256"] = text_hash(draft["text"])
     two_bot["reviewed_bundle_sha256"] = fingerprint(two_bot["bundle"])
     initialize_revision(draft)

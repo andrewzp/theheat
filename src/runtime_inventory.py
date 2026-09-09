@@ -55,9 +55,11 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_sta
     raw_run_id = os.environ.get("GITHUB_RUN_ID", "")
     signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
 
+    from src.editorial.policy import current_editorial_policy
     publication_policy = automatic_publication_policy(bot_state)
     return {
         "schema_version": 1,
+        "editorial_policy": current_editorial_policy(),
         "captured_at": captured_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "mode": mode,
         "git_sha": raw_sha.lower() if _SHA_SHAPE.fullmatch(raw_sha) else None,

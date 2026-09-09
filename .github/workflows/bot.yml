@@ -94,6 +94,9 @@ jobs:
       # TypedDict refactor; remove overrides as files get cleaned up.
       - run: mypy src/
 
+      - name: Verify editorial policy manifest
+        run: python scripts/gen_editorial_policy.py --check
+
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
