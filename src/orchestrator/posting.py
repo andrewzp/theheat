@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
 from src.editorial.approval import (
@@ -10,15 +12,21 @@ from src.editorial.approval import (
     autoship_on_critic_pass_enabled,
 )
 from src.orchestrator.draft_save import _critic_passed
+from src.editorial.revisions import (
+    approval_is_current,
+    binding_matches,
+    draft_identity,
+    has_unresolved_publish,
+    revoke_approval,
+)
 
 
-_PUBLISH_INTENT_TTL = timedelta(hours=2)
 _DEFAULT_MIN_TWEET_SPACING_MIN = 15
 
 
 def _demote_autoship_to_manual(draft: dict, reason: str) -> None:
     """Pull a marked auto-ship draft back to manual review (Phase B guard)."""
-    draft.pop("auto_approve_at", None)
+    revoke_approval(draft)
     draft["approval_mode"] = "manual"
     draft["post_error"] = reason
     _touch_draft(draft)
@@ -92,14 +100,11 @@ def _publish_ledger(bot_state: BotState) -> dict:
 
 
 def _reconcile_publish_ledger(bot_state: BotState) -> None:
-    """Repair drafts already known posted and clear stale pre-post intents."""
+    """Repair matching receipts without erasing unknown delivery evidence."""
     ledger = _publish_ledger(bot_state)
-    now = _utc_now()
     for event_id, row in list(ledger.items()):
         if not isinstance(row, dict):
-            del ledger[event_id]
             continue
-        at = _parse_iso_utc(row.get("at"))
         tweet_id = row.get("tweet_id")
         if tweet_id:
             for draft in bot_state.get("drafts", []):
@@ -107,10 +112,18 @@ def _reconcile_publish_ledger(bot_state: BotState) -> None:
                     continue
                 if draft.get("status") == "posted":
                     continue
+                receipt_view = {**draft, "status": "posted", "publish_outcome": "confirmed"}
+                if not binding_matches(draft, row) or has_unresolved_publish(receipt_view, bot_state):
+                    draft["post_error"] = "Published receipt belongs to another or unverified revision; reconcile before publishing"
+                    _touch_draft(draft)
+                    continue
                 draft["status"] = "posted"
+                draft["publish_outcome"] = "confirmed"
                 draft["tweet_id"] = str(tweet_id)
-                draft["posted_at"] = row.get("at") or _utc_now_iso()
-                draft["last_publish_attempt_at"] = draft["posted_at"]
+                draft["posted_at"] = row.get("confirmed_at") or row.get("at") or _utc_now_iso()
+                draft["last_publish_attempt_at"] = (
+                    row.get("at") or draft.get("last_publish_attempt_at") or draft["posted_at"]
+                )
                 draft.pop("auto_approve_at", None)
                 draft.pop("auto_approve_requested_at", None)
                 draft.pop("post_error", None)
@@ -118,17 +131,12 @@ def _reconcile_publish_ledger(bot_state: BotState) -> None:
                 _touch_draft(draft)
                 print(f"[post] Repaired posted draft {draft.get('id') or event_id} from publish ledger")
             continue
-        if at is None or now - at > _PUBLISH_INTENT_TTL:
-            del ledger[event_id]
-            print(f"[post] Cleared stale publish intent for {event_id}")
+        # Absence of a receipt does not establish absence of publication. Keep
+        # legacy, submitted and unknown attempts regardless of elapsed time.
 
 
 def _publish_intent_in_progress(draft: dict, bot_state: BotState) -> bool:
-    row = _publish_ledger(bot_state).get(_publish_event_id(draft))
-    if not isinstance(row, dict) or row.get("tweet_id"):
-        return False
-    at = _parse_iso_utc(row.get("at"))
-    return at is not None and _utc_now() - at <= _PUBLISH_INTENT_TTL
+    return has_unresolved_publish(draft, bot_state)
 
 
 def _min_tweet_spacing() -> timedelta:
@@ -161,50 +169,119 @@ def _record_published_two_bot_memory(bot_state: BotState, draft: dict) -> None:
 
 
 def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
-    """Post an approved tweet to X.
+    """Post current authorized copy, retaining the exact submitted revision.
 
-    Returns "posted", "rate_limited", or "failed".
+    Untracked ad-hoc text remains the existing manual escape hatch. Every draft
+    with an identifier must pass the same final gate regardless of its caller.
     """
     if not state.check_daily_cap(bot_state):
         print("[post] Daily tweet cap reached, skipping")
         return "failed"
 
     draft = _coerce_publish_draft(draft_or_text)
-    tweet_text = str(draft.get("text") or "")
-    event_id = _publish_event_id(draft)
+    tracked = bool(draft.get("id") or draft.get("event_id") or draft.get("approval_binding"))
+    if tracked:
+        mode = (draft.get("approval_binding") or {}).get("mode")
+        if not approval_is_current(draft, mode):
+            draft["post_error"] = "Current revision needs review and approval before publishing"
+            _touch_draft(draft)
+            return "failed"
+        if (mode == "manual" and draft.get("status") != "approved") or (
+            mode == "auto" and draft.get("status") != "pending"
+        ):
+            draft["post_error"] = "Draft is not in an authorized publication state"
+            _touch_draft(draft)
+            return "failed"
+        if has_unresolved_publish(draft, bot_state):
+            draft["post_error"] = "Publication outcome unresolved; reconcile before another attempt"
+            _touch_draft(draft)
+            return "failed"
+        if mode == "auto" and (draft.get("approval_policy") or {}).get("can_auto_approve") is False:
+            draft["post_error"] = "Auto-approval blocked by policy"
+            _touch_draft(draft)
+            return "failed"
+
+    # Capture this before any sender mutation for the storage stale-read check.
+    expected_draft = deepcopy(draft) if tracked else None
+    snapshot = deepcopy(draft)
+    tweet_text = str(snapshot.get("text") or "")
+    event_id = _publish_event_id(draft, ensure=not tracked)
     intent_id = _publish_intent_id(draft, event_id)
     ledger = _publish_ledger(bot_state)
-    ledger[event_id] = {
+    prior = ledger.get(event_id)
+    expected_publish_ledger = deepcopy(prior)
+    if (tracked and event_id in (bot_state.get("posted_events") or [])) or (prior is not None and (
+        not isinstance(prior, dict)
+        or prior.get("tweet_id")
+        or (tracked and has_unresolved_publish(draft, bot_state))
+    )):
+        draft["post_error"] = "Event already published or has unresolved delivery evidence"
+        _touch_draft(draft)
+        return "failed"
+    identity = draft_identity(snapshot)
+    row = {
+        **identity,
+        "text": tweet_text,
         "intent_id": intent_id,
         "tweet_id": None,
+        "phase": "submitted",
         "at": _utc_now_iso(),
     }
-    if not state.write_state(bot_state):
-        print(f"[post] Failed to durably record publish intent for {event_id}, aborting")
+    ledger[event_id] = row
+    draft["publish_outcome"] = "submitted"
+    draft["last_publish_attempt_at"] = row["at"]
+    if tracked and (draft.get("approval_binding") or {}).get("mode") == "auto":
+        draft["autoship_attempted"] = True
+    _touch_draft(draft)
+    persisted = (
+        state.write_state(
+            bot_state,
+            expected_draft=expected_draft,
+            expected_publish_ledger=expected_publish_ledger,
+        )
+        if tracked else state.write_state(bot_state)
+    )
+    if not persisted:
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft["post_error"] = "Publish intent could not be saved for the expected revision; nothing sent"
+        draft.pop("autoship_attempted", None)
+        _touch_draft(draft)
+        print(f"[post] Failed to durably record current publish intent for {event_id}, aborting")
         return "failed"
 
-    media_png, alt_text = _hot10_media_for_draft(draft)
-    result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
-    if result is None:
-        print("[post] Failed to post to X")
-        return "failed"
-
-    if result.get("error") == "rate_limited":
+    media_png, alt_text = _hot10_media_for_draft(snapshot)
+    try:
+        result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
+    except Exception as exc:  # A lost response must never authorize a blind retry.
+        print(f"[post] Publication outcome unknown: {exc!r}")
+        result = None
+    if result is not None and result.get("error") == "rate_limited":
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft.pop("autoship_attempted", None)
+        _touch_draft(draft)
         return "rate_limited"
 
-    tweet_id = str(result.get("id") or "")
+    tweet_id = str((result or {}).get("id") or "")
     if not tweet_id:
-        print("[post] Posted response missing tweet id")
+        row["phase"] = "unknown"
+        draft["publish_outcome"] = "unknown"
+        draft["post_error"] = "Publication outcome unknown; reconcile before another attempt"
+        _touch_draft(draft)
         return "failed"
 
-    ledger[event_id]["tweet_id"] = tweet_id
-    draft["tweet_id"] = tweet_id
-    draft["status"] = "posted"
-    draft["posted_at"] = _utc_now_iso()
-    draft["last_publish_attempt_at"] = draft["posted_at"]
+    row["tweet_id"] = tweet_id
+    row["phase"] = "confirmed"
+    row["confirmed_at"] = _utc_now_iso()
+    snapshot.update(tweet_id=tweet_id, status="posted", posted_at=row["confirmed_at"], publish_outcome="confirmed")
+    if binding_matches(draft, identity):
+        draft.update(tweet_id=tweet_id, status="posted", posted_at=row["confirmed_at"], publish_outcome="confirmed")
+    else:
+        draft["post_error"] = "A prior revision was published; current text was not sent"
     if event_id and event_id not in bot_state.get("posted_events", []):
         state.record_event(bot_state, event_id)
-    _record_published_two_bot_memory(bot_state, draft)
+    _record_published_two_bot_memory(bot_state, snapshot)
     post_to_bluesky(tweet_text)
     state.increment_daily_count(bot_state)
     print(f"[post] Posted to X: {tweet_text[:60]}...")
@@ -214,12 +291,12 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
 def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> BotState:
     """Post an approved tweet from the TWEET_TEXT env var."""
     manual_start = time.perf_counter()
-    tweet_text = os.environ.get("TWEET_TEXT", "").strip()
+    tweet_text = os.environ.get("TWEET_TEXT", "")
     draft_id = os.environ.get("DRAFT_ID", "").strip()
     publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
     _reconcile_publish_ledger(bot_state)
     draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
-    if not tweet_text:
+    if not tweet_text.strip():
         print("[manual] No TWEET_TEXT provided, skipping")
         _record_source_run(
             current_run, bot_state, "manual_publish", manual_start,
@@ -227,7 +304,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    if draft_id and not draft:
+    if draft_id and (not draft or draft.get("id") != draft_id):
         reason = f"Draft not found for id {draft_id}"
         print(f"[manual] {reason}, skipping")
         _record_source_run(
@@ -236,7 +313,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    if draft_id and draft and draft.get("status") == "posted":
+    if draft and draft.get("status") == "posted":
         print(f"[manual] Draft {draft_id} already posted, skipping duplicate publish")
         _record_source_run(
             current_run, bot_state, "manual_publish", manual_start,
@@ -244,7 +321,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    if draft_id and draft and draft.get("status") != "approved":
+    if draft and draft.get("status") != "approved":
         reason = f"Draft {draft_id} is not approved for publishing"
         print(f"[manual] {reason}")
         _record_source_run(
@@ -253,8 +330,15 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
-    if draft_id and draft and publish_intent_id and draft.get("publish_intent_id") != publish_intent_id:
-        reason = f"Draft {draft_id} publish intent is stale"
+    if draft and (
+        tweet_text != draft.get("text")
+        or not publish_intent_id
+        or draft.get("publish_intent_id") != publish_intent_id
+        or (draft.get("approval_binding") or {}).get("publish_intent_id") != publish_intent_id
+        or not approval_is_current(draft, "manual")
+        or has_unresolved_publish(draft, bot_state)
+    ):
+        reason = f"Draft {draft.get('id')} request is stale, unreviewed, or has unresolved delivery"
         print(f"[manual] {reason}, skipping")
         _record_source_run(
             current_run, bot_state, "manual_publish", manual_start,
@@ -262,12 +346,15 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         )
         return bot_state
 
+    if draft is None:
+        tweet_text = tweet_text.strip()  # Preserve the separate ad-hoc text path.
+
     if len(tweet_text) > 280:
         print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
         if draft:
             draft["status"] = "pending"
             draft["post_error"] = f"Tweet too long ({len(tweet_text)} chars)"
-            draft.pop("publish_intent_id", None)
+            revoke_approval(draft)
             _touch_draft(draft)
         _record_source_run(
             current_run, bot_state, "manual_publish", manual_start,
@@ -282,7 +369,7 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
         if draft:
             draft["status"] = "pending"
             draft["post_error"] = reason
-            draft.pop("publish_intent_id", None)
+            revoke_approval(draft)
             _touch_draft(draft)
         _record_source_run(
             current_run, bot_state, "manual_publish", manual_start,
@@ -292,14 +379,16 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
 
     print(f"[manual] Posting: {tweet_text}")
     publish_draft = draft or {"text": tweet_text}
+    requested_identity = draft_identity(publish_draft)
     result = post_approved(publish_draft, bot_state)
 
     # Update draft status with post result
     if draft:
-        draft["last_publish_attempt_at"] = _utc_now_iso()
-        if result == "posted":
+        if result == "posted" and not binding_matches(draft, requested_identity):
+            draft["post_error"] = "A prior revision was published; current text was not sent"
+        elif result == "posted":
             draft["status"] = "posted"
-            draft["posted_at"] = _utc_now_iso()
+            draft["posted_at"] = draft.get("posted_at") or _utc_now_iso()
             draft.pop("post_error", None)
             draft.pop("publish_intent_id", None)
         elif result == "rate_limited":
@@ -309,8 +398,9 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
             print("[manual] Rate limited, draft kept as pending for retry")
         else:
             draft["status"] = "pending"
-            draft["post_error"] = "Failed to post to X"
-            draft.pop("publish_intent_id", None)
+            draft["post_error"] = draft.get("post_error") or "Failed to post to X"
+            if draft.get("publish_outcome") == "not_sent":
+                draft.pop("publish_intent_id", None)
         _touch_draft(draft)
 
     source_status = "success" if result == "posted" else "failed"
@@ -356,9 +446,15 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             break
 
         if _publish_intent_in_progress(draft, bot_state):
+            revoke_approval(draft)
             draft["post_error"] = "Publish intent already recorded; waiting for post result"
             _touch_draft(draft)
             failures.append(f"{draft.get('id')}: publish intent in progress")
+            continue
+
+        if not approval_is_current(draft, "auto"):
+            _demote_autoship_to_manual(draft, "Auto-approval needs a current model review and revision authorization")
+            failures.append(f"{draft.get('id')}: stale review or approval")
             continue
 
         policy = draft.get("approval_policy", {})
@@ -368,8 +464,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             and draft.get("approval_mode") == "auto"
         )
         if policy.get("can_auto_approve") is False or not (is_policy_auto or is_requested_auto):
-            draft.pop("auto_approve_at", None)
-            draft["approval_mode"] = "manual"
+            revoke_approval(draft)
             draft["post_error"] = "Auto-approval blocked by policy"
             _touch_draft(draft)
             failures.append(f"{draft.get('id')}: blocked by policy")
@@ -379,7 +474,8 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
         # time (the marker) OR — to close the activation-window hole — it is a due
         # allowlist-type draft while the flag is ON (e.g. an armed_auto policy_auto
         # draft created before the flag was flipped on). When the flag is OFF and a
-        # draft has no marker, `managed` is False → byte-for-byte the current path.
+        # draft has no marker, only these additional flag/freshness guards are skipped;
+        # the revision and approval checks above always apply.
         flag_on = autoship_on_critic_pass_enabled()
         managed = bool(draft.get("autoship_on_critic_pass")) or (
             flag_on and draft.get("type") in AUTOSHIP_ALLOWLIST
@@ -390,10 +486,9 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 _demote_autoship_to_manual(draft, "Autoship disabled (flag off)")
                 failures.append(f"{draft.get('id')}: autoship disabled")
                 continue
-            # (1b) Critic PASS is mandatory. Pre-marked drafts already proved it at
-            # save time; an unmarked transition-window draft must prove it now from
-            # its review_context (fail-closed: no critic PASS ⇒ manual, never post).
-            if not draft.get("autoship_on_critic_pass") and not _critic_passed(draft.get("review_context")):
+            # (1b) Critic PASS remains mandatory at send time, including for a draft
+            # marked at save time (fail-closed: no critic PASS means manual review).
+            if not _critic_passed(draft.get("review_context")):
                 _demote_autoship_to_manual(draft, "Autoship blocked: no critic PASS")
                 failures.append(f"{draft.get('id')}: autoship no critic pass")
                 continue
@@ -411,8 +506,8 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 failures.append(f"{draft.get('id')}: autoship stale")
                 continue
             # (4) Event idempotency: never auto-post an event already posted (a
-            # second pending draft for the same event_id from a state merge would
-            # otherwise double-post — post_approved overwrites the ledger row).
+            # second pending draft for the same event_id from a state merge must
+            # be demoted before reaching the sender's final duplicate guard).
             event_id = _publish_event_id(draft, ensure=False)
             ledger_row = _publish_ledger(bot_state).get(event_id)
             already_posted = (event_id and event_id in (bot_state.get("posted_events") or [])) or (
@@ -422,16 +517,12 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 _demote_autoship_to_manual(draft, "Autoship blocked: event already posted")
                 failures.append(f"{draft.get('id')}: autoship event already posted")
                 continue
-            # Mark the attempt BEFORE post_approved's durable state write, and bump
-            # updated_at so this marked draft copy wins the state merge — a crash
-            # mid-post can't drop the marker and blind-retry into a double-post.
-            draft["autoship_attempted"] = True
-            _touch_draft(draft)
+            # post_approved marks the attempt immediately before its durable write.
 
         # Safety check before auto-posting (same gate as manual path)
         passed, reason = run_safety_pipeline(draft["text"])
         if not passed:
-            draft.pop("auto_approve_at", None)
+            revoke_approval(draft)
             draft["status"] = "pending"
             draft["approval_mode"] = "manual"
             draft["post_error"] = f"Auto-post safety rejected: {reason}"
@@ -439,12 +530,15 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             failures.append(f"{draft.get('id')}: safety rejected: {reason}")
             continue
 
+        requested_identity = draft_identity(draft)
         result = post_approved(draft, bot_state)
-        draft["last_publish_attempt_at"] = _utc_now_iso()
-        if result == "posted":
+        if result == "posted" and not binding_matches(draft, requested_identity):
+            draft["post_error"] = "A prior revision was published; current text was not sent"
+            published += 1
+        elif result == "posted":
             draft["status"] = "posted"
             draft["approved_at"] = draft.get("approved_at") or _utc_now_iso()
-            draft["posted_at"] = _utc_now_iso()
+            draft["posted_at"] = draft.get("posted_at") or _utc_now_iso()
             draft["approval_mode"] = draft.get("approval_mode") or "auto"
             draft.pop("auto_approve_at", None)
             draft.pop("auto_approve_requested_at", None)
@@ -460,12 +554,10 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 draft.pop("autoship_attempted", None)
             failures.append(f"{draft.get('id')}: rate limited")
         else:
-            draft["post_error"] = "Failed to post to X"
+            draft["post_error"] = draft.get("post_error") or "Failed to post to X"
             # Unknown outcome (request may have reached X) — hand to a human rather
             # than blind-retry into a possible double-post.
-            if draft.get("autoship_attempted"):
-                draft["approval_mode"] = "manual"
-                draft.pop("auto_approve_at", None)
+            revoke_approval(draft)
             failures.append(f"{draft.get('id')}: failed to post")
         _touch_draft(draft)
 

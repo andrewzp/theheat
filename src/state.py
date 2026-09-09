@@ -22,6 +22,7 @@ from src.state_schema import (
 )
 from src.storage import sqlite_store
 from src.two_bot.json_utils import json_default
+from src.editorial.revisions import decision_revision, draft_identity, fingerprint
 
 GIST_ID = os.environ.get("GIST_ID", "")
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
@@ -345,13 +346,91 @@ def _draft_retention_timestamp(draft: dict) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _draft_attempt_protected(draft: dict) -> bool:
+    return bool(
+        draft.get("publish_intent_id")
+        or draft.get("revision_conflicts")
+        or draft.get("publish_outcome") in {"submitted", "unknown"}
+        or (
+            (draft.get("autoship_attempted") or draft.get("last_publish_attempt_at"))
+            and draft.get("publish_outcome") not in {"not_sent", "confirmed"}
+        )
+    )
+
+
+def _unique_snapshots(rows: list) -> list[dict]:
+    by_fingerprint = {fingerprint(row): deepcopy(row) for row in rows if isinstance(row, dict)}
+    return [by_fingerprint[key] for key in sorted(by_fingerprint)]
+
+
+def _revision_snapshot(draft: dict) -> dict:
+    return deepcopy({key: value for key, value in draft.items() if key not in {"revision_history", "revision_conflicts"}})
+
+
+def _merge_draft_pair(current: dict, incoming: dict) -> dict:
+    """Reconcile observed snapshots; this is not an atomic Gist write guard."""
+    current_identity, incoming_identity = draft_identity(current), draft_identity(incoming)
+    current_key = (current_identity["content_revision"], decision_revision(current), *_draft_recency_key(current), fingerprint(current_identity))
+    incoming_key = (incoming_identity["content_revision"], decision_revision(incoming), *_draft_recency_key(incoming), fingerprint(incoming_identity))
+    winner, loser = (incoming, current) if incoming_key >= current_key else (current, incoming)
+    out = deepcopy(winner)
+    same_identity = current_identity == incoming_identity
+    histories = [*current.get("revision_history", []), *incoming.get("revision_history", [])]
+    if not same_identity or current.get("review_binding") != incoming.get("review_binding") or current.get("approval_binding") != incoming.get("approval_binding"):
+        histories.append(_revision_snapshot(loser))
+    if histories:
+        out["revision_history"] = _unique_snapshots(histories)
+    winning_revision = draft_identity(winner)["content_revision"]
+    conflicts = [
+        row for draft in (current, incoming)
+        if draft_identity(draft)["content_revision"] == winning_revision
+        for row in draft.get("revision_conflicts", [])
+    ]
+    if not same_identity and current_identity["content_revision"] == incoming_identity["content_revision"]:
+        conflicts.extend([_revision_snapshot(current), _revision_snapshot(incoming)])
+    if same_identity and decision_revision(current) == decision_revision(incoming) and current.get("approval_binding") != incoming.get("approval_binding"):
+        conflicts.extend([_revision_snapshot(current), _revision_snapshot(incoming)])
+    if conflicts:
+        out["revision_conflicts"] = _unique_snapshots(conflicts)
+        out.pop("approval_binding", None)
+        out.pop("auto_approve_at", None)
+        out.pop("autoship_on_critic_pass", None)
+    # A losing row can contain a real platform attempt or receipt. Content and
+    # publication evidence must not compete in the timestamp winner selection.
+    if same_identity and loser.get("tweet_id"):
+        for key in ("tweet_id", "posted_at", "last_publish_attempt_at"):
+            if loser.get(key):
+                out[key] = deepcopy(loser[key])
+        out["status"] = "posted"
+        out["publish_outcome"] = "confirmed"
+    elif not same_identity and (loser.get("tweet_id") or _draft_attempt_protected(loser)):
+        # Queue authorization alone can be revoked by an edit. Platform evidence
+        # cannot; keep its full original-text snapshot and block this revision.
+        if loser.get("tweet_id") or loser.get("autoship_attempted") or loser.get("last_publish_attempt_at") or loser.get("publish_outcome") in {"submitted", "unknown"}:
+            out["autoship_attempted"] = True
+            out["publish_outcome"] = "unknown"
+            out["post_error"] = "Publication evidence exists for a different draft revision; reconciliation required."
+            if loser.get("last_publish_attempt_at"):
+                out["last_publish_attempt_at"] = loser["last_publish_attempt_at"]
+    elif same_identity and _draft_attempt_protected(loser):
+        # Only a terminal result for the same attempt can supersede uncertainty.
+        same_attempt = loser.get("last_publish_attempt_at") == out.get("last_publish_attempt_at")
+        if not (same_attempt and out.get("publish_outcome") in {"not_sent", "confirmed"}):
+            if loser.get("autoship_attempted") or loser.get("last_publish_attempt_at") or loser.get("publish_outcome") in {"submitted", "unknown"}:
+                out["autoship_attempted"] = True
+                out["publish_outcome"] = "unknown"
+                if loser.get("last_publish_attempt_at"):
+                    out["last_publish_attempt_at"] = loser["last_publish_attempt_at"]
+    return out
+
+
 def _enforce_draft_cap(drafts: list[dict], max_items: int) -> list[dict]:
     if len(drafts) <= max_items:
         return drafts
 
     protected = [
         draft for draft in drafts
-        if draft.get("status") in _DRAFT_CAP_PROTECTED_STATUSES
+        if draft.get("status") in _DRAFT_CAP_PROTECTED_STATUSES or _draft_attempt_protected(draft)
     ]
     if len(protected) >= max_items:
         return protected
@@ -359,7 +438,7 @@ def _enforce_draft_cap(drafts: list[dict], max_items: int) -> list[dict]:
     slots = max_items - len(protected)
     cap_candidates = [
         draft for draft in drafts
-        if draft.get("status") not in _DRAFT_CAP_PROTECTED_STATUSES
+        if draft.get("status") not in _DRAFT_CAP_PROTECTED_STATUSES and not _draft_attempt_protected(draft)
     ]
     capped_candidates = cap_candidates[-slots:] if slots > 0 else []
     keep_ids = {id(draft) for draft in [*protected, *capped_candidates]}
@@ -371,7 +450,7 @@ def _trim_drafts(state: BotState, max_items: int) -> None:
     retained = []
     expired_rejected = []
     for draft in state.get("drafts", []):
-        if draft.get("status") == "rejected" and _draft_retention_timestamp(draft) < cutoff:
+        if draft.get("status") == "rejected" and not _draft_attempt_protected(draft) and _draft_retention_timestamp(draft) < cutoff:
             expired_rejected.append(draft)
             continue
         retained.append(draft)
@@ -404,14 +483,15 @@ def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MA
     anonymous: list[dict] = []
 
     for draft in [*(current or []), *(incoming or [])]:
-        draft_copy = deepcopy(draft)
+        # Identity uses the durable JSON representation (dates and other source
+        # scalar values are serialized by the existing state writer contract).
+        draft_copy = json.loads(json.dumps(draft, default=json_default))
         draft_id = draft_copy.get("id")
         if not draft_id:
             anonymous.append(draft_copy)
             continue
         existing = merged.get(draft_id)
-        if existing is None or _draft_recency_key(draft_copy) >= _draft_recency_key(existing):
-            merged[draft_id] = draft_copy
+        merged[draft_id] = draft_copy if existing is None else _merge_draft_pair(existing, draft_copy)
 
     ordered = list(merged.values()) + anonymous
     ordered.sort(
@@ -742,6 +822,50 @@ def _strat_take_incoming(base: Any, nxt: Any) -> Any:
 def _strat_dict_overlay(base: Any, nxt: Any) -> dict:
     """Per-key last-writer-wins overlay, deepcopied to avoid aliasing the inputs."""
     return {**deepcopy(base or {}), **deepcopy(nxt or {})}
+
+
+def _attempt_rows(row: Any) -> list[dict]:
+    if not isinstance(row, dict):
+        return []
+    return [
+        {key: deepcopy(value) for key, value in row.items() if key != "attempt_conflicts"},
+        *[child for child in row.get("attempt_conflicts", []) if isinstance(child, dict)],
+    ]
+
+
+def _attempt_rank(row: dict) -> int:
+    if row.get("tweet_id"):
+        return 4
+    return {"confirmed": 4, "not_sent": 3, "unknown": 2, "submitted": 1}.get(str(row.get("phase") or ""), 0)
+
+
+def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
+    """Keep terminal receipts and distinct attempts independently of draft edits."""
+    base = base if isinstance(base, dict) else {}
+    nxt = nxt if isinstance(nxt, dict) else {}
+    merged = {}
+    for event_id in sorted(set(base) | set(nxt)):
+        attempts: dict[str, dict] = {}
+        for row in [*_attempt_rows(base.get(event_id)), *_attempt_rows(nxt.get(event_id))]:
+            identity = {key: row.get(key) for key in ("intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text")}
+            key = fingerprint(identity)
+            existing = attempts.get(key)
+            if existing is None:
+                attempts[key] = deepcopy(row)
+            elif existing.get("tweet_id") and row.get("tweet_id") and existing["tweet_id"] != row["tweet_id"]:
+                attempts[fingerprint(row)] = deepcopy(row)
+            else:
+                winner, loser = (row, existing) if _attempt_rank(row) >= _attempt_rank(existing) else (existing, row)
+                attempts[key] = {**deepcopy(loser), **deepcopy(winner)}
+        rows = list(attempts.values())
+        if not rows:
+            continue
+        rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(row)))
+        primary = rows.pop()
+        if rows:
+            primary["attempt_conflicts"] = _unique_snapshots(rows)
+        merged[event_id] = primary
+    return merged
 
 
 def _strat_max_int(base: Any, nxt: Any) -> int:
@@ -1392,7 +1516,25 @@ def _prepare_merged_write(
     return merged
 
 
-def write_state(state: BotState) -> bool:
+def _expected_draft_matches(current: BotState | dict, expected: dict | None, expected_publish_ledger: dict | None) -> bool:
+    if expected is None:
+        return True
+    draft = next((row for row in current.get("drafts", []) if row.get("id") == expected.get("id")), None)
+    event_id = str(expected.get("event_id") or expected.get("id") or "")
+    ledger_row = current.get("publish_ledger", {}).get(event_id)
+    return (
+        draft is not None
+        and fingerprint(draft) == fingerprint(json.loads(json.dumps(expected, default=json_default)))
+        and fingerprint(ledger_row) == fingerprint(expected_publish_ledger)
+    )
+
+
+def write_state(state: BotState, *, expected_draft: dict | None = None, expected_publish_ledger: dict | None = None) -> bool:
+    """Merge a snapshot; optionally reject an observed stale publishing decision.
+
+    The expected row must be captured before publication markers are mutated.
+    This checks the latest read, not an atomic compare-and-swap on the Gist.
+    """
     # Economics P0.6: fold any buffered per-call LLM usage into the state
     # about to be written. Structural (not call-site-dependent): EVERY
     # state-writing process persists its own spend; never raises; a second
@@ -1410,6 +1552,8 @@ def write_state(state: BotState) -> bool:
             current: BotState | dict = sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE))
         except Exception:
             return False
+        if not _expected_draft_matches(current, expected_draft, expected_publish_ledger):
+            return False
         try:
             return sqlite_store.write_state(
                 DB_PATH, cast(dict, _prepare_merged_write(current, normalized))
@@ -1419,6 +1563,8 @@ def write_state(state: BotState) -> bool:
     try:
         current = _read_gist_state(strict=True)
     except StateReadError:
+        return False
+    if not _expected_draft_matches(current, expected_draft, expected_publish_ledger):
         return False
     try:
         return _write_gist_state(_prepare_merged_write(current, normalized, log_conflict=True))
@@ -1885,7 +2031,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "source_health": _merge_source_health,
     "credential_expiry": _strat_take_incoming,
     "last_good_readings": _merge_last_good,
-    "publish_ledger": _strat_dict_overlay,
+    "publish_ledger": _merge_publish_ledger,
     "tweet_metrics": _merge_tweet_metrics,
     "llm_usage": _merge_llm_usage,
     "_state_rev": _strat_max_int,

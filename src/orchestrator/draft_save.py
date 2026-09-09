@@ -13,6 +13,7 @@ from src.editorial.approval import (
     recommend_approval_policy,
 )
 from src.editorial.newsworthiness import detect_impact_citation
+from src.editorial.revisions import authorize_draft, initialize_revision, review_is_current
 from src.editorial.scoring import EditorialScore
 from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
 from src.orchestrator.common import (
@@ -298,6 +299,7 @@ def save_draft(
 
     draft["approval_policy"] = policy.as_dict()
     draft.setdefault("approval_mode", "manual")
+    initialize_revision(draft)
 
     if (
         not citation.forced
@@ -311,20 +313,26 @@ def save_draft(
         # delayed auto_approve_at — process_due_drafts needs BOTH — plus the marker
         # that scopes the posting-time guards). Anything else stays MANUAL
         # (fail-closed): a disabled/absent critic verdict never auto-ships.
-        if _critic_passed(review_context):
+        if _critic_passed(review_context) and review_is_current(draft):
             delay = policy.recommended_delay_minutes or 30
             draft["auto_approve_at"] = _maybe_defer_auto_approve_at(_utc_after_minutes_iso(delay))
             draft["auto_approve_requested_at"] = _utc_now_iso()
             draft["approval_mode"] = "auto"
             draft["autoship_on_critic_pass"] = True
-    elif policy.mode == "armed_auto" and policy.recommended_delay_minutes:
-        # Existing armed_auto path: flag OFF, or armed_auto types NOT in the allowlist
-        # (e.g. oscillation_transition). Byte-for-byte the current behavior.
+            authorize_draft(draft, "auto")
+    elif (
+        policy.mode == "armed_auto"
+        and policy.recommended_delay_minutes
+        and review_is_current(draft)
+        and (draft.get("review_binding") or {}).get("kind") == "model"
+    ):
+        # Policy-only automation needs the same current review as critic autoship.
         draft["auto_approve_at"] = _maybe_defer_auto_approve_at(
             _utc_after_minutes_iso(policy.recommended_delay_minutes)
         )
         draft["auto_approve_requested_at"] = _utc_now_iso()
         draft["approval_mode"] = "policy_auto"
+        authorize_draft(draft, "auto")
 
     drafts.append(draft)
     print(f"[draft] Saved: {tweet_text[:60]}...")

@@ -11,6 +11,7 @@ import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
+import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
 import "./dashboard.css"
 
 export default function Dashboard() {
@@ -23,6 +24,7 @@ export default function Dashboard() {
   const [drafts, setDrafts] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState("")
+  const [editingRevision, setEditingRevision] = useState(null)
   const [draftAction, setDraftAction] = useState(null)
   const [selectedDraftId, setSelectedDraftId] = useState(null)
   const [draftFeedback, setDraftFeedback] = useState(null)
@@ -163,31 +165,59 @@ export default function Dashboard() {
   async function draftAct(draftId, action, payload = {}) {
     // Backward-compat: if a string is passed (legacy 'edit' callers), treat as editedText
     if (typeof payload === "string") payload = { editedText: payload }
+    const expectedRevision = payload.expectedRevision || (action === "edit"
+      ? editingRevision
+      : drafts.find((draft) => draft.id === draftId)?.revision_identity)
     setDraftAction(draftId)
     setDraftFeedback(null)
     try {
       const res = await fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, draftId, ...payload }),
+        body: JSON.stringify({ action, draftId, ...payload, expectedRevision }),
       })
       const result = await res.json()
       if (!res.ok || result.ok === false) {
-        setDraftFeedback({ type: "error", text: result.error || "Draft action failed" })
+        setDraftFeedback({ type: "error", draftId, text: result.error || "Draft action failed" })
+        if (res.status === 409 || action === "approve") await fetchData()
         return
       }
       setEditingId(null)
       setEditText("")
+      setEditingRevision(null)
       setDraftFeedback({
         type: "success",
-        text: result.action ? `${result.action.replaceAll("_", " ")}.` : "Draft updated.",
+        draftId,
+        text: action === "edit" || action === "select_candidate"
+          ? (result.draft?.review_status === "passed" ? "Text unchanged; current review retained." : "Saved. Previous approval was cancelled. Review this version against its sources before posting.")
+          : action === "review" ? "Human review recorded for this version. You can now approve it for posting."
+          : result.action ? `${result.action.replaceAll("_", " ")}.` : "Draft updated.",
       })
       await fetchData()
     } catch (e) {
       console.error(e)
-      setDraftFeedback({ type: "error", text: e.message })
+      setDraftFeedback({
+        type: "error",
+        draftId,
+        text: `Unable to confirm whether this action completed.${editingId === draftId ? " Your edit is preserved." : ""} Check the refreshed draft before retrying.`,
+      })
+      await fetchData()
     } finally {
       setDraftAction(null)
+    }
+  }
+
+  function startEditing(draft) {
+    setEditingId(draft.id)
+    setEditText(draft.text)
+    setEditingRevision(draft.revision_identity)
+    setDraftFeedback(null)
+  }
+
+  function acceptLatestEditRevision(draft) {
+    if (draft.id === editingId && revisionKey(draft.revision_identity) !== revisionKey(editingRevision)) {
+      setEditingRevision(draft.revision_identity)
+      setDraftFeedback({ type: "success", draftId: draft.id, text: "Your edit is kept. Saving will replace the latest text shown above." })
     }
   }
 
@@ -420,6 +450,9 @@ export default function Dashboard() {
             setEditingId={setEditingId}
             editText={editText}
             setEditText={setEditText}
+            editingRevision={editingRevision}
+            startEditing={startEditing}
+            acceptLatestEditRevision={acceptLatestEditRevision}
             draftAct={draftAct}
             draftAction={draftAction}
             draftFeedback={draftFeedback}
@@ -429,69 +462,60 @@ export default function Dashboard() {
           <>
             {/* DRAFTS — primary view */}
             <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Drafts to Review ({drafts.length})</h2>
+              <h2>Drafts awaiting publication ({drafts.length})</h2>
               {drafts.length > 0 ? (
-                drafts.map((d) => (
-                  <div key={d.id} className={`draft-item ${editingId === d.id ? "highlight" : ""}`}>
-                    <div className="draft-meta">
-                      <span className="draft-type">{d.type}</span>
-                      <span className="draft-time">{timeAgo(d.created_at)}</span>
+                drafts.map((d) => {
+                  const controls = draftReviewControls(d)
+                  return (
+                    <div key={d.id} className="draft-item">
+                      <div className="draft-meta">
+                        <span className="draft-type">{d.type}</span>
+                        <span className="draft-time">{timeAgo(d.created_at)}</span>
+                        <span className="workbench-pill">
+                          {d.publish_blocked ? "publication needs reconciliation" : d.status === "approved" ? "awaiting publication" : controls.needsReview ? "review needed" : d.review_kind === "human" ? "human reviewed" : "model checks current"}
+                        </span>
+                      </div>
+                      <div className="draft-text">{d.text}</div>
+                      <div className="draft-chars">{draftTextLength(d.text)}/280</div>
+                      <div className="draft-actions">
+                        <button
+                          type="button"
+                          className="btn approve sm"
+                          disabled={!!draftAction || !controls.canApprove || editingId === d.id}
+                          onClick={() => draftAct(d.id, "approve")}
+                        >
+                          {draftAction === d.id ? "..." : "Approve + Post"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn sm"
+                          onClick={() => {
+                            setSelectedDraftId(d.id)
+                            if (editingId !== d.id) {
+                              setEditingId(null)
+                              setEditText("")
+                              setEditingRevision(null)
+                            }
+                            setActiveTab("workbench")
+                          }}
+                        >
+                          Review / Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn reject sm"
+                          disabled={!!draftAction || !controls.canEdit}
+                          onClick={() => draftAct(d.id, "reject")}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                      {draftFeedback?.draftId === d.id && (
+                        <div className={`draft-feedback ${draftFeedback.type}`} role="alert">{draftFeedback.text}</div>
+                      )}
                     </div>
-
-                    {editingId === d.id ? (
-                      <>
-                        <textarea
-                          className="draft-edit-area"
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          rows={3}
-                        />
-                        <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
-                          {editText.length}/280
-                        </div>
-                        <div className="draft-actions">
-                          <button
-                            className="btn approve sm"
-                            disabled={draftAction === d.id || editText.length > 280}
-                            onClick={() => draftAct(d.id, "edit", editText)}
-                          >
-                            Save
-                          </button>
-                          <button className="btn sm" onClick={() => setEditingId(null)}>
-                            Cancel
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="draft-text">{d.text}</div>
-                        <div className="draft-chars">{d.text.length}/280</div>
-                        <div className="draft-actions">
-                          <button
-                            className="btn approve sm"
-                            disabled={!!draftAction}
-                            onClick={() => draftAct(d.id, "approve")}
-                          >
-                            {draftAction === d.id ? "..." : "Approve + Post"}
-                          </button>
-                          <button
-                            className="btn sm"
-                            onClick={() => { setEditingId(d.id); setEditText(d.text) }}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn reject sm"
-                            disabled={!!draftAction}
-                            onClick={() => draftAct(d.id, "reject")}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="draft-empty">
                   No drafts waiting. Trigger a run below or compose one manually.

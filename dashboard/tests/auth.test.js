@@ -72,8 +72,8 @@ test("drafts route allows authenticated GET requests", async () => {
 
     assert.equal(response.status, 200)
     const payload = await response.json()
-    assert.equal(payload.drafts.length, 1)
-    assert.equal(payload.drafts[0].id, "draft_1")
+    assert.equal(payload.drafts.length, 2)
+    assert.deepEqual(payload.drafts.map((draft) => draft.id), ["draft_2", "draft_1"])
   } finally {
     globalThis.fetch = originalFetch
   }

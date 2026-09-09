@@ -14,6 +14,7 @@ from copy import deepcopy
 
 from src.editorial.scoring._shared import EditorialScore
 from src.state import DEFAULT_STATE
+from tests.revision_helpers import bind_reviewed_draft, model_review_context
 
 
 def _fresh_state() -> dict:
@@ -23,7 +24,7 @@ def _fresh_state() -> dict:
 
 
 def _critic_ctx(passed: bool = True, verdict: str = "PASS") -> dict:
-    return {"two_bot": {"critic": {"passed": passed, "verdict": verdict}}}
+    return model_review_context("CO2 crossed a grim threshold this week.", passed=passed, verdict=verdict)
 
 
 def _save(bot_state, *, tweet_type="co2_milestone", event_id="e1", review_context=None,
@@ -158,6 +159,7 @@ def _marked_due_draft(*, created_offset_h=0, attempted=False):
         "approval_policy": {"mode": "suggested_auto", "can_auto_approve": True},
         "autoship_on_critic_pass": True,
     }
+    bind_reviewed_draft(draft)
     if attempted:
         draft["autoship_attempted"] = True
     return draft
@@ -235,9 +237,8 @@ class TestProcessDueGuards:
         assert d.get("approval_mode") == "auto"
         assert d.get("autoship_attempted") is not True
 
-    def test_attempt_marked_and_touched_before_post(self, monkeypatch):
-        """codex P1: the one-shot marker is set AND updated_at bumped before the
-        post, so a crash mid-post can't drop it and blind-retry (double-post)."""
+    def test_due_preflight_leaves_attempt_marking_to_sender(self, monkeypatch):
+        """The final sender owns durable attempt marking after revision checks."""
         monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
         from src.orchestrator import posting
         bot_state = _fresh_state()
@@ -253,8 +254,8 @@ class TestProcessDueGuards:
 
         monkeypatch.setattr(posting, "post_approved", fake_post_approved)
         posting.process_due_drafts(bot_state)
-        assert seen["attempted"] is True
-        assert seen["updated_at"] != before_updated  # touched -> wins merge
+        assert seen["attempted"] is None
+        assert seen["updated_at"] == before_updated
 
     def test_stale_source_date_blocks_even_when_freshly_created(self, monkeypatch):
         """codex P2: a freshly-created draft built from stale upstream data (old
@@ -287,6 +288,7 @@ class TestProcessDueGuards:
             "approval_policy": {"mode": "armed_auto", "can_auto_approve": True},
             "review_context": _critic_ctx(),  # has a critic PASS
         }]
+        bind_reviewed_draft(bot_state["drafts"][0])
         posts = _run_due(bot_state, monkeypatch, "posted")
         assert posts == 1
 
@@ -326,6 +328,7 @@ class TestProcessDueGuards:
             "approval_policy": {"mode": "armed_auto", "can_auto_approve": True},
             "review_context": _critic_ctx(),
         }]
+        bind_reviewed_draft(bot_state["drafts"][0])
         _run_due(bot_state, monkeypatch, "rate_limited")
         d = bot_state["drafts"][0]
         assert d.get("autoship_attempted") is not True  # cleared -> retryable next cycle
@@ -342,8 +345,8 @@ class TestProcessDueGuards:
         assert posts == 0
         assert bot_state["drafts"][0]["approval_mode"] == "manual"
 
-    def test_unmarked_armed_auto_draft_unchanged(self, monkeypatch):
-        """Flag OFF + a normal armed_auto draft (no marker) posts exactly as today."""
+    def test_unbound_legacy_armed_auto_draft_needs_review(self, monkeypatch):
+        """A legacy policy marker alone cannot authorize the current revision."""
         monkeypatch.delenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", raising=False)
         from src.orchestrator.common import _utc_after_minutes_iso
         bot_state = _fresh_state()
@@ -355,8 +358,8 @@ class TestProcessDueGuards:
             "approval_policy": {"mode": "armed_auto", "can_auto_approve": True},
         }]
         posts = _run_due(bot_state, monkeypatch, "posted")
-        assert posts == 1
-        assert bot_state["drafts"][0]["status"] == "posted"
+        assert posts == 0
+        assert bot_state["drafts"][0]["approval_mode"] == "manual"
 
 
 class TestRecordsAutoshipExpansion:

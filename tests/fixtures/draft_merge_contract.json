@@ -1,0 +1,74 @@
+[
+  {
+    "name": "edited revision beats stale approval with newer timestamp",
+    "current": {"id":"d1","content_revision":2,"text":"50°C","status":"pending","updated_at":"2026-09-08T12:00:00Z"},
+    "incoming": {"id":"d1","content_revision":1,"text":"40°C","status":"approved","updated_at":"2026-09-08T13:00:00Z","approval_binding":{"mode":"auto"},"auto_approve_at":"2026-09-08T13:30:00Z"},
+    "expected": {"content_revision":2,"text":"50°C","status":"pending"},
+    "absent": ["approval_binding","auto_approve_at"],
+    "history": true,
+    "conflict": false
+  },
+  {
+    "name": "equal revision divergent edits block authorization",
+    "current": {"id":"d1","content_revision":2,"text":"50°C","status":"pending","updated_at":"2026-09-08T12:00:00Z"},
+    "incoming": {"id":"d1","content_revision":2,"text":"51°C","status":"approved","updated_at":"2026-09-08T13:00:00Z","approval_binding":{"mode":"manual"},"auto_approve_at":"2026-09-08T13:30:00Z","autoship_on_critic_pass":true},
+    "expected": {"content_revision":2,"text":"51°C","status":"approved"},
+    "absent": ["approval_binding","auto_approve_at","autoship_on_critic_pass"],
+    "history": true,
+    "conflict": true
+  },
+  {
+    "name": "older receipt does not label edited text published",
+    "current": {"id":"d1","content_revision":2,"text":"50°C","status":"pending","updated_at":"2026-09-08T12:00:00Z"},
+    "incoming": {"id":"d1","content_revision":1,"text":"40°C","status":"posted","updated_at":"2026-09-08T13:00:00Z","tweet_id":"tweet_1","publish_outcome":"confirmed","posted_at":"2026-09-08T13:00:00Z"},
+    "expected": {"content_revision":2,"text":"50°C","status":"pending","autoship_attempted":true,"publish_outcome":"unknown"},
+    "absent": ["tweet_id","posted_at"],
+    "history": true,
+    "conflict": false
+  },
+  {
+    "name": "unknown attempt survives stale same revision row",
+    "current": {"id":"d1","content_revision":1,"text":"40°C","status":"approved","updated_at":"2026-09-08T12:00:00Z","autoship_attempted":true,"last_publish_attempt_at":"2026-09-08T12:00:00Z","publish_outcome":"unknown"},
+    "incoming": {"id":"d1","content_revision":1,"text":"40°C","status":"pending","updated_at":"2026-09-08T13:00:00Z"},
+    "expected": {"content_revision":1,"text":"40°C","status":"pending","autoship_attempted":true,"publish_outcome":"unknown","last_publish_attempt_at":"2026-09-08T12:00:00Z"},
+    "absent": [],
+    "history": false,
+    "conflict": false
+  },
+  {
+    "name": "proven not sent resolves the same attempt",
+    "current": {"id":"d1","content_revision":1,"text":"40°C","status":"approved","updated_at":"2026-09-08T12:00:00Z","autoship_attempted":true,"last_publish_attempt_at":"2026-09-08T12:00:00Z","publish_outcome":"submitted"},
+    "incoming": {"id":"d1","content_revision":1,"text":"40°C","status":"pending","updated_at":"2026-09-08T13:00:00Z","last_publish_attempt_at":"2026-09-08T12:00:00Z","publish_outcome":"not_sent"},
+    "expected": {"content_revision":1,"text":"40°C","status":"pending","publish_outcome":"not_sent"},
+    "absent": [],
+    "history": false,
+    "conflict": false
+  },
+  {
+    "name": "confirmed receipt survives stale same revision row",
+    "current": {"id":"d1","content_revision":1,"text":"40°C","status":"posted","updated_at":"2026-09-08T12:00:00Z","tweet_id":"tweet_1","publish_outcome":"confirmed","posted_at":"2026-09-08T12:00:00Z"},
+    "incoming": {"id":"d1","content_revision":1,"text":"40°C","status":"pending","updated_at":"2026-09-08T13:00:00Z"},
+    "expected": {"content_revision":1,"text":"40°C","status":"posted","tweet_id":"tweet_1","publish_outcome":"confirmed","posted_at":"2026-09-08T12:00:00Z"},
+    "absent": [],
+    "history": false,
+    "conflict": false
+  },
+  {
+    "name": "revocation beats stale same-text approval with newer timestamp",
+    "current": {"id":"d1","content_revision":1,"decision_revision":3,"text":"40°C","status":"pending","updated_at":"2026-09-08T12:00:00Z"},
+    "incoming": {"id":"d1","content_revision":1,"decision_revision":2,"text":"40°C","status":"approved","updated_at":"2026-09-08T13:00:00Z","approval_binding":{"mode":"auto","decision_revision":2},"auto_approve_at":"2026-09-08T13:30:00Z"},
+    "expected": {"content_revision":1,"decision_revision":3,"text":"40°C","status":"pending"},
+    "absent": ["approval_binding","auto_approve_at"],
+    "history": true,
+    "conflict": false
+  },
+  {
+    "name": "equal decision counters with different authorizations block",
+    "current": {"id":"d1","content_revision":1,"decision_revision":2,"text":"40°C","status":"approved","updated_at":"2026-09-08T12:00:00Z","approval_binding":{"mode":"manual","publish_intent_id":"first","decision_revision":2}},
+    "incoming": {"id":"d1","content_revision":1,"decision_revision":2,"text":"40°C","status":"approved","updated_at":"2026-09-08T13:00:00Z","approval_binding":{"mode":"manual","publish_intent_id":"second","decision_revision":2}},
+    "expected": {"content_revision":1,"decision_revision":2,"text":"40°C","status":"approved"},
+    "absent": ["approval_binding"],
+    "history": true,
+    "conflict": true
+  }
+]

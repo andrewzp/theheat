@@ -586,11 +586,11 @@ class TestSaveDraftForcing:
         state["drafts"] = []
         return state
 
-    def _critic_pass_context(self, *, entries=None, cited_impact=None) -> dict:
-        two_bot: dict = {
-            "signal_kind": "all_time_record",
-            "critic": {"passed": True, "verdict": "PASS", "kill_reason": None},
-        }
+    def _critic_pass_context(self, text, *, entries=None, cited_impact=None) -> dict:
+        from tests.revision_helpers import model_review_context
+
+        two_bot = model_review_context(text)["two_bot"]
+        two_bot["signal_kind"] = "all_time_record"
         if entries is not None:
             two_bot["human_impact"] = entries
             two_bot["cited_impact"] = cited_impact
@@ -600,7 +600,10 @@ class TestSaveDraftForcing:
         from src.orchestrator.draft_save import save_draft
 
         monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
-        rc = self._critic_pass_context(entries=[_impact()], cited_impact=True)
+        rc = self._critic_pass_context(
+            "Per NIFC, 3 firefighters were killed on the Alpine fire.",
+            entries=[_impact()], cited_impact=True,
+        )
         assert save_draft(
             "Per NIFC, 3 firefighters were killed on the Alpine fire.",
             bot_state, "all_time_high", event_id="e1",
@@ -617,7 +620,10 @@ class TestSaveDraftForcing:
         from src.orchestrator.draft_save import save_draft
 
         monkeypatch.setenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", "1")
-        rc = self._critic_pass_context(entries=[_impact()], cited_impact=False)
+        rc = self._critic_pass_context(
+            "Island Pond, Vermont hit 92F, hottest in 37 years of records.",
+            entries=[_impact()], cited_impact=False,
+        )
         assert save_draft(
             "Island Pond, Vermont hit 92F, hottest in 37 years of records.",
             bot_state, "all_time_high", event_id="e2",
@@ -632,7 +638,10 @@ class TestSaveDraftForcing:
         from src.orchestrator.draft_save import save_draft
 
         monkeypatch.delenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", raising=False)
-        rc = self._critic_pass_context(entries=[_impact()], cited_impact=True)
+        rc = self._critic_pass_context(
+            "Per NIFC, 3 firefighters were killed on the Alpine fire.",
+            entries=[_impact()], cited_impact=True,
+        )
         # hot10 with strong scores would normally arm the policy_auto window.
         strong = {"total": 80}
         assert save_draft(
@@ -654,7 +663,7 @@ class TestSaveDraftForcing:
         from src.orchestrator.draft_save import save_draft
 
         monkeypatch.delenv("THEHEAT_AUTOSHIP_ON_CRITIC_PASS", raising=False)
-        rc = self._critic_pass_context()
+        rc = self._critic_pass_context("A fire in Mali is radiating 361 MW of heat.")
         assert save_draft(
             "A fire in Mali is radiating 361 MW of heat.",
             bot_state, "fire", event_id="e4",
