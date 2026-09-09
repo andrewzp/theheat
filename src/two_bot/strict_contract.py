@@ -16,7 +16,7 @@ from src.two_bot.json_utils import json_default
 CONTRACT_VERSION = 1
 CLAIM_KINDS = frozenset({"number", "date", "named_entity", "comparison", "era_anchor", "peer_comparison"})
 _SOURCE_KEYS = frozenset({"source", "data_source", "source_name", "source_product", "source_url", "url"})
-_DATE_KEYS = frozenset({"date", "valid_date", "as_of", "issued_at", "retrieved_at", "signal_date", "start_date", "end_date", "valid_start", "valid_end", "cutoff", "comparison_before"})
+_DATE_KEYS = frozenset({"date", "valid_date", "as_of", "issued_at", "retrieved_at", "signal_date", "start_date", "end_date", "valid_start", "valid_end", "cutoff", "verified_source_cutoff", "requested_cutoff", "comparison_before"})
 _OPENERS = frozenset({"A", "An", "The", "This", "That", "These", "Those", "Some", "Last", "First", "No", "Not", "It", "Its", "In", "At", "On", "For", "Over", "Under", "From", "By", "With", "Without", "But", "And", "Or", "If", "As"})
 
 
@@ -105,6 +105,38 @@ def bundle_schema_issues(bundle) -> list[tuple[str, str, str]]:
         issues.append(("invalid_current_facts", "current_facts", "Facts require nonempty labels and explicit values"))
     if not _has_primary_source(payload.get("raw_signal_dump"), payload.get("current_facts")):
         issues.append(("missing_provenance", "raw_signal_dump", "An event ID or place name is not a source or source-record identity"))
+
+    for field in ("raw_signal_dump", "historical_context"):
+        if not isinstance(payload.get(field), dict):
+            issues.append(("invalid_evidence_structure", field, "Supply an evidence object; preserve malformed input for repair"))
+
+    def temperature_structure(evidence: Any, path: str) -> None:
+        if evidence is None:
+            return  # Unknown evidence does not become an asserted observation.
+        if not isinstance(evidence, dict):
+            issues.append(("invalid_evidence_structure", path, "Source evidence must be an object"))
+            return
+        baseline = evidence.get("baseline")
+        if baseline is None:
+            return
+        if not isinstance(baseline, dict):
+            issues.append(("invalid_evidence_structure", f"{path}.baseline", "Baseline must be an object"))
+            return
+        if baseline.get("variable") is not None and not isinstance(baseline["variable"], str):
+            issues.append(("invalid_evidence_structure", f"{path}.baseline.variable", "Selected baseline variable must be a name"))
+        variables = baseline.get("variables", {})
+        if not isinstance(variables, dict) or any(not isinstance(row, dict) for row in variables.values()):
+            issues.append(("invalid_evidence_structure", f"{path}.baseline.variables", "Each named baseline variable requires an object"))
+        members = baseline.get("members", [])
+        if not isinstance(members, list) or any(not isinstance(member, dict) for member in members):
+            issues.append(("invalid_evidence_structure", f"{path}.baseline.members", "Baseline members must be evidence objects"))
+            return
+        for index, member in enumerate(members):
+            temperature_structure(member.get("evidence"), f"{path}.baseline.members[{index}].evidence")
+
+    raw = payload.get("raw_signal_dump")
+    if isinstance(raw, dict):
+        temperature_structure(raw.get("evidence"), "raw_signal_dump.evidence")
 
     def dates(value: Any, path: str) -> None:
         if isinstance(value, dict):

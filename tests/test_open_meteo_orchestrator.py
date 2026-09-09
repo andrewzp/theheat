@@ -62,7 +62,7 @@ def test_unqualified_record_streak_is_withheld_and_daily_source_telemetry_surviv
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
     assert source_run["drafted"] == 1
-    assert any("temperature_aggregate_unqualified" in row["reasons"] for row in bot_state["suppressions"])
+    assert any(issue["code"] == "temperature_aggregate_unqualified" for row in bot_state["suppressions"] for issue in row.get("evidence_readiness", {}).get("issues", []))
 
 
 _FRANCE_CLUSTER = [
@@ -185,7 +185,7 @@ def _capture_enqueue(monkeypatch, runner):
     return enqueued
 
 
-def test_unqualified_records_cluster_does_not_suppress_individual_drafts(monkeypatch):
+def test_unqualified_records_cluster_does_not_suppress_individual_drafts(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 7, 8)
@@ -207,7 +207,7 @@ def test_unqualified_records_cluster_does_not_suppress_individual_drafts(monkeyp
     assert "simultaneous_records" not in enqueued  # flat aggregate is also unqualified
 
 
-def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch):
+def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch, synthetic_bundle_provenance):
     # The heart of the tier rework: a spatially-coherent burst of DAILY-only records
     # is not significant, so the class must NOT fire — and the daily records post
     # individually (they are not suppressed, because no cluster fired).
@@ -231,7 +231,7 @@ def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch):
     assert "simultaneous_records" not in enqueued   # aggregate evidence remains unqualified
 
 
-def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch):
+def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch, synthetic_bundle_provenance):
     # The class is GLOBAL: world cities (evaluate_city) emit monthly/all-time highs
     # but no calendar_date_high, so a cluster built purely from monthly records must
     # fire — with zero daily input. Their individual monthly drafts survive.
@@ -279,7 +279,7 @@ def test_world_monthly_same_year_prior_record_still_clusters(monkeypatch):
     assert enqueued.count("heat_records_cluster") == 0   # same-year monthlies cannot bypass aggregation qualification
 
 
-def test_withheld_cluster_keeps_daily_draft_when_monthly_guard_fails(monkeypatch):
+def test_withheld_cluster_keeps_daily_draft_when_monthly_guard_fails(monkeypatch, synthetic_bundle_provenance):
     # Aggregate evidence is unqualified. Its membership cannot suppress an
     # otherwise eligible daily draft when the individual monthly guard fails.
     from src.orchestrator.sources import open_meteo as runner
@@ -302,7 +302,7 @@ def test_withheld_cluster_keeps_daily_draft_when_monthly_guard_fails(monkeypatch
     assert "monthly_high" not in enqueued                 # cascade guard-fails same-year monthly
 
 
-def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch):
+def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 7, 8)

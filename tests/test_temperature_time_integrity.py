@@ -335,7 +335,7 @@ def test_reduced_temperature_aggregates_withhold_before_writing_with_retained_re
     assert not _enqueue_story_candidate(state, bundle=bundle, score={'total': 80, 'threshold': 70}, source='open_meteo_extreme_signals', legacy_type=kind, event_id=bundle.event_id, review_context={})
     assert not state.get('_triage_queue')
     assert bundle.raw_signal_dump['temperature_aggregate_review']['reasons']
-    assert any('temperature_aggregate_unqualified' in row['reasons'] for row in state['suppressions'])
+    assert any(issue["code"] == "temperature_aggregate_unqualified" for row in state["suppressions"] for issue in row.get("evidence_readiness", {}).get("issues", []))
 
 
 def test_temperature_aggregate_containment_does_not_relabel_unrelated_reanalysis_or_marine():

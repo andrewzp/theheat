@@ -325,7 +325,7 @@ def write_tweet(
     # deterministically here, before any model call — the same decision the
     # live model reaches on its own, but reliable and free. See
     # OUT_OF_SCOPE_SIGNAL_KINDS.
-    if bundle.signal_kind in OUT_OF_SCOPE_SIGNAL_KINDS:
+    if isinstance(bundle.signal_kind, str) and bundle.signal_kind in OUT_OF_SCOPE_SIGNAL_KINDS:
         return WriterResult(
             tweet=None,
             kill_reason=(

@@ -116,6 +116,10 @@ def attach_evidence(bundle, evidence: dict) -> None:
 
 def project_story_evidence(bundle) -> None:
     """Give writer/checker the same explicit source type, day, baseline and limits."""
+    # Construction must retain malformed source packets for the strict audit,
+    # rather than raising before its actionable diagnostic can be recorded.
+    if not isinstance(bundle.raw_signal_dump, dict) or not isinstance(bundle.current_facts, list) or not isinstance(bundle.historical_context, dict):
+        return
     aggregate_failures = temperature_aggregate_failures(bundle)
     if aggregate_failures:
         # Keep the detection reviewable even while generation is withheld. The
@@ -133,7 +137,9 @@ def project_story_evidence(bundle) -> None:
             "value": "; ".join(aggregate_failures),
         })
     evidence = bundle.raw_signal_dump.get("evidence") or {}
-    if not evidence:
+    if not isinstance(evidence, dict) or not evidence:
+        return
+    if evidence.get("baseline") is not None and not isinstance(evidence["baseline"], dict):
         return
     if (
         evidence.get("domain") != "temperature"
@@ -197,6 +203,8 @@ def temperature_aggregate_failures(bundle) -> list[str]:
     or a marine compound as a forecast merely because its name mentions heat.
     """
     kind = bundle.signal_kind
+    if not isinstance(kind, str):
+        return []  # The strict audit owns the invalid signal-kind diagnostic.
     raw = bundle.raw_signal_dump if isinstance(bundle.raw_signal_dump, dict) else {}
     if kind in {"heat_records_cluster", "simultaneous_records"}:
         return ["temperature aggregate scope unverified: same local calendar labels do not establish simultaneous observations; every member needs a qualified source/date/baseline comparison"]

@@ -2779,10 +2779,11 @@ class TestSynthesisStage:
             return True
         monkeypatch.setattr(main, "_try_two_bot_draft", fake_two_bot)
 
-        main.run_alerts(bot_state)
+        from src.orchestrator.sources.synthesis import run_synthesis
+        run_synthesis(bot_state, None)
 
         assert captured == {}  # Source reduction has no member dates/baselines.
-        assert any("temperature_aggregate_unqualified" in row["reasons"] for row in bot_state["suppressions"])
+        assert any(issue["code"] == "temperature_aggregate_unqualified" for row in bot_state["suppressions"] for issue in row.get("evidence_readiness", {}).get("issues", []))
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
         assert "California" not in cooldown
 
