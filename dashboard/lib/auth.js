@@ -25,17 +25,58 @@ function unauthorizedResponse() {
 function unconfiguredResponse() {
   return new Response("Dashboard authentication is not configured", {
     status: 503,
+    headers: { "Cache-Control": "no-store" },
   })
 }
 
-export function verifyDashboardAuth(request) {
-  // App-level HTTP Basic auth is an OPTIONAL second layer. Set DASHBOARD_AUTH_DISABLED=1
-  // to turn it off intentionally and rely on Vercel Deployment Protection (Vercel
-  // Authentication) as the sole gate. Without this explicit opt-out, unconfigured auth
-  // still fails CLOSED in production (503 below) so a forgotten config never exposes the
-  // dashboard — which can trigger runs and post tweets.
-  if (process.env.DASHBOARD_AUTH_DISABLED === "1") {
+function verifyProtectedDeployment(request) {
+  // VERCEL_URL is the generated deployment hostname, whose outer Vercel
+  // authentication gate is verified during release. Production aliases can be
+  // public on Hobby plans, so they must never serve dashboard data directly.
+  const hostname = (process.env.VERCEL_URL || "").toLowerCase()
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app$/.test(hostname)) {
+    return { ok: false, response: unconfiguredResponse() }
+  }
+
+  const requestedUrl = new URL(request.url)
+  const rawHost = (request.headers.get("host") || "").toLowerCase()
+  // Forwarded headers can influence a framework's request URL. Requiring the
+  // raw Host as well prevents either representation alone granting access.
+  if (requestedUrl.hostname === hostname && rawHost === hostname) {
     return { ok: true, response: null }
+  }
+
+  const destination = new URL(`https://${hostname}`)
+  if (requestedUrl.hostname !== hostname && (request.method === "GET" || request.method === "HEAD")) {
+    // Assign path/query separately so a path beginning // cannot change origin.
+    destination.pathname = requestedUrl.pathname
+    destination.search = requestedUrl.search
+    return {
+      ok: false,
+      response: new Response(null, {
+        status: 307,
+        headers: { Location: destination.href, "Cache-Control": "no-store" },
+      }),
+    }
+  }
+
+  return {
+    ok: false,
+    response: Response.json({
+      error: "Sign in at the protected dashboard address before making changes.",
+      code: "sign_in_required",
+      signInUrl: destination.href,
+    }, { status: 403, headers: { "Cache-Control": "no-store" } }),
+  }
+}
+
+export function verifyDashboardAuth(request) {
+  // Disabling Basic auth in production relies on the verified outer Vercel gate
+  // at the generated deployment URL. Missing platform configuration fails closed.
+  if (process.env.DASHBOARD_AUTH_DISABLED === "1") {
+    return process.env.NODE_ENV === "production"
+      ? verifyProtectedDeployment(request)
+      : { ok: true, response: null }
   }
 
   const dashboardUsername = getDashboardUsername()

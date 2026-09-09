@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.3] - 2026-09-08
+
+### Require the protected Vercel address when app passwords are disabled
+
+- Production verification found that the dashboard's stable aliases allowed unauthenticated access while the generated deployment URL required Vercel sign-in. The existing Hobby/Standard Protection setting excludes production aliases.
+- With app-level passwords disabled, production now serves the control panel only on its generated `VERCEL_URL`. Safe requests to other hosts redirect there; mutation requests on those hosts are refused. Missing deployment configuration fails closed, and forwarded-host headers cannot grant access.
+- The shared authentication guard enforces this in both middleware and API routes. Existing Vercel/Google sign-in remains the authentication authority; no paid protection add-on, additional password or bypass token is introduced.
+
 ## [0.9.108.2] - 2026-09-08
 
 ### Revision-safe draft review and publication (P02)

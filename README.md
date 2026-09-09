@@ -41,6 +41,23 @@ escape hatch and test target. The same gist also holds `world_threshold_cache.js
 kept out of `state.json` so core state stays lean). Do not edit the production gist by
 hand. State changes should flow through bot code and the normal merge/write path.
 
+## Dashboard access
+
+The production dashboard uses Vercel Authentication. On the current Hobby plan,
+Standard Protection protects generated deployment URLs but leaves production
+aliases public. When `DASHBOARD_AUTH_DISABLED=1`, the application therefore
+redirects alias page reads to its generated `VERCEL_URL` and refuses alias API
+mutations. Both middleware and API handlers enforce this boundary. Production
+fails closed if the generated address is unavailable.
+
+Keep Vercel Standard Protection and automatic system environment variables
+enabled. The application does not validate a Vercel login itself; Vercel must
+authenticate requests before they reach the generated deployment address. After
+each deployment, verify that anonymous requests to the aliases redirect and that
+the generated address requires sign-in. Existing alias bookmarks still work;
+the resulting dashboard address changes with each deployment. See
+[Vercel's protection scopes](https://vercel.com/docs/deployment-protection).
+
 ## Project Map
 
 - `PIPELINE.md`: current source-to-draft flow and stage glossary.

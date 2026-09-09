@@ -222,15 +222,15 @@ test("middleware blocks public dashboard access", async () => {
   assert.equal(passed.status, 200)
 })
 
-test("DASHBOARD_AUTH_DISABLED turns off app auth (Vercel Deployment Protection is the sole gate)", async () => {
-  process.env.NODE_ENV = "production"
+test("DASHBOARD_AUTH_DISABLED allows intentional local development without app auth", async () => {
+  process.env.NODE_ENV = "development"
   process.env.DASHBOARD_AUTH_DISABLED = "1"
   delete process.env.DASHBOARD_USERNAME
   delete process.env.DASHBOARD_PASSWORD
 
   try {
     const { verifyDashboardAuth, requireDashboardAuth } = await importFresh("lib/auth.js")
-    // no credentials on the request, yet auth passes (the flag is the intentional opt-out)
+    // Local development retains the explicit opt-out without deployment metadata.
     assert.equal(verifyDashboardAuth(new Request("http://localhost/")).ok, true)
     assert.equal(requireDashboardAuth(new Request("http://localhost/api/trigger")), null)
     // the site-wide middleware lets it through too
