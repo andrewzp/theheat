@@ -229,23 +229,24 @@ def test_gemini_requests_constrained_output_in_the_same_call(module, fn, schema,
 HISTORICAL_CASES = json.loads((Path(__file__).parents[1] / "fixtures/historical_scientific_cases.json").read_text())["cases"]
 
 
-@pytest.mark.parametrize("case_id,signal,tweet,evidence", [
-    ("alert_threshold_is_not_a_rain_record", "precipitation_extreme", "Paris broke its 150 mm rainfall record.", {"alert_threshold_mm": 150, "previous_record_mm": 150}),
-    ("forecast_is_not_an_observed_record", "temperature", "Paris set a new record at 40 C.", {"evidence_type": "forecast"}),
-    ("humidity_requires_moisture_evidence", "temperature", "Paris has a wet-bulb burden at 40 C.", {"evidence_type": "forecast"}),
-    ("forecast_landfall_is_not_completed_landfall", "cyclone_landfall", "Bavi made landfall in China.", {"landfall": {"status": "forecast"}}),
-    ("thermal_detection_is_not_verified_wildfire", "fire", "A Congo wildfire burns at 300 MW.", {"evidence_type": "thermal_detection", "confidence": 95}),
-])
-def test_targeted_historical_failure_classes_block_before_model(case_id, signal, tweet, evidence, monkeypatch):
-    # Synthetic regression shapes are not replayed historical source packets.
-    case = next(case for case in HISTORICAL_CASES if case["case_id"] == case_id)
-    assert case["evidence_limit"]
-    bundle = replace(_bundle(), signal_kind=signal)
-    bundle.raw_signal_dump["evidence"] = evidence
-    call = MagicMock(return_value=response(claims=[{"text": tweet, "kind": "comparison"}]))
+# The shared executable registry now owns these historical regression shapes.
+# Keep this direct checker boundary in addition to the pipeline harness.
+from src.evaluation.historical import load_catalog, structural_bundle
+
+_HISTORICAL_PROBES = load_catalog()[1]
+
+
+@pytest.mark.parametrize("spec,variant", [
+    (spec, variant) for spec in _HISTORICAL_PROBES.values() for variant in spec["variants"]
+    if variant["expected_outcome"] == "targeted_rejection"
+], ids=lambda item: item.get("probe_id", item.get("case_id")))
+def test_targeted_historical_failure_classes_block_before_model(spec, variant, monkeypatch):
+    from src.evaluation.historical import failure_codes
+    call = MagicMock()
     monkeypatch.setattr(checker, "_call_gemini", call)
-    result = checker.fact_check(tweet, [], bundle, {})
+    result = checker.fact_check(variant["tweet"], [], structural_bundle(spec), {})
     assert not result.passed
+    assert set(variant["expected_codes"]).issubset(failure_codes(result.failures))
     call.assert_not_called()
 
 

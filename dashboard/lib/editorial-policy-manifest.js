@@ -4,7 +4,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/draft-revisions.js": "0ec65e63b612baf1bec8a613d2469cd3e68a8c1db60450cd7259fe6d5e23f6a0",
     "dashboard/lib/editorial-policy.js": "df41493de12fe26dccd7d93a9c710a6a7bb97a4871ad7e086578ba19b388f568",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
-    "src/data/ghcn.py": "7d025973f1e2435873373482ce6bb4fb4fc4978b3a9af569bab73d4e856a5907",
+    "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
@@ -43,5 +43,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "356d431ccbd0e5eed0d7c21acfd20cacf6cade1b9d9a2b8654747740af08721e"
   },
   "schema_version": 1,
-  "source_sha256": "6ad836d1ddef65e270b3e53a7d3b4289d7a145d375819c3cee8a7490ca6ada41"
+  "source_sha256": "129220d73ac06613d1c0832ccff7ebe9a5d8d2812e39da86a7ed1f6017937d9b"
 }

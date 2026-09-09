@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.12] - 2026-09-09
+
+### Bounded station rotation and honest historical/canary checks
+
+- Rotate the existing 20-per-run GHCN archive budget through consecutive four-hour windows. Tracked and new candidates retain reserved allocations, including odd budgets and overlapping pools. Metrics expose backlog and conditional sweep bounds; missed runs, changing pools and source failures prevent a general freshness guarantee.
+- Add an offline runner anchored to the immutable historical audit. Exact retained text remains private. Targeted text checks, engineered evidence probes, incomplete retained packets and frozen NOAA-byte observations are reported separately; unresolved product/geography cases remain explicit gaps rather than positive gold.
+- Repair two canary fixtures that failed evidence validation before reaching the writer. All three now carry explicit synthetic provenance and defensible scope, and preflight runs before any provider call. Compact complete single sentences remain accepted. Paid cadence, producer threshold and retry budget are unchanged; live writer access remains unverified.
+- Refresh GPM access diagnosis from existing logs, secret-update metadata and retained expiry evidence. Expiry is the strongly supported first blocker; direct S3 from the current runner is a separate latent access-contract problem. Neither access recovery nor the historical Barrow discrepancy is claimed resolved.
+- Validation: 3,465 offline Python tests and 293 dashboard tests, production build, standard Ruff/mypy (135 source files), direct GHCN checks and policy-manifest validation passed. 41 paid tests excluded. Independent selection review covered 1,200 randomized workloads; the integrated private historical run recorded no unexpected observations or provider calls.
+- Automatic publication remains paused. No account spending, credential rotation, source backfill, paid canary, test tweet or public correction is part of this release.
+
 ## [0.9.108.11] - 2026-09-09
 
 ### Current-policy approval and broader qualified source supply

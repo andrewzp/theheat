@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "scope": "Synthetic structural probes mapped to the frozen audit catalog; controls are not positive editorial gold.",
+  "cases": [
+    {
+      "case_id": "alert_threshold_is_not_a_rain_record",
+      "signal_kind": "precipitation_extreme",
+      "structural_evidence": {
+        "alert_threshold_mm": 150,
+        "previous_record_mm": 150
+      },
+      "capability_limit": "The total, integration window and product still need independent validation.",
+      "exact_text_expected_codes": [
+        "unwarranted_record"
+      ],
+      "variants": [
+        {
+          "probe_id": "threshold_as_record",
+          "tweet": "Paris broke its 150 mm rainfall record.",
+          "expected_codes": [
+            "unwarranted_record"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "threshold_control",
+          "tweet": "A satellite estimate of 180 mm crosses the 150 mm alert threshold.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required"
+        }
+      ],
+      "required_scientific_outcome": "reject_unsupported_claim"
+    },
+    {
+      "case_id": "forecast_is_not_an_observed_record",
+      "signal_kind": "temperature",
+      "structural_evidence": {
+        "evidence_type": "forecast"
+      },
+      "capability_limit": "Forecast type cannot establish an observed record; no true observed maximum is supplied by this probe.",
+      "exact_text_expected_codes": [
+        "temperature_forecast_as_observation"
+      ],
+      "variants": [
+        {
+          "probe_id": "forecast_record",
+          "tweet": "Paris set a new record at 40 C.",
+          "expected_codes": [
+            "forecast_as_observation"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "forecast_hit",
+          "tweet": "Paris hit 40\u00b0C.",
+          "expected_codes": [
+            "temperature_forecast_as_observation"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "forecast_control",
+          "tweet": "Paris is forecast to reach 40\u00b0C.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required"
+        }
+      ],
+      "required_scientific_outcome": "reject_unsupported_claim"
+    },
+    {
+      "case_id": "humidity_requires_moisture_evidence",
+      "signal_kind": "temperature",
+      "structural_evidence": {
+        "evidence_type": "forecast"
+      },
+      "capability_limit": "This tests missing diagnostic inputs, not local seasonal climatology or every causal paraphrase.",
+      "exact_text_expected_codes": [
+        "missing_moisture_evidence"
+      ],
+      "variants": [
+        {
+          "probe_id": "temperature_only_moisture",
+          "tweet": "Paris has a wet-bulb burden at 40 C.",
+          "expected_codes": [
+            "missing_moisture_evidence"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "moisture_control",
+          "tweet": "Paris is forecast to reach 40\u00b0C.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required"
+        }
+      ],
+      "required_scientific_outcome": "reject_unsupported_claim"
+    },
+    {
+      "case_id": "forecast_landfall_is_not_completed_landfall",
+      "signal_kind": "cyclone_landfall",
+      "structural_evidence": {
+        "landfall": {
+          "status": "forecast"
+        }
+      },
+      "capability_limit": "No exact JTWC bulletin replay or subday position reconciliation; a typed confirmation is not independently certified.",
+      "exact_text_expected_codes": [
+        "unconfirmed_landfall"
+      ],
+      "variants": [
+        {
+          "probe_id": "completed_landfall",
+          "tweet": "Bavi made landfall in China.",
+          "expected_codes": [
+            "unconfirmed_landfall"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "unrelated_qualifier",
+          "tweet": "No rain fell, but Bavi made landfall in China.",
+          "expected_codes": [
+            "unconfirmed_landfall"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "landfall_control",
+          "tweet": "Bavi may make landfall in China.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required"
+        }
+      ],
+      "required_scientific_outcome": "reject_unsupported_claim"
+    },
+    {
+      "case_id": "thermal_detection_is_not_verified_wildfire",
+      "signal_kind": "fire",
+      "structural_evidence": {
+        "evidence_type": "thermal_detection",
+        "confidence": 100
+      },
+      "capability_limit": "No exact pixel classification; do not infer a proven volcanic source. Native confidence is not incident confidence.",
+      "exact_text_expected_codes": [
+        "unverified_incident",
+        "unwarranted_fire_cause"
+      ],
+      "variants": [
+        {
+          "probe_id": "wildfire_identity",
+          "tweet": "A Congo wildfire burns at 300 MW.",
+          "expected_codes": [
+            "unverified_incident"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "classification_only",
+          "tweet": "A very-high-intensity fire in Congo, satellite-confirmed at 100% confidence.",
+          "expected_codes": [
+            "unverified_incident"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "cause_only",
+          "tweet": "A thermal anomaly appeared after the convective lid broke.",
+          "expected_codes": [
+            "unwarranted_fire_cause"
+          ],
+          "expected_outcome": "targeted_rejection"
+        },
+        {
+          "probe_id": "thermal_control",
+          "tweet": "A thermal anomaly: fire radiative power 300 MW, reported satellite confidence 100%.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required"
+        }
+      ],
+      "required_scientific_outcome": "reject_unsupported_claim"
+    },
+    {
+      "case_id": "material_precipitation_product_disagreement",
+      "signal_kind": "precipitation_extreme",
+      "structural_evidence": {
+        "reported_satellite_estimate_mm": 356.2,
+        "nearby_gauge_total_mm": 1.8,
+        "window_days": 7,
+        "granules_recovered": false,
+        "exact_windows_reconciled": false,
+        "spatial_supports_reconciled": false
+      },
+      "capability_limit": "No runtime cross-product reconciliation guard; original granules, masks, spatial support and integration windows remain missing.",
+      "exact_text_expected_codes": [],
+      "variants": [
+        {
+          "probe_id": "unreconciled_rain",
+          "tweet": "Barrow received 356.2 mm of rain in seven days.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required",
+          "required_capability": "product_disagreement_quarantine_not_yet_enforced"
+        }
+      ],
+      "required_scientific_outcome": "source_review_required"
+    },
+    {
+      "case_id": "record_progression_and_later_quality_revision",
+      "signal_kind": "temperature",
+      "structural_evidence": {},
+      "capability_limit": "Frozen current NOAA bytes can exclude a suspect value and retain findings; historical QC timing and official record status remain unknown.",
+      "exact_text_expected_codes": [],
+      "variants": [],
+      "required_scientific_outcome": "source_review_required"
+    },
+    {
+      "case_id": "editorial_region_must_not_override_country",
+      "signal_kind": "fire",
+      "structural_evidence": {
+        "evidence_type": "thermal_detection",
+        "lat": 10.68,
+        "lon": -13.49,
+        "editorial_region_country": "Mali",
+        "boundary_membership": "not_available_in_probe"
+      },
+      "capability_limit": "Country boundary validation remains unenforced here. T02 is memory-only with unverified publication.",
+      "exact_text_expected_codes": [],
+      "variants": [
+        {
+          "probe_id": "country_mismatch",
+          "tweet": "A 300 MW thermal anomaly was detected in Mali.",
+          "expected_codes": [],
+          "expected_outcome": "verification_required",
+          "required_capability": "versioned_country_boundary_check_not_yet_enforced"
+        }
+      ],
+      "required_scientific_outcome": "source_review_required"
+    }
+  ]
+}
