@@ -17,6 +17,17 @@ import pytest
 from src.two_bot.types import MemorySlice, StoryBundle
 
 
+def _synthetic_canary_source(bundle: StoryBundle, product: str) -> StoryBundle:
+    """Explicit fixture provenance, never a claim of a retrieved agency record."""
+    bundle.raw_signal_dump.update({
+        "source_name": "TheHeat synthetic voice-canary fixture",
+        "source_product": product,
+        "fixture_only": True,
+        "fixture_note": "Invented test values, not a verified real event or publication evidence.",
+    })
+    return bundle
+
+
 def pytest_configure(config):
     config.addinivalue_line(
         "markers",
@@ -144,7 +155,7 @@ def verkhoyansk_monthly_high_bundle() -> StoryBundle:
     Exercises: geographic orientation rule (Verkhoyansk → "Verkhoyansk,
     Russia"), Celsius-first audience routing, non-US audience_unit.
     """
-    return StoryBundle(
+    bundle = StoryBundle(
         signal_kind="monthly_high",
         where="Verkhoyansk, Russia",
         when="2026-04-29",
@@ -165,14 +176,9 @@ def verkhoyansk_monthly_high_bundle() -> StoryBundle:
             {"label": "audience_unit", "value": "celsius_first"},
         ],
         historical_context={
-            "prior_record_c": 12.3,
-            "prior_record_f": 54,
-            "prior_record_year": 2018,
-            "archive_years": 30,
-            "month": "April",
-            "margin_c": 2.5,
-            "margin_f": 5,
-            "archive_window_only": True,
+            "scope": "forecast_only",
+            "record_comparison_qualified": False,
+            "comparison_limit": "No independently qualified source archive is supplied by this synthetic fixture.",
         },
         raw_signal_dump={
             "city": "Verkhoyansk",
@@ -180,11 +186,19 @@ def verkhoyansk_monthly_high_bundle() -> StoryBundle:
             "kind": "high",
             "month": 4,
             "new_temp_c": 14.8,
-            "old_record_c": 12.3,
-            "old_record_year": 2018,
-            "years_of_data": 30,
+            "evidence": {
+                "domain": "temperature", "evidence_type": "forecast",
+                "source_product": "synthetic-daily-forecast-v1", "model": "synthetic_fixture",
+                "valid_date": "2026-04-29", "timezone": "Asia/Vladivostok",
+                "valid_start": "2026-04-28T14:00:00Z", "valid_end": "2026-04-29T14:00:00Z",
+                "unit": "C", "aggregation": "local_daily_maximum",
+                "spatial_scope": "model_grid_point", "issued_at": None, "model_run": None,
+            },
         },
     )
+    # The old fixture supplied a bare prior-record number/year, not a P06
+    # qualified archive. Keep the daily forecast; do not invent qualification.
+    return _synthetic_canary_source(bundle, "synthetic-daily-forecast-v1")
 
 
 @pytest.fixture
@@ -383,7 +397,7 @@ def usgs_earthquake_bundle() -> StoryBundle:
 def co2_milestone_bundle() -> StoryBundle:
     """CO2 milestone — no city, no temperature. Tests writer adapting to
     a non-place, non-temperature signal kind."""
-    return StoryBundle(
+    bundle = StoryBundle(
         signal_kind="co2_milestone",
         where="Mauna Loa",
         when="2026-04-19",
@@ -394,13 +408,9 @@ def co2_milestone_bundle() -> StoryBundle:
             {"label": "actual_ppm", "value": 436.1},
             {"label": "source", "value": "NOAA GML"},
             {"label": "station", "value": "Mauna Loa"},
-            {"label": "audience_unit", "value": "fahrenheit_first"},
+            {"label": "measurement_scope", "value": "station daily mean CO2; not a global daily mean"},
         ],
-        historical_context={
-            "preindustrial_ppm": 280,
-            "first_400ppm_year": 2013,
-            "ppm_growth_per_year_recent": 2.5,
-        },
+        historical_context={"scope": "synthetic_station_daily_threshold_crossing"},
         raw_signal_dump={
             "ppm_crossed": 436,
             "actual_ppm": 436.1,
@@ -408,6 +418,9 @@ def co2_milestone_bundle() -> StoryBundle:
             "event_id": "co2_milestone_436ppm",
         },
     )
+    # These older unsourced reference figures are not needed for the threshold
+    # angle and must not become fabricated history or a new growth-rate claim.
+    return _synthetic_canary_source(bundle, "synthetic-co2-station-daily-v1")
 
 
 @pytest.fixture
@@ -631,22 +644,24 @@ def synthesis_marine_compound_bundle() -> StoryBundle:
 
 @pytest.fixture
 def marine_heatwave_bundle() -> StoryBundle:
-    """Global ocean SST streak fixture for marine heatwave wording."""
-    from src.data.ocean_sst import MarineHeatwaveStreakEvent
-    from src.two_bot.intern import build_marine_heatwave_bundle
-
-    ev = MarineHeatwaveStreakEvent(
-        kind="milestone",
-        days=150,
-        peak_anomaly_c=0.92,
-        today_c=21.18,
-        archive_max_c=20.74,
-        archive_max_year=2024,
-        years_of_data=44,
-        date="2026-06-11",
-        event_id="global_sst_streak_150_2026-06-11",
+    """Synthetic ocean SST snapshot; legacy fixture name does not certify MHW."""
+    # A detector label/count cannot establish a qualified historical sequence
+    # or a Hobday duration/percentile classification. Exercise the supported
+    # ocean-mean value; keep the legacy fixture name for replay compatibility.
+    bundle = StoryBundle(
+        signal_kind="marine_heatwave", where="Global ocean (60°S–60°N)", when="2026-06-11",
+        event_id="synthetic_ocean_sst_2026-06-11",
+        headline_metric={"label": "sst_c", "value": 21.18, "unit": "C"},
+        current_facts=[
+            {"label": "sst_c", "value": 21.18, "unit": "C"},
+            {"label": "spatial_scope", "value": "ocean mean from 60 degrees south to 60 degrees north; excludes polar oceans"},
+            {"label": "measurement_date", "value": "2026-06-11"},
+            {"label": "classification_limit", "value": "No qualified record, streak, anomaly baseline or marine-heatwave classification is supplied."},
+        ],
+        historical_context={"scope": "ocean_mean_snapshot_only"},
+        raw_signal_dump={"today_c": 21.18, "date": "2026-06-11", "spatial_scope": "ocean_60S_60N"},
     )
-    return build_marine_heatwave_bundle(ev)
+    return _synthetic_canary_source(bundle, "synthetic-ocean-sst-daily-v1")
 
 
 @pytest.fixture

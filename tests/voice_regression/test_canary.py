@@ -20,12 +20,15 @@ This canary keeps a small daily paid heartbeat that:
     BROKEN lane (bad prompt deploy, mis-scoped key, dead model id) are
     deterministic, so requiring the failure to repeat across two
     samplings squares away the stochastic false-red while keeping the
-    real-outage signal. Worst-case cost: +2 replays (~$0.05);
+    real-outage signal;
   * fails RED if any produced tweet violates the safety pipeline (the
     canary never blesses unsafe copy — honesty gates don't weaken here).
 
-Cost: 3 Sonnet replays ≈ $0.08/day (+2 worst case on a re-sample);
-skips Sundays (the weekly full suite covers them). Selected by the
+Budget: three initial writer invocations and at most three re-samples.
+Each invocation retains the writer's existing bounded parse/length/provider
+retries, and produced tweets retain the existing safety check. These are
+invocation bounds, not measured cost savings or a dollar-price promise.
+Skips Sundays (the weekly full suite covers them). Selected by the
 `voice_canary` marker
 (the daily canary job); also carries `voice_replay` so the default hermetic
 CI suite keeps deselecting it and the weekly full run includes it.
@@ -45,8 +48,8 @@ pytestmark = [
     pytest.mark.allow_network,
 ]
 
-# Three historically reliable producers across three signal families
-# (station temperature record / atmospheric milestone / ocean). Tunable:
+# Three synthetic cases across three signal families
+# (temperature forecast / atmospheric threshold / ocean snapshot). Tunable:
 # swap a fixture if its bundle goes stale, but keep the families diverse —
 # a single-family canary can go quiet for editorial, not operational,
 # reasons.
@@ -59,11 +62,25 @@ CANARY_FIXTURES = [
 MIN_PRODUCING = 2
 
 
-def _sample_fixture(request, fresh_memory_slice, name, outcomes, unsafe):
+def _preflight_fixtures(request):
+    """Reject broken fixture packets before spending any canary provider call."""
+    from src.two_bot.evidence_contract import audit_story_bundle
+
+    bundles = {name: request.getfixturevalue(name) for name in CANARY_FIXTURES}
+    failures = []
+    for name, bundle in bundles.items():
+        audit = audit_story_bundle(bundle)
+        failures.extend(f"{name}: {issue.code} ({issue.field}): {issue.message}"
+                        for issue in audit.issues if issue.severity == "error")
+    if failures:
+        pytest.fail("canary fixture contract failed before provider calls; repair synthetic inputs:\n" + "\n".join(failures))
+    return bundles
+
+
+def _sample_fixture(bundle, fresh_memory_slice, name, outcomes, unsafe):
     """One replay of one fixture. Returns True iff a safety-passing tweet."""
     from src.two_bot.writer import write_tweet
 
-    bundle = request.getfixturevalue(name)
     try:
         result = write_tweet(bundle, fresh_memory_slice)
     except Exception as exc:  # noqa: BLE001 — an UNRECOVERED provider error is the signal
@@ -84,6 +101,7 @@ def _sample_fixture(request, fresh_memory_slice, name, outcomes, unsafe):
 
 
 def test_canary_api_reachable_and_writer_produces(request, fresh_memory_slice):
+    bundles = _preflight_fixtures(request)
     assert os.environ.get("ANTHROPIC_API_KEY"), (
         "ANTHROPIC_API_KEY is missing — the canary must fail loudly, not "
         "skip: a skipped canary reads as green on the dashboard."
@@ -93,7 +111,7 @@ def test_canary_api_reachable_and_writer_produces(request, fresh_memory_slice):
     outcomes: list[str] = []
     producing: set[str] = set()
     for name in CANARY_FIXTURES:
-        if _sample_fixture(request, fresh_memory_slice, name, outcomes, unsafe):
+        if _sample_fixture(bundles[name], fresh_memory_slice, name, outcomes, unsafe):
             producing.add(name)
 
     # Bounded re-sample (codex P1): a single sampling can legitimately kill
@@ -103,7 +121,7 @@ def test_canary_api_reachable_and_writer_produces(request, fresh_memory_slice):
     if len(producing) < MIN_PRODUCING and not unsafe:
         outcomes.append("-- below threshold; one bounded re-sample of the killers --")
         for name in [n for n in CANARY_FIXTURES if n not in producing]:
-            if _sample_fixture(request, fresh_memory_slice, name, outcomes, unsafe):
+            if _sample_fixture(bundles[name], fresh_memory_slice, name, outcomes, unsafe):
                 producing.add(name)
 
     report = "\n".join(outcomes)
