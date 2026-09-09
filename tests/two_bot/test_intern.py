@@ -1761,7 +1761,8 @@ def test_build_heat_records_cluster_bundle_tier1_region_is_honest():
         "Records fell in 6 cities across France, in Europe.", bundle
     ) is None
     audit = audit_story_bundle(bundle)
-    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+    assert not audit.prompt_ready
+    assert {i.code for i in audit.issues if i.severity == "error"} == {"temperature_aggregate_unqualified", "missing_provenance"}
 
 
 def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
@@ -1788,7 +1789,8 @@ def test_build_heat_records_cluster_bundle_tier2_carries_no_region():
     assert set(facts["cluster_countries"]) == {"France", "Germany", "Belgium", "Netherlands"}
     assert facts["tier_counts"] == {"all_time": 0, "monthly": 3, "daily": 3}
     audit = audit_story_bundle(bundle)
-    assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+    assert not audit.prompt_ready
+    assert {i.code for i in audit.issues if i.severity == "error"} == {"temperature_aggregate_unqualified", "missing_provenance"}
 
 
 def test_build_heat_records_cluster_bundle_carries_observed_forecast_provenance():

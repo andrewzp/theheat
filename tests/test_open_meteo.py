@@ -1,3 +1,4 @@
+from tests.temperature_helpers import provider_payload, complete_archive
 from src.data import places
 """Tests for Open-Meteo data fetching and anomaly calculation."""
 
@@ -45,14 +46,14 @@ class TestComputeAnomalies:
         pass
 
     def test_positive_anomaly(self):
-        temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 45.0)]
+        temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, signal_date=date(2026, 4, 15))]
         normals = {places.event_location_key("Phoenix", "US", 33.45, -112.07): {4: 30.0}}  # April normal
         result = compute_anomalies(temps, normals)
         assert len(result) == 1
         assert result[0].anomaly_c == 15.0
 
     def test_negative_anomaly(self):
-        temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 25.0)]
+        temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 25.0, signal_date=date(2026, 4, 15))]
         normals = {places.event_location_key("Phoenix", "US", 33.45, -112.07): {4: 30.0}}
         result = compute_anomalies(temps, normals)
         assert len(result) == 1
@@ -71,7 +72,7 @@ class TestComputeAnomalies:
         assert len(result) == 0
 
     def test_boundary_anomaly_passes(self):
-        temps = [CityTemp("Hot", "XX", 0.0, 0.0, 50.0)]
+        temps = [CityTemp("Hot", "XX", 0.0, 0.0, 50.0, signal_date=date(2026, 4, 15))]
         normals = {places.event_location_key("Hot", "XX", 0, 0): {4: 20.0}}  # 30C anomaly = exactly at boundary
         result = compute_anomalies(temps, normals, max_anomaly_c=30.0)
         assert len(result) == 1
@@ -254,12 +255,12 @@ class TestDetectExtremeSignals:
         responses.add(
             responses.GET,
             "https://api.open-meteo.com/v1/forecast",
-            json={"daily": {"temperature_2m_max": [50.0], "temperature_2m_min": [25.0]}},
+            json=provider_payload({"daily": {"temperature_2m_max": [50.0], "temperature_2m_min": [25.0]}}),
         )
         responses.add(
             responses.GET,
             "https://archive-api.open-meteo.com/v1/archive",
-            json={"daily": {"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}},
+            json=provider_payload({"daily": complete_archive({"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}, years=3)}),
         )
         bundle = detect_extreme_signals(0.0, 0.0, "TestCity", "TC", archive_years=3)
         assert bundle is not None
@@ -273,20 +274,20 @@ class TestDetectExtremeSignals:
     def test_detects_hot_anomaly(self):
         today = date.today()
         # Build narrow-variance history so anomaly is easy to compute
-        dates = [f"{today.year - 1}-{today.month:02d}-{d:02d}" for d in range(1, 11)]
-        highs = [20.0] * 10  # mean = 20
-        lows = [10.0] * 10
+        dates = [f"{year}-{today.month:02d}-{d:02d}" for year in (today.year - 1, today.year - 2) for d in range(1, 16)]
+        highs = [20.0] * 30  # independently sufficient high samples
+        lows = [10.0] * 30
         responses.add(
             responses.GET,
             "https://api.open-meteo.com/v1/forecast",
-            json={"daily": {"temperature_2m_max": [38.0], "temperature_2m_min": [11.0]}},
+            json=provider_payload({"daily": {"temperature_2m_max": [38.0], "temperature_2m_min": [11.0]}}),
         )
         responses.add(
             responses.GET,
             "https://archive-api.open-meteo.com/v1/archive",
-            json={"daily": {"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}},
+            json=provider_payload({"daily": {"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}}),
         )
-        bundle = detect_extreme_signals(0.0, 0.0, "AnomalyCity", "XX", archive_years=1)
+        bundle = detect_extreme_signals(0.0, 0.0, "AnomalyCity", "XX", archive_years=3)
         assert bundle is not None
         assert bundle.anomaly_hot is not None
         assert bundle.anomaly_hot.anomaly_c >= ANOMALY_HOT_THRESHOLD_C
@@ -309,12 +310,12 @@ class TestDetectExtremeSignals:
         responses.add(
             responses.GET,
             "https://api.open-meteo.com/v1/forecast",
-            json={"daily": {"temperature_2m_max": [20.0], "temperature_2m_min": [15.0]}},
+            json=provider_payload({"daily": {"temperature_2m_max": [20.0], "temperature_2m_min": [15.0]}}),
         )
         responses.add(
             responses.GET,
             "https://archive-api.open-meteo.com/v1/archive",
-            json={"daily": {"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}},
+            json=provider_payload({"daily": {"time": dates, "temperature_2m_max": highs, "temperature_2m_min": lows}}),
         )
         bundle = detect_extreme_signals(0.0, 0.0, "CoolCity", "XX", archive_years=3)
         assert bundle is not None
@@ -327,7 +328,7 @@ class TestDetectCountryRecords:
     """Country-level aggregation — peak across country's cities vs archive peak."""
 
     def _bundle(self, city: str, country: str, today_max: float, archive_max: float, archive_year: int = 2018):
-        return ExtremeSignalBundle(
+        return ExtremeSignalBundle(signal_date=date.today(),
             lat=0, lon=0,
             city=city,
             country=country,
@@ -390,12 +391,12 @@ class TestFetchCityTemp:
         responses.add(
             responses.GET,
             "https://api.open-meteo.com/v1/forecast",
-            json={
+            json=provider_payload({
                 "daily": {
                     "time": ["2026-04-07"],
                     "temperature_2m_max": [42.5],
                 }
-            },
+            }),
             status=200,
         )
         result = fetch_city_temp(33.45, -112.07)
@@ -416,7 +417,7 @@ class TestFetchCityTemp:
         responses.add(
             responses.GET,
             "https://api.open-meteo.com/v1/forecast",
-            json={"daily": {"temperature_2m_max": [None]}},
+            json=provider_payload({"daily": {"temperature_2m_max": [None]}}),
             status=200,
         )
         result = fetch_city_temp(33.45, -112.07)
@@ -430,8 +431,8 @@ from src.data.openmeteo_budget import OpenMeteoSaturated
 @responses.activate
 def test_fetch_forecasts_batch_maps_cities():
     responses.add(responses.GET, "https://api.open-meteo.com/v1/forecast",
-        json=[{"daily": {"temperature_2m_max": [44.0], "temperature_2m_min": [20.0], "wet_bulb_temperature_2m_max": [26.0]}},
-              {"daily": {"temperature_2m_max": [39.0], "temperature_2m_min": [18.0], "wet_bulb_temperature_2m_max": [24.0]}}], status=200)
+        json=provider_payload([{"daily": {"temperature_2m_max": [44.0], "temperature_2m_min": [20.0], "wet_bulb_temperature_2m_max": [26.0]}},
+              {"daily": {"temperature_2m_max": [39.0], "temperature_2m_min": [18.0], "wet_bulb_temperature_2m_max": [24.0]}}]), status=200)
     cities = [{"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"},
               {"city": "Lyon", "country": "France", "lat": "45.7", "lon": "4.8"}]
     out = _open_meteo_module.fetch_forecasts_batch(cities)
@@ -442,15 +443,15 @@ def test_fetch_forecasts_batch_maps_cities():
 @responses.activate
 def test_fetch_forecasts_batch_raises_saturated_on_429():
     responses.add(responses.GET, "https://api.open-meteo.com/v1/forecast",
-        json={"error": True, "reason": "Minutely API request limit exceeded"}, status=429)
+        json=provider_payload({"error": True, "reason": "Minutely API request limit exceeded"}), status=429)
     with pytest.raises(OpenMeteoSaturated):
         _open_meteo_module.fetch_forecasts_batch([{"city": "Madrid", "lat": "40.4", "lon": "-3.7"}])
 
 
 def test_country_record_below_floor_suppressed_and_counts_populated():
     from src.data.open_meteo import detect_country_records, ExtremeSignalBundle
-    r1 = [ExtremeSignalBundle(city="Madrid", country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023)]
-    assert detect_country_records(r1, country_eligibility={"Spain": 3}) == []   # 1 of 3
-    r3 = [ExtremeSignalBundle(city=c, country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023) for c in ["Madrid", "Sevilla", "Zaragoza"]]
-    out = detect_country_records(r3, country_eligibility={"Spain": 3})
+    r1 = [ExtremeSignalBundle(signal_date=date.today(), city="Madrid", country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023)]
+    assert detect_country_records(r1, country_eligibility={"ES": 3}) == []   # 1 of 3
+    r3 = [ExtremeSignalBundle(signal_date=date.today(), city=c, country="Spain", today_max_c=48.0, archive_max_c=44.0, archive_max_year=2023) for c in ["Madrid", "Sevilla", "Zaragoza"]]
+    out = detect_country_records(r3, country_eligibility={"ES": 3})
     assert out and out[0].eligible == 3 and out[0].cached == 3

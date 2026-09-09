@@ -171,6 +171,7 @@ _METADATA_JSON_KEYS = (
     # contract test (codex #388 round): had no sqlite path at all.
     "credential_expiry",
     "publication_control",
+    "temperature_history",
     "data_source_failures",
     "source_health",
     "last_good_readings",

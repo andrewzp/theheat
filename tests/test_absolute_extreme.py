@@ -1,6 +1,7 @@
 """Tests for latitude-banded absolute temperature extremes."""
 
 from __future__ import annotations
+from tests.temperature_helpers import provider_payload
 
 from src.data import places
 from datetime import date
@@ -128,12 +129,12 @@ def test_detect_extreme_signals_populates_absolute_extreme(monkeypatch: pytest.M
     responses.add(
         responses.GET,
         "https://api.open-meteo.com/v1/forecast",
-        json={"daily": {"temperature_2m_max": [31.5], "temperature_2m_min": [16.0]}},
+        json=provider_payload({"daily": {"temperature_2m_max": [31.5], "temperature_2m_min": [16.0]}}, today.isoformat()),
     )
     responses.add(
         responses.GET,
         "https://archive-api.open-meteo.com/v1/archive",
-        json={"daily": _archive_daily(today)},
+        json=provider_payload({"daily": _archive_daily(today)}),
     )
 
     bundle = detect_extreme_signals(70.0, 25.0, "Tromso", "Norway", archive_years=1)

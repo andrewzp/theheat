@@ -1,3 +1,4 @@
+from tests.temperature_helpers import snapshot, dated_forecast
 from src.data import places
 
 def sample_identity(city, country, lat, lon):
@@ -16,7 +17,7 @@ from src.data.open_meteo import (
 from src.state import _fresh_state
 
 
-def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
+def test_unqualified_record_streak_is_withheld_and_daily_source_telemetry_survives(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 5, 15)
@@ -55,12 +56,13 @@ def test_record_streak_draft_counts_in_source_telemetry(monkeypatch):
 
     source_run = current_run["sources"][0]
     assert drafted is None
-    assert len(bot_state["_triage_queue"]) == 2
+    assert len(bot_state["_triage_queue"]) == 1
     assert source_run["source"] == "open_meteo_extreme_signals"
     assert source_run["drafted"] == 0
 
-    assert runner._drain_and_write_triage_queue(bot_state, current_run) == 2
-    assert source_run["drafted"] == 2
+    assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
+    assert source_run["drafted"] == 1
+    assert any(issue["code"] == "temperature_aggregate_unqualified" for row in bot_state["suppressions"] for issue in row.get("evidence_readiness", {}).get("issues", []))
 
 
 _FRANCE_CLUSTER = [
@@ -173,14 +175,17 @@ def _monthly_plus_daily_bundles(signal_date, old_year):
 
 def _capture_enqueue(monkeypatch, runner):
     enqueued = []
-    monkeypatch.setattr(
-        runner, "_enqueue_story_candidate",
-        lambda *a, **k: (enqueued.append(k.get("legacy_type")) or True),
-    )
+    original_enqueue = runner._enqueue_story_candidate
+    def capture(*args, **kwargs):
+        accepted = original_enqueue(*args, **kwargs)
+        if accepted:
+            enqueued.append(kwargs.get("legacy_type"))
+        return accepted
+    monkeypatch.setattr(runner, "_enqueue_story_candidate", capture)
     return enqueued
 
 
-def test_heat_records_cluster_fires_and_suppresses_daily_drafts(monkeypatch):
+def test_unqualified_records_cluster_does_not_suppress_individual_drafts(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 7, 8)
@@ -196,13 +201,13 @@ def test_heat_records_cluster_fires_and_suppresses_daily_drafts(monkeypatch):
 
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
-    assert enqueued.count("heat_records_cluster") == 1
-    assert "record" not in enqueued            # constituent daily drafts suppressed
+    assert enqueued.count("heat_records_cluster") == 0
+    assert enqueued.count("record") == 6        # withheld aggregate cannot suppress individual drafts
     assert "all_time_high" in enqueued         # the all-time member keeps its own draft
-    assert "simultaneous_records" not in enqueued  # flat lane superseded on this date
+    assert "simultaneous_records" not in enqueued  # flat aggregate is also unqualified
 
 
-def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch):
+def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch, synthetic_bundle_provenance):
     # The heart of the tier rework: a spatially-coherent burst of DAILY-only records
     # is not significant, so the class must NOT fire — and the daily records post
     # individually (they are not suppressed, because no cluster fired).
@@ -223,10 +228,10 @@ def test_daily_only_cluster_does_not_fire_significance_gate(monkeypatch):
 
     assert "heat_records_cluster" not in enqueued   # daily-only ⇒ not significant
     assert enqueued.count("record") == 6            # daily drafts NOT suppressed
-    assert "simultaneous_records" in enqueued       # flat lane runs normally
+    assert "simultaneous_records" not in enqueued   # aggregate evidence remains unqualified
 
 
-def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch):
+def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch, synthetic_bundle_provenance):
     # The class is GLOBAL: world cities (evaluate_city) emit monthly/all-time highs
     # but no calendar_date_high, so a cluster built purely from monthly records must
     # fire — with zero daily input. Their individual monthly drafts survive.
@@ -245,7 +250,7 @@ def test_world_monthly_cluster_fires_globally_without_daily_records(monkeypatch)
 
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
-    assert enqueued.count("heat_records_cluster") == 1   # fires from monthly records alone
+    assert enqueued.count("heat_records_cluster") == 0   # withheld pending qualified aggregate contract
     assert "record" not in enqueued                       # no daily-record input at all
     assert "monthly_high" in enqueued                     # monthly members keep their drafts
 
@@ -271,13 +276,12 @@ def test_world_monthly_same_year_prior_record_still_clusters(monkeypatch):
 
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
-    assert enqueued.count("heat_records_cluster") == 1   # same-year monthlies still cluster
+    assert enqueued.count("heat_records_cluster") == 0   # same-year monthlies cannot bypass aggregation qualification
 
 
-def test_cluster_member_daily_draft_suppressed_when_monthly_guard_fails(monkeypatch):
-    # A city that joins the cluster as a monthly member (its individual monthly draft
-    # guard-fails in the cascade because the prior record was set this year) must have
-    # its DAILY draft suppressed too — it must not leak an individual "record".
+def test_withheld_cluster_keeps_daily_draft_when_monthly_guard_fails(monkeypatch, synthetic_bundle_provenance):
+    # Aggregate evidence is unqualified. Its membership cannot suppress an
+    # otherwise eligible daily draft when the individual monthly guard fails.
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 7, 8)
@@ -293,12 +297,12 @@ def test_cluster_member_daily_draft_suppressed_when_monthly_guard_fails(monkeypa
 
     runner.run_extreme_signals(bot_state, current_run, [], {}, {})
 
-    assert enqueued.count("heat_records_cluster") == 1   # monthly members form the cluster
-    assert "record" not in enqueued                       # daily drafts suppressed (no leak)
+    assert enqueued.count("heat_records_cluster") == 0   # aggregate comparison remains unqualified
+    assert enqueued.count("record") == 6                   # withheld aggregate cannot consume the daily lane
     assert "monthly_high" not in enqueued                 # cascade guard-fails same-year monthly
 
 
-def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch):
+def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 7, 8)
@@ -316,7 +320,7 @@ def test_flag_off_keeps_individual_records_and_no_cluster(monkeypatch):
 
     assert "heat_records_cluster" not in enqueued   # flag off ⇒ class dormant
     assert enqueued.count("record") == 6            # each daily record drafts individually
-    assert "simultaneous_records" in enqueued       # today's flat lane unchanged
+    assert "simultaneous_records" not in enqueued   # aggregate evidence remains unqualified
 
 
 def test_absolute_extreme_is_queued_when_it_is_strongest(monkeypatch):
@@ -550,14 +554,15 @@ def test_both_provider_runs_ghcn_for_us_and_open_meteo_for_world(monkeypatch):
     # all-time-high via evaluate_city in CONSOLIDATE.
     store = {places.cache_key("Seville", "Spain", 37.4, -6): CityThresholds(
         identity=sample_identity("Seville", "Spain", 37.4, -6), city="Seville", as_of=date.today().isoformat(), years_of_data=30,
-        all_time_max=(40.0, 2000)).to_dict()}   # world cache keyed by world_key
+        all_time_max=(40.0, 2000)).to_dict()}
+    store = {key: snapshot(row) for key, row in store.items()}   # world cache keyed by world_key
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
     monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
     monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
         "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
         "wet_bulb_temperature_2m_max": [24.0]})
     monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
-        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): {"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0} for c in cities})
+        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
     monkeypatch.setattr(runner, "_should_draft", lambda *args, **kwargs: True)
     monkeypatch.setattr(
         runner, "_enqueue_story_candidate",
@@ -669,7 +674,8 @@ def test_world_path_emits_no_calendar_streak_or_simultaneous():
     from datetime import date
     cached = CityThresholds(identity=sample_identity("Lyon", "France", 45.7, 4.8), city="Lyon", as_of="2026-06-01", years_of_data=30,
                             all_time_max=(40.0, 2019), monthly_max={"06": (39.0, 2019)})
-    b = evaluate_city("Lyon", "France", {"max_c": 45.0, "min_c": 20.0, "tw_max_c": 10.0},
+    cached = CityThresholds.from_dict(snapshot(cached.to_dict()))
+    b = evaluate_city("Lyon", "France", dated_forecast({"max_c": 45.0, "min_c": 20.0, "tw_max_c": 10.0}),
                       cached, lat=45.7, lon=4.8, today=date(2026, 6, 26))
     assert b.calendar_date_high is None
     assert b.calendar_date_low is None
@@ -684,15 +690,16 @@ def test_both_world_half_warms_then_evaluates_and_surfaces_metrics(monkeypatch):
     # (Madrid, warmed this run only — 1-run lag before it is eval'd).
     store = {places.cache_key("Cairo", "Egypt", 30, 31.2): CityThresholds(identity=sample_identity("Cairo", "Egypt", 30, 31.2), city="Cairo", as_of=date.today().isoformat(),
                                            years_of_data=30, all_time_max=(40.0, 2000)).to_dict()}
+    store = {key: snapshot(row) for key, row in store.items()}
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
     monkeypatch.setattr(world_cache, "write_cache", lambda c: store.update(c) or True)
     monkeypatch.setenv("THEHEAT_SIGNALS_PROVIDER", "both")
-    monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", lambda metrics_out: ([], []))
+    monkeypatch.setattr(runner.ghcn, "check_extreme_signals_for_stations", lambda metrics_out, **kwargs: ([], []))
     monkeypatch.setattr(runner, "_fetch_city_archive", lambda c: {
         "time": ["1996-06-01"], "temperature_2m_max": [40.0], "temperature_2m_min": [10.0],
         "wet_bulb_temperature_2m_max": [24.0]})
     monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch",
-        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): {"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0} for c in cities})
+        lambda cities: {places.cache_key(c["city"], c["country"], c["lat"], c["lon"]): dated_forecast({"max_c": 46.0, "min_c": 12.0, "tw_max_c": 10.0}, date.today().isoformat()) for c in cities})
     cities = [{"city": "Cairo", "country": "Egypt", "lat": "30.0", "lon": "31.2"},
               {"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"}]
     run = {"id": "r", "mode": "alerts", "started_at": "2026-06-26T00:00:00Z", "sources": []}

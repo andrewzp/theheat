@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 
-from src.data.world_thresholds import CityThresholds
+from copy import deepcopy
+from src.data.temperature_evidence import fingerprint
 from src.data import places
 from src.data.place_migration import migrate_cache
 from src.state import GIST_ID, GITHUB_TOKEN, STATE_SIZE_WARNING_BYTES, _headers
@@ -23,53 +24,102 @@ def _as_of(e):
     return str((e or {}).get("as_of") or "")
 
 
-def _pick_pair(a, b, *, more_extreme_is_max):
-    if a is None:
-        return b
-    if b is None:
-        return a
-    return (a if a[0] >= b[0] else b) if more_extreme_is_max else (a if a[0] <= b[0] else b)
+def _normalized_time(value):
+    if not value:
+        return ""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("Archive snapshot retrieval time lacks timezone")
+    return parsed.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
-def _merge_entry_fields(a: dict, b: dict) -> dict:
-    """Equal-as_of field-wise merge: more-extreme per field; richer mean wins."""
-    out = dict(a)
-    out["all_time_max"] = _pick_pair(a.get("all_time_max"), b.get("all_time_max"), more_extreme_is_max=True)
-    out["all_time_min"] = _pick_pair(a.get("all_time_min"), b.get("all_time_min"), more_extreme_is_max=False)
-    out["wetbulb_max"] = _pick_pair(a.get("wetbulb_max"), b.get("wetbulb_max"), more_extreme_is_max=True)
-    for key, is_max in (("monthly_max", True), ("monthly_min", False)):
-        merged = dict(a.get(key) or {})
-        for mm, v in (b.get(key) or {}).items():
-            merged[mm] = _pick_pair(merged.get(mm), v, more_extreme_is_max=is_max)
-        out[key] = merged
-    mm_mean = dict(a.get("monthly_mean") or {})
-    for mm, v in (b.get("monthly_mean") or {}).items():
-        cur = mm_mean.get(mm)
-        if cur is None or (v[2] > cur[2]):   # higher sample_count wins
-            mm_mean[mm] = v
-    out["monthly_mean"] = mm_mean
-    return out
+def _snapshot_time(entry):
+    return _normalized_time((entry.get("baseline") or {}).get("retrieved_at", ""))
+
+
+def _snapshot_fingerprint(entry):
+    # A claimed baseline revision ID does not prove that cached comparator
+    # fields match it. Include every semantic field, including derived values.
+    semantic = {key: value for key, value in entry.items() if key not in ("as_of", "baseline")}
+    semantic["baseline"] = {key: value for key, value in entry.get("baseline", {}).items() if key != "retrieved_at"}
+    return fingerprint(semantic)
+
+
+def _version_union(*maps, rows=()):
+    """Re-key all variants by their payload, never a caller-supplied revision ID."""
+    variants: dict[str, dict] = {}
+    for row in [value for versions in maps for value in versions.values()] + list(rows):
+        key = _snapshot_fingerprint(row)
+        existing = variants.get(key)
+        # Equivalent semantics may have a later verification time. An exact-time
+        # tie still chooses deterministically between timestamp spellings.
+        if existing is None or (_snapshot_time(row), fingerprint(row)) > (_snapshot_time(existing), fingerprint(existing)):
+            variants[key] = deepcopy(row)
+    return variants
 
 
 def merge_caches(base: dict, nxt: dict) -> dict:
-    base = migrate_cache(base or {})
-    nxt = migrate_cache(nxt or {})
-    out: dict = {}
-    for city in sorted((set(base) | set(nxt)) - {_META_KEY}):
-        b = base.get(city)
-        n = nxt.get(city)
-        if b is None:
-            out[city] = n
-        elif n is None:
-            out[city] = b
-        elif _as_of(n) > _as_of(b):
-            out[city] = n
-        elif _as_of(b) > _as_of(n):
-            out[city] = b
-        else:
-            out[city] = _merge_entry_fields(b, n)
+    """Choose complete source snapshots by retrieval version, never extreme value.
+
+    Same-time conflicting snapshots remain quarantined until a later source read
+    resolves them. A later corrected maximum can move downward without a stale
+    worker reconstructing the rejected high from individual fields.
+    """
+    base, nxt = migrate_cache(base or {}), migrate_cache(nxt or {})
     meta = {**base.get("_meta", {}), **nxt.get("_meta", {})}
-    meta["identity_quarantine"] = {**base.get("_meta", {}).get("identity_quarantine", {}), **nxt.get("_meta", {}).get("identity_quarantine", {})}
+    for field in ("identity_quarantine", "baseline_conflicts", "baseline_revisions"):
+        meta[field] = {
+            **base.get("_meta", {}).get(field, {}),
+            **nxt.get("_meta", {}).get(field, {}),
+        }
+    # Preserve all same-time conflict versions across concurrent quarantine merges.
+    for key in set(base.get("_meta", {}).get("baseline_conflicts", {})) | set(nxt.get("_meta", {}).get("baseline_conflicts", {})):
+        left = base.get("_meta", {}).get("baseline_conflicts", {}).get(key, {})
+        right = nxt.get("_meta", {}).get("baseline_conflicts", {}).get(key, {})
+        meta["baseline_conflicts"][key] = {
+            "retrieved_at": max(_normalized_time(left.get("retrieved_at", "")), _normalized_time(right.get("retrieved_at", ""))),
+            "versions": _version_union(left.get("versions", {}), right.get("versions", {})),
+        }
+    out = {}
+    for key in sorted((set(base) | set(nxt)) - {_META_KEY}):
+        rows = [row for row in (base.get(key), nxt.get(key)) if row is not None]
+        rows.sort(key=lambda row: (_snapshot_time(row), fingerprint(row)))
+        newest = rows[-1]
+        same_time = [row for row in rows if _snapshot_time(row) == _snapshot_time(newest)]
+        conflict = meta["baseline_conflicts"].get(key)
+        if len({_snapshot_fingerprint(row) for row in same_time}) > 1 or (
+            conflict and _snapshot_time(newest) <= conflict["retrieved_at"]
+        ):
+            versions = _version_union((conflict or {}).get("versions", {}), rows=same_time)
+            meta["baseline_conflicts"][key] = {
+                "retrieved_at": max(
+                    _snapshot_time(newest), (conflict or {}).get("retrieved_at", "")
+                ),
+                "versions": versions,
+            }
+            continue
+        out[key] = deepcopy(newest)
+        if (
+            len(rows) == 2
+            and _snapshot_fingerprint(rows[0]) != _snapshot_fingerprint(newest)
+        ):
+            fields = ("all_time_max", "all_time_min", "monthly_max", "monthly_min", "calendar_max", "calendar_min", "monthly_mean", "wetbulb_max")
+            changes = {
+                field: {"previous": rows[0].get(field), "current": newest.get(field)}
+                for field in fields
+                if rows[0].get(field) != newest.get(field)
+            }
+            if changes:
+                review = {
+                    "sampling_key": key,
+                    "previous_revision": rows[0]["baseline"]["revision_id"],
+                    "current_revision": newest["baseline"]["revision_id"],
+                    "previous_snapshot_sha256": _snapshot_fingerprint(rows[0]),
+                    "current_snapshot_sha256": _snapshot_fingerprint(newest),
+                    "retrieved_at": _snapshot_time(newest),
+                    "changes": changes,
+                }
+                meta["baseline_revisions"][fingerprint(review)] = review
     out["_meta"] = meta
     return migrate_cache(out)
 
@@ -78,7 +128,9 @@ def _is_stale(entry, *, ttl_days, today):
     if not entry or not entry.get("as_of"):
         return True
     try:
-        return date.fromisoformat(entry["as_of"]) < date.fromisoformat(today) - timedelta(days=ttl_days)
+        return date.fromisoformat(entry["as_of"]) < date.fromisoformat(today) - timedelta(
+            days=ttl_days
+        )
     except (ValueError, TypeError):
         return True
 
@@ -89,14 +141,23 @@ def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_
     # display city (URGENT_WORLD_HEAT_CITIES is bare names; it only orders warming).
     rank = {name: i for i, name in enumerate(urgent_order)}
     stale = [
-        c for c in world_cities
-        if _is_stale(cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon"))), ttl_days=ttl_days, today=today)
+        c
+        for c in world_cities
+        if _is_stale(
+            cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon"))),
+            ttl_days=ttl_days,
+            today=today,
+        )
     ]
-    stale.sort(key=lambda c: (
-        rank.get(c.get("city"), len(urgent_order)),
-        _as_of(cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")))),
-        c.get("city"),
-    ))
+    stale.sort(
+        key=lambda c: (
+            rank.get(c.get("city"), len(urgent_order)),
+            _as_of(
+                cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")))
+            ),
+            c.get("city"),
+        )
+    )
     out, seen = [], set()
     for c in stale:
         key = world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon"))
@@ -109,45 +170,16 @@ def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_
     return out
 
 
-def _year(today: str) -> int:
-    return date.fromisoformat(today).year
-
-
 def apply_provisional(cache: dict, bundle, *, today: str) -> None:
-    key = world_key(bundle.city, bundle.country, bundle.lat, bundle.lon)   # composite identity; bundle.city stays display
-    entry = cache.get(key)
-    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=bundle.city, as_of=today, years_of_data=0, identity={**places.resolve_place(bundle.city, bundle.country, bundle.lat, bundle.lon), "source_product": places.CACHE_PRODUCT})
-    if bundle.all_time_high is not None:
-        t.all_time_max = (bundle.all_time_high.new_temp_c, _year(today))
-    if bundle.all_time_low is not None:
-        t.all_time_min = (bundle.all_time_low.new_temp_c, _year(today))
-    if bundle.monthly_high is not None:
-        t.monthly_max[f"{bundle.monthly_high.month:02d}"] = (bundle.monthly_high.new_temp_c, _year(today))
-    if bundle.monthly_low is not None:
-        t.monthly_min[f"{bundle.monthly_low.month:02d}"] = (bundle.monthly_low.new_temp_c, _year(today))
-    t.as_of = today
-    cache[key] = t.to_dict()
+    """Compatibility no-op: a forecast cannot modify historical evidence.
+
+    Event IDs and retained draft revisions provide suppression. Forecasts remain
+    inside candidate evidence; only a new archive snapshot can replace a baseline.
+    """
 
 
 def apply_provisional_preserving_as_of(cache, bundle, *, today, advance_as_of, ttl_days) -> None:
-    """Stamp today's provisional record fields, with freshness honesty on ``as_of``.
-
-    Advance ``as_of`` to today when the city was warmed this run (``advance_as_of``) OR
-    its prior entry is non-stale; otherwise (stale AND not warmed) keep the prior
-    ``as_of`` so a record fired against still-stale climatology stays eligible for
-    re-warming next run. ``advance_as_of`` is the caller's "warmed this run" signal;
-    staleness is recomputed here so a fresh-cached, non-warmed record keeps
-    ``as_of=today`` (the dominant production path). A stale, not-warmed entry whose
-    prior ``as_of`` is falsy (missing/empty) is kept stale (``as_of=""``), NOT advanced
-    to today — advancing would mark unconfirmed climatology fresh (false freshness).
-    """
-    key = world_key(bundle.city, bundle.country, bundle.lat, bundle.lon)
-    prior = cache.get(key)
-    prior_as_of = (prior or {}).get("as_of")
-    prior_stale = _is_stale(prior, ttl_days=ttl_days, today=today)
-    apply_provisional(cache, bundle, today=today)        # writes record fields + as_of=today
-    if not advance_as_of and prior_stale:
-        cache[key]["as_of"] = prior_as_of or ""          # keep stale + not-warmed warm-eligible
+    """Compatibility no-op; forecast activity is not archive freshness."""
 
 
 WORLD_COVERAGE_FLOOR = 0.85
@@ -169,9 +201,9 @@ def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
     warm_sat = bool(metrics.get("warm_saturated", False))
 
     if eval_sat:
-        return "degraded"                          # records could not be evaluated -> hard fail
+        return "degraded"  # records could not be evaluated -> hard fail
     if wa > 0 and wf / wa > WORLD_WARM_FAILURE_FLOOR:
-        return "degraded"                          # archive systematically failing (unconditional)
+        return "degraded"  # archive systematically failing (unconditional)
 
     # Steady-state is keyed to PRE-RUN fullness, not post-run ``cached``: under eval-first
     # the cache that eval saw is the pre-warm one, so a cold 0->total first-fill (post-run
@@ -189,7 +221,7 @@ def classify_world_status(metrics: dict, *, prev_cached_count: int) -> str:
     if fa > 0 and ff / fa > WORLD_FORECAST_FAIL_FLOOR:
         return "degraded"
 
-    if not bootstrap:                              # steady state (cache full at run start)
+    if not bootstrap:  # steady state (cache full at run start)
         if float(metrics.get("coverage_ratio", 1.0)) < WORLD_COVERAGE_FLOOR:
             return "degraded"
         return "success"
@@ -204,7 +236,9 @@ def read_cache() -> dict:
     if not GIST_ID or not GITHUB_TOKEN:
         return {}
     try:
-        resp = requests.get(f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15)
+        resp = requests.get(
+            f"https://api.github.com/gists/{GIST_ID}", headers=_headers(), timeout=15
+        )
         resp.raise_for_status()
         meta = resp.json().get("files", {}).get(WORLD_CACHE_FILENAME)
         if not meta:
@@ -233,8 +267,10 @@ def write_cache(cache: dict) -> bool:
         if len(payload) > STATE_SIZE_WARNING_BYTES:
             print(f"[world_cache] WARNING size {len(payload)}B approaching gist inline cliff")
         resp = requests.patch(
-            f"https://api.github.com/gists/{GIST_ID}", headers=_headers(),
-            json={"files": {WORLD_CACHE_FILENAME: {"content": payload}}}, timeout=15,
+            f"https://api.github.com/gists/{GIST_ID}",
+            headers=_headers(),
+            json={"files": {WORLD_CACHE_FILENAME: {"content": payload}}},
+            timeout=15,
         )
         resp.raise_for_status()
         return True

@@ -1,3 +1,4 @@
+from tests.temperature_helpers import provider_payload
 """Tests for Open-Meteo Marine ocean wave data."""
 
 import responses
@@ -29,7 +30,7 @@ class TestFetchOceanConditions:
             responses.add(
                 responses.GET,
                 MARINE_URL,
-                json=_mock_marine_response(5.0),
+                json=provider_payload(_mock_marine_response(5.0)),
                 status=200,
             )
         readings = fetch_ocean_conditions()
@@ -41,7 +42,7 @@ class TestFetchOceanConditions:
     @responses.activate
     def test_skips_failed_points(self):
         # First point succeeds, rest fail
-        responses.add(responses.GET, MARINE_URL, json=_mock_marine_response(3.0), status=200)
+        responses.add(responses.GET, MARINE_URL, json=provider_payload(_mock_marine_response(3.0)), status=200)
         for _ in range(15):
             responses.add(responses.GET, MARINE_URL, status=500)
         readings = fetch_ocean_conditions()
@@ -52,18 +53,18 @@ class TestFetchOceanConditions:
         responses.add(
             responses.GET,
             MARINE_URL,
-            json={"daily": {"wave_height_max": [None]}},
+            json=provider_payload({"daily": {"wave_height_max": [None]}}),
             status=200,
         )
         for _ in range(15):
-            responses.add(responses.GET, MARINE_URL, json=_mock_marine_response(3.0), status=200)
+            responses.add(responses.GET, MARINE_URL, json=provider_payload(_mock_marine_response(3.0)), status=200)
         readings = fetch_ocean_conditions()
         assert len(readings) == 15  # first one skipped
 
     @responses.activate
     def test_event_id_format(self):
         for _ in range(16):
-            responses.add(responses.GET, MARINE_URL, json=_mock_marine_response(3.0), status=200)
+            responses.add(responses.GET, MARINE_URL, json=provider_payload(_mock_marine_response(3.0)), status=200)
         readings = fetch_ocean_conditions()
         assert readings[0].event_id.startswith("ocean_gulf_of_mexico_")
 

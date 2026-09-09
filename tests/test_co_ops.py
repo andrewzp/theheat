@@ -28,7 +28,7 @@ def _event() -> StormSurgeEvent:
     )
 
 
-def test_co_ops_success_enqueues_storm_surge_candidate(fresh_state, monkeypatch):
+def test_co_ops_success_enqueues_storm_surge_candidate(fresh_state, monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import co_ops
 
     monkeypatch.setattr(co_ops, "_fetch_strict", lambda *args, **kwargs: [_reading()])

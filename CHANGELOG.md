@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.9] - 2026-09-09
+
+### Compact evidence-grounded writing, scientific integrity and source repair
+
+- Replace mandatory explanatory endings and unsupported exemplars with one complete, compelling sentence by default. Writer, checker and critic agree on global relevance, source limits and necessary uncertainty. Combined common-system instructions shrink 74.2% by character count; token savings, model adherence and reader response remain unmeasured.
+- Reject malformed evidence before paid calls; require complete supported output/claim inventories. Decoded schema violations do not buy a formatting-repair retry. Constrained output travels in existing model requests, with no extra model stage. Paid PR replays now require explicit repository opt-in; existing scheduled/manual evaluations retain their cadence.
+- Preserve forecast, observed and reanalysis distinctions, source-local dates and separate variable coverage/cutoffs. Forecasts cannot rewrite historical extrema. Conflicting baselines and material source/QC revisions remain reviewable, including affected claims and unchanged publication evidence. Unqualified aggregates are withheld without suppressing qualified individual candidates.
+- Repair the demonstrated GDACS GeoRSS failure on source-explicit unknown cyclone countries; retain actual serving-source provenance and distinguish a valid feed with zero qualifying alerts from source failure. GPM authentication failures remain unresolved.
+- Integrated validation: 3,222 offline Python tests passed with 41 paid replays excluded; 292 dashboard tests, build, Ruff and mypy (130 source files) passed.
+- Preserve the publication pause, all historical evidence classes and original draft/receipt state. Scientific baseline restoration, complete global coverage, hosted transactional authority, current-policy review bindings, measured cost controls and the upcoming graphics integration remain separate acceptance work.
+
 ## [0.9.108.8] - 2026-09-09
 
 ### Completed-run persistence and dashboard security maintenance

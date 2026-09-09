@@ -448,6 +448,32 @@ function mergeSuppressions(current = [], incoming = [], maxItems = 200) {
   return ordered.length > maxItems ? ordered.slice(-maxItems) : ordered
 }
 
+function mergeTemperatureHistory(base, incoming) {
+  // Conflict suffixes are reserved reducer IDs. Canonicalize them first so
+  // a generated ID never overwrites an earlier conflicting payload.
+  const groups = new Map()
+  for (const source of [base ?? {}, incoming ?? {}]) {
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      throw new Error("Malformed temperature revision history")
+    }
+    for (const [key, value] of Object.entries(source)) {
+      const root = key.replace(/(?::conflict:[0-9a-f]{64})+$/, "")
+      if (!groups.has(root)) groups.set(root, new Map())
+      groups.get(root).set(fingerprint(value), value)
+    }
+  }
+  const result = {}
+  for (const [key, rows] of groups) {
+    Array.from(rows.keys()).sort().forEach((revisionId, index) => {
+      const target = index === 0 ? key : `${key}:conflict:${revisionId}`
+      Object.defineProperty(result, target, {
+        value: structuredClone(rows.get(revisionId)), enumerable: true, configurable: true, writable: true,
+      })
+    })
+  }
+  return result
+}
+
 function mergeState(current, incoming) {
   const base = normalizeState(current)
   const next = normalizeState(incoming)
@@ -491,6 +517,7 @@ function mergeState(current, incoming) {
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
     publication_control: mergePublicationControl(base.publication_control, next.publication_control),
+    temperature_history: mergeTemperatureHistory(base.temperature_history, rawIncoming.temperature_history),
     publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),
   })
 }

@@ -2,6 +2,7 @@
 
 export const STATE_DEFAULTS = {
   "publication_control": {},
+  "temperature_history": {},
   "last_hot10": {
     "date": null,
     "cities": []
@@ -136,6 +137,7 @@ export const METADATA_JSON_KEYS = [
   "memory",
   "credential_expiry",
   "publication_control",
+  "temperature_history",
   "data_source_failures",
   "source_health",
   "last_good_readings",

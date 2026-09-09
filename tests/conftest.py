@@ -144,3 +144,24 @@ def automatic_publication_release(monkeypatch):
     """
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_ENABLED", "1")
     monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_EPOCH", "offline-test-release")
+
+
+@pytest.fixture
+def synthetic_bundle_provenance(monkeypatch):
+    """Give routing/cap unit tests explicit synthetic source identity.
+
+    Those tests exercise orchestration after evidence readiness. The unmodified
+    source-builder migration matrix and strict-boundary tests separately assert
+    that real legacy packets without provenance are withheld. This fixture is
+    opt-in and never changes a production adapter or its scientific evidence.
+    """
+    from src.two_bot.types import StoryBundle
+
+    original = StoryBundle.__post_init__
+
+    def with_fixture_source(bundle):
+        original(bundle)
+        if isinstance(bundle.raw_signal_dump, dict):
+            bundle.raw_signal_dump = {**bundle.raw_signal_dump, "source_product": "synthetic-orchestration-fixture"}
+
+    monkeypatch.setattr(StoryBundle, "__post_init__", with_fixture_source)

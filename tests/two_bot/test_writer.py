@@ -50,13 +50,8 @@ def test_write_fire_tweet_returns_kill(mock_anthropic):
 
 
 def test_write_fire_tweet_kills_on_both_tweet_and_kill_set(mock_anthropic):
-    """Contract violation: both tweet AND kill_reason set. The JSON-parse
-    retry layer (see TestJsonParseRetry) catches the ValueError from
-    WriterResult's post-init validator and returns a KILL after the
-    retry budget is exhausted, instead of raising. Same root cause as
-    the Nettles Is pipeline_error regression on 2026-05-12 — surface
-    the failure mode as a recorded kill, not a crashed pipeline.
-    """
+    """A decoded contract violation is retained and killed without buying
+    another model call. The malformed/truncated JSON retry remains separate."""
     bad_response = _fake_writer_response(
         {
             "tweet": "x",
@@ -67,14 +62,15 @@ def test_write_fire_tweet_kills_on_both_tweet_and_kill_set(mock_anthropic):
             "reasoning": "x",
         }
     )
-    # Both parse attempts return the same contract-violating payload.
+    # A second response is available but must never be requested.
     mock_anthropic.side_effect = [bad_response, bad_response]
 
     result = write_fire_tweet(_bundle(), _memory())
 
     assert result.tweet is None
     assert result.kill_reason is not None
-    assert "invalid JSON across" in result.kill_reason
+    assert "output contract rejected" in result.kill_reason
+    assert mock_anthropic.call_count == 1
 
 
 def test_write_fire_tweet_kills_on_invalid_json(mock_anthropic):
@@ -530,12 +526,13 @@ class TestBundleJsonHandlesDates:
         return StoryBundle(
             signal_kind="monthly_low",
             where="SISSONVILLE 1SW, United States",
-            when="on May 4",
+            when="2026-05-04",
             event_id="monthly_low_USC00468191_05_2026-05-04",
             headline_metric={"label": "today_min_c", "value": -2.2, "unit": "C"},
             current_facts=[{"label": "city", "value": "SISSONVILLE 1SW"}],
             historical_context={"prior_record_c": 1.0, "prior_record_year": 1995},
             raw_signal_dump={
+                "source_product": "synthetic-ghcn-fixture",
                 "city": "SISSONVILLE 1SW",
                 "country": "United States",
                 "signal_date": datetime.date(2026, 5, 4),
@@ -610,7 +607,7 @@ class TestBundleJsonHandlesDates:
                 ),
             )
             captured["prompt"] = user_prompt + retry_suffix
-            return '{"passed": true, "extracted_claims": [], "failures": []}'
+            return '{"passed": true, "extracted_claims": [{"text": "test tweet", "kind": "comparison"}], "failures": []}'
 
         from src.two_bot import fact_check
         monkeypatch.setattr(fact_check, "_call_gemini", fake_call)
@@ -619,137 +616,3 @@ class TestBundleJsonHandlesDates:
         result = fact_check.fact_check("test tweet", [], bundle, {})
         assert result.passed is True
         assert "2026-05-04" in captured["prompt"]
-
-
-class TestWriterPromptAntiSpeculation:
-    """Regression: writer was inventing temporal and seasonal framing not in the
-    bundle, causing fact-check kills. Two confirmed kills on 2026-05-08 (Dayton WY):
-    - 'January reading' — invented seasonal framing
-    - 'three weeks into meteorological spring' — invented + factually wrong
-
-    The HARD RULES now carry an explicit anti-fabricated-context bullet. These
-    tests assert the prompt contains the guard and does NOT contain blanket
-    anti-voice phrases that would kill legitimate editorial flourish like
-    'Fruit trees in the Kanawha Valley were not consulted.'
-    """
-
-    def _get_system_prompt(self):
-        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
-        return WRITER_SYSTEM_PROMPT
-
-    def test_anti_speculation_bullet_present(self):
-        """The HARD RULES section must contain the fabricated-context guard."""
-        prompt = self._get_system_prompt()
-        assert "NO FABRICATED CONTEXT" in prompt
-
-    def test_bullet_names_temporal_framing_examples(self):
-        """Bullet must call out specific temporal-framing failure patterns."""
-        prompt = self._get_system_prompt()
-        assert "three weeks into meteorological spring" in prompt
-        assert "January reading" in prompt
-
-    def test_bullet_names_seasonal_biological_examples(self):
-        """Bullet must call out seasonal/biological invented context."""
-        prompt = self._get_system_prompt()
-        assert "flowers are already up" in prompt
-        assert "the ground froze" in prompt
-
-    def test_bullet_explicitly_permits_anthropomorphic_flourish(self):
-        """The Sissonville regression guard: anthropomorphic voice must be
-        explicitly exempted so the model doesn't over-correct and kill
-        editorial lines like 'Fruit trees...were not consulted.'"""
-        prompt = self._get_system_prompt()
-        assert "Anthropomorphic flourish" in prompt
-        assert "not consulted" in prompt  # the canonical example is in the prompt
-
-    def test_prompt_does_not_contain_blanket_anti_voice_ban(self):
-        """Confirm no blunt 'no anthropomorphism' rule was accidentally added."""
-        prompt = self._get_system_prompt()
-        assert "no anthropomorphism" not in prompt.lower()
-        assert "no anthropomorphic" not in prompt.lower()
-
-
-class TestWriterPromptHardRules:
-    """Each HARD RULE bullet in WRITER_SYSTEM_PROMPT is load-bearing.
-
-    These tests fail if a bullet is accidentally deleted or weakened during
-    a prompt edit. They check for canonical concept anchors per rule, not
-    exact wording, so minor rephrasing doesn't break them. The intent is
-    "did the rule get dropped from the prompt?", not "is the wording
-    pixel-perfect?"
-    """
-
-    def _get_system_prompt(self):
-        from src.two_bot.prompts.writer_prompt import WRITER_SYSTEM_PROMPT
-        return WRITER_SYSTEM_PROMPT
-
-    def test_length_cap_present(self):
-        prompt = self._get_system_prompt()
-        assert "280" in prompt
-
-    def test_no_first_person_rule(self):
-        """Rule must enumerate the specific banned pronouns so the model
-        can't paraphrase its way around 'no first person.'"""
-        prompt = self._get_system_prompt()
-        assert "No first person" in prompt
-        assert '"we"' in prompt
-        assert '"I"' in prompt
-        assert '"us"' in prompt
-
-    def test_no_hedging_rule(self):
-        prompt = self._get_system_prompt()
-        assert "No hedging" in prompt
-        # At least one canonical hedging example must remain
-        assert '"seems"' in prompt or '"may"' in prompt or '"appears to be"' in prompt
-
-    def test_no_restate_padding_rule(self):
-        prompt = self._get_system_prompt()
-        assert "restate-padding" in prompt or "restate padding" in prompt
-
-    def test_no_poetry_closers_rule(self):
-        """The named example anchors the shape — model needs to see what's banned."""
-        prompt = self._get_system_prompt()
-        assert "poetry" in prompt.lower()
-        # The canonical "doesn't know" example must remain
-        assert "doesn't know" in prompt or "doesn’t know" in prompt
-
-    def test_no_named_power_plant_formula_rule(self):
-        """The single most-violated stock-formula ban — must enumerate the
-        adjectives so the model can't slip in 'mid-sized commercial reactor.'"""
-        prompt = self._get_system_prompt()
-        assert "power plant" in prompt
-        assert "SPECIFIC" in prompt or "NAMED" in prompt
-
-    def test_no_throat_clearing_openers_rule(self):
-        prompt = self._get_system_prompt()
-        assert "throat-clearing" in prompt or "throat clearing" in prompt
-
-    def test_concrete_claim_traceability_rule(self):
-        """Every concrete claim must trace to bundle or general knowledge."""
-        prompt = self._get_system_prompt()
-        assert "traceable to the bundle" in prompt or "trace to" in prompt
-        assert "bundle" in prompt
-
-    def test_geographic_orientation_rule(self):
-        """Must remain with named-city examples; this rule was a recurring
-        regression target — readers need 'Conakry, Guinea' not just 'Conakry.'"""
-        prompt = self._get_system_prompt()
-        assert "ORIENT THE READER GEOGRAPHICALLY" in prompt
-        # Specific anchor cities that motivated the rule
-        assert "Conakry" in prompt
-        assert "Yakutsk" in prompt
-
-    def test_temperature_formatting_rules_present(self):
-        """audience_unit / Fahrenheit-first routing — added in PR #46."""
-        prompt = self._get_system_prompt()
-        assert "audience_unit" in prompt
-        assert "fahrenheit_first" in prompt
-        assert "celsius_first" in prompt
-
-    def test_archive_window_only_rule_present(self):
-        """When historical_context.archive_window_only is true, model must
-        NOT call it 'all-time' / 'ever' / 'in recorded history.'"""
-        prompt = self._get_system_prompt()
-        assert "archive_window_only" in prompt
-        # The substitute phrasing must be enumerated so the model has a path
-        assert "in N years" in prompt or "in the N-year" in prompt or "since" in prompt

@@ -92,7 +92,7 @@ class TestGhcnSourceStatus:
 
         newest_missing = (date.today() - timedelta(days=1)).isoformat()
 
-        def fake_ghcn_fetch(*, metrics_out=None):
+        def fake_ghcn_fetch(*, metrics_out=None, bot_state=None):
             if metrics_out is not None:
                 metrics_out.update({
                     "stations_active": 11982,
@@ -913,6 +913,7 @@ class TestMonthlyRecordSameYearSuppression:
         mock_draft,
         mock_two_bot,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """When the prior record was set in a prior year, the signal
         should be allowed through — and it should hit the two-bot
@@ -1016,6 +1017,7 @@ class TestCO2AnnualCap:
         mock_two_bot,
         mock_draft,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """Below the annual CO2 cap, a fresh milestone should reach the
         two-bot pipeline (ported from voice gen on 2026-05-04)."""
@@ -1526,7 +1528,7 @@ class TestRunAlerts:
         mock_generate_fire_draft.assert_not_called()
         mock_two_bot.assert_called_once()
 
-    def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
+    def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch, synthetic_bundle_provenance):
         """Day-5 streak crossing → one draft saved under marine_heatwave."""
         from src import main
         from src.main import run_alerts
@@ -1608,7 +1610,7 @@ class TestRunLeaderboard:
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft):
+    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
         """Hot 10 leaderboard: ported from voice gen to two-bot writer
         on 2026-05-04. The voice generator's `generate_tweet` is no
         longer reached for the hot10 category."""
@@ -1620,10 +1622,10 @@ class TestRunLeaderboard:
             CityTemp("Phoenix", "US", 33.45, -112.07, 45.0),
         ]
         mock_om.compute_anomalies.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
+            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
         ]
         mock_om.rank_hot10.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
+            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
         ]
         mock_two_bot.return_value = True
         mock_state.update_streaks.return_value = {}
@@ -1640,9 +1642,9 @@ class TestRunLeaderboard:
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft):
+    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
         ranked = [
-            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx)
+            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx, signal_date=date(2026, 5, 4))
             for idx in range(1, 11)
         ]
         mock_om.load_cities.return_value = []
@@ -2301,7 +2303,7 @@ class TestProcessDueDrafts:
 
 
 class TestRunAlertsIceMass:
-    def test_monday_with_record_drafts(self, monkeypatch):
+    def test_monday_with_record_drafts(self, monkeypatch, synthetic_bundle_provenance):
         """On a Monday, a fresh monthly record for Greenland drafts a tweet
         and updates state (ice_mass_max_loss + ice_mass_last_seen + count)."""
         from src import main
@@ -2442,6 +2444,7 @@ class TestFireFootprintIntegration:
         mock_draft,
         mock_two_bot,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """Fire footprint ported to two-bot writer on 2026-05-04. The
         FireComplex flows through `build_fire_footprint_bundle` →
@@ -2732,7 +2735,7 @@ class TestSynthesisRecording:
 
 
 class TestSynthesisStage:
-    def test_synthesis_stage_creates_draft(self, monkeypatch):
+    def test_synthesis_stage_withholds_reduced_heat_evidence(self, monkeypatch):
         from copy import deepcopy
         from datetime import datetime, timedelta, UTC
         from src.state import (
@@ -2776,19 +2779,13 @@ class TestSynthesisStage:
             return True
         monkeypatch.setattr(main, "_try_two_bot_draft", fake_two_bot)
 
-        main.run_alerts(bot_state)
+        from src.orchestrator.sources.synthesis import run_synthesis
+        run_synthesis(bot_state, None)
 
-        assert captured.get("legacy_type") == "synthesis_fire_drought_heat"
-        assert captured.get("bundle_signal_kind") == "synthesis_fire_drought_heat"
-        assert captured["components"] == [
-            {"kind": "drought", "d4_pct": 10.0},
-            {"kind": "fire", "peak_frp_mw": 1400.0, "peak_region": "Sacramento"},
-            {"kind": "heat", "peak_city": "Sacramento", "peak_kind": "calendar", "peak_value_c": 40.0},
-        ]
-        assert "california" in captured["event_id"]
-        # Cooldown must have been recorded so a second cycle is suppressed.
+        assert captured == {}  # Source reduction has no member dates/baselines.
+        assert any(issue["code"] == "temperature_aggregate_unqualified" for row in bot_state["suppressions"] for issue in row.get("evidence_readiness", {}).get("issues", []))
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
-        assert "California" in cooldown
+        assert "California" not in cooldown
 
     def test_synthesis_stage_creates_marine_compound_draft(self, monkeypatch):
         from copy import deepcopy

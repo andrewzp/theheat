@@ -1,3 +1,4 @@
+from tests.temperature_helpers import snapshot, dated_forecast, complete_archive
 from src.data import places
 
 def sample_identity(city, country, lat, lon):
@@ -57,7 +58,7 @@ def _arch(*, max_c=None, min_c=None, tw=None):
         a["temperature_2m_min"] = [min_c]
     if tw is not None:
         a["wet_bulb_temperature_2m_max"] = [tw]
-    return a
+    return complete_archive(a)
 
 
 def _raise(exc):
@@ -84,7 +85,7 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
     for c in world_cities:
         key = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
         if key in store:
-            store[key] = {**store[key], "identity": sample_identity(c["city"], c["country"], c["lat"], c["lon"])}
+            store[key] = snapshot({**store[key], "identity": sample_identity(c["city"], c["country"], c["lat"], c["lon"])})
     if meta_prev is not None:
         store["_meta"] = {"cached_count": meta_prev, "as_of": STALE_ISO}
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
@@ -95,7 +96,7 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
         return True
 
     monkeypatch.setattr(world_cache, "write_cache", _write)
-    monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch", forecasts)
+    monkeypatch.setattr("src.data.open_meteo.fetch_forecasts_batch", lambda cities: {key: dated_forecast(value, ISO) for key, value in forecasts(cities).items()})
     monkeypatch.setattr(runner, "_fetch_city_archive", archive)
     monkeypatch.setattr("src.data.open_meteo.detect_absolute_extreme",
                         abs_extreme or (lambda *a, **k: None))
@@ -136,7 +137,7 @@ def test_distinct_same_name_cities_do_not_conflate(monkeypatch):
     assert len(spain) == 1                                   # Spain Barcelona fired its own record
     assert ven == []                                        # Venezuela Barcelona did NOT (own forecast)
     assert K("Barcelona", "Spain") in store and K("Barcelona", "Venezuela") in store
-    assert store[K("Barcelona", "Spain")]["all_time_max"] == [45.0, YEAR]    # stamped
+    assert store[K("Barcelona", "Spain")]["all_time_max"] == [40.0, 2000]  # forecast never stamped
     assert store[K("Barcelona", "Venezuela")]["all_time_max"] == [40.0, 2000]  # untouched
 
 
@@ -186,7 +187,7 @@ def test_eval_saturation_degrades(monkeypatch):
     assert om_bundles == []
 
 
-# --- 3. Stale-cache record CONFIRMED by fresh archive emits + stamps
+# --- 3. Complete fresh source archive confirms a scoped forecast comparison
 def test_stale_record_confirmed_by_fresh_archive(monkeypatch):
     seed = {K("C"): _thresh("C", STALE_ISO, all_time_max=(44.0, 2000))}
     cities = [_city("C")]
@@ -195,7 +196,7 @@ def test_stale_record_confirmed_by_fresh_archive(monkeypatch):
         forecasts=_fc_map({"C": {"max_c": 47.0, "min_c": 12.0, "tw_max_c": 10.0}}),
         archive=lambda c: _arch(max_c=46.0))
     assert any(b.all_time_high is not None for b in om_bundles)
-    assert store[K("C")]["all_time_max"] == [47.0, YEAR]
+    assert store[K("C")]["all_time_max"] == [46.0, ARCH_YEAR]
     assert store[K("C")]["as_of"] == ISO
 
 
@@ -232,13 +233,14 @@ def test_no_stale_field_carryover_warm_success(monkeypatch):
         monkeypatch, cities, seed,
         forecasts=_fc_map({"C": {"max_c": 47.0, "min_c": 12.0, "tw_max_c": 10.0}}),
         archive=lambda c: _arch(max_c=46.0, min_c=12.0, tw=28.0))
-    assert store[K("C")]["all_time_max"] == [47.0, YEAR]
-    assert store[K("C")]["monthly_mean"][MM] == [46.0, 12.0, 1]
+    assert store[K("C")]["all_time_max"] == [46.0, ARCH_YEAR]
+    mean = store[K("C")]["monthly_mean"][MM]
+    assert mean[0] < 46 and mean[1] > 12 and mean[2] > 1 and mean[3] > 1
     assert store[K("C")]["wetbulb_max"] == [28.0, ARCH_YEAR]
     assert any(b.all_time_high is not None for b in om_bundles)
 
 
-# --- 5b. Warm fails -> entry untouched except stamped record fields; as_of preserved
+# --- 5b. Warm fails: historical entry untouched and stale record lane withheld
 def test_no_stale_field_carryover_warm_fails(monkeypatch):
     seed = {K("C"): _thresh("C", STALE_ISO, all_time_max=(44.0, 2000),
                             monthly_mean={MM: (20.0, 10.0, 50)}, wetbulb_max=(30.0, 2005))}
@@ -247,11 +249,12 @@ def test_no_stale_field_carryover_warm_fails(monkeypatch):
         monkeypatch, cities, seed, meta_prev=1,
         forecasts=_fc_map({"C": {"max_c": 47.0, "min_c": 12.0, "tw_max_c": 10.0}}),
         archive=_raise(OpenMeteoSaturated("archive 429")))
-    assert store[K("C")]["all_time_max"] == [47.0, YEAR]
-    assert store[K("C")]["monthly_mean"][MM] == [20.0, 10.0, 50]
+    assert store[K("C")]["all_time_max"] == [44.0, 2000]
+    assert store[K("C")]["monthly_mean"][MM] == [20.0, 10.0, 50, 50]
     assert store[K("C")]["wetbulb_max"] == [30.0, 2005]
     assert store[K("C")]["as_of"] == STALE_ISO
-    assert any(b.all_time_high is not None for b in om_bundles)
+    assert not any(b.all_time_high is not None for b in om_bundles)
+    assert m["record_comparisons_withheld"] == 1
     assert m["warm_saturated"] is True
 
 
@@ -278,7 +281,7 @@ def test_freshness_honesty_not_warmed_keeps_stale_as_of(monkeypatch):
     assert store[K("Aaa")]["as_of"] == ISO
     assert store[K("Bbb")]["as_of"] == STALE_ISO
     assert world_cache._is_stale(store[K("Bbb")], ttl_days=30, today=ISO) is True
-    assert {b.city for b in om_bundles if b.all_time_high} == {"Aaa", "Bbb"}
+    assert {b.city for b in om_bundles if b.all_time_high} == {"Aaa"}
 
 
 # --- 7. Snapshot-before-warm / 1-run lag for a previously-missing city
@@ -306,7 +309,7 @@ def test_steady_state_cached_record_advances_as_of(monkeypatch):
         monkeypatch, cities, seed,
         forecasts=_fc_map({"C": {"max_c": 45.0, "min_c": 12.0, "tw_max_c": 10.0}}),
         archive=_raise(AssertionError("warm must not run for a fresh city")))
-    assert store[K("C")]["all_time_max"] == [45.0, YEAR]
+    assert store[K("C")]["all_time_max"] == [40.0, 2000]
     assert store[K("C")]["as_of"] == ISO
     assert any(b.all_time_high is not None for b in om_bundles)
 
@@ -378,12 +381,29 @@ def test_event_id_disambiguated_by_country():
     from src.data.world_thresholds import evaluate_city
     cached = CityThresholds(city="Barcelona", as_of=ISO, years_of_data=30,
                             all_time_max=(40.0, 2000)).to_dict()
-    fc = {"max_c": 45.0, "min_c": 12.0, "tw_max_c": 10.0}
+    fc = dated_forecast({"max_c": 45.0, "min_c": 12.0, "tw_max_c": 10.0}, ISO)
     cached["identity"] = sample_identity("Barcelona", "Spain", 41.39, 2.16)
-    es = evaluate_city("Barcelona", "Spain", fc, CityThresholds.from_dict(cached),
+    es = evaluate_city("Barcelona", "Spain", fc, CityThresholds.from_dict(snapshot(cached)),
                        lat=41.39, lon=2.16, today=TODAY)
     cached["identity"] = sample_identity("Barcelona", "Venezuela", 10.14, -64.69)
-    ve = evaluate_city("Barcelona", "Venezuela", fc, CityThresholds.from_dict(cached),
+    ve = evaluate_city("Barcelona", "Venezuela", fc, CityThresholds.from_dict(snapshot(cached)),
                        lat=10.14, lon=-64.69, today=TODAY)
     assert es.all_time_high.event_id != ve.all_time_high.event_id
     assert places.event_identity(es.all_time_high.event_id)["place_id"] != places.event_identity(ve.all_time_high.event_id)["place_id"]
+
+
+def test_record_refresh_cap_withholds_unreconciled_candidate_with_visible_reason(monkeypatch):
+    monkeypatch.setattr(runner, "WORLD_WARM_BUDGET", 1)
+    seed = {K(city): _thresh(city, STALE_ISO, all_time_max=(44.0, 2000)) for city in ("A", "B")}
+    calls = []
+    def archive(city):
+        calls.append(city["city"])
+        return _arch(max_c=46)
+    bundles, _, _, metrics = _run(monkeypatch, [_city("A"), _city("B")], seed,
+        forecasts=_fc_map({city: {"max_c": 47, "min_c": 12} for city in ("A", "B")}), archive=archive)
+    assert calls == ["A"]
+    assert {bundle.city for bundle in bundles if bundle.all_time_high} == {"A"}
+    assert metrics["record_refresh_candidates"] == 2 and metrics["record_comparisons_withheld"] == 1
+    assert metrics["withheld_record_candidates"][0]["city"] == "B"
+    assert metrics["withheld_record_candidates"][0]["reason"] == "unreconciled_archive_cutoff"
+    assert metrics["status"] == "degraded"

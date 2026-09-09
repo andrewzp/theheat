@@ -220,6 +220,8 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             "place_id": places.resolve_place(ct.city, ct.country, ct.lat, ct.lon)["place_id"],
             "sampling_point_id": places.sampling_point_id(ct.lat, ct.lon),
                     "country": ct.country,
+                    "valid_date": ct.signal_date.isoformat() if ct.signal_date else None,
+                    "evidence": ct.evidence,
                     "temp_high_c": ct.temp_high_c,
                     "normal_high_c": ct.normal_high_c,
                     "anomaly_c": ct.anomaly_c,

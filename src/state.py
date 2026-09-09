@@ -24,6 +24,7 @@ from src.storage import sqlite_store
 from src.data.metric_history import merge_metric_rows
 from src.two_bot.json_utils import json_default
 from src.editorial.publication import automatic_approval_allowed, merge_publication_control
+from src.data.temperature_history import merge_temperature_history
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
 
 GIST_ID = os.environ.get("GIST_ID", "")
@@ -54,6 +55,7 @@ _TIER_TTLS_DAYS = {
 
 DEFAULT_STATE: BotState = {
     "publication_control": {},
+    "temperature_history": {},
     "last_hot10": {"date": None, "cities": []},
     "streaks": {},
     "posted_events": [],
@@ -2045,6 +2047,7 @@ def _merge_source_health(
 
 MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "publication_control": merge_publication_control,
+    "temperature_history": merge_temperature_history,
     "last_hot10": _strat_take_incoming,
     "streaks": _strat_take_incoming,
     "posted_events": _strat_ordered_unique(500),

@@ -1,6 +1,7 @@
 """Tests for Open-Meteo wet-bulb extreme signals."""
 
 from __future__ import annotations
+from tests.temperature_helpers import provider_payload
 
 from src.data import places
 from datetime import date
@@ -69,17 +70,17 @@ def _mock_detect_responses(
     responses.add(
         responses.GET,
         "https://api.open-meteo.com/v1/forecast",
-        json={"daily": _forecast_daily(tw_value, include_tw_key=include_forecast_tw_key)},
+        json=provider_payload({"daily": _forecast_daily(tw_value, include_tw_key=include_forecast_tw_key)}),
     )
     responses.add(
         responses.GET,
         "https://archive-api.open-meteo.com/v1/archive",
-        json={
+        json=provider_payload({
             "daily": _archive_daily(
                 tw_values=archive_tw_values,
                 include_tw_key=include_archive_tw_key,
             )
-        },
+        }),
     )
 
 
@@ -95,8 +96,10 @@ def test_tier3_wet_bulb_fires(monkeypatch: pytest.MonkeyPatch) -> None:
     assert bundle.wet_bulb_extreme.tier == 3
     assert bundle.wet_bulb_extreme.tier_label == "tier_3"
     assert bundle.wet_bulb_extreme.daily_max_tw_c == 35.5
-    assert bundle.wet_bulb_extreme.archive_max_tw_c == 34.8
-    assert bundle.wet_bulb_extreme.archive_max_year == 2023
+    # Three sparse annual cells do not qualify the intervening archive.
+    assert bundle.wet_bulb_extreme.archive_max_tw_c is None
+    assert bundle.wet_bulb_extreme.archive_max_year is None
+    assert bundle.wet_bulb_extreme.archive_years is None
     assert bundle.wet_bulb_extreme.event_id == f"wetbulb_{places.event_location_key('Jacobabad','Pakistan',24,68)}_2026-07-12_tier3"
 
 

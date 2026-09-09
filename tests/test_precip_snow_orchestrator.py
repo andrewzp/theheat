@@ -4,7 +4,7 @@ from src.data.nsidc_snow import SnowReading
 from src.state import _fresh_state
 
 
-def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
+def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import gpm_imerg as runner
 
     bot_state = _fresh_state()
@@ -93,7 +93,7 @@ def test_run_gpm_imerg_passes_worker_env(monkeypatch):
     assert captured["max_workers"] == 3
 
 
-def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch):
+def test_run_nsidc_snow_drafts_seasonal_record_and_counts(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import nsidc_snow as runner
 
     bot_state = _fresh_state()

@@ -1,0 +1,129 @@
+[
+  {
+    "name": "disjoint material revisions",
+    "base": {
+      "r1": {
+        "value_c": 34.8
+      }
+    },
+    "incoming": {
+      "r2": {
+        "value_c": 39.9,
+        "qflag": "S"
+      }
+    },
+    "expected": {
+      "r1": {
+        "value_c": 34.8
+      },
+      "r2": {
+        "value_c": 39.9,
+        "qflag": "S"
+      }
+    }
+  },
+  {
+    "name": "unchanged Unicode source evidence",
+    "base": {
+      "r1": {
+        "name": "Beaver Dams — 39.9°C",
+        "qflag": "S"
+      }
+    },
+    "incoming": {
+      "r1": {
+        "qflag": "S",
+        "name": "Beaver Dams — 39.9°C"
+      }
+    },
+    "expected": {
+      "r1": {
+        "qflag": "S",
+        "name": "Beaver Dams — 39.9°C"
+      }
+    }
+  },
+  {
+    "name": "conflicting retained evidence",
+    "base": {
+      "r1": {
+        "value_c": 34.8
+      }
+    },
+    "incoming": {
+      "r1": {
+        "value_c": 39.9
+      }
+    },
+    "expected": {
+      "r1": {
+        "value_c": 34.8
+      },
+      "r1:conflict:fada4e402635c8a5e3a31fa2260aee7dc5456211bdec3b33f40c89bb42ee3410": {
+        "value_c": 39.9
+      }
+    }
+  },
+  {
+    "name": "boolean is not numeric provenance",
+    "base": {
+      "r1": {
+        "accepted": true
+      }
+    },
+    "incoming": {
+      "r1": {
+        "accepted": 1
+      }
+    },
+    "expected": {
+      "r1": {
+        "accepted": true
+      },
+      "r1:conflict:9d009075d5d4653cae964f5b273dd40d96f62b3ad1f7216ff3b33b9007c34ef2": {
+        "accepted": 1
+      }
+    }
+  },
+  {
+    "name": "reserved conflict ID collision retains every payload",
+    "base": {
+      "r": {
+        "value": 2
+      },
+      "r:conflict:fdc5b5e8999983eb817ef03e526a30b08cef00f64c66c1e14482ad0accec3d64": {
+        "value": 999
+      }
+    },
+    "incoming": {
+      "r": {
+        "value": 1
+      }
+    },
+    "expected": {
+      "r": {
+        "value": 999
+      },
+      "r:conflict:28ea086a7244da02acf966aa4fbef348082c1e7388e5c6a6b170f09751059b65": {
+        "value": 2
+      },
+      "r:conflict:fdc5b5e8999983eb817ef03e526a30b08cef00f64c66c1e14482ad0accec3d64": {
+        "value": 1
+      }
+    }
+  },
+  {
+    "name": "prototype-shaped evidence key is ordinary retained data",
+    "base": {
+      "__proto__": {
+        "qflag": "S"
+      }
+    },
+    "incoming": {},
+    "expected": {
+      "__proto__": {
+        "qflag": "S"
+      }
+    }
+  }
+]

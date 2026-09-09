@@ -7,13 +7,13 @@ Docs: https://open-meteo.com/en/docs/marine-weather-api
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
 
 import requests
 
 from src.data._http import fetch_with_retry
 from src.data.source_status import SourceFetchError
+from src.data.temperature_evidence import daily_time, finite
 
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 
@@ -64,6 +64,7 @@ class OceanReading:
     sst_c: float | None
     date: str
     event_id: str
+    evidence: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -73,6 +74,7 @@ class ExtremeWaveEvent:
     wave_height_m: float
     date: str
     event_id: str
+    evidence: dict = field(default_factory=dict)
 
 
 def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
@@ -100,10 +102,11 @@ def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
             wave = daily.get("wave_height_max", [None])[0]
             sst = None  # SST not available as daily aggregate in Marine API
 
-            if wave is None:
+            if not finite(wave):
                 continue
 
-            reading_date = date.today().isoformat()
+            timing = daily_time(data)
+            reading_date = timing["valid_date"]
             event_id = f"ocean_{name.replace(' ', '_').lower()}_{reading_date}"
 
             readings.append(OceanReading(
@@ -115,8 +118,9 @@ def fetch_ocean_conditions(*, strict: bool = False) -> list[OceanReading]:
                 sst_c=sst,
                 date=reading_date,
                 event_id=event_id,
+                evidence={**timing, "evidence_type": "forecast", "source_product": "openmeteo-marine-forecast", "spatial_scope": "model_grid_point"},
             ))
-        except (requests.RequestException, KeyError, IndexError, ValueError) as exc:
+        except (requests.RequestException, KeyError, IndexError, ValueError, TypeError) as exc:
             failures.append(f"{name}: {exc}")
             continue
 
@@ -141,5 +145,6 @@ def detect_extreme_waves(readings: list[OceanReading], threshold_m: float = EXTR
                 wave_height_m=r.wave_height_max_m,
                 date=r.date,
                 event_id=f"extreme_wave_{r.location.replace(' ', '_').lower()}_{r.date}",
+                evidence=r.evidence,
             ))
     return events

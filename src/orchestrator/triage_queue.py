@@ -74,7 +74,7 @@ def _enqueue_story_candidate(
     StoryBundle, and submit it here. Only the drain step may later call the
     writer pipeline for triage survivors.
     """
-    from src.two_bot.evidence_contract import audit_story_bundle
+    from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
     from src.two_bot.types import TriageCandidateBundle
 
     audit = audit_story_bundle(bundle)
@@ -88,8 +88,9 @@ def _enqueue_story_candidate(
             event_id=event_id,
             score=score,
             kill_stage="evidence_contract",
-            kill_reason="; ".join(error_codes),
+            kill_reason="; ".join(f"{issue.code} ({issue.field}): {issue.message}" for issue in audit.issues if issue.severity == "error"),
             summary=getattr(bundle, "where", None) or city or None,
+            evidence_readiness=evidence_rejection_details(bundle, audit),
         )
         return False
 

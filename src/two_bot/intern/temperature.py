@@ -237,7 +237,7 @@ def build_all_time_record_bundle(ev: AllTimeRecord, *, source: str = "open_meteo
             "prior_record_f": old_record_f,
             "prior_record_year": ev.old_record_year,
             "archive_years": ev.years_of_data,
-            "archive_start_year": date.today().year - ev.years_of_data,
+            "archive_start_year": (ev.evidence.get("baseline") or {}).get("requested_start"),
             "archive_window_only": True,
             "kind": ev.kind,
             "margin_c": margin_c,
@@ -654,7 +654,7 @@ def build_hot10_bundle(
     return StoryBundle(
         signal_kind="hot10",
         where=f"{leader['city']}, {leader['country']}" if leader else "global",
-        when=date.today().isoformat(),
+        when=(leader or {}).get("valid_date") or "",
         event_id=event_id,
         headline_metric={
             "label": "top_anomaly_c",
@@ -667,6 +667,9 @@ def build_hot10_bundle(
             {"label": "leader_temp_c", "value": leader["temp_high_c"] if leader else None},
             {"label": "leader_anomaly_c", "value": leader["anomaly_c"] if leader else None},
             {"label": "city_count", "value": len(cities)},
+            {"label": "evidence_type", "value": "forecast"},
+            {"label": "valid_dates", "value": sorted({row["valid_date"] for row in cities if row.get("valid_date")})},
+            {"label": "date_scope", "value": "Each city uses its returned local forecast date; this is not a simultaneous observed global maximum."},
             {"label": "cities", "value": cities},
             {"label": "rank_changes", "value": changes},
             *_audience_unit_facts(leader["country"] if leader else None),

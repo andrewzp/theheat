@@ -13,7 +13,7 @@ name: voice-regression
 #     such events ≈ $11–12 total; was ~$30/month nightly regardless).
 #
 # Triggers (economics master plan P0.4):
-#   - pull_request (automatic) when the PR touches the writer prompt or the
+#   - pull_request (only with THEHEAT_PAID_PR_REPLAY_ENABLED=1) when the PR touches the writer prompt or the
 #     writer itself: src/two_bot/prompts/** or src/two_bot/writer.py. The
 #     suite goes red on the exact PRs that can break the voice. Same-repo
 #     PRs only: forks receive no secrets, so the paid job would fail on a
@@ -71,13 +71,16 @@ jobs:
           fi
 
   replay:
-    # Full suite: weekly cron, manual dispatch, writer-path PRs, labeled PRs.
+    # Existing scheduled/manual evaluations retain their cadence. New PR
+    # iterations require an explicit paid-evaluation opt-in: changing prompts
+    # or applying voice-check alone must not silently buy another full replay.
     needs: [changes]
     if: >
       always() && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'schedule' && github.event.schedule == '0 9 * * 0') ||
         (github.event_name == 'pull_request' &&
+          vars.THEHEAT_PAID_PR_REPLAY_ENABLED == '1' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           (github.event.action != 'labeled' || github.event.label.name == 'voice-check') &&
           (needs.changes.outputs.writer_paths == 'true' ||

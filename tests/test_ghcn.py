@@ -31,7 +31,7 @@ from src.data import ghcn as ghcn_module
 from src.data.ghcn import (
     ANOMALY_HOT_THRESHOLD_C,
     _dedup_by_metro,
-    _detect_signals_for_station,
+    _detect_signals_for_station as _detect_verified_signals,
     _fetch_recent_obs,
     _has_signal,
     check_extreme_signals_for_stations,
@@ -76,6 +76,32 @@ STATION_META_2 = {
     "elevation_m": 50.0,
     "archive_years": 40,
 }
+
+
+def _qualify_math_fixture(thresholds, obs):
+    """Explicit source-verifier stub for pre-existing signal arithmetic tests.
+
+    Real source bytes, cutoff and QC reconciliation are covered independently
+    in test_ghcn_time_integrity.py. These synthetic maxima are not an archive.
+    """
+    rows = [obs] if isinstance(obs, DailyObs) else obs
+    thresholds.provenance = {
+        "reconciled": True, "station_id": thresholds.station_id,
+        "source_product": "noaa-ghcn-daily-v2", "source_payload_sha256": "fixture",
+        "retrieved_at": "2026-09-09T00:00:00Z", "comparison_before": rows[0].obs_date.isoformat(),
+        "variables": {variable: {
+            "years_with_samples": years or thresholds.archive_years, "candidate_accepted": True, "source_coverage_complete": True,
+            "record_dates": {},
+            "monthly_years": {row.obs_date.strftime("%m"): years or thresholds.archive_years for row in rows},
+            "calendar_years": {row.obs_date.strftime("%m-%d"): years or thresholds.archive_years for row in rows},
+        } for variable, years in (("temperature_2m_max", thresholds.tmax_archive_years),
+                                  ("temperature_2m_min", thresholds.tmin_archive_years))},
+    }
+    return thresholds
+
+
+def _detect_signals_for_station(station, obs, thresholds):
+    return _detect_verified_signals(station, obs, _qualify_math_fixture(thresholds, obs))
 
 
 def _make_thresholds() -> StationThresholds:
@@ -431,7 +457,9 @@ class TestDetectSignalsForStation:
         thin_thresh.archive_years = 5
         obs = _obs("POLAR0000000", date(2026, 7, 15), "TMAX", 30.0)
         bundle = _detect_signals_for_station(thin_meta, obs, thin_thresh)
-        assert bundle is None
+        assert bundle is not None
+        assert bundle.all_time_high is None
+        assert bundle.archive_max_c is None
 
     def test_tmin_only_station_uses_tmin_archive_years(self):
         t = StationThresholds(station_id="TMINONLY000")
@@ -527,6 +555,15 @@ def test_dedup_allows_multiple_countries():
 # ---------------------------------------------------------------------------
 
 class TestCheckExtremeSignalsForStations:
+    @pytest.fixture(autouse=True)
+    def verified_math_adapter(self, monkeypatch):
+        monkeypatch.setattr(ghcn_module, "_fetch_station_archive", lambda sid: b"engineered fixture")
+        monkeypatch.setattr(ghcn_module, "_archive_snapshot", lambda sid, payload, now: {"records": {}})
+        def verified(sid, obs, snapshot):
+            thresholds = _make_thresholds() if sid == STATION_META["station_id"] else _make_thresholds_2()
+            return _qualify_math_fixture(thresholds, obs), obs
+        monkeypatch.setattr(ghcn_module, "_thresholds_from_verified_archive", verified)
+
     def test_returns_bundle_when_signal_fires(self, db_path: Path):
         """An all-time record obs produces a non-empty bundles list."""
         obs = _obs("POLAR0000000", date(2026, 7, 15), "TMAX", 26.0)

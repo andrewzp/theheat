@@ -12,7 +12,7 @@ from src.data.fire_footprint import FireComplex
 
 from src.data.fire_footprint import TIERS_HECTARES
 
-from src.data.firms import FireEvent
+from src.data.firms import FireEvent, _FIRMS_PRODUCT_CHAIN
 
 from src.two_bot.types import StoryBundle
 
@@ -51,6 +51,15 @@ def build_fire_bundle(fire: FireEvent) -> StoryBundle:
         ],
         historical_context={},
         raw_signal_dump={
+            # Source family is known by this adapter; the primary product,
+            # acquisition interval and raw classification are not retained by
+            # FireEvent and must not be invented here.
+            "source_name": (
+                "NOAA HMS" if fire.source_leg == "noaa_hms"
+                else "NASA FIRMS" if fire.source_leg is None or fire.source_leg in _FIRMS_PRODUCT_CHAIN
+                else None
+            ),
+            "source_leg": fire.source_leg,
             "lat": fire.lat,
             "lon": fire.lon,
             "confidence": fire.confidence,

@@ -132,6 +132,8 @@ def _try_two_bot_draft(
                 kill_stage=pipeline_result.get("kill_stage", "unknown"),
                 kill_reason=pipeline_result.get("kill_reason", "unknown"),
                 summary=getattr(bundle, "where", None) or city or None,
+                evidence_readiness=pipeline_result.get("evidence_readiness"),
+                model_diagnostics=pipeline_result.get("model_diagnostics"),
             )
         return False
     final_text = _append_cyclone_advisory_url(draft["text"], bundle, legacy_type)

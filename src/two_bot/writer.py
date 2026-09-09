@@ -17,9 +17,12 @@ from src.two_bot.json_utils import (
     extract_json_payload as _extract_json_payload,  # noqa: F401 — re-exported for tests
     json_default as _json_default,
     loads_model_json,
+    model_response_diagnostic,
+    ModelOutputContractError,
     strip_markdown_fences as _strip_markdown_fences,  # noqa: F401 — re-exported for tests
 )
 from src.two_bot.retry import call_with_retries
+from src.two_bot.strict_contract import model_failure_snapshot
 
 
 WRITER_MODEL = os.environ.get("THEHEAT_WRITER_MODEL", _DEFAULT_WRITER_MODEL)
@@ -77,38 +80,82 @@ LENGTH_RETRY_BUDGET = 2
 # in WriterResult so the dashboard records a kill_reason instead of the
 # pipeline raising a ValueError. 1 retry is enough because the failure is
 # typically stochastic refusal — a second sampling usually produces JSON.
+# Economics P2.2: on the Anthropic path this lane is now a residual safety
+# net — structured outputs (WRITER_OUTPUT_SCHEMA below) constrain decoding
+# to schema-valid JSON, so the lane fires only on refusal-shaped responses
+# and provider-side schema failures; both supported providers receive a schema.
 JSON_PARSE_RETRY_BUDGET = 1
+
+# Reused from PR #463, commit 61ae9ee4ab41f333de57ab2400925f2700af98d8.
+# Economics P2.2: machine enforcement of the prompt's `# OUTPUT` contract
+# (writer_prompt.py). Passed as `output_config.format` (GA on the pinned
+# claude-sonnet-4-6; verified live 2026-07-13 in PLAN-ECONOMICS-MASTER-v3)
+# so the JSON-parse retry lane stops burning paid calls on non-JSON output.
+# Field-for-field this MUST stay in lockstep with _parse_writer_json and the
+# prompt's OUTPUT section: same six base fields, plus `cited_impact`, which
+# IMPACT_GUIDANCE asks for when a bundle carries human_impact — with
+# additionalProperties:false, omitting it here would make strict decoding
+# reject every impact-lane draft (Bet A A1). Required-with-null keeps the
+# key always present; the parser already maps null → None.
+# `maxLength` is deliberately absent: unsupported server-side, so the
+# 280-char cap remains the length-retry lane's job (semantic, not schema).
+WRITER_OUTPUT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "tweet": {"type": ["string", "null"]},
+        "kill_reason": {"type": ["string", "null"]},
+        "angle_chosen": {"type": "string"},
+        "era_anchor_used": {"type": ["string", "null"]},
+        "peer_comparison_used": {"type": ["string", "null"]},
+        "reasoning": {"type": "string"},
+        "cited_impact": {"type": ["boolean", "null"]},
+    },
+    "required": [
+        "tweet",
+        "kill_reason",
+        "angle_chosen",
+        "era_anchor_used",
+        "peer_comparison_used",
+        "reasoning",
+        "cited_impact",
+    ],
+    "additionalProperties": False,
+}
 
 
 def _bundle_json(bundle: StoryBundle) -> str:
-    return json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default)
+    return json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default, allow_nan=False)
 
 
 def _memory_json(memory: MemorySlice) -> str:
-    return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default)
+    return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default, allow_nan=False)
 
 
 def _parse_writer_json(raw: str) -> WriterResult:
     try:
         parsed = loads_model_json(raw, expected="object")
-    except json.JSONDecodeError as exc:
-        print(f"[two_bot.writer] Invalid JSON response: {raw}")
-        raise ValueError("Writer returned invalid JSON") from exc
+    except ValueError as exc:
+        raise ValueError(f"Writer returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
-        raise ValueError("Writer response must be a JSON object")
+        raise ModelOutputContractError("Writer response must be a JSON object")
+    required = {"tweet", "kill_reason", "angle_chosen", "era_anchor_used", "peer_comparison_used", "reasoning"}
+    if not required.issubset(parsed) or set(parsed) - (required | {"cited_impact"}):
+        raise ModelOutputContractError("Writer response fields do not match the output contract")
     cited_impact = parsed.get("cited_impact")
     try:
-        return WriterResult(
+        result = WriterResult(
             tweet=parsed.get("tweet"),
             kill_reason=parsed.get("kill_reason"),
-            angle_chosen=parsed.get("angle_chosen") or "",
+            angle_chosen=parsed["angle_chosen"],
             era_anchor_used=parsed.get("era_anchor_used"),
             peer_comparison_used=parsed.get("peer_comparison_used"),
-            reasoning=parsed.get("reasoning") or "",
-            cited_impact=cited_impact if isinstance(cited_impact, bool) else None,
+            reasoning=parsed["reasoning"],
+            cited_impact=cited_impact,
         )
-    except TypeError as exc:
-        raise ValueError("Writer response is missing required fields") from exc
+        result.validate_model_output()
+        return result
+    except (TypeError, ValueError) as exc:
+        raise ModelOutputContractError(f"Writer response violates its output contract: {exc}") from exc
 
 
 def _call_anthropic(user_prompt: str) -> str:
@@ -146,6 +193,13 @@ def _call_anthropic(user_prompt: str) -> str:
                 }
             ],
             messages=[{"role": "user", "content": user_prompt}],
+            # Economics P2.2: constrained decoding to the writer contract.
+            # On a safety refusal the output may not match the schema — the
+            # existing _parse_writer_json ValueError path + JSON-retry lane
+            # stay in place as the net for exactly that case.
+            output_config={
+                "format": {"type": "json_schema", "schema": WRITER_OUTPUT_SCHEMA}
+            },
         ),
     )
     # Economics P0.6: every paid call lands in the usage ledger. The WHOLE
@@ -167,6 +221,22 @@ def _call_anthropic(user_prompt: str) -> str:
             )
     except Exception as exc:  # noqa: BLE001 — accounting never breaks the call
         print(f"[usage_ledger] anthropic usage extraction error (ignored): {exc!r}")
+    # Refusal / empty-content route (codex r1 P1): a safety refusal is a
+    # SUCCESSFUL HTTP 200 whose content may be EMPTY (and, with structured
+    # outputs, need not match the schema). Indexing content[0] here raised
+    # IndexError → pipeline_error, bypassing the JSON-retry → clean-KILL net
+    # this path advertises. Returning "" routes it into exactly that net:
+    # _parse_writer_json("") raises ValueError, the parse lane retries once,
+    # and an unresolved refusal becomes a clean writer KILL with a reason —
+    # the same contract as the 2026-05-12 empty-output incident this lane
+    # was built for.
+    if getattr(response, "stop_reason", None) == "refusal" or not response.content:
+        print(
+            f"[two_bot.writer] Anthropic returned "
+            f"{'refusal' if getattr(response, 'stop_reason', None) == 'refusal' else 'empty content'}"
+            f" (stop_reason={getattr(response, 'stop_reason', None)!r})"
+        )
+        return ""
     # response.content is a list of block types — narrow to TextBlock.
     # We don't request thinking / tool use, so the first block is always text;
     # the explicit check is for static type safety + future-proofing.
@@ -195,6 +265,7 @@ def _call_google(user_prompt: str) -> str:
         lambda: client.models.generate_content(
             model=WRITER_MODEL,
             contents=f"{WRITER_SYSTEM_PROMPT}\n\n{user_prompt}",
+            config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=WRITER_OUTPUT_SCHEMA),
         ),
     )
     # Economics P0.6: mirror the Anthropic capture, same fail-open boundary
@@ -254,7 +325,7 @@ def write_tweet(
     # deterministically here, before any model call — the same decision the
     # live model reaches on its own, but reliable and free. See
     # OUT_OF_SCOPE_SIGNAL_KINDS.
-    if bundle.signal_kind in OUT_OF_SCOPE_SIGNAL_KINDS:
+    if isinstance(bundle.signal_kind, str) and bundle.signal_kind in OUT_OF_SCOPE_SIGNAL_KINDS:
         return WriterResult(
             tweet=None,
             kill_reason=(
@@ -268,6 +339,24 @@ def write_tweet(
                 "out-of-scope geophysical signal; @theheat publishes climate, "
                 "weather, ocean, atmosphere, and cryosphere signals only"
             ),
+        )
+
+    # Direct callers (including the offline writer CLI) must obey the same
+    # evidence gate as triage and the main pipeline before spending a call.
+    from src.two_bot.evidence_contract import audit_story_bundle
+
+    audit = audit_story_bundle(bundle)
+    if not audit.prompt_ready:
+        return WriterResult(
+            tweet=None,
+            kill_reason="Evidence requires repair: " + "; ".join(
+                f"{issue.code} ({issue.field}): {issue.message}"
+                for issue in audit.issues if issue.severity == "error"
+            ),
+            angle_chosen="",
+            era_anchor_used=None,
+            peer_comparison_used=None,
+            reasoning="Evidence validation failed before requesting a writer response.",
         )
 
     if WRITER_PROVIDER == "unsupported_openai":
@@ -329,6 +418,15 @@ def write_tweet(
             try:
                 result = _parse_writer_json(raw)
                 break  # parse succeeded — exit inner loop
+            except ModelOutputContractError as exc:
+                # Valid JSON with a wrong shape/type is an unresolved output,
+                # not a reason to spend another schema-repair model call.
+                return WriterResult(
+                    tweet=None, kill_reason=f"Writer output contract rejected: {exc}",
+                    angle_chosen="", era_anchor_used=None, peer_comparison_used=None,
+                    reasoning="Deterministic output validation failed; no repair call was made.",
+                    failure_diagnostic=model_failure_snapshot("writer", raw),
+                )
             except ValueError as exc:
                 last_parse_error = str(exc)
                 # Fall through to retry; if budget exhausted, return KILL.
@@ -347,6 +445,7 @@ def write_tweet(
                     f"json-parse retry exhausted; last error: "
                     f"{last_parse_error or 'unknown'}"
                 ),
+                failure_diagnostic=model_failure_snapshot("writer", raw),
             )
 
         assert result is not None  # mypy: the break above guarantees result is set

@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+from datetime import date, datetime
+from src.data.temperature_evidence import finite
 
 from src.data import places
 
@@ -30,6 +32,54 @@ def valid_cache_entry(key: str, row: dict) -> bool:
     if any(isinstance(identity.get(field), bool) for field in ("lat", "lon")):
         return False
     if identity.get("source_product") != places.CACHE_PRODUCT:
+        return False
+    baseline = row.get("baseline")
+    if (
+        not isinstance(baseline, dict)
+        or baseline.get("schema_version") != 2
+        or baseline.get("model") != "era5"
+    ):
+        return False
+    try:
+        if baseline.get("source_product") != places.CACHE_PRODUCT:
+            return False
+        revision = baseline["revision_id"]
+        if not isinstance(revision, str) or len(revision) != 64 or any(c not in "0123456789abcdef" for c in revision):
+            return False
+        retrieved = datetime.fromisoformat(baseline["retrieved_at"].replace("Z", "+00:00"))
+        if retrieved.tzinfo is None:
+            return False
+        start, end = date.fromisoformat(baseline["requested_start"]), date.fromisoformat(baseline["requested_end"])
+        years = baseline["requested_years"]
+        if start > end or not isinstance(years, int) or isinstance(years, bool) or years < 1:
+            return False
+        variables = baseline["variables"]
+        for variable in ("temperature_2m_max", "temperature_2m_min", "wet_bulb_temperature_2m_max"):
+            value = variables[variable]
+            count, expected = value["sample_count"], value["expected_count"]
+            sampled_years = value["years_with_samples"]
+            if any(not isinstance(v, int) or isinstance(v, bool) or v < 0 for v in (count, expected, sampled_years)):
+                return False
+            if expected != (end - start).days + 1 or count > expected or not isinstance(value["complete"], bool):
+                return False
+            cutoff = date.fromisoformat(value["cutoff"]) if value.get("cutoff") else None
+            if (count > 0) != (cutoff is not None) or (cutoff is not None and not start <= cutoff <= end):
+                return False
+            if value["complete"] and (count != expected or cutoff != end):
+                return False
+        for field in ("all_time_max", "all_time_min", "wetbulb_max"):
+            value = row.get(field)
+            if value is not None and (not isinstance(value, (tuple, list)) or len(value) != 2 or not finite(value[0]) or not isinstance(value[1], int)):
+                return False
+        for field in ("monthly_max", "monthly_min", "calendar_max", "calendar_min", "monthly_mean"):
+            values = row.get(field) or {}
+            if not isinstance(values, dict):
+                return False
+            for value in values.values():
+                length = 4 if field == "monthly_mean" else 2
+                if not isinstance(value, (tuple, list)) or len(value) != length or any(v is not None and not finite(v) for v in value):
+                    return False
+    except (KeyError, TypeError, ValueError, AttributeError):
         return False
     try:
         resolved = places.resolve_place(

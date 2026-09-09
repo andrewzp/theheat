@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 # ruff: noqa: F403,F405
-import requests
 
 from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
@@ -40,6 +41,7 @@ def _cluster_member_row(
         "old_record_year": ev.old_record_year,
         "margin_c": round(ev.new_temp_c - ev.old_record_c, 1),
         "signal_date": date_iso,
+        "evidence": deepcopy(ev.evidence),
     }
 
 
@@ -69,8 +71,8 @@ def _records_cluster_member(
 
     There is deliberately NO monthly "old record set this year" guard here. That
     guard is an individual-tweet nicety, but world monthly records legitimately
-    carry ``old_record_year == the current year`` (world_cache stamps provisional
-    records with today's year), so guarding here would silently drop world monthly
+    carry ``old_record_year == the current year`` (the archive may include accepted
+    reanalysis samples earlier this year), so guarding here would silently drop world monthly
     members and make the class US-only — the exact failure the tier rework fixes.
     """
     observed = bool(bundle.station_id)
@@ -98,35 +100,12 @@ def _records_cluster_member(
 
 
 def _fetch_city_archive(city: dict) -> dict | None:
-    today = date.today()
-    try:
-        start = today.replace(year=today.year - 30)
-    except ValueError:
-        start = today.replace(year=today.year - 30, day=28)
-    end = date.fromordinal(today.toordinal() - 1)
-    try:
-        resp = open_meteo.fetch_with_retry(
-            f"{open_meteo.ARCHIVE_URL}/archive",
-            params={
-                "latitude": city["lat"], "longitude": city["lon"],
-                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
-                "start_date": start.isoformat(), "end_date": end.isoformat(), "timezone": "auto",
-            },
-            timeout=30, attempts=3, backoff_base=1.0,
-        )
-    except requests.HTTPError as exc:
-        if getattr(exc.response, "status_code", None) == 429:
-            raise OpenMeteoSaturated("archive 429") from exc
-        return None
-    except requests.RequestException:
-        return None
-    try:
-        return resp.json().get("daily", {})
-    except ValueError:
-        return None
+    # Warming can precede a city's first forecast. This is a query bound only;
+    # provider response dates define coverage and never become an observed date.
+    return open_meteo.fetch_archive_daily(city["lat"], city["lon"], date.fromisoformat(city["_archive_valid_date"]) if city.get("_archive_valid_date") else date.today())
 
 
-def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
+def _run_world_cached_half(world_cities: list[dict], metrics_out: dict, bot_state=None):
     """Cached-threshold world half, mirroring the GHCN/US model.
 
     Three phases under one shared ``OpenMeteoBudget`` (paced under Open-Meteo's
@@ -143,9 +122,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
        starving forecast evaluation (the original world-half bug).
     3. **CONSOLIDATE** (no network) — re-evaluate every pending city against the
        FRESHEST thresholds (warm-fresh if warmed this run, else the pre-existing
-       cached entry), finalize ``om_bundles``/``all_readings``, and stamp
-       provisional records via ``apply_provisional_preserving_as_of`` so a fresh
-       archive can refute a stale-cache record before it is emitted or stamped.
+       cached entry), finalize ``om_bundles``/``all_readings``. A fresh archive can refute a
+       stale-cache comparison; forecast activity never changes historical fields.
 
     A previously-missing city is warmed but not evaluated until the next run
     (bounded, intentional 1-run lag); a previously-cached city warmed this run is
@@ -176,8 +154,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
 
     # Snapshot eval targets + the stale set off the PRE-mutation cache. ``cached_cities``
     # is stable because EVAL never adds cache entries (only WARM does); ``stale`` must be
-    # selected BEFORE the provisional stamp in CONSOLIDATE, which sets as_of=today and
-    # would otherwise hide a stale city from select_stale_cities.
+    # selected before warming. Forecast activity does not advance archive freshness.
     cached_cities = [
         c for c in world_cities
         if world_cache.world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")) in cache
@@ -219,10 +196,24 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
             pending.append((c, fc))    # forecast carried into CONSOLIDATE (single carrier)
         i += size
 
+    # Refresh candidates before routine warming, within the SAME existing cap.
+    # A current forecast may nominate a source read but cannot alter the baseline.
+    from src.data.world_thresholds import potential_record_variables, record_comparison_qualification
+    refresh, seen_refresh = [], set()
+    for city, forecast in pending:
+        key = world_cache.world_key(city["city"], city["country"], city["lat"], city["lon"])
+        baseline = cache[key]["baseline"]
+        if any(not record_comparison_qualification(baseline, date.fromisoformat(forecast["valid_date"]), var)[0]
+               for var in potential_record_variables(forecast, cache[key])):
+            refresh.append({**city, "_archive_valid_date": forecast["valid_date"]})
+            seen_refresh.add(key)
+    stale = (refresh + [city for city in stale if world_cache.world_key(city["city"], city["country"], city["lat"], city["lon"]) not in seen_refresh])[:WORLD_WARM_BUDGET]
+    metrics_out["record_refresh_candidates"] = len(refresh)
+    withheld = []
+
     # PHASE 2 — WARM (archive endpoint): refresh climatology for the stale/missing set.
-    # Gated on ``not warm_saturated`` ONLY (the decouple). ``warmed_now`` records which
-    # cities got fresh archive thresholds this run so CONSOLIDATE evaluates them fresh.
-    warmed_now: set[str] = set()
+    # Gated on ``not warm_saturated`` ONLY; CONSOLIDATE uses each complete fresh snapshot.
+
     for c in stale:
         try:
             budget.wait_until_can_spend(43)
@@ -240,14 +231,15 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
             warm_failures += 1
             continue
         wk = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
-        cache[wk] = compute_city_thresholds(c["city"], archive, as_of=iso, country=c["country"], lat=c["lat"], lon=c["lon"]).to_dict()
-        warmed_now.add(wk)
+        fresh = compute_city_thresholds(c["city"], archive, as_of=iso, country=c["country"], lat=c["lat"], lon=c["lon"]).to_dict()
+        from src.data.world_temperature_history import record_baseline_revision
+        record_baseline_revision(bot_state, wk, cache.get(wk), fresh)
+        cache[wk] = fresh
 
     # PHASE 3 — CONSOLIDATE (no network): evaluate every pending city against the FRESHEST
     # available thresholds (warm-fresh if warmed this run, else the pre-existing cached
-    # entry), finalize om_bundles/all_readings, and stamp provisional records with
-    # freshness honesty. Finalizing after WARM lets a fresh archive refute a stale-cache
-    # record before it is ever emitted or stamped.
+    # entry). Finalizing after WARM lets a fresh archive refute a stale-cache comparison
+    # before it is emitted. Forecast values never enter the archive snapshot.
     all_readings = []
     om_bundles = []
     for c, fc in pending:
@@ -259,14 +251,19 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         cached_t = CityThresholds.from_dict(cur)
         bundle = evaluate_city(
             name, c["country"], fc, cached_t,
-            lat=float(c["lat"]), lon=float(c["lon"]), today=today,
+            lat=float(c["lat"]), lon=float(c["lon"]),
         )
+        for variable in potential_record_variables(fc, cur):
+            eligible, reason = record_comparison_qualification(cur["baseline"], bundle.signal_date, variable)
+            if not eligible:
+                withheld.append({"sampling_key": wk, "city": name, "valid_date": fc["valid_date"], "variable": variable, "reason": reason, "archive_cutoff": cur["baseline"]["variables"][variable].get("cutoff")})
         abs_ev = open_meteo.detect_absolute_extreme(
             float(c["lat"]), float(c["lon"]), fc.get("max_c"), fc.get("min_c"),
-            name, c["country"],
+            name, c["country"], signal_date=bundle.signal_date,
         )
         if abs_ev is not None:
             bundle.absolute_extreme = abs_ev
+            open_meteo.attach_evidence(bundle, bundle.evidence)
         all_readings.append(bundle)    # ALWAYS append: country aggregation needs every reading
         if any([
             bundle.all_time_high, bundle.all_time_low, bundle.monthly_high,
@@ -274,20 +271,13 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
             bundle.absolute_extreme, bundle.wet_bulb_extreme,
         ]):
             om_bundles.append(bundle)
-        if any([bundle.all_time_high, bundle.all_time_low,
-                bundle.monthly_high, bundle.monthly_low]):
-            world_cache.apply_provisional_preserving_as_of(
-                cache, bundle, today=iso, advance_as_of=(wk in warmed_now),
-                ttl_days=WORLD_CACHE_TTL_DAYS,
-            )
-
     eligibility: dict[str, int] = {}
     for c in world_cities:
         co = places.country_key(c.get("country", ""))
         if co:
             eligibility[co] = eligibility.get(co, 0) + 1
     om_country = open_meteo.detect_country_records(
-        all_readings, country_eligibility=eligibility, record_date=today,
+        all_readings, country_eligibility=eligibility,
     )
 
     cached_count = len(active_keys & set(cache))
@@ -297,6 +287,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     world_cache.write_cache(cache)
 
     metrics_out.update({
+        "record_comparisons_withheld": len(withheld), "withheld_record_candidates": withheld,
         "world_total": len(world_cities), "cached_count": cached_count,
         "identity_quarantined": cache["_meta"].get("quarantined_count", 0),
         "forecast_attempted": forecast_attempted, "forecast_failures": forecast_failures,
@@ -307,7 +298,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         "saturated": eval_saturated or warm_saturated,   # backward-compatible OR
     })
     metrics_out["status"] = world_cache.classify_world_status(metrics_out, prev_cached_count=prev_cached)
-    if metrics_out["identity_quarantined"] and cached_count < len(active_keys):
+    if withheld or (metrics_out["identity_quarantined"] and cached_count < len(active_keys)):
         metrics_out["status"] = "degraded"
     return om_bundles, om_country
 
@@ -348,7 +339,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             )
         if _signals_provider == "ghcn":
             bundles, country_records = ghcn.check_extreme_signals_for_stations(
-                metrics_out=ghcn_pipeline_metrics,
+                metrics_out=ghcn_pipeline_metrics, bot_state=bot_state,
             )
         elif _signals_provider == "open_meteo":
             bundles, country_records = _check_city_extreme_signals(
@@ -361,13 +352,13 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             # and partition by country so every place is sourced from exactly one
             # provider — no overlap, no fragile name/geo matching.
             ghcn_bundles, ghcn_country = ghcn.check_extreme_signals_for_stations(
-                metrics_out=ghcn_pipeline_metrics,
+                metrics_out=ghcn_pipeline_metrics, bot_state=bot_state,
             )
             # Open-Meteo only needs the non-US cities — the US comes from GHCN —
             # so skip the US city fetches entirely.
             world_cities = [c for c in cities if not is_us_location(c.get("country"))]
             om_bundles, om_country = _run_world_cached_half(
-                world_cities, open_meteo_pipeline_metrics,
+                world_cities, open_meteo_pipeline_metrics, bot_state=bot_state,
             )
             bundles, country_records = partition_us_world(
                 ghcn_bundles, ghcn_country, om_bundles, om_country,
@@ -432,13 +423,15 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     # the constituent *daily* drafts. All-time/monthly members keep
                     # their bigger individual draft (double-coverage default — a
                     # taste call surfaced to Andrew).
-                    records_cluster_fired_dates.add(_date_iso)
-                    records_cluster_suppressed_ids.update(
-                        _r["cal_event_id"] for _r in _cluster if _r.get("cal_event_id")
-                    )
                     _rc_bundle = build_heat_records_cluster_bundle(
                         _cluster, _cname, event_id=_rc_event_id, when=_date_iso,
                     )
+                    from src.data.temperature_evidence import temperature_aggregate_failures
+                    if not temperature_aggregate_failures(_rc_bundle):
+                        records_cluster_fired_dates.add(_date_iso)
+                        records_cluster_suppressed_ids.update(
+                            _r["cal_event_id"] for _r in _cluster if _r.get("cal_event_id")
+                        )
                     records_cluster_candidates.append(
                         (_rc_bundle, _rc_score, _rc_event_id, _cname, _tier_counts, _date_iso)
                     )
@@ -675,6 +668,8 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                             "margin_c": round(ev_cdh.new_temp_c - ev_cdh.old_record_c, 1),
                             "elevation_m": city_elevations.get((ev_cdh.city, ev_cdh.country)),
                             "signal_date": (bundle.signal_date or date.today()).isoformat(),
+                            "event_id": ev_cdh.event_id,
+                            "evidence": deepcopy(ev_cdh.evidence),
                         })
 
             if strongest_signal is None and bundle.calendar_date_low:
@@ -741,6 +736,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                             "anomaly_c": (
                                 float(anomaly_c) if anomaly_c is not None else None
                             ),
+                            "evidence": deepcopy(strongest_signal.evidence),
                         },
                     )
                 _signal_source_label = (
@@ -1224,6 +1220,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 f"provider:both ghcn[{ghcn_funnel}] "
                 f"world[cached:{m.get('cached_count', 0)}/{m.get('world_total', 0)} "
                 f"identity_quarantine:{m.get('identity_quarantined', 0)} "
+                f"record_withheld:{m.get('record_comparisons_withheld', 0)} "
                 f"cov:{m.get('coverage_ratio', 0)} fc_fail:{m.get('forecast_failures', 0)} "
                 f"warm:{m.get('warm_attempted', 0)}/{m.get('warm_failures', 0)}f "
                 f"esat:{m.get('eval_saturated', False)} sat:{m.get('saturated', False)}] | {signal_breakdown}"
@@ -1266,12 +1263,20 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                 source_status = "degraded"
             elif city_failures and not city_readings:
                 source_status = "failed"
-            note = f"provider:{_signals_provider} {signal_breakdown}"
+            withheld_count = open_meteo_pipeline_metrics.get("record_comparisons_withheld", 0)
+            if withheld_count and source_status != "failed":
+                source_status = "degraded"
+            note = f"provider:{_signals_provider} {signal_breakdown} record_withheld:{withheld_count}"
             if open_meteo_pipeline_metrics:
                 details = {
                     "provider": "open_meteo",
                     "pipeline_metrics": dict(open_meteo_pipeline_metrics),
                 }
+        verification_gaps = sum(int(ghcn_pipeline_metrics.get(key, 0) or 0) for key in (
+            "archive_verification_exhausted", "archive_verification_failed", "baseline_cutoff_gaps", "tracked_stations_unscanned"))
+        if verification_gaps:
+            source_status = "degraded" if source_status != "failed" else source_status
+            note += f" | source_archive_verification_gaps:{verification_gaps}"
         # Prune stale streaks only after a non-failed source cycle; a total
         # fetch failure should not erase continuity state.
         if source_status != "failed":

@@ -49,6 +49,13 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
                 review_context=review_context,
             )
         degraded_note = degraded_via(disasters)
+        diagnostics = getattr(disasters, "source_diagnostics", None)
+        if diagnostics and diagnostics.get("source_leg") == gdacs.GDACS_GEORSS_LEG:
+            degraded_note = (
+                f"served via georss; validated_feed_items:{diagnostics['feed_items_validated']} "
+                f"selected_alerts:{diagnostics['selected_alerts']} "
+                f"unknown_country_items:{diagnostics['unknown_country_items']}"
+            )
         _record_source_run(
             current_run, bot_state, "gdacs", gdacs_start,
             status="degraded" if degraded_note else "success",
@@ -56,6 +63,7 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
             promoted=source_promoted,
             drafted=0,
             note=degraded_note,
+            details={"feed_diagnostics": diagnostics} if diagnostics else None,
         )
     except Exception as e:
         print(f"[alerts] GDACS error: {e}")

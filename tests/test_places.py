@@ -1,3 +1,4 @@
+from tests.temperature_helpers import provider_payload, dated_forecast, complete_archive
 """Scientific identity regressions from the September 8 reproduced collisions."""
 
 from copy import deepcopy
@@ -29,7 +30,7 @@ def pair(name):
 def threshold(row, high=40):
     return compute_city_thresholds(
         row["city"],
-        {"time": ["2000-09-08"], "temperature_2m_max": [high], "temperature_2m_min": [10]},
+        complete_archive({"time": ["2000-09-08"], "temperature_2m_max": [high], "temperature_2m_min": [10]}),
         as_of=date.today().isoformat(),
         country=row["country"],
         lat=row["lat"],
@@ -57,6 +58,7 @@ def test_real_pair_end_to_end_without_network(name, monkeypatch):
         }
         for i in range(2)
     ]
+    payload = provider_payload(payload)
     monkeypatch.setattr(
         open_meteo, "fetch_with_retry", lambda *a, **k: SimpleNamespace(json=lambda: payload)
     )
@@ -117,12 +119,12 @@ def test_direct_detectors_use_same_identity_contract(name, monkeypatch):
     rows = pair(name)
     forecasts = {"daily": {"temperature_2m_max": [50], "temperature_2m_min": [10]}}
     archive = {
-        "daily": {"time": ["2000-09-08"], "temperature_2m_max": [30], "temperature_2m_min": [20]}
+        "daily": complete_archive({"time": ["2000-09-08"], "temperature_2m_max": [30], "temperature_2m_min": [20]})
     }
     monkeypatch.setattr(
         open_meteo,
         "fetch_with_retry",
-        lambda url, **k: SimpleNamespace(json=lambda: archive if "archive" in url else forecasts),
+        lambda url, **k: SimpleNamespace(json=lambda: provider_payload(archive if "archive" in url else forecasts)),
     )
     bundles = [
         open_meteo.detect_extreme_signals(float(r["lat"]), float(r["lon"]), r["city"], r["country"])
@@ -174,7 +176,7 @@ def test_same_name_same_country_different_points_and_coordinate_revision():
         evaluate_city(
             "Barcelona",
             "Spain",
-            {"max_c": 60},
+            dated_forecast({"max_c": 60}, "2026-09-08"),
             threshold(row),
             lat=41.4,
             lon=2.17,
@@ -212,7 +214,7 @@ def test_cache_quarantine_idempotence_merge_and_coverage():
         evaluate_city(
             "Barcelona",
             "Spain",
-            {"max_c": 60},
+            dated_forecast({"max_c": 60}, "2026-09-08"),
             CityThresholds(city="Barcelona", as_of="2026-09-08", years_of_data=30),
             lat=41.39,
             lon=2.16,
@@ -244,7 +246,7 @@ def test_air_quality_tier_and_normals_stay_independent(name):
         key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"])
         temps.append(
             open_meteo.CityTemp(
-                row["city"], row["country"], float(row["lat"]), float(row["lon"]), 40 + i * 10
+                row["city"], row["country"], float(row["lat"]), float(row["lon"]), 40 + i * 10, signal_date=date.today()
             )
         )
         normals[key] = {date.today().month: 30 + i * 10}
@@ -273,7 +275,7 @@ def test_legacy_published_receipts_immutable_and_attribution_specific(monkeypatc
             evaluate_city(
                 r["city"],
                 r["country"],
-                {"max_c": 60},
+                dated_forecast({"max_c": 60}, "2026-09-08"),
                 threshold(r),
                 lat=float(r["lat"]),
                 lon=float(r["lon"]),
@@ -369,17 +371,19 @@ def test_normals_loader_excludes_legacy_and_validates_point(tmp_path):
         "lat",
         "lon",
         "month",
-        "avg_high_c",
+        "avg_high_c", "source_product", "period_start", "period_end", "retrieved_at",
     ]
     with path.open("w") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerow({"city": "Barcelona", "month": 9, "avg_high_c": 99})
         writer.writerow(
-            {**{k: v for k, v in row.items() if k in fields}, "month": 9, "avg_high_c": 25}
+            {**{k: v for k, v in row.items() if k in fields}, "month": 9, "avg_high_c": 25, "source_product": "meteostat-normals-point-v1", "period_start": 1991, "period_end": 2020, "retrieved_at": "2026-09-08T00:00:00Z"}
         )
     normals = open_meteo.load_normals(str(path))
-    assert normals == {places.event_location_key("Barcelona", "Spain"): {9: 25}}
+    row = normals[places.event_location_key("Barcelona", "Spain")]
+    assert row[9] == 25
+    assert row["_meta"][9]["period_start"] == 1991
 
 
 def test_precip_history_separates_satellite_and_model_samples():

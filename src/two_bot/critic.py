@@ -28,7 +28,7 @@ from datetime import UTC, datetime
 
 from src.config import CRITIC_MODEL
 from src.state_schema import BotState
-from src.two_bot.json_utils import json_default as _json_default, loads_model_json
+from src.two_bot.json_utils import json_default as _json_default, loads_model_json, model_response_diagnostic
 from src.two_bot.prompts.critic_prompt import (
     CRITIC_SLATE_USER_PROMPT_TEMPLATE,
     CRITIC_SYSTEM_PROMPT,
@@ -143,9 +143,8 @@ def _parse_critic_result(
 
     try:
         parsed = loads_model_json(raw, expected="object")
-    except json.JSONDecodeError as exc:
-        print(f"[two_bot.critic] Invalid JSON response: {raw}")
-        raise ValueError("Critic returned invalid JSON") from exc
+    except ValueError as exc:
+        raise ValueError(f"Critic returned invalid JSON ({model_response_diagnostic(raw)})") from exc
     if not isinstance(parsed, dict):
         raise ValueError("Critic response must be a JSON object")
     if "verdict" not in parsed:

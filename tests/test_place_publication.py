@@ -244,7 +244,8 @@ def test_confirmed_country_alias_refused_by_final_sender(externals, old, new, mo
 def test_valid_unregistered_cache_row_survives_migration():
     place = places.resolve_place("New Example Place", "US", 40.123, -100.123)
     key = places.cache_key(place["city"], place["country"], place["lat"], place["lon"])
-    row = {"identity": {**place, "source_product": places.CACHE_PRODUCT}}
+    from tests.temperature_helpers import snapshot
+    row = snapshot({"identity": {**place, "source_product": places.CACHE_PRODUCT}})
     result = migrate_cache({key: row})
     assert result[key] == row
     assert result["_meta"]["cached_count"] == 1

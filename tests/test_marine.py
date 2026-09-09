@@ -26,7 +26,7 @@ def _event() -> ExtremeWaveEvent:
     )
 
 
-def test_marine_success_enqueues_extreme_wave_candidate(fresh_state, monkeypatch):
+def test_marine_success_enqueues_extreme_wave_candidate(fresh_state, monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import marine
 
     monkeypatch.setattr(marine, "_fetch_strict", lambda *args, **kwargs: [_reading()])

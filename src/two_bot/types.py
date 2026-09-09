@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import re
 from typing import Any
 
 
@@ -70,6 +71,9 @@ class StoryBundle:
             self.raw_signal_dump = {**self.raw_signal_dump, **identity}
             self.country = country_key(self.raw_signal_dump.get("country", self.country))
 
+        from src.data.temperature_evidence import project_story_evidence
+        project_story_evidence(self)
+
     def to_dict(self) -> dict:
         data: dict[str, Any] = {
             "signal_kind": self.signal_kind,
@@ -134,6 +138,8 @@ class WriterResult:
     # regex sweep in save_draft cross-checks it (either signal forces
     # manual_only; a missing field on an enriched draft fails closed).
     cited_impact: bool | None = None
+    # Local failed-call diagnostic, never an accepted provider output field.
+    failure_diagnostic: dict | None = None
 
     def __post_init__(self):
         if (self.tweet is None) == (self.kill_reason is None):
@@ -141,6 +147,30 @@ class WriterResult:
                 "WriterResult invariant violated: exactly one of tweet/kill_reason "
                 "must be non-None"
             )
+
+    def validate_model_output(self) -> None:
+        """Validate newly generated output, without reinterpreting old memory."""
+        if self.tweet is not None and (not isinstance(self.tweet, str) or not self.tweet.strip()):
+            raise ValueError("WriterResult tweet must be nonempty text")
+        if self.kill_reason is not None and (not isinstance(self.kill_reason, str) or not self.kill_reason.strip()):
+            raise ValueError("WriterResult kill_reason must be nonempty text")
+        if not isinstance(self.angle_chosen, str) or len(self.angle_chosen) > 80:
+            raise ValueError("WriterResult angle_chosen must be bounded text")
+        if self.tweet is not None and not re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", self.angle_chosen):
+            raise ValueError("WriterResult angle_chosen must be a snake_case label")
+        if not isinstance(self.reasoning, str) or len(self.reasoning) > 12000:
+            raise ValueError("WriterResult reasoning must be bounded text")
+        if self.cited_impact is not None and type(self.cited_impact) is not bool:
+            raise ValueError("WriterResult cited_impact must be boolean or null")
+        for name, anchor in (("era_anchor_used", self.era_anchor_used), ("peer_comparison_used", self.peer_comparison_used)):
+            if anchor is not None and (not isinstance(anchor, str) or not anchor.strip() or self.tweet is None or anchor not in self.tweet):
+                raise ValueError(f"WriterResult {name} must be an exact nonempty tweet substring or null")
+        for value in (self.tweet, self.kill_reason, self.angle_chosen, self.reasoning):
+            if value is not None:
+                try:
+                    value.encode("utf-8")
+                except UnicodeError as exc:
+                    raise ValueError("WriterResult text contains malformed Unicode") from exc
 
     def to_dict(self) -> dict:
         data: dict[str, Any] = {
@@ -154,6 +184,8 @@ class WriterResult:
         # Omit when None so non-enriched drafts serialize byte-identically.
         if self.cited_impact is not None:
             data["cited_impact"] = self.cited_impact
+        if self.failure_diagnostic is not None:
+            data["failure_diagnostic"] = self.failure_diagnostic
         return data
 
 
