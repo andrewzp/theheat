@@ -154,15 +154,15 @@ def approval_is_current(draft: dict, mode: str | None = None) -> bool:
 def has_unresolved_publish(draft: dict, state: Mapping[str, Any]) -> bool:
     """Unknown attempts and receipts for other content cannot be cleared by edits."""
     ledger = state.get("publish_ledger") or {}
-    row = ledger.get(draft.get("event_id") or draft.get("id")) if isinstance(ledger, dict) else None
+    event_id = draft.get("event_id") or draft.get("id")
 
     def unresolved(attempt: Any) -> bool:
         if not isinstance(attempt, dict):
-            return False
+            return True
         conflicts = attempt.get("attempt_conflicts", [])
         if not isinstance(conflicts, list):
             return True
-        if any(unresolved(other) for other in conflicts if isinstance(other, dict)):
+        if any(unresolved(other) for other in conflicts):
             return True
         if attempt.get("tweet_id"):
             if "text_sha256" in attempt:
@@ -171,7 +171,9 @@ def has_unresolved_publish(draft: dict, state: Mapping[str, Any]) -> bool:
         # A missing phase is legacy evidence of a possible send, not proof of expiry.
         return attempt.get("phase") != "not_sent"
 
-    if unresolved(row):
+    # Missing evidence and an explicitly malformed retained row are different.
+    # Never treat null/scalar conflict members as proof that nothing was sent.
+    if isinstance(ledger, dict) and event_id in ledger and unresolved(ledger[event_id]):
         return True
     if draft.get("publish_outcome") in ("submitted", "unknown"):
         return True

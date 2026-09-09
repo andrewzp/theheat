@@ -830,13 +830,26 @@ def _strat_dict_overlay(base: Any, nxt: Any) -> dict:
     return {**deepcopy(base or {}), **deepcopy(nxt or {})}
 
 
-def _attempt_rows(row: Any) -> list[dict]:
-    if not isinstance(row, dict):
-        return []
-    return [
-        {key: deepcopy(value) for key, value in row.items() if key != "attempt_conflicts"},
-        *[child for child in row.get("attempt_conflicts", []) if isinstance(child, dict)],
-    ]
+def _attempt_rows(row: Any) -> tuple[list[dict], list[dict]]:
+    """Separate normal attempts from opaque evidence that cannot be reconciled.
+
+    Malformed subtrees remain verbatim inside attempt_conflicts. They must never
+    participate in receipt/phase winner selection, which could erase uncertainty.
+    """
+    clean, malformed = [], []
+    pending = [row]
+    while pending:
+        attempt = pending.pop()
+        if not isinstance(attempt, dict):
+            malformed.append({"phase": "unknown", "attempt_conflicts": [deepcopy(attempt)]})
+            continue
+        conflicts = attempt.get("attempt_conflicts", [])
+        if not isinstance(conflicts, list) or any(not isinstance(child, dict) for child in conflicts):
+            malformed.append(deepcopy(attempt))
+            continue
+        clean.append({key: deepcopy(value) for key, value in attempt.items() if key != "attempt_conflicts"})
+        pending.extend(conflicts)
+    return clean, malformed
 
 
 def _attempt_rank(row: dict) -> int:
@@ -852,9 +865,18 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
     merged = {}
     for event_id in sorted(set(base) | set(nxt)):
         attempts: dict[str, dict] = {}
-        for row in [*_attempt_rows(base.get(event_id)), *_attempt_rows(nxt.get(event_id))]:
+        clean, malformed = [], []
+        for ledger in (base, nxt):
+            if event_id in ledger:
+                rows, opaque = _attempt_rows(ledger[event_id])
+                clean.extend(rows)
+                malformed.extend(opaque)
+        for row in clean:
             identity = {key: row.get(key) for key in ("intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text")}
-            key = fingerprint(identity)
+            # Missing intent IDs cannot prove two phase observations refer to
+            # the same platform call. Retain distinct legacy evidence instead.
+            identified = isinstance(row.get("intent_id"), str) and bool(row["intent_id"])
+            key = fingerprint(identity if identified else {"unidentified_attempt": row})
             existing = attempts.get(key)
             if existing is None:
                 attempts[key] = deepcopy(row)
@@ -864,12 +886,10 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
                 winner, loser = (row, existing) if _attempt_rank(row) >= _attempt_rank(existing) else (existing, row)
                 attempts[key] = {**deepcopy(loser), **deepcopy(winner)}
         rows = list(attempts.values())
-        if not rows:
-            continue
         rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(row)))
-        primary = rows.pop()
-        if rows:
-            primary["attempt_conflicts"] = _unique_snapshots(rows)
+        primary = rows.pop() if rows else {"phase": "unknown"}
+        if rows or malformed:
+            primary["attempt_conflicts"] = _unique_snapshots([*rows, *malformed])
         merged[event_id] = primary
     return merged
 

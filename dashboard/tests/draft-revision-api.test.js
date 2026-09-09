@@ -4,8 +4,11 @@ import test from "node:test"
 process.env.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED = "1"
 process.env.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH = "offline-test-release"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
 import { importFresh } from "./helpers/import-fresh.js"
 import { authorizeDraft, draftIdentity, fingerprint, initializeRevision, invalidateText, recordHumanReview, reviewIsCurrent, textHash } from "../lib/draft-revisions.js"
+
+const malformedAttempts = JSON.parse(readFileSync(new URL("../../tests/fixtures/publication_uncertainty_contract.json", import.meta.url))).filter((example) => example.malformed)
 
 function fixture(id = "draft_1") {
   const draft = {
@@ -155,6 +158,43 @@ for (const condition of ["posted", "unknown"]) {
     }, { ledger })
   })
 }
+
+for (const example of malformedAttempts) {
+  test(`malformed delivery evidence blocks every dashboard action: ${example.name}`, async () => {
+    const original = fixture()
+    const ledger = { [original.event_id]: structuredClone(example.row) }
+    await withStore([original], async ({ post, state, route, headers, writes, dispatches }) => {
+      const before = structuredClone(state())
+      const response = await route.GET(new Request("http://localhost/api/drafts", { headers }))
+      assert.equal((await response.json()).drafts[0].publish_blocked, true)
+      for (const action of ["edit", "select_candidate", "review", "approve", "auto_approve", "cancel_auto_approve", "reject", "bulk_reject_below"]) {
+        const result = await post(request(original, action, {
+          editedText: "Replacement text.", candidateRank: 1, reviewConfirmed: true,
+          expectedRevisions: { [original.id]: expected(original) },
+        }))
+        assert.equal(result.status, 409, action)
+        assert.equal(result.body.code, "publication_unresolved", action)
+      }
+      assert.equal(writes(), 0)
+      assert.equal(dispatches.length, 0)
+      assert.deepEqual(state(), before)
+    }, { ledger })
+  })
+}
+
+test("an unrelated dashboard edit preserves malformed publication evidence", async () => {
+  const blocked = fixture("blocked"), editable = fixture("editable")
+  const bad = { phase: "not_sent", attempt_conflicts: [null, { phase: "unknown", text: "Original uncertain text" }] }
+  await withStore([blocked, editable], async ({ post, state, writes }) => {
+    assert.equal((await post(request(editable, "edit", { editedText: "A separate corrected draft." }))).status, 200)
+    assert.equal(writes(), 1)
+    assert.deepEqual(state().publish_ledger[blocked.event_id].attempt_conflicts, [bad])
+    const result = await post(request(blocked, "approve"))
+    assert.equal(result.status, 409)
+    assert.equal(result.body.code, "publication_unresolved")
+    assert.equal(writes(), 1)
+  }, { ledger: { [blocked.event_id]: bad } })
+})
 
 test("known dispatch failure rolls back only its unchanged approval", async () => {
   const original = fixture()

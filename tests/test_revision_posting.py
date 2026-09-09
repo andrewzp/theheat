@@ -20,6 +20,7 @@ from src.editorial.revisions import (
 from src.orchestrator import posting
 from src.state import DEFAULT_STATE
 from tests.revision_helpers import bind_reviewed_draft, model_review_context
+from tests.test_publication_uncertainty import MALFORMED
 
 
 def _draft(mode="manual"):
@@ -195,6 +196,47 @@ def test_attempt_conflict_blocks_even_when_top_receipt_matches(external):
         "attempt_conflicts": [{"intent_id": "other", "phase": "unknown"}],
     }
     assert posting.post_approved(draft, state) == "failed"
+    external[1].assert_not_called()
+
+
+@pytest.mark.parametrize("case", MALFORMED, ids=lambda case: case["name"])
+@pytest.mark.parametrize("path", ["manual", "auto", "queued_manual", "due"])
+def test_malformed_conflicts_never_reach_storage_or_platform(external, monkeypatch, case, path):
+    draft = _draft("auto" if path in ("auto", "due") else "manual")
+    state = _state(draft)
+    state["publish_ledger"][draft["event_id"]] = deepcopy(case["row"])
+    original = deepcopy(state["publish_ledger"])
+    if path == "due":
+        posting.process_due_drafts(state)
+    elif path == "queued_manual":
+        monkeypatch.setenv("DRAFT_ID", draft["id"])
+        monkeypatch.setenv("TWEET_TEXT", draft["text"])
+        monkeypatch.setenv("PUBLISH_INTENT_ID", draft["publish_intent_id"])
+        posting.run_manual_tweet(state)
+    else:
+        assert posting.post_approved(draft, state) == "failed"
+    assert state["publish_ledger"] == original
+    assert has_unresolved_publish(draft, state)
+    external[0].write_state.assert_not_called()
+    external[1].assert_not_called()
+    posting.post_to_bluesky.assert_not_called()
+    posting.run_safety_pipeline.assert_not_called()
+
+
+@pytest.mark.parametrize("case", [case for case in MALFORMED if isinstance(case["row"], dict)], ids=lambda case: case["name"])
+def test_matching_receipt_cannot_clear_unknown_with_malformed_conflicts(external, case):
+    draft = _draft("auto")
+    draft.update(publish_outcome="unknown", autoship_attempted=True)
+    state = _state(draft)
+    row = {**draft_identity(draft), "tweet_id": "retained_receipt", "phase": "confirmed",
+           "attempt_conflicts": deepcopy(case["row"]["attempt_conflicts"])}
+    state["publish_ledger"][draft["event_id"]] = deepcopy(row)
+    posting._reconcile_publish_ledger(state)
+    assert draft["publish_outcome"] == "unknown"
+    assert draft["status"] != "posted"
+    assert state["publish_ledger"][draft["event_id"]] == row
+    assert "unverified revision" in draft["post_error"]
+    external[0].write_state.assert_not_called()
     external[1].assert_not_called()
 
 
