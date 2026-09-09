@@ -639,6 +639,8 @@ class TestPrecipDetection:
         country = [event for event in events if event.kind == "country_precip_event"]
         assert len(country) == 1
         assert country[0].city_count == 10
+        assert country[0].country == "France"
+        assert country[0].location == "France"
         assert country[0].sample_cities[:2] == ["City 0", "City 1"]
 
     def test_update_precip_tracking_records_daily_and_recent_rows(self):

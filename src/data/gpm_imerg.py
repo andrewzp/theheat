@@ -1143,8 +1143,13 @@ def _detect_country_events(
     min_country_records: int,
 ) -> list[PrecipExtremeEvent]:
     by_country: dict[str, list[PrecipExtremeEvent]] = {}
+    seen_places: set[str] = set()
     for event in events:
         if event.kind == "daily_record" and event.country:
+            place = places.resolve_place(event.location, event.country, event.lat, event.lon)["place_id"]
+            if place in seen_places:
+                continue
+            seen_places.add(place)
             by_country.setdefault(places.country_key(event.country), []).append(event)
 
     country_events: list[PrecipExtremeEvent] = []
@@ -1155,8 +1160,8 @@ def _detect_country_events(
         sample_cities = [event.location for event in group[:12]]
         country_events.append(PrecipExtremeEvent(
             kind="country_precip_event",
-            location=country,
-            country=country,
+            location=leader.country,
+            country=leader.country,
             date=leader.date,
             mm_total=max(event.mm_total for event in group),
             period_days=1,
