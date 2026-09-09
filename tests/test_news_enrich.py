@@ -759,7 +759,7 @@ class TestPromptRiders:
 
         assert "ordinary bundle fact" in FACT_CHECK_SYSTEM_PROMPT
         assert "population_affected" in FACT_CHECK_SYSTEM_PROMPT
-        assert "Nothing changed for these" in FACT_CHECK_SYSTEM_PROMPT
+        assert "source-qualified ordinary bundle fact" in FACT_CHECK_SYSTEM_PROMPT
 
     def test_writer_result_parses_cited_impact(self):
         from src.two_bot.writer import _parse_writer_json

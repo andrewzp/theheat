@@ -591,5 +591,5 @@ class TestReganomRoundingExampleConsistency:
                 "(11.53) rounds to value_rounded_c=12. Use '~12°C' or make the "
                 "example's raw value round to 11."
             )
-        # The corrected exemplar is present in the writer prompt.
-        assert "~12°C" in WRITER_SYSTEM_PROMPT
+        # Precision now follows the supplied rounded field, without a real-post exemplar.
+        assert "value_rounded_c" in WRITER_SYSTEM_PROMPT
