@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 from src import credentials, runtime_inventory, state
 from src.orchestrator import budget
+from src.editorial.publication import observe_publication_policy
 from src.state_schema import BotState
 from src.two_bot import usage_ledger
 
@@ -31,8 +32,9 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     except state.StateReadError as exc:
         print(f"[main] ERROR: {exc}")
         sys.exit(1)
+    observe_publication_policy(bot_state)
     current_run = state.init_run(args.mode)
-    current_run["runtime_inventory"] = runtime_inventory.collect_runtime_inventory(args.mode)
+    current_run["runtime_inventory"] = runtime_inventory.collect_runtime_inventory(args.mode, bot_state=bot_state)
     # Refresh credential-expiry counters (dashboard) from the live env every run.
     # Cheap, never raises; only derived expiry dates are stored, not the tokens.
     bot_state["credential_expiry"] = credentials.collect_credential_expiry()

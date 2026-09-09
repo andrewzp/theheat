@@ -1,0 +1,317 @@
+[
+  {
+    "name": "all active and published statuses exceed cap safely",
+    "groups": [
+      {
+        "prefix": "pending",
+        "count": 205,
+        "draft": {
+          "status": "pending",
+          "created_at": "2000-01-01T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "approved",
+        "count": 205,
+        "draft": {
+          "status": "approved",
+          "created_at": "2000-01-02T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "posted",
+        "count": 205,
+        "draft": {
+          "status": "posted",
+          "created_at": "2000-01-03T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "rejected",
+        "count": 10,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "pending",
+        "start": 0,
+        "end": 205
+      },
+      {
+        "prefix": "approved",
+        "start": 0,
+        "end": 205
+      },
+      {
+        "prefix": "posted",
+        "start": 0,
+        "end": 205
+      }
+    ]
+  },
+  {
+    "name": "old approved row survives a full pending queue",
+    "groups": [
+      {
+        "prefix": "approved",
+        "count": 1,
+        "draft": {
+          "status": "approved",
+          "created_at": "2000-01-01T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "pending",
+        "count": 201,
+        "draft": {
+          "status": "pending",
+          "created_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "approved",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "pending",
+        "start": 0,
+        "end": 201
+      }
+    ]
+  },
+  {
+    "name": "old rejected publication evidence is never discarded",
+    "groups": [
+      {
+        "prefix": "intent",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "publish_intent_id": "i1"
+        }
+      },
+      {
+        "prefix": "conflict",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "revision_conflicts": [
+            {
+              "text": "other"
+            }
+          ]
+        }
+      },
+      {
+        "prefix": "submitted",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "publish_outcome": "submitted"
+        }
+      },
+      {
+        "prefix": "unknown",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "publish_outcome": "unknown"
+        }
+      },
+      {
+        "prefix": "attempt",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "last_publish_attempt_at": "2000-01-01T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "autoship",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "autoship_attempted": true
+        }
+      },
+      {
+        "prefix": "resolved",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "autoship_attempted": true,
+          "publish_outcome": "not_sent"
+        }
+      },
+      {
+        "prefix": "pending",
+        "count": 201,
+        "draft": {
+          "status": "pending"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "intent",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "conflict",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "submitted",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "unknown",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "attempt",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "autoship",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "pending",
+        "start": 0,
+        "end": 201
+      }
+    ]
+  },
+  {
+    "name": "rejected expiry honors exact UTC thirty-day boundary",
+    "groups": [
+      {
+        "prefix": "expired",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-08-08T23:59:59.999Z",
+          "updated_at": "2026-09-08T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "boundary",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-08-09T02:00:00+02:00"
+        }
+      },
+      {
+        "prefix": "recent",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-08-09T00:00:00.001Z"
+        }
+      },
+      {
+        "prefix": "undated",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "invalid"
+        }
+      },
+      {
+        "prefix": "naive-boundary",
+        "count": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-08-09T00:00:00"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "boundary",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "recent",
+        "start": 0,
+        "end": 1
+      },
+      {
+        "prefix": "naive-boundary",
+        "start": 0,
+        "end": 1
+      }
+    ]
+  },
+  {
+    "name": "all expired retains newest ten rejected records",
+    "groups": [
+      {
+        "prefix": "old",
+        "count": 25,
+        "stepSeconds": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2000-01-01T00:00:00Z"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "old",
+        "start": 15,
+        "end": 25
+      }
+    ]
+  },
+  {
+    "name": "recent rejected records occupy only remaining cap slots",
+    "groups": [
+      {
+        "prefix": "pending",
+        "count": 5,
+        "draft": {
+          "status": "pending",
+          "created_at": "2000-01-01T00:00:00Z"
+        }
+      },
+      {
+        "prefix": "recent",
+        "count": 225,
+        "stepSeconds": 1,
+        "draft": {
+          "status": "rejected",
+          "created_at": "2026-09-07T00:00:00Z"
+        }
+      }
+    ],
+    "keep": [
+      {
+        "prefix": "pending",
+        "start": 0,
+        "end": 5
+      },
+      {
+        "prefix": "recent",
+        "start": 30,
+        "end": 225
+      }
+    ]
+  }
+]

@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("automatic_publication_release")
+
 from src.state import DEFAULT_STATE
 from src.editorial.revisions import draft_identity
 from tests.revision_helpers import bind_reviewed_draft, model_review_context

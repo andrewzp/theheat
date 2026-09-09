@@ -16,7 +16,7 @@ export function draftReviewControls(draft) {
     canEdit: mutable,
     canReview: mutable && pending && !conflict && !reviewed,
     canApprove: mutable && pending && reviewed,
-    canSchedule: mutable && pending && reviewed && draft.review_kind === "model" && draft.approval_policy?.can_auto_approve !== false,
+    canSchedule: draft?.automatic_publication?.enabled === true && mutable && pending && reviewed && draft.review_kind === "model" && draft.approval_policy?.can_auto_approve !== false,
     needsReview: !reviewed,
     conflict,
   }

@@ -29,11 +29,11 @@ on:
           - manual_tweet
           - auto_publish_due
       tweet_text:
-        description: 'Tweet text (only used with manual_tweet mode)'
+        description: 'Exact reviewed draft text (manual_tweet requires draft_id and publish_intent_id)'
         required: false
         type: string
       draft_id:
-        description: 'Draft id for approved draft posting'
+        description: 'Required draft id for reviewed approved posting'
         required: false
         type: string
       publish_intent_id:
@@ -122,9 +122,8 @@ jobs:
     # Intentionally does NOT gate on the test result: the full suite is a
     # PR-merge gate, not a production-run gate (the test job is skipped on
     # schedules). Drafting must survive a flaky unit test; the Smoke gate step
-    # below is the real guard against a genuinely broken build. Drafts are
-    # manual-gated (human review before posting), so the residual risk is a
-    # rejected draft, not a bad tweet — far cheaper than a multi-day outage.
+    # below guards broken imports; publication has separate revision and policy
+    # gates. P00b defaults automatic publication paused while ingestion continues.
     if: |
       always()
       && github.event_name != 'pull_request'
@@ -306,6 +305,9 @@ jobs:
           # NOTE: AUTOSHIP_ON_CRITIC_PASS posts LIVE to @theheat.
           # Rollback any: gh variable set <NAME> --body 0 --repo andrewzp/theheat
           THEHEAT_FUNNEL_TELEMETRY: ${{ vars.THEHEAT_FUNNEL_TELEMETRY || '0' }}
+          # P00b: universal automatic-send gate. Rotate epoch on EVERY pause/release.
+          THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED || '0' }}
+          THEHEAT_AUTOMATIC_PUBLICATION_EPOCH: ${{ vars.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH }}
           THEHEAT_AUTOSHIP_ON_CRITIC_PASS: ${{ vars.THEHEAT_AUTOSHIP_ON_CRITIC_PASS || '0' }}
           THEHEAT_AUTOSHIP_MAX_AGE_H: ${{ vars.THEHEAT_AUTOSHIP_MAX_AGE_H || '36' }}
           THEHEAT_REFILL_ENABLED: ${{ vars.THEHEAT_REFILL_ENABLED || '0' }}

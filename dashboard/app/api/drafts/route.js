@@ -1,3 +1,4 @@
+import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { readJsonObject } from "../../../lib/request-json.js"
@@ -61,7 +62,7 @@ function assertReviewed(draft, modelOnly = false) {
 
 function projection(draft, state) {
   try {
-    return { ...projectDraft(draft), publish_blocked: hasUnresolvedPublish(draft, state) }
+    return { ...projectDraft(draft), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(draft, state) }
   } catch (error) {
     return { ...draft, text: typeof draft.text === "string" ? draft.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message }
   }
@@ -167,6 +168,8 @@ export async function POST(request) {
         revokeApproval(draft)
         recordHumanReview(draft)
       } else if (action === "auto_approve") {
+        const publication = dashboardAutomaticPolicy(state)
+        if (!publication.enabled) fail(publication.reason, 409, "automatic_publication_paused")
         assertPending(draft)
         assertReviewed(draft, true)
         const policy = draft.approval_policy || {}
@@ -175,7 +178,7 @@ export async function POST(request) {
         if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) fail("Delay must be between 5 and 1440 minutes", 400, "invalid_delay")
         autoApproveAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
         revokeApproval(draft)
-        authorizeDraft(draft, "auto")
+        authorizeDraft(draft, "auto", null, publication.epoch)
         draft.auto_approve_at = autoApproveAt
         draft.auto_approve_requested_at = new Date().toISOString()
         draft.approval_mode = "auto"

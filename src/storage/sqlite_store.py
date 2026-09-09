@@ -170,6 +170,7 @@ _METADATA_JSON_KEYS = (
     # Credential-expiry counters (#330) — latent gap FOUND BY the persistence
     # contract test (codex #388 round): had no sqlite path at all.
     "credential_expiry",
+    "publication_control",
     "data_source_failures",
     "source_health",
     "last_good_readings",
@@ -216,6 +217,10 @@ def is_empty(db_path: str) -> bool:
 def read_state(db_path: str, default_state: dict) -> dict:
     state = json.loads(json.dumps(default_state, default=json_default))
     with _connect(db_path) as conn:
+        metadata_keys = {row["key"] for row in conn.execute("SELECT key FROM metadata")}
+        unsupported = metadata_keys - {"last_hot10", *_METADATA_JSON_KEYS}
+        if unsupported:
+            raise ValueError(f"Unsupported SQLite metadata fields: {sorted(unsupported)}; upgrade this reader before writing")
         last_hot10_row = conn.execute(
             "SELECT value_json FROM metadata WHERE key = 'last_hot10'"
         ).fetchone()

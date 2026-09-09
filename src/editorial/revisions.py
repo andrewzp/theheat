@@ -15,6 +15,8 @@ import math
 import struct
 from typing import Any
 
+from src.editorial.publication import automatic_publication_policy
+
 
 def _canonical(value: Any) -> Any:
     if value is None:
@@ -221,18 +223,25 @@ def record_human_review(draft: dict) -> dict:
     return draft
 
 
-def authorize_draft(draft: dict, mode: str, intent_id: str | None = None) -> dict:
+def authorize_draft(draft: dict, mode: str, intent_id: str | None = None, *, publication_epoch: str | None = None) -> dict:
     if not review_is_current(draft):
         raise ValueError("This revision needs revalidation")
     if mode not in ("manual", "auto"):
         raise ValueError("Invalid approval mode")
     if mode == "auto" and draft["review_binding"].get("kind") != "model":
         raise ValueError("Scheduling requires a current model review")
+    if mode == "auto":
+        policy = automatic_publication_policy()
+        if not policy["enabled"] or (publication_epoch is not None and publication_epoch != policy["epoch"]):
+            raise ValueError(policy["reason"])
+        publication_epoch = policy["epoch"]
     _advance_decision(draft)
     draft["approval_binding"] = {
         **draft_identity(draft), "decision_revision": draft["decision_revision"],
         "mode": mode, "authorized_at": _now(),
     }
+    if mode == "auto":
+        draft["approval_binding"]["publication_epoch"] = publication_epoch
     if intent_id:
         draft["approval_binding"]["publish_intent_id"] = intent_id
         draft["publish_intent_id"] = intent_id

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.5] - 2026-09-09
+
+### Publication containment and protected state (P00b/P03)
+
+- Automatic publication defaults paused across draft scheduling, due processing and the final sender. A released epoch must match the exact approval; retired epochs remain blocked after stale state merges. Ingestion, drafting and reviewed manual approval remain available.
+- Raw ad-hoc text can no longer publish through the dashboard or Python entry points. Unknown delivery outcomes remain blocked during pause and release.
+- Pending, approved, posted and unresolved drafts survive the nominal 200-record cap. Python and JavaScript share retention fixtures and generated defaults/storage contracts; every current durable field is checked through real SQLite round trips.
+- Invalid backend selections, failed configured bootstrap and unknown SQLite metadata fail closed. Authoritative suppression metadata prevents removed records from reappearing.
+- Validation: 2,595 offline Python tests, 222 dashboard tests, Ruff, mypy and the production dashboard build pass; 41 paid replay tests remain excluded.
+- This release does not enable automation, send a manual canary, correct historical posts or migrate production storage. An observed persisted pause and old-worker reconciliation remain deployment gates; Gist concurrency remains P00c work.
+
 ## [0.9.108.4] - 2026-09-08
 
 ### Observed bot configuration and product health (P00)

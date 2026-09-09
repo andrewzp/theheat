@@ -6,6 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("automatic_publication_release")
+
 from src.editorial.revisions import (
     authorize_draft,
     draft_identity,
@@ -281,12 +283,12 @@ def test_appended_url_does_not_inherit_checks_for_original_text():
     assert not review_is_current(draft)
 
 
-def test_explicit_ad_hoc_text_path_remains_separate(external, monkeypatch):
+def test_explicit_ad_hoc_text_path_is_refused(external, monkeypatch):
     monkeypatch.delenv("DRAFT_ID", raising=False)
     monkeypatch.delenv("PUBLISH_INTENT_ID", raising=False)
     monkeypatch.setenv("TWEET_TEXT", "  Ad hoc manual text.  ")
     posting.run_manual_tweet(deepcopy(DEFAULT_STATE))
-    external[1].assert_called_once_with("Ad hoc manual text.", media_png=None, alt_text=None)
+    external[1].assert_not_called()
 
 
 def test_success_receipt_merges_with_submitted_state_as_one_attempt(external):

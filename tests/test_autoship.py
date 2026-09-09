@@ -10,6 +10,10 @@ Behind THEHEAT_AUTOSHIP_ON_CRITIC_PASS (default OFF). Covers the codex must-fixe
 
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.usefixtures("automatic_publication_release")
+
 from copy import deepcopy
 
 from src.editorial.scoring._shared import EditorialScore
