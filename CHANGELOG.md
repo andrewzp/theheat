@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.6] - 2026-09-09
+
+### Canonical place and sampling identity (P04)
+
+- Distinct Barcelona, Hyderabad and Valencia locations retain separate forecasts, baselines, events and editorial history. A persistent place registry documents intentional aliases while sampling-point IDs keep different coordinates from sharing scientific evidence.
+- Direct and cached temperature, AQ, Hot10, precipitation, country aggregation, draft dedup and editorial memory share the identity contract. Existing PR #346 is incorporated with attribution.
+- Unattributable legacy cache rows are preserved in idempotent quarantine; name-only Hot10 normals remain preserved but ineligible. Degraded coverage is explicit. No bulk baseline rebuild or scientific certification is implied.
+- Unregistered points remain usable for collection but require registry attribution before publishing. Legacy unknown publication attempts block new aliases in both manual and automatic send paths. Confirmed aggregate country aliases remain duplicates; ambiguous place history requires review. Old scientific drafts cannot automatically publish even with fresh approvals, and existing release-epoch controls remain enforced.
+- Published texts, receipts, original IDs and unknown outcomes remain intact. P06 archive/forecast separation and qualified baseline restoration remain separate work; automation is not enabled by this release.
+- Validation: 2,773 offline Python tests, 222 dashboard tests, Ruff, mypy and the production dashboard build pass; 41 paid replay tests remain excluded. Independent final review found no remaining P04 issue.
+
 ## [0.9.108.5] - 2026-09-09
 
 ### Publication containment and protected state (P00b/P03)

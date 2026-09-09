@@ -1,14 +1,14 @@
 # P04: canonical location identity
 
-Status: implemented locally in the isolated `codex/p04-canonical-places` worktree. No live data calls, baseline rebuild, production state edits, publishing or deployment were performed.
+Status: integrated locally on P00b/P03 `8fafd75`, with main benchmark baseline `f5e7e12` merged, in `/tmp/theheat-p04-release`, branch `codex/p04-place-release` (release 0.9.108.6). No live data calls, baseline rebuild, production state edits, publishing or deployment were performed.
 
 ## Contract and coverage
 
-This reuses PR #346's location-collision patch (`c6bbb7c`, carried with attribution as `d502dc0`) and extends it beyond the world-cache-only `city|country` approach.
+This reuses PR #346's location-collision patch (`c6bbb7c`, carried with attribution as `c92e74c` on the release branch) and extends it beyond the world-cache-only `city|country` approach.
 
 `data/place_registry.json` assigns persistent `pl...` IDs to 633 places represented by the original 638 watchlist rows. Every original row remains in `data/cities.csv` and in registry aliases. Barcelona, Hyderabad and Valencia pairs remain distinct. Amsterdam, Brazzaville, Dubai, Hong Kong and Kinshasa aliases each share one intentional place. The first preexisting point is the explicitly documented v1 active sampling choice; alternate coordinates/elevations are retained and never treated as interchangeable baselines. Hong Kong is a separate coverage territory. Administrative codes not independently qualified remain null. Country-label codes come from a checked-in public-domain IANA table plus explicit project aliases; no runtime geocoding dependency is introduced.
 
-A place ID is separate from `sampling_point_id`, which fingerprints exact requested coordinates. Unknown unregistered points get a coordinate-specific identity and require coordinates. Registered coordinate changes must be deliberate registry revisions; they cannot inherit the prior point's baseline. Source-native GHCN station IDs remain instrument IDs, including absolute-extreme events.
+A place ID is separate from `sampling_point_id`, which fingerprints exact requested coordinates. Unknown unregistered points get a coordinate-specific identity and require coordinates. Collection, budget selection and cache analysis support those points, but drafting/publishing requires explicit registry attribution so new coordinates cannot bypass unknown historical sends. Nonexistent registry IDs are also ineligible. Adding a registry entry must include its intentional historical aliases; registration is not itself reconciliation of an unknown platform outcome. Registered coordinate changes must be deliberate registry revisions; they cannot inherit the prior point's baseline. Source-native GHCN station IDs remain instrument IDs, including absolute-extreme events.
 
 Both direct and cached Open-Meteo paths, world warming/batch maps, absolute/wet-bulb/monthly/all-time/anomaly IDs, record streaks, AQ IDs and tier state, Hot10 normals/movement/streaks, GPM point/history keys, country aggregation/caps, draft city/date/cooldown gates and editorial memory use the shared identity. GPM primary/witness events share event identity, while satellite/model history keys remain product-specific. New bundle identity travels inside evidence, so P02 reviews become stale if that evidence changes.
 
@@ -20,23 +20,19 @@ Both direct and cached Open-Meteo paths, world warming/batch maps, absolute/wet-
 
 Existing name-only `data/normals.csv` is preserved but excluded from Hot10 comparisons: its rows contain no attributable sampling point. The leaderboard reports degraded when no attributable normals remain. `scripts/build_normals.py` now emits place, point and coordinate fields. **No bulk rebuild has been run.** An explicit qualified maintenance rebuild is required before Hot10 supply resumes. Source/baseline period qualification belongs to P06; metadata alone is not a scientific certificate.
 
-Existing legacy streak/tier/precip history entries remain in their current maps; new identities do not use them as seeds. No new top-level state key is introduced. `Hot10Snapshot.place_ids` is an additive nested field and is preserved by normal JSON storage. No published text, original event ID, receipt or unknown publication outcome is rewritten. Retained legacy publication evidence is checked for unique attribution: proven matches suppress only the covered place; unresolved history puts a new draft in manual review with an explicit reason, rather than declaring both same-name places published.
+Existing legacy streak/tier/precip history entries remain in their current maps; new identities do not use them as seeds. No new top-level state key is introduced. `Hot10Snapshot.place_ids` is an additive nested field and is preserved by normal JSON storage. No published text, original event ID, receipt or unknown publication outcome is rewritten. Retained legacy publication evidence is checked for unique attribution: proven matches suppress only the covered place; confirmed but ambiguous place history puts a new draft in manual review without declaring both same-name places published. Unknown legacy ledger rows, draft attempt evidence and attempt conflicts block drafting and both manual and automatic sending under a new alias, even when `posted_events` is empty. Known country-label aliases preserve confirmed and uncertain country-temperature/precipitation event identity through ISO-code conversion. Historical texts and receipt rows are never rewritten.
 
-## Required integration hook with P00b
+## Integrated P00b/P03 release boundary
 
-P00b owns `src/orchestrator/posting.py`. After both branches are integrated, root must import `requires_identity_review` from `src.data.places` and apply its read-only result inside the final automatic-send guard near the approval-policy check:
+The final sender now applies `requires_identity_review` after current revision, approval and publication-epoch checks. Legacy temperature/AQ/precipitation point IDs, old country-label aggregate IDs and Hot10 drafts without nested city identities cannot publish automatically. GHCN station-native IDs remain exempt. The due-draft path applies the same identity containment before its external safety checks; final sender checks also protect direct calls. Manual review can resolve ambiguous place evidence, but cannot bypass an unknown legacy delivery outcome, a proven duplicate receipt or an unregistered place identity. The same registry requirement applies to nested Hot10 city identities.
 
-```python
-if mode == "auto" and requires_identity_review(draft):
-    draft["post_error"] = "Legacy place evidence requires identity review"
-    return "failed"
-```
+Tests explicitly enable a local mocked release epoch: a canonical reviewed draft reaches the real direct and due sender paths, while a stale epoch and freshly reviewed legacy drafts fail. Unknown legacy attempts remain byte-for-byte intact in both modes, and confirmed country aliases cannot be republished. SQLite round-trip coverage retains nested `last_hot10.place_ids`; P03 protected-draft retention and generated state defaults remain in place.
 
-This keeps old pending point-temperature/AQ/Hot10 drafts from automatically shipping name-only scientific evidence. GHCN station-native IDs are exempt. The helper never changes evidence, receipts or unresolved attempts. Manual evidence review remains available. Root must verify both direct-sender and due-draft paths with P00b's combined publication controls before release; the helper alone is not a completed posting integration.
+Independent review found and prompted fixes for unknown legacy attempts without `posted_events`, country aggregate aliases, deterministic unregistered point round trips and malformed cache identity types. Malformed cache rows now quarantine individually rather than crashing the whole cache path. The follow-up review also closed unregistered-place publication alias bypasses; collection remains usable while both send modes require registry attribution. Independent final re-review found no remaining P04 issue and reran 123 identity/publication regressions.
 
 ## Validation and limits
 
-Validation: **2,585 Python tests passed; 41 paid voice replays deselected. Ruff and mypy passed (120 source files).** All tests imported this isolated worktree while using the existing dependency environment.
+Validation on the integrated release: **2,773 offline Python tests passed; 41 paid voice replays deselected. All 222 dashboard tests and the production dashboard build passed. Ruff and mypy passed (123 source files).** All tests imported this isolated worktree while using the existing dependency environment.
 
 Regression fixtures include the real Barcelona/Hyderabad/Valencia pairs through response, baseline, detector, intern, draft, cooldown and publication dedup; independent AQ tiers and Hot10 baselines; all five intentional alias groups; coordinate revision; invalid coordinates; batch cardinality; country alias coverage; cache quarantine/merge idempotence; preserved old publication receipts; source-specific precipitation histories; and P02 evidence invalidation.
 
