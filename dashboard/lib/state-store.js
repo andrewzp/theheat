@@ -1,4 +1,5 @@
 import { mergePublicationControl } from "./publication-control.js"
+import { mergeUsageLedgers } from "./usage-ledger.js"
 import { DatabaseSync } from "node:sqlite"
 import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
 import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
@@ -516,6 +517,7 @@ function mergeState(current, incoming) {
     errors: mergeErrors(base.errors, next.errors),
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
+    llm_usage: Object.hasOwn(rawIncoming, "llm_usage") ? mergeUsageLedgers(base.llm_usage, rawIncoming.llm_usage) : base.llm_usage,
     publication_control: mergePublicationControl(base.publication_control, next.publication_control),
     temperature_history: mergeTemperatureHistory(base.temperature_history, rawIncoming.temperature_history),
     publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),

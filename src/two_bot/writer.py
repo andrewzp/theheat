@@ -205,23 +205,15 @@ def _call_anthropic(user_prompt: str) -> str:
             },
         ),
     )
-    # Economics P0.6: every paid call lands in the usage ledger. The WHOLE
+    # Capture this returned writer response, including missing usage metadata.
+    # Failed pre-response requests and other model stages remain untracked. The WHOLE
     # extraction sits inside the fail-open boundary (codex P2): a response
     # whose usage attribute is a raising property must never convert an
     # already-successful paid call into a pipeline failure.
     try:
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            from src.two_bot import usage_ledger
+        from src.two_bot import usage_ledger
 
-            usage_ledger.record_usage(
-                "writer",
-                WRITER_MODEL,
-                input_tokens=getattr(usage, "input_tokens", 0) or 0,
-                output_tokens=getattr(usage, "output_tokens", 0) or 0,
-                cache_write_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
-                cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
-            )
+        usage_ledger.record_writer_response(response, WRITER_MODEL, "anthropic")
     except Exception as exc:  # noqa: BLE001 — accounting never breaks the call
         print(f"[usage_ledger] anthropic usage extraction error (ignored): {exc!r}")
     # Refusal / empty-content route (codex r1 P1): a safety refusal is a
@@ -273,19 +265,11 @@ def _call_google(user_prompt: str) -> str:
     )
     # Economics P0.6: mirror the Anthropic capture, same fail-open boundary
     # (codex P2). Gemini token fields live on usage_metadata; unknown models
-    # price at $0 in the ledger (this path is a never-used-live fallback).
+    # retain their tokens with explicit unpriced-call coverage.
     try:
-        usage_meta = getattr(response, "usage_metadata", None)
-        if usage_meta is not None:
-            from src.two_bot import usage_ledger
+        from src.two_bot import usage_ledger
 
-            usage_ledger.record_usage(
-                "writer",
-                WRITER_MODEL,
-                input_tokens=getattr(usage_meta, "prompt_token_count", 0) or 0,
-                output_tokens=getattr(usage_meta, "candidates_token_count", 0) or 0,
-                cache_read_tokens=getattr(usage_meta, "cached_content_token_count", 0) or 0,
-            )
+        usage_ledger.record_writer_response(response, WRITER_MODEL, "google")
     except Exception as exc:  # noqa: BLE001 — accounting never breaks the call
         print(f"[usage_ledger] gemini usage extraction error (ignored): {exc!r}")
     # google-genai response.text is Optional — empty falls through to the

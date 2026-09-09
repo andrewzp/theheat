@@ -62,7 +62,8 @@ function buildUsageState() {
   }
 }
 
-test("usage API sums the current month, rejects junk keys, and projects deterministically", async () => {
+test("usage API sums the current month, rejects junk keys, and projects deterministically", async (t) => {
+  t.mock.timers.enable({apis: ["Date"], now: new Date("2026-09-09T12:00:00Z")})
   setEnv()
   const originalFetch = globalThis.fetch
   let monthPrefix, state, payload
@@ -118,7 +119,7 @@ test("usage API requires auth", async () => {
   }
 })
 
-test("usage API is zero-safe on missing ledger", async () => {
+test("usage API reports missing accounting as unavailable rather than free", async () => {
   setEnv()
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => gistResponse({})
@@ -131,7 +132,12 @@ test("usage API is zero-safe on missing ledger", async () => {
     )
     assert.equal(response.status, 200)
     const payload = await response.json()
-    assert.equal(payload.mtd_usd, 0)
+    assert.equal(payload.mtd_usd, null)
+    assert.equal(payload.known_cost_usd, null)
+    assert.equal(payload.projected_usd, null)
+    assert.equal(payload.coverage, "unavailable")
+    assert.equal(payload.level, "coverage_incomplete")
+    assert.equal(payload.budget_enforced, false)
     assert.deepEqual(payload.recent_days, [])
   } finally {
     globalThis.fetch = originalFetch

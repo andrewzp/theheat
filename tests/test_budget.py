@@ -35,12 +35,12 @@ def test_month_to_date_sums_only_current_month():
 
 
 def test_month_to_date_tolerates_corruption():
-    assert budget.month_to_date_usd({}, now=NOW) == 0.0
-    assert budget.month_to_date_usd({"llm_usage": None}, now=NOW) == 0.0
-    assert budget.month_to_date_usd({"llm_usage": {"2026-07-01": "junk"}}, now=NOW) == 0.0
+    assert budget.month_to_date_usd({}, now=NOW) is None
+    assert budget.month_to_date_usd({"llm_usage": None}, now=NOW) is None
+    assert budget.month_to_date_usd({"llm_usage": {"2026-07-01": "junk"}}, now=NOW) is None
     assert budget.month_to_date_usd(
         {"llm_usage": {"2026-07-01": {"writer|m": {"usd": "junk"}}}}, now=NOW
-    ) == 0.0
+    ) is None
 
 
 def test_budget_default_and_override(monkeypatch):
@@ -65,7 +65,7 @@ def test_levels_at_exact_70_and_90_boundaries(monkeypatch):
     assert budget.budget_status(_state(11.2, days=1), now=NOW)["level"] == "warn_70"
     assert budget.budget_status(_state(14.4, days=1), now=NOW)["level"] == "alarm_90"
     # A hair under each boundary stays at the lower level.
-    assert budget.budget_status(_state(11.19, days=1), now=NOW)["level"] == "ok"
+    assert budget.budget_status(_state(11.19, days=1), now=NOW)["level"] == "coverage_incomplete"
     assert budget.budget_status(_state(14.39, days=1), now=NOW)["level"] == "warn_70"
 
 
@@ -87,8 +87,8 @@ def test_record_budget_health_survives_status_explosion(monkeypatch):
             raise RuntimeError("boom")
 
     status = budget.record_budget_health(_Bomb(), now=NOW)
-    assert status["level"] == "ok"
-    assert status["mtd_usd"] == 0.0
+    assert status["level"] == "coverage_incomplete"
+    assert status["mtd_usd"] is None
 
 
 def test_projection_is_straight_line():
@@ -110,7 +110,7 @@ def test_record_budget_health_maps_levels_to_source_health(monkeypatch):
     budget.record_budget_health(_state(1.5, days=7), now=NOW)
     budget.record_budget_health(_state(2.0, days=7), now=NOW)
 
-    assert [c[1] for c in calls] == ["success", "degraded", "failed"]
+    assert [c[1] for c in calls] == ["skipped", "degraded", "failed"]
     assert all(c[0] == "budget" for c in calls)
     assert calls[1][2] is not None and "MTD" in calls[1][2]
     assert calls[2][2] is not None and "projected" in calls[2][2]
@@ -122,4 +122,40 @@ def test_record_budget_health_never_raises(monkeypatch):
 
     monkeypatch.setattr("src.state.record_source_health", exploding_record)
     status = budget.record_budget_health(_state(1.0), now=NOW)
-    assert status["level"] == "ok", "the status still returns despite the sink failing"
+    assert status["level"] == "coverage_incomplete", "the status still returns despite the sink failing"
+
+
+def test_expected_partial_accounting_does_not_reopen_prior_alarm_incident():
+    from datetime import timedelta
+    from src import state as state_module
+    from scripts.source_health_sentinel import classify_source, plan_issue_actions, run_sentinel
+    from tests.test_usage_coverage import node
+
+    current = datetime.now(timezone.utc)
+    snapshot = {}
+    state_module.record_source_health(snapshot, "budget", "failed", "Previous real threshold alarm",
+                                      timestamp=current-timedelta(hours=6))
+    alarm = snapshot["source_health"]["budget"]["runs"][0].copy()
+    for _ in range(5):
+        result = budget.record_budget_health(snapshot, now=current)
+        health = snapshot["source_health"]["budget"]
+        assert result["level"] == "coverage_incomplete" and result["mtd_usd"] is None
+        assert classify_source("budget", health, now=current)["category"] == "idle"
+    report = run_sentinel(snapshot["source_health"], now=current)
+    unknown = {v["source"] for v in report["healthy"] if v.get("issue_resolution_unknown")}
+    assert unknown == {"budget"}
+    assert plan_issue_actions({}, {"budget": 123}, resolution_unknown=unknown) == []
+    assert plan_issue_actions({}, {}, resolution_unknown=unknown) == []
+    assert health["runs"][0] == alarm and health["failed"] == 1
+    assert all(row["status"] == "skipped" and row["error_class"] == "accounting_coverage" for row in health["runs"][1:])
+    dashboard = node('''
+      import {readFileSync} from "node:fs";
+      import {buildSourceHealthPayload} from "./dashboard/lib/source-health.js";
+      console.log(JSON.stringify(buildSourceHealthPayload(JSON.parse(readFileSync(0,"utf8"))).sources));
+    ''', snapshot)
+    assert dashboard[0]["health"] == "idle"
+    assert "accounting unavailable" in dashboard[0]["accounting_note"]
+    # A NEW actual threshold alarm still uses the existing incident path.
+    snapshot["llm_usage"] = {current.date().isoformat(): {"writer|old": {"calls": 1, "usd": 20}}}
+    assert budget.record_budget_health(snapshot, now=current)["level"] == "alarm_90"
+    assert classify_source("budget", snapshot["source_health"]["budget"], now=current)["category"] == "failing"

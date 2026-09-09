@@ -59,6 +59,7 @@ def populated_state():
         else:
             state[key] = f"sentinel-{key}"
     state.update(
+        llm_usage={"2099-09-08": {"writer|fixture": {"calls": 3, "in": 53, "out": 8, "cache_write": 0, "cached_in": 0, "usd": 0.03}}},
         publication_control={"retired_epochs": ["fixture-pause-epoch", "retired-release-fixture"],
                              "observed_at": "2099-09-08T12:00:00Z", "epoch": "fixture-pause-epoch",
                              "enabled": False, "reason": "Offline paused fixture"},

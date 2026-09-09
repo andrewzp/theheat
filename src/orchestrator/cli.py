@@ -65,11 +65,7 @@ def main(dispatchers: dict[str, RunMode]) -> None:
     # Economics P1.1: budget watch — surfaces 70%/90% alerts through the
     # source-health lane (sentinel auto-issues + dashboard). Never raises.
     budget_state = budget.record_budget_health(bot_state)
-    print(
-        f"[main] budget: est ${budget_state['mtd_usd']:.2f} MTD "
-        f"({budget_state['pct_of_budget']:.0%} of ${budget_state['budget_usd']:.0f}), "
-        f"projected ${budget_state['projected_usd']:.2f}/mo [{budget_state['level']}]"
-    )
+    print(f"[main] budget: {budget.status_message(budget_state)} [{budget_state['level']}]")
 
     # The terminal report belongs in the same final snapshot as the run's data.
     # A separate best-effort report write could fail after a successful data

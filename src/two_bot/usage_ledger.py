@@ -1,32 +1,31 @@
-"""Per-call LLM usage ledger (economics master plan P0.6 — ledger MVP).
+"""Retained writer-response usage and table estimates, with explicit gaps.
 
-Records every paid provider call's token usage in a small in-process buffer
-and folds it into ``state["llm_usage"]`` at cycle end — a day-keyed aggregate
-(day → "stage|model" → counters + est. $), pruned to the newest
-``LLM_USAGE_RETENTION_DAYS`` days so the gist state stays tiny (state-size
-watch #390: 45 days × ~2 stage-model keys ≈ single-digit KB). The prune is
-enforced BOTH here and in the state merge strategy (``_merge_llm_usage``) —
-a drain-side prune alone would be resurrected by the merge overlay on write.
+Only the two instrumented writer response sites feed the bounded in-process
+buffer. State-writing runs drain into day/stage/model cumulative aggregates;
+dryruns, replays and other model stages do not establish persisted accounting.
+The buffer retains at most 500 responses; the ledger retains 45 day buckets.
+Each bucket/model retains at most 32 compact cumulative coverage witnesses,
+so contradictory snapshots cannot be hidden by later MAX merges. Overflow
+makes coverage unknown; these bounds are not account-level accounting.
 
-Scope: the ledger accounts for PRODUCTION-cycle spend — runs that write
-state. Dryruns and voice-regression replays deliberately never write state,
-so their paid calls are visible in the Console and workflow logs, not here;
-the buffer cap bounds their memory. This is a design choice, not a leak.
-
-Why: every cost number in this repo's comments has drifted stale ("$6/month",
-"~5,700 tokens", "$25–45/mo" — all measured wrong on 2026-07-13). The ledger
-makes spend a *measured* dashboard fact. Estimates are directional — the
-Console is the invoice; unknown models record tokens with usd=0.0 because an
-honest "unknown" beats a fabricated price.
+Legacy usd/token/call fields remain historical estimates. New priced/unpriced
+counters identify unknown prices and absent metadata. No enforcement or invoice
+reconciliation happens here, and a recorded response does not prove billing.
 """
 
 from __future__ import annotations
 
+from copy import deepcopy
 import math
 import re
 import threading
 from datetime import date, datetime, timezone
 from typing import Any
+
+from src.two_bot.usage_coverage import (
+    COVERAGE_COUNTS as _COVERAGE_COUNT_FIELDS, COVERAGE_FIELDS as _COVERAGE_FIELDS,
+    SNAPSHOTS, count as valid_count, money, coverage_evidence, coverage_fields_valid, union_evidence,
+)
 
 # $/MTok (input, output, cache_write, cache_read) — verified live 2026-07-13
 # against the Anthropic pricing page. Boundary-aware prefix match (below) so
@@ -73,7 +72,7 @@ _TOKEN_CLAMP = 10**12
 def _clamp_tokens(raw: object) -> int:
     try:
         value = int(raw or 0)  # type: ignore[call-overload]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0
     return max(0, min(value, _TOKEN_CLAMP))
 
@@ -82,7 +81,7 @@ def _price_for(model: str) -> tuple[float, float, float, float]:
     for prefix, prices in _PRICES_PER_MTOK.items():
         # Boundary-aware: "claude-sonnet-4-6" and its dated variants
         # ("claude-sonnet-4-6-20250929") match; "claude-sonnet-4-60" is a
-        # DIFFERENT (unknown) model and must price at $0 (codex P2).
+        # DIFFERENT (unknown) model. Its zero placeholder is never a known price.
         if model == prefix or model.startswith(prefix + "-") or model.startswith(prefix + "@"):
             return prices
     return (0.0, 0.0, 0.0, 0.0)
@@ -96,6 +95,7 @@ def estimate_usd(
     cache_write_tokens: int = 0,
     cache_read_tokens: int = 0,
 ) -> float:
+    """Legacy numeric calculator; zero can mean unknown. Consult coverage counters."""
     in_p, out_p, cw_p, cr_p = _price_for(model)
     usd = (
         _clamp_tokens(input_tokens) * in_p
@@ -114,11 +114,17 @@ def record_usage(
     output_tokens: int = 0,
     cache_write_tokens: int = 0,
     cache_read_tokens: int = 0,
+    usage_complete: bool = True,
 ) -> None:
     """Buffer one provider call's usage. Thread-safe (writer samples run in a
     ThreadPoolExecutor). Never raises — the ledger must not take down a call
     that already succeeded."""
     try:
+        quantities = (input_tokens, output_tokens, cache_write_tokens, cache_read_tokens)
+        complete = usage_complete is True and all(type(value) is int and 0 <= value <= _TOKEN_CLAMP for value in quantities)
+        priced = complete and any(_price_for(str(model)))
+        usd = estimate_usd(str(model), input_tokens=input_tokens, output_tokens=output_tokens,
+                           cache_write_tokens=cache_write_tokens, cache_read_tokens=cache_read_tokens) if priced else 0.0
         row = {
             "day": datetime.now(timezone.utc).date().isoformat(),
             "stage": str(stage),
@@ -127,13 +133,9 @@ def record_usage(
             "cached_in": _clamp_tokens(cache_read_tokens),
             "cache_write": _clamp_tokens(cache_write_tokens),
             "out": _clamp_tokens(output_tokens),
-            "usd": estimate_usd(
-                str(model),
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                cache_write_tokens=cache_write_tokens,
-                cache_read_tokens=cache_read_tokens,
-            ),
+            "usd": usd, "priced_usd": usd,
+            "priced_calls": int(priced), "unpriced_calls": int(not priced),
+            "missing_usage_calls": int(not complete),
         }
         with _LEDGER_LOCK:
             _BUFFER.append(row)
@@ -141,6 +143,36 @@ def record_usage(
                 del _BUFFER[: len(_BUFFER) - _BUFFER_CAP]
     except Exception as exc:  # noqa: BLE001 — never break a successful call
         print(f"[usage_ledger] record error (ignored): {exc!r}")
+
+
+def record_writer_response(response: Any, model: str, provider: str) -> None:
+    """Observe existing successful responses; never call/retry a provider here.
+
+    Missing metadata records an unpriced response, not a known billed charge.
+    Provider failures before a response remain outside this capture scope.
+    """
+    try:
+        usage = getattr(response, "usage" if provider == "anthropic" else "usage_metadata", None)
+        if usage is None:
+            record_usage("writer", model, usage_complete=False)
+            return
+        def optional_count(field):
+            value = getattr(usage, field, None)
+            return 0 if value is None else value
+
+        values: dict[str, Any]
+        if provider == "anthropic":
+            values = {"input_tokens": getattr(usage, "input_tokens", None),
+                      "output_tokens": getattr(usage, "output_tokens", None),
+                      "cache_write_tokens": optional_count("cache_creation_input_tokens"),
+                      "cache_read_tokens": optional_count("cache_read_input_tokens")}
+        else:
+            values = {"input_tokens": getattr(usage, "prompt_token_count", None),
+                      "output_tokens": getattr(usage, "candidates_token_count", None),
+                      "cache_read_tokens": optional_count("cached_content_token_count")}
+        record_usage("writer", model, **values)
+    except Exception:  # Metadata access itself can fail on an otherwise successful response.
+        record_usage("writer", model, usage_complete=False)
 
 
 def _valid_agg(raw: Any) -> dict:
@@ -180,25 +212,55 @@ def drain_into_state(state: Any) -> int:
                     f"resetting to a fresh ledger"
                 )
             ledger = {}
-            state["llm_usage"] = ledger
+        # Work on a copy: shallow callers can share DEFAULT_STATE nested maps.
+        ledger = deepcopy(ledger)
+        previous_evidence: dict[tuple[str, str], dict] = {}
         for row in rows:
             day_bucket = ledger.get(row["day"])
             if not isinstance(day_bucket, dict):
                 day_bucket = {}
                 ledger[row["day"]] = day_bucket
             key = f"{row['stage']}|{row['model']}"
+            identity = (row["day"], key)
+            if identity not in previous_evidence:
+                raw = day_bucket.get(key)
+                previous_evidence[identity] = coverage_evidence(raw if isinstance(raw, dict) else {})
             agg = _valid_agg(day_bucket.get(key))
             day_bucket[key] = agg
             agg["calls"] += 1
             for field in _AGG_INT_FIELDS:
                 agg[field] += row[field]
             agg["usd"] = round(agg["usd"] + row["usd"], 6)
+            if any(field in agg for field in _COVERAGE_FIELDS) and not coverage_fields_valid(agg):
+                agg["cost_coverage_invalid"] = True
+            for field in _COVERAGE_COUNT_FIELDS:
+                value = agg.get(field, 0)
+                # Preserve contradictory/corrupt evidence rather than silently
+                # turning it into a reassuring coverage count.
+                if valid_count(value):
+                    agg[field] = int(value) + row[field]
+                else:
+                    agg[field] = row[field]  # Invalid flag remains; this is not verified coverage.
+            value = agg.get("priced_usd", 0.0)
+            if money(value):
+                agg["priced_usd"] = round(value + row["priced_usd"], 6)
+            else:
+                agg["priced_usd"] = row["priced_usd"]
+        for (day, key), previous in previous_evidence.items():
+            agg = ledger[day][key]
+            # This drain is an original cumulative snapshot. Keep old evidence
+            # alongside it; a new response cannot reconcile old contradictions.
+            fresh = coverage_evidence({field: value for field, value in agg.items() if field != SNAPSHOTS})
+            agg.update(union_evidence(previous, fresh))
         for day in list(ledger.keys()):
             if not _is_valid_day_key(day):
                 print(f"[usage_ledger] dropping corrupt day key {day!r}")
                 del ledger[day]
         for day in sorted(ledger.keys())[:-LLM_USAGE_RETENTION_DAYS]:
             del ledger[day]
+        # Commit only after the whole fold succeeds; a retry must not replay
+        # earlier rows on top of a partially mutated state.
+        state["llm_usage"] = ledger
         return len(rows)
     except Exception as exc:  # noqa: BLE001 — never break the state save
         print(f"[usage_ledger] drain error (rows re-buffered): {exc!r}")
