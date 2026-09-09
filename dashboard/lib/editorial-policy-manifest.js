@@ -10,7 +10,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "4cf2228f4920ab80df259d251eea6585b0fca31fedf645d38918a441aee70e75",
+    "src/editorial/policy.py": "942a414fae614bc22e853ee11c11f7ec35854b196355064513d2680949815fdc",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
@@ -40,8 +40,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/strict_contract.py": "319469ca3bcd584b6162364d770b89e44b0698076f10ae92eb9c538368234575",
     "src/two_bot/types.py": "1ca82f8ae83306bfc5e1693f6de14d3da0c0b51c8473429873bd7443cde08d02",
     "src/two_bot/writer.py": "c1a3826765885290eefe48cbda6df364b78cbcfa524ee42c6fad54964cc4a273",
-    "src/voice/safety.py": "be3bff564882cf7b5b4105ebc6e76e335454aad238f2ad37e3798b3ccdc96318"
+    "src/voice/safety.py": "cc3f555a759db5801576e84dfb5de49600a0558c8d5da10b20d9b9605880c98e"
   },
   "schema_version": 1,
-  "source_sha256": "a1607cd87c09ea8e019bd329f749c6ab15b3ff59487ba7d2735220364dcbdd99"
+  "source_sha256": "d4cf5db64998cb023b110bbaf30e6d0ce72abac3406895e97d79c9d6bea0dd9c"
 }

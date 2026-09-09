@@ -191,8 +191,9 @@ class TestTellDontShow:
         )
         assert not passed
 
-    def test_good_sinlaku_passes(self):
-        """The rewritten version should pass."""
+    def test_good_sinlaku_passes(self, monkeypatch):
+        """Tone-only fixture; separate evidence checks establish factual validity."""
+        monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
         passed, reason = run_safety_pipeline(
             "Tropical Cyclone SINLAKU just hit 178 mph over the Northern "
             "Mariana Islands. Category 5 starts at 157."
@@ -419,10 +420,10 @@ class TestMonthRepetition:
 
 
 class TestSafetyPipeline:
-    def test_clean_tweet_passes_full_pipeline(self):
-        # LLM layer skipped when no API key is set
+    def test_clean_tweet_blocks_without_required_model_check(self):
+        # Clean prose still needs the required model check to complete.
         passed, reason = run_safety_pipeline("Phoenix hit 119F. New record for April.")
-        assert passed
+        assert not passed and reason == "safety_unavailable: missing credential"
 
     def test_regex_failure_short_circuits(self):
         passed, reason = run_safety_pipeline("BREAKING: Phoenix hit 119F!")
@@ -444,8 +445,9 @@ class TestSafetyPipeline:
         )
         assert not passed
 
-    def test_good_sinlaku_tweet_passes(self):
-        """The tweet I wrote for Cyclone SINLAKU should pass the pipeline."""
+    def test_good_sinlaku_tweet_passes(self, monkeypatch):
+        """Tone-only fixture; this does not certify the weather claim."""
+        monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
         passed, reason = run_safety_pipeline(
             "Tropical Cyclone SINLAKU is 80 miles from Guam at 145mph sustained. "
             "It just got bumped to the top GDACS tier."

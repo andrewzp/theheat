@@ -3,6 +3,7 @@
 from copy import deepcopy
 import importlib
 from unittest.mock import MagicMock
+from types import SimpleNamespace
 
 import pytest
 
@@ -62,6 +63,38 @@ def _state(draft):
     state = deepcopy(DEFAULT_STATE)
     state["drafts"] = [draft]
     return state
+
+
+@pytest.mark.parametrize("mode", ["manual", "auto"])
+@pytest.mark.parametrize("outcome", ["missing_credential", "provider_error", "empty_response"])
+def test_unavailable_required_safety_blocks_real_posting_paths(external, monkeypatch, mode, outcome):
+    from google import genai
+    from src.voice import safety
+
+    safety._SAFETY_CACHE.clear()
+    monkeypatch.setattr(safety, "GEMINI_API_KEY", "" if outcome == "missing_credential" else "synthetic-key")
+    generate = MagicMock(return_value=SimpleNamespace(text=""))
+    if outcome == "provider_error":
+        generate.side_effect = RuntimeError("synthetic failure")
+    monkeypatch.setattr(genai, "Client", MagicMock(return_value=SimpleNamespace(
+        models=SimpleNamespace(generate_content=generate))))
+    real_safety = MagicMock(wraps=safety.run_safety_pipeline)
+    monkeypatch.setattr(posting, "run_safety_pipeline", real_safety)
+    draft = _draft(mode)
+    state = _state(draft)
+    if mode == "manual":
+        monkeypatch.setenv("DRAFT_ID", draft["id"])
+        monkeypatch.setenv("TWEET_TEXT", draft["text"])
+        monkeypatch.setenv("PUBLISH_INTENT_ID", draft["publish_intent_id"])
+        posting.run_manual_tweet(state)
+    else:
+        posting.process_due_drafts(state)
+    real_safety.assert_called_once_with(draft["text"])
+    assert generate.call_count == (0 if outcome == "missing_credential" else 1)
+    external[1].assert_not_called()
+    assert not state["publish_ledger"]
+    assert draft["status"] == "pending" and not draft.get("approval_binding")
+    assert "safety_" in draft["post_error"] and "auto_approve_at" not in draft
 
 
 @pytest.mark.parametrize("change", ["text", "evidence", "fact_check", "approval", "conflict", "revision"])
