@@ -1,0 +1,122 @@
+{
+  "temperature_comparator": {
+    "schema_version": 1,
+    "synthetic": true,
+    "location": "Example station / synthetic data",
+    "scope": "One synthetic station; daily values",
+    "variable": "daily_maximum_temperature",
+    "unit": "°C",
+    "event_id": "synthetic-comparator-v1",
+    "evidence_as_of": "2026-09-08T12:00:00Z",
+    "points": [
+      {
+        "value": 40.2,
+        "unit": "°C",
+        "valid_time": "2026-09-12T12:00:00Z",
+        "evidence_type": "forecast",
+        "source": {
+          "product": "Synthetic model",
+          "url": "https://example.invalid/synthetic/model",
+          "revision_sha256": "24cbd42dc9f26ae3fa741f336c62f0e95f00f2ad1b164cff5fba8b627b0a627f"
+        }
+      }
+    ],
+    "baseline": {
+      "complete": true,
+      "sample_count": 8,
+      "expected_count": 8,
+      "start": "2026-09-01T12:00:00Z",
+      "cutoff": "2026-09-08T12:00:00Z",
+      "scope": "8 complete synthetic daily samples; no official record",
+      "point": {
+        "value": 38.6,
+        "unit": "°C",
+        "valid_time": "2026-09-07T12:00:00Z",
+        "evidence_type": "observed",
+        "source": {
+          "product": "Synthetic station",
+          "url": "https://example.invalid/synthetic/station",
+          "revision_sha256": "ce0ae2400b5c1a1dc7adbc18206a8067128b2932d2d9d07fa25df3e866690e9d"
+        }
+      }
+    }
+  },
+  "temperature_trajectory": {
+    "schema_version": 1,
+    "synthetic": true,
+    "location": "Example station / synthetic data",
+    "scope": "One synthetic station; daily values",
+    "variable": "daily_maximum_temperature",
+    "unit": "°C",
+    "event_id": "synthetic-trajectory-v1",
+    "evidence_as_of": "2026-09-08T12:00:00Z",
+    "points": [
+      {
+        "value": 35.0,
+        "unit": "°C",
+        "valid_time": "2026-09-07T12:00:00Z",
+        "evidence_type": "observed",
+        "source": {
+          "product": "Synthetic station",
+          "url": "https://example.invalid/synthetic/station",
+          "revision_sha256": "ce0ae2400b5c1a1dc7adbc18206a8067128b2932d2d9d07fa25df3e866690e9d"
+        }
+      },
+      {
+        "value": 37.0,
+        "unit": "°C",
+        "valid_time": "2026-09-08T12:00:00Z",
+        "evidence_type": "observed",
+        "source": {
+          "product": "Synthetic station",
+          "url": "https://example.invalid/synthetic/station",
+          "revision_sha256": "ce0ae2400b5c1a1dc7adbc18206a8067128b2932d2d9d07fa25df3e866690e9d"
+        }
+      },
+      {
+        "value": 38.3,
+        "unit": "°C",
+        "valid_time": "2026-09-09T12:00:00Z",
+        "evidence_type": "forecast",
+        "source": {
+          "product": "Synthetic model",
+          "url": "https://example.invalid/synthetic/model",
+          "revision_sha256": "24cbd42dc9f26ae3fa741f336c62f0e95f00f2ad1b164cff5fba8b627b0a627f"
+        }
+      },
+      {
+        "value": 40.2,
+        "unit": "°C",
+        "valid_time": "2026-09-10T12:00:00Z",
+        "evidence_type": "forecast",
+        "source": {
+          "product": "Synthetic model",
+          "url": "https://example.invalid/synthetic/model",
+          "revision_sha256": "24cbd42dc9f26ae3fa741f336c62f0e95f00f2ad1b164cff5fba8b627b0a627f"
+        }
+      },
+      {
+        "value": 39.1,
+        "unit": "°C",
+        "valid_time": "2026-09-11T12:00:00Z",
+        "evidence_type": "forecast",
+        "source": {
+          "product": "Synthetic model",
+          "url": "https://example.invalid/synthetic/model",
+          "revision_sha256": "24cbd42dc9f26ae3fa741f336c62f0e95f00f2ad1b164cff5fba8b627b0a627f"
+        }
+      },
+      {
+        "value": 36.8,
+        "unit": "°C",
+        "valid_time": "2026-09-12T12:00:00Z",
+        "evidence_type": "forecast",
+        "source": {
+          "product": "Synthetic model",
+          "url": "https://example.invalid/synthetic/model",
+          "revision_sha256": "24cbd42dc9f26ae3fa741f336c62f0e95f00f2ad1b164cff5fba8b627b0a627f"
+        }
+      }
+    ]
+  }
+}
