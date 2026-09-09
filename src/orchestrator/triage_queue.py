@@ -1,4 +1,8 @@
-"""Triage queue helpers for source-runner candidates."""
+"""Triage queue helpers for source-runner candidates.
+
+Negative-cache queue partition/refill handling reused from PR #464,
+2b70565a44faaecef4c2c818ca5f89a1841e799f; narrowed P08 disposition below.
+"""
 
 from __future__ import annotations
 
@@ -210,6 +214,20 @@ def _abort_cycle_on_billing(
             )
 
 
+def _record_negcache_kill_if_eligible(
+    bot_state: BotState, candidate: "TriageCandidateBundle", cand_result: dict
+) -> None:
+    """Record an explicit model evidence judgment once on either queue path.
+
+    The pipeline owns the default-deny scope/code disposition. Generated-text,
+    context, contract and infrastructure failures cannot arm this cache.
+    Direct dispatch may already have recorded the verdict; the shared helper
+    prevents counting the same attempt again.
+    """
+    from src.two_bot.negative_cache import record_result
+    record_result(bot_state, candidate.event_id, candidate.bundle, cand_result)
+
+
 def _refill_drain(
     bot_state: BotState,
     current_run: dict | None,
@@ -238,6 +256,11 @@ def _refill_drain(
     from src.orchestrator import funnel as _funnel
     from src.orchestrator import triage as _triage
     from src.orchestrator.draft_save import can_draft_candidate
+    from src.two_bot import negative_cache as _negcache
+
+    # Economics P1.3: sweep TTL-expired negative-cache entries once per drain
+    # so the skip predicate below only ever consults live entries.
+    _negcache.prune(bot_state)
 
     try:
         ranked = _triage.select_survivors(bot_state, queue, refill=True)
@@ -260,6 +283,13 @@ def _refill_drain(
     success_by_country: dict[str, int] = {}
     pending_by_type: dict[str, int] = {}
     attempted_event_ids: set[str] = set()
+    # Economics P1.3 (codex r10): a $0 cache skip must not consume the
+    # event's paid slot for the cycle — a later same-event row with CHANGED
+    # facts deserves its attempt (the changed-facts-reopening invariant).
+    # Cache skips are therefore tracked per FINGERPRINT: an identical-facts
+    # sibling falls to duplicate_draft; different facts continue down the
+    # predicate chain (their own cache check misses on the new sha).
+    negcache_skipped_sha: dict[str, str] = {}
 
     ctx = _current_suppression_ctx() or {}
     run_id = ctx.get("run_id")
@@ -277,14 +307,27 @@ def _refill_drain(
             kill_reason=reason,
             summary=getattr(candidate.bundle, "where", None) or candidate.city or None,
         )
-        if sink_active:
+        # First terminal wins (codex P1.3 r4 P2, mirroring the billing-abort
+        # rule): record_slate_terminal is last-write-wins, so a duplicate
+        # queue row's later kill (e.g. duplicate_draft after a
+        # negative_cache skip) must not overwrite the event's true outcome.
+        # The suppression row above still records every kill.
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
 
     def _cut(candidate: "TriageCandidateBundle", reason: str) -> None:
         _triage._record_triage_suppression(
             bot_state, candidate, cap=per_cat_cap, global_cap=target, reason=reason,
         )
-        if sink_active:
+        # First terminal wins here too (codex P1.3 r5 P2): once the ceiling
+        # is reached, a trailing duplicate of an event that already resolved
+        # (e.g. negative_cache) must not have its terminal overwritten with
+        # triage_cap.
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
             _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
     drafted_count = 0
@@ -298,6 +341,19 @@ def _refill_drain(
         # already attempted this cycle (the first attempt may have critic-killed, so
         # can_draft_candidate wouldn't catch it). (codex)
         if candidate.event_id and candidate.event_id in attempted_event_ids:
+            _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
+            continue
+        # A cache-skipped event blocks only IDENTICAL facts (codex r10):
+        # same fingerprint → duplicate_draft (not a second savings-inflating
+        # negative_cache row, codex r3); changed facts fall through — their
+        # own cache check below misses on the new sha and the paid attempt
+        # proceeds.
+        if (
+            candidate.event_id
+            and candidate.event_id in negcache_skipped_sha
+            and _negcache.bundle_fingerprint(candidate.bundle, bot_state)
+            == negcache_skipped_sha[candidate.event_id]
+        ):
             _pre_writer_kill(candidate, "duplicate_draft", "pre-writer: duplicate event in slate")
             continue
 
@@ -340,6 +396,32 @@ def _refill_drain(
             _pre_writer_kill(candidate, reason, f"pre-writer: {reason}")
             continue
 
+        # Economics P1.3: LAST $0 predicate, immediately before the paid
+        # boundary (codex r1 P2: checking earlier let cheaper deterministic
+        # kills — caps, cooldowns, dup-events — be misattributed to the
+        # cache, overstating its savings). An event killed at a paid stage
+        # min_kills+ times on byte-identical facts under the current decision
+        # epoch re-enters the queue every cycle; skip re-buying it until its
+        # facts change, the epoch rotates, or the TTL lapses.
+        negcache_reason = _negcache.should_skip(
+            bot_state, candidate.event_id, candidate.bundle
+        )
+        if negcache_reason is not None:
+            # Accounting parity with the billing-skip path (codex r3 P2):
+            # the event leaves triage via the cache, not an editorial cut —
+            # count triaged_out so triage_cut stays exact. The skip is
+            # remembered per FINGERPRINT, not per event (codex r10): an
+            # identical-facts sibling row records duplicate_draft instead
+            # of a second savings-inflating negative_cache kill, while a
+            # changed-facts sibling keeps its paid shot.
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            if candidate.event_id:
+                negcache_skipped_sha[candidate.event_id] = (
+                    _negcache.bundle_fingerprint(candidate.bundle, bot_state)
+                )
+            _pre_writer_kill(candidate, "negative_cache", f"pre-writer: {negcache_reason}")
+            continue
+
         _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         attempts += 1
@@ -362,7 +444,17 @@ def _refill_drain(
                 terminal = cand_result["kill_stage"]
             else:
                 terminal = "save_rejected"
-            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
+            # First terminal wins across EVERY recording path (codex P1.3
+            # r4–r6): duplicate event_ids with divergent category/gate
+            # attributes can route one row through a pre-writer terminal and
+            # a later row to the writer. Documented trade: the slate view
+            # keeps the FIRST resolution; the suppression ledger and
+            # stage_outcomes above still carry the paid attempt's full
+            # history.
+            if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+                "_slate_terminal", {}
+            ):
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
 
         if drafted:
             drafted_count += 1
@@ -379,6 +471,13 @@ def _refill_drain(
                     candidate.on_draft_success()
                 except Exception as cb_exc:  # noqa: BLE001
                     print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+        else:
+            # Economics P1.3: remember eligible writer evidence judgments so later
+            # cycles skip re-attempting this bundle while its material facts
+            # are unchanged. Eligibility (r8 explicit disposition, r2
+            # out-of-scope exclusion) lives in the shared helper — ONE rule
+            # for both drain paths (codex r9).
+            _record_negcache_kill_if_eligible(bot_state, candidate, cand_result)
 
         if cand_result.get("kill_stage") == "budget_exhausted":
             _abort_cycle_on_billing(
@@ -534,37 +633,146 @@ def _drain_and_write_triage_queue(
             defer_callbacks=defer_callbacks, funnel_sink=funnel_sink,
         )
 
-    survivors = queue  # default: legacy passthrough
+    # Economics P1.3 (codex r9–r11): the negative cache protects the legacy
+    # path too, and a $0 cache skip must not consume a capped survivor slot
+    # (codex r11 P1: caps ran BEFORE the cache check, so a cache-dead row
+    # burned the slot a changed-facts sibling needed and the slot was never
+    # backfilled). The cache therefore PARTITIONS the queue before cap
+    # selection: cache-dead rows and their identical-facts duplicates
+    # resolve here; only live candidates contend for cap slots.
+    # Attribution trade, documented: a row that is BOTH cache-dead and
+    # would have been cap-cut records negative_cache rather than triage_cap
+    # on this path — the refill drain keeps exact last-$0-predicate
+    # ordering; here the slot-backfill invariant wins.
+    from src.two_bot import negative_cache as _negcache
+
+    _negcache.prune(bot_state)
+    negcache_run_id = (_current_suppression_ctx() or {}).get("run_id")
+
+    def _legacy_pre_writer_row(
+        candidate: "TriageCandidateBundle", stage: str, reason: str
+    ) -> None:
+        """$0 suppression row + first-terminal-wins funnel row (legacy)."""
+        _record_downstream_suppression(
+            bot_state=bot_state,
+            source=candidate.source,
+            run_id=negcache_run_id,
+            event_id=candidate.event_id,
+            score=candidate.score,
+            kill_stage=stage,
+            kill_reason=reason,
+            summary=getattr(candidate.bundle, "where", None)
+            or candidate.city
+            or None,
+        )
+        if funnel_sink is not None and candidate.event_id not in funnel_sink.get(
+            "_slate_terminal", {}
+        ):
+            from src.orchestrator import funnel as _funnel
+
+            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, stage)
+
+    # Partition rules (codex r10–r12), in order per row:
+    #   1. The event already holds a LIVE row → duplicate_draft. One paid
+    #      shot per event per cycle; a second same-event row (identical OR
+    #      changed facts) must not burn a cap slot the attempted guard
+    #      would only reclaim after selection (codex r12 P1).
+    #   2. Identical facts to a cache-skipped row → duplicate_draft (never
+    #      a second savings-inflating negative_cache row, codex r10).
+    #   3. Cache-dead → negative_cache row + fingerprint skip memory.
+    #   4. Otherwise live — the event's one contender for a cap slot.
+    # Partition rows LEFT triage — bump triaged_out for them (codex r12
+    # P2: funnel triage_cut = triaged_in - triaged_out; unbumped cache
+    # resolutions read as editorial cap cuts, a cache-only slate showed
+    # triage_cap_rate=1.0). writer_attempted is never bumped here — no
+    # paid attempt happened.
+    negcache_skipped_sha: dict[str, str] = {}
+    live_event_ids: set[str] = set()
+    live_queue: list = []
+    for candidate in queue:
+        if candidate.event_id and candidate.event_id in live_event_ids:
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
+            continue
+        if (
+            candidate.event_id
+            and candidate.event_id in negcache_skipped_sha
+            and _negcache.bundle_fingerprint(candidate.bundle, bot_state)
+            == negcache_skipped_sha[candidate.event_id]
+        ):
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
+            continue
+        negcache_reason = _negcache.should_skip(
+            bot_state, candidate.event_id, candidate.bundle
+        )
+        if negcache_reason is not None:
+            if candidate.event_id:
+                negcache_skipped_sha[candidate.event_id] = (
+                    _negcache.bundle_fingerprint(candidate.bundle, bot_state)
+                )
+            _bump_source_field_in_run(current_run, candidate.source, "triaged_out")
+            _legacy_pre_writer_row(
+                candidate, "negative_cache", f"pre-writer: {negcache_reason}"
+            )
+            continue
+        if candidate.event_id:
+            live_event_ids.add(candidate.event_id)
+        live_queue.append(candidate)
+
+    survivors = live_queue  # default: legacy passthrough
     if triage_enabled:
         try:
-            survivors = _triage.select_survivors(bot_state, queue)
+            survivors = _triage.select_survivors(bot_state, live_queue)
         except Exception as exc:
             # Legacy passthrough preserves draft production (the cycle still
             # produces drafts even if the triage stage breaks). But we MUST
             # surface the failure to the dashboard — silent broken triage is
             # worse than loud broken triage.
             err_text = str(exc)[:200]
-            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(queue)} candidates)")
+            print(f"[triage] error: {exc!r} — falling through to legacy (writing all {len(live_queue)} candidates)")
             _record_triage_error_suppression(bot_state, err_text)
             _state.record_source_health(bot_state, "triage", "degraded", err_text)
-            survivors = queue
+            survivors = live_queue
 
     survivor_by_source = Counter(candidate.source for candidate in survivors)
     for source, survivor_count in survivor_by_source.items():
         _bump_source_field_in_run(current_run, source, "triaged_out", survivor_count)
 
-    # Phase A: mark slate candidates the triage cap cut (drain-observed, not from
-    # the truncatable suppression ledger — triage_cap rows carry run_id=None).
+    # Phase A: mark slate candidates the triage cap cut (drain-observed, not
+    # from the truncatable suppression ledger — triage_cap rows carry
+    # run_id=None). LIVE candidates only: cache-partitioned rows already
+    # carry their own terminal, and first-terminal-wins (codex r10/r11) —
+    # a cap-cut changed-facts sibling of a skipped event must not overwrite
+    # the event's negative_cache resolution with triage_cap.
     if funnel_sink is not None:
         from src.orchestrator import funnel as _funnel
 
         survivor_ids = {candidate.event_id for candidate in survivors}
-        for candidate in queue:
-            if candidate.event_id not in survivor_ids:
+        for candidate in live_queue:
+            if candidate.event_id not in survivor_ids and candidate.event_id not in funnel_sink.get(
+                "_slate_terminal", {}
+            ):
                 _funnel.record_slate_terminal(funnel_sink, candidate.event_id, "triage_cap")
 
     drafted_count = 0
+    # One paid shot per event per cycle (codex r11 P2): the fingerprint
+    # partition reopens changed facts, but a reopened event must not be
+    # bought twice when the queue carries it twice — mirror the refill
+    # drain's attempted guard beyond the paid boundary.
+    attempted_event_ids: set[str] = set()
     for idx, candidate in enumerate(survivors):
+        if candidate.event_id and candidate.event_id in attempted_event_ids:
+            _legacy_pre_writer_row(
+                candidate, "duplicate_draft", "pre-writer: duplicate event in slate"
+            )
+            continue
+        if candidate.event_id:
+            attempted_event_ids.add(candidate.event_id)
         _bump_source_field_in_run(current_run, candidate.source, "writer_attempted")
         draft_kwargs = {
             "legacy_type": candidate.legacy_type,
@@ -601,7 +809,13 @@ def _drain_and_write_triage_queue(
                 # generate_draft succeeded but save_draft refused (cooldown / dup /
                 # superseded); the specific stage is in the kills counter + ledger.
                 terminal = "save_rejected"
-            _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
+            # First terminal wins here too (codex r10 P2): with cached facts
+            # A skipped pre-writer and changed facts B reaching the writer,
+            # B's paid result must not overwrite the event's first
+            # resolution — parity with the refill drain and the legacy
+            # cache-hit path above.
+            if candidate.event_id not in funnel_sink.get("_slate_terminal", {}):
+                _funnel.record_slate_terminal(funnel_sink, candidate.event_id, terminal)
         if drafted:
             drafted_count += 1
             # Credit the originating source's run-telemetry entry (spec § 9 I2 fix).
@@ -622,6 +836,11 @@ def _drain_and_write_triage_queue(
                         candidate.on_draft_success()
                     except Exception as cb_exc:
                         print(f"[triage] on_draft_success callback error for {candidate.source}: {cb_exc!r}")
+        else:
+            # Economics P1.3 (codex r9): record eligible writer evidence judgments on
+            # the legacy path too — same shared disposition as the refill
+            # drain, so evidence accumulates regardless of the refill flag.
+            _record_negcache_kill_if_eligible(bot_state, candidate, cand_result)
 
         if cand_result.get("kill_stage") == "budget_exhausted":
             _abort_cycle_on_billing(

@@ -109,6 +109,8 @@ WRITER_OUTPUT_SCHEMA: dict = {
         "peer_comparison_used": {"type": ["string", "null"]},
         "reasoning": {"type": "string"},
         "cited_impact": {"type": ["boolean", "null"]},
+        "kill_scope": {"type": ["string", "null"], "enum": ["evidence", "style", "context", "unknown", None]},
+        "kill_code": {"type": ["string", "null"], "enum": ["insufficient_evidence", "conflicting_evidence", None]},
     },
     "required": [
         "tweet",
@@ -117,7 +119,7 @@ WRITER_OUTPUT_SCHEMA: dict = {
         "era_anchor_used",
         "peer_comparison_used",
         "reasoning",
-        "cited_impact",
+        "cited_impact", "kill_scope", "kill_code",
     ],
     "additionalProperties": False,
 }
@@ -139,7 +141,7 @@ def _parse_writer_json(raw: str) -> WriterResult:
     if not isinstance(parsed, dict):
         raise ModelOutputContractError("Writer response must be a JSON object")
     required = {"tweet", "kill_reason", "angle_chosen", "era_anchor_used", "peer_comparison_used", "reasoning"}
-    if not required.issubset(parsed) or set(parsed) - (required | {"cited_impact"}):
+    if not required.issubset(parsed) or set(parsed) - (required | {"cited_impact", "kill_scope", "kill_code"}):
         raise ModelOutputContractError("Writer response fields do not match the output contract")
     cited_impact = parsed.get("cited_impact")
     try:
@@ -151,6 +153,7 @@ def _parse_writer_json(raw: str) -> WriterResult:
             peer_comparison_used=parsed.get("peer_comparison_used"),
             reasoning=parsed["reasoning"],
             cited_impact=cited_impact,
+            kill_scope=parsed.get("kill_scope"), kill_code=parsed.get("kill_code"),
         )
         result.validate_model_output()
         return result
@@ -449,6 +452,10 @@ def write_tweet(
             )
 
         assert result is not None  # mypy: the break above guarantees result is set
+
+        # Retry feedback changes the decision context. A rejection after
+        # length/JSON repair or critic revision cannot defer the base event.
+        result.initial_response = attempt == 0 and parse_attempt == 0 and not revision_constraint
 
         # Kill or fits — return as-is.
         if result.tweet is None or len(result.tweet) <= TWEET_MAX_LENGTH:

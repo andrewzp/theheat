@@ -136,6 +136,7 @@ DEFAULT_STATE: BotState = {
     # {calls, in, cached_in, cache_write, out, usd}. Pruned to
     # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
     "llm_usage": {},
+    "writer_negative_cache": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
     # Global ocean SST archive-high streak. Two-field state:
@@ -1082,6 +1083,11 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
     for day in sorted(merged.keys())[:-LLM_USAGE_RETENTION_DAYS]:
         del merged[day]
     return merged
+
+
+def _merge_writer_negative_cache(base: Any, nxt: Any) -> dict:
+    from src.two_bot.negative_cache import merge_entries
+    return merge_entries(base, nxt)
 
 
 def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
@@ -2079,6 +2085,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "publish_ledger": _merge_publish_ledger,
     "tweet_metrics": _merge_tweet_metrics,
     "llm_usage": _merge_llm_usage,
+    "writer_negative_cache": _merge_writer_negative_cache,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,
     "ice_mass_max_loss": _strat_reduce_by_key(_keep_min_gt),

@@ -279,6 +279,12 @@ def generate_draft(
     # REVISE re-runs overwrite a stage's outcome (terminal wins), so each
     # stage counts a candidate once. Mirrored into result_out for the drain.
     stage_outcomes: dict[str, str] = {}
+    if result_out is not None:
+        # A caller may reuse its telemetry dict. A prior model verdict must
+        # never authorize caching a later style, transport or contract failure.
+        for field in ("cacheable", "kill_scope", "kill_code", "negative_cache_recorded",
+                      "negative_cache_input_sha", "negative_cache_epoch"):
+            result_out.pop(field, None)
 
     def _record_kill(stage: str, reason: str) -> None:
         if result_out is not None:
@@ -312,6 +318,18 @@ def generate_draft(
                 ]
             _mark_stage("writer", "kill")
             _record_kill("writer", reason)
+            # Only explicit, repeated model evidence judgments are reusable.
+            # A failed sample is one verdict about one attempt, not objective
+            # proof that the weather event is unpublishable.
+            from src.two_bot.negative_cache import EVIDENCE_KILL_CODES
+            from src.two_bot.memory import _signal_kind_to_category
+            codes = {result.kill_code for result in writer_results}
+            if (result_out is not None and writer_results and len(codes) == 1
+                and codes.issubset(EVIDENCE_KILL_CODES)
+                and all(result.kill_scope == "evidence" and result.failure_diagnostic is None
+                        and result.initial_response is True for result in writer_results)
+                and _signal_kind_to_category(bundle.signal_kind) not in memory_slice.recent_categories):
+                result_out.update(cacheable=True, kill_scope="evidence", kill_code=next(iter(codes)))
             return None
         _mark_stage("writer", "pass")
 

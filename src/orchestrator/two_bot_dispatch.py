@@ -119,7 +119,31 @@ def _try_two_bot_draft(
     # When the caller supplies ``result_out`` (Phase A funnel drain), generate_draft
     # writes ``kill_stage`` / ``kill_reason`` / ``stage_outcomes`` straight into it.
     pipeline_result: dict = result_out if result_out is not None else {}
+    from src.two_bot import negative_cache
+    from src.two_bot.evidence_contract import audit_story_bundle
+    # The direct caller has the same cache boundary as both queue modes. Keep
+    # required evidence validation ahead of cache attribution; cache metadata
+    # cannot convert a zero-cost contract rejection into a claimed paid skip.
+    try:
+        prompt_ready = audit_story_bundle(bundle).prompt_ready
+    except Exception:
+        prompt_ready = False
+    skip_reason = negative_cache.should_skip(bot_state, event_id, bundle) if prompt_ready else None
+    if skip_reason is not None:
+        pipeline_result.update(kill_stage="negative_cache", kill_reason=skip_reason, stage_outcomes={})
+        cache_ctx = _current_suppression_ctx() or {}
+        _record_downstream_suppression(bot_state=bot_state, source=cache_ctx.get("source") or "writer",
+            run_id=cache_ctx.get("run_id"), event_id=event_id, score=score,
+            kill_stage="negative_cache", kill_reason=skip_reason,
+            summary=getattr(bundle, "where", None) or city or None)
+        return False
+    input_sha = negative_cache.bundle_fingerprint(bundle, bot_state)
+    input_epoch = negative_cache.decision_epoch()
     draft = generate_draft(bundle, bot_state, result_out=pipeline_result)
+    pipeline_result["negative_cache_input_sha"] = input_sha
+    pipeline_result["negative_cache_epoch"] = input_epoch
+    if draft is None:
+        negative_cache.record_result(bot_state, event_id, bundle, pipeline_result)
     if draft is None:
         ctx = _current_suppression_ctx()
         if ctx is not None:
