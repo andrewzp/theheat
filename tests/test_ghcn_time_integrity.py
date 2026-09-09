@@ -255,11 +255,45 @@ def test_bounded_verification_reports_unscanned_and_rotates_tracked_stations(tmp
         archive_verification_limit=999, metrics_out=metrics)
     assert len(calls) == 20
     assert metrics["archive_verification_exhausted"] == metrics["tracked_stations_unscanned"] == 4
+    selection = metrics["archive_selection"]
+    assert selection["limit"] == 20
+    assert selection["tracked"]["pool_stations"] == 24
+    assert selection["tracked"]["verified_stations"] == 20
+    assert selection["tracked"]["unverified_stations"] == 4
+    assert selection["tracked"]["stable_sweep_opportunities"] == 2
     first = set(calls)
     calls.clear()
     ghcn.check_extreme_signals_for_stations(stations=[META], db_path=path, bot_state=state,
-        _fetch_obs_fn=lambda _: {}, _fetch_archive_fn=fetch, _now_fn=lambda: "2026-09-10T12:00:00Z")
+        _fetch_obs_fn=lambda _: {}, _fetch_archive_fn=fetch, _now_fn=lambda: "2026-09-09T16:00:00Z")
     assert set(calls) != first
+    assert set(calls) | first == set(ids)
+
+
+def test_failed_verifications_report_actual_coverage_without_spending_extra_fetches(tmp_path):
+    path = db(tmp_path)
+    ids = [f"USC{i:08d}" for i in range(24)]
+    original_drafts = [draft("posted", sid=sid) for sid in ids]
+    state = {"drafts": deepcopy(original_drafts)}
+    calls = []
+
+    def unavailable(sid):
+        calls.append(sid)
+        raise OSError("offline fixture: unavailable archive")
+
+    metrics = {}
+    ghcn.check_extreme_signals_for_stations(stations=[META], db_path=path, bot_state=state,
+        _fetch_obs_fn=lambda _: {}, _fetch_archive_fn=unavailable, _now_fn=lambda: NOW,
+        metrics_out=metrics)
+    assert len(calls) == len(set(calls)) == 20
+    assert metrics["archive_verification_attempted"] == metrics["archive_verification_failed"] == 20
+    assert metrics["archive_verification_verified"] == 0
+    assert metrics["archive_verification_exhausted"] == 4
+    assert metrics["tracked_stations_unscanned"] == 24
+    selection = metrics["archive_selection"]
+    assert selection["tracked"]["selected_stations"] == 20
+    assert selection["tracked"]["verified_stations"] == 0
+    assert selection["tracked"]["unverified_stations"] == 24
+    assert state["drafts"] == original_drafts
 
 
 def test_material_revision_history_union_preserves_conflicting_payloads():

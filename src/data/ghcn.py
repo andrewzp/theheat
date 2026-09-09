@@ -40,7 +40,7 @@ import hashlib
 from copy import deepcopy
 from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from itertools import zip_longest
 from typing import Callable
@@ -224,8 +224,8 @@ DIFF_LOOKBACK_DAYS = int(os.environ.get("THEHEAT_GHCN_DIFF_LOOKBACK_DAYS", "3"))
 # earlier dates — a station that uploaded its April 24 reading on May 5 will
 # appear in the May 5 diff. We do NOT want to surface week-old readings as
 # fresh signals; the editorial bar is "what happened recently," not "what was
-# uploaded recently". 4 days = today, 1-, 2-, 3-day lag (covers a 24-72 hr
-# publish window plus weekend slack). Tunable for backfill / replay scenarios.
+# uploaded recently". The inclusive cutoff accepts ages 0 through 4 days;
+# source arrival lag can leave much less time for verification. Tunable for replay.
 MAX_OBS_AGE_DAYS = int(os.environ.get("THEHEAT_GHCN_MAX_OBS_AGE_DAYS", "4"))
 
 # Minimum margin above the existing record to fire a signal (tenths-of-°C
@@ -239,6 +239,7 @@ ANOMALY_COLD_THRESHOLD_C = float(os.environ.get("THEHEAT_ANOMALY_COLD_THRESHOLD_
 # Minimum archive years before we trust thresholds (avoids thin-data false positives)
 MIN_ARCHIVE_YEARS = int(os.environ.get("THEHEAT_GHCN_MIN_ARCHIVE_YEARS", "15"))
 ARCHIVE_VERIFICATION_LIMIT = 20
+ARCHIVE_SELECTION_BUCKET_HOURS = 4
 GHCN_SOURCE_PRODUCT = "noaa-ghcn-daily-v2"
 
 
@@ -763,26 +764,12 @@ def check_extreme_signals_for_stations(
         if sid in active_ids and _could_need_baseline(obs, cached[sid])
     }
     tracked_stations = {sid for sid, _, _ in points}
-    # Rotate deterministically by UTC day within each lane, then interleave the
-    # two lanes so neither old published evidence nor new candidates starves.
-    def rotate(ids):
-        ordered = sorted(ids)
-        if not ordered:
-            return ordered
-        offset = date.fromisoformat(now[:10]).toordinal() % len(ordered)
-        return ordered[offset:] + ordered[:offset]
-    tracked_order = rotate(tracked_stations)
-    candidate_order = rotate(candidates)
-    priority = list(dict.fromkeys(
-        sid for pair in zip_longest(tracked_order, candidate_order)
-        for sid in pair if sid is not None
-    ))
-    if isinstance(archive_verification_limit, bool) or not isinstance(archive_verification_limit, int):
-        raise ValueError("GHCN archive verification limit must be an integer")
-    limit = max(0, min(archive_verification_limit, ARCHIVE_VERIFICATION_LIMIT))
-    selected = priority[:limit]
+    selected, selection = _select_archive_stations(
+        tracked_stations, candidates, now=now, limit=archive_verification_limit,
+    )
+    metrics["archive_selection"] = selection
     metrics["archive_verification_attempted"] = len(selected)
-    metrics["archive_verification_exhausted"] = len(priority) - len(selected)
+    metrics["archive_verification_exhausted"] = selection["unselected_unique_stations"]
     metrics["tracked_stations_unscanned"] = len(tracked_stations - set(selected))
     snapshots = {}
     fetch_archive = _fetch_archive_fn or _fetch_station_archive
@@ -797,6 +784,9 @@ def check_extreme_signals_for_stations(
                 log.warning("GHCN station verification unavailable for %s: %s", sid, exc)
     metrics["archive_verification_verified"] = len(snapshots)
     metrics["tracked_stations_unscanned"] = len(tracked_stations - snapshots.keys())
+    for lane, ids in (("tracked", tracked_stations), ("candidates", candidates)):
+        selection[lane]["verified_stations"] = len(ids & snapshots.keys())
+        selection[lane]["unverified_stations"] = len(ids - snapshots.keys())
     # Old-dated QC updates are reviewed even when too old for a news signal.
     latest_revisions = {}
     for record, retrieved, source_revision in revisions:
@@ -888,6 +878,97 @@ def check_extreme_signals_for_stations(
     return signal_bundles, country_records
 
 
+def _select_archive_stations(
+    tracked_ids: set[str], candidate_ids: set[str], *, now: str, limit: int,
+) -> tuple[list[str], dict]:
+    """Allocate consecutive circular lane windows for each UTC four-hour bucket.
+
+    With unchanged lane membership/limit and a run in every consecutive bucket,
+    each lane advances by exactly its reserved slots. Two-bucket cumulative
+    offsets also handle an odd limit (including one) without starving a lane.
+    Deduplicating overlapping windows and filling spare slots never drops a
+    reserved station. Missing buckets, pool churn, or failed requests do not
+    inherit this selection-only coverage bound. No cross-run state is kept.
+    """
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        raise ValueError("GHCN archive verification limit must be an integer")
+    limit = max(0, min(limit, ARCHIVE_VERIFICATION_LIMIT))
+    instant = datetime.fromisoformat(now.replace("Z", "+00:00"))
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        raise ValueError("GHCN archive selection requires a timezone-qualified time")
+    instant = instant.astimezone(timezone.utc)
+    bucket_hour = instant.hour // ARCHIVE_SELECTION_BUCKET_HOURS * ARCHIVE_SELECTION_BUCKET_HOURS
+    bucket = instant.date().toordinal() * 6 + bucket_hour // ARCHIVE_SELECTION_BUCKET_HOURS
+    cycles, phase = divmod(bucket, 2)
+    lanes = (sorted(tracked_ids), sorted(candidate_ids))
+    union_size = len(tracked_ids | candidate_ids)
+    budget = min(limit, union_size)
+
+    def allocation(parity: int) -> tuple[int, int]:
+        tracked = min(len(lanes[0]), budget // 2 + (budget % 2 if parity == 0 else 0))
+        candidate = min(len(lanes[1]), budget // 2 + (budget % 2 if parity == 1 else 0))
+        spare = budget - tracked - candidate
+        extra = min(spare, len(lanes[0]) - tracked)
+        tracked += extra
+        candidate += min(spare - extra, len(lanes[1]) - candidate)
+        return tracked, candidate
+
+    allocations = (allocation(0), allocation(1))
+    windows: list[list[str]] = []
+    tails: list[list[str]] = []
+    lane_metrics = []
+    for index, ordered in enumerate(lanes):
+        even, odd = (row[index] for row in allocations)
+        reserved = allocations[phase][index]
+        offset = (cycles * (even + odd) + (even if phase else 0)) % len(ordered) if ordered else 0
+        rotated = ordered[offset:] + ordered[:offset]
+        windows.append(rotated[:reserved])
+        tails.append(rotated[reserved:])
+        # Worst starting parity: complete pairs plus the slower final pair.
+        if not ordered:
+            sweep = 0
+        elif even + odd == 0:
+            sweep = None
+        else:
+            pairs, remainder = divmod(len(ordered) - 1, even + odd)
+            sweep = pairs * 2 + (1 if remainder + 1 <= min(even, odd) else 2)
+        lane_metrics.append({
+            "pool_stations": len(ordered), "reserved_slots": reserved,
+            "stable_sweep_opportunities": sweep,
+            "verified_stations": None, "unverified_stations": None,
+        })
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    for lists in (windows, tails):
+        for pair in zip_longest(*lists):
+            for sid in pair:
+                if sid is not None and sid not in seen and len(selected) < budget:
+                    selected.append(sid)
+                    seen.add(sid)
+            if len(selected) == budget:
+                break
+    for metrics, ids in zip(lane_metrics, (tracked_ids, candidate_ids)):
+        metrics["selected_stations"] = len(ids & seen)
+        metrics["unselected_stations"] = len(ids - seen)
+    return selected, {
+        "schema_version": 1,
+        "strategy": "four_hour_cumulative_lane_windows",
+        "bucket_start": instant.replace(hour=bucket_hour, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z"),
+        "bucket_hours": ARCHIVE_SELECTION_BUCKET_HOURS,
+        "limit": limit,
+        "eligible_unique_stations": union_size,
+        "overlap_stations": len(tracked_ids & candidate_ids),
+        "selected_unique_stations": len(selected),
+        "unselected_unique_stations": union_size - len(selected),
+        "tracked": lane_metrics[0], "candidates": lane_metrics[1],
+        "coverage_bound_scope": "Selection only; stable lane membership and limit, with a run in every consecutive four-hour bucket. Source failures and news freshness are not covered.",
+        "verification_scope": "Current archive fetched and parsed; candidate QC and comparator coverage remain separate qualification gates.",
+        "same_bucket_retries_reuse_selection": True,
+        "timely_verification_guaranteed": False,
+    }
+
+
 def _empty_pipeline_metrics() -> dict:
     return {
         "stations_active": 0,
@@ -900,6 +981,7 @@ def _empty_pipeline_metrics() -> dict:
         "country_records": 0,
         "archive_verification_attempted": 0, "archive_verification_verified": 0,
         "archive_verification_exhausted": 0, "archive_verification_failed": 0,
+        "archive_selection": None,
         "baseline_cutoff_gaps": 0, "tracked_stations_unscanned": 0,
         "material_revisions": 0, "affected_claims": 0, "diff_fetch_failed": 0,
     }
