@@ -41,6 +41,8 @@ for (const example of cases) {
       assert.deepEqual(mergePublishLedger(forward, forward), forward)
     }
     assert.deepEqual(bad, original)
+    const known = { event: { phase: "not_sent" } }
+    assert.deepEqual(mergePublishLedger(mergePublishLedger(known, bad), bad), mergePublishLedger(known, mergePublishLedger(bad, bad)))
   })
 }
 
@@ -50,4 +52,11 @@ test("unidentified nested unknown attempts cannot be absorbed by not-sent eviden
   assert.equal(hasUnresolvedPublish(draft, { publish_ledger: ledger }), true)
   assert.equal(containsValue(ledger, { phase: "unknown" }), true)
   assert.deepEqual(mergePublishLedger(ledger, { event: row }), ledger)
+})
+
+test("container marker cannot hide other retained attempt fields", () => {
+  const row = { preserved_evidence_only: true, attempt_conflicts: [], phase: "unknown", text: "Original evidence" }
+  const merged = mergePublishLedger({ event: row }, {})
+  assert.equal(merged.event.phase, "unknown")
+  assert.equal(merged.event.text, row.text)
 })

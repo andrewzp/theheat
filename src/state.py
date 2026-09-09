@@ -847,7 +847,12 @@ def _attempt_rows(row: Any) -> tuple[list[dict], list[dict]]:
         if not isinstance(conflicts, list) or any(not isinstance(child, dict) for child in conflicts):
             malformed.append(deepcopy(attempt))
             continue
-        clean.append({key: deepcopy(value) for key, value in attempt.items() if key != "attempt_conflicts"})
+        container_only = (
+            set(attempt) == {"preserved_evidence_only", "attempt_conflicts"}
+            and attempt["preserved_evidence_only"] is True
+        )
+        if not container_only:
+            clean.append({key: deepcopy(value) for key, value in attempt.items() if key != "attempt_conflicts"})
         pending.extend(conflicts)
     return clean, malformed
 
@@ -887,7 +892,8 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
                 attempts[key] = {**deepcopy(loser), **deepcopy(winner)}
         rows = list(attempts.values())
         rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(row)))
-        primary = rows.pop() if rows else {"phase": "unknown"}
+        # This is a container for unreadable evidence, not a fabricated attempt.
+        primary = rows.pop() if rows else {"preserved_evidence_only": True}
         if rows or malformed:
             primary["attempt_conflicts"] = _unique_snapshots([*rows, *malformed])
         merged[event_id] = primary

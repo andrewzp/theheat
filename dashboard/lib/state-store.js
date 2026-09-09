@@ -285,7 +285,9 @@ function attemptRows(row) {
       malformed.push(structuredClone(attempt))
       continue
     }
-    clean.push(Object.fromEntries(Object.entries(attempt).filter(([key]) => key !== "attempt_conflicts")))
+    const containerOnly = attempt.preserved_evidence_only === true && Object.keys(attempt).length === 2
+      && Object.hasOwn(attempt, "attempt_conflicts")
+    if (!containerOnly) clean.push(Object.fromEntries(Object.entries(attempt).filter(([key]) => key !== "attempt_conflicts")))
     pending.push(...conflicts)
   }
   return { clean, malformed }
@@ -325,7 +327,8 @@ export function mergePublishLedger(base = {}, next = {}) {
     const rows = [...attempts.values()].sort((a, b) => Number(Boolean(a.tweet_id)) - Number(Boolean(b.tweet_id))
       || parseTimestamp(a.at) - parseTimestamp(b.at) || attemptRank(a) - attemptRank(b)
       || (fingerprint(a) < fingerprint(b) ? -1 : fingerprint(a) > fingerprint(b) ? 1 : 0))
-    const primary = rows.pop() || { phase: "unknown" }
+    // Preserve unreadable evidence without inventing a platform attempt.
+    const primary = rows.pop() || { preserved_evidence_only: true }
     if (rows.length || malformed.length) primary.attempt_conflicts = uniqueSnapshots([...rows, ...malformed])
     merged[eventId] = primary
   }

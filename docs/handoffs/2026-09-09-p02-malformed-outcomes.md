@@ -26,6 +26,12 @@ receipt cannot overwrite them. Scalar per-event payloads receive an unknown
 wrapper while retaining the original value. Repeated merges remain stable and
 unrelated dashboard edits continue to work.
 
+An independent three-way merge review found that an all-malformed input initially
+received a synthetic `unknown` root which a later merge could mistake for a real
+attempt. Container-only roots now carry an explicit `preserved_evidence_only`
+marker and never enter attempt precedence. This removes merge-order-dependent
+invented evidence; original unknown attempts and every malformed payload remain.
+
 Different phase observations without a nonempty string intent ID no longer count
 as proof of one platform call. Distinct unidentified legacy observations remain
 available for reconciliation. Normal identified submitted-to-confirmed and
@@ -45,8 +51,11 @@ known-rate-limit progression remains covered and unchanged.
 - Every dashboard draft action refuses the affected draft without a write or
   dispatch. Its read projection is blocked, and an unrelated edit preserves the
   malformed evidence.
-- Full offline Python: **2,848 passed**, **41 paid replay tests excluded**.
-- Dashboard: **284 passed**. Ruff, mypy (123 source files), dashboard build and
+- Independent review of 12,167 adversarial three-way combinations confirmed
+  associativity, replay stability, uncertainty retention and exact opaque payload
+  preservation. Distinct-event permutations retained isolation.
+- Full offline Python: **2,867 passed**, **41 paid replay tests excluded**.
+- Dashboard: **285 passed**. Ruff, mypy (123 source files), dashboard build and
   whitespace checks passed.
 
 ## Integration

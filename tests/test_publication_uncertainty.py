@@ -82,3 +82,20 @@ def test_nested_unidentified_unknown_attempt_cannot_be_absorbed_by_not_sent():
     assert has_unresolved_publish(DRAFT, {"publish_ledger": ledger})
     assert contains_value(ledger, {"phase": "unknown"})
     assert _merge_publish_ledger(ledger, {"event": row}) == ledger
+
+
+@pytest.mark.parametrize("case", MALFORMED, ids=lambda case: case["name"])
+def test_container_only_evidence_does_not_invent_attempts_in_a_later_merge(case):
+    known = {"event": {"phase": "not_sent"}}
+    bad = {"event": case["row"]}
+    left = _merge_publish_ledger(_merge_publish_ledger(known, bad), bad)
+    right = _merge_publish_ledger(known, _merge_publish_ledger(bad, bad))
+    assert left == right
+    assert has_unresolved_publish(DRAFT, {"publish_ledger": left})
+
+
+def test_container_marker_cannot_hide_other_retained_attempt_fields():
+    row = {"preserved_evidence_only": True, "attempt_conflicts": [], "phase": "unknown", "text": "Original evidence"}
+    merged = _merge_publish_ledger({"event": row}, {})
+    assert merged["event"]["phase"] == "unknown"
+    assert merged["event"]["text"] == row["text"]
