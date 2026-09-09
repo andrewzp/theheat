@@ -198,6 +198,8 @@ def _call_grounded_search(now: datetime) -> str:
             tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())],
         ),
     )
+    from src.two_bot.usage_ledger import record_response
+    record_response("newsworthiness_search", response, CHEAP_MODEL, "google")
     return response.text or "[]"
 
 
@@ -334,6 +336,8 @@ def _call_verify_flash(claim: str, value: Any, page_text: str) -> str:
             claim=claim, value=value, page_text=page_text
         ),
     )
+    from src.two_bot.usage_ledger import record_response
+    record_response("newsworthiness_verify", response, CHEAP_MODEL, "google")
     return response.text or "{}"
 
 

@@ -271,7 +271,7 @@ def test_optional_cache_metadata_only_normalizes_absence(provider, field, value)
         response = SimpleNamespace(**{"usage" if provider == "anthropic" else "usage_metadata": SimpleNamespace(**fields, **{field: value})})
         ledger.record_writer_response(response, "claude-sonnet-4-6", provider)
         assert len(ledger._BUFFER) == 1
-        assert ledger._BUFFER[0]["priced_calls"] == int(value is None)
+        assert ledger._BUFFER[0]["priced_calls"] == int(value is None and provider == "anthropic")
         assert ledger._BUFFER[0]["missing_usage_calls"] == int(value is not None)
     finally:
         ledger._BUFFER.clear()

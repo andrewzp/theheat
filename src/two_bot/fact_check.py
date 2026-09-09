@@ -165,6 +165,8 @@ def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> 
             config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA),
         ),
     )
+    from src.two_bot.usage_ledger import record_response
+    record_response("fact_check", response, FACT_CHECKER_MODEL, "google")
     # google-genai's response.text is Optional — empty when no candidates
     # come back. Empty string falls through to the JSON parser as a parse
     # error, which the caller handles consistently with other failure modes.

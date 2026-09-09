@@ -292,6 +292,8 @@ def _call_gemini(
             contents=f"{CRITIC_SYSTEM_PROMPT}\n\n{user_prompt}",
         ),
     )
+    from src.two_bot.usage_ledger import record_response
+    record_response("critic", response, CRITIC_MODEL, "google")
     return response.text or ""
 
 

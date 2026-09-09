@@ -1,6 +1,6 @@
 """Monthly LLM budget watch (economics master plan P1.1).
 
-Reads retained writer estimates and their incomplete coverage. Thresholds
+Reads retained model-response estimates and their incomplete coverage. Thresholds
 at 70% / 90% are alerts on a recorded subtotal, not account totals or enforced
 caps. Lower subtotals and absent accounting never establish budget health.
 
@@ -77,7 +77,7 @@ def status_message(status: dict) -> str:
             f"priced {amount(status['known_cost_usd'])}, legacy {amount(status['legacy_estimate_usd'])}; "
             f"projected recorded subtotal {amount(status['projected_usd'])}/month. "
             f"Unpriced responses {status['unpriced_calls'] if status['unpriced_calls'] is not None else 'unknown'}; "
-            f"accounting {status['coverage']}, other stages untracked. "
+            f"accounting {status['coverage']}, account totals incomplete. "
             f"Reporting comparison ${status['budget_usd']:.2f}/month, budget not enforced.")
 
 
