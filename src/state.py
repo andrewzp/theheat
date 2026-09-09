@@ -40,7 +40,7 @@ RECENT_RECORD_TTL_DAYS = 90
 RECORD_STORE_RETENTION_YEARS = 10
 REJECTED_DRAFT_RETENTION_DAYS = 30
 REJECTED_DRAFT_GUARDRAIL_COUNT = 10
-_DRAFT_CAP_PROTECTED_STATUSES = {"pending", "posted"}
+_DRAFT_CAP_PROTECTED_STATUSES = {"pending", "approved", "posted"}
 _TIER_TOUCH_SEPARATOR = "::"
 _TIER_TTLS_DAYS = {
     "fire_complex_tiers": 90,
@@ -271,10 +271,12 @@ def _headers():
 
 
 def _configured_backend() -> str:
-    state_backend = os.environ.get("THEHEAT_STATE_BACKEND", STATE_BACKEND).lower()
+    state_backend = os.environ.get("THEHEAT_STATE_BACKEND", STATE_BACKEND).strip().lower()
     db_path = os.environ.get("THEHEAT_DB_PATH", DB_PATH)
     if state_backend in {"gist", "sqlite"}:
         return state_backend
+    if state_backend:
+        raise StateReadError(f"Unsupported state backend: {state_backend!r}; use gist or sqlite")
     return "sqlite" if db_path else "gist"
 
 
@@ -448,8 +450,8 @@ def _enforce_draft_cap(drafts: list[dict], max_items: int) -> list[dict]:
     return [draft for draft in drafts if id(draft) in keep_ids]
 
 
-def _trim_drafts(state: BotState, max_items: int) -> None:
-    cutoff = datetime.now(UTC) - timedelta(days=REJECTED_DRAFT_RETENTION_DAYS)
+def _trim_drafts(state: BotState, max_items: int, *, now: datetime | None = None) -> None:
+    cutoff = (now or datetime.now(UTC)) - timedelta(days=REJECTED_DRAFT_RETENTION_DAYS)
     retained = []
     expired_rejected = []
     for draft in state.get("drafts", []):
@@ -469,19 +471,19 @@ def trim_drafts(state: BotState) -> None:
     """Trim durable drafts in place.
 
     Policy:
-    - all pending drafts are kept indefinitely for human review
+    - all pending and approved drafts are kept indefinitely for human review/delivery
     - all posted drafts are kept indefinitely for audit trail
+    - unresolved publication attempts and revision conflicts are kept indefinitely
     - rejected drafts older than 30 days by created_at are dropped
     - if every draft would be dropped, keep the newest 10 rejected drafts
       as a guardrail for state/audit continuity
-    - after time-trim, enforce the 200-cap against non-pending/non-posted
-      drafts as a backstop
+    - after time-trim, enforce the 200-cap against unprotected drafts only
     """
 
     _trim_drafts(state, MAX_DRAFTS)
 
 
-def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MAX_DRAFTS) -> list[dict]:
+def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MAX_DRAFTS, *, now: datetime | None = None) -> list[dict]:
     merged: dict[str, dict] = {}
     anonymous: list[dict] = []
 
@@ -504,7 +506,7 @@ def _merge_drafts(current: list[dict], incoming: list[dict], max_items: int = MA
         )
     )
     state: BotState = {"drafts": ordered}
-    _trim_drafts(state, max_items)
+    _trim_drafts(state, max_items, now=now)
     return state["drafts"]
 
 
@@ -1480,18 +1482,22 @@ def _write_gist_state(state: BotState) -> bool:
         return False
 
 
+def _read_sqlite_state() -> BotState:
+    if not DB_PATH:
+        raise StateReadError("SQLite backend selected but THEHEAT_DB_PATH is not set")
+    try:
+        if sqlite_store.is_empty(DB_PATH) and (GIST_ID or GITHUB_TOKEN):
+            gist_state = _read_gist_state(strict=True)
+            if not sqlite_store.write_state(DB_PATH, cast(dict, gist_state)):
+                raise StateReadError("Failed to bootstrap SQLite from configured Gist; refusing empty state")
+        return _normalize_state(sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE)))
+    except Exception as exc:
+        raise StateReadError(f"Failed to read SQLite state store: {exc}") from exc
+
+
 def read_state() -> BotState:
-    backend = _configured_backend()
-    if backend == "sqlite":
-        if not DB_PATH:
-            raise StateReadError("SQLite backend selected but THEHEAT_DB_PATH is not set")
-        try:
-            if sqlite_store.is_empty(DB_PATH) and GIST_ID and GITHUB_TOKEN:
-                gist_state = _read_gist_state(strict=True)
-                sqlite_store.write_state(DB_PATH, cast(dict, gist_state))
-            return _normalize_state(sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE)))
-        except Exception as exc:
-            raise StateReadError(f"Failed to read SQLite state store: {exc}") from exc
+    if _configured_backend() == "sqlite":
+        return _read_sqlite_state()
     return _read_gist_state(strict=True)
 
 
@@ -1554,7 +1560,7 @@ def write_state(state: BotState, *, expected_draft: dict | None = None, expected
         if not DB_PATH:
             return False
         try:
-            current: BotState | dict = sqlite_store.read_state(DB_PATH, cast(dict, DEFAULT_STATE))
+            current: BotState | dict = _read_sqlite_state()
         except Exception:
             return False
         if not _expected_draft_matches(current, expected_draft, expected_publish_ledger):

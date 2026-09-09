@@ -41,6 +41,19 @@ escape hatch and test target. The same gist also holds `world_threshold_cache.js
 kept out of `state.json` so core state stays lean). Do not edit the production gist by
 hand. State changes should flow through bot code and the normal merge/write path.
 
+Pending, approved and posted drafts, unresolved publication attempts, and
+revision conflicts survive the nominal 200-draft cap in both runtimes. Only
+unprotected records are capped; rejected drafts expire after 30 days, with the
+newest ten retained if expiry would otherwise empty the queue.
+
+The dashboard's defaults, SQLite metadata fields and retention constants are
+generated from Python. After intentionally changing those contracts, run
+`python scripts/gen_state_contract.py`; CI checks the generated file and actual
+Python/dashboard SQLite round trips. SQLite rejects unknown metadata and a
+configured Gist bootstrap failure rather than returning a plausible empty
+history. This parity coverage does not make SQLite a production migration or
+make Gist writes transactional.
+
 ## Publication containment
 
 Automatic publication defaults paused through `THEHEAT_AUTOMATIC_PUBLICATION_ENABLED=0`.
