@@ -17,7 +17,7 @@ from src.data.open_meteo import (
 from src.state import _fresh_state
 
 
-def test_unqualified_record_streak_is_withheld_and_daily_source_telemetry_survives(monkeypatch):
+def test_unqualified_record_streak_is_withheld_and_daily_source_telemetry_survives(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import open_meteo as runner
 
     signal_date = date(2026, 5, 15)

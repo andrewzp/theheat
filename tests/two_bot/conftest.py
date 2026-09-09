@@ -37,6 +37,7 @@ def _bundle(
         ],
         historical_context={},
         raw_signal_dump={
+            "source_product": "synthetic-firms-fixture",
             "lat": 13.5,
             "lon": -4.2,
             "confidence": confidence,

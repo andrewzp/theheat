@@ -12,7 +12,7 @@ from tests.two_bot.conftest import _bundle, _state_with_memory
 def _fact_response(passed=True, failures=None, extracted_claims=None):
     return json.dumps({
         "passed": passed,
-        "extracted_claims": extracted_claims or [],
+        "extracted_claims": extracted_claims if extracted_claims is not None else [{"text": "Some clean tweet.", "kind": "comparison"}],
         "failures": failures or [],
     })
 
@@ -66,7 +66,7 @@ def test_fact_check_accepts_fenced_preamble_response(mock_gemini):
 ```json
 {
   "passed": true,
-  "extracted_claims": [],
+  "extracted_claims": [{"text": "Some clean tweet.", "kind": "comparison"}],
   "failures": []
 }
 ```
@@ -126,43 +126,28 @@ def test_fact_check_requires_claims_when_combined_path_has_no_preextract(mock_ge
     assert any("extracted_claims" in failure for failure in result.failures)
 
 
-def test_fact_check_skips_claims_with_unknown_kind_instead_of_killing(mock_gemini, capsys):
-    """Gemini Flash sometimes returns claim kinds outside the prompt's
-    enumerated list (observed 2026-06-01: 14+ candidates killed across
-    the day with 'Unsupported extracted claim kind: factual_assertion').
-    The parser must drop the unknown-kind claims gracefully, NOT kill the
-    whole tweet — pass/fail is independent of claim kinds.
-    """
-    mock_gemini.return_value = json.dumps({
+def test_fact_check_retains_unsupported_claim_as_unresolved(mock_gemini):
+    """An unrecognized assertion cannot disappear from a factual approval."""
+    raw = json.dumps({
         "passed": True,
         "failures": [],
         "extracted_claims": [
             {"text": "12.0 °C-weeks", "kind": "number"},
-            {"text": "the broader signal", "kind": "factual_assertion"},  # off-script kind
+            {"text": "the broader signal", "kind": "factual_assertion"},
             {"text": "Western India", "kind": "named_entity"},
         ],
     })
-
+    mock_gemini.return_value = raw
     result = fact_check(
-        "Western India: 12.0 °C-weeks of thermal stress.",
-        [],
-        _bundle(),
-        _state_with_memory(),
+        "Western India: 12.0 °C-weeks of thermal stress.", [], _bundle(), _state_with_memory(),
     )
-
-    # Tweet should pass: pass/fail doesn't depend on claim kinds.
-    assert result.passed
-    # The 2 valid claims survive; the 1 unknown-kind claim is dropped.
-    assert len(result.extracted_claims) == 2
-    assert {c.kind for c in result.extracted_claims} == {"number", "named_entity"}
-    # And we logged the drop so the operator can see it in the cron output.
-    captured = capsys.readouterr()
-    assert "factual_assertion" in captured.out
-    assert "unsupported kind" in captured.out.lower()
+    assert not result.passed
+    assert any("factual_assertion" in failure for failure in result.failures)
+    assert result.raw_response == raw
 
 
 def test_fact_check_still_raises_on_structurally_bad_claim(mock_gemini):
-    """Unknown KIND → skip. But missing/wrong-type FIELDS still raise.
+    """Missing/wrong-type fields produce a durable failed check.
     A response missing required structure is fundamentally untrusted.
     """
     mock_gemini.return_value = json.dumps({

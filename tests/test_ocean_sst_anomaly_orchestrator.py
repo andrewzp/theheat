@@ -29,7 +29,7 @@ def _state() -> dict:
     return deepcopy(DEFAULT_STATE)
 
 
-def test_run_ocean_sst_anomaly_enqueues_regional_candidate(monkeypatch):
+def test_run_ocean_sst_anomaly_enqueues_regional_candidate(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 
     bot_state = _state()
@@ -93,7 +93,7 @@ def test_run_ocean_sst_anomaly_duplicate_updates_tier_without_queue(monkeypatch)
     assert bot_state["sst_anom_last_tier"]["2026/north_atlantic"] == 2
 
 
-def test_run_ocean_sst_anomaly_on_success_updates_tier_and_count(monkeypatch):
+def test_run_ocean_sst_anomaly_on_success_updates_tier_and_count(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 
     bot_state = _state()
@@ -113,7 +113,7 @@ def test_run_ocean_sst_anomaly_on_success_updates_tier_and_count(monkeypatch):
     assert bot_state["sst_anom_annual_count"] == {"2025": 1}
 
 
-def test_run_ocean_sst_anomaly_annual_state_filtered_to_reading_year(monkeypatch):
+def test_run_ocean_sst_anomaly_annual_state_filtered_to_reading_year(monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources.ocean_sst_anomaly import run_ocean_sst_anomaly
 
     bot_state = _state()

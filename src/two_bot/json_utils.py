@@ -5,9 +5,19 @@ from __future__ import annotations
 from dataclasses import asdict, is_dataclass
 from datetime import date, datetime
 from decimal import Decimal
+import hashlib
 import json
+import math
 import re
 from typing import Any
+
+
+def model_response_diagnostic(raw: Any) -> str:
+    """A bounded correlation token safe for public workflow logs."""
+    if not isinstance(raw, str):
+        return f"response_type={type(raw).__name__}"
+    encoded = raw.encode("utf-8", errors="backslashreplace")
+    return f"response_chars={len(raw)} response_sha256={hashlib.sha256(encoded).hexdigest()}"
 
 
 def json_default(obj: Any):
@@ -199,17 +209,45 @@ def extract_json_payload(raw: str, *, expected: str = "any") -> str:
     return text
 
 
+class ModelJSONIntegrityError(ValueError):
+    """Ambiguous/nonfinite JSON is terminal, never a recoverable preamble."""
+
+
+class ModelOutputContractError(ValueError):
+    """Decoded output violates a known contract; do not buy a repair pass."""
+
+
+def _strict_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ModelJSONIntegrityError(f"Duplicate model JSON field: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite(value):
+    raise ModelJSONIntegrityError(f"Nonfinite model JSON value: {value}")
+
+
+def _strict_float(value):
+    number = float(value)
+    if not math.isfinite(number):
+        raise ModelJSONIntegrityError("Nonfinite model JSON number")
+    return number
+
+
 def _try_parse_span(span_text: str) -> Any:
     """Try to parse span_text, applying comment/comma cleanup on first failure.
 
     Raises json.JSONDecodeError if still invalid after cleanup.
     """
     try:
-        return json.loads(span_text)
+        return json.loads(span_text, object_pairs_hook=_strict_pairs, parse_constant=_reject_nonfinite, parse_float=_strict_float)
     except json.JSONDecodeError:
         cleaned = _strip_json_comments(span_text)
         cleaned = _strip_trailing_commas(cleaned)
-        return json.loads(cleaned)  # let this raise if still broken
+        return json.loads(cleaned, object_pairs_hook=_strict_pairs, parse_constant=_reject_nonfinite, parse_float=_strict_float)  # let this raise if still broken
 
 
 def loads_model_json(raw: str, *, expected: str = "any") -> Any:
@@ -219,6 +257,8 @@ def loads_model_json(raw: str, *, expected: str = "any") -> Any:
     (after optional comment/comma cleanup) is returned.  Raises on total
     failure so callers always see an error instead of silent None.
     """
+    if not isinstance(raw, str):
+        raise ValueError("Model response must be text")
     text = strip_markdown_fences(raw)
     spans = list(_iter_json_spans(text, expected))
 
@@ -227,6 +267,8 @@ def loads_model_json(raw: str, *, expected: str = "any") -> Any:
         candidate = text[span[0]:span[1]]
         try:
             return _try_parse_span(candidate)
+        except ModelJSONIntegrityError:
+            raise
         except (json.JSONDecodeError, ValueError) as exc:
             last_exc = exc
             continue

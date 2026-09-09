@@ -50,13 +50,8 @@ def test_write_fire_tweet_returns_kill(mock_anthropic):
 
 
 def test_write_fire_tweet_kills_on_both_tweet_and_kill_set(mock_anthropic):
-    """Contract violation: both tweet AND kill_reason set. The JSON-parse
-    retry layer (see TestJsonParseRetry) catches the ValueError from
-    WriterResult's post-init validator and returns a KILL after the
-    retry budget is exhausted, instead of raising. Same root cause as
-    the Nettles Is pipeline_error regression on 2026-05-12 — surface
-    the failure mode as a recorded kill, not a crashed pipeline.
-    """
+    """A decoded contract violation is retained and killed without buying
+    another model call. The malformed/truncated JSON retry remains separate."""
     bad_response = _fake_writer_response(
         {
             "tweet": "x",
@@ -67,14 +62,15 @@ def test_write_fire_tweet_kills_on_both_tweet_and_kill_set(mock_anthropic):
             "reasoning": "x",
         }
     )
-    # Both parse attempts return the same contract-violating payload.
+    # A second response is available but must never be requested.
     mock_anthropic.side_effect = [bad_response, bad_response]
 
     result = write_fire_tweet(_bundle(), _memory())
 
     assert result.tweet is None
     assert result.kill_reason is not None
-    assert "invalid JSON across" in result.kill_reason
+    assert "output contract rejected" in result.kill_reason
+    assert mock_anthropic.call_count == 1
 
 
 def test_write_fire_tweet_kills_on_invalid_json(mock_anthropic):
@@ -530,12 +526,13 @@ class TestBundleJsonHandlesDates:
         return StoryBundle(
             signal_kind="monthly_low",
             where="SISSONVILLE 1SW, United States",
-            when="on May 4",
+            when="2026-05-04",
             event_id="monthly_low_USC00468191_05_2026-05-04",
             headline_metric={"label": "today_min_c", "value": -2.2, "unit": "C"},
             current_facts=[{"label": "city", "value": "SISSONVILLE 1SW"}],
             historical_context={"prior_record_c": 1.0, "prior_record_year": 1995},
             raw_signal_dump={
+                "source_product": "synthetic-ghcn-fixture",
                 "city": "SISSONVILLE 1SW",
                 "country": "United States",
                 "signal_date": datetime.date(2026, 5, 4),
@@ -610,7 +607,7 @@ class TestBundleJsonHandlesDates:
                 ),
             )
             captured["prompt"] = user_prompt + retry_suffix
-            return '{"passed": true, "extracted_claims": [], "failures": []}'
+            return '{"passed": true, "extracted_claims": [{"text": "test tweet", "kind": "comparison"}], "failures": []}'
 
         from src.two_bot import fact_check
         monkeypatch.setattr(fact_check, "_call_gemini", fake_call)

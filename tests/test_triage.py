@@ -580,7 +580,8 @@ class TestEnqueueStoryCandidate:
         assert len(suppressions) == 1
         assert suppressions[0]["source"] == "river_gauges"
         assert suppressions[0]["stage"] == "evidence_contract"
-        assert suppressions[0]["reasons"] == ["missing_event_id"]
+        assert "missing_event_id (event_id)" in suppressions[0]["reasons"][0]
+        assert suppressions[0]["evidence_readiness"]["status"] == "needs_evidence_repair"
 
 
 # ---------------------------------------------------------------------------

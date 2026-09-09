@@ -67,10 +67,10 @@ class TestFireFootprintFixture:
         assert bundle.human_impact
         assert any(name in e["claim"] for e in bundle.human_impact)
 
-    def test_footprint_bundle_passes_the_evidence_contract(self):
+    def test_footprint_bundle_requires_source_provenance(self):
         audit = audit_story_bundle(_build_bundle(_args(type="fire_footprint")))
-        errors = [i.code for i in audit.issues if i.severity == "error"]
-        assert audit.prompt_ready, errors
+        assert not audit.prompt_ready
+        assert {i.code for i in audit.issues if i.severity == "error"} == {"missing_provenance"}
 
     def test_footprint_tier_consistent_with_hectares(self):
         # The fixture's hectares must actually cross its tier threshold —
@@ -136,7 +136,8 @@ class TestPrecipFixture:
         assert facts["alert_threshold_mm"] == 300.0
         assert "previous_record_mm" not in facts
         audit = audit_story_bundle(bundle)
-        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+        assert not audit.prompt_ready
+        assert {i.code for i in audit.issues if i.severity == "error"} == {"missing_provenance"}
 
     def test_record_path_shape(self):
         bundle = _build_bundle(_args(type="precipitation_extreme", record_path=True))
@@ -153,7 +154,8 @@ class TestPrecipFixture:
         assert "previous_record_mm" not in facts
         assert "alert_threshold_mm" not in facts
         audit = audit_story_bundle(bundle)
-        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+        assert not audit.prompt_ready
+        assert {i.code for i in audit.issues if i.severity == "error"} == {"missing_provenance"}
 
 
 class TestCycloneRapidIntensificationFixture:
@@ -221,7 +223,8 @@ class TestMarineFixture:
         bundle = _build_bundle(_args(type="marine_heatwave"))
         assert bundle.signal_kind == "marine_heatwave"
         audit = audit_story_bundle(bundle)
-        assert audit.prompt_ready, [i.code for i in audit.issues if i.severity == "error"]
+        assert not audit.prompt_ready
+        assert {i.code for i in audit.issues if i.severity == "error"} == {"missing_provenance"}
 
     def test_marine_heatwave_no_impact(self):
         bundle = _build_bundle(_args(type="marine_heatwave"))

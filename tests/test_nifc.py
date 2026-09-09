@@ -18,7 +18,7 @@ def _complex() -> FireComplex:
     )
 
 
-def test_nifc_success_enqueues_fire_footprint_candidate(fresh_state, monkeypatch):
+def test_nifc_success_enqueues_fire_footprint_candidate(fresh_state, monkeypatch, synthetic_bundle_provenance):
     from src.orchestrator.sources import nifc
 
     monkeypatch.setattr(nifc, "_fetch_strict", lambda *args, **kwargs: [_complex()])

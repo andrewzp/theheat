@@ -12,9 +12,11 @@ from src.data.firms import FireEvent
 from src.editorial.revisions import fingerprint, text_hash
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, writer
-from src.two_bot.evidence_contract import audit_story_bundle
+from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
+from src.two_bot.strict_contract import model_failure_snapshot
+from src.two_bot.json_utils import model_response_diagnostic
 from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
 from src.voice.safety import run_safety_pipeline
 
@@ -146,6 +148,7 @@ def _audit_bundle_for_generation(
     *,
     record_kill: Callable[[str, str], None] | None = None,
     prefix: str = "",
+    result_out: dict | None = None,
 ) -> bool:
     audit = audit_story_bundle(bundle)
     warning_codes = [issue.code for issue in audit.issues if issue.severity == "warning"]
@@ -158,8 +161,9 @@ def _audit_bundle_for_generation(
     if audit.prompt_ready:
         return True
 
-    error_codes = [issue.code for issue in audit.issues if issue.severity == "error"]
-    reason = ", ".join(error_codes) or "unknown"
+    reason = "; ".join(f"{issue.code} ({issue.field}): {issue.message}" for issue in audit.issues if issue.severity == "error") or "unknown"
+    if result_out is not None:
+        result_out["evidence_readiness"] = evidence_rejection_details(bundle, audit)
     print(
         f"[two_bot.pipeline] {prefix}Evidence contract rejected "
         f"{bundle.signal_kind} draft: {reason}"
@@ -191,6 +195,7 @@ def _check_safety_honesty_fact(
     *,
     record_kill: Callable[[str, str], None],
     mark_stage: Callable[[str, str], None] | None = None,
+    result_out: dict | None = None,
 ) -> FactCheckResult | None:
     safety_passed, safety_reason = run_safety_pipeline(tweet)
     if not safety_passed:
@@ -224,8 +229,12 @@ def _check_safety_honesty_fact(
         failures_str = "; ".join(fact_result.failures)
         print(
             f"[two_bot.pipeline] Fact-check rejected {bundle.signal_kind} "
-            f"draft: {failures_str}"
+            f"draft ({model_response_diagnostic(fact_result.raw_response)})"
         )
+        if result_out is not None:
+            result_out.setdefault("model_diagnostics", []).append(
+                model_failure_snapshot("fact_check", fact_result.raw_response)
+            )
         if mark_stage is not None:
             mark_stage("fact_check", "kill")
         record_kill("fact_check", failures_str or "unknown")
@@ -282,7 +291,7 @@ def generate_draft(
             result_out["stage_outcomes"] = stage_outcomes
 
     try:
-        if not _audit_bundle_for_generation(bundle, record_kill=_record_kill):
+        if not _audit_bundle_for_generation(bundle, record_kill=_record_kill, result_out=result_out):
             return None
 
         memory_slice = memory.build_memory_slice(state, bundle)
@@ -295,7 +304,12 @@ def generate_draft(
                 for result in writer_results
             ]
             reason = "all writer samples killed: " + "; ".join(kill_reasons)
-            print(f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft: {reason}")
+            print(f"[two_bot.pipeline] Writer killed {bundle.signal_kind} draft")
+            if result_out is not None:
+                result_out["model_diagnostics"] = [
+                    result.failure_diagnostic for result in writer_results
+                    if result.failure_diagnostic is not None
+                ]
             _mark_stage("writer", "kill")
             _record_kill("writer", reason)
             return None
@@ -330,6 +344,7 @@ def generate_draft(
             state,
             record_kill=_record_kill,
             mark_stage=_mark_stage,
+            result_out=result_out,
         )
         if fact_result is None:
             return None
@@ -364,8 +379,10 @@ def generate_draft(
                 if revised.tweet is None:
                     print(
                         f"[two_bot.pipeline] Revision writer killed "
-                        f"{bundle.signal_kind} draft: {revised.kill_reason}"
+                        f"{bundle.signal_kind} draft"
                     )
+                    if result_out is not None and revised.failure_diagnostic is not None:
+                        result_out.setdefault("model_diagnostics", []).append(revised.failure_diagnostic)
                     # Terminal outcome is a writer kill — overwrite the earlier
                     # writer pass so the candidate isn't double-counted.
                     _mark_stage("writer", "kill")
@@ -379,6 +396,7 @@ def generate_draft(
                     state,
                     record_kill=_record_kill,
                     mark_stage=_mark_stage,
+                    result_out=result_out,
                 )
                 if fact_result is None:
                     return None

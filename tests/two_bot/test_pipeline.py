@@ -207,7 +207,8 @@ def test_pipeline_evidence_contract_blocks_writer_before_token_spend(
 
     assert draft is None
     assert result_out["kill_stage"] == "evidence_contract"
-    assert result_out["kill_reason"] == "missing_event_id"
+    assert "missing_event_id (event_id)" in result_out["kill_reason"]
+    assert result_out["evidence_readiness"]["candidate_bundle"]["event_id"] == ""
     assert not mock_writer.called
     assert not mock_extract.called
     assert not mock_fact_check.called

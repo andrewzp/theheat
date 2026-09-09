@@ -70,7 +70,7 @@ def _error_codes(audit) -> set[str]:
     return {issue.code for issue in audit.issues if issue.severity == "error"}
 
 
-def test_temperature_record_bundle_passes_with_no_errors():
+def test_legacy_temperature_record_bundle_requires_source_provenance():
     bundle = build_record_bundle(
         RecordEvent(
             city="Riga",
@@ -84,8 +84,8 @@ def test_temperature_record_bundle_passes_with_no_errors():
 
     audit = audit_story_bundle(bundle)
 
-    assert audit.prompt_ready is True
-    assert _error_codes(audit) == set()
+    assert audit.prompt_ready is False
+    assert _error_codes(audit) == {"missing_provenance"}
 
 
 def test_fire_bundle_passes_and_warns_on_empty_historical_context():
@@ -603,12 +603,14 @@ def test_assert_prompt_ready_raises_only_for_error_bundles():
         ),
     ],
 )
-def test_representative_source_bundles_are_prompt_ready(case, bundle):
+def test_representative_source_bundle_migration_readiness(case, bundle):
     audit = audit_story_bundle(bundle)
 
+    # This is a migration inventory, not a scientific certification. Preserve
+    # the actual legacy fixtures: do not make them pass by inventing sources.
+    source_identity_present = {"fire", "ch4", "ozone", "cyclone_basin_record", "coral"}
+    expected = set() if case in source_identity_present else {"missing_provenance"}
     if case == "temperature_simultaneous":
-        assert audit.prompt_ready is False
-        assert _error_codes(audit) == {"temperature_aggregate_unqualified"}
-    else:
-        assert audit.prompt_ready is True, (case, audit.issues)
-        assert _error_codes(audit) == set()
+        expected.add("temperature_aggregate_unqualified")
+    assert _error_codes(audit) == expected, (case, audit.issues)
+    assert audit.prompt_ready is (not expected)

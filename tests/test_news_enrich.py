@@ -694,7 +694,7 @@ class TestEvidenceContract:
             raw_signal_dump={"event_id": "ec1", "frp": 400.0},
         )
 
-    def test_complete_impact_entries_pass(self):
+    def test_complete_impact_entries_pass(self, synthetic_bundle_provenance):
         from src.two_bot.evidence_contract import audit_story_bundle
 
         b = self._prompt_ready_bundle()
@@ -859,7 +859,7 @@ class TestDrainWiring:
 
 
 class TestPipelineMetadata:
-    def test_metadata_carries_impact_and_citation_flag(self, monkeypatch):
+    def test_metadata_carries_impact_and_citation_flag(self, monkeypatch, synthetic_bundle_provenance):
         from src.state import DEFAULT_STATE
         from src.two_bot import pipeline
         from src.two_bot.types import FactCheckResult, WriterResult

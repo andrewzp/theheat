@@ -359,7 +359,7 @@ def _patch_other_alert_sources(monkeypatch):
     monkeypatch.setattr(main.ghcn, "check_extreme_signals_for_stations", lambda *a, **k: ([], []))
 
 
-def test_run_alerts_wires_copernicus_flood_bundle(monkeypatch):
+def test_run_alerts_wires_copernicus_flood_bundle(monkeypatch, synthetic_bundle_provenance):
     _patch_other_alert_sources(monkeypatch)
     event = _activation()
     monkeypatch.setattr(

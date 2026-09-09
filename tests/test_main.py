@@ -913,6 +913,7 @@ class TestMonthlyRecordSameYearSuppression:
         mock_draft,
         mock_two_bot,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """When the prior record was set in a prior year, the signal
         should be allowed through — and it should hit the two-bot
@@ -1016,6 +1017,7 @@ class TestCO2AnnualCap:
         mock_two_bot,
         mock_draft,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """Below the annual CO2 cap, a fresh milestone should reach the
         two-bot pipeline (ported from voice gen on 2026-05-04)."""
@@ -1526,7 +1528,7 @@ class TestRunAlerts:
         mock_generate_fire_draft.assert_not_called()
         mock_two_bot.assert_called_once()
 
-    def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch):
+    def test_run_alerts_ocean_sst_drafts_on_day_5(self, monkeypatch, synthetic_bundle_provenance):
         """Day-5 streak crossing → one draft saved under marine_heatwave."""
         from src import main
         from src.main import run_alerts
@@ -1608,7 +1610,7 @@ class TestRunLeaderboard:
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft):
+    def test_computes_anomalies_and_drafts(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
         """Hot 10 leaderboard: ported from voice gen to two-bot writer
         on 2026-05-04. The voice generator's `generate_tweet` is no
         longer reached for the hot10 category."""
@@ -1640,7 +1642,7 @@ class TestRunLeaderboard:
     @patch("src.main._try_two_bot_draft")
     @patch("src.main.open_meteo")
     @patch("src.main.state")
-    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft):
+    def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft, synthetic_bundle_provenance):
         ranked = [
             CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx, signal_date=date(2026, 5, 4))
             for idx in range(1, 11)
@@ -2301,7 +2303,7 @@ class TestProcessDueDrafts:
 
 
 class TestRunAlertsIceMass:
-    def test_monday_with_record_drafts(self, monkeypatch):
+    def test_monday_with_record_drafts(self, monkeypatch, synthetic_bundle_provenance):
         """On a Monday, a fresh monthly record for Greenland drafts a tweet
         and updates state (ice_mass_max_loss + ice_mass_last_seen + count)."""
         from src import main
@@ -2442,6 +2444,7 @@ class TestFireFootprintIntegration:
         mock_draft,
         mock_two_bot,
         mock_alerts_pipeline_sources,
+        synthetic_bundle_provenance,
     ):
         """Fire footprint ported to two-bot writer on 2026-05-04. The
         FireComplex flows through `build_fire_footprint_bundle` →

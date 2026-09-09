@@ -7,6 +7,7 @@ from numbers import Number
 from typing import Any, Literal
 
 from src.two_bot.types import StoryBundle
+from src.two_bot.strict_contract import bundle_schema_issues
 
 EvidenceSeverity = Literal["error", "warning"]
 
@@ -69,7 +70,7 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     surface weak context while allowing generation to continue.
     """
 
-    issues: list[EvidenceIssue] = []
+    issues: list[EvidenceIssue] = [_issue("error", code, field, message) for code, field, message in bundle_schema_issues(bundle)]
 
     _require_text(issues, bundle.signal_kind, "signal_kind", "missing_signal_kind")
     _require_text(issues, bundle.where, "where", "missing_where")
@@ -192,6 +193,12 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
     for reason in temperature_aggregate_failures(bundle):
         issues.append(_issue("error", "temperature_aggregate_unqualified", "raw_signal_dump", reason))
 
+    # The strict boundary and older shape diagnostics can report the same
+    # field. Keep one actionable instruction per code/field/severity.
+    unique_issues: dict[tuple[str, str, str], EvidenceIssue] = {}
+    for issue in issues:
+        unique_issues.setdefault((issue.code, issue.field, issue.severity), issue)
+    issues = list(unique_issues.values())
     has_errors = any(issue.severity == "error" for issue in issues)
     return EvidenceAudit(
         signal_kind=bundle.signal_kind,
@@ -352,3 +359,22 @@ def _has_source_like_anchor(
         for key in keys
         for token in _SOURCE_LIKE_TOKENS
     )
+
+
+def evidence_rejection_details(bundle: StoryBundle, audit: EvidenceAudit) -> dict:
+    """Retain the rejected candidate and repair instructions in its ledger row."""
+    from src.two_bot.strict_contract import CONTRACT_VERSION, review_snapshot
+
+    # to_dict itself can fail on a malformed related-signal object. The dataclass
+    # fields still describe the received packet and are retained diagnostically.
+    try:
+        received = bundle.to_dict()
+    except (TypeError, ValueError, AttributeError, RecursionError, OverflowError):
+        received = vars(bundle)
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "status": "needs_evidence_repair",
+        "issues": [{"code": issue.code, "field": issue.field, "message": issue.message}
+                   for issue in audit.issues if issue.severity == "error"],
+        "candidate_bundle": review_snapshot(received),
+    }

@@ -154,6 +154,8 @@ def _record_downstream_suppression(
     kill_stage: str,
     kill_reason: str,
     summary: str | None,
+    evidence_readiness: dict | None = None,
+    model_diagnostics: list[dict] | None = None,
 ) -> None:
     """Append a downstream-kill suppression — a bundle that passed the
     editorial score gate but died in the two-bot pipeline (writer kill,
@@ -186,6 +188,10 @@ def _record_downstream_suppression(
         "reasons": reasons,
         "summary": summary,
     }
+    if evidence_readiness is not None:
+        row["evidence_readiness"] = evidence_readiness
+    if model_diagnostics:
+        row["model_diagnostics"] = model_diagnostics
     with _SUPPRESSIONS_LOCK:
         suppressions = bot_state.setdefault("suppressions", [])
         suppressions.append(row)
