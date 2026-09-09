@@ -7,7 +7,7 @@ import requests
 
 from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
-from src.data import open_meteo
+from src.data import open_meteo, places
 from src.orchestrator import world_cache
 from src.data.world_thresholds import CityThresholds, compute_city_thresholds, evaluate_city
 from src.data.openmeteo_budget import OpenMeteoBudget, OpenMeteoSaturated
@@ -73,7 +73,6 @@ def _records_cluster_member(
     records with today's year), so guarding here would silently drop world monthly
     members and make the class US-only — the exact failure the tier rework fixes.
     """
-    place_key = bundle.station_id or ""
     observed = bool(bundle.station_id)
     ch = bundle.calendar_date_high
     cal_id = (
@@ -91,7 +90,7 @@ def _records_cluster_member(
         member = _cluster_member_row(ch, "daily", date_iso)
     else:
         return None
-    member["place_key"] = place_key
+    member["place_key"] = bundle.station_id or places.event_location_key(bundle.city, bundle.country, member["lat"], member["lon"])
     member["observed"] = observed
     if cal_id is not None:
         member["cal_event_id"] = cal_id
@@ -157,12 +156,13 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     """
     today = date.today()
     iso = today.isoformat()
-    cache = world_cache.read_cache()
+    cache = world_cache.migrate_cache(world_cache.read_cache())
     # True pre-warm entry count, on the SAME basis as the post-run cached_count below
     # (non-_meta keys). Do NOT trust _meta.cached_count: write_cache merges a fresh
     # remote read, so a prior run's _meta can lag the persisted entry set and mis-key
     # the steady-state-vs-bootstrap decision in classify_world_status.
-    prev_cached = len([k for k in cache if k != "_meta"])
+    active_keys = {world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"]) for c in world_cities}
+    prev_cached = len(active_keys & set(cache))
     budget = OpenMeteoBudget(
         per_minute=600, per_hour=5000, per_day=10000,
         reserve=WORLD_LEADERBOARD_RESERVE, clock=time.monotonic, sleep=time.sleep,
@@ -180,7 +180,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     # would otherwise hide a stale city from select_stale_cities.
     cached_cities = [
         c for c in world_cities
-        if world_cache.world_key(c.get("city"), c.get("country")) in cache
+        if world_cache.world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")) in cache
     ]
     stale = world_cache.select_stale_cities(
         cache, world_cities, ttl_days=WORLD_CACHE_TTL_DAYS, budget=WORLD_WARM_BUDGET,
@@ -212,7 +212,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         budget.spend(len(batch))
         for c in batch:
             forecast_attempted += 1
-            fc = forecasts.get(world_cache.world_key(c["city"], c["country"]))
+            fc = forecasts.get(world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"]))
             if not fc or (fc.get("max_c") is None and fc.get("min_c") is None):
                 forecast_failures += 1
                 continue
@@ -239,8 +239,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         if not archive or not archive.get("time"):
             warm_failures += 1
             continue
-        wk = world_cache.world_key(c["city"], c["country"])
-        cache[wk] = compute_city_thresholds(c["city"], archive, as_of=iso).to_dict()
+        wk = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
+        cache[wk] = compute_city_thresholds(c["city"], archive, as_of=iso, country=c["country"], lat=c["lat"], lon=c["lon"]).to_dict()
         warmed_now.add(wk)
 
     # PHASE 3 — CONSOLIDATE (no network): evaluate every pending city against the FRESHEST
@@ -252,7 +252,7 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
     om_bundles = []
     for c, fc in pending:
         name = c["city"]
-        wk = world_cache.world_key(c["city"], c["country"])
+        wk = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
         cur = cache.get(wk)
         if cur is None:                # defensive; eval-snapshot cities are always cached
             continue
@@ -283,21 +283,22 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
 
     eligibility: dict[str, int] = {}
     for c in world_cities:
-        co = c.get("country")
+        co = places.country_key(c.get("country", ""))
         if co:
             eligibility[co] = eligibility.get(co, 0) + 1
     om_country = open_meteo.detect_country_records(
         all_readings, country_eligibility=eligibility, record_date=today,
     )
 
-    cached_count = len([k for k in cache if k != "_meta"])
+    cached_count = len(active_keys & set(cache))
     evaluated_ok = forecast_attempted - forecast_failures
     coverage_ratio = round(evaluated_ok / len(world_cities), 3) if world_cities else 1.0
-    cache["_meta"] = {"cached_count": cached_count, "as_of": iso}
+    cache["_meta"].update({"cached_count": cached_count, "as_of": iso})
     world_cache.write_cache(cache)
 
     metrics_out.update({
         "world_total": len(world_cities), "cached_count": cached_count,
+        "identity_quarantined": cache["_meta"].get("quarantined_count", 0),
         "forecast_attempted": forecast_attempted, "forecast_failures": forecast_failures,
         "warm_attempted": warm_attempted, "warm_failures": warm_failures,
         "coverage_ratio": coverage_ratio,
@@ -306,6 +307,8 @@ def _run_world_cached_half(world_cities: list[dict], metrics_out: dict):
         "saturated": eval_saturated or warm_saturated,   # backward-compatible OR
     })
     metrics_out["status"] = world_cache.classify_world_status(metrics_out, prev_cached_count=prev_cached)
+    if metrics_out["identity_quarantined"] and cached_count < len(active_keys):
+        metrics_out["status"] = "degraded"
     return om_bundles, om_country
 
 
@@ -832,7 +835,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                     # World (both-mode) cities come from evaluate_city, which emits no calendar_date_high; this lane is US/GHCN-only.
                     if strongest_type == "record" and bundle.calendar_date_high:
                         ev_cd = bundle.calendar_date_high
-                        streak_key = bundle.station_id if bundle.station_id else ev_cd.city
+                        streak_key = bundle.station_id if bundle.station_id else places.event_location_key(bundle.city, bundle.country, ev_cd.lat, ev_cd.lon)
                         state.update_record_streak(
                             bot_state,
                             streak_key,
@@ -1220,6 +1223,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
             note = (
                 f"provider:both ghcn[{ghcn_funnel}] "
                 f"world[cached:{m.get('cached_count', 0)}/{m.get('world_total', 0)} "
+                f"identity_quarantine:{m.get('identity_quarantined', 0)} "
                 f"cov:{m.get('coverage_ratio', 0)} fc_fail:{m.get('forecast_failures', 0)} "
                 f"warm:{m.get('warm_attempted', 0)}/{m.get('warm_failures', 0)}f "
                 f"esat:{m.get('eval_saturated', False)} sat:{m.get('saturated', False)}] | {signal_breakdown}"

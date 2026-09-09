@@ -6,22 +6,17 @@ from datetime import date, timedelta
 import requests
 
 from src.data.world_thresholds import CityThresholds
+from src.data import places
+from src.data.place_migration import migrate_cache
 from src.state import GIST_ID, GITHUB_TOKEN, STATE_SIZE_WARNING_BYTES, _headers
 
 WORLD_CACHE_FILENAME = "world_threshold_cache.json"
 _META_KEY = "_meta"
 
 
-def world_key(city, country) -> str:
-    """Stable per-city identity for the world cache: ``"<city>|<country>"``.
-
-    ``(city, country)`` is unique across the curated city list, so this disambiguates
-    genuinely-distinct cities that share a name across countries (e.g. Barcelona
-    Spain vs Barcelona Venezuela). The bare ``city`` remains the DISPLAY name; this
-    composite is the cache/forecast/dedup IDENTITY. The ``"|"`` separator is also the
-    migration marker read_cache uses to drop legacy bare-city keys.
-    """
-    return f"{city}|{country}"
+def world_key(city, country, lat=None, lon=None) -> str:
+    """Product-qualified sampling key; names remain display-only (P04)."""
+    return places.cache_key(city, country, lat, lon)
 
 
 def _as_of(e):
@@ -57,8 +52,8 @@ def _merge_entry_fields(a: dict, b: dict) -> dict:
 
 
 def merge_caches(base: dict, nxt: dict) -> dict:
-    base = base or {}
-    nxt = nxt or {}
+    base = migrate_cache(base or {})
+    nxt = migrate_cache(nxt or {})
     out: dict = {}
     for city in sorted((set(base) | set(nxt)) - {_META_KEY}):
         b = base.get(city)
@@ -73,7 +68,10 @@ def merge_caches(base: dict, nxt: dict) -> dict:
             out[city] = b
         else:
             out[city] = _merge_entry_fields(b, n)
-    return out
+    meta = {**base.get("_meta", {}), **nxt.get("_meta", {})}
+    meta["identity_quarantine"] = {**base.get("_meta", {}).get("identity_quarantine", {}), **nxt.get("_meta", {}).get("identity_quarantine", {})}
+    out["_meta"] = meta
+    return migrate_cache(out)
 
 
 def _is_stale(entry, *, ttl_days, today):
@@ -92,16 +90,16 @@ def select_stale_cities(cache, world_cities, *, ttl_days, budget, today, urgent_
     rank = {name: i for i, name in enumerate(urgent_order)}
     stale = [
         c for c in world_cities
-        if _is_stale(cache.get(world_key(c.get("city"), c.get("country"))), ttl_days=ttl_days, today=today)
+        if _is_stale(cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon"))), ttl_days=ttl_days, today=today)
     ]
     stale.sort(key=lambda c: (
         rank.get(c.get("city"), len(urgent_order)),
-        _as_of(cache.get(world_key(c.get("city"), c.get("country")))),
+        _as_of(cache.get(world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon")))),
         c.get("city"),
     ))
     out, seen = [], set()
     for c in stale:
-        key = world_key(c.get("city"), c.get("country"))
+        key = world_key(c.get("city"), c.get("country"), c.get("lat"), c.get("lon"))
         if key in seen:
             continue
         seen.add(key)
@@ -116,9 +114,9 @@ def _year(today: str) -> int:
 
 
 def apply_provisional(cache: dict, bundle, *, today: str) -> None:
-    key = world_key(bundle.city, bundle.country)   # composite identity; bundle.city stays display
+    key = world_key(bundle.city, bundle.country, bundle.lat, bundle.lon)   # composite identity; bundle.city stays display
     entry = cache.get(key)
-    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=bundle.city, as_of=today, years_of_data=0)
+    t = CityThresholds.from_dict(entry) if entry else CityThresholds(city=bundle.city, as_of=today, years_of_data=0, identity={**places.resolve_place(bundle.city, bundle.country, bundle.lat, bundle.lon), "source_product": places.CACHE_PRODUCT})
     if bundle.all_time_high is not None:
         t.all_time_max = (bundle.all_time_high.new_temp_c, _year(today))
     if bundle.all_time_low is not None:
@@ -143,7 +141,7 @@ def apply_provisional_preserving_as_of(cache, bundle, *, today, advance_as_of, t
     prior ``as_of`` is falsy (missing/empty) is kept stale (``as_of=""``), NOT advanced
     to today — advancing would mark unconfirmed climatology fresh (false freshness).
     """
-    key = world_key(bundle.city, bundle.country)
+    key = world_key(bundle.city, bundle.country, bundle.lat, bundle.lon)
     prior = cache.get(key)
     prior_as_of = (prior or {}).get("as_of")
     prior_stale = _is_stale(prior, ttl_days=ttl_days, today=today)
@@ -220,12 +218,8 @@ def read_cache() -> dict:
         data = json.loads(content)
         if not isinstance(data, dict):
             return {}
-        # One-time migration: drop legacy bare-city keys (pre city|country re-key). They
-        # are unreachable under composite keys and, left in place, would be merged back by
-        # write_cache and inflate cached_count (breaking steady-state detection). Keeping
-        # only composite ("|") keys + _meta means the next write rewrites the gist
-        # composite-only; the few legacy entries simply re-warm.
-        return {k: v for k, v in data.items() if k == _META_KEY or "|" in str(k)}
+        # Preserve original unattributed rows in idempotent quarantine; never guess geography.
+        return migrate_cache(data)
     except (requests.RequestException, ValueError, KeyError):
         return {}
 
@@ -235,8 +229,6 @@ def write_cache(cache: dict) -> bool:
         return False
     try:
         merged = merge_caches(read_cache(), cache)
-        if _META_KEY in cache:
-            merged[_META_KEY] = cache[_META_KEY]
         payload = json.dumps(merged, separators=(",", ":"))
         if len(payload) > STATE_SIZE_WARNING_BYTES:
             print(f"[world_cache] WARNING size {len(payload)}B approaching gist inline cliff")

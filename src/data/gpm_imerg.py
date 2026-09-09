@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, MutableMapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
+from src.data import places
 from datetime import date, timedelta
 import csv
 import io
@@ -146,8 +147,7 @@ class PrecipExtremeEvent:
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
-    with Path(cities_path).open(newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    return places.load_cities(cities_path)
 
 
 def fetch_daily_precip(
@@ -283,8 +283,7 @@ def _fetch_daily_precip_primary(
         )
         if mm_total is None:
             return index, None
-        city_key = _safe_key(city_name)
-        country_key = _safe_key(country)
+        city_key = places.event_location_key(city_name, country, city["lat"], city["lon"])
         date_key = requested_date.isoformat()
         return index, CityPrecipReading(
             city=city_name,
@@ -294,7 +293,7 @@ def _fetch_daily_precip_primary(
             date=date_key,
             mm_total=mm_total,
             source_product=product,
-            event_id=f"gpm_imerg_{country_key}_{city_key}_{date_key}",
+            event_id=f"gpm_imerg_{city_key}_{date_key}",
         )
 
     def handle_failure(exc: Exception) -> None:
@@ -510,7 +509,7 @@ def _fetch_precip_open_meteo(
             date=date_key,
             mm_total=mm_total,
             source_product="open_meteo",
-            event_id=f"gpm_imerg_{_safe_key(country)}_{_safe_key(city_name)}_{date_key}",
+            event_id=f"gpm_imerg_{places.event_location_key(city_name, country, city["lat"], city["lon"])}_{date_key}",
         ))
     assert_freshness(date_key, "gpm_imerg", max_age_days=6, today=today)
     return tag_source_leg(readings, "open_meteo")
@@ -548,8 +547,8 @@ def detect_precip_records(
                 lon=reading.lon,
                 city_count=None,
                 sample_cities=[],
-                event_id=f"gpm_precip_record_{_safe_key(reading.country)}_"
-                f"{_safe_key(reading.city)}_{reading.date}",
+                event_id="gpm_precip_record_"
+                f"{places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)}_{reading.date}",
             ))
 
     events.extend(_detect_rolling_accumulations(readings, tracking))
@@ -1034,7 +1033,7 @@ def _subset_grid(
                 date=date_key,
                 mm_total=max(value, 0.0),
                 source_product=product,
-                event_id=f"gpm_imerg_{_safe_key(country)}_{_safe_key(city_name)}_{date_key}",
+                event_id=f"gpm_imerg_{places.event_location_key(city_name, country, city["lat"], city["lon"])}_{date_key}",
             )
         )
     return readings
@@ -1132,8 +1131,8 @@ def _detect_rolling_accumulations(
                 lon=reading.lon,
                 city_count=None,
                 sample_cities=[],
-                event_id=f"gpm_precip_{period_days}d_{_safe_key(reading.country)}_"
-                f"{_safe_key(reading.city)}_{reading.date}",
+                event_id=f"gpm_precip_{period_days}d_"
+                f"{places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)}_{reading.date}",
             ))
     return events
 
@@ -1146,7 +1145,7 @@ def _detect_country_events(
     by_country: dict[str, list[PrecipExtremeEvent]] = {}
     for event in events:
         if event.kind == "daily_record" and event.country:
-            by_country.setdefault(event.country, []).append(event)
+            by_country.setdefault(places.country_key(event.country), []).append(event)
 
     country_events: list[PrecipExtremeEvent] = []
     for country, group in by_country.items():
@@ -1202,7 +1201,7 @@ def _record_year(record: object) -> int | None:
 
 
 def _city_key(reading: CityPrecipReading) -> str:
-    return f"{_safe_key(reading.country)}:{_safe_key(reading.city)}"
+    return f"precip:{reading.source_product}:" + places.event_location_key(reading.city, reading.country, reading.lat, reading.lon)
 
 
 def _daily_record_key(reading: CityPrecipReading) -> str:

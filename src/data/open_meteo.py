@@ -11,6 +11,7 @@ from datetime import date, timedelta
 import requests
 
 from src.data._http import fetch_with_retry
+from src.data import places
 from src.data.openmeteo_budget import OpenMeteoSaturated
 
 BASE_URL = "https://api.open-meteo.com/v1"
@@ -188,6 +189,8 @@ class ExtremeSignalBundle:
     signal_date: date | None = None
     station_id: str = ""
     station_name: str = ""
+    lat: float | None = None
+    lon: float | None = None
 
 
 @dataclass
@@ -216,20 +219,24 @@ class CountryRecord:
 
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
-    with open(cities_path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    return places.load_cities(cities_path)
 
 
 def load_normals(normals_path: str = "data/normals.csv") -> dict[str, dict[int, float]]:
-    """Returns {city_name: {month_int: avg_high_c}}."""
+    """Returns {sampling_identity: {month: normal_high_c}} for attributable rows."""
     normals = {}
     if not os.path.exists(normals_path):
         return normals
     with open(normals_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            city = row["city"]
+            if not all(row.get(k) for k in ("place_id", "sampling_point_id", "country", "lat", "lon")):
+                continue  # Legacy normals have no sampling provenance; recompute explicitly.
+            identity = places.place_for_row(row)
+            if row["sampling_point_id"] != identity["sampling_point_id"]:
+                continue
+            key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"], place_id=row["place_id"])
             month = int(row["month"])
-            normals.setdefault(city, {})[month] = float(row["avg_high_c"])
+            normals.setdefault(key, {})[month] = float(row["avg_high_c"])
     return normals
 
 
@@ -280,7 +287,7 @@ def compute_anomalies(
     """Compute anomaly for each city. Filter out likely data errors (anomaly > max)."""
     month = date.today().month
     for ct in temps:
-        city_normals = normals.get(ct.city)
+        city_normals = normals.get(places.event_location_key(ct.city, ct.country, ct.lat, ct.lon))
         if city_normals and month in city_normals:
             ct.normal_high_c = city_normals[month]
             ct.anomaly_c = ct.temp_high_c - ct.normal_high_c
@@ -378,7 +385,7 @@ def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEve
                 new_temp_c=today_temp,
                 old_record_c=old_record_c,
                 old_record_year=old_record_year,
-                event_id=f"record_{city.replace(' ', '_')}_{today.isoformat()}",
+                event_id=f"record_{places.event_location_key(city, country, lat, lon)}_{today.isoformat()}",
                 kind="high",
                 lat=lat,
                 lon=lon,
@@ -450,34 +457,16 @@ def select_world_budget_cities(
     ``prioritize_cities()`` order. Interim guard for the Open-Meteo archive
     minutely rate limit; superseded by the world threshold cache.
     """
-    by_name: dict[str, dict] = {}
-    for city in world_cities:
-        name = city.get("city")
-        if name not in by_name:
-            by_name[name] = city
-
-    selected: list[dict] = []
-    seen: set[str] = set()
-
-    for name in URGENT_WORLD_HEAT_CITIES:
+    rank = {name: i for i, name in enumerate(URGENT_WORLD_HEAT_CITIES)}
+    ordered = sorted(prioritize_cities(world_cities), key=lambda row: rank.get(row["city"], len(rank)))
+    selected, seen = [], set()
+    for row in ordered:
+        key = places.place_for_row(row)["place_id"]
+        if key not in seen:
+            selected.append(row)
+            seen.add(key)
         if len(selected) >= budget:
             break
-        city = by_name.get(name)
-        if city is None or name in seen:
-            continue
-        selected.append(city)
-        seen.add(name)
-
-    if len(selected) < budget:
-        for city in prioritize_cities(world_cities):
-            if len(selected) >= budget:
-                break
-            name = city.get("city")
-            if name in seen:
-                continue
-            selected.append(city)
-            seen.add(name)
-
     return selected[:budget]
 
 
@@ -513,7 +502,7 @@ def detect_absolute_extreme(
     """Fire if today's temp crosses the absolute threshold for this latitude band."""
     today = signal_date or date.today()
     today_iso = today.isoformat()
-    city_key = city.replace(" ", "_")
+    city_key = places.event_location_key(city, country, lat, lon)
 
     band = next((b for b in LATITUDE_BANDS if b[0] <= lat < b[1]), None)
     if band is None:
@@ -632,6 +621,7 @@ def detect_extreme_signals(
         country=country,
         today_max_c=today_max,
         today_min_c=today_min,
+        lat=lat, lon=lon,
     )
     target_month = today.month
     target_day = today.day
@@ -694,7 +684,7 @@ def detect_extreme_signals(
     bundle.archive_min_year = hist_min_overall_year
 
     today_iso = today.isoformat()
-    city_key = city.replace(" ", "_")
+    city_key = places.event_location_key(city, country, lat, lon)
 
     if today_tw_max is not None:
         for tier_index, threshold_c, tier_label in WETBULB_TIERS:
@@ -927,9 +917,17 @@ def detect_country_records(
     today_iso = today.isoformat()
 
     by_country: dict[str, list[ExtremeSignalBundle]] = {}
+    seen_places: set[str] = set()
     for r in readings:
         if r.country:
-            by_country.setdefault(r.country, []).append(r)
+            try:
+                identity = r.station_id or places.resolve_place(r.city, r.country, r.lat, r.lon)["place_id"]
+            except ValueError:
+                continue  # An unattributable point cannot count toward country coverage.
+            if identity in seen_places:
+                continue
+            seen_places.add(identity)
+            by_country.setdefault(places.country_key(r.country), []).append(r)
 
     records: list[CountryRecord] = []
     for country, group in by_country.items():
@@ -949,9 +947,9 @@ def detect_country_records(
             peak_today, peak_today_city = max(today_highs, key=lambda x: x[0])
             peak_hist_temp, peak_hist_city, peak_hist_year = max(hist_highs, key=lambda x: x[0])
             if peak_today > peak_hist_temp:
-                country_key = country.replace(" ", "_")
+                country_key = places.country_key(country)
                 records.append(CountryRecord(
-                    country=country,
+                    country=group[0].country,
                     kind="high",
                     new_temp_c=peak_today,
                     peak_city=peak_today_city,
@@ -978,9 +976,9 @@ def detect_country_records(
             trough_today, trough_today_city = min(today_lows, key=lambda x: x[0])
             trough_hist_temp, trough_hist_city, trough_hist_year = min(hist_lows, key=lambda x: x[0])
             if trough_today < trough_hist_temp:
-                country_key = country.replace(" ", "_")
+                country_key = places.country_key(country)
                 records.append(CountryRecord(
-                    country=country,
+                    country=group[0].country,
                     kind="low",
                     new_temp_c=trough_today,
                     peak_city=trough_today_city,
@@ -1085,7 +1083,7 @@ def detect_record_lows(lat: float, lon: float, city: str, country: str) -> Recor
                 new_temp_c=today_low,
                 old_record_c=old_record_c,
                 old_record_year=old_record_year,
-                event_id=f"record_low_{city.replace(' ', '_')}_{today.isoformat()}",
+                event_id=f"record_low_{places.event_location_key(city, country, lat, lon)}_{today.isoformat()}",
                 kind="low",
                 lat=lat,
                 lon=lon,
@@ -1138,7 +1136,7 @@ def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = No
 def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
     """Fetch forecast data for multiple cities in one Open-Meteo request.
 
-    Returns a mapping of city name to {max_c, min_c, tw_max_c}. Raises
+    Returns a mapping of product-qualified sampling key to {max_c, min_c, tw_max_c}. Raises
     OpenMeteoSaturated on HTTP 429; returns {} on any other failure.
     """
     if not cities:
@@ -1164,13 +1162,13 @@ def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
     except ValueError:
         return {}
     blocks = payload if isinstance(payload, list) else [payload]
+    if len(blocks) != len(cities) or any(not isinstance(block, dict) for block in blocks):
+        return {}  # A partial/malformed batch cannot safely align readings to requested places.
     out: dict[str, dict] = {}
     for city, block in zip(cities, blocks):
         daily = (block or {}).get("daily", {}) or {}
-        # Key by "<city>|<country>" (matches world_cache.world_key) so genuinely-distinct
-        # cities that share a name (e.g. Barcelona ES vs VE) don't overwrite each other.
-        # Sole caller is the world half (_run_world_cached_half), which looks up the same key.
-        out[f'{city["city"]}|{city["country"]}'] = {
+        # Shared sampling identity prevents cross-place and coordinate-revision reuse.
+        out[places.cache_key(city["city"], city["country"], city["lat"], city["lon"])] = {
             "max_c": (daily.get("temperature_2m_max") or [None])[0],
             "min_c": (daily.get("temperature_2m_min") or [None])[0],
             "tw_max_c": (daily.get("wet_bulb_temperature_2m_max") or [None])[0],

@@ -24,6 +24,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from src.data import open_meteo
+from src.data.places import country_key
 from src.orchestrator.finalize import MAX_DRAFTS_PER_CYCLE
 from src.orchestrator.suppression import _SUPPRESSIONS_LOCK
 from src.state import MAX_SUPPRESSIONS
@@ -197,10 +198,8 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
     full names ("United States"), and those must never split one country
     into two cap buckets.
 
-    Non-US code-vs-name splits (e.g. "ML" vs "Mali") are NOT collapsed —
-    this can still under-cap those countries (two spellings of the same
-    country landing in different buckets), which is an acceptable
-    fail-open trade-off for a diversity NUDGE, not a hard partition.
+    Non-US codes and country-label aliases share the canonical registry bucket.
+    Unknown country labels remain explicit labels, never guessed countries.
 
     ``bundle.country``, when set, is TRUSTED as-is — it's documented as a
     real country code, so it is never run through the known-country check
@@ -256,7 +255,7 @@ def _candidate_country_key(candidate: "TriageCandidateBundle") -> str:
         return "united states"
     if from_where and key not in _known_countries():
         return ""
-    return key
+    return country_key(key).lower()
 
 
 def _pending_type_cap() -> int:

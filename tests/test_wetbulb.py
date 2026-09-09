@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.data import places
 from datetime import date
 from urllib.parse import parse_qs, urlparse
 
@@ -96,7 +97,7 @@ def test_tier3_wet_bulb_fires(monkeypatch: pytest.MonkeyPatch) -> None:
     assert bundle.wet_bulb_extreme.daily_max_tw_c == 35.5
     assert bundle.wet_bulb_extreme.archive_max_tw_c == 34.8
     assert bundle.wet_bulb_extreme.archive_max_year == 2023
-    assert bundle.wet_bulb_extreme.event_id == "wetbulb_Jacobabad_2026-07-12_tier3"
+    assert bundle.wet_bulb_extreme.event_id == f"wetbulb_{places.event_location_key('Jacobabad','Pakistan',24,68)}_2026-07-12_tier3"
 
 
 @responses.activate
@@ -178,7 +179,7 @@ def test_wet_bulb_only_bundle_survives_open_meteo_gate(
         tier=3,
         tier_label="tier_3",
         tier_threshold_c=35.0,
-        event_id="wetbulb_Jacobabad_2026-07-12_tier3",
+        event_id=f"wetbulb_{places.event_location_key('Jacobabad','Pakistan',24,68)}_2026-07-12_tier3",
     )
     only_wet_bulb = ExtremeSignalBundle(
         city="Jacobabad",

@@ -1,3 +1,8 @@
+from src.data import places
+
+def sample_identity(city, country, lat, lon):
+    return {**places.resolve_place(city, country, lat, lon), "source_product": places.CACHE_PRODUCT}
+
 """Tests for the world-half eval/warm/consolidate path (_run_world_cached_half).
 
 Covers the eval-gating fix (archive saturation must NOT starve forecast evaluation),
@@ -27,7 +32,7 @@ DAY = f"{ARCH_YEAR}-{MM}-01"
 
 
 def K(city, country="Spain"):
-    return world_cache.world_key(city, country)
+    return world_cache.world_key(city, country, *((41.39, 2.16) if city == "Barcelona" and country == "Spain" else (10.14, -64.69) if city == "Barcelona" else (37.4, -6.0)))
 
 
 def _thresh(city, as_of, *, all_time_max=None, all_time_min=None, monthly_max=None,
@@ -76,6 +81,10 @@ def _run(monkeypatch, world_cities, seed_cache, *, forecasts, archive,
     Returns (om_bundles, om_country, store, metrics).
     """
     store = dict(seed_cache)
+    for c in world_cities:
+        key = world_cache.world_key(c["city"], c["country"], c["lat"], c["lon"])
+        if key in store:
+            store[key] = {**store[key], "identity": sample_identity(c["city"], c["country"], c["lat"], c["lon"])}
     if meta_prev is not None:
         store["_meta"] = {"cached_count": meta_prev, "as_of": STALE_ISO}
     monkeypatch.setattr(world_cache, "read_cache", lambda: dict(store))
@@ -370,9 +379,11 @@ def test_event_id_disambiguated_by_country():
     cached = CityThresholds(city="Barcelona", as_of=ISO, years_of_data=30,
                             all_time_max=(40.0, 2000)).to_dict()
     fc = {"max_c": 45.0, "min_c": 12.0, "tw_max_c": 10.0}
+    cached["identity"] = sample_identity("Barcelona", "Spain", 41.39, 2.16)
     es = evaluate_city("Barcelona", "Spain", fc, CityThresholds.from_dict(cached),
                        lat=41.39, lon=2.16, today=TODAY)
+    cached["identity"] = sample_identity("Barcelona", "Venezuela", 10.14, -64.69)
     ve = evaluate_city("Barcelona", "Venezuela", fc, CityThresholds.from_dict(cached),
                        lat=10.14, lon=-64.69, today=TODAY)
     assert es.all_time_high.event_id != ve.all_time_high.event_id
-    assert "Spain" in es.all_time_high.event_id and "Venezuela" in ve.all_time_high.event_id
+    assert places.event_identity(es.all_time_high.event_id)["place_id"] != places.event_identity(ve.all_time_high.event_id)["place_id"]

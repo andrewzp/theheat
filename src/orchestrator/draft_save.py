@@ -30,6 +30,7 @@ from src.orchestrator.dedup import (
 )
 from src.orchestrator.suppression import _record_save_rejection
 from src.state_schema import BotState
+from src.data.places import event_identity, legacy_publication_status
 
 
 def _touch_draft(draft: dict) -> None:
@@ -52,6 +53,9 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     from src import state as _state
 
     event_id = getattr(candidate, "event_id", "") or ""
+    place_id = event_identity(event_id).get("place_id", "")
+    if legacy_publication_status(bot_state, event_id) == "duplicate":
+        return False, "duplicate_posted"
     drafts = bot_state.get("drafts", []) or []
     if event_id and any(d.get("event_id") == event_id for d in drafts):
         return False, "duplicate_draft"
@@ -63,9 +67,9 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     score = getattr(candidate, "score", None)
     new_total = int(getattr(score, "total", 0) or 0)
     if city and tweet_date:
-        if _same_day_already_posted(drafts, city, tweet_date):
+        if _same_day_already_posted(drafts, city, tweet_date, place_id=place_id):
             return False, "same_day_posted"
-        collision = _same_day_pending_collision(drafts, city, tweet_date)
+        collision = _same_day_pending_collision(drafts, city, tweet_date, place_id=place_id)
         if collision:
             _idx, other = collision
             other_total = int((other.get("score") or {}).get("total", 0) or 0)
@@ -76,7 +80,7 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
     if (
         city
         and not getattr(candidate, "cooldown_exempt", False)
-        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS)
+        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS, place_id=place_id)
     ):
         return False, "city_cooldown"
     return True, ""
@@ -139,6 +143,10 @@ def save_draft(
     event types (fires, disasters, CO2, sea ice, etc.) omit ``city`` and
     pass through unchanged.
     """
+    place_id = event_identity(event_id).get("place_id", "")
+    history_status = legacy_publication_status(bot_state, event_id)
+    if history_status == "duplicate":
+        return False
     drafts = bot_state.setdefault("drafts", [])
 
     # Don't duplicate drafts for the same event
@@ -156,7 +164,7 @@ def save_draft(
 
     # (city, date) dedup — highest signal wins
     if city and tweet_date:
-        if _same_day_already_posted(drafts, city, tweet_date):
+        if _same_day_already_posted(drafts, city, tweet_date, place_id=place_id):
             print(f"[draft] Already posted for {city} on {tweet_date}, skipping")
             _record_save_rejection(
                 bot_state=bot_state,
@@ -168,7 +176,7 @@ def save_draft(
             )
             return False
 
-        collision = _same_day_pending_collision(drafts, city, tweet_date)
+        collision = _same_day_pending_collision(drafts, city, tweet_date, place_id=place_id)
         if collision:
             idx, other = collision
             other_total = (other.get("score") or {}).get("total", 0)
@@ -219,7 +227,7 @@ def save_draft(
         city
         and not cooldown_exempt
         and not copy_is_elite
-        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS)
+        and _posted_city_within_days(drafts, city, CITY_COOLDOWN_DAYS, place_id=place_id)
     ):
         print(f"[draft] {city} in {CITY_COOLDOWN_DAYS}-day cooldown, skipping")
         _record_save_rejection(
@@ -298,6 +306,11 @@ def save_draft(
         )
         draft["forced_manual"] = "cited_impact"
 
+    if history_status == "ambiguous":
+        policy = ApprovalPolicy(key="identity_history_manual", mode="manual_only", recommended_delay_minutes=None, can_auto_approve=False, reason="Legacy publication identity cannot be attributed. Review the old publication before approving this place.")
+        draft["forced_manual"] = "ambiguous_legacy_place"
+        draft.setdefault("review_context", {})["identity_history_status"] = "ambiguous"
+
     draft["approval_policy"] = policy.as_dict()
     draft.setdefault("approval_mode", "manual")
     initialize_revision(draft)
@@ -306,6 +319,7 @@ def save_draft(
     if (
         publication_policy["enabled"]
         and not citation.forced
+        and history_status != "ambiguous"
         and autoship_on_critic_pass_enabled()
         and tweet_type in AUTOSHIP_ALLOWLIST
     ):

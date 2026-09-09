@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from src.data import places
 from datetime import date
 
 from src.data.open_meteo import (
@@ -28,10 +29,12 @@ class CityThresholds:
     monthly_min: dict[str, tuple[float, int]] = field(default_factory=dict)
     monthly_mean: dict[str, tuple[float, float, int]] = field(default_factory=dict)
     wetbulb_max: tuple[float, int] | None = None
+    identity: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
             "city": self.city,
+            "identity": self.identity,
             "as_of": self.as_of,
             "years_of_data": self.years_of_data,
             "all_time_max": list(self.all_time_max) if self.all_time_max else None,
@@ -49,6 +52,7 @@ class CityThresholds:
 
         return cls(
             city=d["city"],
+            identity=dict(d.get("identity") or {}),
             as_of=d["as_of"],
             years_of_data=int(d.get("years_of_data", 0)),
             all_time_max=pair(d.get("all_time_max")),
@@ -60,7 +64,7 @@ class CityThresholds:
         )
 
 
-def compute_city_thresholds(city, archive_daily, *, as_of, years_of_data=30):
+def compute_city_thresholds(city, archive_daily, *, as_of, years_of_data=30, country="", lat=None, lon=None):
     dates = archive_daily.get("time", []) or []
     highs = archive_daily.get("temperature_2m_max", []) or []
     lows = archive_daily.get("temperature_2m_min", []) or []
@@ -118,24 +122,28 @@ def compute_city_thresholds(city, archive_daily, *, as_of, years_of_data=30):
 
     return CityThresholds(
         city=city, as_of=as_of, years_of_data=years_of_data,
+        identity=({**places.resolve_place(city, country, lat, lon), "source_product": places.CACHE_PRODUCT} if country else {}),
         all_time_max=at_max, all_time_min=at_min,
         monthly_max=m_max, monthly_min=m_min, monthly_mean=m_mean, wetbulb_max=wb_max,
     )
 
 
 def evaluate_city(city, country, forecast, cached, *, lat, lon, today):
+    from src.data.place_migration import valid_cache_entry
+    if not valid_cache_entry(places.cache_key(city, country, lat, lon), cached.to_dict()):
+        raise ValueError("Threshold cache lacks matching sampling provenance; recompute it")
     today_max = forecast.get("max_c")
     today_min = forecast.get("min_c")
     tw_max = forecast.get("tw_max_c")
     iso = today.isoformat()
     # Include country so genuinely-distinct same-name cities (e.g. Barcelona ES vs VE)
     # get distinct event_ids and dedup doesn't suppress the second city's real record.
-    key = f"{city}_{country}".replace(" ", "_")
+    key = places.event_location_key(city, country, lat, lon)
     mm = f"{today.month:02d}"
     yrs = cached.years_of_data
 
     b = ExtremeSignalBundle(
-        city=city, country=country, today_max_c=today_max, today_min_c=today_min,
+        city=city, country=country, today_max_c=today_max, today_min_c=today_min, lat=lat, lon=lon,
     )
     if cached.all_time_max is not None:
         b.archive_max_c, b.archive_max_year = cached.all_time_max
