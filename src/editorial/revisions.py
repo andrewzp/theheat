@@ -15,7 +15,7 @@ import math
 import struct
 from typing import Any
 
-from src.editorial.publication import automatic_publication_policy
+from src.editorial.publication import automatic_publication_policy, valid_epoch
 
 
 def _canonical(value: Any) -> Any:
@@ -213,7 +213,7 @@ def initialize_revision(draft: dict) -> dict:
     return record_model_review(draft)
 
 
-def record_human_review(draft: dict) -> dict:
+def record_human_review(draft: dict, *, at: str | None = None) -> dict:
     if draft.get("revision_conflicts"):
         raise ValueError("Resolve the conflicting revision before reviewing")
     text = draft.get("text")
@@ -221,7 +221,7 @@ def record_human_review(draft: dict) -> dict:
         raise ValueError("Invalid draft text")
     draft["content_revision"] = max(1, draft_identity(draft)["content_revision"])
     revoke_approval(draft)
-    draft["review_binding"] = {**draft_identity(draft), "kind": "human", "reviewed_at": _now()}
+    draft["review_binding"] = {**draft_identity(draft), "kind": "human", "reviewed_at": at if at is not None else _now()}
     return draft
 
 
@@ -237,10 +237,29 @@ def authorize_draft(draft: dict, mode: str, intent_id: str | None = None, *, pub
         if not policy["enabled"] or (publication_epoch is not None and publication_epoch != policy["epoch"]):
             raise ValueError(policy["reason"])
         publication_epoch = policy["epoch"]
+    return bind_reviewed_revision(draft, mode, at=_now(), intent_id=intent_id, publication_epoch=publication_epoch)
+
+
+def bind_reviewed_revision(draft: dict, mode: str, *, at: str,
+                           intent_id: str | None = None, publication_epoch: str | None = None) -> dict:
+    """Record a binding deterministically after the caller's authorization check.
+
+    This is a domain transition, not permission to send a post. Runtime callers
+    must use authorize_draft; a command authority supplies its verified policy
+    and clock explicitly. Final publication still requires the sender's checks.
+    """
+    if not review_is_current(draft):
+        raise ValueError("This revision needs revalidation")
+    if mode not in ("manual", "auto"):
+        raise ValueError("Invalid approval mode")
+    if mode == "auto" and draft["review_binding"].get("kind") != "model":
+        raise ValueError("Scheduling requires a current model review")
+    if mode == "auto" and not valid_epoch(publication_epoch):
+        raise ValueError("A valid publication epoch is required")
     _advance_decision(draft)
     draft["approval_binding"] = {
         **draft_identity(draft), "decision_revision": draft["decision_revision"],
-        "mode": mode, "authorized_at": _now(),
+        "mode": mode, "authorized_at": at,
     }
     if mode == "auto":
         draft["approval_binding"]["publication_epoch"] = publication_epoch
@@ -261,7 +280,7 @@ def revoke_approval(draft: dict) -> dict:
     return draft
 
 
-def invalidate_text(draft: dict, new_text: str) -> dict:
+def invalidate_text(draft: dict, new_text: str, *, at: str | None = None) -> dict:
     if not isinstance(new_text, str) or not new_text.strip() or len(new_text) > 280:
         raise ValueError("Invalid draft text")
     text_hash(new_text)  # Reject malformed Unicode before changing durable fields.
@@ -271,7 +290,7 @@ def invalidate_text(draft: dict, new_text: str) -> dict:
         "text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision",
     ) if key in draft}
     previous.update(draft_identity(draft))
-    previous["invalidated_at"] = _now()
+    previous["invalidated_at"] = at if at is not None else _now()
     draft.setdefault("revision_history", []).append(previous)
     draft["content_revision"] = previous["content_revision"] + 1
     draft["text"] = new_text
