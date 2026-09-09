@@ -284,6 +284,7 @@ class BotState(TypedDict, total=False):
     record_streaks: dict[str, RecordStreakEntry]
     data_source_failures: dict[str, int]
     source_health: dict[str, SourceHealth]
+    publication_control: dict
     credential_expiry: dict[str, CredentialExpiry]
     last_good_readings: dict[str, dict]
     publish_ledger: dict[str, dict]

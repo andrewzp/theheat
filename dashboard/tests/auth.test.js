@@ -153,8 +153,13 @@ test("authenticated POST routes reject malformed JSON bodies", async () => {
       body: "{",
     }))
 
-    assert.equal(response.status, 400)
-    assert.match((await response.json()).error, /invalid json/i)
+    if (modulePath === "app/api/post/route.js") {
+      assert.equal(response.status, 409)
+      assert.equal((await response.json()).code, "sourced_draft_required")
+    } else {
+      assert.equal(response.status, 400)
+      assert.match((await response.json()).error, /invalid json/i)
+    }
   }
 })
 
@@ -197,8 +202,13 @@ test("POST routes reject non-string text fields", async () => {
         body: JSON.stringify(body),
       }))
 
-      assert.equal(response.status, 400)
-      assert.match((await response.json()).error, errorPattern)
+      if (modulePath === "app/api/post/route.js") {
+        assert.equal(response.status, 409)
+        assert.equal((await response.json()).code, "sourced_draft_required")
+      } else {
+        assert.equal(response.status, 400)
+        assert.match((await response.json()).error, errorPattern)
+      }
     }
   } finally {
     globalThis.fetch = originalFetch

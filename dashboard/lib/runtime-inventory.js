@@ -1,6 +1,7 @@
 // Bot settings come from the bot process, never from the dashboard's environment.
 export const RUNTIME_MAX_AGE_HOURS = 6
 const FLAG_KEYS = [
+  "automatic_publication_enabled", "automatic_publication_epoch", "automatic_publication_reason",
   "autoship_on_critic_pass", "autoship_max_age_hours", "critic_enabled",
   "critic_revise_enabled", "writer_samples", "triage_enabled", "refill_enabled",
   "funnel_telemetry", "concurrent_sources", "metrics_enabled", "reganom_enabled",

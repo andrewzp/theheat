@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from src.editorial.publication import automatic_publication_policy
 from src.editorial.scheduling import defer_to_engagement_window
 from src.editorial.approval import (
     AUTOSHIP_ALLOWLIST,
@@ -301,8 +302,10 @@ def save_draft(
     draft.setdefault("approval_mode", "manual")
     initialize_revision(draft)
 
+    publication_policy = automatic_publication_policy(bot_state)
     if (
-        not citation.forced
+        publication_policy["enabled"]
+        and not citation.forced
         and autoship_on_critic_pass_enabled()
         and tweet_type in AUTOSHIP_ALLOWLIST
     ):
@@ -319,9 +322,10 @@ def save_draft(
             draft["auto_approve_requested_at"] = _utc_now_iso()
             draft["approval_mode"] = "auto"
             draft["autoship_on_critic_pass"] = True
-            authorize_draft(draft, "auto")
+            authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
     elif (
-        policy.mode == "armed_auto"
+        publication_policy["enabled"]
+        and policy.mode == "armed_auto"
         and policy.recommended_delay_minutes
         and review_is_current(draft)
         and (draft.get("review_binding") or {}).get("kind") == "model"
@@ -332,7 +336,7 @@ def save_draft(
         )
         draft["auto_approve_requested_at"] = _utc_now_iso()
         draft["approval_mode"] = "policy_auto"
-        authorize_draft(draft, "auto")
+        authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
 
     drafts.append(draft)
     print(f"[draft] Saved: {tweet_text[:60]}...")

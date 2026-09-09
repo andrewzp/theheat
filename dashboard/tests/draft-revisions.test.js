@@ -1,4 +1,8 @@
 import test from "node:test"
+
+// Explicit policy for these mocked legacy release scenarios.
+process.env.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED = "1"
+process.env.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH = "offline-test-release"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { authorizeDraft, approvalIsCurrent, draftIdentity, fingerprint, hasUnresolvedPublish,

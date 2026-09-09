@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { configuredAutomaticPolicy } from "./publication-control.js"
 
 // Paired with src/editorial/revisions.py. This is a decision binding, not a lock.
 function validUnicode(text) {
@@ -133,12 +134,18 @@ export function recordHumanReview(draft) {
   return draft
 }
 
-export function authorizeDraft(draft, mode, intentId = null) {
+export function authorizeDraft(draft, mode, intentId = null, publicationEpoch = null) {
   if (!reviewIsCurrent(draft)) throw new Error("This revision needs revalidation")
   if (!["manual", "auto"].includes(mode)) throw new Error("Invalid approval mode")
   if (mode === "auto" && draft.review_binding.kind !== "model") throw new Error("Scheduling requires a current model review")
+  if (mode === "auto") {
+    const policy = configuredAutomaticPolicy()
+    if (!policy.enabled || (publicationEpoch !== null && publicationEpoch !== policy.epoch)) throw new Error("Automatic publication is paused")
+    publicationEpoch = policy.epoch
+  }
   advanceDecision(draft)
   draft.approval_binding = { ...draftIdentity(draft), decision_revision: draft.decision_revision, mode, authorized_at: new Date().toISOString() }
+  if (mode === "auto") draft.approval_binding.publication_epoch = publicationEpoch
   if (intentId) {
     draft.approval_binding.publish_intent_id = intentId
     draft.publish_intent_id = intentId

@@ -22,6 +22,7 @@ from src.state_schema import (
 )
 from src.storage import sqlite_store
 from src.two_bot.json_utils import json_default
+from src.editorial.publication import automatic_approval_allowed, merge_publication_control
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
 
 GIST_ID = os.environ.get("GIST_ID", "")
@@ -49,7 +50,9 @@ _TIER_TTLS_DAYS = {
     "flood_activation_tiers": 60,
 }
 
+
 DEFAULT_STATE: BotState = {
+    "publication_control": {},
     "last_hot10": {"date": None, "cities": []},
     "streaks": {},
     "posted_events": [],
@@ -1519,6 +1522,8 @@ def _prepare_merged_write(
 def _expected_draft_matches(current: BotState | dict, expected: dict | None, expected_publish_ledger: dict | None) -> bool:
     if expected is None:
         return True
+    if (expected.get("approval_binding") or {}).get("mode") == "auto" and not automatic_approval_allowed(expected, current):
+        return False
     draft = next((row for row in current.get("drafts", []) if row.get("id") == expected.get("id")), None)
     event_id = str(expected.get("event_id") or expected.get("id") or "")
     ledger_row = current.get("publish_ledger", {}).get(event_id)
@@ -2003,6 +2008,7 @@ def _merge_source_health(
 # ---------------------------------------------------------------------------
 
 MERGE_SPEC: dict[str, Callable[..., Any]] = {
+    "publication_control": merge_publication_control,
     "last_hot10": _strat_take_incoming,
     "streaks": _strat_take_incoming,
     "posted_events": _strat_ordered_unique(500),

@@ -41,6 +41,16 @@ escape hatch and test target. The same gist also holds `world_threshold_cache.js
 kept out of `state.json` so core state stays lean). Do not edit the production gist by
 hand. State changes should flow through bot code and the normal merge/write path.
 
+## Publication containment
+
+Automatic publication defaults paused through `THEHEAT_AUTOMATIC_PUBLICATION_ENABLED=0`.
+The older autoship flag alone does not pause every automatic lane. Source collection,
+drafting and review continue; raw ad-hoc text cannot publish. Release authorization
+uses a new epoch, exact current approval and a verified persisted pause before
+re-enabling. See [the P00b configuration and release protocol](docs/handoffs/2026-09-09-p00b-publication-containment.md).
+Gist mutations are still non-atomic; [P00c](docs/plans/2026-09-09-p00c-single-mutation-authority.md)
+tracks the single-consumer and credential-isolation work.
+
 ## Dashboard access
 
 The production dashboard uses Vercel Authentication. On the current Hobby plan,

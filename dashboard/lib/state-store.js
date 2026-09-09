@@ -1,7 +1,9 @@
+import { mergePublicationControl } from "./publication-control.js"
 import { DatabaseSync } from "node:sqlite"
 import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
 
 const DEFAULT_STATE = {
+  publication_control: {},
   last_hot10: { date: null, cities: [] },
   streaks: {},
   posted_events: [],
@@ -170,6 +172,7 @@ CREATE TABLE IF NOT EXISTS suppressions (
 `
 
 const METADATA_JSON_KEYS = [
+  "publication_control",
   "co2_annual_count",
   "ch4_annual_count",
   "ch4_last_milestone",
@@ -541,6 +544,7 @@ function mergeState(current, incoming) {
     errors: mergeErrors(base.errors, next.errors),
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
+    publication_control: mergePublicationControl(base.publication_control, next.publication_control),
     publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),
   })
 }

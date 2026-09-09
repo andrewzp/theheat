@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.usefixtures("automatic_publication_release")
+
 from copy import deepcopy
 from datetime import UTC, datetime
 

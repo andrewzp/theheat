@@ -106,6 +106,7 @@ export function DraftWorkbench({
                     copy {selectedDraft.candidate_score?.total ?? "—"}
                     {selectedCandidate?.source ? ` · ${selectedCandidate.source}` : ""}
                   </span>
+                  {selectedDraft.automatic_publication?.enabled !== true && <p className="runtime-note">Automatic scheduling is paused or unverified. Review remains available.</p>}
                   {selectedDraft.auto_approve_at ? (
                     <span className="workbench-pill alert">{countdownText(selectedDraft.auto_approve_at)}</span>
                   ) : selectedDraft.approval_policy?.mode === "manual_only" ? (
@@ -464,7 +465,7 @@ export function DraftWorkbench({
         </div>
       ) : (
         <div className="draft-empty">
-          No drafts waiting. Trigger a run on the Pipeline tab or compose one manually.
+          No drafts waiting. Trigger a run on the Pipeline tab or try a writing preview.
         </div>
       )}
     </div>

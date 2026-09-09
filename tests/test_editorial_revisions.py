@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("automatic_publication_release")
+
 from src.editorial.revisions import (
     approval_is_current, authorize_draft, binding_matches, draft_identity, fingerprint,
     has_unresolved_publish, initialize_revision, invalidate_text, project_draft,

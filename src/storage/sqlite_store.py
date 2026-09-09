@@ -170,6 +170,7 @@ _METADATA_JSON_KEYS = (
     # Credential-expiry counters (#330) — latent gap FOUND BY the persistence
     # contract test (codex #388 round): had no sqlite path at all.
     "credential_expiry",
+    "publication_control",
     "data_source_failures",
     "source_health",
     "last_good_readings",

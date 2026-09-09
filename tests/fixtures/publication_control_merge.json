@@ -1,0 +1,59 @@
+[
+  {
+    "name": "missing control",
+    "a": null,
+    "b": {},
+    "expected": {
+      "retired_epochs": []
+    }
+  },
+  {
+    "name": "null epoch list fails closed",
+    "a": {
+      "retired_epochs": null
+    },
+    "b": {
+      "retired_epochs": [
+        "release-one"
+      ]
+    },
+    "expected": {
+      "retired_epochs": [
+        "release-one"
+      ],
+      "invalid_control": true
+    }
+  },
+  {
+    "name": "malformed epoch fails closed",
+    "a": {
+      "retired_epochs": [
+        "short"
+      ]
+    },
+    "b": {},
+    "expected": {
+      "retired_epochs": [],
+      "invalid_control": true
+    }
+  },
+  {
+    "name": "retired union",
+    "a": {
+      "retired_epochs": [
+        "release-one"
+      ]
+    },
+    "b": {
+      "retired_epochs": [
+        "release-two"
+      ]
+    },
+    "expected": {
+      "retired_epochs": [
+        "release-one",
+        "release-two"
+      ]
+    }
+  }
+]
