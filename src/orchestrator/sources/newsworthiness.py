@@ -54,13 +54,21 @@ def run_newsworthiness(bot_state: BotState, current_run: dict | None) -> None:
         f"dropped_unwarranted={result.dropped_unwarranted}",
         f"dropped_unverified={result.dropped_unverified}",
     ]
+    usage = result.verification_usage()
+    note_bits.extend([f"verify_calls={result.verify_calls}/{usage['model_call_limit']}",
+                      f"verify_cache_hits={result.verify_cache_hits}",
+                      f"verify_budget_skips={result.verify_budget_skips + result.verify_fetch_budget_skips}"])
     if result.notes:
         note_bits.append("; ".join(result.notes[:3]))
-    # A leg failure (notes present) still yielded the other leg's events —
-    # that is degraded, not success; both legs clean is success even at 0
-    # events (a quiet news day is a real answer).
-    status = "degraded" if any("leg failed" in n for n in result.notes) else "success"
+    # Failed or deliberately limited verification leaves partial coverage.
+    # Unsupported claims alone are a valid result, including no retained news.
+    failures = (any("leg failed" in n for n in result.notes)
+                or result.verify_fetch_failures > 0 or result.verify_errors > 0)
+    budget_limited = result.verify_budget_skips > 0 or result.verify_fetch_budget_skips > 0
+    status = "degraded" if failures or budget_limited else "success"
     _record_source_run(
         current_run, bot_state, SOURCE_KEY, source_start,
         status=status, observed=observed, note=" | ".join(note_bits),
+        details={"verification": usage},
+        error_class="verification_budget" if budget_limited and not failures else None,
     )
