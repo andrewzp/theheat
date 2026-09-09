@@ -1046,7 +1046,8 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
     reject-all-drafts operator tool — its own concurrency group) can no
     longer roll a day bucket backwards (codex P1). Two writers that both
     ADDED usage from one base undercount by the smaller increment — bounded,
-    never inflated, fine for a directional ledger. Union of days + newest-N
+    never a complete account total. Coverage witnesses retain detectable
+    contradictions; they do not reconstruct concurrent increments. Union of days + newest-N
     prune HERE, not only at drain: a plain overlay merge resurrects
     drain-pruned days on every write (codex P1 — reproduced as 45→46 days).
     """
@@ -1054,7 +1055,10 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
         LLM_USAGE_RETENTION_DAYS,
         _is_valid_day_key,
         _valid_agg,
+        _COVERAGE_FIELDS,
+        coverage_fields_valid,
     )
+    from src.two_bot.usage_coverage import coverage_evidence, union_evidence
 
     base_d = base if isinstance(base, dict) else {}
     nxt_d = nxt if isinstance(nxt, dict) else {}
@@ -1071,6 +1075,8 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
         n_day = n_day if isinstance(n_day, dict) else {}
         day_out: dict = {}
         for key in set(b_day) | set(n_day):
+            raw_rows = [value if isinstance(value, dict) else {} for value in (b_day.get(key), n_day.get(key))]
+            evidence = union_evidence(*(coverage_evidence(value) for value in raw_rows))
             b_agg = _valid_agg(deepcopy(b_day.get(key, {})))
             n_agg = _valid_agg(deepcopy(n_day.get(key, {})))
             out = {
@@ -1078,6 +1084,12 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
                 for field in ("calls", "in", "cached_in", "cache_write", "out")
             }
             out["usd"] = max(b_agg["usd"], n_agg["usd"])
+            coverage = [agg for agg in (b_agg, n_agg) if any(field in agg for field in _COVERAGE_FIELDS)]
+            if coverage:
+                valid = [agg for agg in coverage if coverage_fields_valid(agg)]
+                for field in _COVERAGE_FIELDS:
+                    out[field] = max((agg[field] for agg in valid), default=0)
+            out.update(evidence)
             day_out[key] = out
         merged[day] = day_out
     for day in sorted(merged.keys())[:-LLM_USAGE_RETENTION_DAYS]:

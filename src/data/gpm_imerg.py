@@ -11,7 +11,7 @@ from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from src.data import places
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import io
 import math
 import os
@@ -20,6 +20,7 @@ from typing import Any
 
 import requests
 
+from src.credentials import decode_jwt_exp
 from src.data._freshness import assert_freshness
 from src.data._http import fetch_with_retry
 from src.data._s3credentials import get_s3_credentials
@@ -251,6 +252,14 @@ def _fetch_daily_precip_primary(
         if strict:
             raise SourceSkipped("EARTHDATA_TOKEN is not configured")
         return []
+
+    # Introspection is only an early refusal, never authentication proof. An
+    # opaque/future-dated token still needs the real endpoint to establish access.
+    expiry = decode_jwt_exp(token)
+    if expiry is not None and expiry <= datetime.now(timezone.utc):
+        raise SourceFetchError(
+            f"EARTHDATA_TOKEN expired at {expiry.isoformat()}; renew the credential before GPM collection"
+        )
 
     # Grid sources download the daily file once and subset locally. On any
     # failure they raise _GridFetchUnavailable and we fall through to the next
@@ -780,7 +789,10 @@ def _gpm_grid_source_chain(source: str) -> tuple[str, ...]:
     if source == "s3":
         return ("s3", "datapool")
     if source == "datapool":
-        return ("datapool", "s3")
+        # NASA direct S3 requires same-region AWS execution. HTTPS failure
+        # cannot grant that capability to our ordinary GitHub-hosted runner.
+        # Deliberate S3 selection remains available for a qualified deployment.
+        return ("datapool",)
     return ()
 
 
@@ -1004,15 +1016,11 @@ def _fetch_grid_bytes_s3(*, target_date: date, product: str, token: str) -> byte
         meta = getattr(exc, "response", {}) or {}
         status = meta.get("ResponseMetadata", {}).get("HTTPStatusCode")
         code = str(meta.get("Error", {}).get("Code", ""))
-        # The temp role has no s3:ListBucket, so a missing key returns
-        # 403/AccessDenied rather than 404 — treat both as "not published".
-        if status in (403, 404) or code in {
-            "404",
-            "403",
-            "NoSuchKey",
-            "AccessDenied",
-            "NoSuchBucket",
-        }:
+        # Permission/region denial is not evidence of an unpublished date.
+        # A missing bucket also cannot be repaired by trying yesterday's key.
+        if status in (401, 403) or code in {"403", "AccessDenied", "ExpiredToken", "InvalidAccessKeyId"}:
+            raise _GridTransient("s3 credential or region access failure; date probing stopped") from exc
+        if code in {"404", "NoSuchKey"} or (status == 404 and code in {"", "NotFound"}):
             raise _GridNotFound(f"s3 {code or status} for {key}") from exc
         raise _GridTransient(f"s3 ClientError {code or status} for {key}") from exc
     except BotoCoreError as exc:

@@ -51,7 +51,7 @@ def test_grid_failure_keeps_remote_city_fanout_bounded(monkeypatch, limit, expec
     monkeypatch.setattr(gpm, "_fetch_grid_bytes", unavailable)
     monkeypatch.setattr(gpm, "_fetch_city_precip", lambda **kw: city_calls.append(kw) or 1.0)
     readings = gpm._fetch_daily_precip_primary(cities(), target_date=DAY, today=DAY, max_cities=limit, max_workers=1)
-    assert grid_calls == ["datapool", "s3"]
+    assert grid_calls == ["datapool"]
     assert len(city_calls) == len(readings) == expected
 
 

@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.13] - 2026-09-09
+
+### Source failure containment, qualified graphics and truthful usage reporting
+
+- Refuse a configured GPM token with a known expiry before making source requests. Remove premature S3 credential acquisition from the default datapool route, and stop date probing on authorization failures. Opaque tokens still require real endpoint validation. NASA access recovery and historical rainfall reconciliation remain open.
+- Build local comparison and trajectory graphics from qualified individual GHCN station bundles. Preserve source-calendar dates, units, quality flags, coverage and exact inputs; reject mixed archive snapshots and changed projections. The renderer verifies four synthetic specimens. Production media storage, attachment and joint text/media approval remain separate work.
+- Distinguish priced writer responses, retained legacy estimates, unpriced calls and missing usage metadata. An empty ledger no longer implies zero spending. Python and dashboard readers expose accounting limits, including untracked model stages, cumulative-merge undercount and the existing price-table age. This is reporting, not a reconciled invoice or an enforced spending cap.
+- Preserve contradictory accounting evidence across state merges and fail closed when its bounded retention overflows. Incomplete accounting alone must not create repeated source incidents or imply that a prior budget alarm has recovered.
+- Document the observed-temperature routing gap and check three station candidates with four bounded free NOAA requests. All three fail freshness and comparator qualification; existing inventory is not treated as a working pilot or a measure of global coverage.
+- Validation: 3,609 offline Python tests and 294 dashboard tests, production build, Ruff/mypy (138 source files), direct changed GPM checks and both generated contracts pass. Four synthetic graphic specimens pass the real renderer checks. The private historical run has no unexpected observations; 41 paid tests were excluded. Independent cost review includes 606 cross-language merge permutations and the prior-threshold-incident case.
+- Automatic publication remains paused. No provider credits, paid evaluation, source backfill, test tweet or public correction is part of this release.
+
 ## [0.9.108.12] - 2026-09-09
 
 ### Bounded station rotation and honest historical/canary checks

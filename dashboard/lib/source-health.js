@@ -61,6 +61,7 @@ function classifyError(lastError) {
 }
 
 function classifyHealth(s) {
+  if (s.source === "budget" && s.last_run_status === "skipped" && s.last_run_error_class === "accounting_coverage") return "idle"
   // No runs OR no active attempts ever -> idle.
   const degradedRuns = s.degraded + s.partial_failures
   const active = s.successes + s.failures + degradedRuns
@@ -193,6 +194,7 @@ function aggregateFromSourceHealth(sourceHealth) {
       last_error_at: health?.last_error_ts || null,
       last_run_at: lastRun?.ts || null,
       last_run_status: lastRun?.status || null,
+      ...(source === "budget" ? {last_run_error_class: lastRun?.error_class || null, accounting_note: lastRun?.error_class === "accounting_coverage" ? lastRun?.error || null : null} : {}),
       troubleshooting_log: buildTroubleshootingLogFromRuns(runs, (r) => r?.ts || null),
     }
     for (const key of HEALTH_METRIC_TOTALS) {

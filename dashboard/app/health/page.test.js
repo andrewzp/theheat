@@ -231,3 +231,12 @@ test("embedded mode renders the body without the standalone header or nav", () =
   assert.ok(!markup.includes('href="/health"'), "must not emit a self-link that breaks out")
   assert.ok(!markup.includes("source health"), "must not emit the standalone page header")
 })
+
+
+test("health page shows incomplete accounting without inventing a zero cost or a new outage", () => {
+  const note = "Recorded estimate unavailable; accounting partial, other stages untracked. Budget not enforced."
+  const markup = render({sources:[{...SOURCES[3], source:"budget", accounting_note:note}]})
+  assert.match(markup, /accounting partial, other stages untracked/)
+  assert.match(markup, /Budget not enforced/)
+  assert.doesNotMatch(markup, /\$0\.00/)
+})

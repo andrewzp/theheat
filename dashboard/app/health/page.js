@@ -164,6 +164,7 @@ function SourceRow({ source, now }) {
       h(CounterPill, { label: "failed", value: source.failures, tone: "failed" }),
       h(CounterPill, { label: "skipped", value: source.skipped, tone: "skipped" })
     ),
+    source.accounting_note ? h("p", { className: "source-accounting-note" }, source.accounting_note) : null,
     lastError
       ? h(
           "div",

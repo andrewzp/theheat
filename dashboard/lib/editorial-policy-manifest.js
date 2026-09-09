@@ -39,9 +39,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/scientific_claims.py": "5efb5a18e4766164f8fddf99f2916d2ab7e2ec833b09fa285e218741e795871f",
     "src/two_bot/strict_contract.py": "319469ca3bcd584b6162364d770b89e44b0698076f10ae92eb9c538368234575",
     "src/two_bot/types.py": "1ca82f8ae83306bfc5e1693f6de14d3da0c0b51c8473429873bd7443cde08d02",
-    "src/two_bot/writer.py": "73a2e35a2048333d1c4c78614547f368b51f05c266e9b009c01c6c87a223d54e",
+    "src/two_bot/writer.py": "c1a3826765885290eefe48cbda6df364b78cbcfa524ee42c6fad54964cc4a273",
     "src/voice/safety.py": "356d431ccbd0e5eed0d7c21acfd20cacf6cade1b9d9a2b8654747740af08721e"
   },
   "schema_version": 1,
-  "source_sha256": "129220d73ac06613d1c0832ccff7ebe9a5d8d2812e39da86a7ed1f6017937d9b"
+  "source_sha256": "99455fd4bf2ee3439a1b3001821c6a09fbbcb9d3502c4340f4a9c039fe5b913c"
 }

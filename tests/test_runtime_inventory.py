@@ -179,10 +179,7 @@ def test_cli_captures_inventory_before_dispatch_and_preserves_it_in_history(monk
     monkeypatch.setattr(cli.runtime_inventory, "collect_runtime_inventory", collect)
     monkeypatch.setattr(cli.credentials, "collect_credential_expiry", lambda: {})
     monkeypatch.setattr(cli.usage_ledger, "drain_into_state", lambda _: 0)
-    monkeypatch.setattr(cli.budget, "record_budget_health", lambda _: {
-        "mtd_usd": 0, "pct_of_budget": 0, "budget_usd": 14,
-        "projected_usd": 0, "level": "ok",
-    })
+    monkeypatch.setattr(cli.budget, "record_budget_health", lambda _: cli.budget.budget_status({}))
 
     cli.main({"alerts": dispatch})
 

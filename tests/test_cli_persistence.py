@@ -17,7 +17,7 @@ def prepare(monkeypatch, outcomes, *, source_status="skipped"):
     monkeypatch.setattr(cli.runtime_inventory, "collect_runtime_inventory", lambda *args, **kwargs: {"git_sha": "fixture-sha", "mode": "auto_publish_due"})
     monkeypatch.setattr(cli.credentials, "collect_credential_expiry", lambda: {})
     monkeypatch.setattr(cli.usage_ledger, "drain_into_state", lambda value: 0)
-    monkeypatch.setattr(cli.budget, "record_budget_health", lambda value: {"mtd_usd": 0, "pct_of_budget": 0, "budget_usd": 14, "projected_usd": 0, "level": "ok"})
+    monkeypatch.setattr(cli.budget, "record_budget_health", lambda value: cli.budget.budget_status({}))
     attempts = []
     results = iter(outcomes)
 

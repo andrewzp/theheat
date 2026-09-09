@@ -234,7 +234,12 @@ def classify_source(
     # stale attempts is what wrongly flagged idle low-cadence sources as failing.
     recent = [s for s in statuses[-recent_window:] if s in _ACTIVE_STATUSES]
     recent_rate: float | None
-    if not recent:
+    latest = next((row for row in reversed(runs) if isinstance(row, dict)), {})
+    accounting_only = (name == "budget" and latest.get("status") == "skipped"
+                       and latest.get("error_class") == "accounting_coverage")
+    if not recent or accounting_only:
+        # A coverage report makes no claim of current budget health or outage.
+        # Retain old threshold alarms, but do not keep filing them as new failures.
         category = "idle"
         recent_rate = None
     else:
@@ -263,6 +268,7 @@ def classify_source(
     served_via = parse_served_via(last_error) if category == "degraded" else None
     return {
         "source": name,
+        **({"issue_resolution_unknown": True} if accounting_only else {}),
         "category": category,
         "cause": cause if category == "failing" else None,
         "suggested_action": action if category == "failing" else None,
@@ -381,6 +387,8 @@ def _normalise_failing(
 def plan_issue_actions(
     failing: Mapping[str, Mapping[str, Any]] | set[str],
     open_issues: dict[str, Any],
+    *,
+    resolution_unknown: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Reconcile the failing set against currently-open sentinel issues.
 
@@ -425,7 +433,7 @@ def plan_issue_actions(
             action["remove_labels"] = stale_cause_labels
         actions.append(action)
 
-    for source in sorted(set(open_issues) - failing_sources):
+    for source in sorted(set(open_issues) - failing_sources - (resolution_unknown or set())):
         actions.append({
             "action": "close",
             "source": source,
@@ -1494,7 +1502,10 @@ def main(argv: list[str] | None = None) -> int:
              "-d", "Source-health failure cause is not classified yet"], check=False)
     failing_map = {v["source"]: v for v in report["failing"]}
     open_issues = _list_open_sentinel_issues()
-    for action in plan_issue_actions(failing_map, open_issues):
+    # Incomplete accounting neither proves an outage nor resolves a previous
+    # real threshold alert. Leave that issue untouched without recurring comments.
+    resolution_unknown = {v["source"] for v in report["healthy"] if v.get("issue_resolution_unknown")}
+    for action in plan_issue_actions(failing_map, open_issues, resolution_unknown=resolution_unknown):
         if action["action"] == "create":
             _create_issue(failing_map[action["source"]])
         elif action["action"] == "update":
