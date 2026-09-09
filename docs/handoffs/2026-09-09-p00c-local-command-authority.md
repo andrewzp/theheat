@@ -57,6 +57,10 @@ The focused tests include eight independent writer processes preserving unrelate
 
 Independent review identified and verified fixes for mutable candidate ranks, malformed-history queue poisoning and SQLite replacement bypasses. Directed execution was also tightened to preserve FIFO. These tests prove the local transactional contract, not hosted durability or credential isolation.
 
+## Integrated release checks
+
+The reviewed foundation was integrated with P04 place containment and the P02/P00a uncertainty/metrics release in `codex/p00c-authority-release`. The automatic-policy wrapper and the newer malformed-outcome checks both remain in the shared revision module. Validation on this integration: **3,076 offline Python tests passed**, 41 paid replays excluded; **286 dashboard tests**, build, Ruff and mypy (128 source files) passed. This is still the local-only authority boundary, with no hosted adapter or production cutover. No application version bump is needed for this experimental, unconnected module; deployment is not a completion criterion for its production authority work.
+
 ## Next implementation slices and external gates
 
 1. **Choose and provision the private transactional authority.** SQLite is usable for this same-machine, shared-file experiment. Independent ephemeral dashboard/workflow hosts do not share this file. A production adapter needs durable storage, backups, restore evidence and an operational owner. No such service was provisioned or activated here.
