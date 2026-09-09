@@ -6,7 +6,7 @@ import os
 
 # ruff: noqa: F403,F405
 from src.orchestrator.common import *
-from src.data import air_quality, openaq
+from src.data import air_quality, openaq, places
 from src.two_bot.intern import build_dust_event_bundle, build_pm25_hazard_bundle
 
 # A 638-city sweep routinely loses its rate-limited tail chunk to Open-Meteo's
@@ -85,7 +85,7 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
                 if pm25_event is not None:
                     if openaq_enabled:
                         pm25_event = openaq.corroborate_pm25_hazard(pm25_event)
-                    city_slug = air_quality._city_slug(pm25_event.city)
+                    city_slug = places.event_location_key(pm25_event.city, pm25_event.country, pm25_event.lat, pm25_event.lon)
                     if _should_emit_tier(
                         bot_state,
                         tier_key="air_quality_pm25_tiers",
@@ -147,7 +147,7 @@ def run_air_quality(bot_state: BotState, current_run: dict | None, cities: list[
             if dust_enabled:
                 dust_event = air_quality.detect_dust_event(obs)
                 if dust_event is not None:
-                    city_slug = air_quality._city_slug(dust_event.city)
+                    city_slug = places.event_location_key(dust_event.city, dust_event.country, dust_event.lat, dust_event.lon)
                     if _should_emit_tier(
                         bot_state,
                         tier_key="air_quality_dust_tiers",

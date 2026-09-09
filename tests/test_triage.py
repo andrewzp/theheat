@@ -1097,7 +1097,7 @@ class TestCandidateCountryKey:
         candidate = _candidate(
             signal_kind="monthly_high", where="Astana, Kazakhstan", country="",
         )
-        assert _candidate_country_key(candidate) == "kazakhstan"
+        assert _candidate_country_key(candidate) == "kz"
 
     def test_country_high_prefix_bare_where_resolves_country(self):
         from src.orchestrator.triage import _candidate_country_key
@@ -1105,7 +1105,7 @@ class TestCandidateCountryKey:
         candidate = _candidate(
             signal_kind="country_high", where="Kazakhstan", country="",
         )
-        assert _candidate_country_key(candidate) == "kazakhstan"
+        assert _candidate_country_key(candidate) == "kz"
 
     def test_fire_kind_resolves_country(self):
         from src.orchestrator.triage import _candidate_country_key
@@ -1121,7 +1121,7 @@ class TestCandidateCountryKey:
         candidate = _candidate(
             signal_kind="air_quality_hazard", where="Delhi, India", country="",
         )
-        assert _candidate_country_key(candidate) == "india"
+        assert _candidate_country_key(candidate) == "in"
 
     def test_precipitation_extreme_kind_resolves_country(self):
         from src.orchestrator.triage import _candidate_country_key
@@ -1129,7 +1129,7 @@ class TestCandidateCountryKey:
         candidate = _candidate(
             signal_kind="precipitation_extreme", where="Lagos, Nigeria", country="",
         )
-        assert _candidate_country_key(candidate) == "nigeria"
+        assert _candidate_country_key(candidate) == "ng"
 
     def test_drought_kind_resolves_country(self):
         """drought's bundle.where is the literal "United States" (bare, no

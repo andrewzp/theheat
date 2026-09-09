@@ -11,14 +11,16 @@ from pathlib import Path
 
 from meteostat import Normals, Point
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from src.data import places
+
 CITIES_PATH = Path(__file__).parent.parent / "data" / "cities.csv"
 NORMALS_PATH = Path(__file__).parent.parent / "data" / "normals.csv"
 
 
 def main():
     # Load cities
-    with open(CITIES_PATH, newline="", encoding="utf-8") as f:
-        cities = list(csv.DictReader(f))
+    cities = places.load_cities(str(CITIES_PATH))
 
     print(f"Fetching normals for {len(cities)} cities...")
 
@@ -48,6 +50,8 @@ def main():
                 if tmax is not None and not (tmax != tmax):  # not NaN
                     rows.append({
                         "city": name,
+                        "country": city["country"], "place_id": city["place_id"],
+                        "sampling_point_id": city["sampling_point_id"], "lat": lat, "lon": lon,
                         "month": int(month_idx),
                         "avg_high_c": round(float(tmax), 1),
                     })
@@ -60,7 +64,7 @@ def main():
 
     # Write normals.csv
     with open(NORMALS_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["city", "month", "avg_high_c"])
+        writer = csv.DictWriter(f, fieldnames=["city", "country", "place_id", "sampling_point_id", "lat", "lon", "month", "avg_high_c"])
         writer.writeheader()
         writer.writerows(rows)
 

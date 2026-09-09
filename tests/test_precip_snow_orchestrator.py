@@ -1,3 +1,4 @@
+from src.data import places
 from src.data.gpm_imerg import CityPrecipReading
 from src.data.nsidc_snow import SnowReading
 from src.state import _fresh_state
@@ -8,7 +9,7 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
 
     bot_state = _fresh_state()
     bot_state["precip_daily_records"] = {
-        "france:paris:05-14": {"mm": 40.0, "year": 2024},
+        "precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14": {"mm": 40.0, "year": 2024},
     }
     reading = CityPrecipReading(
         city="Paris",
@@ -34,11 +35,11 @@ def test_run_gpm_imerg_drafts_and_updates_tracking(monkeypatch):
     assert len(bot_state["_triage_queue"]) == 1
     assert bot_state["_triage_queue"][0].source == "gpm_imerg"
     assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
-    assert bot_state["precip_daily_records"]["france:paris:05-14"]["mm"] == 75.0
+    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14"]["mm"] == 75.0
 
     assert runner._drain_and_write_triage_queue(bot_state, current_run) == 1
     assert "gpm_precip_record_france_paris_2026-05-14" not in bot_state["posted_events"]
-    assert bot_state["precip_daily_records"]["france:paris:05-14"]["mm"] == 75.0
+    assert bot_state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris","France",48.85,2.35) + ":05-14"]["mm"] == 75.0
     assert bot_state["source_health"]["gpm_imerg"]["success"] == 1
     assert current_run["sources"][0]["drafted"] == 1
 

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "assessment_date": "2026-09-08",
+  "label_origin": "Completed TheHeat historical fact audit; no new adjudication or model replay. Cases are targeted, not a representative error-rate sample.",
+  "cases": [
+    {
+      "case_id": "alert_threshold_is_not_a_rain_record",
+      "audit_ids": ["T42", "T30"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "A hardcoded 150 mm alert threshold was presented as a previous three-day rainfall record.",
+      "evidence_limit": "T42 has an X receipt; T30 only has posted state. The record-field assignment was fixed July 6, but the underlying rainfall totals are not certified by that repair.",
+      "expected_rejection": "Reject a historical-record comparison whose comparator has only alert-threshold provenance, regardless of prose grade.",
+      "permitted_claim": "An attributed estimate exceeded the named alert threshold, if the total, integration window and product provenance separately pass validation."
+    },
+    {
+      "case_id": "forecast_is_not_an_observed_record",
+      "audit_ids": ["T47", "T60"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "Chennai and Bishkek forecast highs were narrated as already observed temperature records.",
+      "evidence_limit": "The original observed maxima and complete forecast payloads were not recovered. An evidence-type error does not prove the forecast numerical value was wrong.",
+      "expected_rejection": "Reject observed-record language based only on a forecast; forecast values must not update accepted observed maxima.",
+      "permitted_claim": "An attributed forecast for its provider-local valid date can be compared with a compatible, explicitly scoped model archive."
+    },
+    {
+      "case_id": "humidity_requires_moisture_evidence",
+      "audit_ids": ["T47"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "The Chennai explanation added an event-specific humidity/wet-bulb burden without moisture measurements and mischaracterized its local rainfall peak.",
+      "evidence_limit": "Temperature alone cannot substantiate the asserted diagnostic; July being part of a monsoon season is distinct from being Chennai's rainfall peak.",
+      "expected_rejection": "Reject an event-specific wet-bulb or heat-index assertion without the required inputs and calculation or an attributed value; background knowledge is not event evidence.",
+      "permitted_claim": "A complete short temperature forecast needs no invented humidity or seasonal ending."
+    },
+    {
+      "case_id": "forecast_landfall_is_not_completed_landfall",
+      "audit_ids": ["T52"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "Bavi was described as having made Eastern China landfall at publication; JMA's preliminary 18:00 UTC position, about one minute earlier, was 17.7N 130.8E offshore.",
+      "evidence_limit": "The exact original JTWC bulletin was not recovered. A broad detector regex reproduces future/negation errors synthetically, but is not proven to be the exact historical causal path. Agency wind averaging periods differ.",
+      "expected_rejection": "Reject completed landfall from a forecast, negated sentence, proximity or uncorroborated event label. Preserve source issue/valid time and confirmation status.",
+      "permitted_claim": "A dated attributed forecast can describe landfall risk; a confirmed landfall requires suitable contemporaneous evidence."
+    },
+    {
+      "case_id": "thermal_detection_is_not_verified_wildfire",
+      "audit_ids": ["T46"],
+      "verdict": "strong_suspicion",
+      "finding": "The Congo thermal anomaly is about 630 m from Nyamulagira; a volcanic source is strongly suspected. The asserted convective-lid cause is independently unsupported.",
+      "evidence_limit": "No independent classification of the exact June 29 FIRMS pixel was recovered. Do not relabel the old post as a proven volcanic detection. Native detection confidence is not confidence in vegetation-fire identity or cause.",
+      "expected_rejection": "Reject verified-wildfire and atmospheric-cause language absent incident/land-cover/source classification and event-specific evidence.",
+      "permitted_claim": "An attributed thermal anomaly may be reported as unclassified, with relevant volcanic/static-source uncertainty and native units."
+    },
+    {
+      "case_id": "material_precipitation_product_disagreement",
+      "audit_ids": ["T53"],
+      "verdict": "unreconciled_discrepancy",
+      "finding": "Barrow's retained 356.2 mm seven-day satellite estimate differs materially from 1.8 mm at the nearby NOAA airport gauge over corresponding dates.",
+      "evidence_limit": "Gauge and grid-cell spatial support and day boundaries differ; original granules/footprint/integration timestamps are incomplete. The gauge is not a substitute truth for the whole cell, and the cause remains unresolved.",
+      "expected_rejection": "Quarantine the received-rain claim until original granules, masks, units, windows and qualified product comparisons reconcile the discrepancy; wording alone is not a repair.",
+      "permitted_claim": "A review task can preserve both attributed measurements, their incompatible supports and the unresolved discrepancy."
+    },
+    {
+      "case_id": "record_progression_and_later_quality_revision",
+      "audit_ids": ["T34", "T43"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "Beaver Dams reused a 2020 comparator after an intervening June 12 high; the June 25 39.9C observation has NOAA QFLAG=S in the September 8 archive.",
+      "evidence_limit": "The later tweet does not literally call 2020 the immediately previous record. The audit does not establish when S was added. June 12's blank flag is not an all-time record certification.",
+      "expected_rejection": "Require an archive cutoff and intervening accepted-record progression; a later source QC failure must create a reviewable affected-claim revision without silently rewriting historical evidence.",
+      "permitted_claim": "A comparison to a named historical year can be arithmetically valid if its limited scope and subsequent record progression are made clear."
+    },
+    {
+      "case_id": "editorial_region_must_not_override_country",
+      "audit_ids": ["T02"],
+      "verdict": "confirmed_specific_defect",
+      "finding": "The retained 10.68N 13.49W coordinate is in Guinea but was labeled Mali by a broad regional box.",
+      "evidence_limit": "This is generation-memory-only text with unverified publication. It must not be counted as a confirmed public error or given an invented receipt.",
+      "expected_rejection": "Keep country/admin membership separate from editorial-region boxes; unknown or border-ambiguous identity must remain explicit.",
+      "permitted_claim": "A versioned boundary-supported location can be reported separately from biome, region and nearest populated place."
+    }
+  ]
+}

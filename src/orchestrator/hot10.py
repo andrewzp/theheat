@@ -1,6 +1,7 @@
 """Hot 10 leaderboard mode."""
 
 from __future__ import annotations
+from src.data import places
 
 # ruff: noqa: F403,F405
 from src.data import twitter_metrics
@@ -175,16 +176,17 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             print("[leaderboard] No valid anomalies to rank")
             _record_source_run(
                 current_run, bot_state, "leaderboard", leaderboard_start,
-                status="success", observed=len(temps), promoted=0, drafted=0, note="No valid anomalies to rank"
+                status="degraded", observed=len(temps), promoted=0, drafted=0, note="No attributable normals or valid anomalies; legacy name-only normals require explicit recomputation"
             )
             _run_twitter_metrics(bot_state, current_run)
             return bot_state
 
-        prev_cities = bot_state.get("last_hot10", {}).get("cities", [])
+        prev_cities = bot_state.get("last_hot10", {}).get("place_ids", [])
         changes = []
         for i, ct in enumerate(hot10):
-            if ct.city in prev_cities:
-                old_pos = prev_cities.index(ct.city) + 1
+            place_id = places.resolve_place(ct.city, ct.country, ct.lat, ct.lon)["place_id"]
+            if place_id in prev_cities:
+                old_pos = prev_cities.index(place_id) + 1
                 new_pos = i + 1
                 if old_pos != new_pos:
                     direction = "UP" if new_pos < old_pos else "DOWN"
@@ -215,6 +217,8 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
             hot10_dicts = [
                 {
                     "city": ct.city,
+            "place_id": places.resolve_place(ct.city, ct.country, ct.lat, ct.lon)["place_id"],
+            "sampling_point_id": places.sampling_point_id(ct.lat, ct.lon),
                     "country": ct.country,
                     "temp_high_c": ct.temp_high_c,
                     "normal_high_c": ct.normal_high_c,
@@ -239,8 +243,9 @@ def run_leaderboard(bot_state: BotState, current_run: dict | None = None) -> Bot
         bot_state["last_hot10"] = {
             "date": date.today().isoformat(),
             "cities": [ct.city for ct in hot10],
+            "place_ids": [places.resolve_place(ct.city, ct.country, ct.lat, ct.lon)["place_id"] for ct in hot10],
         }
-        state.update_streaks(bot_state, [ct.city for ct in hot10])
+        state.update_streaks(bot_state, [places.resolve_place(ct.city, ct.country, ct.lat, ct.lon)["place_id"] for ct in hot10])
         _record_source_run(
             current_run, bot_state, "leaderboard", leaderboard_start,
             status="success", observed=len(temps), promoted=len(hot10) if score.passes else 0, drafted=0

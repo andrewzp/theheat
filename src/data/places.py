@@ -1,0 +1,377 @@
+"""Registry-owned place identity, separate from a weather sampling point.
+
+Display names are never scientific keys. A changed point cannot inherit a baseline.
+No geocoder, fuzzy matching, or network is used. Registry aliases are intentional.
+"""
+
+from __future__ import annotations
+
+import csv
+from functools import lru_cache
+import hashlib
+import json
+import math
+from pathlib import Path
+import re
+import unicodedata
+from typing import Any
+from collections.abc import Mapping
+
+DATA = Path(__file__).resolve().parents[2] / "data"
+CACHE_PRODUCT = "openmeteo-archive-daily-30y-v1"
+_TOKEN = re.compile(r"loc1-(pl[0-9]+|ux[a-f0-9]{16})-(pt[a-f0-9]{16})")
+
+
+def normalize(value: str) -> str:
+    return unicodedata.normalize("NFKC", str(value)).strip().casefold()
+
+
+@lru_cache(maxsize=1)
+def country_codes() -> dict[str, str]:
+    return json.loads((DATA / "country_codes.json").read_text())["codes"]
+
+
+def country_key(value: str) -> str:
+    value = str(value or "").strip()
+    if value.upper() in set(country_codes().values()):
+        return value.upper()
+    return country_codes().get(normalize(value), "label:" + normalize(value)) if value else ""
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()[:16]
+
+
+def sampling_point_id(lat: Any, lon: Any) -> str:
+    lat, lon = float(lat), float(lon)
+    if (
+        not math.isfinite(lat)
+        or not math.isfinite(lon)
+        or not -90 <= lat <= 90
+        or not -180 <= lon <= 180
+    ):
+        raise ValueError("Invalid sampling coordinates")
+    return "pt" + _digest([0.0 if lat == 0 else lat, 0.0 if lon == 0 else lon])
+
+
+@lru_cache(maxsize=1)
+def registry() -> tuple[dict, ...]:
+    rows = json.loads((DATA / "place_registry.json").read_text())["places"]
+    ids, aliases = set(), {}
+    for row in rows:
+        if row["place_id"] in ids:
+            raise ValueError("Duplicate place ID")
+        ids.add(row["place_id"])
+        sampling_point_id(row["lat"], row["lon"])
+        for alias in row["aliases"]:
+            key = (
+                normalize(alias["city"]),
+                country_key(alias["country"]),
+                sampling_point_id(alias["lat"], alias["lon"]),
+            )
+            if key in aliases and aliases[key] != row["place_id"]:
+                raise ValueError("Conflicting place alias")
+            aliases[key] = row["place_id"]
+    return tuple(rows)
+
+
+@lru_cache(maxsize=4096)
+def resolve_place(city: str, country: str, lat=None, lon=None, *, place_id: str = "") -> dict:
+    """Resolve a registered place; preserve the exact requested sample coordinates.
+
+    Without an explicit registry ID, a known name with unlisted coordinates gets
+    an unregistered identity, not an assumed same-city match. A known ID permits
+    a deliberate point revision. Unregistered points remain coordinate-specific.
+    """
+    if not isinstance(place_id, str):
+        raise ValueError("Invalid place ID")
+    if place_id.startswith("ux"):
+        # Runtime inventories also contain deterministic unregistered points.
+        # Recompute instead of treating their ID as a registry lookup or trusting it.
+        computed = resolve_place(city, country, lat, lon)
+        if computed["place_id"] != place_id:
+            raise ValueError("Unregistered place ID conflicts with supplied geography")
+        return computed
+    matches = [
+        r
+        for r in registry()
+        if (
+            r["place_id"] == place_id
+            if place_id
+            else any(
+                normalize(a["city"]) == normalize(city)
+                and country_key(a["country"]) == country_key(country)
+                for a in [r, *r["aliases"]]
+            )
+        )
+    ]
+    if len(matches) > 1 and lat is not None and lon is not None:
+        requested = sampling_point_id(lat, lon)
+        matches = [
+            r
+            for r in matches
+            if requested in {sampling_point_id(a["lat"], a["lon"]) for a in [r, *r["aliases"]]}
+        ]
+    row = matches[0] if len(matches) == 1 else None
+    if place_id and row is None:
+        raise ValueError("Unknown registry place ID")
+    if (
+        place_id
+        and row
+        and not any(
+            normalize(a["city"]) == normalize(city)
+            and country_key(a["country"]) == country_key(country)
+            for a in [row, *row["aliases"]]
+        )
+    ):
+        raise ValueError("Place ID conflicts with supplied geography")
+    if lat is None or lon is None:
+        if row is None:
+            raise ValueError("Unregistered place needs coordinates")
+        lat, lon = row["lat"], row["lon"]
+    point = sampling_point_id(lat, lon)
+    if (
+        row is not None
+        and not place_id
+        and point not in {sampling_point_id(a["lat"], a["lon"]) for a in [row, *row["aliases"]]}
+    ):
+        row = None
+    code = row["country_code"] if row else country_key(country)
+    if not str(city).strip() or not code:
+        raise ValueError("Place needs city and country")
+    pid = row["place_id"] if row else "ux" + _digest([normalize(city), code, point])
+    return {
+        "place_id": pid,
+        "sampling_point_id": point,
+        "country_code": code,
+        "city": row["city"] if row else city,
+        "country": row["country"] if row else country,
+        "lat": float(lat),
+        "lon": float(lon),
+    }
+
+
+def place_for_row(row: dict) -> dict:
+    return resolve_place(
+        row["city"],
+        row["country"],
+        row.get("lat"),
+        row.get("lon"),
+        place_id=row.get("place_id", ""),
+    )
+
+
+def event_location_key(city, country, lat=None, lon=None, *, place_id="") -> str:
+    place = resolve_place(city, country, lat, lon, place_id=place_id)
+    return f"loc1-{place['place_id']}-{place['sampling_point_id']}"
+
+
+def event_identity(event_id: str) -> dict:
+    match = _TOKEN.search(str(event_id or ""))
+    return {"place_id": match[1], "sampling_point_id": match[2]} if match else {}
+
+
+def cache_key(city, country, lat=None, lon=None, *, place_id="") -> str:
+    return CACHE_PRODUCT + ":" + event_location_key(city, country, lat, lon, place_id=place_id)
+
+
+def load_cities(path: str = "data/cities.csv") -> list[dict]:
+    """Resolve rows, collapsing explicit aliases onto one selected active point."""
+    with open(path, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    result, seen = [], set()
+    for raw in rows:
+        place = place_for_row(raw)
+        if place["place_id"] in seen:
+            continue
+        seen.add(place["place_id"])
+        registered = next((r for r in registry() if r["place_id"] == place["place_id"]), None)
+        if registered:
+            place = resolve_place(
+                registered["city"],
+                registered["country"],
+                registered["lat"],
+                registered["lon"],
+                place_id=registered["place_id"],
+            )
+        result.append({**raw, **place})
+    return result
+
+
+def identity_from_payload(payload: dict) -> dict:
+    """Read identity only from structured evidence, never from tweet prose."""
+    direct = event_identity(payload.get("event_id", ""))
+    if direct:
+        return direct
+    try:
+        return resolve_place(
+            payload["city"], payload["country"], payload.get("lat"), payload.get("lon")
+        )
+    except (KeyError, TypeError, ValueError):
+        return {}
+
+
+def draft_place_id(draft: dict) -> str:
+    review = draft.get("review_context") or {}
+    bundle = (review.get("two_bot") or {}).get("bundle") or {}
+    raw = bundle.get("raw_signal_dump") or {}
+    return (event_identity(draft.get("event_id", "")) or identity_from_payload(raw)).get(
+        "place_id", ""
+    )
+
+
+def _country_event(event_id: str):
+    return re.fullmatch(
+        r"(country_(?:high|low)_|gpm_precip_country_)([A-Za-z]{2})(_\d{4}-\d{2}-\d{2})",
+        event_id,
+    )
+
+
+def legacy_event_candidates(event_id: str) -> set[str]:
+    """Known old display-name IDs, for evidence-aware migration containment."""
+    country_event = _country_event(event_id)
+    if country_event:
+        prefix, code, suffix = country_event.groups()
+        # Only declared country-label aliases qualify. In particular, Hong Kong's
+        # former China-labelled row is not evidence that a China aggregate was HK.
+        labels = {
+            alias["country"]
+            for row in registry()
+            for alias in [row, *row["aliases"]]
+            if country_key(alias["country"]) == code.upper()
+        }
+        slug = lambda value: re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+        variants = {
+            prefix
+            + (slug(label) if prefix.startswith("gpm_") else label.replace(" ", "_"))
+            + suffix
+            for label in labels
+        }
+        return variants - {event_id}
+    ident = event_identity(event_id)
+    row = next((r for r in registry() if r["place_id"] == ident.get("place_id")), None)
+    if not row:
+        return set()
+    variants = set()
+    for alias in row["aliases"]:
+        for name in (
+            alias["city"].replace(" ", "_"),
+            alias["city"].lower().replace(" ", "_").replace(",", ""),
+            f"{alias['city']}_{alias['country']}".replace(" ", "_"),
+        ):
+            variants.add(_TOKEN.sub(name, event_id))
+        if event_id.startswith("gpm_"):
+            slug = lambda value: re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+            variants.add(_TOKEN.sub(slug(alias["country"]) + "_" + slug(alias["city"]), event_id))
+    return variants
+
+
+def legacy_publication_status(state: Mapping, event_id: str) -> str:
+    """Return duplicate/ambiguous/unresolved/clear without modifying history.
+
+    A confirmed but unattributed old publication requires manual identity review.
+    Any uncertain legacy attempt blocks publication, including a manual send under
+    a newly canonicalized ID. Identity migration cannot bypass P02 idempotency.
+    """
+    ident = event_identity(event_id)
+    if ident and ident["place_id"] not in {row["place_id"] for row in registry()}:
+        # Coordinates support collection and analysis, but cannot prove historical
+        # aliases. Register/attribute this point before creating a publishable event.
+        return "unregistered"
+    variants = legacy_event_candidates(event_id)
+    if not variants:
+        return "clear"
+    recorded = variants & set(state.get("posted_events") or [])
+    ledger = state.get("publish_ledger") or {}
+    if not isinstance(ledger, dict):
+        return "unresolved"
+
+    def uncertain(row):
+        if not isinstance(row, dict):
+            return True
+        conflicts = row.get("attempt_conflicts", [])
+        if not isinstance(conflicts, list) or any(uncertain(other) for other in conflicts):
+            return True
+        return not row.get("tweet_id") and row.get("phase") != "not_sent"
+
+    for alias in variants:
+        if alias not in ledger:
+            continue
+        row = ledger[alias]
+        if uncertain(row):
+            return "unresolved"
+        if isinstance(row, dict) and row.get("tweet_id"):
+            recorded.add(alias)
+
+    target = event_identity(event_id).get("place_id")
+    attributable = set()
+    matching = False
+    for draft in state.get("drafts") or []:
+        if not isinstance(draft, dict) or draft.get("event_id") not in variants:
+            continue
+        if draft.get("publish_outcome") in ("submitted", "unknown") or (
+            draft.get("status") != "posted"
+            and draft.get("publish_outcome") not in ("not_sent", "confirmed")
+            and (draft.get("autoship_attempted") or draft.get("last_publish_attempt_at"))
+        ):
+            return "unresolved"
+        if draft.get("status") == "posted" or draft.get("tweet_id"):
+            recorded.add(draft["event_id"])
+            pid = draft_place_id(draft)
+            if pid:
+                attributable.add(draft["event_id"])
+                matching = matching or pid == target
+    if matching or (_country_event(event_id) and recorded):
+        # Country-only aggregate aliases have an unambiguous declared country
+        # mapping; city-only aliases still require retained structured evidence.
+        return "duplicate"
+    return "ambiguous" if recorded - attributable else "clear"
+
+
+def has_unregistered_identity(draft: dict) -> bool:
+    """Unregistered points are analyzable, but need attribution before any send."""
+    registered = {row["place_id"] for row in registry()}
+    ident = event_identity(draft.get("event_id", ""))
+    if ident:
+        return ident["place_id"] not in registered
+    if str(draft.get("event_id", "")).startswith("hot10_"):
+        review = draft.get("review_context") or {}
+        raw = ((review.get("two_bot") or {}).get("bundle") or {}).get("raw_signal_dump") or {}
+        return any(
+            isinstance(row, dict) and row.get("place_id") and row["place_id"] not in registered
+            for row in raw.get("cities") or []
+        )
+    return False
+
+
+def requires_identity_review(draft: dict) -> bool:
+    """Automatic-send containment for legacy scientific identities.
+
+    Read-only: never relabel old evidence or touch an uncertain attempt/receipt.
+    The posting integration calls this only for automatic publication. A human
+    can inspect/rebuild the evidence through the existing manual review path.
+    """
+    event_id = str(draft.get("event_id") or "")
+    if event_identity(event_id):
+        return False
+    if event_id.startswith(("country_high_", "country_low_", "gpm_precip_country_")):
+        return not bool(_country_event(event_id))
+    if event_id.startswith("gpm_precip_"):
+        return True
+    if event_id.startswith("hot10_"):
+        review = draft.get("review_context") or {}
+        raw = ((review.get("two_bot") or {}).get("bundle") or {}).get("raw_signal_dump") or {}
+        cities = raw.get("cities") or []
+        return not cities or any(
+            not isinstance(row, dict) or not row.get("place_id") or not row.get("sampling_point_id")
+            for row in cities
+        )
+    point_signal = re.match(
+        r"^(record(?:_low)?|alltime_(?:high|low)|monthly_(?:high|low)|anomaly_(?:hot|cold)|absextreme(?:_cold)?|wetbulb|streak|pm25|dust)_",
+        event_id,
+    )
+    if not point_signal:
+        return False
+    return not re.search(r"_[A-Z]{2}[A-Z0-9]{9}_", event_id)

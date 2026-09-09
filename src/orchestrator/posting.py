@@ -1,6 +1,7 @@
 """Posting and publish queue modes."""
 
 from __future__ import annotations
+from src.data.places import has_unregistered_identity, legacy_publication_status, requires_identity_review
 
 from copy import deepcopy
 
@@ -207,6 +208,20 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
             draft["post_error"] = "Auto-approval blocked by policy"
             _touch_draft(draft)
             return "failed"
+
+    if has_unregistered_identity(draft):
+        draft["post_error"] = "Unregistered sampling identity requires registry attribution before publishing"
+        return "failed"
+    history_status = legacy_publication_status(bot_state, draft.get("event_id", ""))
+    if history_status in ("duplicate", "unresolved"):
+        draft["post_error"] = (
+            "Legacy publication outcome unresolved; reconcile before publishing this identity"
+            if history_status == "unresolved" else "This place event was already published under its legacy identity"
+        )
+        return "failed"
+    if mode == "auto" and (requires_identity_review(draft) or history_status == "ambiguous"):
+        draft["post_error"] = "Legacy place evidence requires identity review"
+        return "failed"
 
     # Capture this before any sender mutation for the storage stale-read check.
     expected_draft = deepcopy(draft) if tracked else None
@@ -531,6 +546,21 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
                 failures.append(f"{draft.get('id')}: autoship event already posted")
                 continue
             # post_approved marks the attempt immediately before its durable write.
+
+        history_status = legacy_publication_status(bot_state, draft.get("event_id", ""))
+        if has_unregistered_identity(draft) or requires_identity_review(draft) or history_status != "clear":
+            identity_reason = (
+                "Unregistered sampling identity requires registry attribution before publishing"
+                if has_unregistered_identity(draft) else
+                "Legacy publication outcome unresolved; reconcile before publishing this identity"
+                if history_status == "unresolved" else
+                "This place event was already published under its legacy identity"
+                if history_status == "duplicate" else
+                "Legacy place evidence requires identity review"
+            )
+            _demote_autoship_to_manual(draft, identity_reason)
+            failures.append(f"{draft.get('id')}: {identity_reason}")
+            continue
 
         # Safety check before auto-posting (same gate as manual path)
         passed, reason = run_safety_pipeline(draft["text"])

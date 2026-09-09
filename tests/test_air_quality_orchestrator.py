@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.data import places
 
 from copy import deepcopy
 
@@ -51,7 +52,7 @@ def test_run_air_quality_enqueues_pm25_candidate(bot_state, monkeypatch):
 
     queue = bot_state["_triage_queue"]
     assert len(queue) == 1
-    assert queue[0].event_id == "pm25_lahore_2026-06-08_tier1"
+    assert queue[0].event_id == f"pm25_{places.event_location_key('Lahore', 'Pakistan', 31.5, 74.3)}_2026-06-08_tier1"
     assert queue[0].legacy_type == "air_quality_hazard"
 
 
@@ -67,14 +68,14 @@ def test_run_air_quality_enqueues_dust_candidate(bot_state, monkeypatch):
 
     queue = bot_state["_triage_queue"]
     assert len(queue) == 1
-    assert queue[0].event_id == "dust_khartoum_2026-06-08_tier1"
+    assert queue[0].event_id == f"dust_{places.event_location_key('Khartoum', 'Sudan', 31.5, 74.3)}_2026-06-08_tier1"
     assert queue[0].legacy_type == "dust_event"
 
 
 def test_run_air_quality_tier_dedup_no_refire(bot_state, monkeypatch):
     from src.orchestrator.sources.air_quality import run_air_quality
 
-    bot_state["air_quality_pm25_tiers"] = {"lahore": {"tier": 1, "date": "2026-06-08"}}
+    bot_state["air_quality_pm25_tiers"] = {places.event_location_key("Lahore", "Pakistan", 31.5, 74.3): {"tier": 1, "date": "2026-06-08"}}
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
         lambda cities: [_obs(pm25=150.0)],
@@ -88,7 +89,7 @@ def test_run_air_quality_tier_dedup_no_refire(bot_state, monkeypatch):
 def test_run_air_quality_tier_upgrade_fires(bot_state, monkeypatch):
     from src.orchestrator.sources.air_quality import run_air_quality
 
-    bot_state["air_quality_pm25_tiers"] = {"lahore": {"tier": 1, "date": "2026-06-08"}}
+    bot_state["air_quality_pm25_tiers"] = {places.event_location_key("Lahore", "Pakistan", 31.5, 74.3): {"tier": 1, "date": "2026-06-08"}}
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
         lambda cities: [_obs(pm25=250.0)],
@@ -98,13 +99,13 @@ def test_run_air_quality_tier_upgrade_fires(bot_state, monkeypatch):
 
     queue = bot_state["_triage_queue"]
     assert len(queue) == 1
-    assert queue[0].event_id == "pm25_lahore_2026-06-08_tier2"
+    assert queue[0].event_id == f"pm25_{places.event_location_key('Lahore', 'Pakistan', 31.5, 74.3)}_2026-06-08_tier2"
 
 
 def test_run_air_quality_new_day_resets_tier(bot_state, monkeypatch):
     from src.orchestrator.sources.air_quality import run_air_quality
 
-    bot_state["air_quality_pm25_tiers"] = {"lahore": {"tier": 1, "date": "2026-06-07"}}
+    bot_state["air_quality_pm25_tiers"] = {places.event_location_key("Lahore", "Pakistan", 31.5, 74.3): {"tier": 1, "date": "2026-06-07"}}
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
         lambda cities: [_obs(pm25=150.0)],
@@ -118,7 +119,7 @@ def test_run_air_quality_new_day_resets_tier(bot_state, monkeypatch):
 def test_run_air_quality_is_duplicate_guard(bot_state, monkeypatch):
     from src.orchestrator.sources.air_quality import run_air_quality
 
-    bot_state["posted_events"] = ["pm25_lahore_2026-06-08_tier1"]
+    bot_state["posted_events"] = [f"pm25_{places.event_location_key('Lahore', 'Pakistan', 31.5, 74.3)}_2026-06-08_tier1"]
     monkeypatch.setattr(
         "src.orchestrator.sources.air_quality.air_quality.fetch_batch_air_quality",
         lambda cities: [_obs(pm25=150.0)],
@@ -178,7 +179,7 @@ def test_run_air_quality_tier_state_written_on_success(bot_state, monkeypatch):
     assert candidate.on_draft_success is not None
     candidate.on_draft_success()
     assert bot_state["air_quality_pm25_tiers"] == {
-        "lahore": {"tier": 1, "date": "2026-06-08"}
+        places.event_location_key("Lahore", "Pakistan", 31.5, 74.3): {"tier": 1, "date": "2026-06-08"}
     }
 
 
@@ -220,8 +221,8 @@ def test_multi_city_tier_state_each_recorded(bot_state, monkeypatch):
         assert candidate.on_draft_success is not None
         candidate.on_draft_success()
     assert bot_state["air_quality_pm25_tiers"] == {
-        "lahore": {"tier": 1, "date": "2026-06-08"},
-        "delhi": {"tier": 2, "date": "2026-06-08"},
+        places.event_location_key("Lahore", "Pakistan", 31.5, 74.3): {"tier": 1, "date": "2026-06-08"},
+        places.event_location_key("Delhi", "India", 31.5, 74.3): {"tier": 2, "date": "2026-06-08"},
     }
 
 

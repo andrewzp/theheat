@@ -1219,7 +1219,8 @@ class TestSqliteBackend:
             db_path = f"{tmpdir}/theheat.sqlite"
             sample = {
                 **DEFAULT_STATE,
-                "last_hot10": {"date": "2026-04-08", "cities": ["Phoenix", "Miami"]},
+                "last_hot10": {"date": "2026-04-08", "cities": ["Phoenix", "Miami"],
+                               "place_ids": ["pl0317", "pl0276"]},
                 "posted_events": ["event_1"],
                 "drafts": [{"id": "draft_1", "text": "hello", "status": "pending", "type": "hot10"}],
                 "run_history": [{"id": "run_1", "mode": "alerts", "status": "success", "sources": []}],
@@ -1236,6 +1237,7 @@ class TestSqliteBackend:
                 loaded = read_state()
 
             assert loaded["last_hot10"]["cities"] == ["Phoenix", "Miami"]
+            assert loaded["last_hot10"]["place_ids"] == ["pl0317", "pl0276"]
             assert loaded["posted_events"] == ["event_1"]
             assert loaded["drafts"][0]["id"] == "draft_1"
             assert loaded["run_history"][0]["id"] == "run_1"

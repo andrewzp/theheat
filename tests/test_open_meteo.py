@@ -1,3 +1,4 @@
+from src.data import places
 """Tests for Open-Meteo data fetching and anomaly calculation."""
 
 import responses
@@ -45,14 +46,14 @@ class TestComputeAnomalies:
 
     def test_positive_anomaly(self):
         temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 45.0)]
-        normals = {"Phoenix": {4: 30.0}}  # April normal
+        normals = {places.event_location_key("Phoenix", "US", 33.45, -112.07): {4: 30.0}}  # April normal
         result = compute_anomalies(temps, normals)
         assert len(result) == 1
         assert result[0].anomaly_c == 15.0
 
     def test_negative_anomaly(self):
         temps = [CityTemp("Phoenix", "US", 33.45, -112.07, 25.0)]
-        normals = {"Phoenix": {4: 30.0}}
+        normals = {places.event_location_key("Phoenix", "US", 33.45, -112.07): {4: 30.0}}
         result = compute_anomalies(temps, normals)
         assert len(result) == 1
         assert result[0].anomaly_c == -5.0
@@ -65,13 +66,13 @@ class TestComputeAnomalies:
 
     def test_extreme_anomaly_filtered(self):
         temps = [CityTemp("Broken", "XX", 0.0, 0.0, 80.0)]
-        normals = {"Broken": {4: 20.0}}  # 60C anomaly = data error
+        normals = {places.event_location_key("Broken", "XX", 0, 0): {4: 20.0}}  # 60C anomaly = data error
         result = compute_anomalies(temps, normals, max_anomaly_c=30.0)
         assert len(result) == 0
 
     def test_boundary_anomaly_passes(self):
         temps = [CityTemp("Hot", "XX", 0.0, 0.0, 50.0)]
-        normals = {"Hot": {4: 20.0}}  # 30C anomaly = exactly at boundary
+        normals = {places.event_location_key("Hot", "XX", 0, 0): {4: 20.0}}  # 30C anomaly = exactly at boundary
         result = compute_anomalies(temps, normals, max_anomaly_c=30.0)
         assert len(result) == 1
 
@@ -327,6 +328,7 @@ class TestDetectCountryRecords:
 
     def _bundle(self, city: str, country: str, today_max: float, archive_max: float, archive_year: int = 2018):
         return ExtremeSignalBundle(
+            lat=0, lon=0,
             city=city,
             country=country,
             today_max_c=today_max,
@@ -430,9 +432,11 @@ def test_fetch_forecasts_batch_maps_cities():
     responses.add(responses.GET, "https://api.open-meteo.com/v1/forecast",
         json=[{"daily": {"temperature_2m_max": [44.0], "temperature_2m_min": [20.0], "wet_bulb_temperature_2m_max": [26.0]}},
               {"daily": {"temperature_2m_max": [39.0], "temperature_2m_min": [18.0], "wet_bulb_temperature_2m_max": [24.0]}}], status=200)
-    cities = [{"city": "Madrid", "lat": "40.4", "lon": "-3.7"}, {"city": "Lyon", "lat": "45.7", "lon": "4.8"}]
+    cities = [{"city": "Madrid", "country": "Spain", "lat": "40.4", "lon": "-3.7"},
+              {"city": "Lyon", "country": "France", "lat": "45.7", "lon": "4.8"}]
     out = _open_meteo_module.fetch_forecasts_batch(cities)
-    assert out["Madrid"]["max_c"] == 44.0 and out["Lyon"]["min_c"] == 18.0
+    # keyed by "<city>|<country>" (world_key) so same-name cities don't collide
+    assert out[places.cache_key("Madrid", "Spain", 40.4, -3.7)]["max_c"] == 44.0 and out[places.cache_key("Lyon", "France", 45.7, 4.8)]["min_c"] == 18.0
 
 
 @responses.activate

@@ -22,6 +22,7 @@ import requests
 
 from src.data._freshness import assert_freshness, newest_freshness_date
 from src.data._http import fetch_with_retry
+from src.data.places import event_location_key
 
 AQ_URL = "https://air-quality-api.open-meteo.com/v1/air-quality"
 
@@ -264,6 +265,8 @@ def _fetch_chunk(
         return out, False, None, None
 
     location_list = payload if isinstance(payload, list) else [payload]
+    if len(location_list) != len(chunk):
+        return out, False, None, None  # Cannot assign an incomplete positional batch safely.
     for offset, loc_data in enumerate(location_list):
         if offset >= len(chunk) or not isinstance(loc_data, dict):
             break
@@ -339,7 +342,7 @@ def detect_pm25_hazard(obs: CityAirQuality) -> PM25HazardEvent | None:
     tier = _tier(obs.pm25_24h_mean, PM25_TIERS)
     if tier is None:
         return None
-    slug = _city_slug(obs.city)
+    slug = event_location_key(obs.city, obs.country, obs.lat, obs.lon)
     return PM25HazardEvent(
         city=obs.city,
         country=obs.country,
@@ -361,7 +364,7 @@ def detect_dust_event(obs: CityAirQuality) -> DustEvent | None:
     tier = _tier(obs.dust_daily_max, DUST_TIERS)
     if tier is None:
         return None
-    slug = _city_slug(obs.city)
+    slug = event_location_key(obs.city, obs.country, obs.lat, obs.lon)
     # Co-measured PM10 anchor, pre-rounded here so the writer never divides
     # (the value_rounded_c pattern). None-safe: a cycle with no pm10 series
     # still mints the event, just without the WHO anchor.
