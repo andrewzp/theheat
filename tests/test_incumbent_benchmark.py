@@ -17,18 +17,32 @@ def encoded(value):
 
 @pytest.fixture
 def inputs(tmp_path, monkeypatch):
-    snapshot = b'{"drafts":[],"shipped_tweets":[]}\n'
+    source = {"drafts": [], "publish_ledger": {}, "memory": {"shipped_tweets": []}}
     rows = []
     for index, evidence in enumerate(sorted(incumbent.PUBLICATION_CLASSES), 1):
         receipt = evidence == "x_receipt"
         rows.append({
             "audit_id": f"T{index:02d}", "text": f"Synthetic copy {index}: 35°C.\n",
+            "event_id": f"event_{index}", "posted_at": "2026-07-01T12:00:00Z",
             "publication_evidence": evidence, "tweet_id": "123456" if receipt else None,
             "url": "https://x.com/i/status/123456" if receipt else "",
-            "source_snapshot_sha256": hashlib.sha256(snapshot).hexdigest(),
             "live_x_check": "individual_post" if receipt else "not_checked",
             "public_views_2026_09_08": 12 if receipt else None,
         })
+        if evidence == "generation_memory_only_publication_unverified":
+            source["memory"]["shipped_tweets"].append({
+                "event_id": f"event_{index}", "tweet_text": rows[-1]["text"],
+                "shipped_at": rows[-1]["posted_at"],
+            })
+            rows[-1]["posted_at"] = None
+        else:
+            source["drafts"].append({"event_id": f"event_{index}", "text": rows[-1]["text"],
+                                     "status": "posted", "posted_at": rows[-1]["posted_at"]})
+        if receipt:
+            source["publish_ledger"][f"event_{index}"] = {"tweet_id": "123456"}
+    snapshot = encoded(source)
+    for row in rows:
+        row["source_snapshot_sha256"] = hashlib.sha256(snapshot).hexdigest()
     labels = {"schema_version": 1, "cases": [{
         "case_id": "synthetic_forecast", "audit_ids": ["T01"],
         "verdict": "confirmed_specific_defect", "finding": "Wrong evidence class.",
@@ -146,6 +160,53 @@ def test_receipt_url_cannot_point_to_a_different_post(inputs):
     rows = json.loads(inputs["corpus"].read_text())
     rows[-1]["url"] = "https://x.com/i/status/999999"
     with pytest.raises(ValueError, match="URL"):
+        incumbent.validate_corpus(encoded(rows), inputs["snapshot"].read_bytes())
+
+
+@pytest.mark.parametrize("change", [
+    {"text": "Invented exact text"}, {"event_id": "unrelated_event"},
+    {"tweet_id": "999999", "url": "https://x.com/i/status/999999"},
+    {"posted_at": "2026-07-02T12:00:00Z"},
+])
+def test_hash_match_cannot_legitimize_invented_source_claims(inputs, change):
+    rows = json.loads(inputs["corpus"].read_text())
+    rows[-1].update(change)
+    with pytest.raises(ValueError, match="join original source"):
+        incumbent.validate_corpus(encoded(rows), inputs["snapshot"].read_bytes())
+
+
+@pytest.mark.parametrize("change", ["empty", "approved", "receipt_removed"])
+def test_original_source_must_establish_publication(inputs, change):
+    rows = json.loads(inputs["corpus"].read_text())
+    source = json.loads(inputs["snapshot"].read_text())
+    if change == "empty":
+        source = {"drafts": [], "publish_ledger": {}, "memory": {"shipped_tweets": []}}
+    elif change == "approved":
+        source["drafts"][-1]["status"] = "approved"
+    else:
+        source["publish_ledger"] = {}
+    snapshot = encoded(source)
+    for row in rows:
+        row["source_snapshot_sha256"] = hashlib.sha256(snapshot).hexdigest()
+    with pytest.raises(ValueError, match="join original source"):
+        incumbent.validate_corpus(encoded(rows), snapshot)
+
+
+@pytest.mark.parametrize("number", ["1e999", "-1e999", "NaN", "Infinity", "-Infinity"])
+@pytest.mark.parametrize("document", ["corpus", "snapshot", "cases"])
+def test_nonfinite_values_fail_in_every_input_document(inputs, number, document):
+    data = inputs[document].read_bytes()
+    # Add an otherwise unused measurement; validation must inspect all JSON.
+    data = data.replace(b"{", b'{"unused_measurement":' + number.encode() + b",", 1)
+    inputs[document].write_bytes(data)
+    with pytest.raises(ValueError, match="Non-finite"):
+        incumbent.freeze(**inputs)
+
+
+def test_generation_time_cannot_become_publication_time(inputs):
+    rows = json.loads(inputs["corpus"].read_text())
+    rows[0]["posted_at"] = "2026-07-01T12:00:00Z"
+    with pytest.raises(ValueError, match="Timestamp"):
         incumbent.validate_corpus(encoded(rows), inputs["snapshot"].read_bytes())
 
 

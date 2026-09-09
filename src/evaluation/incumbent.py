@@ -11,6 +11,7 @@ from collections import Counter
 from datetime import UTC, datetime
 import hashlib
 import json
+import math
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
@@ -51,7 +52,14 @@ def _json(data: bytes):
             result[key] = value
         return result
 
-    return json.loads(data, parse_constant=reject_constant, object_pairs_hook=unique_keys)
+    def finite_float(value):
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError(f"Non-finite JSON number: {value}")
+        return parsed
+
+    return json.loads(data, parse_constant=reject_constant, parse_float=finite_float,
+                      object_pairs_hook=unique_keys)
 
 
 def _encode(value) -> bytes:
@@ -67,12 +75,49 @@ def _safe_path(name: str) -> str:
     return name
 
 
+def _validate_source_join(row: dict, snapshot: dict) -> None:
+    """A matching snapshot hash is insufficient: join the claimed source row."""
+    drafts, ledger, memory = snapshot.get("drafts"), snapshot.get("publish_ledger"), snapshot.get("memory")
+    if not isinstance(drafts, list) or not isinstance(ledger, dict) or not isinstance(memory, dict):
+        raise ValueError("Snapshot lacks the original draft, receipt or memory collections")
+    shipped = memory.get("shipped_tweets")
+    if not isinstance(shipped, list):
+        raise ValueError("Snapshot lacks the original generation-memory collection")
+    event = row.get("event_id")
+    if not isinstance(event, str) or not event:
+        raise ValueError("Corpus row has no source event identity")
+    posted = [draft for draft in drafts if isinstance(draft, dict)
+              and draft.get("event_id") == event and draft.get("text") == row["text"]
+              and draft.get("status") == "posted"]
+    remembered = [item for item in shipped if isinstance(item, dict)
+                  and item.get("event_id") == event and item.get("tweet_text") == row["text"]]
+    receipts = {draft.get("tweet_id") for draft in posted if draft.get("tweet_id")}
+    ledger_row = ledger.get(event)
+    if isinstance(ledger_row, dict) and ledger_row.get("tweet_id"):
+        receipts.add(ledger_row["tweet_id"])
+    evidence = row["publication_evidence"]
+    if evidence == "x_receipt":
+        valid = bool(posted) and row["tweet_id"] in receipts
+    elif evidence == "posted_state_no_receipt":
+        valid = bool(posted) and not receipts
+    else:
+        valid = bool(remembered) and not posted and not receipts
+    if not valid:
+        raise ValueError(f"Text/event/publication class does not join original source: {row['audit_id']}")
+    # A generation-memory time is not a publication time. Keep the null in the
+    # normalized corpus; the original memory timestamp stays in the snapshot.
+    source_times = {draft.get("posted_at") for draft in posted} if posted else {None}
+    if row.get("posted_at") not in source_times:
+        raise ValueError(f"Timestamp does not join original source: {row['audit_id']}")
+
+
 def validate_corpus(data: bytes, snapshot: bytes) -> dict:
     """Validate archive evidence classes, preserving the original bytes separately."""
     rows = _json(data)
     if not isinstance(rows, list) or not rows:
         raise ValueError("Corpus must be a nonempty list")
-    if not isinstance(_json(snapshot), dict):
+    source = _json(snapshot)
+    if not isinstance(source, dict):
         raise ValueError("Source state snapshot must be an object")
     snapshot_hash = _hash(snapshot)
     ids, receipt_ids, texts = set(), set(), set()
@@ -123,6 +168,7 @@ def validate_corpus(data: bytes, snapshot: bytes) -> dict:
             if type(views) is not int or views < 0 or check != "individual_post":
                 raise ValueError(f"Invalid selected public-view observation: {audit_id}")
             public_view_samples += 1
+        _validate_source_join(row, source)
         counts[evidence] += 1
     return {
         "texts": len(rows), "publication_classes": dict(sorted(counts.items())),
