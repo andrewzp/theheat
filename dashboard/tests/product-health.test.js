@@ -7,6 +7,15 @@ const now = Date.parse("2026-09-08T18:00:00Z")
 const build = (state) => buildProductHealth({ drafts: [], publish_ledger: {}, ...state }, { now })
 const post = (tweet_id, posted_at = "2026-09-07T12:00:00Z") => ({ id: `d-${tweet_id}`, status: "posted", tweet_id, posted_at })
 
+test("conflicting metric samples and empty partial lookups do not appear recovered", () => {
+  const state = { drafts: [post("one")], tweet_metrics: {
+    one: { at: "2026-09-08T12:00:00Z", likes: 2, retweets: 0, replies: 0, latest_sample_conflict: true },
+  } }
+  assert.deepEqual(build(state).metrics.totals, { likes: null, retweets: null, replies: null })
+  state.source_health = { twitter_metrics: { runs: [{ ts: "2026-09-08T12:00:00Z", status: "partial_failure", error: "No usable metric counts" }] } }
+  assert.equal(build(state).metrics.status, "unavailable")
+})
+
 test("legacy state and green workflows do not imply a working product", () => {
   const result = buildProductHealth({ run_history: [{ ended_at: "2026-09-08T17:59:00Z", status: "success", sources: [{ source: "weather", status: "success" }] }] }, { now })
   assert.equal(result.generated_at, "2026-09-08T18:00:00.000Z")

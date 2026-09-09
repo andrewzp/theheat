@@ -178,3 +178,20 @@ def test_future_sqlite_metadata_fails_closed_in_both_runtimes(tmp_path):
         assert write_state({"drafts": []}) is False
     with sqlite3.connect(db_path) as db:
         assert db.execute("SELECT value_json FROM metadata WHERE key='future_field'").fetchone()[0] == '{"receipt":"do not erase"}'
+
+
+def test_metric_samples_survive_real_python_dashboard_write_cycle(tmp_path):
+    from src.data.metric_history import append_sample
+    from src.state import _merge_state
+    source = populated_state()
+    receipt_state = {"publish_ledger": {"event": {"tweet_id": "123", "at": "2026-09-07T00:00:00Z"}}}
+    first = append_sample(None, tweet_id="123", counts={"likes": 0}, sampled_at=NOW, state=receipt_state)
+    second = append_sample(None, tweet_id="123", counts={"likes": 5}, sampled_at=NOW + timedelta(days=1), state=receipt_state)
+    source["tweet_metrics"] = _merge_state({"tweet_metrics": {"123": first}}, {"tweet_metrics": {"123": second}})["tweet_metrics"]
+    assert len(source["tweet_metrics"]["123"]["samples"]) == 2
+    db = tmp_path / "samples.sqlite"
+    assert sqlite_store.write_state(str(db), source)
+    node_store(db, "edit")
+    node_store(db, "write", {"drafts": []})
+    loaded = sqlite_store.read_state(str(db), DEFAULT_STATE)
+    assert loaded["tweet_metrics"] == source["tweet_metrics"]

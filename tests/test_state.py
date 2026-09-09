@@ -497,12 +497,18 @@ class TestMergeStateContract:
             },
         )
 
-        assert merged["tweet_metrics"]["tweet_1"] == {
+        latest = merged["tweet_metrics"]["tweet_1"]
+        assert {key: latest[key] for key in ("at", "likes", "retweets", "replies")} == {
             "at": "2026-06-12T12:00:00Z",
             "likes": 4,
             "retweets": 5,
             "replies": 6,
         }
+        assert sorted(latest["legacy_rows"].values(), key=lambda row: row["at"]) == [
+            {"at": "2026-06-12T10:00:00Z", "likes": 1, "retweets": 2, "replies": 3},
+            {"at": "2026-06-12T12:00:00Z", "likes": 4, "retweets": 5, "replies": 6},
+        ]
+        assert latest["latest_sample_conflict"] is False
         assert merged["tweet_metrics"]["tweet_2"]["likes"] == 7
 
     # --- Strategy regressions locking the Codex adversarial findings (rev 2 spec).

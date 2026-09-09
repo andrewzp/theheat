@@ -21,6 +21,7 @@ from src.state_schema import (
     SynthesisComponents,
 )
 from src.storage import sqlite_store
+from src.data.metric_history import merge_metric_rows
 from src.two_bot.json_utils import json_default
 from src.editorial.publication import automatic_approval_allowed, merge_publication_control
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
@@ -1056,7 +1057,7 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
 
 
 def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
-    """Per-tweet metrics merge: keep the row sampled at the newest timestamp."""
+    """Keep latest projection and every append-only metric observation."""
 
     base = base if isinstance(base, dict) else {}
     nxt = nxt if isinstance(nxt, dict) else {}
@@ -1070,9 +1071,7 @@ def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
         if not isinstance(b, dict):
             out[tweet_id] = deepcopy(a)
             continue
-        a_ts = _parse_state_timestamp(str(a.get("at") or ""))
-        b_ts = _parse_state_timestamp(str(b.get("at") or ""))
-        out[tweet_id] = deepcopy(a if a_ts >= b_ts else b)
+        out[tweet_id] = merge_metric_rows(a, b)
     return out
 
 

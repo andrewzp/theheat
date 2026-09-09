@@ -493,6 +493,21 @@
       "tweet_metrics": {
         "tweet_1": {
           "at": "2026-06-12T12:00:00Z",
+          "latest_sample_conflict": false,
+          "legacy_rows": {
+            "1e616d3212abd6ddffd1d6ddce44a3817d184eeeb56b13b9c9b276fb8e165336": {
+              "at": "2026-06-12T10:00:00Z",
+              "likes": 1,
+              "replies": 3,
+              "retweets": 2
+            },
+            "dc975e6750572719ff1eee1a7619c6eabef548fb8c34dd77e2cc653dd3796410": {
+              "at": "2026-06-12T12:00:00Z",
+              "likes": 4,
+              "replies": 6,
+              "retweets": 5
+            }
+          },
           "likes": 4,
           "replies": 6,
           "retweets": 5

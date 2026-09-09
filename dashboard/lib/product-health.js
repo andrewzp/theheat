@@ -167,7 +167,7 @@ function metricsHealth(state, posts, sources, now) {
   const unknownEligibility = posts.filter((post) => post.collector_supported && post.eligibility_time === null).length
   const sampled = eligible.map((post) => {
     const row = object(state.tweet_metrics) ? state.tweet_metrics[post.tweet_id] : null
-    const time = timestamp(row?.at, now)
+    const time = row?.latest_sample_conflict === true ? null : timestamp(row?.at, now)
     return { time, values: Object.fromEntries(METRIC_FIELDS.map((field) => [field, time === null ? null : count(row?.[field])])) }
   })
   const complete = sampled.filter((row) => METRIC_FIELDS.every((field) => row.values[field] !== null)).length
@@ -175,7 +175,7 @@ function metricsHealth(state, posts, sources, now) {
   const sampleDates = sampled.filter((row) => Object.values(row.values).some((value) => value !== null)).map((row) => row.time)
   const lastSample = sampleDates.length ? Math.max(...sampleDates) : null
   const collector = sources.find((row) => row.source === "twitter_metrics")
-  const failedAfterSample = collector && (collector.status === "failed" || (collector.status === "skipped" && /credential|access|auth/i.test(collector.note || collector.error || ""))) && (lastSample === null || collector.time >= lastSample)
+  const failedAfterSample = collector && (["failed", "partial_failure"].includes(collector.status) || (collector.status === "skipped" && /credential|access|auth/i.test(collector.note || collector.error || ""))) && (lastSample === null || collector.time >= lastSample)
   let status = "unknown"
   if (!inventoryKnown) status = "unknown"
   else if (!eligible.length) status = unknownEligibility ? "unknown" : "inactive"
@@ -192,7 +192,7 @@ function metricsHealth(state, posts, sources, now) {
     last_sample_at: lastSample === null ? null : new Date(lastSample).toISOString(),
     totals: Object.fromEntries(METRIC_FIELDS.map((field) => [field, inventoryKnown && sampled.length && sampled.every((row) => row.values[field] !== null) ? sampled.reduce((sum, row) => sum + row.values[field], 0) : null])),
     last_collector: collector ? { at: new Date(collector.time).toISOString(), status: collector.status ?? null, error: collector.error ?? null, note: collector.note ?? null } : null,
-    notes: ["Inactive means no retained receipt-backed post is eligible for the collector's 30-day window; it requires present draft and ledger collections and does not prove credentials or collection work. Missing collections or undated receipts have unknown eligibility.", "Missing fields remain null; recorded zero is data. Counts and totals cover eligible retained receipts only, not the whole account. Old stored metrics do not establish current collection. Samples are the latest retained snapshot per post, not post-age performance curves or evidence of causal lift."],
+    notes: ["Inactive means no retained receipt-backed post is eligible for the collector's 30-day window; it requires present draft and ledger collections and does not prove credentials or collection work. Missing collections or undated receipts have unknown eligibility.", "Missing or conflicting latest fields remain null; recorded zero is data. Totals use the latest unconflicted snapshot of eligible retained receipts only. New samples preserve collection time and post age when the platform creation time is available; historical samples are not yet presented here. Old stored metrics do not establish current collection, a fixed-age comparison or causal lift."],
   }
 }
 

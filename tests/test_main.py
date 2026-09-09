@@ -1771,12 +1771,19 @@ class TestTwitterMetricsIngestion:
 
         assert len(captured["tweet_ids"]) == 50
         assert captured["tweet_ids"][:3] == ["tweet_0", "tweet_1", "tweet_2"]
-        assert state["tweet_metrics"]["tweet_0"] == {
+        result = state["tweet_metrics"]["tweet_0"]
+        assert {key: result[key] for key in ("at", "likes", "retweets", "replies")} == {
             "at": "2026-06-12T12:00:00Z",
             "likes": 0,
             "retweets": 1,
             "replies": 2,
         }
+        assert len(result["samples"]) == 1
+        observation = next(iter(result["samples"].values()))
+        assert observation["post_age_seconds"] is None
+        assert observation["receipt_age_seconds"] == 0
+        assert observation["receipt_time_status"] == "proxy"
+        assert observation["counts"]["impressions"] is None
         assert current_run["sources"][-1]["source"] == "twitter_metrics"
         assert current_run["sources"][-1]["status"] == "success"
         assert current_run["sources"][-1]["observed"] == 50
