@@ -85,6 +85,15 @@ def resolve_place(city: str, country: str, lat=None, lon=None, *, place_id: str 
     an unregistered identity, not an assumed same-city match. A known ID permits
     a deliberate point revision. Unregistered points remain coordinate-specific.
     """
+    if not isinstance(place_id, str):
+        raise ValueError("Invalid place ID")
+    if place_id.startswith("ux"):
+        # Runtime inventories also contain deterministic unregistered points.
+        # Recompute instead of treating their ID as a registry lookup or trusting it.
+        computed = resolve_place(city, country, lat, lon)
+        if computed["place_id"] != place_id:
+            raise ValueError("Unregistered place ID conflicts with supplied geography")
+        return computed
     matches = [
         r
         for r in registry()
@@ -213,8 +222,34 @@ def draft_place_id(draft: dict) -> str:
     )
 
 
+def _country_event(event_id: str):
+    return re.fullmatch(
+        r"(country_(?:high|low)_|gpm_precip_country_)([A-Za-z]{2})(_\d{4}-\d{2}-\d{2})",
+        event_id,
+    )
+
+
 def legacy_event_candidates(event_id: str) -> set[str]:
     """Known old display-name IDs, for evidence-aware migration containment."""
+    country_event = _country_event(event_id)
+    if country_event:
+        prefix, code, suffix = country_event.groups()
+        # Only declared country-label aliases qualify. In particular, Hong Kong's
+        # former China-labelled row is not evidence that a China aggregate was HK.
+        labels = {
+            alias["country"]
+            for row in registry()
+            for alias in [row, *row["aliases"]]
+            if country_key(alias["country"]) == code.upper()
+        }
+        slug = lambda value: re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
+        variants = {
+            prefix
+            + (slug(label) if prefix.startswith("gpm_") else label.replace(" ", "_"))
+            + suffix
+            for label in labels
+        }
+        return variants - {event_id}
     ident = event_identity(event_id)
     row = next((r for r in registry() if r["place_id"] == ident.get("place_id")), None)
     if not row:
@@ -234,26 +269,60 @@ def legacy_event_candidates(event_id: str) -> set[str]:
 
 
 def legacy_publication_status(state: Mapping, event_id: str) -> str:
-    """Return duplicate/ambiguous/clear without rewriting historical records.
+    """Return duplicate/ambiguous/unresolved/clear without modifying history.
 
-    A bare ID without attributable retained evidence contains the new candidate
-    for manual identity review; it never asserts both places were published.
+    A confirmed but unattributed old publication requires manual identity review.
+    Any uncertain legacy attempt blocks publication, including a manual send under
+    a newly canonicalized ID. Identity migration cannot bypass P02 idempotency.
     """
     variants = legacy_event_candidates(event_id)
-    recorded = variants & set(state.get("posted_events") or [])
-    if not recorded:
+    if not variants:
         return "clear"
-    target = event_identity(event_id).get("place_id")
-    unresolved = set(recorded)
-    for draft in state.get("drafts") or []:
-        if draft.get("status") != "posted" or draft.get("event_id") not in recorded:
+    recorded = variants & set(state.get("posted_events") or [])
+    ledger = state.get("publish_ledger") or {}
+    if not isinstance(ledger, dict):
+        return "unresolved"
+
+    def uncertain(row):
+        if not isinstance(row, dict):
+            return True
+        conflicts = row.get("attempt_conflicts", [])
+        if not isinstance(conflicts, list) or any(uncertain(other) for other in conflicts):
+            return True
+        return not row.get("tweet_id") and row.get("phase") != "not_sent"
+
+    for alias in variants:
+        if alias not in ledger:
             continue
-        pid = draft_place_id(draft)
-        if pid:
-            unresolved.discard(draft["event_id"])
-            if pid == target:
-                return "duplicate"
-    return "ambiguous" if unresolved else "clear"
+        row = ledger[alias]
+        if uncertain(row):
+            return "unresolved"
+        if isinstance(row, dict) and row.get("tweet_id"):
+            recorded.add(alias)
+
+    target = event_identity(event_id).get("place_id")
+    attributable = set()
+    matching = False
+    for draft in state.get("drafts") or []:
+        if not isinstance(draft, dict) or draft.get("event_id") not in variants:
+            continue
+        if draft.get("publish_outcome") in ("submitted", "unknown") or (
+            draft.get("status") != "posted"
+            and draft.get("publish_outcome") not in ("not_sent", "confirmed")
+            and (draft.get("autoship_attempted") or draft.get("last_publish_attempt_at"))
+        ):
+            return "unresolved"
+        if draft.get("status") == "posted" or draft.get("tweet_id"):
+            recorded.add(draft["event_id"])
+            pid = draft_place_id(draft)
+            if pid:
+                attributable.add(draft["event_id"])
+                matching = matching or pid == target
+    if matching or (_country_event(event_id) and recorded):
+        # Country-only aggregate aliases have an unambiguous declared country
+        # mapping; city-only aliases still require retained structured evidence.
+        return "duplicate"
+    return "ambiguous" if recorded - attributable else "clear"
 
 
 def requires_identity_review(draft: dict) -> bool:
@@ -266,6 +335,10 @@ def requires_identity_review(draft: dict) -> bool:
     event_id = str(draft.get("event_id") or "")
     if event_identity(event_id):
         return False
+    if event_id.startswith(("country_high_", "country_low_", "gpm_precip_country_")):
+        return not bool(_country_event(event_id))
+    if event_id.startswith("gpm_precip_"):
+        return True
     if event_id.startswith("hot10_"):
         review = draft.get("review_context") or {}
         raw = ((review.get("two_bot") or {}).get("bundle") or {}).get("raw_signal_dump") or {}

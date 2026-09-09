@@ -54,8 +54,11 @@ def can_draft_candidate(bot_state: BotState, candidate) -> tuple[bool, str]:
 
     event_id = getattr(candidate, "event_id", "") or ""
     place_id = event_identity(event_id).get("place_id", "")
-    if legacy_publication_status(bot_state, event_id) == "duplicate":
+    history_status = legacy_publication_status(bot_state, event_id)
+    if history_status == "duplicate":
         return False, "duplicate_posted"
+    if history_status == "unresolved":
+        return False, "legacy_publish_unresolved"
     drafts = bot_state.get("drafts", []) or []
     if event_id and any(d.get("event_id") == event_id for d in drafts):
         return False, "duplicate_draft"
@@ -145,7 +148,7 @@ def save_draft(
     """
     place_id = event_identity(event_id).get("place_id", "")
     history_status = legacy_publication_status(bot_state, event_id)
-    if history_status == "duplicate":
+    if history_status in ("duplicate", "unresolved"):
         return False
     drafts = bot_state.setdefault("drafts", [])
 

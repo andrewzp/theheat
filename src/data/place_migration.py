@@ -15,6 +15,20 @@ def valid_cache_entry(key: str, row: dict) -> bool:
     identity = row.get("identity") or {}
     if not isinstance(identity, dict):
         return False
+    if not all(
+        isinstance(identity.get(field), str) and identity[field].strip()
+        for field in (
+            "source_product",
+            "place_id",
+            "sampling_point_id",
+            "country_code",
+            "city",
+            "country",
+        )
+    ):
+        return False
+    if any(isinstance(identity.get(field), bool) for field in ("lat", "lon")):
+        return False
     if identity.get("source_product") != places.CACHE_PRODUCT:
         return False
     try:
@@ -23,14 +37,14 @@ def valid_cache_entry(key: str, row: dict) -> bool:
             identity["country"],
             identity["lat"],
             identity["lon"],
-            place_id=identity["place_id"] if identity["place_id"].startswith("pl") else "",
+            place_id=identity["place_id"],
         )
         expected = places.cache_key(
             resolved["city"],
             resolved["country"],
             resolved["lat"],
             resolved["lon"],
-            place_id=resolved["place_id"] if resolved["place_id"].startswith("pl") else "",
+            place_id=resolved["place_id"],
         )
         return key == expected and all(
             identity.get(k) == resolved[k]
