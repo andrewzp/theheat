@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { validEditorialPolicy } from "./editorial-policy.js"
 import { configuredAutomaticPolicy } from "./publication-control.js"
 
 // Paired with src/editorial/revisions.py. This is a decision binding, not a lock.
@@ -72,17 +73,22 @@ function twoBot(draft) { return draft.review_context?.two_bot ?? {} }
 function checks(value) { return { fact_check: value.fact_check ?? null, critic: value.critic ?? null } }
 function checksPass(value) { return value.fact_check?.passed === true && value.critic?.passed === true }
 
-export function reviewIsCurrent(draft) {
+function policyMatches(binding, policy) {
+  try { return validEditorialPolicy(policy) && validEditorialPolicy(binding?.editorial_policy) && fingerprint(binding.editorial_policy) === fingerprint(policy) && binding.policy_sha256 === fingerprint(policy) } catch { return false }
+}
+
+export function reviewIsCurrent(draft, policy = null) {
   const binding = draft.review_binding
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
+  if (!policyMatches(binding, policy)) return false
   if (binding.kind === "human") return true
   if (binding.kind !== "model" || !checksPass(twoBot(draft))) return false
   try { return binding.checks_sha256 === fingerprint(checks(twoBot(draft))) } catch { return false }
 }
 
-export function approvalIsCurrent(draft, mode = null) {
+export function approvalIsCurrent(draft, mode = null, policy = null) {
   const binding = draft.approval_binding
-  if (!reviewIsCurrent(draft) || !bindingMatches(draft, binding)) return false
+  if (!reviewIsCurrent(draft, policy) || !bindingMatches(draft, binding) || !policyMatches(binding, policy)) return false
   if (!["manual", "auto"].includes(binding.mode) || (mode && binding.mode !== mode)) return false
   try { if (binding.decision_revision !== decisionRevision(draft)) return false } catch { return false }
   if ((binding.publish_intent_id ?? null) !== (draft.publish_intent_id ?? null)) return false
@@ -108,45 +114,46 @@ export function hasUnresolvedPublish(draft, state) {
   return !!(draft.autoship_attempted || draft.last_publish_attempt_at)
 }
 
-export function recordModelReview(draft) {
+export function recordModelReview(draft, policy = null) {
   revokeApproval(draft)
   const value = twoBot(draft)
   let proven = false
   try {
-    proven = checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
+    proven = validEditorialPolicy(policy) && value.reviewed_policy_sha256 === fingerprint(policy) && checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
       && Object.hasOwn(value, "bundle") && value.reviewed_bundle_sha256 === fingerprint(value.bundle)
   } catch { /* Invalid evidence cannot establish a review. */ }
   if (proven && !draft.revision_conflicts?.length) {
-    draft.review_binding = { ...draftIdentity(draft), kind: "model", reviewed_at: new Date().toISOString(), checks_sha256: fingerprint(checks(value)) }
+    draft.review_binding = { ...draftIdentity(draft), kind: "model", reviewed_at: new Date().toISOString(), checks_sha256: fingerprint(checks(value)), editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy) }
   } else delete draft.review_binding
   return draft
 }
 
-export function initializeRevision(draft) {
+export function initializeRevision(draft, policy = null) {
   if (!Object.hasOwn(draft, "content_revision")) draft.content_revision = 1
-  return recordModelReview(draft)
+  return recordModelReview(draft, policy)
 }
 
-export function recordHumanReview(draft) {
+export function recordHumanReview(draft, policy = null) {
   if (draft.revision_conflicts?.length) throw new Error("Resolve the conflicting revision before reviewing")
   if (typeof draft.text !== "string" || !draft.text.trim() || [...draft.text].length > 280) throw new Error("Invalid draft text")
+  if (!validEditorialPolicy(policy)) throw new Error("Editorial policy unverified; cannot establish a new review")
   draft.content_revision = Math.max(1, draftIdentity(draft).content_revision)
   revokeApproval(draft)
-  draft.review_binding = { ...draftIdentity(draft), kind: "human", reviewed_at: new Date().toISOString() }
+  draft.review_binding = { ...draftIdentity(draft), kind: "human", reviewed_at: new Date().toISOString(), editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy) }
   return draft
 }
 
-export function authorizeDraft(draft, mode, intentId = null, publicationEpoch = null) {
-  if (!reviewIsCurrent(draft)) throw new Error("This revision needs revalidation")
+export function authorizeDraft(draft, mode, intentId = null, publicationEpoch = null, policy = null) {
+  if (!reviewIsCurrent(draft, policy)) throw new Error("This revision needs revalidation")
   if (!["manual", "auto"].includes(mode)) throw new Error("Invalid approval mode")
   if (mode === "auto" && draft.review_binding.kind !== "model") throw new Error("Scheduling requires a current model review")
   if (mode === "auto") {
-    const policy = configuredAutomaticPolicy()
-    if (!policy.enabled || (publicationEpoch !== null && publicationEpoch !== policy.epoch)) throw new Error("Automatic publication is paused")
-    publicationEpoch = policy.epoch
+    const publication = configuredAutomaticPolicy()
+    if (!publication.enabled || (publicationEpoch !== null && publicationEpoch !== publication.epoch)) throw new Error("Automatic publication is paused")
+    publicationEpoch = publication.epoch
   }
   advanceDecision(draft)
-  draft.approval_binding = { ...draftIdentity(draft), decision_revision: draft.decision_revision, mode, authorized_at: new Date().toISOString() }
+  draft.approval_binding = { ...draftIdentity(draft), decision_revision: draft.decision_revision, mode, authorized_at: new Date().toISOString(), editorial_policy: structuredClone(policy), policy_sha256: fingerprint(policy) }
   if (mode === "auto") draft.approval_binding.publication_epoch = publicationEpoch
   if (intentId) {
     draft.approval_binding.publish_intent_id = intentId
@@ -184,7 +191,7 @@ export function invalidateText(draft, newText) {
   return draft
 }
 
-export function projectDraft(draft) {
-  const current = reviewIsCurrent(draft)
-  return { ...draft, revision_identity: { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }, review_status: draft.revision_conflicts?.length ? "conflict" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
+export function projectDraft(draft, policy = null) {
+  const current = reviewIsCurrent(draft, policy)
+  return { ...draft, revision_identity: { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }, review_status: draft.revision_conflicts?.length ? "conflict" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }

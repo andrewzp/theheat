@@ -382,3 +382,31 @@ def test_human_reviewed_revision_records_text_without_old_model_claims():
     assert state["memory"]["shipped_tweets"][0]["tweet_text"] == draft["text"]
     assert state["memory"]["used_peer_comparisons"] == []
     assert state["memory"]["used_framings"] == []
+
+
+def test_live_model_drift_overrules_saved_runtime_report_before_transport(external, monkeypatch):
+    from src.editorial.policy import current_editorial_policy
+    from src.two_bot import writer
+    storage, send = external
+    draft = _draft()
+    state = _state(draft)
+    state["run_history"] = [{"runtime_inventory": {"editorial_policy": current_editorial_policy()}}]
+    monkeypatch.setattr(writer, "WRITER_MODEL", writer.WRITER_MODEL + "-changed")
+    assert posting.post_approved(draft, state) == "failed"
+    send.assert_not_called()
+    storage.write_state.assert_not_called()
+
+
+def test_policy_change_during_intent_write_stops_transport(external, monkeypatch):
+    from src.two_bot import writer
+    storage, send = external
+    draft = _draft()
+    state = _state(draft)
+    def persisted(*args, **kwargs):
+        monkeypatch.setattr(writer, "WRITER_MODEL", writer.WRITER_MODEL + "-changed")
+        return True
+    storage.write_state.side_effect = persisted
+    assert posting.post_approved(draft, state) == "failed"
+    send.assert_not_called()
+    assert state["publish_ledger"][draft["event_id"]]["phase"] == "not_sent"
+    assert draft["publish_outcome"] == "not_sent"

@@ -1,3 +1,4 @@
+import { policy, runtimeRun } from "./helpers/review-policy.js"
 import test from "node:test"
 
 // Explicit policy for these mocked legacy release scenarios.
@@ -7,7 +8,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { authorizeDraft, approvalIsCurrent, draftIdentity, fingerprint, hasUnresolvedPublish,
   initializeRevision, invalidateText, projectDraft, recordHumanReview, recordModelReview, reviewIsCurrent, revokeApproval, textHash,
-} from "../lib/draft-revisions.js"
+} from "./helpers/review-policy.js"
 
 function reviewed() {
   const draft = { id: "d", event_id: "event", text: "40°C forecast", status: "pending", review_context: {
@@ -15,6 +16,7 @@ function reviewed() {
   } }
   const proof = draft.review_context.two_bot
   proof.reviewed_text_sha256 = textHash(draft.text)
+  proof.reviewed_policy_sha256 = fingerprint(policy)
   proof.reviewed_bundle_sha256 = fingerprint(proof.bundle)
   return initializeRevision(draft)
 }

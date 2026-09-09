@@ -941,3 +941,15 @@ def test_pipeline_critic_exception_records_pipeline_error(
     assert "Gemini 500" in result_out["kill_reason"]
     # No memory leakage on the failure path.
     assert state["memory"]["shipped_tweets"] == []
+
+
+def test_late_checked_response_cannot_acquire_policy_that_changed_during_generation(monkeypatch, mock_writer, mock_fact_check):
+    from src.two_bot import writer
+    def delayed(*args, **kwargs):
+        monkeypatch.setattr(writer, "WRITER_MODEL", writer.WRITER_MODEL + "-changed")
+        return WriterResult("Mali fire is 361 MW.", None, "plain_number", None, None, "test")
+    mock_writer.side_effect = delayed
+    mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok")
+    outcome = {}
+    assert generate_draft(_bundle(), _state_with_memory(), result_out=outcome) is None
+    assert outcome["kill_stage"] == "editorial_policy"

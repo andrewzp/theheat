@@ -117,9 +117,30 @@ def _checks_pass(two_bot: dict) -> bool:
     )
 
 
-def review_is_current(draft: dict) -> bool:
+_CURRENT_POLICY = object()
+
+
+def _editorial_policy(value=_CURRENT_POLICY):
+    from src.editorial.policy import current_editorial_policy, valid_policy
+    if value is _CURRENT_POLICY:
+        return current_editorial_policy()
+    return value if valid_policy(value) else None
+
+
+def _policy_matches(binding, policy):
+    from src.editorial.policy import valid_policy
+    try:
+        stored = binding.get("editorial_policy")
+        return valid_policy(policy) and valid_policy(stored) and fingerprint(stored) == fingerprint(policy) == binding.get("policy_sha256")
+    except (ValueError, TypeError, UnicodeError, OverflowError):
+        return False
+
+
+def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
     binding = draft.get("review_binding")
     if draft.get("revision_conflicts") or not isinstance(binding, dict) or not binding_matches(draft, binding):
+        return False
+    if not _policy_matches(binding, _editorial_policy(policy)):
         return False
     if binding.get("kind") == "human":
         return True
@@ -131,9 +152,10 @@ def review_is_current(draft: dict) -> bool:
         return False
 
 
-def approval_is_current(draft: dict, mode: str | None = None) -> bool:
+def approval_is_current(draft: dict, mode: str | None = None, *, policy=_CURRENT_POLICY) -> bool:
     binding = draft.get("approval_binding")
-    if not isinstance(binding, dict) or not review_is_current(draft) or not binding_matches(draft, binding):
+    policy = _editorial_policy(policy)
+    if not isinstance(binding, dict) or not review_is_current(draft, policy=policy) or not binding_matches(draft, binding) or not _policy_matches(binding, policy):
         return False
     if binding.get("mode") not in ("manual", "auto"):
         return False
@@ -186,12 +208,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def record_model_review(draft: dict) -> dict:
+def record_model_review(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
     revoke_approval(draft)
     two_bot = _two_bot(draft)
+    policy = _editorial_policy(policy)
     try:
         proven = (
-            _checks_pass(two_bot)
+            policy is not None
+            and two_bot.get("reviewed_policy_sha256") == fingerprint(policy)
+            and _checks_pass(two_bot)
             and two_bot.get("reviewed_text_sha256") == text_hash(draft.get("text", ""))
             and "bundle" in two_bot
             and two_bot.get("reviewed_bundle_sha256") == fingerprint(two_bot["bundle"])
@@ -202,6 +227,7 @@ def record_model_review(draft: dict) -> dict:
         draft["review_binding"] = {
             **draft_identity(draft), "kind": "model", "reviewed_at": _now(),
             "checks_sha256": fingerprint(_checks(two_bot)),
+            "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy),
         }
     else:
         draft.pop("review_binding", None)
@@ -213,15 +239,19 @@ def initialize_revision(draft: dict) -> dict:
     return record_model_review(draft)
 
 
-def record_human_review(draft: dict, *, at: str | None = None) -> dict:
+def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
     if draft.get("revision_conflicts"):
         raise ValueError("Resolve the conflicting revision before reviewing")
     text = draft.get("text")
     if not isinstance(text, str) or not text.strip() or len(text) > 280:
         raise ValueError("Invalid draft text")
+    policy = _editorial_policy(policy)
+    if policy is None:
+        raise ValueError("Editorial policy unverified; cannot establish a new review")
     draft["content_revision"] = max(1, draft_identity(draft)["content_revision"])
     revoke_approval(draft)
-    draft["review_binding"] = {**draft_identity(draft), "kind": "human", "reviewed_at": at if at is not None else _now()}
+    draft["review_binding"] = {**draft_identity(draft), "kind": "human", "reviewed_at": at if at is not None else _now(),
+                               "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy)}
     return draft
 
 
@@ -241,14 +271,15 @@ def authorize_draft(draft: dict, mode: str, intent_id: str | None = None, *, pub
 
 
 def bind_reviewed_revision(draft: dict, mode: str, *, at: str,
-                           intent_id: str | None = None, publication_epoch: str | None = None) -> dict:
+                           intent_id: str | None = None, publication_epoch: str | None = None, policy=_CURRENT_POLICY) -> dict:
     """Record a binding deterministically after the caller's authorization check.
 
     This is a domain transition, not permission to send a post. Runtime callers
     must use authorize_draft; a command authority supplies its verified policy
     and clock explicitly. Final publication still requires the sender's checks.
     """
-    if not review_is_current(draft):
+    policy = _editorial_policy(policy)
+    if not review_is_current(draft, policy=policy):
         raise ValueError("This revision needs revalidation")
     if mode not in ("manual", "auto"):
         raise ValueError("Invalid approval mode")
@@ -260,6 +291,7 @@ def bind_reviewed_revision(draft: dict, mode: str, *, at: str,
     draft["approval_binding"] = {
         **draft_identity(draft), "decision_revision": draft["decision_revision"],
         "mode": mode, "authorized_at": at,
+        "editorial_policy": deepcopy(policy), "policy_sha256": fingerprint(policy),
     }
     if mode == "auto":
         draft["approval_binding"]["publication_epoch"] = publication_epoch
@@ -304,10 +336,11 @@ def invalidate_text(draft: dict, new_text: str, *, at: str | None = None) -> dic
     return draft
 
 
-def project_draft(draft: dict) -> dict:
-    current = review_is_current(draft)
+def project_draft(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
+    policy = _editorial_policy(policy)
+    current = review_is_current(draft, policy=policy)
     return {
         **draft, "revision_identity": {**draft_identity(draft), "decision_revision": decision_revision(draft)},
-        "review_status": "conflict" if draft.get("revision_conflicts") else "passed" if current else "needs_revalidation",
+        "review_status": "conflict" if draft.get("revision_conflicts") else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
         "review_kind": draft.get("review_binding", {}).get("kind") if current else None,
     }

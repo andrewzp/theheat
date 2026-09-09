@@ -103,6 +103,11 @@ def decision_epoch() -> str:
         from src.two_bot import writer, critic, fact_check, pipeline
         from src.two_bot.prompts import writer_prompt, critic_prompt, fact_check_prompt
         from src.voice import safety
+        from src.editorial.policy import current_editorial_policy
+
+        editorial_policy = current_editorial_policy()
+        if editorial_policy is None:
+            return ""
 
         prompt_values = {
             module.__name__: {
@@ -143,6 +148,7 @@ def decision_epoch() -> str:
         )
         payload = {
             "policy": CACHE_POLICY_VERSION,
+            "editorial_policy": editorial_policy,
             "prompts": prompt_values,
             "policy_files": {
                 name: hashlib.sha256((root / name).read_bytes()).hexdigest()

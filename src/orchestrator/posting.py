@@ -273,6 +273,15 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
         return "failed"
 
     media_png, alt_text = _hot10_media_for_draft(snapshot)
+    # Storage/media work may outlive a configuration change. Recompute live
+    # policy immediately before transport; a stored runtime report cannot send.
+    if not approval_is_current(snapshot, mode):
+        row["phase"] = "not_sent"
+        draft["publish_outcome"] = "not_sent"
+        draft["post_error"] = "Editorial policy changed before transport; nothing sent. Review again."
+        draft.pop("autoship_attempted", None)
+        _touch_draft(draft)
+        return "failed"
     try:
         result = post_tweet(tweet_text, media_png=media_png, alt_text=alt_text)
     except Exception as exc:  # A lost response must never authorize a blind retry.

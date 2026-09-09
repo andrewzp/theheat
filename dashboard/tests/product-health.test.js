@@ -1,7 +1,8 @@
+import { policy, runtimeRun } from "./helpers/review-policy.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { buildProductHealth } from "../lib/product-health.js"
-import { recordHumanReview } from "../lib/draft-revisions.js"
+import { recordHumanReview } from "./helpers/review-policy.js"
 
 const now = Date.parse("2026-09-08T18:00:00Z")
 const build = (state) => buildProductHealth({ drafts: [], publish_ledger: {}, ...state }, { now })
@@ -74,7 +75,7 @@ test("review milestone verifies the current binding and excludes obsolete review
   const obsolete = structuredClone(current)
   Object.assign(obsolete, { id: "obsolete", text: "50°C forecast", created_at: "2026-09-08T12:00:00Z" })
   obsolete.review_binding.reviewed_at = "2026-09-08T13:00:00Z"
-  const result = build({ drafts: [current, obsolete] })
+  const result = build({ drafts: [current, obsolete], run_history: [runtimeRun("2026-09-08T17:00:00Z")] })
   assert.equal(result.milestones.draft_created.id, "obsolete")
   assert.equal(result.milestones.draft_reviewed.id, "current")
   assert.equal(result.milestones.draft_reviewed.review_kind, "human")

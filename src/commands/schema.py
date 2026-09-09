@@ -106,21 +106,25 @@ class DraftTarget:
                 "evidence_sha256": self.evidence_sha256}
 
 
-def _validate_payload(action: str, payload: Any) -> str:
+def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = False) -> str:
     if not isinstance(payload, dict):
         raise CommandError("invalid_payload", "Payload must be an object")
     required = {
         "edit_revision": {"text"}, "select_candidate": {"candidate_rank", "candidate_sha256"},
-        "record_review": {"confirmed", "reason"}, "approve_revision": {"reason"},
+        "record_review": {"confirmed", "reason", "expected_policy_sha256"}, "approve_revision": {"reason"},
         "schedule_revision": {"delay_minutes", "publication_epoch", "reason"},
         "cancel_approval": {"reason"}, "reject_revision": {"reason"}, "bulk_reject": {"reason"},
     }[action]
+    if action == "record_review" and allow_legacy_review and set(payload) == {"confirmed", "reason"}:
+        required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
     if set(payload) != required:
         raise CommandError("invalid_payload", "Payload fields do not match the action")
     if "text" in payload:
         _string(payload["text"], "Draft text", 280)
     if "reason" in payload:
         _string(payload["reason"], "Reason", 2000)
+    if "expected_policy_sha256" in payload and (not isinstance(payload["expected_policy_sha256"], str) or not _HEX.fullmatch(payload["expected_policy_sha256"])):
+        raise CommandError("editorial_policy_unverified", "Supply the exact policy fingerprint shown during review")
     if action == "record_review" and payload["confirmed"] is not True:
         raise CommandError("review_confirmation_required", "Confirm review against the exact source evidence")
     if action == "select_candidate" and (type(payload["candidate_rank"]) is not int or not 1 <= payload["candidate_rank"] <= 100):
@@ -149,7 +153,7 @@ class Command:
     schema_version: int = 1
 
     @classmethod
-    def from_request(cls, body: Any, principal: Principal, *, environment: str, now: datetime) -> Command:
+    def from_request(cls, body: Any, principal: Principal, *, environment: str, now: datetime, allow_legacy_review: bool = False) -> Command:
         """Reject authority fields in input; callers retain IDs/timestamps on retry."""
         keys = {"command_id", "action", "requested_at", "expires_at", "targets", "payload"}
         if not isinstance(body, dict) or set(body) != keys:
@@ -181,7 +185,7 @@ class Command:
         if len({row.draft_id for row in targets}) != len(targets):
             raise CommandError("invalid_targets", "Duplicate draft targets are not allowed")
         return cls(command_id, action, environment, principal.subject, principal.authentication_context,
-                   body["requested_at"], body["expires_at"], targets, _validate_payload(action, body["payload"]))
+                   body["requested_at"], body["expires_at"], targets, _validate_payload(action, body["payload"], allow_legacy_review=allow_legacy_review))
 
     @property
     def payload(self) -> dict:
@@ -214,7 +218,7 @@ class Command:
         principal = Principal(_string(row.get("actor_subject"), "Subject", 200), "publisher",
                               _string(row.get("authentication_context"), "Authentication context", 200))
         environment = _string(row.get("environment"), "Environment", 10)
-        parsed = cls.from_request(request, principal, environment=environment, now=utc_datetime(row.get("requested_at")))
+        parsed = cls.from_request(request, principal, environment=environment, now=utc_datetime(row.get("requested_at")), allow_legacy_review=True)
         if parsed.as_dict() != row:
             raise CommandError("invalid_journal", "Stored envelope contains unexpected fields")
         return parsed

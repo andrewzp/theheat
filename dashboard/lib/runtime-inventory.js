@@ -34,7 +34,7 @@ export function buildRuntimeConfig(state = {}, { now = Date.now() } = {}) {
     bot_git_sha: null, bot_version: null, state_backend: null,
     writer_model: null, writer_provider: null, fact_check_model: null,
     critic_model: null, safety_model: null, claim_extract_model: null,
-    flags: {}, credentials_present: {}, capabilities: {},
+    editorial_policy: null, flags: {}, credentials_present: {}, capabilities: {},
   }
   const history = Array.isArray(state?.run_history) ? state.run_history : []
   const latest = [...history].filter((run) => Number.isFinite(timestamp(run?.started_at)))
@@ -63,6 +63,7 @@ export function buildRuntimeConfig(state = {}, { now = Date.now() } = {}) {
     run_id: text(latest.id || latest.run_id), mode: text(snapshot.mode),
     bot_git_sha: sha(snapshot.git_sha), bot_version: text(snapshot.version),
     state_backend: text(snapshot.state_backend),
+    editorial_policy: snapshot.editorial_policy ?? null,
     writer_model: text(snapshot.models?.writer), writer_provider: text(snapshot.models?.writer_provider),
     fact_check_model: text(snapshot.models?.fact_check), critic_model: text(snapshot.models?.critic),
     safety_model: text(snapshot.models?.safety), claim_extract_model: text(snapshot.models?.claim_extract),

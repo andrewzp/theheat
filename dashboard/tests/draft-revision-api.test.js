@@ -1,3 +1,4 @@
+import { policy, runtimeRun } from "./helpers/review-policy.js"
 import test from "node:test"
 
 // Explicit policy for these mocked legacy release scenarios.
@@ -6,7 +7,7 @@ process.env.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH = "offline-test-release"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { importFresh } from "./helpers/import-fresh.js"
-import { authorizeDraft, draftIdentity, fingerprint, initializeRevision, invalidateText, recordHumanReview, reviewIsCurrent, textHash } from "../lib/draft-revisions.js"
+import { authorizeDraft, draftIdentity, fingerprint, initializeRevision, invalidateText, recordHumanReview, reviewIsCurrent, textHash } from "./helpers/review-policy.js"
 
 const malformedAttempts = JSON.parse(readFileSync(new URL("../../tests/fixtures/publication_uncertainty_contract.json", import.meta.url))).filter((example) => example.malformed)
 
@@ -23,13 +24,14 @@ function fixture(id = "draft_1") {
   }
   const proof = draft.review_context.two_bot
   proof.reviewed_text_sha256 = textHash(draft.text)
+  proof.reviewed_policy_sha256 = fingerprint(policy)
   proof.reviewed_bundle_sha256 = fingerprint(proof.bundle)
   return initializeRevision(draft)
 }
 
 async function withStore(drafts, run, options = {}) {
   Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_USERNAME: "reviewer", DASHBOARD_PASSWORD: "secret-pass", THEHEAT_STATE_BACKEND: "gist", THEHEAT_DB_PATH: "", GIST_ID: "gist_revision_test", GITHUB_TOKEN: "token_revision_test" })
-  let state = { drafts: structuredClone(drafts), publish_ledger: options.ledger || {}, errors: [], run_history: [{ started_at: new Date().toISOString(), runtime_inventory: { schema_version: 1, captured_at: new Date().toISOString(), flags: { automatic_publication_enabled: true, automatic_publication_epoch: "offline-test-release" } } }] }
+  let state = { drafts: structuredClone(drafts), publish_ledger: options.ledger || {}, errors: [], run_history: [{ started_at: new Date().toISOString(), runtime_inventory: { editorial_policy: structuredClone(policy), schema_version: 1, captured_at: new Date().toISOString(), flags: { automatic_publication_enabled: true, automatic_publication_epoch: "offline-test-release" } } }] }
   const dispatches = []
   let writes = 0
   const originalFetch = globalThis.fetch
@@ -105,7 +107,7 @@ test("legacy draft needs explicit human review; human review allows manual posti
   await withStore([original], async ({ post, state, dispatches }) => {
     assert.equal((await post(request(original, "approve"))).status, 409)
     assert.equal((await post(request(original, "review"))).status, 400)
-    const reviewed = await post(request(original, "review", { reviewConfirmed: true }))
+    const reviewed = await post(request(original, "review", { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy) }))
     assert.equal(reviewed.status, 200)
     assert.equal(reviewed.body.draft.review_kind, "human")
     const current = structuredClone(state().drafts[0])
@@ -140,7 +142,7 @@ test("changed evidence invalidates a stale acknowledgement even with unchanged t
   const changed = structuredClone(original)
   changed.review_context.two_bot.bundle.headline_value = 42
   await withStore([changed], async ({ post, writes }) => {
-    assert.equal((await post(request(original, "review", { reviewConfirmed: true }))).status, 409)
+    assert.equal((await post(request(original, "review", { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy) }))).status, 409)
     assert.equal(writes(), 0)
   })
 })
@@ -169,7 +171,7 @@ for (const example of malformedAttempts) {
       assert.equal((await response.json()).drafts[0].publish_blocked, true)
       for (const action of ["edit", "select_candidate", "review", "approve", "auto_approve", "cancel_auto_approve", "reject", "bulk_reject_below"]) {
         const result = await post(request(original, action, {
-          editedText: "Replacement text.", candidateRank: 1, reviewConfirmed: true,
+          editedText: "Replacement text.", candidateRank: 1, reviewConfirmed: true, expectedPolicySha256: fingerprint(policy),
           expectedRevisions: { [original.id]: expected(original) },
         }))
         assert.equal(result.status, 409, action)
@@ -321,6 +323,25 @@ test("invalid Unicode is rejected with 422 before an edit or candidate selection
       assert.equal(state().drafts[0].text, original.text)
       assert.equal(state().drafts[0].content_revision, original.content_revision)
       assert.equal(state().drafts[0].revision_history, undefined)
+    })
+  }
+})
+
+
+test("human confirmation cannot silently adopt a changed or unverified policy", async () => {
+  for (const mode of ["changed", "missing", "expired"]) {
+    const draft = fixture()
+    invalidateText(draft, "New text requiring human review.")
+    await withStore([draft], async ({ post, state, writes, dispatches }) => {
+      if (mode === "changed") state().run_history[0].runtime_inventory.editorial_policy.models.writer = "new-policy-model"
+      if (mode === "expired") state().run_history[0].runtime_inventory.captured_at = "2000-01-01T00:00:00Z"
+      const body = request(draft, "review", { reviewConfirmed: true, ...(mode === "missing" ? {} : { expectedPolicySha256: fingerprint(policy) }) })
+      const result = await post(body)
+      assert.equal(result.status, 409)
+      assert.match(result.body.code, /editorial_policy/)
+      assert.equal(writes(), 0)
+      assert.equal(dispatches.length, 0)
+      assert.equal(state().drafts[0].review_binding, undefined)
     })
   }
 })

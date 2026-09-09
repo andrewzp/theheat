@@ -14,7 +14,7 @@ export function draftReviewControls(draft) {
   const reviewed = draft?.review_status === "passed"
   return {
     canEdit: mutable,
-    canReview: mutable && pending && !conflict && !reviewed,
+    canReview: mutable && pending && !conflict && !reviewed && draft?.review_status !== "policy_unverified",
     canApprove: mutable && pending && reviewed,
     canSchedule: draft?.automatic_publication?.enabled === true && mutable && pending && reviewed && draft.review_kind === "model" && draft.approval_policy?.can_auto_approve !== false,
     needsReview: !reviewed,

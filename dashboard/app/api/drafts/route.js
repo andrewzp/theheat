@@ -1,3 +1,4 @@
+import { dashboardEditorialPolicy } from "../../../lib/editorial-policy.js"
 import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { readStateStore, updateDraftStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
@@ -53,8 +54,9 @@ function assertPending(draft) {
   if (draft.status !== "pending") fail("This draft is already awaiting publication. Cancel or edit it before approving again.", 409, "draft_not_pending")
 }
 
-function assertReviewed(draft, modelOnly = false) {
-  if (!reviewIsCurrent(draft)) fail("Review this exact version against its source evidence first.", 409, "review_required")
+function assertReviewed(draft, policy, modelOnly = false) {
+  if (!policy) fail("Editorial policy unverified. Wait for a fresh matching bot report before reviewing or approving.", 409, "editorial_policy_unverified")
+  if (!reviewIsCurrent(draft, policy)) fail("Review this exact version against its source evidence first.", 409, "review_required")
   if (modelOnly && draft.review_binding?.kind !== "model") {
     fail("Automatic scheduling requires current model checks. Human-reviewed drafts can be posted manually.", 409, "model_review_required")
   }
@@ -62,7 +64,7 @@ function assertReviewed(draft, modelOnly = false) {
 
 function projection(draft, state) {
   try {
-    return { ...projectDraft(draft), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(draft, state) }
+    return { ...projectDraft(draft, dashboardEditorialPolicy(state).policy), editorial_policy: dashboardEditorialPolicy(state), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(draft, state) }
   } catch (error) {
     return { ...draft, text: typeof draft.text === "string" ? draft.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message }
   }
@@ -136,6 +138,7 @@ export async function POST(request) {
     const { draft: updatedDraft, state: updatedState } = await updateDraftStore(draftId, (draft, state) => {
       assertExpected(draft, expectedRevision)
       assertMutable(draft, state)
+      const editorialPolicy = dashboardEditorialPolicy(state)
       if (action === "edit") {
         invalidateText(draft, editedText)
         draft.manual_override = true
@@ -165,30 +168,31 @@ export async function POST(request) {
         assertPending(draft)
         if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
         if (draft.revision_conflicts?.length) fail("Resolve the conflicting text with an edit before reviewing it.")
-        revokeApproval(draft)
-        recordHumanReview(draft)
+        if (!editorialPolicy.policy) fail(editorialPolicy.reason, 409, "editorial_policy_unverified")
+        if (body.expectedPolicySha256 !== editorialPolicy.policy_sha256) fail("Editorial policy changed since your confirmation. Refresh and review again.", 409, "editorial_policy_changed")
+        recordHumanReview(draft, editorialPolicy.policy)
       } else if (action === "auto_approve") {
         const publication = dashboardAutomaticPolicy(state)
         if (!publication.enabled) fail(publication.reason, 409, "automatic_publication_paused")
         assertPending(draft)
-        assertReviewed(draft, true)
+        assertReviewed(draft, editorialPolicy.policy, true)
         const policy = draft.approval_policy || {}
         if (policy.can_auto_approve === false) fail("This draft type requires manual approval", 400, "manual_only")
         minutes = Number(delayMinutes ?? policy.recommended_delay_minutes ?? 30)
         if (!Number.isFinite(minutes) || minutes < 5 || minutes > 1440) fail("Delay must be between 5 and 1440 minutes", 400, "invalid_delay")
         autoApproveAt = new Date(Date.now() + minutes * 60 * 1000).toISOString()
         revokeApproval(draft)
-        authorizeDraft(draft, "auto", null, publication.epoch)
+        authorizeDraft(draft, "auto", null, publication.epoch, editorialPolicy.policy)
         draft.auto_approve_at = autoApproveAt
         draft.auto_approve_requested_at = new Date().toISOString()
         draft.approval_mode = "auto"
         draft.post_error = null
       } else if (action === "approve") {
         assertPending(draft)
-        assertReviewed(draft)
+        assertReviewed(draft, editorialPolicy.policy)
         publishIntentId = crypto.randomUUID()
         revokeApproval(draft)
-        authorizeDraft(draft, "manual", publishIntentId)
+        authorizeDraft(draft, "manual", publishIntentId, null, editorialPolicy.policy)
         draft.status = "approved"
         draft.approved_at = new Date().toISOString()
         draft.approval_mode = "manual"
@@ -205,7 +209,7 @@ export async function POST(request) {
       return Response.json({ ok: true, action: names[action], draft: projection(updatedDraft, updatedState), ...(autoApproveAt ? { autoApproveAt, minutes } : {}) })
     }
 
-    if (!approvalIsCurrent(updatedDraft, "manual") || updatedDraft.publish_intent_id !== publishIntentId || hasUnresolvedPublish(updatedDraft, updatedState)) {
+    if (!approvalIsCurrent(updatedDraft, "manual", dashboardEditorialPolicy(updatedState).policy) || updatedDraft.publish_intent_id !== publishIntentId || hasUnresolvedPublish(updatedDraft, updatedState)) {
       fail("This draft changed before dispatch. Review its current version before publishing.")
     }
     let res

@@ -33,7 +33,7 @@ export function DraftWorkbench({
   const selectedDraft = drafts.find((d) => d.id === selectedDraftId) || drafts[0] || null
   const controls = draftReviewControls(selectedDraft)
   const currentRevisionKey = revisionKey(selectedDraft?.revision_identity)
-  const reviewKey = `${selectedDraft?.id}:${currentRevisionKey}`
+  const reviewKey = `${selectedDraft?.id}:${currentRevisionKey}:${selectedDraft?.editorial_policy?.policy_sha256 ?? "unverified"}`
   const editConflict = editingId === selectedDraft?.id && revisionKey(editingRevision) !== currentRevisionKey
   const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
   const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
@@ -76,7 +76,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.status === "approved" ? "awaiting publication" : draft.review_status !== "passed" ? "review needed" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
+                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? "awaiting publication" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
                 </div>
               </button>
             ))}
@@ -96,7 +96,7 @@ export function DraftWorkbench({
 
                 <div className="draft-status-row">
                   <span className="workbench-pill">
-                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.status === "approved" ? "awaiting publication" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
+                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? "awaiting publication" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
                   </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
@@ -180,7 +180,7 @@ export function DraftWorkbench({
                       type="button"
                       className="btn sm"
                       disabled={!!draftAction || reviewConfirmedIdentity !== reviewKey}
-                      onClick={() => draftAct(selectedDraft.id, "review", { reviewConfirmed: true, expectedRevision: selectedDraft.revision_identity })}
+                      onClick={() => draftAct(selectedDraft.id, "review", { reviewConfirmed: true, expectedPolicySha256: selectedDraft.editorial_policy?.policy_sha256, expectedRevision: selectedDraft.revision_identity })}
                     >
                       Record human review
                     </button>
@@ -281,7 +281,9 @@ export function DraftWorkbench({
                   <div className="workbench-panel">
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
-                      {controls.needsReview
+                      {selectedDraft.review_status === "policy_unverified"
+                        ? selectedDraft.editorial_policy?.reason
+                        : controls.needsReview
                         ? "This version needs review before approval."
                         : selectedDraft.review_kind === "human"
                         ? "Human review permits manual posting. Automatic scheduling requires current model checks."

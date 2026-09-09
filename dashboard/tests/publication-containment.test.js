@@ -1,9 +1,10 @@
+import { policy, runtimeRun } from "./helpers/review-policy.js"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import { configuredAutomaticPolicy, dashboardAutomaticPolicy, mergePublicationControl } from "../lib/publication-control.js"
 import { draftReviewControls } from "../lib/draft-review-ui.js"
-import { draftIdentity, fingerprint, initializeRevision, textHash } from "../lib/draft-revisions.js"
+import { draftIdentity, fingerprint, initializeRevision, textHash } from "./helpers/review-policy.js"
 import { importFresh } from "./helpers/import-fresh.js"
 
 const epoch = "offline-release-one"
@@ -70,7 +71,7 @@ test("paused scheduling API rejects a current reviewed draft before writing or d
   const headers = auth()
   Object.assign(process.env, env, { THEHEAT_AUTOMATIC_PUBLICATION_ENABLED: "0" })
   const d = { id: "draft", event_id: "event", status: "pending", text: "Sourced text.", approval_policy: { can_auto_approve: true },
-    review_context: { two_bot: { bundle: {}, fact_check: { passed: true }, critic: { passed: true }, reviewed_text_sha256: textHash("Sourced text."), reviewed_bundle_sha256: fingerprint({}) } } }
+    review_context: { two_bot: { bundle: {}, fact_check: { passed: true }, critic: { passed: true }, reviewed_text_sha256: textHash("Sourced text."), reviewed_bundle_sha256: fingerprint({}), reviewed_policy_sha256: fingerprint(policy) } } }
   initializeRevision(d)
   const snapshot = { ...state(), drafts: [d] }
   const previous = globalThis.fetch

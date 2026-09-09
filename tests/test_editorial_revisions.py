@@ -8,6 +8,7 @@ import pytest
 
 pytestmark = pytest.mark.usefixtures("automatic_publication_release")
 
+from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import (
     approval_is_current, authorize_draft, binding_matches, draft_identity, fingerprint,
     has_unresolved_publish, initialize_revision, invalidate_text, project_draft,
@@ -26,6 +27,7 @@ def reviewed_draft():
     }
     proof = draft["review_context"]["two_bot"]
     proof["reviewed_text_sha256"] = text_hash(draft["text"])
+    proof["reviewed_policy_sha256"] = fingerprint(current_editorial_policy())
     proof["reviewed_bundle_sha256"] = fingerprint(proof["bundle"])
     return initialize_revision(draft)
 
