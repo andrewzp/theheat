@@ -275,6 +275,11 @@ def legacy_publication_status(state: Mapping, event_id: str) -> str:
     Any uncertain legacy attempt blocks publication, including a manual send under
     a newly canonicalized ID. Identity migration cannot bypass P02 idempotency.
     """
+    ident = event_identity(event_id)
+    if ident and ident["place_id"] not in {row["place_id"] for row in registry()}:
+        # Coordinates support collection and analysis, but cannot prove historical
+        # aliases. Register/attribute this point before creating a publishable event.
+        return "unregistered"
     variants = legacy_event_candidates(event_id)
     if not variants:
         return "clear"
@@ -325,6 +330,22 @@ def legacy_publication_status(state: Mapping, event_id: str) -> str:
     return "ambiguous" if recorded - attributable else "clear"
 
 
+def has_unregistered_identity(draft: dict) -> bool:
+    """Unregistered points are analyzable, but need attribution before any send."""
+    registered = {row["place_id"] for row in registry()}
+    ident = event_identity(draft.get("event_id", ""))
+    if ident:
+        return ident["place_id"] not in registered
+    if str(draft.get("event_id", "")).startswith("hot10_"):
+        review = draft.get("review_context") or {}
+        raw = ((review.get("two_bot") or {}).get("bundle") or {}).get("raw_signal_dump") or {}
+        return any(
+            isinstance(row, dict) and row.get("place_id") and row["place_id"] not in registered
+            for row in raw.get("cities") or []
+        )
+    return False
+
+
 def requires_identity_review(draft: dict) -> bool:
     """Automatic-send containment for legacy scientific identities.
 
@@ -344,7 +365,8 @@ def requires_identity_review(draft: dict) -> bool:
         raw = ((review.get("two_bot") or {}).get("bundle") or {}).get("raw_signal_dump") or {}
         cities = raw.get("cities") or []
         return not cities or any(
-            not row.get("place_id") or not row.get("sampling_point_id") for row in cities
+            not isinstance(row, dict) or not row.get("place_id") or not row.get("sampling_point_id")
+            for row in cities
         )
     point_signal = re.match(
         r"^(record(?:_low)?|alltime_(?:high|low)|monthly_(?:high|low)|anomaly_(?:hot|cold)|absextreme(?:_cold)?|wetbulb|streak|pm25|dust)_",

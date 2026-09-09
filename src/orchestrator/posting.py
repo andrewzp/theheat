@@ -1,7 +1,7 @@
 """Posting and publish queue modes."""
 
 from __future__ import annotations
-from src.data.places import legacy_publication_status, requires_identity_review
+from src.data.places import has_unregistered_identity, legacy_publication_status, requires_identity_review
 
 from copy import deepcopy
 
@@ -209,6 +209,9 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
             _touch_draft(draft)
             return "failed"
 
+    if has_unregistered_identity(draft):
+        draft["post_error"] = "Unregistered sampling identity requires registry attribution before publishing"
+        return "failed"
     history_status = legacy_publication_status(bot_state, draft.get("event_id", ""))
     if history_status in ("duplicate", "unresolved"):
         draft["post_error"] = (
@@ -545,8 +548,10 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             # post_approved marks the attempt immediately before its durable write.
 
         history_status = legacy_publication_status(bot_state, draft.get("event_id", ""))
-        if requires_identity_review(draft) or history_status != "clear":
+        if has_unregistered_identity(draft) or requires_identity_review(draft) or history_status != "clear":
             identity_reason = (
+                "Unregistered sampling identity requires registry attribution before publishing"
+                if has_unregistered_identity(draft) else
                 "Legacy publication outcome unresolved; reconcile before publishing this identity"
                 if history_status == "unresolved" else
                 "This place event was already published under its legacy identity"

@@ -258,3 +258,44 @@ def test_malformed_retained_legacy_attempt_cannot_be_cleared(row):
         places.legacy_publication_status({"publish_ledger": {OLD_POINT: row}}, NEW_POINT)
         == "unresolved"
     )
+
+
+@pytest.mark.parametrize(
+    "city,country,lat,lon",
+    [("New Example Place", "US", 40.123, -100.123), ("Barcelona", "Spain", 40.123, 2)],
+)
+@pytest.mark.parametrize("mode", ["auto", "manual", "due"])
+@pytest.mark.parametrize("kind", ["point", "hot10"])
+def test_unregistered_identity_requires_attribution_before_any_send(
+    externals, city, country, lat, lon, mode, kind
+):
+    place = places.resolve_place(city, country, lat, lon)
+    event_id = "alltime_high_" + places.event_location_key(city, country, lat, lon) + "_2026-09-08"
+    assert place["place_id"].startswith("ux")
+    legacy = "alltime_high_" + city.replace(" ", "_") + "_2026-09-08"
+    ledger = {legacy: {"phase": "unknown", "text": "Uncertain legacy text"}}
+    bot_state = {"drafts": [], "publish_ledger": deepcopy(ledger)}
+    assert places.legacy_publication_status(bot_state, event_id) == "unregistered"
+    assert draft_save.can_draft_candidate(bot_state, SimpleNamespace(event_id=event_id)) == (
+        False,
+        "unregistered_place",
+    )
+    assert not draft_save.save_draft("New text", bot_state, "all_time_high", event_id)
+    draft_event = event_id if kind == "point" else "hot10_2026-09-08"
+    item = approved(draft_event, "manual" if mode == "manual" else "auto")
+    if kind == "hot10":
+        item["review_context"]["two_bot"]["bundle"]["raw_signal_dump"]["cities"] = [place]
+        bind_reviewed_draft(
+            item,
+            "manual" if mode == "manual" else "auto",
+            "manual-intent" if mode == "manual" else None,
+        )
+    bot_state["drafts"] = [item]
+    if mode == "due":
+        posting.process_due_drafts(bot_state)
+    else:
+        assert posting.post_approved(item, bot_state) == "failed"
+    assert "registry attribution" in item["post_error"]
+    assert bot_state["publish_ledger"] == ledger
+    for mock in externals.values():
+        mock.assert_not_called()
