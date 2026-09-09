@@ -590,6 +590,7 @@ def _detect_signals_for_station(
             data_source="ghcn",
         )
         if abs_ev is not None:
+            abs_ev.event_id = f"absextreme_{abs_ev.kind}_{sid_key}_{obs_date_iso}"
             bundle.absolute_extreme = abs_ev
 
     return bundle

@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from src.data.places import draft_place_id
 
 from src.orchestrator.common import _parse_iso_utc, _utc_now
 
 
-def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> bool:
+def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str, *, place_id: str = "") -> bool:
     """True if a posted draft exists for this (city, tweet_date) tuple."""
     if not city or not tweet_date:
         return False
     for d in drafts:
         if (
-            d.get("city") == city
+            (draft_place_id(d) == place_id if place_id else d.get("city") == city and not draft_place_id(d))
             and d.get("tweet_date") == tweet_date
             and d.get("status") == "posted"
         ):
@@ -22,14 +23,14 @@ def _same_day_already_posted(drafts: list[dict], city: str, tweet_date: str) -> 
 
 
 def _same_day_pending_collision(
-    drafts: list[dict], city: str, tweet_date: str
+    drafts: list[dict], city: str, tweet_date: str, *, place_id: str = ""
 ) -> tuple[int, dict] | None:
     """Return (index, draft) of a pending draft matching (city, tweet_date), if any."""
     if not city or not tweet_date:
         return None
     for i, d in enumerate(drafts):
         if (
-            d.get("city") == city
+            (draft_place_id(d) == place_id if place_id else d.get("city") == city and not draft_place_id(d))
             and d.get("tweet_date") == tweet_date
             and d.get("status") == "pending"
         ):
@@ -37,13 +38,13 @@ def _same_day_pending_collision(
     return None
 
 
-def _posted_city_within_days(drafts: list[dict], city: str, days: int) -> bool:
+def _posted_city_within_days(drafts: list[dict], city: str, days: int, *, place_id: str = "") -> bool:
     """True if any posted draft for this city exists within the last N days."""
     if not city:
         return False
     cutoff = _utc_now() - timedelta(days=days)
     for d in drafts:
-        if d.get("city") != city:
+        if not (draft_place_id(d) == place_id if place_id else d.get("city") == city and not draft_place_id(d)):
             continue
         if d.get("status") != "posted":
             continue

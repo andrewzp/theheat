@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from src.data import places
 from datetime import date
 
 import pytest
@@ -98,7 +99,7 @@ def test_detect_absolute_extreme_hot_and_cold_event_ids() -> None:
     assert hot.band_label == "Arctic"
     assert hot.threshold_c == 30.0
     assert hot.kind == "hot"
-    assert hot.event_id == "absextreme_Tromso_2026-07-15"
+    assert hot.event_id == f"absextreme_{places.event_location_key('Tromso','Norway',70,25)}_2026-07-15"
 
     cold = detect_absolute_extreme(
         72.0,
@@ -112,7 +113,7 @@ def test_detect_absolute_extreme_hot_and_cold_event_ids() -> None:
     assert cold is not None
     assert cold.kind == "cold"
     assert cold.band_label == "Arctic"
-    assert cold.event_id == "absextreme_cold_Yakutsk_2026-01-10"
+    assert cold.event_id == f"absextreme_cold_{places.event_location_key('Yakutsk','Russia',72,129)}_2026-01-10"
 
 
 def test_detect_absolute_extreme_does_not_fire_below_thresholds() -> None:
@@ -139,7 +140,7 @@ def test_detect_extreme_signals_populates_absolute_extreme(monkeypatch: pytest.M
 
     assert bundle is not None
     assert bundle.absolute_extreme is not None
-    assert bundle.absolute_extreme.event_id == "absextreme_Tromso_2026-07-15"
+    assert bundle.absolute_extreme.event_id == f"absextreme_{places.event_location_key('Tromso','Norway',70,25)}_2026-07-15"
     assert bundle.absolute_extreme.data_source == "forecast"
 
 
@@ -191,7 +192,7 @@ def test_build_absolute_extreme_bundle_surfaces_forecast_context() -> None:
         kind="hot",
         lat=70.0,
         lon=25.0,
-        event_id="absextreme_Tromso_2026-07-15",
+        event_id=f"absextreme_{places.event_location_key('Tromso','Norway',70,25)}_2026-07-15",
         signal_date=date(2026, 7, 15),
         data_source="forecast",
     )

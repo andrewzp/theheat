@@ -1,3 +1,8 @@
+from src.data import places
+
+def sample_identity(city, country, lat, lon):
+    return {**places.resolve_place(city, country, lat, lon), "source_product": places.CACHE_PRODUCT}
+
 from src.data.world_thresholds import CityThresholds, MIN_MEAN_SAMPLES, compute_city_thresholds
 
 
@@ -35,7 +40,7 @@ from src.data.world_thresholds import evaluate_city
 
 
 def _cached(mean_n=900):
-    return CityThresholds(city="Madrid", as_of="2026-06-01", years_of_data=30,
+    return CityThresholds(identity=sample_identity("Madrid", "Spain", 40.4, -3.7), city="Madrid", as_of="2026-06-01", years_of_data=30,
         all_time_max=(44.0, 2023), all_time_min=(-4.0, 2001),
         monthly_max={"06": (43.0, 2019)}, monthly_min={"06": (8.0, 1997)},
         monthly_mean={"06": (32.0, 17.0, mean_n)}, wetbulb_max=(26.0, 2022))

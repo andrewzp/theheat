@@ -63,6 +63,13 @@ class StoryBundle:
     # prompt); empty = today's behavior everywhere.
     human_impact: list[dict[str, Any]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        from src.data.places import event_identity, country_key
+        identity = event_identity(self.event_id)
+        if identity:
+            self.raw_signal_dump = {**self.raw_signal_dump, **identity}
+            self.country = country_key(self.raw_signal_dump.get("country", self.country))
+
     def to_dict(self) -> dict:
         data: dict[str, Any] = {
             "signal_kind": self.signal_kind,

@@ -1,3 +1,4 @@
+from src.data import places
 from datetime import date
 import re
 import time
@@ -76,7 +77,7 @@ class TestGpmFetch:
 
         assert len(readings) == 1
         assert readings[0].mm_total == 42.5
-        assert readings[0].event_id == "gpm_imerg_france_paris_2026-05-14"
+        assert readings[0].event_id == f"gpm_imerg_{places.event_location_key('Paris', 'France', 48.85, 2.35)}_2026-05-14"
         assert responses.calls[0].request.headers["Authorization"] == "Bearer fake-token"
 
     @responses.activate
@@ -544,7 +545,7 @@ class TestPrecipDetection:
     def test_daily_record_requires_20mm_margin(self):
         events = detect_precip_records(
             [_reading(mm=55.0)],
-            {"precip_daily_records": {"france:paris:05-14": {"mm": 34.0, "year": 2024}}},
+            {"precip_daily_records": {"precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35) + ":05-14": {"mm": 34.0, "year": 2024}}},
         )
 
         assert len(events) == 1
@@ -557,7 +558,7 @@ class TestPrecipDetection:
     def test_multi_day_accumulation_uses_recent_state(self):
         state = {
             "precip_recent_by_city": {
-                "france:paris": [
+                "precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35): [
                     {"date": "2026-05-12", "mm": 55.0},
                     {"date": "2026-05-13", "mm": 50.0},
                 ]
@@ -576,7 +577,7 @@ class TestPrecipDetection:
         # retrieval — no event, however far past the threshold the sum lands.
         state = {
             "precip_recent_by_city": {
-                "france:paris": [
+                "precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35): [
                     {"date": "2026-05-12", "mm": 71.25},
                     {"date": "2026-05-13", "mm": 71.25},
                 ]
@@ -589,7 +590,7 @@ class TestPrecipDetection:
         # The guard must not kill real storms: same total, varied dailies.
         state = {
             "precip_recent_by_city": {
-                "france:paris": [
+                "precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35): [
                     {"date": "2026-05-12", "mm": 80.0},
                     {"date": "2026-05-13", "mm": 63.75},
                 ]
@@ -606,7 +607,7 @@ class TestPrecipDetection:
         # of 300.0 mm" was a false record minted from this exact path.
         state = {
             "precip_recent_by_city": {
-                "france:paris": [
+                "precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35): [
                     {"date": "2026-05-12", "mm": 55.0},
                     {"date": "2026-05-13", "mm": 50.0},
                 ]
@@ -628,7 +629,7 @@ class TestPrecipDetection:
         ]
         state = {
             "precip_daily_records": {
-                f"france:city_{i}:05-14": {"mm": 30.0, "year": 2020}
+                "precip:late:" + places.event_location_key(f"City {i}", "France", 48.85, 2.35) + ":05-14": {"mm": 30.0, "year": 2020}
                 for i in range(10)
             }
         }
@@ -638,15 +639,17 @@ class TestPrecipDetection:
         country = [event for event in events if event.kind == "country_precip_event"]
         assert len(country) == 1
         assert country[0].city_count == 10
+        assert country[0].country == "France"
+        assert country[0].location == "France"
         assert country[0].sample_cities[:2] == ["City 0", "City 1"]
 
     def test_update_precip_tracking_records_daily_and_recent_rows(self):
         state = {"precip_daily_records": {}, "precip_recent_by_city": {}}
         update_precip_tracking(state, [_reading(mm=25.0), _reading(mm=35.0, day="2026-05-15")])
 
-        assert state["precip_daily_records"]["france:paris:05-14"]["mm"] == 25.0
-        assert state["precip_daily_records"]["france:paris:05-15"]["mm"] == 35.0
-        assert len(state["precip_recent_by_city"]["france:paris"]) == 2
+        assert state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35) + ":05-14"]["mm"] == 25.0
+        assert state["precip_daily_records"]["precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35) + ":05-15"]["mm"] == 35.0
+        assert len(state["precip_recent_by_city"]["precip:late:" + places.event_location_key("Paris", "France", 48.85, 2.35)]) == 2
 
     def test_precip_event_dataclass_surface(self):
         event = PrecipExtremeEvent(
@@ -751,7 +754,7 @@ class TestGpmGridFetch:
         assert readings[0].mm_total == 42.5
         assert readings[0].date == "2026-06-05"
         assert readings[0].source_product == "late"
-        assert readings[0].event_id == "gpm_imerg_france_paris_2026-06-05"
+        assert readings[0].event_id == f"gpm_imerg_{places.event_location_key('Paris', 'France', 48.85, 2.35)}_2026-06-05"
 
     def test_subset_grid_skips_fill_value(self):
         from src.data.gpm_imerg import FILL_VALUE, _lat_index, _lon_index, _subset_grid
@@ -1162,7 +1165,7 @@ class TestOpenMeteoPrecipWitness:
         assert r.source_product == "open_meteo"
         assert r.mm_total == 80.0
         assert r.date == "2026-06-12"  # past_days=1 -> yesterday
-        assert r.event_id == "gpm_imerg_france_paris_2026-06-12"
+        assert r.event_id == f"gpm_imerg_{places.event_location_key('Paris', 'France', 48.85, 2.35)}_2026-06-12"
 
     def test_gpm_primary_healthy_skips_witness(self):
         primary_readings = [_reading(city="Paris", country="France", mm=40.0)]

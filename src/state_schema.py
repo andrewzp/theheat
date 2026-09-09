@@ -20,6 +20,7 @@ class Hot10Snapshot(TypedDict, total=False):
 
     date: str | None
     cities: list[str]
+    place_ids: list[str]
 
 
 class StreakEntry(TypedDict):

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from src.data import places
 
 from datetime import date
 from unittest.mock import MagicMock, patch
@@ -396,14 +397,14 @@ def test_event_id_scheme_pm25():
     event = detect_pm25_hazard(_obs(city="Lahore", country="Pakistan", pm25=150.0))
 
     assert event is not None
-    assert event.event_id == "pm25_lahore_2026-06-08_tier1"
+    assert event.event_id == f"pm25_{places.event_location_key(event.city, event.country, event.lat, event.lon)}_2026-06-08_tier1"
 
 
 def test_event_id_scheme_dust():
     event = detect_dust_event(_obs(city="Khartoum", country="Sudan", dust=2000.0))
 
     assert event is not None
-    assert event.event_id == "dust_khartoum_2026-06-08_tier2"
+    assert event.event_id == f"dust_{places.event_location_key(event.city, event.country, event.lat, event.lon)}_2026-06-08_tier2"
 
 
 def test_who_multiple_uses_15():
@@ -418,4 +419,4 @@ def test_city_slug_special_chars_preserves_apostrophe_and_removes_comma():
     event = detect_dust_event(_obs(city="N'Djamena, Central", country="Chad", dust=500.0))
 
     assert event is not None
-    assert event.event_id == "dust_n'djamena_central_2026-06-08_tier1"
+    assert event.event_id == f"dust_{places.event_location_key(event.city, event.country, event.lat, event.lon)}_2026-06-08_tier1"

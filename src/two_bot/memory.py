@@ -117,12 +117,15 @@ def _utc_now_iso() -> str:
 
 
 def _country_for(bundle: StoryBundle) -> str:
+    from src.data.places import country_key
+    if bundle.country:
+        return country_key(bundle.country)
     country = bundle.raw_signal_dump.get("country")
     if country:
-        return str(country)
+        return country_key(str(country))
     for fact in bundle.current_facts:
         if fact.get("label") == "country":
-            return str(fact.get("value") or "")
+            return country_key(str(fact.get("value") or ""))
     return ""
 
 
@@ -142,6 +145,11 @@ def _row_time(row: dict) -> datetime:
 
 
 def _event_base(event_id: Any) -> str:
+    from src.data.places import event_identity
+    identity = event_identity(str(event_id or ""))
+    if identity:
+        # Signal family + persistent place; dates/point revisions do not merge different cities.
+        return str(event_id).split("loc1-", 1)[0] + identity["place_id"]
     parts = str(event_id or "").split("_")
     if len(parts) < 3:
         return str(event_id or "")
@@ -202,6 +210,7 @@ def bundle_memory_snapshot(bundle: StoryBundle) -> dict:
 def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
     """Assemble the relevant memory for the writer."""
 
+    from src.data.places import country_key
     memory = _memory(state)
     country = _country_for(bundle)
     event_keys = {
@@ -212,7 +221,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
 
     same_country_rows = []
     for row in memory.get("shipped_tweets", []):
-        if not isinstance(row, dict) or row.get("country") != country:
+        if not isinstance(row, dict) or country_key(row.get("country", "")) != country:
             continue
         shipped_at = _parse_time(row.get("shipped_at"))
         if shipped_at is not None and shipped_at.timestamp() < cutoff:
@@ -235,7 +244,7 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         if (
             row.get("signal_kind") == bundle.signal_kind
             and row.get("region") == bundle.where
-            and row.get("country") == country
+            and country_key(row.get("country", "")) == country
         ):
             fallback_region_match = row
     if ongoing_event is None:
