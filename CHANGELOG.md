@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.7] - 2026-09-09
+
+### Publication uncertainty and prospective outcome history (P02/P00a)
+
+- Malformed publication conflicts remain unresolved across Python and dashboard gates, receipt reconciliation, unrelated edits and repeated state merges. Original opaque evidence survives; distinct unidentified legacy attempts cannot be collapsed into a known outcome. Container metadata is separate from real platform attempts.
+- Existing public-metric polling retains timestamped observations and original legacy rows, with nullable supported counters. Only the platform creation timestamp establishes true post age; receipt timing is labeled separately. Conflicting latest observations withhold totals, including equivalent timezone instants.
+- Partial metric responses remain partial failures. No extra polling, account backfill, fixed-age guarantee or causal performance claim is introduced; the current live receipt window is inactive.
+- Combined validation: 3,027 offline Python tests, 286 dashboard tests, Ruff, mypy and production build pass; 41 paid replays excluded. Independent reviews exercised three-way merge invariants and cross-runtime preservation.
+- Automatic publishing remains paused. No test tweet, paid lookup, public correction or production database migration is part of this change.
+
 ## [0.9.108.6] - 2026-09-09
 
 ### Canonical place and sampling identity (P04)

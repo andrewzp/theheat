@@ -91,16 +91,18 @@ export function approvalIsCurrent(draft, mode = null) {
 
 export function hasUnresolvedPublish(draft, state) {
   function unresolved(attempt) {
-    if (!attempt || typeof attempt !== "object") return false
-    if (attempt.attempt_conflicts != null && !Array.isArray(attempt.attempt_conflicts)) return true
-    if ((attempt.attempt_conflicts ?? []).some(unresolved)) return true
+    if (!attempt || typeof attempt !== "object" || Array.isArray(attempt)) return true
+    const conflicts = Object.hasOwn(attempt, "attempt_conflicts") ? attempt.attempt_conflicts : []
+    if (!Array.isArray(conflicts) || conflicts.some(unresolved)) return true
     if (attempt.tweet_id) {
       if (Object.hasOwn(attempt, "text_sha256")) return !bindingMatches(draft, attempt)
       return typeof attempt.text === "string" && attempt.text !== draft.text
     }
     return attempt.phase !== "not_sent"
   }
-  if (unresolved(state.publish_ledger?.[draft.event_id || draft.id])) return true
+  const ledger = state.publish_ledger || {}
+  const eventId = draft.event_id || draft.id
+  if (Object.hasOwn(ledger, eventId) && unresolved(ledger[eventId])) return true
   if (["submitted", "unknown"].includes(draft.publish_outcome)) return true
   if (draft.status === "posted" || ["not_sent", "confirmed"].includes(draft.publish_outcome)) return false
   return !!(draft.autoship_attempted || draft.last_publish_attempt_at)

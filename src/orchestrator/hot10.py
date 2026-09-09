@@ -5,6 +5,7 @@ from src.data import places
 
 # ruff: noqa: F403,F405
 from src.data import twitter_metrics
+from src.data.metric_history import PUBLIC_FIELDS, append_sample
 from src.orchestrator.common import *
 
 
@@ -49,7 +50,7 @@ def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]
     def add(tweet_id, sampled_at) -> None:
         tweet_id = str(tweet_id or "").strip()
         sampled = _parse_iso_utc(str(sampled_at or ""))
-        if not tweet_id or sampled is None or sampled < cutoff:
+        if not tweet_id or sampled is None or sampled < cutoff or sampled > now:
             return
         candidates.append((sampled, tweet_id))
 
@@ -62,7 +63,7 @@ def _metric_candidate_tweet_ids(bot_state: BotState, now: datetime) -> list[str]
     for draft in bot_state.get("drafts", []):
         if not isinstance(draft, dict):
             continue
-        add(draft.get("tweet_id"), draft.get("posted_at") or draft.get("last_publish_attempt_at"))
+        add(draft.get("tweet_id"), draft.get("posted_at"))
 
     candidates.sort(key=lambda item: item[0], reverse=True)
     ids: list[str] = []
@@ -121,20 +122,26 @@ def _run_twitter_metrics(
         )
         return
 
-    sampled_at = sample_time.isoformat().replace("+00:00", "Z")
+    returned = {tweet_id: row for tweet_id, row in metrics.items()
+                if tweet_id in tweet_ids and isinstance(row, dict)}
+    sample_time = now or _utc_now()  # Client observation after the lookup returned.
     table = bot_state.setdefault("tweet_metrics", {})
-    for tweet_id, row in metrics.items():
-        table[str(tweet_id)] = {
-            "at": sampled_at,
-            "likes": int(row.get("likes", 0)),
-            "retweets": int(row.get("retweets", 0)),
-            "replies": int(row.get("replies", 0)),
-        }
+    usable = 0
+    for tweet_id, row in returned.items():
+        table[str(tweet_id)] = append_sample(
+            table.get(str(tweet_id)), tweet_id=str(tweet_id), counts=row,
+            sampled_at=sample_time, state=bot_state,
+        )
+        if any(type(value) is int and 0 <= value <= 2**53 - 1
+               for key, value in row.items() if key in PUBLIC_FIELDS):
+            usable += 1
 
+    missing = len(tweet_ids) - usable
     _record_source_run(
         current_run, bot_state, _METRICS_SOURCE, metrics_start,
-        status="success", observed=len(tweet_ids), promoted=len(metrics),
-        note=f"Stored {len(metrics)} metric row(s)"
+        status="partial_failure" if missing else "success", observed=len(tweet_ids), promoted=usable,
+        note=f"Stored {len(returned)} metric sample(s); {missing} requested post(s) without usable counts",
+        error=f"No usable metric counts returned for {missing} requested post(s)" if missing else None,
     )
 
 

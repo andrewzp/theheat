@@ -271,9 +271,26 @@ function mergeDraftPair(current, incoming) {
 }
 
 function attemptRows(row) {
-  if (!row || typeof row !== "object" || Array.isArray(row)) return []
-  return [Object.fromEntries(Object.entries(row).filter(([key]) => key !== "attempt_conflicts")),
-    ...(row.attempt_conflicts || []).filter((child) => child && typeof child === "object" && !Array.isArray(child))]
+  // Keep opaque malformed subtrees out of receipt/phase winner selection.
+  const clean = [], malformed = [], pending = [row]
+  const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
+  while (pending.length) {
+    const attempt = pending.pop()
+    if (!isObject(attempt)) {
+      malformed.push({ phase: "unknown", attempt_conflicts: [structuredClone(attempt)] })
+      continue
+    }
+    const conflicts = Object.hasOwn(attempt, "attempt_conflicts") ? attempt.attempt_conflicts : []
+    if (!Array.isArray(conflicts) || conflicts.some((child) => !isObject(child))) {
+      malformed.push(structuredClone(attempt))
+      continue
+    }
+    const containerOnly = attempt.preserved_evidence_only === true && Object.keys(attempt).length === 2
+      && Object.hasOwn(attempt, "attempt_conflicts")
+    if (!containerOnly) clean.push(Object.fromEntries(Object.entries(attempt).filter(([key]) => key !== "attempt_conflicts")))
+    pending.push(...conflicts)
+  }
+  return { clean, malformed }
 }
 
 function attemptRank(row) {
@@ -284,10 +301,20 @@ export function mergePublishLedger(base = {}, next = {}) {
   const merged = {}
   for (const eventId of [...new Set([...Object.keys(base || {}), ...Object.keys(next || {})])].sort()) {
     const attempts = new Map()
-    for (const row of [...attemptRows(base?.[eventId]), ...attemptRows(next?.[eventId])]) {
+    const clean = [], malformed = []
+    for (const ledger of [base, next]) {
+      if (ledger && Object.hasOwn(ledger, eventId)) {
+        const parts = attemptRows(ledger[eventId])
+        clean.push(...parts.clean)
+        malformed.push(...parts.malformed)
+      }
+    }
+    for (const row of clean) {
       const identity = Object.fromEntries(["intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text"]
         .map((key) => [key, row[key] ?? null]))
-      const key = fingerprint(identity)
+      // A missing intent ID cannot prove that different phases are one call.
+      const identified = typeof row.intent_id === "string" && row.intent_id.length > 0
+      const key = fingerprint(identified ? identity : { unidentified_attempt: row })
       const existing = attempts.get(key)
       if (!existing) attempts.set(key, structuredClone(row))
       else if (existing.tweet_id && row.tweet_id && existing.tweet_id !== row.tweet_id) {
@@ -300,9 +327,9 @@ export function mergePublishLedger(base = {}, next = {}) {
     const rows = [...attempts.values()].sort((a, b) => Number(Boolean(a.tweet_id)) - Number(Boolean(b.tweet_id))
       || parseTimestamp(a.at) - parseTimestamp(b.at) || attemptRank(a) - attemptRank(b)
       || (fingerprint(a) < fingerprint(b) ? -1 : fingerprint(a) > fingerprint(b) ? 1 : 0))
-    const primary = rows.pop()
-    if (!primary) continue
-    if (rows.length) primary.attempt_conflicts = uniqueSnapshots(rows)
+    // Preserve unreadable evidence without inventing a platform attempt.
+    const primary = rows.pop() || { preserved_evidence_only: true }
+    if (rows.length || malformed.length) primary.attempt_conflicts = uniqueSnapshots([...rows, ...malformed])
     merged[eventId] = primary
   }
   return merged

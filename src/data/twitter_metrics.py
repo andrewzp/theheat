@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 
 import tweepy
+from src.data.metric_history import parse_public_metrics
 
 API_KEY = os.environ.get("TWITTER_API_KEY", "")
 API_SECRET = os.environ.get("TWITTER_API_SECRET", "")
@@ -50,7 +52,7 @@ def _tweet_field(tweet, field: str):
     return getattr(tweet, field, None)
 
 
-def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict[str, int]]:
+def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict]:
     """Fetch public engagement metrics for tweet IDs, batched at 100 IDs."""
     ids = _unique_ids(tweet_ids)
     if not ids:
@@ -61,17 +63,17 @@ def fetch_metrics(tweet_ids: list[str]) -> dict[str, dict[str, int]]:
         print("[twitter_metrics] No credentials configured, skipping metrics fetch")
         return {}
 
-    metrics_by_id: dict[str, dict[str, int]] = {}
+    metrics_by_id: dict[str, dict] = {}
     for batch in _batches(ids):
-        response = client.get_tweets(ids=batch, tweet_fields=["public_metrics"])
+        response = client.get_tweets(ids=batch, tweet_fields=["public_metrics", "created_at"])
         for tweet in response.data or []:
             tweet_id = str(_tweet_field(tweet, "id") or "")
-            public_metrics = _tweet_field(tweet, "public_metrics") or {}
-            if not tweet_id or not isinstance(public_metrics, dict):
+            public_metrics = _tweet_field(tweet, "public_metrics")
+            if tweet_id not in batch or not isinstance(public_metrics, dict):
                 continue
-            metrics_by_id[tweet_id] = {
-                "likes": int(public_metrics.get("like_count") or 0),
-                "retweets": int(public_metrics.get("retweet_count") or 0),
-                "replies": int(public_metrics.get("reply_count") or 0),
-            }
+            created_at = _tweet_field(tweet, "created_at")
+            if isinstance(created_at, datetime):
+                created_at = created_at.isoformat()
+            metrics_by_id[tweet_id] = {**parse_public_metrics(public_metrics),
+                                       "created_at": created_at if isinstance(created_at, str) else None}
     return metrics_by_id

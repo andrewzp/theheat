@@ -12,7 +12,7 @@ where ``T`` is the nested TypedDict.
 """
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class Hot10Snapshot(TypedDict, total=False):
@@ -183,9 +183,15 @@ class TweetMetric(TypedDict):
     """Public engagement metrics for one posted X tweet."""
 
     at: str
-    likes: int
-    retweets: int
-    replies: int
+    likes: int | None
+    retweets: int | None
+    replies: int | None
+    quotes: NotRequired[int | None]
+    impressions: NotRequired[int | None]
+    bookmarks: NotRequired[int | None]
+    samples: NotRequired[dict[str, dict]]
+    legacy_rows: NotRequired[dict[str, dict]]
+    latest_sample_conflict: NotRequired[bool]
 
 
 class DraftIdentity(TypedDict):

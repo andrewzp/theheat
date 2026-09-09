@@ -21,6 +21,7 @@ from src.state_schema import (
     SynthesisComponents,
 )
 from src.storage import sqlite_store
+from src.data.metric_history import merge_metric_rows
 from src.two_bot.json_utils import json_default
 from src.editorial.publication import automatic_approval_allowed, merge_publication_control
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
@@ -829,13 +830,31 @@ def _strat_dict_overlay(base: Any, nxt: Any) -> dict:
     return {**deepcopy(base or {}), **deepcopy(nxt or {})}
 
 
-def _attempt_rows(row: Any) -> list[dict]:
-    if not isinstance(row, dict):
-        return []
-    return [
-        {key: deepcopy(value) for key, value in row.items() if key != "attempt_conflicts"},
-        *[child for child in row.get("attempt_conflicts", []) if isinstance(child, dict)],
-    ]
+def _attempt_rows(row: Any) -> tuple[list[dict], list[dict]]:
+    """Separate normal attempts from opaque evidence that cannot be reconciled.
+
+    Malformed subtrees remain verbatim inside attempt_conflicts. They must never
+    participate in receipt/phase winner selection, which could erase uncertainty.
+    """
+    clean, malformed = [], []
+    pending = [row]
+    while pending:
+        attempt = pending.pop()
+        if not isinstance(attempt, dict):
+            malformed.append({"phase": "unknown", "attempt_conflicts": [deepcopy(attempt)]})
+            continue
+        conflicts = attempt.get("attempt_conflicts", [])
+        if not isinstance(conflicts, list) or any(not isinstance(child, dict) for child in conflicts):
+            malformed.append(deepcopy(attempt))
+            continue
+        container_only = (
+            set(attempt) == {"preserved_evidence_only", "attempt_conflicts"}
+            and attempt["preserved_evidence_only"] is True
+        )
+        if not container_only:
+            clean.append({key: deepcopy(value) for key, value in attempt.items() if key != "attempt_conflicts"})
+        pending.extend(conflicts)
+    return clean, malformed
 
 
 def _attempt_rank(row: dict) -> int:
@@ -851,9 +870,18 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
     merged = {}
     for event_id in sorted(set(base) | set(nxt)):
         attempts: dict[str, dict] = {}
-        for row in [*_attempt_rows(base.get(event_id)), *_attempt_rows(nxt.get(event_id))]:
+        clean, malformed = [], []
+        for ledger in (base, nxt):
+            if event_id in ledger:
+                rows, opaque = _attempt_rows(ledger[event_id])
+                clean.extend(rows)
+                malformed.extend(opaque)
+        for row in clean:
             identity = {key: row.get(key) for key in ("intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text")}
-            key = fingerprint(identity)
+            # Missing intent IDs cannot prove two phase observations refer to
+            # the same platform call. Retain distinct legacy evidence instead.
+            identified = isinstance(row.get("intent_id"), str) and bool(row["intent_id"])
+            key = fingerprint(identity if identified else {"unidentified_attempt": row})
             existing = attempts.get(key)
             if existing is None:
                 attempts[key] = deepcopy(row)
@@ -863,12 +891,11 @@ def _merge_publish_ledger(base: Any, nxt: Any) -> dict:
                 winner, loser = (row, existing) if _attempt_rank(row) >= _attempt_rank(existing) else (existing, row)
                 attempts[key] = {**deepcopy(loser), **deepcopy(winner)}
         rows = list(attempts.values())
-        if not rows:
-            continue
         rows.sort(key=lambda row: (bool(row.get("tweet_id")), _parse_state_timestamp(row.get("at")), _attempt_rank(row), fingerprint(row)))
-        primary = rows.pop()
-        if rows:
-            primary["attempt_conflicts"] = _unique_snapshots(rows)
+        # This is a container for unreadable evidence, not a fabricated attempt.
+        primary = rows.pop() if rows else {"preserved_evidence_only": True}
+        if rows or malformed:
+            primary["attempt_conflicts"] = _unique_snapshots([*rows, *malformed])
         merged[event_id] = primary
     return merged
 
@@ -1056,7 +1083,7 @@ def _merge_llm_usage(base: Any, nxt: Any) -> dict:
 
 
 def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
-    """Per-tweet metrics merge: keep the row sampled at the newest timestamp."""
+    """Keep latest projection and every append-only metric observation."""
 
     base = base if isinstance(base, dict) else {}
     nxt = nxt if isinstance(nxt, dict) else {}
@@ -1070,9 +1097,7 @@ def _merge_tweet_metrics(base: Any, nxt: Any) -> dict:
         if not isinstance(b, dict):
             out[tweet_id] = deepcopy(a)
             continue
-        a_ts = _parse_state_timestamp(str(a.get("at") or ""))
-        b_ts = _parse_state_timestamp(str(b.get("at") or ""))
-        out[tweet_id] = deepcopy(a if a_ts >= b_ts else b)
+        out[tweet_id] = merge_metric_rows(a, b)
     return out
 
 
