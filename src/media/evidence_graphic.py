@@ -7,14 +7,15 @@ supply the expected hash from the reviewed evidence, never from edited media.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import math
 import json
+import re
 from urllib.parse import urlparse
 
 from src.editorial.revisions import fingerprint
 
-TEMPLATE_VERSION = "p31-preview-1"
+TEMPLATE_VERSION = "p31-preview-2"
 TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory"})
 VARIABLE_LABELS = {"daily_maximum_temperature": "Daily maximum temperature",
                    "daily_minimum_temperature": "Daily minimum temperature"}
@@ -43,6 +44,20 @@ def _number(value):
     return value
 
 
+def date_only(evidence):
+    return evidence.get("time_basis") == "source_calendar_date"
+
+
+def _date(value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        raise ValueError("Source calendar dates require YYYY-MM-DD, without an invented time")
+    return date.fromisoformat(value)
+
+
+def point_label(point, evidence):
+    return point["valid_date"] if date_only(evidence) else point["valid_time"]
+
+
 def _source(source, synthetic):
     if not isinstance(source, dict):
         raise ValueError("Every series requires source provenance")
@@ -67,6 +82,12 @@ def _point(point, evidence):
     if point.get("evidence_type") not in {"observed", "forecast", "reanalysis"}:
         raise ValueError("Declare observed, forecast or reanalysis evidence explicitly")
     _source(point.get("source"), evidence["synthetic"])
+    if date_only(evidence):
+        if point.get("valid_time") is not None or point["evidence_type"] != "observed":
+            raise ValueError("Date-only station values cannot acquire an instant or forecast status")
+        if point["source"].get("station_id") != evidence["station_id"]:
+            raise ValueError("Date-only points must identify the same source station")
+        return _date(point.get("valid_date"))
     return _time(point.get("valid_time"))
 
 
@@ -85,6 +106,17 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         raise ValueError("Graphic evidence differs from the expected review binding")
     if type(evidence.get("synthetic")) is not bool:
         raise ValueError("Synthetic status must be explicit")
+    if evidence.get("time_basis", "instant") not in {"instant", "source_calendar_date"}:
+        raise ValueError("Unsupported graphic time basis")
+    if date_only(evidence) and (
+        evidence.get("spatial_scope") != "station"
+        or not re.fullmatch(r"[A-Z0-9]{11}", str(evidence.get("station_id", "")))
+        or evidence.get("reporting_interval_known") is not False
+        or evidence.get("timezone") is not None
+    ):
+        raise ValueError("Date-only station scope must retain its unknown reporting interval/timezone")
+    if date_only(evidence) and "input_binding" not in evidence:
+        raise ValueError("Date-only station graphics require a qualified input bundle binding")
     for key, limit in (("event_id", 120), ("location", 45), ("scope", 105)):
         _text(evidence.get(key), key, limit)
     if evidence.get("variable") not in VARIABLE_LABELS:
@@ -96,10 +128,11 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         raise ValueError("Provide one to eight explicit temperature points")
     times = [_point(point, evidence) for point in points]
     as_of = _time(evidence.get("evidence_as_of"))
+    comparison_as_of = as_of.date() if date_only(evidence) else as_of
     for point, valid in zip(points, times):
-        if point["evidence_type"] != "forecast" and valid > as_of:
+        if point["evidence_type"] != "forecast" and valid > comparison_as_of:
             raise ValueError("Observed/reanalysis values cannot occur after the evidence cutoff")
-        if point["evidence_type"] == "forecast" and valid <= as_of:
+        if point["evidence_type"] == "forecast" and valid <= comparison_as_of:
             raise ValueError("This preview supports forecasts valid after the evidence cutoff")
     if any(left >= right for left, right in zip(times, times[1:])):
         raise ValueError("Trajectory times must be unique and strictly increasing")
@@ -115,20 +148,37 @@ def validate_graphic(template, evidence, *, expected_evidence_sha256):
         if not isinstance(baseline, dict) or baseline.get("complete") is not True:
             raise ValueError("Incomplete comparators cannot be plotted as an archive extreme")
         _text(baseline.get("scope"), "baseline scope", 100)
-        count, expected = baseline.get("sample_count"), baseline.get("expected_count")
-        if type(count) is not int or type(expected) is not int or count <= 0 or count != expected:
-            raise ValueError("Comparator coverage must be explicit and complete")
-        start, cutoff = _time(baseline.get("start")), _time(baseline.get("cutoff"))
+        if date_only(evidence):
+            if baseline.get("coverage_kind") != "available_accepted_source_samples":
+                raise ValueError("Station comparison must retain available accepted sample scope")
+            count, cells = baseline.get("accepted_sample_count"), baseline.get("source_calendar_count")
+            expected = baseline.get("source_calendar_expected_count")
+            if type(count) is not int or type(cells) is not int or type(expected) is not int or not 0 < count <= cells == expected:
+                raise ValueError("Station comparator needs accepted counts and complete source-calendar coverage")
+            for key in ("source_missing_count", "source_qc_rejected_count"):
+                if type(baseline.get(key)) is not int or not 0 <= baseline[key] <= cells:
+                    raise ValueError("Station comparator exclusions must remain explicit")
+            start, cutoff = _date(baseline.get("start")), _date(baseline.get("cutoff"))
+            if (cutoff - start).days + 1 != expected:
+                raise ValueError("Source-calendar count does not cover the declared interval")
+        else:
+            count, expected = baseline.get("sample_count"), baseline.get("expected_count")
+            if type(count) is not int or type(expected) is not int or count <= 0 or count != expected:
+                raise ValueError("Comparator coverage must be explicit and complete")
+            start, cutoff = _time(baseline.get("start")), _time(baseline.get("cutoff"))
         if not start <= cutoff < times[0]:
             raise ValueError("Comparator cutoff must precede candidate valid time")
         comparator = baseline.get("point")
         if not isinstance(comparator, dict):
             raise ValueError("Missing comparator point evidence")
         observed = _point(comparator, evidence)
-        if comparator["evidence_type"] == "forecast" or not start <= observed <= cutoff <= as_of:
+        if comparator["evidence_type"] == "forecast" or not start <= observed <= cutoff <= comparison_as_of:
             raise ValueError("Comparator must be an observed/reanalysis point inside its stated interval")
     elif len(points) < 2 or evidence.get("baseline") is not None:
         raise ValueError("Trajectory requires two to eight points and no implied record comparator")
+    if "input_binding" in evidence:
+        from src.media.temperature_graphic_adapter import validate_temperature_adapter_binding
+        validate_temperature_adapter_binding(template, evidence)
     return deepcopy(evidence)
 
 
@@ -141,13 +191,19 @@ def chart_title(template, evidence):
 
 def build_alt_text(template, evidence):
     prefix = "SYNTHETIC DEMONSTRATION; no actual weather. " if evidence["synthetic"] else ""
-    rows = [f"{p['valid_time']}: {p['value']:g}{p['unit']} {p['evidence_type']} ({p['source']['product']})" for p in evidence["points"]]
+    rows = [f"{point_label(p, evidence)}: {p['value']:g}{p['unit']} {p['evidence_type']} ({p['source']['product']})" for p in evidence["points"]]
     text = prefix + f"{chart_title(template, evidence)} for {evidence['location']}. Variable: {VARIABLE_LABELS[evidence['variable']]}. Scope: {evidence['scope']}. Evidence as of {evidence['evidence_as_of']}. " + "; ".join(rows) + "."
+    if date_only(evidence):
+        text += " Dates are station source-calendar labels; reporting interval and timezone are unknown, with no implied UTC observation time."
     if template == "temperature_comparator":
         baseline, candidate = evidence["baseline"], evidence["points"][0]
         prior = baseline["point"]
-        text += (f" Comparator: {prior['value']:g}{prior['unit']} {prior['evidence_type']} on {prior['valid_time']} "
-                 f"from {prior['source']['product']}. {baseline['scope']}; complete {baseline['sample_count']} samples "
+        coverage = (f"{baseline['accepted_sample_count']} accepted samples; {baseline['source_calendar_count']} source-calendar cells, including {baseline['source_missing_count']} missing and {baseline['source_qc_rejected_count']} QC-rejected cells across the full interval"
+                    if date_only(evidence) else f"complete {baseline['sample_count']} samples")
+        text += (f" Comparator: {prior['value']:g}{prior['unit']} {prior['evidence_type']} on {point_label(prior, evidence)} "
+                 f"from {prior['source']['product']}. {baseline['scope']}; {coverage} "
                  f"from {baseline['start']} through {baseline['cutoff']}. Difference {candidate['value'] - prior['value']:+g}{prior['unit']}. "
                  "This dated comparison does not establish an official or unrestricted record.")
+        if date_only(evidence):
+            text += f" Latest accepted sample: {baseline['accepted_sample_cutoff']}; verified source-calendar cutoff: {baseline['cutoff']}."
     return text

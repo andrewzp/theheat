@@ -5,7 +5,7 @@ import ReportLab or require this renderer. No upload or publishing adapter.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import base64
 import hashlib
 import json
@@ -14,7 +14,8 @@ import subprocess
 
 from src.editorial.revisions import fingerprint
 from src.media.evidence_graphic import (
-    HEIGHT, WIDTH, TEMPLATE_VERSION, VARIABLE_LABELS, build_alt_text, chart_title, validate_graphic,
+    HEIGHT, WIDTH, TEMPLATE_VERSION, VARIABLE_LABELS, build_alt_text, chart_title, date_only,
+    point_label, validate_graphic,
 )
 
 BACKGROUND = "#0A0A0A"
@@ -48,6 +49,8 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
                 "implementation_sha256": _digest(Path(__file__)),
                 "contract_sha256": _digest(Path(__file__).with_name("evidence_graphic.py")),
                 "font_sha256": _digest(FONT_PATH), "width": WIDTH, "height": HEIGHT}
+    if "input_binding" in evidence:
+        renderer["adapter_sha256"] = _digest(Path(__file__).with_name("temperature_graphic_adapter.py"))
     identity = {"template": template, "template_version": TEMPLATE_VERSION,
                 "source_evidence_sha256": expected_evidence_sha256, "renderer": renderer}
     key = fingerprint(identity)
@@ -138,23 +141,28 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         text(56, 337, f"{current['value']:g}{evidence['unit']}", 35, "warm")
         text(56, 270, prior["evidence_type"].capitalize() + " comparator", 22)
         text(56, 234, f"{prior['value']:g}{evidence['unit']}", 35)
-        text(56, 203, prior["valid_time"][:10], 20, "muted")
+        text(56, 203, point_label(prior, evidence)[:10], 20, "muted")
         text(1082, 459, f"Difference {current['value'] - prior['value']:+g}{evidence['unit']}", 27, "warm", "end")
         text(56, 416, VARIABLE_LABELS[evidence["variable"]] + " / " + evidence["scope"], 20, "muted")
         text(1120, 170, evidence["unit"], 24, "muted", "end")
         source_products.append(prior["source"]["product"])
-        valid_label = datetime.fromisoformat(current["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-        cutoff_label = datetime.fromisoformat(baseline["cutoff"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-        subtitle = f"Valid {valid_label} / cutoff {cutoff_label}"
+        if date_only(evidence):
+            subtitle = f"Source date {current['valid_date']} / archive cutoff {baseline['cutoff']}"
+        else:
+            valid_label = datetime.fromisoformat(current["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+            cutoff_label = datetime.fromisoformat(baseline["cutoff"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
+            subtitle = f"Valid {valid_label} / cutoff {cutoff_label}"
         text(56, 118, subtitle, 24)
         text(56, 84, baseline["scope"], 21, "muted")
     else:
-        times = [datetime.fromisoformat(point["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc) for point in points]
+        times = ([date.fromisoformat(point["valid_date"]) for point in points] if date_only(evidence) else
+                 [datetime.fromisoformat(point["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc) for point in points])
         xs = [(value - times[0]).total_seconds() / 86400 for value in times]
         padding = (xs[-1] - xs[0]) * 0.04
         plot.xValueAxis.valueMin, plot.xValueAxis.valueMax = xs[0] - padding, xs[-1] + padding
-        daily = len({value.date() for value in times}) == len(times)
-        same_day = len({value.date() for value in times}) == 1
+        days = [value.date() if isinstance(value, datetime) else value for value in times]
+        daily = len(set(days)) == len(times)
+        same_day = len(set(days)) == 1
         time_format = "%m-%d" if daily else ("%H:%M" if same_day else "%m-%d %H:%M")
         if not daily and len({value.strftime(time_format) for value in times}) != len(times):
             time_format += ":%S"
@@ -192,7 +200,9 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         text(60, 461, evidence["unit"], 23, "muted")
         legend = "   ".join(("◇ " if kind == "forecast" else "● ") + kind.capitalize() for kind, _ in series if kind != "forecast-connector")
         text(1095, 484, legend, 23, "muted", "end")
-        text(56, 119, f"{times[0].strftime('%Y-%m-%d %H:%M')}–{times[-1].strftime('%Y-%m-%d %H:%M')} UTC", 23)
+        period_label = (f"{times[0].isoformat()}–{times[-1].isoformat()} / source dates; times unknown"
+                        if date_only(evidence) else f"{times[0].strftime('%Y-%m-%d %H:%M')}–{times[-1].strftime('%Y-%m-%d %H:%M')} UTC")
+        text(56, 119, period_label, 23)
         text(56, 85, evidence["scope"], 21, "muted")
     drawing.add(plot)
     # Source labels are derived from evidence, not editable renderer copy.
