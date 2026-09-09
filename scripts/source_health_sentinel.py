@@ -237,7 +237,14 @@ def classify_source(
     latest = next((row for row in reversed(runs) if isinstance(row, dict)), {})
     accounting_only = (name == "budget" and latest.get("status") == "skipped"
                        and latest.get("error_class") == "accounting_coverage")
-    if not recent or accounting_only:
+    verification_budget_only = (name == "newsworthiness" and latest.get("status") == "degraded"
+                                and latest.get("error_class") == "verification_budget")
+    if verification_budget_only:
+        # Intentional work limits are partial coverage, not a broken provider.
+        # They neither open new repair incidents nor resolve earlier outages.
+        category = "degraded"
+        recent_rate = None
+    elif not recent or accounting_only:
         # A coverage report makes no claim of current budget health or outage.
         # Retain old threshold alarms, but do not keep filing them as new failures.
         category = "idle"
@@ -268,7 +275,7 @@ def classify_source(
     served_via = parse_served_via(last_error) if category == "degraded" else None
     return {
         "source": name,
-        **({"issue_resolution_unknown": True} if accounting_only else {}),
+        **({"issue_resolution_unknown": True} if accounting_only or verification_budget_only else {}),
         "category": category,
         "cause": cause if category == "failing" else None,
         "suggested_action": action if category == "failing" else None,
@@ -342,6 +349,14 @@ def run_sentinel(
             "total": len(verdicts),
         },
     }
+
+
+def plan_health_issue_actions(report: dict, open_issues: Mapping[str, Any]) -> list[dict]:
+    """Only observed recovery resolves incidents; deliberate limits do not."""
+    failing = {row["source"]: row for row in report["failing"]}
+    unresolved = {row["source"] for row in [*report["healthy"], *report["degraded"]]
+                  if row.get("issue_resolution_unknown")}
+    return plan_issue_actions(failing, open_issues, resolution_unknown=unresolved)
 
 
 def _issue_labels(v: Mapping[str, Any]) -> list[str]:
@@ -1502,10 +1517,7 @@ def main(argv: list[str] | None = None) -> int:
              "-d", "Source-health failure cause is not classified yet"], check=False)
     failing_map = {v["source"]: v for v in report["failing"]}
     open_issues = _list_open_sentinel_issues()
-    # Incomplete accounting neither proves an outage nor resolves a previous
-    # real threshold alert. Leave that issue untouched without recurring comments.
-    resolution_unknown = {v["source"] for v in report["healthy"] if v.get("issue_resolution_unknown")}
-    for action in plan_issue_actions(failing_map, open_issues, resolution_unknown=resolution_unknown):
+    for action in plan_health_issue_actions(report, open_issues):
         if action["action"] == "create":
             _create_issue(failing_map[action["source"]])
         elif action["action"] == "update":

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.16] - 2026-09-09
+
+- Bound news retrieval to six verification model requests and three distinct cited-page fetches. Give each story a turn before extra claims; reuse only identical impact/context/page checks within the retrieval. Unchecked claims remain excluded.
+- Explicitly disable SDK retries for the two news model sites and expose verification attempts, cache hits, withheld claims and failures. This is a per-retrieval work limit, not an account spending ceiling.
+- Treat incomplete verification as degraded coverage; intentional limits neither trigger source repair incidents nor close an older outage without observed recovery.
+
 ## [0.9.108.15] - 2026-09-09
 
 - Add a local-only immutable evidence journal: snapshot bytes, provisional draft identities, exact revisions and retained unverified history/check/publication packets.

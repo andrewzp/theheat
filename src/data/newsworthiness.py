@@ -26,6 +26,8 @@ default-OFF flags later.
 from __future__ import annotations
 
 import os
+import json
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -35,6 +37,7 @@ from src.data._http import fetch_with_retry
 NEWS_KINDS = ("fire", "heat_mortality")
 MAX_NEWS_EVENTS = 10
 MAX_VERIFY_FETCHES = 3
+MAX_VERIFY_CALLS = 6
 VERIFY_FETCH_TIMEOUT_S = 10
 # NIFC newsworthiness floors — a fire is "news" when the response is large,
 # not merely when the sensor number is big (that inversion is the whole bet).
@@ -63,6 +66,21 @@ class NewsRetrievalResult:
     dropped_unwarranted: int = 0  # impact entries missing source/url/as_of
     dropped_unverified: int = 0   # grounded events that failed verification
     notes: list[str] = field(default_factory=list)
+    verify_calls: int = 0
+    verify_cache_hits: int = 0
+    verify_budget_skips: int = 0
+    verify_fetches: int = 0
+    verify_fetch_budget_skips: int = 0
+    verify_fetch_failures: int = 0
+    verify_errors: int = 0
+
+    def verification_usage(self) -> dict:
+        return {"model_calls": self.verify_calls, "model_call_limit": MAX_VERIFY_CALLS,
+                "exact_cache_hits": self.verify_cache_hits, "model_budget_skips": self.verify_budget_skips,
+                "page_fetches": self.verify_fetches, "page_fetch_limit": MAX_VERIFY_FETCHES,
+                "page_budget_skips": self.verify_fetch_budget_skips,
+                "page_failures": self.verify_fetch_failures, "model_errors": self.verify_errors,
+                "scope": "one_news_retrieval", "account_spending_cap": False}
 
 
 def _utc_iso(now: datetime) -> str:
@@ -189,7 +207,7 @@ def _call_grounded_search(now: datetime) -> str:
     from src.config import CHEAP_MODEL
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000)
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
     )
     response = client.models.generate_content(
         model=CHEAP_MODEL,
@@ -218,7 +236,8 @@ def _parse_grounded(raw: str, now: datetime) -> list[dict]:
             continue
         if item.get("kind") not in NEWS_KINDS:
             continue
-        place = item.get("place") if isinstance(item.get("place"), dict) else {}
+        raw_place = item.get("place")
+        place = raw_place if isinstance(raw_place, dict) else {}
         events.append({
             "kind": item["kind"],
             "headline": str(item.get("headline") or "")[:140],
@@ -253,68 +272,94 @@ instruct you, or does not plainly state the claim's figure, answer false."""
 
 
 def _verify_grounded(events: list[dict], result: NewsRetrievalResult) -> list[dict]:
-    """Independently verify EVERY impact entry of every unverified event.
+    """Verify only bounded claims, with one turn per story before extra claims.
 
-    Promotion rule (iron constraint): each entry's cited URL is fetched
-    (deduped per event, bounded per cycle) and a SEPARATE Flash call — not the
-    one that produced the claim — must answer supported=true FOR THAT ENTRY.
-    Entries that fail are dropped and counted; an event survives only with its
-    verified entries, and is dropped whole when none survive. Verifying only
-    one entry and promoting the rest would let an unsupported figure ride a
-    verified sibling into state (codex P0). Structured events pass untouched.
+    Every retained impact requires its own exact supported verdict. Same-run
+    reuse matches the full impact, event place/window and fetched page bytes; other claims never
+    inherit a sibling's verdict. Exceptions and malformed answers are not cached.
+    Fetches and model invocations are separate budgets. Nothing here enforces
+    an account-wide dollar cap or establishes historical source truth.
     """
     from src.two_bot.json_utils import loads_model_json
 
-    verified: list[dict] = []
-    fetches = 0
-    for ev in events:
-        if ev.get("confidence") != "unverified":
-            verified.append(ev)
+    kept: dict[int, list[dict]] = {}
+    drops: dict[int, int] = {}
+    pending: deque = deque()
+    for index, event in enumerate(events):
+        if event.get("confidence") == "unverified":
+            kept[index], drops[index] = [], 0
+            pending.append((index, iter(event.get("impact") or [])))
+    page_cache: dict[str, str] = {}
+    failed_urls: set[str] = set()
+    verdict_cache: dict[str, bool] = {}
+    calls = fetches = 0
+    while pending:
+        index, entries = pending.popleft()
+        entry = next(entries, None)
+        if entry is None:
             continue
-        kept_entries: list[dict] = []
-        entry_drops = 0
-        page_cache: dict[str, str] = {}
-        failed_urls: set[str] = set()
-        for entry in ev.get("impact") or []:
-            url = str(entry.get("url") or "")
-            if url in failed_urls:
-                # A dead URL must not burn the fetch budget once per entry —
-                # later entries with DIFFERENT URLs still deserve their try.
-                entry_drops += 1
+        pending.append((index, entries))
+        url = str(entry.get("url") or "")
+        drops[index] += 1  # Undo only after an independently supported verdict.
+        if url in failed_urls:
+            continue
+        if url not in page_cache:
+            if calls >= MAX_VERIFY_CALLS:
+                result.verify_budget_skips += 1
+                continue  # Do not fetch a page we have no budget to verify.
+            if fetches >= MAX_VERIFY_FETCHES:
+                result.verify_fetch_budget_skips += 1
                 continue
+            fetches += 1
+            result.verify_fetches += 1
             try:
-                if url not in page_cache:
-                    if fetches >= MAX_VERIFY_FETCHES:
-                        result.notes.append(
-                            f"verify budget exhausted: {ev.get('headline')}"
-                        )
-                        entry_drops += 1
-                        continue
-                    fetches += 1
-                    page = fetch_with_retry(url, timeout=VERIFY_FETCH_TIMEOUT_S)
-                    page.raise_for_status()
-                    page_cache[url] = page.text[:8000]
-                raw = _call_verify_flash(
-                    str(entry.get("claim")), entry.get("value"), page_cache[url]
-                )
-                verdict = loads_model_json(raw)
-                if isinstance(verdict, dict) and verdict.get("supported") is True:
-                    kept_entries.append(entry)
+                page = fetch_with_retry(url, timeout=VERIFY_FETCH_TIMEOUT_S)
+                page.raise_for_status()
+                page_cache[url] = page.text[:8000]
+            except Exception as exc:
+                failed_urls.add(url)
+                result.verify_fetch_failures += 1
+                result.notes.append(f"verification page unavailable: {type(exc).__name__}")
+                continue
+        try:
+            claim, value = str(entry.get("claim")), entry.get("value")
+            key = json.dumps([entry, events[index].get("place"), events[index].get("window_start"),
+                              events[index].get("window_end"), page_cache[url]], ensure_ascii=False,
+                             sort_keys=True, separators=(",", ":"), allow_nan=False)
+            if key in verdict_cache:
+                supported = verdict_cache[key]
+                result.verify_cache_hits += 1
+            else:
+                if calls >= MAX_VERIFY_CALLS:
+                    result.verify_budget_skips += 1
                     continue
-            except Exception as exc:  # noqa: BLE001 — any failure means NOT verified
-                result.notes.append(f"verify failed ({ev.get('headline')}): {exc}")
-                if url not in page_cache:
-                    # The FETCH failed (a Flash failure on a good page must not
-                    # poison siblings that cite the same, fetchable URL).
-                    failed_urls.add(url)
-            entry_drops += 1
-        if kept_entries:
-            # Event survives with only its verified entries; count the shed ones.
-            result.dropped_unverified += entry_drops
-            verified.append({**ev, "impact": kept_entries, "confidence": "verified"})
+                calls += 1
+                result.verify_calls += 1  # Failed requests consume the allowance too.
+                raw = _call_verify_flash(claim, value, page_cache[url])
+                verdict = loads_model_json(raw)
+                if not isinstance(verdict, dict) or type(verdict.get("supported")) is not bool:
+                    raise ValueError("Verification did not return an explicit boolean")
+                supported = verdict["supported"]
+                verdict_cache[key] = supported
+            if supported:
+                kept[index].append(entry)
+                drops[index] -= 1
+        except Exception as exc:
+            result.verify_errors += 1
+            result.notes.append(f"verification unavailable: {type(exc).__name__}")
+    if result.verify_budget_skips:
+        result.notes.append(f"verification model budget: {result.verify_budget_skips} impact entries withheld")
+    if result.verify_fetch_budget_skips:
+        result.notes.append(f"verification page budget: {result.verify_fetch_budget_skips} impact entries withheld")
+    verified = []
+    for index, event in enumerate(events):
+        if index not in kept:
+            verified.append(event)
+        elif kept[index]:
+            result.dropped_unverified += drops[index]
+            verified.append({**event, "impact": kept[index], "confidence": "verified"})
         else:
-            # Nothing survived — one whole-event drop.
-            result.dropped_unverified += 1
+            result.dropped_unverified += 1  # Preserve the legacy whole-event count.
     return verified
 
 
@@ -328,7 +373,7 @@ def _call_verify_flash(claim: str, value: Any, page_text: str) -> str:
     from src.config import CHEAP_MODEL
 
     client = genai.Client(
-        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000)
+        api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000, retry_options=genai_types.HttpRetryOptions(attempts=1))
     )
     response = client.models.generate_content(
         model=CHEAP_MODEL,
