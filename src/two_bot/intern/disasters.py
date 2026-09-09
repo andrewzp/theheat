@@ -82,6 +82,12 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
         {"label": "population_affected", "value": disaster.population_affected},
         {"label": "description", "value": disaster.description},
     ]
+    for label in ("source_product", "source_url", "source_event_id"):
+        value = getattr(disaster, label, "")
+        if value:
+            current_facts.append({"label": label, "value": value})
+    if disaster.source_provenance.get("source_country_known") is False:
+        current_facts.append({"label": "claim_limit", "value": "GDACS reports affected country as unknown; do not infer a country or landfall from the cyclone position."})
     if disaster.source_leg == "subtype_witnesses":
         current_facts.extend([
             {"label": "data_source", "value": "USGS/NHC/JTWC subtype witness"},

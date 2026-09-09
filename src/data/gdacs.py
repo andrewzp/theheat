@@ -5,13 +5,14 @@ volcanoes, droughts, and wildfires with severity ratings.
 Docs: https://www.gdacs.org/Knowledge/models.aspx
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
+import math
 import xml.etree.ElementTree as ET
 
 import requests
 
-from src.data._freshness import assert_freshness, newest_freshness_date
+from src.data._freshness import assert_freshness, newest_freshness_date, parse_freshness_date
 from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
 from src.data import jtwc, nhc, usgs_quakes
@@ -22,6 +23,9 @@ from src.data.usgs_quakes import SignificantEarthquakeEvent
 GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
 GDACS_GEORSS_URL = "https://www.gdacs.org/xml/rss.xml"
 GDACS_SUBTYPE_LEG = "subtype_witnesses"
+GDACS_GEORSS_LEG = "georss"
+MAX_GEORSS_BYTES = 2_000_000
+MAX_GEORSS_ITEMS = 1_000
 
 # Event types GDACS tracks
 EVENT_TYPES = {
@@ -48,6 +52,20 @@ class GlobalDisasterEvent:
     severity_unit: str = ""
     population_affected: int = 0
     source_leg: str | None = None  # witness leg that served (R-00); None = primary
+    # Set only by the adapter that actually supplied this event. Hand-created
+    # legacy events cannot infer provenance from their display name/event ID.
+    source_product: str = ""
+    source_url: str = ""
+    source_event_id: str = ""
+    source_provenance: dict = field(default_factory=dict)
+
+
+class DisasterBatch(list[GlobalDisasterEvent]):
+    """Keep feed diagnostics even when no event meets the requested alert tier."""
+
+    def __init__(self, events, *, source_diagnostics):
+        super().__init__(events)
+        self.source_diagnostics = source_diagnostics
 
 
 # Saffir-Simpson-ish thresholds in km/h for cyclone intensity tiers.
@@ -138,6 +156,10 @@ def _events_from_features(
             severity_value=severity_value,
             severity_unit=severity_unit,
             population_affected=population_affected,
+            source_product="gdacs-events-map",
+            source_url=GDACS_URL,
+            source_event_id=str(gdacs_id),
+            source_provenance={key: props[key] for key in ("eventtype", "fromdate", "todate", "datemodified", "lastupdate", "date") if key in props},
         ))
     return events
 
@@ -171,9 +193,17 @@ def _xml_attr_int(item: ET.Element, path: str, attr: str) -> int:
 
 
 def _has_georss_coordinates(item: ET.Element) -> bool:
-    if _xml_text(item, "georss:point"):
-        return True
-    return bool(_xml_text(item, "geo:Point/geo:lat") and _xml_text(item, "geo:Point/geo:long"))
+    point = _xml_text(item, "georss:point")
+    parts = point.split() if point else [
+        _xml_text(item, "geo:Point/geo:lat"), _xml_text(item, "geo:Point/geo:long"),
+    ]
+    try:
+        if len(parts) != 2:
+            return False
+        lat, lon = map(float, parts)
+        return math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180
+    except ValueError:
+        return False
 
 
 def _events_from_georss(
@@ -181,13 +211,22 @@ def _events_from_georss(
     *,
     min_level: int,
     severity_order: dict[str, int],
+    diagnostics: dict | None = None,
 ) -> tuple[list[GlobalDisasterEvent], date | None]:
+    if len(text.encode("utf-8")) > MAX_GEORSS_BYTES:
+        raise SourceFetchError("GDACS GeoRSS schema drift: response exceeds parser byte bound")
     root = ET.fromstring(text.lstrip("\ufeff"))
+    channel = root.find("channel")
+    items = channel.findall("item") if channel is not None else []
+    if root.tag != "rss" or not items or len(items) > MAX_GEORSS_ITEMS:
+        raise SourceFetchError("GDACS GeoRSS schema drift: missing or invalid bounded RSS item collection")
     events: list[GlobalDisasterEvent] = []
     payload_dates: list[date | datetime | int | float | str | None] = []
-    for item in root.findall(".//item"):
+    alert_counts = {level: 0 for level in severity_order}
+    unknown_country_count = 0
+    for item in items:
         event_type_code = _xml_text(item, "gdacs:eventtype")
-        alert_level = _xml_text(item, "gdacs:alertlevel") or "Green"
+        alert_level = _xml_text(item, "gdacs:alertlevel")
         gdacs_id = _xml_text(item, "gdacs:eventid")
         country = _xml_text(item, "gdacs:country")
         from_date = _xml_text(item, "gdacs:fromdate")
@@ -195,18 +234,29 @@ def _events_from_georss(
         description = _xml_text(item, "description")
         title = _xml_text(item, "title")
         name = _xml_text(item, "gdacs:eventname") or title
-        if not (
-            event_type_code
-            and alert_level
-            and gdacs_id
-            and country
-            and from_date
-            and description
-            and name
-            and _has_georss_coordinates(item)
-        ):
-            raise SourceFetchError("GDACS GeoRSS insufficient GeoRSS fields")
-        if severity_order.get(alert_level, 0) < min_level:
+        # GDACS explicitly emits an empty country element for some cyclones
+        # whose affected countries are unknown. Preserve that absence; it is
+        # not a malformed event and cannot imply landfall or a guessed country.
+        country_unknown = (
+            event_type_code == "TC" and not country
+            and item.find("gdacs:country", _GEORSS_NS) is not None
+        )
+        required = {
+            "event_type": event_type_code in EVENT_TYPES,
+            "alert_level": alert_level in severity_order,
+            "event_id": bool(gdacs_id),
+            "country": bool(country) or country_unknown,
+            "from_date": parse_freshness_date(from_date) is not None,
+            "description": bool(description),
+            "name": bool(name),
+            "coordinates": _has_georss_coordinates(item),
+        }
+        missing = [field for field, valid in required.items() if not valid]
+        if missing:
+            raise SourceFetchError("GDACS GeoRSS insufficient GeoRSS fields: " + ", ".join(missing))
+        alert_counts[alert_level] += 1
+        unknown_country_count += int(country_unknown)
+        if severity_order[alert_level] < min_level:
             continue
 
         severity_value = _xml_attr_float(item, "gdacs:severity", "value")
@@ -228,7 +278,29 @@ def _events_from_georss(
             severity_value=severity_value,
             severity_unit=severity_unit,
             population_affected=population_affected,
+            source_leg=GDACS_GEORSS_LEG,
+            source_product="gdacs-georss",
+            source_url=GDACS_GEORSS_URL,
+            source_event_id=gdacs_id,
+            source_provenance={
+                "eventtype": event_type_code, "fromdate": from_date,
+                "todate": _xml_text(item, "gdacs:todate"),
+                "datemodified": _xml_text(item, "gdacs:datemodified"),
+                "report_link": _xml_text(item, "link"),
+                "source_country_known": bool(country),
+                "coordinates": _xml_text(item, "georss:point") or {
+                    "latitude": _xml_text(item, "geo:Point/geo:lat"),
+                    "longitude": _xml_text(item, "geo:Point/geo:long"),
+                },
+            },
         ))
+    if diagnostics is not None:
+        diagnostics.update(
+            source_leg=GDACS_GEORSS_LEG, feed_items_validated=len(items),
+            alert_counts=alert_counts, selected_alerts=len(events),
+            unknown_country_items=unknown_country_count,
+            status="valid_alerts" if events else "valid_no_qualifying_alerts",
+        )
     return events, newest_freshness_date(payload_dates)
 
 
@@ -270,7 +342,13 @@ def _fetch_disasters_primary(
     try:
         resp = fetch_with_retry(GDACS_URL, timeout=30, attempts=3, backoff_base=1.0)
         data = resp.json()
-        features = data.get("features", [])
+        if not isinstance(data, dict) or not isinstance(data.get("features"), list) or not data["features"]:
+            raise ValueError("GDACS JSON schema drift: missing or empty feature collection")
+        features = data["features"]
+        if any(not isinstance(row, dict) or not isinstance(row.get("properties"), dict) for row in features):
+            raise ValueError("GDACS JSON schema drift: invalid feature properties")
+        if any(not all(row["properties"].get(field) for field in ("eventtype", "eventid", "alertlevel")) for row in features):
+            raise ValueError("GDACS JSON schema drift: missing event identity or alert level")
         events = _events_from_features(
             features,
             min_level=min_level,
@@ -288,6 +366,7 @@ def _fetch_disasters_primary(
 
     except (requests.RequestException, ValueError, KeyError) as exc:
         try:
+            diagnostics = {"primary_error_class": type(exc).__name__}
             resp = fetch_with_retry(
                 GDACS_GEORSS_URL, timeout=30, attempts=3, backoff_base=1.0
             )
@@ -295,10 +374,11 @@ def _fetch_disasters_primary(
                 resp.text,
                 min_level=min_level,
                 severity_order=severity_order,
+                diagnostics=diagnostics,
             )
             print("[gdacs] served by georss fallback")
         except (requests.RequestException, ValueError, ET.ParseError, SourceFetchError) as georss_exc:
-            if isinstance(georss_exc, SourceFetchError) and "insufficient GeoRSS fields" in str(georss_exc):
+            if isinstance(georss_exc, (SourceFetchError, ET.ParseError)):
                 raise SourceFetchError(f"GDACS GeoRSS schema drift: {georss_exc}") from georss_exc
             if strict:
                 raise SourceFetchError(
@@ -307,7 +387,7 @@ def _fetch_disasters_primary(
             return []
         if newest_date:
             assert_freshness(newest_date, "gdacs", max_age_days=3)
-        return events
+        return DisasterBatch(events, source_diagnostics=diagnostics)
 
 
 def _fetch_subtype_witnesses(min_severity: str) -> list[GlobalDisasterEvent]:
@@ -368,6 +448,10 @@ def _quake_to_gdacs_event(quake: SignificantEarthquakeEvent) -> GlobalDisasterEv
         severity_value=quake.magnitude,
         severity_unit="M",
         population_affected=0,
+        source_product="usgs-significant-earthquake",
+        source_url=quake.url or usgs_quakes.USGS_SIGNIFICANT_DAY_URL,
+        source_event_id=quake.usgs_id,
+        source_provenance={"event_time": quake.time, "event_updated": quake.updated},
     )
 
 
@@ -404,4 +488,9 @@ def _cyclone_to_gdacs_event(advisory: CycloneAdvisory) -> GlobalDisasterEvent:
         severity_value=severity_value_kmh,
         severity_unit="km/h",
         population_affected=0,
+        source_product=f"{advisory.source}-cyclone-advisory" if advisory.source else "",
+        source_url=advisory.public_advisory_url,
+        source_event_id=advisory.storm_id,
+        source_provenance={"issued_at": advisory.issued_at, "advisory_number": advisory.advisory_number,
+                           "original_source_leg": advisory.source_leg},
     )
