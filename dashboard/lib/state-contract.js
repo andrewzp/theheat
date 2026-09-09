@@ -49,6 +49,7 @@ export const STATE_DEFAULTS = {
   "publish_ledger": {},
   "tweet_metrics": {},
   "llm_usage": {},
+  "writer_negative_cache": {},
   "_state_rev": 0,
   "ocean_sst_streak": {
     "seeded": false,
@@ -144,6 +145,7 @@ export const METADATA_JSON_KEYS = [
   "publish_ledger",
   "tweet_metrics",
   "llm_usage",
+  "writer_negative_cache",
   "_state_rev",
   "reganom_last_fired",
   "coverage_log",

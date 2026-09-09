@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.10] - 2026-09-09
+
+### Bounded repeat attempts and first graphics previews
+
+- Reuse two individually fresh, explicit initial writer evidence rejections for the exact same candidate, context and policy. Both queue modes and direct dispatch defer unchanged inputs without consuming writer slots. Changed evidence reopens; style, formatting retries, invalid output, transport and billing failures cannot activate the cache. Retention is bounded and the operator can disable reuse.
+- Integrate the matching nullable rejection metadata prompt and strict parser together. This adapts existing economics PR 464 without modifying its original branch. Offline call-count tests demonstrate avoided invocations; billed savings remain unmeasured.
+- Add two optional local chart templates: a dated temperature comparison and an observed/forecast trajectory. They include exact evidence/source/units/time/scope bindings, alt text, embedded fonts, deterministic rendering and verified cached artifacts. The supplied specimens are explicitly synthetic. No image-model calls or production dependency changes.
+- Combined validation: 3,292 offline Python tests passed, 41 paid replays excluded; Ruff and mypy (133 source files) passed. P08's 292 dashboard tests and build passed, and both optional graphic renderers passed actual deterministic/cache/tamper checks.
+- Graphics remain local review prototypes; live source adapters, production renderer packaging, media selection and joint text/media approval are still required. Automatic publishing remains paused and private historical evidence remains preserved.
+
 ## [0.9.108.9] - 2026-09-09
 
 ### Compact evidence-grounded writing, scientific integrity and source repair

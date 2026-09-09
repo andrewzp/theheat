@@ -140,6 +140,10 @@ class WriterResult:
     cited_impact: bool | None = None
     # Local failed-call diagnostic, never an accepted provider output field.
     failure_diagnostic: dict | None = None
+    kill_scope: str | None = None
+    kill_code: str | None = None
+    # Local provenance only; the provider cannot self-certify first-attempt status.
+    initial_response: bool = False
 
     def __post_init__(self):
         if (self.tweet is None) == (self.kill_reason is None):
@@ -162,6 +166,14 @@ class WriterResult:
             raise ValueError("WriterResult reasoning must be bounded text")
         if self.cited_impact is not None and type(self.cited_impact) is not bool:
             raise ValueError("WriterResult cited_impact must be boolean or null")
+        if self.kill_scope not in (None, "evidence", "style", "context", "unknown"):
+            raise ValueError("WriterResult kill_scope is not recognized")
+        if self.kill_code not in (None, "insufficient_evidence", "conflicting_evidence"):
+            raise ValueError("WriterResult kill_code is not recognized")
+        if self.tweet is not None and (self.kill_scope is not None or self.kill_code is not None):
+            raise ValueError("A viable tweet cannot carry rejection metadata")
+        if self.kill_scope != "evidence" and self.kill_code is not None:
+            raise ValueError("Only evidence-scoped rejections may carry an evidence code")
         for name, anchor in (("era_anchor_used", self.era_anchor_used), ("peer_comparison_used", self.peer_comparison_used)):
             if anchor is not None and (not isinstance(anchor, str) or not anchor.strip() or self.tweet is None or anchor not in self.tweet):
                 raise ValueError(f"WriterResult {name} must be an exact nonempty tweet substring or null")
@@ -186,6 +198,10 @@ class WriterResult:
             data["cited_impact"] = self.cited_impact
         if self.failure_diagnostic is not None:
             data["failure_diagnostic"] = self.failure_diagnostic
+        if self.kill_scope is not None:
+            data["kill_scope"] = self.kill_scope
+        if self.kill_code is not None:
+            data["kill_code"] = self.kill_code
         return data
 
 

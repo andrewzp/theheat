@@ -75,6 +75,8 @@ def test_schema_matches_parser_contract():
         "peer_comparison_used",
         "reasoning",
         "cited_impact",
+        "kill_scope",
+        "kill_code",
     }
     assert schema_fields == parser_fields
 
@@ -95,6 +97,8 @@ def test_schema_shape_is_strict():
         "era_anchor_used",
         "peer_comparison_used",
         "cited_impact",
+        "kill_scope",
+        "kill_code",
     }
     # No unsupported constraints (maxLength is not enforced server-side; the
     # 280 cap must stay in the length-retry lane, not silently assumed here).

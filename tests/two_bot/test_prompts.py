@@ -100,12 +100,13 @@ def test_frozen_historical_case_keeps_a_corresponding_policy_and_evidence_limit(
     # This maps requirements; the P05/P06 tests execute the actual gates.
 
 
-def test_output_field_contracts_match_existing_parsers_without_new_metadata():
+def test_output_field_contracts_match_parsers_with_nullable_rejection_metadata():
     from src.two_bot import critic, fact_check, writer
     from src.two_bot.json_utils import loads_model_json
 
     writer_shape = loads_model_json(WRITER_SYSTEM_PROMPT.split("OUTPUT\n", 1)[1])
-    assert set(writer_shape) == {"tweet", "kill_reason", "angle_chosen", "era_anchor_used", "peer_comparison_used", "reasoning", "cited_impact"}
+    assert set(writer_shape) == {"tweet", "kill_reason", "angle_chosen", "era_anchor_used", "peer_comparison_used", "reasoning", "cited_impact", "kill_scope", "kill_code"}
+    assert writer_shape["kill_scope"] is None and writer_shape["kill_code"] is None
     tweet = "A thermal anomaly near Example Bay, Guinea: 300 MW on September 9."
     payload = dict(writer_shape, tweet=tweet, kill_reason=None, angle_chosen="plain_number", era_anchor_used=None, peer_comparison_used=None, reasoning="A supported measurement.", cited_impact=None)
     assert writer._parse_writer_json(json.dumps(payload)).tweet == tweet
