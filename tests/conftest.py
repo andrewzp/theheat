@@ -133,3 +133,14 @@ def _fast_retry_backoff(request):
         return
     with patch("src.data._http._sleep_before_retry"):
         yield
+
+
+@pytest.fixture
+def automatic_publication_release(monkeypatch):
+    """Existing mocked posting scenarios exercise an explicit offline release.
+
+    Containment tests deliberately remove/override these values to prove default
+    pause and failure behavior. This fixture does not enable production.
+    """
+    monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_ENABLED", "1")
+    monkeypatch.setenv("THEHEAT_AUTOMATIC_PUBLICATION_EPOCH", "offline-test-release")

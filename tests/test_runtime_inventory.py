@@ -159,7 +159,7 @@ def test_cli_captures_inventory_before_dispatch_and_preserves_it_in_history(monk
     saved = []
     events = []
 
-    def collect(mode):
+    def collect(mode, *, bot_state):
         events.append("capture")
         assert mode == "alerts"
         return captured

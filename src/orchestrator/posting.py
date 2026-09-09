@@ -11,6 +11,7 @@ from src.editorial.approval import (
     autoship_max_age_hours,
     autoship_on_critic_pass_enabled,
 )
+from src.editorial.publication import automatic_approval_allowed, observe_publication_policy
 from src.orchestrator.draft_save import _critic_passed
 from src.editorial.revisions import (
     approval_is_current,
@@ -171,8 +172,7 @@ def _record_published_two_bot_memory(bot_state: BotState, draft: dict) -> None:
 def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
     """Post current authorized copy, retaining the exact submitted revision.
 
-    Untracked ad-hoc text remains the existing manual escape hatch. Every draft
-    with an identifier must pass the same final gate regardless of its caller.
+    Every submission requires a retained, reviewed draft and exact approval.
     """
     if not state.check_daily_cap(bot_state):
         print("[post] Daily tweet cap reached, skipping")
@@ -180,6 +180,13 @@ def post_approved(draft_or_text: dict | str, bot_state: BotState) -> str:
 
     draft = _coerce_publish_draft(draft_or_text)
     tracked = bool(draft.get("id") or draft.get("event_id") or draft.get("approval_binding"))
+    if not tracked or not draft.get("id"):
+        print("[post] Untracked text cannot publish; create and review a sourced draft")
+        return "failed"
+    mode = (draft.get("approval_binding") or {}).get("mode")
+    if mode == "auto" and not automatic_approval_allowed(draft, bot_state):
+        draft["post_error"] = "Automatic publication paused or approval belongs to an obsolete release epoch"
+        return "failed"
     if tracked:
         mode = (draft.get("approval_binding") or {}).get("mode")
         if not approval_is_current(draft, mode):
@@ -295,6 +302,10 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
     draft_id = os.environ.get("DRAFT_ID", "").strip()
     publish_intent_id = os.environ.get("PUBLISH_INTENT_ID", "").strip()
     _reconcile_publish_ledger(bot_state)
+    if not draft_id:
+        _record_source_run(current_run, bot_state, "manual_publish", manual_start,
+                           status="failed", error="Untracked text cannot publish; review a sourced draft first")
+        return bot_state
     draft = _find_draft(bot_state, draft_id=draft_id, tweet_text=tweet_text)
     if not tweet_text.strip():
         print("[manual] No TWEET_TEXT provided, skipping")
@@ -345,9 +356,6 @@ def run_manual_tweet(bot_state: BotState, current_run: dict | None = None) -> Bo
             status="skipped", observed=1, note=reason
         )
         return bot_state
-
-    if draft is None:
-        tweet_text = tweet_text.strip()  # Preserve the separate ad-hoc text path.
 
     if len(tweet_text) > 280:
         print(f"[manual] Tweet too long ({len(tweet_text)} chars), skipping")
@@ -416,6 +424,11 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
     """Post drafts whose auto-approval window has elapsed."""
     queue_start = time.perf_counter()
     _reconcile_publish_ledger(bot_state)
+    policy = observe_publication_policy(bot_state)
+    if not policy["enabled"]:
+        _record_source_run(current_run, bot_state, "auto_publish_due", queue_start,
+                           status="skipped", note=policy["reason"])
+        return bot_state
     now = _utc_now()
     due_drafts = []
     for draft in bot_state.get("drafts", []):
@@ -452,7 +465,7 @@ def process_due_drafts(bot_state: BotState, current_run: dict | None = None) -> 
             failures.append(f"{draft.get('id')}: publish intent in progress")
             continue
 
-        if not approval_is_current(draft, "auto"):
+        if not automatic_approval_allowed(draft, bot_state) or not approval_is_current(draft, "auto"):
             _demote_autoship_to_manual(draft, "Auto-approval needs a current model review and revision authorization")
             failures.append(f"{draft.get('id')}: stale review or approval")
             continue

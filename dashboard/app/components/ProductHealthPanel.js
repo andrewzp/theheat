@@ -29,6 +29,10 @@ export function ProductHealthPanel({ health, config, deployment, stale = false }
   return h("section", { className: "card full runtime-panel", "aria-label": "Operating status" },
     h("div", { className: "runtime-heading" }, h("h2", null, "Operating status"),
       h("span", { className: "runtime-note" }, stale ? "Refresh failed · showing the last loaded evidence" : "From retained bot evidence")),
+    h("p", { className: "runtime-note", role: "status" }, flags.automatic_publication_enabled === false
+      ? "Automatic publication paused in the last bot report. Ingestion and review continue. Release requires fresh checks and new approval."
+      : flags.automatic_publication_enabled === true ? "Automatic publication was enabled in the last bot report. Approvals must match its release epoch."
+        : "Automatic publication state is unverified; scheduling is unavailable until the bot reports its release policy."),
     h("dl", { className: "runtime-milestones" },
       h(Milestone, { title: "Last nonempty source run", value: health.milestones?.source_observed }),
       h(Milestone, { title: "Last saved draft", value: health.milestones?.draft_created }),

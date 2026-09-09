@@ -1,73 +1,11 @@
+import { mergePublicationControl } from "./publication-control.js"
 import { DatabaseSync } from "node:sqlite"
+import { STATE_DEFAULTS, METADATA_JSON_KEYS, DRAFT_RETENTION } from "./state-contract.js"
 import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
 
-const DEFAULT_STATE = {
-  last_hot10: { date: null, cities: [] },
-  streaks: {},
-  posted_events: [],
-  daily_tweet_count: {},
-  co2_annual_count: {},
-  ch4_annual_count: {},
-  ch4_last_milestone: null,
-  nao_annual_count: {},
-  ao_annual_count: {},
-  pdo_annual_count: {},
-  nao_last_phase: null,
-  ao_last_phase: null,
-  pdo_last_phase: null,
-  ozone_hole_last_peak: {},
-  ozone_hole_annual_count: {},
-  pending_confirmations: [],
-  drafts: [],
-  run_history: [],
-  errors: [],
-  suppressions: [],
-  memory: {
-    ongoing_events: [],
-    used_era_anchors: [],
-    used_peer_comparisons: [],
-    used_framings: [],
-    shipped_tweets: [],
-  },
-  city_all_time_max: {},
-  city_all_time_min: {},
-  city_monthly_max: {},
-  city_monthly_min: {},
-  record_streaks: {},
-  data_source_failures: {},
-  source_health: {},
-  publish_ledger: {},
-  _state_rev: 0,
-  ocean_sst_streak: {
-    seeded: false,
-    last_milestone_fired: null,
-  },
-  ice_mass_max_loss: {},
-  ice_mass_last_milestone: {},
-  ice_mass_last_seen: {},
-  ice_annual_count: {},
-  precip_daily_records: {},
-  precip_recent_by_city: {},
-  snow_daily_swe_gain_records: {},
-  snow_recent_by_station: {},
-  snow_annual_count: {},
-  seasonal_snow_records: {},
-  fire_complex_tiers: {},
-  coral_dhw_last_tier: {},
-  coral_dhw_annual_count: {},
-  cyclone_tiers: {},
-  cyclone_wind_history: {},
-  cyclone_annual_count: {},
-  flood_activation_tiers: {},
-  flood_annual_count: {},
-  fire_footprint_last_run: null,
-  synthesis_components: {
-    fires: {},
-    heats: {},
-    drought_snapshot: null,
-  },
-  synthesis_cooldown: {},
-}
+// Durable fields are generated from Python; this legacy dashboard-only queue
+// remains readable for older local fixtures, but the Python bot no longer uses it.
+const DEFAULT_STATE = { ...STATE_DEFAULTS, pending_confirmations: [] }
 
 const SQLITE_SCHEMA = `
 PRAGMA foreign_keys = ON;
@@ -169,52 +107,6 @@ CREATE TABLE IF NOT EXISTS suppressions (
 );
 `
 
-const METADATA_JSON_KEYS = [
-  "co2_annual_count",
-  "ch4_annual_count",
-  "ch4_last_milestone",
-  "nao_annual_count",
-  "ao_annual_count",
-  "pdo_annual_count",
-  "nao_last_phase",
-  "ao_last_phase",
-  "pdo_last_phase",
-  "ozone_hole_last_peak",
-  "ozone_hole_annual_count",
-  "city_all_time_max",
-  "city_all_time_min",
-  "city_monthly_max",
-  "city_monthly_min",
-  "record_streaks",
-  "ocean_sst_streak",
-  "ice_mass_max_loss",
-  "ice_mass_last_milestone",
-  "ice_mass_last_seen",
-  "ice_annual_count",
-  "precip_daily_records",
-  "precip_recent_by_city",
-  "snow_daily_swe_gain_records",
-  "snow_recent_by_station",
-  "snow_annual_count",
-  "seasonal_snow_records",
-  "fire_complex_tiers",
-  "coral_dhw_last_tier",
-  "coral_dhw_annual_count",
-  "cyclone_tiers",
-  "cyclone_wind_history",
-  "cyclone_annual_count",
-  "flood_activation_tiers",
-  "flood_annual_count",
-  "fire_footprint_last_run",
-  "synthesis_components",
-  "synthesis_cooldown",
-  "suppressions",
-  "memory",
-  "data_source_failures",
-  "source_health",
-  "publish_ledger",
-  "_state_rev",
-]
 
 const PYTHON_OWNED_METADATA_KEYS = METADATA_JSON_KEYS.filter((key) => key !== "suppressions")
 
@@ -230,7 +122,7 @@ function configuredDbPath() {
 }
 
 function configuredStateBackend() {
-  return (process.env.THEHEAT_STATE_BACKEND || "").toLowerCase()
+  return (process.env.THEHEAT_STATE_BACKEND || "").trim().toLowerCase()
 }
 
 function configuredGistId() {
@@ -246,13 +138,23 @@ function normalizeState(state) {
 
 function configuredBackend() {
   const stateBackend = configuredStateBackend()
-  if (stateBackend === "sqlite" || stateBackend === "gist") return stateBackend
-  return configuredDbPath() ? "sqlite" : "gist"
+  if (stateBackend && !["sqlite", "gist"].includes(stateBackend)) {
+    throw new Error(`Unsupported state backend: ${stateBackend}; use gist or sqlite`)
+  }
+  const backend = stateBackend || (configuredDbPath() ? "sqlite" : "gist")
+  if (backend === "sqlite" && !configuredDbPath()) {
+    throw new Error("SQLite backend selected but THEHEAT_DB_PATH is not set")
+  }
+  return backend
 }
 
 function parseTimestamp(value) {
   if (!value) return 0
-  const parsed = Date.parse(value)
+  // Python interprets legacy timestamps without an offset as UTC. Browser or
+  // worker local time must not shift retention boundaries or revision ordering.
+  const utcValue = typeof value === "string" && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value)
+    ? `${value}Z` : value
+  const parsed = Date.parse(utcValue)
   return Number.isFinite(parsed) ? parsed : 0
 }
 
@@ -406,7 +308,32 @@ export function mergePublishLedger(base = {}, next = {}) {
   return merged
 }
 
-export function mergeDrafts(current = [], incoming = [], maxItems = 200) {
+// Shared policy: the cap may trim only unprotected records. Delivery intent,
+// uncertainty and conflicting revisions remain available for reconciliation.
+export function retainDrafts(drafts, maxItems = DRAFT_RETENTION.maxItems, { now = Date.now() } = {}) {
+  const cutoff = Number(now) - DRAFT_RETENTION.rejectedDays * 86400000
+  const expired = []
+  let retained = drafts.filter((draft) => {
+    if (draft.status === "rejected" && !draftAttemptProtected(draft) && parseTimestamp(draft.created_at) < cutoff) {
+      expired.push(draft)
+      return false
+    }
+    return true
+  })
+  if (!retained.length && expired.length) {
+    retained = expired.sort((a, b) => parseTimestamp(a.created_at) - parseTimestamp(b.created_at))
+      .slice(-DRAFT_RETENTION.rejectedGuardrailCount)
+  }
+  if (retained.length <= maxItems) return retained
+  const protectedRow = (draft) => DRAFT_RETENTION.protectedStatuses.includes(draft.status) || draftAttemptProtected(draft)
+  const protectedDrafts = retained.filter(protectedRow)
+  const candidates = retained.filter((draft) => !protectedRow(draft))
+  const slots = Math.max(0, maxItems - protectedDrafts.length)
+  const kept = new Set([...protectedDrafts, ...(slots ? candidates.slice(-slots) : [])])
+  return retained.filter((draft) => kept.has(draft))
+}
+
+export function mergeDrafts(current = [], incoming = [], maxItems = DRAFT_RETENTION.maxItems, { now = Date.now() } = {}) {
   const merged = new Map()
   const anonymous = []
 
@@ -426,12 +353,7 @@ export function mergeDrafts(current = [], incoming = [], maxItems = 200) {
     return parseTimestamp(a.updated_at || a.created_at) - parseTimestamp(b.updated_at || b.created_at)
   })
 
-  if (ordered.length <= maxItems) return ordered
-  const protectedDrafts = ordered.filter(draftAttemptProtected)
-  const candidates = ordered.filter((draft) => !draftAttemptProtected(draft))
-  const slots = Math.max(0, maxItems - protectedDrafts.length)
-  const kept = new Set([...protectedDrafts, ...(slots ? candidates.slice(-slots) : [])])
-  return ordered.filter((draft) => kept.has(draft))
+  return retainDrafts(ordered, maxItems, { now })
 }
 
 function mergeRunHistory(current = [], incoming = [], maxItems = 20) {
@@ -541,6 +463,7 @@ function mergeState(current, incoming) {
     errors: mergeErrors(base.errors, next.errors),
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
+    publication_control: mergePublicationControl(base.publication_control, next.publication_control),
     publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),
   })
 }
@@ -784,6 +707,13 @@ function writeSqliteState(db, state) {
 
 function readSqliteState(db) {
   const state = structuredClone(DEFAULT_STATE)
+  const metadataKeys = new Set()
+  const supportedMetadata = new Set(["last_hot10", ...METADATA_JSON_KEYS])
+  const unsupported = db.prepare("SELECT key FROM metadata").all().map((row) => row.key)
+    .filter((key) => !supportedMetadata.has(key))
+  if (unsupported.length) {
+    throw new Error(`Unsupported SQLite metadata fields: ${unsupported.sort().join(", ")}; upgrade this reader before writing`)
+  }
   const lastHot10 = db.prepare("SELECT value_json FROM metadata WHERE key = 'last_hot10'").get()
   if (lastHot10?.value_json) {
     state.last_hot10 = JSON.parse(lastHot10.value_json)
@@ -792,6 +722,7 @@ function readSqliteState(db) {
     const row = db.prepare("SELECT value_json FROM metadata WHERE key = ?").get(key)
     if (row?.value_json) {
       state[key] = JSON.parse(row.value_json)
+      metadataKeys.add(key)
     }
   }
 
@@ -824,7 +755,10 @@ function readSqliteState(db) {
 
   state.errors = db.prepare("SELECT payload_json FROM errors ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
   const tableSuppressions = db.prepare("SELECT payload_json FROM suppressions ORDER BY seq ASC").all().map((row) => JSON.parse(row.payload_json))
-  state.suppressions = mergeSuppressions(state.suppressions, tableSuppressions)
+  // Python writes suppressions only to metadata. A present metadata row (even
+  // []) supersedes the obsolete dashboard table, preventing removed rows from
+  // reappearing after a Python write. Old table-only databases still migrate.
+  if (!metadataKeys.has("suppressions")) state.suppressions = tableSuppressions
   return normalizeState(state)
 }
 
@@ -863,12 +797,8 @@ function upsertSqliteDraft(db, draftId, draft, fallbackSeq) {
 
 async function bootstrapSqliteFromGist(db) {
   if (!configuredGistId() || sqliteIsEmpty(db) === false) return
-  try {
-    const gistState = await readGistState()
-    writeSqliteState(db, gistState)
-  } catch {
-    // Leave the DB empty if bootstrap fails; callers will still get defaults.
-  }
+  const gistState = await readGistState()
+  writeSqliteState(db, gistState)
 }
 
 export function getStateBackend() {

@@ -577,6 +577,7 @@ class TestCitationDetection:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("automatic_publication_release")
 class TestSaveDraftForcing:
     @pytest.fixture()
     def bot_state(self):

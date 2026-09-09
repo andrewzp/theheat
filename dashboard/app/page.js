@@ -34,7 +34,6 @@ export default function Dashboard() {
   const [composePrompt, setComposePrompt] = useState("")
   const [composeTweet, setComposeTweet] = useState("")
   const [generating, setGenerating] = useState(false)
-  const [posting, setPosting] = useState(false)
   const [composeStatus, setComposeStatus] = useState(null)
 
   // Suppressed signals
@@ -243,32 +242,6 @@ export default function Dashboard() {
       setComposeStatus(`Error: ${e.message}`)
     } finally {
       setGenerating(false)
-    }
-  }
-
-  async function postComposed() {
-    if (!composeTweet.trim()) return
-    setPosting(true)
-    setComposeStatus(null)
-    try {
-      const res = await fetch("/api/post", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tweet: composeTweet.trim() }),
-      })
-      const result = await res.json()
-      if (result.ok) {
-        setComposeStatus("Sent to post queue")
-        setComposeTweet("")
-        setComposePrompt("")
-        setTimeout(fetchData, 5000)
-      } else {
-        setComposeStatus(`Error: ${result.error}`)
-      }
-    } catch (e) {
-      setComposeStatus(`Error: ${e.message}`)
-    } finally {
-      setPosting(false)
     }
   }
 
@@ -525,7 +498,7 @@ export default function Dashboard() {
                 })
               ) : (
                 <div className="draft-empty">
-                  No drafts waiting. Trigger a run below or compose one manually.
+                  No drafts waiting. Trigger a run below or try a writing preview.
                 </div>
               )}
             </div>
@@ -553,7 +526,8 @@ export default function Dashboard() {
 
             {/* Compose */}
             <div className="card full" style={{ marginBottom: 16 }}>
-              <h2>Compose Tweet</h2>
+              <h2>Writing preview</h2>
+              <p className="runtime-note">Previews are unsourced writing experiments. Publishing requires a sourced draft with current review in the workbench.</p>
               <div className="compose">
                 <textarea
                   className="compose-input"
@@ -580,13 +554,6 @@ export default function Dashboard() {
                       rows={3}
                     />
                     <div className="preview-actions">
-                      <button
-                        className="btn approve"
-                        disabled={posting || !composeTweet.trim() || composeTweet.length > 280}
-                        onClick={postComposed}
-                      >
-                        {posting ? "..." : "Approve + Post"}
-                      </button>
                       <button className="btn" disabled={generating} onClick={generateTweet}>
                         Regenerate
                       </button>

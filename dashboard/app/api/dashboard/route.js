@@ -1,3 +1,4 @@
+import { dashboardAutomaticPolicy } from "../../../lib/publication-control.js"
 import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
@@ -36,7 +37,7 @@ function pendingDrafts(state) {
     })
     .map((d) => {
       try {
-        return { ...projectDraft(d), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
+        return { ...projectDraft(d), automatic_publication: dashboardAutomaticPolicy(state), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
       } catch (error) {
         return { ...d, text: typeof d.text === "string" ? d.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message, tweet_id: d.tweet_id ?? null }
       }

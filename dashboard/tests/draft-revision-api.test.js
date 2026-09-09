@@ -1,4 +1,8 @@
 import test from "node:test"
+
+// Explicit policy for these mocked legacy release scenarios.
+process.env.THEHEAT_AUTOMATIC_PUBLICATION_ENABLED = "1"
+process.env.THEHEAT_AUTOMATIC_PUBLICATION_EPOCH = "offline-test-release"
 import assert from "node:assert/strict"
 import { importFresh } from "./helpers/import-fresh.js"
 import { authorizeDraft, draftIdentity, fingerprint, initializeRevision, invalidateText, recordHumanReview, reviewIsCurrent, textHash } from "../lib/draft-revisions.js"
@@ -22,7 +26,7 @@ function fixture(id = "draft_1") {
 
 async function withStore(drafts, run, options = {}) {
   Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_USERNAME: "reviewer", DASHBOARD_PASSWORD: "secret-pass", THEHEAT_STATE_BACKEND: "gist", THEHEAT_DB_PATH: "", GIST_ID: "gist_revision_test", GITHUB_TOKEN: "token_revision_test" })
-  let state = { drafts: structuredClone(drafts), publish_ledger: options.ledger || {}, errors: [], run_history: [] }
+  let state = { drafts: structuredClone(drafts), publish_ledger: options.ledger || {}, errors: [], run_history: [{ started_at: new Date().toISOString(), runtime_inventory: { schema_version: 1, captured_at: new Date().toISOString(), flags: { automatic_publication_enabled: true, automatic_publication_epoch: "offline-test-release" } } }] }
   const dispatches = []
   let writes = 0
   const originalFetch = globalThis.fetch

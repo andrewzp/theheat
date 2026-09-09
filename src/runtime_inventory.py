@@ -8,7 +8,9 @@ unknown rather than substituting its own deployment's environment.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Any
 import os
 from pathlib import Path
 import re
@@ -27,7 +29,7 @@ def _version() -> str | None:
     return value if _VERSION_SHAPE.fullmatch(value) else None
 
 
-def collect_runtime_inventory(mode: str, *, now: datetime | None = None) -> dict:
+def collect_runtime_inventory(mode: str, *, now: datetime | None = None, bot_state: Mapping[str, Any] | None = None) -> dict:
     """Return only named, non-secret configuration effective in this process.
 
     Model modules cache configuration at import time; report their actual
@@ -38,6 +40,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None) -> dict
     from src import state
     from src.data import firms, gpm_imerg, twitter_metrics
     from src.editorial import approval, newsworthiness
+    from src.editorial.publication import automatic_publication_policy
     from src.orchestrator import caps, funnel, hot10, scheduler, triage_queue
     from src.orchestrator.sources import air_quality, open_meteo
     from src.orchestrator.sources import newsworthiness as news_source
@@ -52,6 +55,7 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None) -> dict
     raw_run_id = os.environ.get("GITHUB_RUN_ID", "")
     signals_provider = os.environ.get("THEHEAT_SIGNALS_PROVIDER", "open_meteo").lower()
 
+    publication_policy = automatic_publication_policy(bot_state)
     return {
         "schema_version": 1,
         "captured_at": captured_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
@@ -69,6 +73,9 @@ def collect_runtime_inventory(mode: str, *, now: datetime | None = None) -> dict
             "claim_extract": None,
         },
         "flags": {
+            "automatic_publication_enabled": publication_policy["enabled"],
+            "automatic_publication_epoch": publication_policy["epoch"],
+            "automatic_publication_reason": publication_policy["reason"],
             "autoship_on_critic_pass": approval.autoship_on_critic_pass_enabled(),
             "autoship_max_age_hours": approval.autoship_max_age_hours(),
             "critic_enabled": pipeline._critic_enabled(),
