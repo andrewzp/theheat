@@ -1,6 +1,6 @@
 # P04: canonical location identity
 
-Status: integrated locally on P00b/P03 `8fafd75`, with main benchmark baseline `f5e7e12` merged, in `/tmp/theheat-p04-release`, branch `codex/p04-place-release` (release 0.9.108.6). No live data calls, baseline rebuild, production state edits, publishing or deployment were performed.
+Status: released through PR 513 at `f4773c53de5d15b02d33f2da8328f36d6fd8814d`, version 0.9.108.6. Required CI passed. Paused run `34310518278` recorded the exact live version and preserved all 40 draft texts, the full publication ledger and 31 receipt IDs. The 588 original world-cache rows were privately exported and the local migration retained each verbatim. Production cache migration and qualified warming remain pending normal bounded ingestion; no bulk rebuild, paid source call or publishing was performed. Dashboard application code was unchanged.
 
 ## Contract and coverage
 
