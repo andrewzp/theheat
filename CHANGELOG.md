@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.15] - 2026-09-09
+
+- Add a local-only immutable evidence journal: snapshot bytes, provisional draft identities, exact revisions and retained unverified history/check/publication packets.
+- Commit command edits, evidence and terminal results atomically; roll back together on storage failure or process death. Add passive idempotent imports, integrity verification and explicit local migration.
+- Quarantine conflicting aliases, preserve unknown historical qualification, reject changed schemas and protect immutable rows from replacement. No production backend or publishing change.
+
 ## [0.9.108.14] - 2026-09-09
 
 ### Account for existing checker, critic, safety and news responses

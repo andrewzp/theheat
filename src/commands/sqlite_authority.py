@@ -10,10 +10,12 @@ from collections.abc import Callable
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 import json
+import os
 from pathlib import Path
 import sqlite3
 from typing import Any
 
+from src.commands import domain_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -46,8 +48,17 @@ class SQLiteAuthority:
         self.path = str(path)
         self.environment = environment
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+    def _connect(self, *, create: bool = False) -> sqlite3.Connection:
+        if create:
+            try:
+                descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                pass
+            else:
+                os.close(descriptor)
+        # Read/status/consume must not silently create an empty database.
+        uri = Path(self.path).resolve().as_uri() + "?mode=rw"
+        connection = sqlite3.connect(uri, uri=True, timeout=30, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
@@ -57,41 +68,91 @@ class SQLiteAuthority:
         if row is None or row["environment"] != self.environment:
             raise CommandError("environment_mismatch", "Authority environment does not match this consumer")
 
-    def initialize(self, initial_state: dict) -> None:
+    @staticmethod
+    def _check_tables(connection: sqlite3.Connection) -> None:
+        allowed = {"authority_metadata", "authority_state", "command_intents", "command_results", "command_events"}
+        allowed.update(domain_journal._TABLES)
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+        if tables - allowed:
+            raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
+
+    def initialize(self, initial_state: dict, *, source_namespace: str = "local-fixtures",
+                   raw: bytes | None = None) -> None:
         if not isinstance(initial_state, dict):
             raise CommandError("invalid_state", "Initial state must be an object")
         encoded = canonical_json(initial_state)
-        with closing(self._connect()) as connection:
+        with closing(self._connect(create=True)) as connection:
+            self._check_tables(connection)
             connection.execute("PRAGMA journal_mode=WAL")
-            connection.executescript(_SCHEMA)
-            for table in ("authority_metadata", "command_intents", "command_results", "command_events"):
-                for action in ("UPDATE", "DELETE"):
-                    connection.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_no_{action.lower()} BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'append-only journal'); END")
-            # REPLACE implicitly deletes a conflicting row, and SQLite normally
-            # does not run delete triggers for that operation. Block duplicate
-            # inserts explicitly across every primary/unique journal key.
-            duplicate_keys = {
-                "authority_metadata": "singleton=NEW.singleton",
-                "command_intents": "sequence=NEW.sequence OR command_id=NEW.command_id",
-                "command_results": "command_id=NEW.command_id",
-                "command_events": "sequence=NEW.sequence OR (command_id=NEW.command_id AND event=NEW.event)",
-            }
-            for table, predicate in duplicate_keys.items():
-                connection.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS(SELECT 1 FROM {table} WHERE {predicate}) BEGIN SELECT RAISE(ABORT, 'append-only journal'); END")
             connection.execute("BEGIN IMMEDIATE")
             try:
-                existing = connection.execute("SELECT state_json FROM authority_state WHERE singleton=1").fetchone()
+                self._check_tables(connection)
+                for statement in _SCHEMA.split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+                for table in ("authority_metadata", "command_intents", "command_results", "command_events"):
+                    for action in ("UPDATE", "DELETE"):
+                        connection.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_no_{action.lower()} BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'append-only journal'); END")
+                # REPLACE implicitly deletes a conflicting row, and SQLite normally
+                # does not run delete triggers for that operation. Block duplicate
+                # inserts explicitly across every primary/unique journal key.
+                duplicate_keys = {
+                    "authority_metadata": "singleton=NEW.singleton",
+                    "command_intents": "sequence=NEW.sequence OR command_id=NEW.command_id",
+                    "command_results": "command_id=NEW.command_id",
+                    "command_events": "sequence=NEW.sequence OR (command_id=NEW.command_id AND event=NEW.event)",
+                }
+                for table, predicate in duplicate_keys.items():
+                    connection.execute(f"CREATE TRIGGER IF NOT EXISTS {table}_no_replace BEFORE INSERT ON {table} WHEN EXISTS(SELECT 1 FROM {table} WHERE {predicate}) BEGIN SELECT RAISE(ABORT, 'append-only journal'); END")
+                existing = connection.execute("SELECT version,state_json FROM authority_state WHERE singleton=1").fetchone()
+                version = 0
                 if existing is not None:
                     self._check_environment(connection)
                     if existing["state_json"] != encoded:
                         raise CommandError("already_initialized", "Initialization cannot replace existing authority state")
+                    version = existing["version"]
                 else:
                     connection.execute("INSERT INTO authority_metadata(singleton, environment) VALUES(1, ?)", (self.environment,))
                     connection.execute("INSERT INTO authority_state(singleton, version, state_json) VALUES(1, 0, ?)", (encoded,))
+                installed = domain_journal.install(connection, source_namespace)
+                if installed:
+                    domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
+                        origin_id=str(version), authority_version=version, raw=raw,
+                        recorded_at=utc_text(datetime.now(UTC)))
+                elif raw is not None and canonical_json(domain_journal.parse_snapshot(raw)) != encoded:
+                    raise domain_journal.DomainJournalError("Initial bytes differ from current authority state")
                 connection.commit()
             except BaseException:
                 connection.rollback()
                 raise
+
+    def import_snapshot(self, raw: bytes, *, import_id: str, now: datetime | None = None) -> dict:
+        """Passive evidence import; never replace current state or grant approval."""
+        state = domain_journal.parse_snapshot(raw)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                report = domain_journal.record_snapshot(connection, state, origin="import",
+                    origin_id=import_id, raw=raw, recorded_at=utc_text(now or datetime.now(UTC)))
+                connection.commit()
+                return report
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def domain_status(self, *, verify: bool = False) -> dict:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            return domain_journal.inspect(connection, verify=verify)
+
+    def read_artifact(self, sha: str) -> bytes:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            domain_journal.validate_schema(connection)
+            return domain_journal.read_artifact(connection, sha)
 
     def accept(self, command: Command, principal: Principal, *, now: datetime | None = None) -> dict:
         # A caller cannot bypass schema/actor validation by directly constructing a dataclass.
@@ -163,6 +224,8 @@ class SQLiteAuthority:
                 snapshot = connection.execute("SELECT version,state_json FROM authority_state WHERE singleton=1").fetchone()
                 state = json.loads(snapshot["state_json"])
                 version = snapshot["version"]
+                pending_domain_state = None
+                domain_journal.validate_schema(connection)
                 try:
                     principal = resolve_principal(command.actor_subject)
                     if principal is None:
@@ -175,8 +238,15 @@ class SQLiteAuthority:
                         encoded_state = canonical_json(reduction.state)
                         version += 1
                         connection.execute("UPDATE authority_state SET version=?,state_json=? WHERE singleton=1", (version, encoded_state))
+                        pending_domain_state = reduction.state
                 except (CommandError, ValueError, TypeError, UnicodeError, OverflowError) as exc:
                     result = failure_result(exc)
+                # Storage failures must roll back state and result together, not
+                # become terminal reducer rejections after a successful edit.
+                if pending_domain_state is not None:
+                    domain_journal.record_snapshot(connection, pending_domain_state, origin="command",
+                        origin_id=command.command_id, authority_version=version, command_id=command.command_id,
+                        recorded_at=utc_text(clock))
                 result.update(command_id=command.command_id, digest=command.digest, state_version=version,
                               completed_at=utc_text(clock), actor_subject=command.actor_subject)
                 connection.execute("INSERT INTO command_results(command_id,result_json) VALUES(?,?)", (command.command_id, canonical_json(result)))
