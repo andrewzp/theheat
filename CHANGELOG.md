@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.8] - 2026-09-09
+
+### Completed-run persistence and dashboard security maintenance
+
+- Finalize the run report before the last state save so a successful flush retains both data and runtime metadata. Retry an unconfirmed write once; two failures exit nonzero. Diagnostics expose error class/HTTP status without leaking request or source content.
+- Patch Next.js to 15.5.25, the PostCSS override to 8.5.28, sharp to 0.35.4 and nanoid to 3.3.18 within supported dependency ranges. React versions remain unchanged. Current npm audit reports zero known vulnerabilities.
+- Validation: 3,081 offline Python tests on the persistence fix; 286 dashboard tests, production build, native image round trip and ten local fixture-auth HTTP checks passed. Paid replays excluded; no model/platform call or automatic publication activation.
+- Independent persistence review confirms same finalized report on retry, nonzero exhaustion and preservation of receipts/control. The production transport cause of the original failed second write remains unknown; Gist concurrency and signed-in visual acceptance remain separate work.
+
 ## [0.9.108.7] - 2026-09-09
 
 ### Publication uncertainty and prospective outcome history (P02/P00a)

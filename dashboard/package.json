@@ -10,11 +10,11 @@
     "test": "node --test"
   },
   "dependencies": {
-    "next": "^15.3.0",
+    "next": "^15.5.25",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "overrides": {
-    "postcss": "8.5.10"
+    "postcss": "8.5.28"
   }
 }

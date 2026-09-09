@@ -71,16 +71,14 @@ def main(dispatchers: dict[str, RunMode]) -> None:
         f"projected ${budget_state['projected_usd']:.2f}/mo [{budget_state['level']}]"
     )
 
+    # The terminal report belongs in the same final snapshot as the run's data.
+    # A separate best-effort report write could fail after a successful data
+    # write while the workflow still returned success (observed 2026-09-09).
+    state.finalize_run(bot_state, current_run, status=final_status)
     if not state.write_state(bot_state):
         print("[main] WARNING: State write failed, retrying...")
         if not state.write_state(bot_state):
-            print("[main] ERROR: State write failed twice. Drafts from this run may be lost.")
-            state.log_error(bot_state, "state", "write_state failed twice")
-            final_status = "failed"
-    else:
-        print("[main] State saved")
-
-    state.finalize_run(bot_state, current_run, status=final_status)
-    if not state.write_state(bot_state):
-        print("[main] WARNING: Final run history write failed")
+            print("[main] ERROR: Final state and run report could not be confirmed saved after two attempts.")
+            sys.exit(1)
+    print("[main] State and run report saved")
     print("[main] Done")
