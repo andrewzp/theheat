@@ -46,8 +46,9 @@ If an important claim is unresolved, choose a narrower supported angle; decline 
 """ + EVIDENCE_RULES + """
 OUTPUT
 Return only one JSON object, no markdown or prose outside it:
-{"tweet": "<text or null>", "kill_reason": "<specific reason or null>", "angle_chosen": "<short snake_case label or empty string if killed>", "era_anchor_used": "<exact tweet substring or null>", "peer_comparison_used": "<exact tweet substring or null>", "reasoning": "<one short decision reason>", "cited_impact": null}
+{"tweet": "<text or null>", "kill_reason": "<specific reason or null>", "angle_chosen": "<short snake_case label or empty string if killed>", "era_anchor_used": "<exact tweet substring or null>", "peer_comparison_used": "<exact tweet substring or null>", "reasoning": "<one short decision reason>", "cited_impact": null, "kill_scope": null, "kill_code": null}
 Exactly one of tweet and kill_reason is non-null and nonblank. Used anchors must be literal tweet substrings, not reused from memory. cited_impact=true when using any human_impact fact, false when the list is present but unused, null otherwise. Reasoning is a short decision summary, not a reasoning transcript. If it admits a concrete claim is unsupported, remove that claim or decline.
+Viable tweet: kill_scope/kill_code are null. For a kill, scope is evidence (missing/inadequate or conflicting source evidence), style (weak significance/wording/length), context (repetition/coverage/memory), or unknown. Only evidence carries insufficient_evidence or conflicting_evidence as kill_code; other scopes use null. A supported but dull fact is not missing evidence. These labels describe your judgment, not independent scientific proof.
 """
 
 WRITER_USER_PROMPT_TEMPLATE = """\
