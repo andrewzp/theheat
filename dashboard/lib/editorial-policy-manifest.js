@@ -4,8 +4,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/draft-revisions.js": "0ec65e63b612baf1bec8a613d2469cd3e68a8c1db60450cd7259fe6d5e23f6a0",
     "dashboard/lib/editorial-policy.js": "df41493de12fe26dccd7d93a9c710a6a7bb97a4871ad7e086578ba19b388f568",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
-    "src/data/ghcn.py": "091c4e4ce294217ec13ab45d15f9156449f6ccbe6526c93593daf586f07fc717",
-    "src/data/ghcn_format.py": "2ffb9e3e5c67d7a103635dc2179fa5a6bbe0a27e80c33bada0472f5adfce46c0",
+    "src/data/ghcn.py": "7d025973f1e2435873373482ce6bb4fb4fc4978b3a9af569bab73d4e856a5907",
+    "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
@@ -13,7 +13,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/policy.py": "4cf2228f4920ab80df259d251eea6585b0fca31fedf645d38918a441aee70e75",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
-    "src/orchestrator/sources/open_meteo.py": "c366077828ec64af9febf08397d33f972afc5d9a4101a40812a0b6f14c3fc28d",
+    "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
     "src/two_bot/critic.py": "60092dccc12420b5065fd53205243992096755859766b793d7a166ca696bde2e",
     "src/two_bot/evidence_contract.py": "4fdf6237b57fc708c195a2d91795845ab21d0704545cc6d7fe1a2f5c994b591a",
     "src/two_bot/fact_check.py": "d23ce9825e8dad67d374d9c23ba69a7d21afacb075fdd65386435c7534ace4db",
@@ -43,5 +43,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "356d431ccbd0e5eed0d7c21acfd20cacf6cade1b9d9a2b8654747740af08721e"
   },
   "schema_version": 1,
-  "source_sha256": "7f322951168da64b228679638e1178593c9aeb82f16400f555307df4282aed78"
+  "source_sha256": "6ad836d1ddef65e270b3e53a7d3b4289d7a145d375819c3cee8a7490ca6ada41"
 }
