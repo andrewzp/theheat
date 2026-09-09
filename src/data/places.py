@@ -18,7 +18,7 @@ from typing import Any
 from collections.abc import Mapping
 
 DATA = Path(__file__).resolve().parents[2] / "data"
-CACHE_PRODUCT = "openmeteo-archive-daily-30y-v1"
+CACHE_PRODUCT = "openmeteo-era5-daily-v2"
 _TOKEN = re.compile(r"loc1-(pl[0-9]+|ux[a-f0-9]{16})-(pt[a-f0-9]{16})")
 
 

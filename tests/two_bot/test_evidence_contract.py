@@ -221,6 +221,7 @@ def test_assert_prompt_ready_raises_only_for_error_bundles():
                         "city": "Phoenix",
                         "country": "US",
                         "temp_high_c": 47.2,
+                        "valid_date": "2026-05-04",
                         "normal_high_c": 38.0,
                         "anomaly_c": 9.2,
                     }
@@ -605,5 +606,9 @@ def test_assert_prompt_ready_raises_only_for_error_bundles():
 def test_representative_source_bundles_are_prompt_ready(case, bundle):
     audit = audit_story_bundle(bundle)
 
-    assert audit.prompt_ready is True, (case, audit.issues)
-    assert _error_codes(audit) == set()
+    if case == "temperature_simultaneous":
+        assert audit.prompt_ready is False
+        assert _error_codes(audit) == {"temperature_aggregate_unqualified"}
+    else:
+        assert audit.prompt_ready is True, (case, audit.issues)
+        assert _error_codes(audit) == set()

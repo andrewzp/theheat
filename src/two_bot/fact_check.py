@@ -163,7 +163,8 @@ def fact_check(
 ) -> FactCheckResult:
     """Run strict local reuse checks, then LLM verification."""
 
-    failures: list[str] = []
+    from src.data.temperature_evidence import temperature_claim_failures
+    failures: list[str] = temperature_claim_failures(tweet, bundle)
     extracted = list(extracted or [])
 
     if memory.is_reuse(state, tweet, "tweet_text"):

@@ -71,7 +71,13 @@ def fetch_snow_today(*, strict: bool = False) -> list[SnowReading]:
         rows = payload["data"]
         if not isinstance(metadata, Mapping) or not isinstance(rows, list):
             raise SourceFetchError("NSIDC Snow Today schema drift: bad metadata/data shape")
-        reading_date = str(metadata.get("last_date_with_data") or date.today().isoformat())
+        reading_date = metadata.get("last_date_with_data")
+        if not isinstance(reading_date, str):
+            raise SourceFetchError("NSIDC Snow Today missing provider valid date")
+        try:
+            date.fromisoformat(reading_date)
+        except ValueError as exc:
+            raise SourceFetchError("NSIDC Snow Today invalid provider valid date") from exc
         assert_freshness(reading_date, "NSIDC Snow Today", SNOW_TODAY_MAX_AGE_DAYS)
 
         readings: list[SnowReading] = []

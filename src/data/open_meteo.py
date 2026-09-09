@@ -5,13 +5,14 @@ from __future__ import annotations
 import csv
 import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import requests
 
 from src.data._http import fetch_with_retry
 from src.data import places
+from src.data.temperature_evidence import ARCHIVE_MODEL, forecast_day, daily_time, attach_evidence, finite, fingerprint
 from src.data.openmeteo_budget import OpenMeteoSaturated
 
 BASE_URL = "https://api.open-meteo.com/v1"
@@ -27,6 +28,9 @@ class CityTemp:
     temp_high_c: float
     normal_high_c: float | None = None
     anomaly_c: float | None = None
+    signal_date: date | None = None
+
+    evidence: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -37,16 +41,21 @@ class RecordEvent:
     old_record_c: float
     old_record_year: int
     event_id: str
-    signal_date: date | None = None  # date reading was observed; None → use date.today()
+    signal_date: date | None = None  # provider-valid local date; None means unknown, never publication-ready
     kind: str = "high"  # "high" or "low"; default preserves legacy positional calls
-    state: str | None = None  # full state name (e.g. "West Virginia") for US stations; None elsewhere
+    state: str | None = (
+        None  # full state name (e.g. "West Virginia") for US stations; None elsewhere
+    )
     lat: float | None = None
     lon: float | None = None
+
+    evidence: dict = field(default_factory=dict)
 
 
 @dataclass
 class AllTimeRecord:
     """A city broke its hottest-or-coldest reading in the archive history."""
+
     city: str
     country: str
     kind: str  # "high" or "low"
@@ -60,10 +69,13 @@ class AllTimeRecord:
     lat: float | None = None
     lon: float | None = None
 
+    evidence: dict = field(default_factory=dict)
+
 
 @dataclass
 class MonthlyRecord:
     """A city broke its hottest-or-coldest reading for this month of year."""
+
     city: str
     country: str
     kind: str  # "high" or "low"
@@ -78,10 +90,13 @@ class MonthlyRecord:
     lat: float | None = None
     lon: float | None = None
 
+    evidence: dict = field(default_factory=dict)
+
 
 @dataclass
 class AnomalyEvent:
     """Today's reading is far above (or below) the historical mean for this month."""
+
     city: str
     country: str
     today_temp_c: float
@@ -94,10 +109,13 @@ class AnomalyEvent:
     lat: float | None = None
     lon: float | None = None
 
+    evidence: dict = field(default_factory=dict)
+
 
 @dataclass
 class AbsoluteExtremeEvent:
     """Today's reading exceeds the absolute threshold for its latitude band."""
+
     city: str
     country: str
     today_temp_c: float
@@ -111,10 +129,13 @@ class AbsoluteExtremeEvent:
     state: str | None = None
     data_source: str = "forecast"
 
+    evidence: dict = field(default_factory=dict)
+
 
 @dataclass
 class RecordStreakEvent:
     """A city has broken its daily record multiple days running."""
+
     city: str
     country: str
     consecutive_days: int
@@ -122,6 +143,7 @@ class RecordStreakEvent:
     peak_temp_c: float
     event_id: str
     signal_date: date | None = None
+    evidence: dict = field(default_factory=dict)
 
 
 WETBULB_TIERS: list[tuple[int, float, str]] = [
@@ -133,6 +155,7 @@ WETBULB_TIERS: list[tuple[int, float, str]] = [
 @dataclass
 class WetBulbEvent:
     """Forecast daily-max wet-bulb temperature crossed an extreme tier."""
+
     city: str
     country: str
     daily_max_tw_c: float
@@ -146,6 +169,8 @@ class WetBulbEvent:
     archive_max_tw_c: float | None = None
     archive_max_year: int | None = None
     archive_years: int | None = None
+
+    evidence: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -162,12 +187,13 @@ class ExtremeSignalBundle:
 
     GHCN-path additions (all optional, backward-compatible):
     - ``signal_date``: the date the reading was observed. None means
-      the Open-Meteo path; consumers fall back to date.today().
+      unknown evidence and cannot establish a publication date.
     - ``station_id``: GHCN station ID (e.g. "USW00023183"). Empty for
       the Open-Meteo path.
     - ``station_name``: human-readable station name (e.g. "PHOENIX SKY
       HARBOR INTL AP"). Empty for the Open-Meteo path.
     """
+
     city: str = ""
     country: str = ""
     calendar_date_high: RecordEvent | None = None
@@ -192,6 +218,8 @@ class ExtremeSignalBundle:
     lat: float | None = None
     lon: float | None = None
 
+    evidence: dict = field(default_factory=dict)
+
 
 @dataclass
 class CountryRecord:
@@ -202,6 +230,7 @@ class CountryRecord:
     country-peak reading; the ``old_record_city`` is the historical holder
     across our archive (may be different city).
     """
+
     country: str
     kind: str  # "high" or "low"
     new_temp_c: float
@@ -217,31 +246,58 @@ class CountryRecord:
     cached: int = 0
     forecast_read: int = 0
 
+    evidence: dict = field(default_factory=dict)
+
 
 def load_cities(cities_path: str = "data/cities.csv") -> list[dict]:
     return places.load_cities(cities_path)
 
 
-def load_normals(normals_path: str = "data/normals.csv") -> dict[str, dict[int, float]]:
-    """Returns {sampling_identity: {month: normal_high_c}} for attributable rows."""
-    normals = {}
+def load_normals(normals_path: str = "data/normals.csv") -> dict[str, dict]:
+    """Attributable normals with the actual product and climatology period.
+
+    Bare legacy city/month rows cannot identify a sample point or which fallback
+    normal period produced the value. They require a deliberate qualified rebuild.
+    """
+    normals: dict[str, dict] = {}
     if not os.path.exists(normals_path):
         return normals
     with open(normals_path, newline="", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            if not all(row.get(k) for k in ("place_id", "sampling_point_id", "country", "lat", "lon")):
-                continue  # Legacy normals have no sampling provenance; recompute explicitly.
-            identity = places.place_for_row(row)
-            if row["sampling_point_id"] != identity["sampling_point_id"]:
+            if not all(row.get(k) for k in ("place_id", "sampling_point_id", "country", "lat", "lon", "period_start", "period_end", "retrieved_at")):
                 continue
-            key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"], place_id=row["place_id"])
-            month = int(row["month"])
-            normals.setdefault(key, {})[month] = float(row["avg_high_c"])
+            if row.get("source_product") != "meteostat-normals-point-v1":
+                continue
+            try:
+                identity = places.place_for_row(row)
+                if row["sampling_point_id"] != identity["sampling_point_id"]:
+                    continue
+                start, end = int(row["period_start"]), int(row["period_end"])
+                month, value = int(row["month"]), float(row["avg_high_c"])
+                if not 1 <= month <= 12 or not 1800 <= start <= end <= 2200 or not finite(value):
+                    continue
+                key = places.event_location_key(row["city"], row["country"], row["lat"], row["lon"], place_id=row["place_id"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            provenance = {
+                "source_product": row["source_product"], "evidence_type": "climatology_point_estimate",
+                "period_start": start, "period_end": end, "retrieved_at": row["retrieved_at"],
+                "sampling_point_id": identity["sampling_point_id"], "unit": "C", "month": month,
+                "sample_count": None, "coverage_fraction": None,
+                "comparison_scope": "Meteostat point monthly normal for the stated period; underlying sample coverage unavailable",
+            }
+            provenance["revision_id"] = fingerprint({"value": value, **provenance})
+            entry = normals.setdefault(key, {"_meta": {}})
+            # Conflicting rows for one point/month are unavailable, not last-row wins.
+            if month in entry and (entry[month] != value or entry["_meta"][month] != provenance):
+                entry.pop(month)
+                entry["_meta"][month] = {"conflict": True}
+            elif not entry["_meta"].get(month, {}).get("conflict"):
+                entry[month], entry["_meta"][month] = value, provenance
     return normals
 
 
-def fetch_city_temp(lat: float, lon: float) -> float | None:
-    """Fetch today's high temperature for a single location."""
+def fetch_city_forecast(lat: float, lon: float) -> dict | None:
     try:
         resp = fetch_with_retry(
             f"{BASE_URL}/forecast",
@@ -250,54 +306,69 @@ def fetch_city_temp(lat: float, lon: float) -> float | None:
                 "longitude": lon,
                 "daily": "temperature_2m_max",
                 "timezone": "auto",
+                "temperature_unit": "celsius",
                 "forecast_days": 1,
             },
             timeout=10,
             attempts=3,
             backoff_base=1.0,
         )
-        data = resp.json()
-        temps = data.get("daily", {}).get("temperature_2m_max", [])
-        return temps[0] if temps and temps[0] is not None else None
-    except (requests.RequestException, IndexError, KeyError):
+        result = forecast_day(resp.json())
+        result["evidence"]["requested_sampling_point"] = {"latitude": lat, "longitude": lon}
+        return result if result["max_c"] is not None else None
+    except (requests.RequestException, IndexError, KeyError, ValueError, TypeError):
         return None
+
+
+def fetch_city_temp(lat: float, lon: float) -> float | None:
+    """Compatibility value-only accessor; publication consumers use full evidence."""
+    result = fetch_city_forecast(lat, lon)
+    return result["max_c"] if result else None
 
 
 def fetch_all_city_temps(cities: list[dict]) -> list[CityTemp]:
     """Fetch current temps for all cities. Sequential, ~45 seconds for 150 cities."""
     results = []
     for city in cities:
-        temp = fetch_city_temp(float(city["lat"]), float(city["lon"]))
-        if temp is not None:
-            results.append(CityTemp(
-                city=city["city"],
-                country=city["country"],
-                lat=float(city["lat"]),
-                lon=float(city["lon"]),
-                temp_high_c=temp,
-            ))
+        forecast = fetch_city_forecast(float(city["lat"]), float(city["lon"]))
+        if forecast is not None:
+            results.append(
+                CityTemp(
+                    city=city["city"],
+                    country=city["country"],
+                    lat=float(city["lat"]),
+                    lon=float(city["lon"]),
+                    temp_high_c=forecast["max_c"],
+                    signal_date=date.fromisoformat(forecast["valid_date"]),
+                    evidence=forecast["evidence"],
+                )
+            )
     return results
 
 
 def compute_anomalies(
     temps: list[CityTemp],
-    normals: dict[str, dict[int, float]],
+    normals: dict[str, dict],
     max_anomaly_c: float = 30.0,
 ) -> list[CityTemp]:
     """Compute anomaly for each city. Filter out likely data errors (anomaly > max)."""
-    month = date.today().month
     for ct in temps:
+        if ct.signal_date is None:
+            ct.anomaly_c = None
+            continue
+        month = ct.signal_date.month
         city_normals = normals.get(places.event_location_key(ct.city, ct.country, ct.lat, ct.lon))
         if city_normals and month in city_normals:
             ct.normal_high_c = city_normals[month]
             ct.anomaly_c = ct.temp_high_c - ct.normal_high_c
+            ct.evidence = {**ct.evidence, "baseline": city_normals.get("_meta", {}).get(month, {
+                "evidence_type": "unqualified_normal", "period_start": None, "period_end": None,
+                "comparison_scope": "period/source coverage not supplied; not a qualified production normal",
+            })}
         else:
             ct.anomaly_c = None
 
-    return [
-        ct for ct in temps
-        if ct.anomaly_c is not None and abs(ct.anomaly_c) <= max_anomaly_c
-    ]
+    return [ct for ct in temps if ct.anomaly_c is not None and abs(ct.anomaly_c) <= max_anomaly_c]
 
 
 def rank_hot10(temps: list[CityTemp]) -> list[CityTemp]:
@@ -311,102 +382,44 @@ def rank_hot10(temps: list[CityTemp]) -> list[CityTemp]:
 
 
 def detect_records(lat: float, lon: float, city: str, country: str) -> RecordEvent | None:
-    """Check whether today's forecast high would break the record for this date."""
-    today = date.today()
-    try:
-        # Use the forecast high as an early warning signal; NOAA confirmations land later.
-        resp_today = fetch_with_retry(
-            f"{BASE_URL}/forecast",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "daily": "temperature_2m_max",
-                "timezone": "auto",
-                "forecast_days": 1,
-            },
-            timeout=10,
-            attempts=3,
-            backoff_base=1.0,
-        )
-        today_temp = resp_today.json()["daily"]["temperature_2m_max"][0]
-        if today_temp is None:
-            return None
-
-        # Fetch historical data for this calendar date going back 30 years
-        historical_highs = []
-        for years_back in range(1, 31):
-            hist_date = today.replace(year=today.year - years_back)
-            historical_highs.append((hist_date.year, hist_date))
-
-        # Batch: fetch full range from archive
-        try:
-            start = today.replace(year=today.year - 30)
-        except ValueError:
-            # Feb 29 on a non-leap year 30 years ago
-            start = today.replace(year=today.year - 30, day=28)
-        end = today - timedelta(days=1)
-        resp_hist = fetch_with_retry(
-            f"{ARCHIVE_URL}/archive",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "daily": "temperature_2m_max",
-                "start_date": start.isoformat(),
-                "end_date": end.isoformat(),
-                "timezone": "auto",
-            },
-            timeout=30,
-            attempts=3,
-            backoff_base=1.0,
-        )
-        hist_data = resp_hist.json()
-        dates = hist_data.get("daily", {}).get("time", [])
-        temps = hist_data.get("daily", {}).get("temperature_2m_max", [])
-
-        # Find max temp on this calendar date (same month/day) in history
-        target_month = today.month
-        target_day = today.day
-        old_record_c = None
-        old_record_year = None
-
-        for d_str, t in zip(dates, temps):
-            if t is None:
-                continue
-            d = date.fromisoformat(d_str)
-            if d.month == target_month and d.day == target_day:
-                if old_record_c is None or t > old_record_c:
-                    old_record_c = t
-                    old_record_year = d.year
-
-        if old_record_c is not None and today_temp > old_record_c:
-            return RecordEvent(
-                city=city,
-                country=country,
-                new_temp_c=today_temp,
-                old_record_c=old_record_c,
-                old_record_year=old_record_year,
-                event_id=f"record_{places.event_location_key(city, country, lat, lon)}_{today.isoformat()}",
-                kind="high",
-                lat=lat,
-                lon=lon,
-            )
-
-        return None
-
-    except (requests.RequestException, KeyError, IndexError):
-        return None
+    """Forecast compared with the calendar day in the declared ERA5 archive."""
+    bundle = detect_extreme_signals(lat, lon, city, country)
+    return bundle.calendar_date_high if bundle else None
 
 
 # Cities most likely to break heat records — check these every run.
 # These are the world's hottest cities plus US cities that routinely set records.
 PRIORITY_HEAT_CITIES = {
-    "Phoenix", "Death Valley", "Las Vegas", "Tucson", "Sacramento",
-    "Dubai", "Abu Dhabi", "Doha", "Kuwait City", "Riyadh", "Mecca", "Muscat",
-    "Baghdad", "Basra", "Ahvaz",
-    "Delhi", "Jacobabad", "Karachi",
-    "Djibouti", "Bamako", "Niamey", "N'Djamena", "Khartoum",
-    "Miami", "Houston", "San Antonio", "Dallas",
-    "Alice Springs", "Seville", "Athens",
+    "Phoenix",
+    "Death Valley",
+    "Las Vegas",
+    "Tucson",
+    "Sacramento",
+    "Dubai",
+    "Abu Dhabi",
+    "Doha",
+    "Kuwait City",
+    "Riyadh",
+    "Mecca",
+    "Muscat",
+    "Baghdad",
+    "Basra",
+    "Ahvaz",
+    "Delhi",
+    "Jacobabad",
+    "Karachi",
+    "Djibouti",
+    "Bamako",
+    "Niamey",
+    "N'Djamena",
+    "Khartoum",
+    "Miami",
+    "Houston",
+    "San Antonio",
+    "Dallas",
+    "Alice Springs",
+    "Seville",
+    "Athens",
 }
 
 
@@ -439,9 +452,22 @@ WORLD_FETCH_BUDGET = 10
 # global hot-spots so neither is starved by the budget. Spellings must match
 # data/cities.csv exactly. Revert/replace when the cache removes the budget.
 URGENT_WORLD_HEAT_CITIES = [
-    "Madrid", "Jacobabad", "Sevilla", "Kuwait City", "Lyon", "Mecca",
-    "Zaragoza", "Delhi", "Paris", "Ahvaz", "Rome", "Khartoum",
-    "Athens", "Naples", "Karachi", "Lisbon",
+    "Madrid",
+    "Jacobabad",
+    "Sevilla",
+    "Kuwait City",
+    "Lyon",
+    "Mecca",
+    "Zaragoza",
+    "Delhi",
+    "Paris",
+    "Ahvaz",
+    "Rome",
+    "Khartoum",
+    "Athens",
+    "Naples",
+    "Karachi",
+    "Lisbon",
 ]
 
 
@@ -458,7 +484,9 @@ def select_world_budget_cities(
     minutely rate limit; superseded by the world threshold cache.
     """
     rank = {name: i for i, name in enumerate(URGENT_WORLD_HEAT_CITIES)}
-    ordered = sorted(prioritize_cities(world_cities), key=lambda row: rank.get(row["city"], len(rank)))
+    ordered = sorted(
+        prioritize_cities(world_cities), key=lambda row: rank.get(row["city"], len(rank))
+    )
     selected, seen = [], set()
     for row in ordered:
         key = places.place_for_row(row)["place_id"]
@@ -544,53 +572,19 @@ def detect_absolute_extreme(
     return None
 
 
-def detect_extreme_signals(
-    lat: float,
-    lon: float,
-    city: str,
-    country: str,
-    *,
-    archive_years: int = 30,
-) -> ExtremeSignalBundle | None:
-    """Fetch archive once, compute all extreme signals from it.
+def fetch_archive_daily(lat, lon, valid_date: date, *, archive_years=30) -> dict | None:
+    """Fetch one consistent reanalysis product; retain the actual archive cutoff.
 
-    Returns an ExtremeSignalBundle with whichever signals fire (or all None).
-    Returns None on API failure. archive_years controls how far back to pull
-    historical data; 30 is Open-Meteo's typical reliable window.
-
-    Honest framing: these are "hottest in {archive_years} years of records"
-    records, NOT absolute all-time — Open-Meteo's archive doesn't go back
-    further reliably. Generators should reflect this.
+    ERA5 is delayed. Forecast/past_days values never fill its recent gap.
+    The comparison explicitly ends at the returned accepted cutoff.
     """
-    today = date.today()
     try:
-        resp_today = fetch_with_retry(
-            f"{BASE_URL}/forecast",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
-                "timezone": "auto",
-                "forecast_days": 1,
-            },
-            timeout=10,
-            attempts=3,
-            backoff_base=1.0,
-        )
-        today_data = resp_today.json().get("daily", {})
-        today_max = (today_data.get("temperature_2m_max") or [None])[0]
-        today_min = (today_data.get("temperature_2m_min") or [None])[0]
-        today_tw_max = (today_data.get("wet_bulb_temperature_2m_max") or [None])[0]
-        if today_max is None and today_min is None:
-            return None
-
-        try:
-            start = today.replace(year=today.year - archive_years)
-        except ValueError:
-            start = today.replace(year=today.year - archive_years, day=28)
-        end = today - timedelta(days=1)
-
-        resp_hist = fetch_with_retry(
+        start = valid_date.replace(year=valid_date.year - archive_years)
+    except ValueError:
+        start = valid_date.replace(year=valid_date.year - archive_years, day=28)
+    end = valid_date - timedelta(days=5)
+    try:
+        response = fetch_with_retry(
             f"{ARCHIVE_URL}/archive",
             params={
                 "latitude": lat,
@@ -599,230 +593,83 @@ def detect_extreme_signals(
                 "start_date": start.isoformat(),
                 "end_date": end.isoformat(),
                 "timezone": "auto",
+                "temperature_unit": "celsius",
+                "models": ARCHIVE_MODEL,
             },
             timeout=30,
             attempts=3,
             backoff_base=1.0,
         )
-        hist_data = resp_hist.json().get("daily", {})
-        dates = hist_data.get("time", [])
-        highs = hist_data.get("temperature_2m_max", [])
-        lows = hist_data.get("temperature_2m_min", [])
-        hist_tw_values = hist_data.get("wet_bulb_temperature_2m_max", [])
-
-        if not dates:
-            return None
-
-    except (requests.RequestException, KeyError, IndexError, ValueError):
+        payload = response.json()
+        timing = daily_time(payload)
+        daily = payload["daily"]
+        return {
+            **daily,
+            "_provenance": {
+                **timing,
+                "model": ARCHIVE_MODEL,
+                "provider_grid": {key: payload.get(key) if finite(payload.get(key)) else None for key in ("latitude", "longitude", "elevation")},
+                "provider_units": payload.get("daily_units") or {},
+                "requested_sampling_point": {"latitude": lat, "longitude": lon},
+                "requested_start": start.isoformat(),
+                "requested_end": end.isoformat(),
+            },
+        }
+    except requests.HTTPError as exc:
+        if getattr(exc.response, "status_code", None) == 429:
+            raise OpenMeteoSaturated("archive 429") from exc
+        return None
+    except (requests.RequestException, KeyError, ValueError, TypeError):
         return None
 
-    bundle = ExtremeSignalBundle(
-        city=city,
-        country=country,
-        today_max_c=today_max,
-        today_min_c=today_min,
-        lat=lat, lon=lon,
-    )
-    target_month = today.month
-    target_day = today.day
 
-    # Build historical statistics in one pass
-    hist_max_overall = None
-    hist_max_overall_year = None
-    hist_min_overall = None
-    hist_min_overall_year = None
-    hist_max_this_month = None
-    hist_max_this_month_year = None
-    hist_min_this_month = None
-    hist_min_this_month_year = None
-    hist_max_calendar = None
-    hist_max_calendar_year = None
-    hist_min_calendar = None
-    hist_min_calendar_year = None
-    this_month_highs = []
-    this_month_lows = []
+def detect_extreme_signals(
+    lat: float, lon: float, city: str, country: str, *, archive_years: int = 30
+) -> ExtremeSignalBundle | None:
+    """Compare a dated forecast with one immutable, scoped ERA5 archive snapshot."""
+    from src.data.world_thresholds import compute_city_thresholds, evaluate_city
 
-    for d_str, hi, lo in zip(dates, highs, lows):
-        try:
-            d = date.fromisoformat(d_str)
-        except (ValueError, TypeError):
-            continue
-
-        if hi is not None:
-            if hist_max_overall is None or hi > hist_max_overall:
-                hist_max_overall = hi
-                hist_max_overall_year = d.year
-            if d.month == target_month:
-                if hist_max_this_month is None or hi > hist_max_this_month:
-                    hist_max_this_month = hi
-                    hist_max_this_month_year = d.year
-                this_month_highs.append(hi)
-                if d.day == target_day:
-                    if hist_max_calendar is None or hi > hist_max_calendar:
-                        hist_max_calendar = hi
-                        hist_max_calendar_year = d.year
-
-        if lo is not None:
-            if hist_min_overall is None or lo < hist_min_overall:
-                hist_min_overall = lo
-                hist_min_overall_year = d.year
-            if d.month == target_month:
-                if hist_min_this_month is None or lo < hist_min_this_month:
-                    hist_min_this_month = lo
-                    hist_min_this_month_year = d.year
-                this_month_lows.append(lo)
-                if d.day == target_day:
-                    if hist_min_calendar is None or lo < hist_min_calendar:
-                        hist_min_calendar = lo
-                        hist_min_calendar_year = d.year
-
-    # Expose archive extremes on the bundle so country-level aggregation
-    # downstream can compare today's national peak vs the archive's.
-    bundle.archive_max_c = hist_max_overall
-    bundle.archive_max_year = hist_max_overall_year
-    bundle.archive_min_c = hist_min_overall
-    bundle.archive_min_year = hist_min_overall_year
-
-    today_iso = today.isoformat()
-    city_key = places.event_location_key(city, country, lat, lon)
-
-    if today_tw_max is not None:
-        for tier_index, threshold_c, tier_label in WETBULB_TIERS:
-            if today_tw_max < threshold_c:
-                continue
-            valid_hist_tw = [
-                (tw, d_str)
-                for tw, d_str in zip(hist_tw_values, dates)
-                if tw is not None
-            ]
-            archive_max_tw_c = None
-            archive_max_year = None
-            if valid_hist_tw:
-                archive_max_tw_c, archive_max_date = max(valid_hist_tw, key=lambda item: item[0])
-                try:
-                    archive_max_year = int(archive_max_date[:4])
-                except (TypeError, ValueError):
-                    archive_max_year = None
-            bundle.wet_bulb_extreme = WetBulbEvent(
-                city=city,
-                country=country,
-                daily_max_tw_c=today_tw_max,
-                tier=tier_index,
-                tier_label=tier_label,
-                tier_threshold_c=threshold_c,
-                event_id=f"wetbulb_{city_key}_{today_iso}_tier{tier_index}",
-                signal_date=today,
-                lat=lat,
-                lon=lon,
-                archive_max_tw_c=archive_max_tw_c,
-                archive_max_year=archive_max_year,
-                archive_years=archive_years,
-            )
-            break
-
-    # Calendar-date records (legacy compatibility)
-    if today_max is not None and hist_max_calendar is not None and today_max > hist_max_calendar:
-        bundle.calendar_date_high = RecordEvent(
-            city=city, country=country,
-            new_temp_c=today_max, old_record_c=hist_max_calendar,
-            old_record_year=hist_max_calendar_year,
-            event_id=f"record_{city_key}_{today_iso}",
-            kind="high",
-            lat=lat,
-            lon=lon,
+    try:
+        response = fetch_with_retry(
+            f"{BASE_URL}/forecast",
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                "timezone": "auto",
+                "temperature_unit": "celsius",
+                "forecast_days": 1,
+            },
+            timeout=10,
+            attempts=3,
+            backoff_base=1.0,
         )
-    if today_min is not None and hist_min_calendar is not None and today_min < hist_min_calendar:
-        bundle.calendar_date_low = RecordEvent(
-            city=city, country=country,
-            new_temp_c=today_min, old_record_c=hist_min_calendar,
-            old_record_year=hist_min_calendar_year,
-            event_id=f"record_low_{city_key}_{today_iso}",
-            kind="low",
-            lat=lat,
-            lon=lon,
-        )
-
-    # All-time records within our archive window
-    if today_max is not None and hist_max_overall is not None and today_max > hist_max_overall:
-        bundle.all_time_high = AllTimeRecord(
-            city=city, country=country, kind="high",
-            new_temp_c=today_max, old_record_c=hist_max_overall,
-            old_record_year=hist_max_overall_year,
+        forecast = forecast_day(response.json())
+        if forecast["max_c"] is None and forecast["min_c"] is None:
+            return None
+        valid = date.fromisoformat(forecast["valid_date"])
+        archive = fetch_archive_daily(lat, lon, valid, archive_years=archive_years)
+        if not archive:
+            return None
+        baseline = compute_city_thresholds(
+            city,
+            archive,
+            as_of=forecast["retrieved_at"][:10],
             years_of_data=archive_years,
-            event_id=f"alltime_high_{city_key}_{today_iso}",
+            country=country,
             lat=lat,
             lon=lon,
         )
-    if today_min is not None and hist_min_overall is not None and today_min < hist_min_overall:
-        bundle.all_time_low = AllTimeRecord(
-            city=city, country=country, kind="low",
-            new_temp_c=today_min, old_record_c=hist_min_overall,
-            old_record_year=hist_min_overall_year,
-            years_of_data=archive_years,
-            event_id=f"alltime_low_{city_key}_{today_iso}",
-            lat=lat,
-            lon=lon,
+        bundle = evaluate_city(
+            city, country, forecast, baseline, lat=lat, lon=lon, include_calendar=True
         )
-
-    # Monthly records (hottest/coldest ever for this month-of-year)
-    if today_max is not None and hist_max_this_month is not None and today_max > hist_max_this_month:
-        bundle.monthly_high = MonthlyRecord(
-            city=city, country=country, kind="high",
-            month=target_month,
-            new_temp_c=today_max, old_record_c=hist_max_this_month,
-            old_record_year=hist_max_this_month_year,
-            years_of_data=archive_years,
-            event_id=f"monthly_high_{city_key}_{today.year}_{target_month:02d}",
-            lat=lat,
-            lon=lon,
+        bundle.absolute_extreme = detect_absolute_extreme(
+            lat, lon, forecast["max_c"], forecast["min_c"], city, country, signal_date=valid
         )
-    if today_min is not None and hist_min_this_month is not None and today_min < hist_min_this_month:
-        bundle.monthly_low = MonthlyRecord(
-            city=city, country=country, kind="low",
-            month=target_month,
-            new_temp_c=today_min, old_record_c=hist_min_this_month,
-            old_record_year=hist_min_this_month_year,
-            years_of_data=archive_years,
-            event_id=f"monthly_low_{city_key}_{today.year}_{target_month:02d}",
-            lat=lat,
-            lon=lon,
-        )
-
-    # Anomaly vs historical mean for this month
-    if today_max is not None and this_month_highs:
-        mean = sum(this_month_highs) / len(this_month_highs)
-        anomaly = today_max - mean
-        if anomaly >= ANOMALY_HOT_THRESHOLD_C:
-            bundle.anomaly_hot = AnomalyEvent(
-                city=city, country=country,
-                today_temp_c=today_max,
-                historical_mean_c=mean,
-                anomaly_c=anomaly,
-                years_of_data=archive_years,
-                event_id=f"anomaly_hot_{city_key}_{today_iso}",
-                lat=lat,
-                lon=lon,
-            )
-    if today_min is not None and this_month_lows:
-        mean = sum(this_month_lows) / len(this_month_lows)
-        anomaly = today_min - mean
-        if anomaly <= -ANOMALY_COLD_THRESHOLD_C:
-            bundle.anomaly_cold = AnomalyEvent(
-                city=city, country=country,
-                today_temp_c=today_min,
-                historical_mean_c=mean,
-                anomaly_c=anomaly,
-                years_of_data=archive_years,
-                event_id=f"anomaly_cold_{city_key}_{today_iso}",
-                lat=lat,
-                lon=lon,
-            )
-
-    abs_ev = detect_absolute_extreme(lat, lon, today_max, today_min, city, country)
-    if abs_ev is not None:
-        bundle.absolute_extreme = abs_ev
-
-    return bundle
+        attach_evidence(bundle, bundle.evidence)
+        return bundle
+    except (requests.RequestException, KeyError, ValueError, TypeError, OpenMeteoSaturated):
+        return None
 
 
 def check_extreme_signals_for_cities(
@@ -858,25 +705,36 @@ def check_extreme_signals_for_cities(
             continue
         all_readings.append(bundle)
         # Only include bundles with at least one per-city signal
-        if any([
-            bundle.calendar_date_high, bundle.calendar_date_low,
-            bundle.all_time_high, bundle.all_time_low,
-            bundle.monthly_high, bundle.monthly_low,
-            bundle.anomaly_hot, bundle.anomaly_cold,
-            bundle.absolute_extreme,
-            bundle.wet_bulb_extreme,
-        ]):
+        if any(
+            [
+                bundle.calendar_date_high,
+                bundle.calendar_date_low,
+                bundle.all_time_high,
+                bundle.all_time_low,
+                bundle.monthly_high,
+                bundle.monthly_low,
+                bundle.anomaly_hot,
+                bundle.anomaly_cold,
+                bundle.absolute_extreme,
+                bundle.wet_bulb_extreme,
+            ]
+        ):
             bundles.append(bundle)
 
     country_records = detect_country_records(all_readings, archive_years=archive_years)
+    withheld = [{"city": bundle.city, "valid_date": bundle.signal_date.isoformat(), "variable": variable, "reason": reason}
+        for bundle in all_readings for variable, reason in bundle.evidence.get("comparison", {}).get("withheld_record_variables", {}).items()]
     if metrics_out is not None:
-        metrics_out.update({
-            "cities_attempted": len(to_check),
-            "city_readings": len(all_readings),
-            "city_fetch_failures": failures,
-            "signal_bundles": len(bundles),
-            "country_records": len(country_records),
-        })
+        metrics_out.update(
+            {
+                "record_comparisons_withheld": len(withheld), "withheld_record_candidates": withheld,
+                "cities_attempted": len(to_check),
+                "city_readings": len(all_readings),
+                "city_fetch_failures": failures,
+                "signal_bundles": len(bundles),
+                "country_records": len(country_records),
+            }
+        )
     return bundles, country_records
 
 
@@ -889,115 +747,116 @@ def detect_country_records(
     country_eligibility: dict[str, int] | None = None,
     country_forecast_read: dict[str, int] | None = None,
 ) -> list[CountryRecord]:
-    """Aggregate per-city readings into country-level records.
+    """Scoped sampled-network comparisons; never an official national record.
 
-    For each country with at least ``min_cities_per_country`` sampled
-    cities, compare today's peak temperature (across all that country's
-    cities) against the highest historical reading we've seen (across the
-    same set of cities). When today exceeds it, the country has hit a new
-    archive-wide high.
-
-    Same logic for lows with the sign flipped.
-
-    Coverage accounting on each emitted record (the country-record honesty
-    floor — a national record must rest on enough of that country's cities,
-    not one bootstrap city):
-
-    - ``eligible`` — cities curated for the country (from ``country_eligibility``);
-      a record only fires when the sampled group is at least this size.
-    - ``cached`` — cities in the group with cached thresholds this run.
-    - ``forecast_read`` — cities whose live forecast was actually read this run
-      (from ``country_forecast_read``). NOTE: ``_run_world_cached_half`` does not
-      yet thread ``country_forecast_read``, so it currently defaults to the group
-      size — i.e. ``forecast_read`` is a placeholder equal to ``cached`` until
-      threaded. The coverage-floor *gate* above is unaffected; only this recorded
-      fact is approximate.
+    Separate valid dates and evidence classes cannot become one simultaneous
+    observed event. High/low coverage is tested independently for every member.
     """
-    today = record_date or date.today()
-    today_iso = today.isoformat()
-
-    by_country: dict[str, list[ExtremeSignalBundle]] = {}
-    seen_places: set[str] = set()
-    for r in readings:
-        if r.country:
-            try:
-                identity = r.station_id or places.resolve_place(r.city, r.country, r.lat, r.lon)["place_id"]
-            except ValueError:
-                continue  # An unattributable point cannot count toward country coverage.
-            if identity in seen_places:
+    groups, seen = {}, set()
+    for reading in readings:
+        valid = reading.signal_date or record_date
+        if not reading.country or valid is None:
+            continue
+        try:
+            identity = (
+                reading.station_id
+                or places.resolve_place(reading.city, reading.country, reading.lat, reading.lon)[
+                    "place_id"
+                ]
+            )
+        except ValueError:
+            continue
+        kind = reading.evidence.get("evidence_type") or (
+            "observed" if reading.station_id else "forecast"
+        )
+        key = (places.country_key(reading.country), valid.isoformat(), kind)
+        member_key = (*key, identity)
+        if member_key not in seen:
+            groups.setdefault(key, []).append(reading)
+            seen.add(member_key)
+    records = []
+    for (country, valid, evidence_type), group in groups.items():
+        eligible = (
+            country_eligibility.get(country, len(group)) if country_eligibility else len(group)
+        )
+        if len(group) < max(min_cities_per_country, eligible):
+            continue
+        for kind, today_attr, prior_attr, year_attr, variable, choose in (
+            ("high", "today_max_c", "archive_max_c", "archive_max_year", "temperature_2m_max", max),
+            ("low", "today_min_c", "archive_min_c", "archive_min_year", "temperature_2m_min", min),
+        ):
+            current = [
+                (getattr(row, today_attr), row.city)
+                for row in group
+                if getattr(row, today_attr) is not None
+            ]
+            history = [
+                (getattr(row, prior_attr), row.city, getattr(row, year_attr))
+                for row in group
+                if getattr(row, prior_attr) is not None and getattr(row, year_attr) is not None
+            ]
+            if len(current) != len(group) or len(history) != len(group):
                 continue
-            seen_places.add(identity)
-            by_country.setdefault(places.country_key(r.country), []).append(r)
-
-    records: list[CountryRecord] = []
-    for country, group in by_country.items():
-        if len(group) < min_cities_per_country:
-            continue
-        if country_eligibility is not None and len(group) < country_eligibility.get(country, len(group)):
-            continue
-
-        # Highs
-        today_highs = [(r.today_max_c, r.city) for r in group if r.today_max_c is not None]
-        hist_highs = [
-            (r.archive_max_c, r.city, r.archive_max_year)
-            for r in group
-            if r.archive_max_c is not None and r.archive_max_year is not None
-        ]
-        if today_highs and hist_highs:
-            peak_today, peak_today_city = max(today_highs, key=lambda x: x[0])
-            peak_hist_temp, peak_hist_city, peak_hist_year = max(hist_highs, key=lambda x: x[0])
-            if peak_today > peak_hist_temp:
-                country_key = places.country_key(country)
-                records.append(CountryRecord(
+            peak, city = choose(current, key=lambda row: row[0])
+            prior, prior_city, year = choose(history, key=lambda row: row[0])
+            if not (peak > prior if kind == "high" else peak < prior):
+                continue
+            members = [
+                {"city": row.city, "station_id": row.station_id or None, "evidence": row.evidence}
+                for row in group
+            ]
+            evidence = {
+                "domain": "temperature",
+                "evidence_type": evidence_type,
+                "source_product": "sampled-temperature-network",
+                "valid_date": valid,
+                "timezone": None,
+                "valid_start": None,
+                "valid_end": None,
+                "baseline": {
+                    "comparison_scope": "sampled_network",
+                    "variable": variable,
+                    "members": members,
+                    "official_national_record": False,
+                },
+            }
+            evidence["revision_id"] = fingerprint(evidence)
+            years = [
+                (row.evidence.get("baseline") or {})
+                .get("variables", {})
+                .get(variable, {})
+                .get("years_with_samples", archive_years)
+                for row in group
+            ]
+            records.append(
+                CountryRecord(
                     country=group[0].country,
-                    kind="high",
-                    new_temp_c=peak_today,
-                    peak_city=peak_today_city,
-                    old_record_c=peak_hist_temp,
-                    old_record_year=peak_hist_year,
-                    old_record_city=peak_hist_city,
-                    years_of_data=archive_years,
+                    kind=kind,
+                    new_temp_c=peak,
+                    peak_city=city,
+                    old_record_c=prior,
+                    old_record_year=year,
+                    old_record_city=prior_city,
+                    years_of_data=min(years),
                     cities_sampled=len(group),
-                    event_id=f"country_high_{country_key}_{today_iso}",
-                    signal_date=record_date,
-                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
+                    event_id=f"country_{kind}_{country}_{valid}",
+                    signal_date=date.fromisoformat(valid),
+                    eligible=eligible,
                     cached=len(group),
-                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
-                ))
-
-        # Lows
-        today_lows = [(r.today_min_c, r.city) for r in group if r.today_min_c is not None]
-        hist_lows = [
-            (r.archive_min_c, r.city, r.archive_min_year)
-            for r in group
-            if r.archive_min_c is not None and r.archive_min_year is not None
-        ]
-        if today_lows and hist_lows:
-            trough_today, trough_today_city = min(today_lows, key=lambda x: x[0])
-            trough_hist_temp, trough_hist_city, trough_hist_year = min(hist_lows, key=lambda x: x[0])
-            if trough_today < trough_hist_temp:
-                country_key = places.country_key(country)
-                records.append(CountryRecord(
-                    country=group[0].country,
-                    kind="low",
-                    new_temp_c=trough_today,
-                    peak_city=trough_today_city,
-                    old_record_c=trough_hist_temp,
-                    old_record_year=trough_hist_year,
-                    old_record_city=trough_hist_city,
-                    years_of_data=archive_years,
-                    cities_sampled=len(group),
-                    event_id=f"country_low_{country_key}_{today_iso}",
-                    signal_date=record_date,
-                    eligible=(country_eligibility.get(country, len(group)) if country_eligibility else len(group)),
-                    cached=len(group),
-                    forecast_read=(country_forecast_read.get(country, len(group)) if country_forecast_read else len(group)),
-                ))
-
+                    forecast_read=(
+                        country_forecast_read.get(country, len(group))
+                        if country_forecast_read
+                        else len(group)
+                    ),
+                    evidence=evidence,
+                )
+            )
     return records
 
 
-def check_records_for_cities(cities: list[dict], max_checks: int | None = None) -> list[RecordEvent]:
+def check_records_for_cities(
+    cities: list[dict], max_checks: int | None = None
+) -> list[RecordEvent]:
     """Check cities for broken heat records.
 
     All 257 cities by default. Priority cities checked first so if the run
@@ -1019,89 +878,33 @@ def check_records_for_cities(cities: list[dict], max_checks: int | None = None) 
 
 
 def detect_record_lows(lat: float, lon: float, city: str, country: str) -> RecordEvent | None:
-    """Check whether today's forecast low would break the record low for this date."""
-    today = date.today()
-    try:
-        resp_today = fetch_with_retry(
-            f"{BASE_URL}/forecast",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "daily": "temperature_2m_min",
-                "timezone": "auto",
-                "forecast_days": 1,
-            },
-            timeout=10,
-            attempts=3,
-            backoff_base=1.0,
-        )
-        today_low = resp_today.json()["daily"]["temperature_2m_min"][0]
-        if today_low is None:
-            return None
-
-        try:
-            start = today.replace(year=today.year - 30)
-        except ValueError:
-            start = today.replace(year=today.year - 30, day=28)
-        end = today - timedelta(days=1)
-        resp_hist = fetch_with_retry(
-            f"{ARCHIVE_URL}/archive",
-            params={
-                "latitude": lat,
-                "longitude": lon,
-                "daily": "temperature_2m_min",
-                "start_date": start.isoformat(),
-                "end_date": end.isoformat(),
-                "timezone": "auto",
-            },
-            timeout=30,
-            attempts=3,
-            backoff_base=1.0,
-        )
-        hist_data = resp_hist.json()
-        dates = hist_data.get("daily", {}).get("time", [])
-        temps = hist_data.get("daily", {}).get("temperature_2m_min", [])
-
-        target_month = today.month
-        target_day = today.day
-        old_record_c = None
-        old_record_year = None
-
-        for d_str, t in zip(dates, temps):
-            if t is None:
-                continue
-            d = date.fromisoformat(d_str)
-            if d.month == target_month and d.day == target_day:
-                if old_record_c is None or t < old_record_c:
-                    old_record_c = t
-                    old_record_year = d.year
-
-        if old_record_c is not None and today_low < old_record_c:
-            return RecordEvent(
-                city=city,
-                country=country,
-                new_temp_c=today_low,
-                old_record_c=old_record_c,
-                old_record_year=old_record_year,
-                event_id=f"record_low_{places.event_location_key(city, country, lat, lon)}_{today.isoformat()}",
-                kind="low",
-                lat=lat,
-                lon=lon,
-            )
-
-        return None
-
-    except (requests.RequestException, KeyError, IndexError):
-        return None
+    bundle = detect_extreme_signals(lat, lon, city, country)
+    return bundle.calendar_date_low if bundle else None
 
 
-# Cities most likely to break cold records — polar + high-altitude + surprise-freeze cities.
 PRIORITY_COLD_CITIES = {
-    "Anchorage", "Fairbanks", "Yakutsk", "Ulaanbaatar", "Astana",
-    "Moscow", "Helsinki", "Reykjavik", "Tromsø",
-    "Denver", "Minneapolis", "Chicago", "Montreal", "Winnipeg",
-    "La Paz", "Bogota", "Quito", "Lhasa", "Addis Ababa",
-    "Dallas", "Atlanta", "Houston",  # surprise freezes are sensational
+    "Anchorage",
+    "Fairbanks",
+    "Yakutsk",
+    "Ulaanbaatar",
+    "Astana",
+    "Moscow",
+    "Helsinki",
+    "Reykjavik",
+    "Tromsø",
+    "Denver",
+    "Minneapolis",
+    "Chicago",
+    "Montreal",
+    "Winnipeg",
+    "La Paz",
+    "Bogota",
+    "Quito",
+    "Lhasa",
+    "Addis Ababa",
+    "Dallas",
+    "Atlanta",
+    "Houston",  # surprise freezes are sensational
 }
 
 
@@ -1113,7 +916,9 @@ def prioritize_cities_cold(cities: list[dict]) -> list[dict]:
     return priority + rest
 
 
-def check_record_lows_for_cities(cities: list[dict], max_checks: int | None = None) -> list[RecordEvent]:
+def check_record_lows_for_cities(
+    cities: list[dict], max_checks: int | None = None
+) -> list[RecordEvent]:
     """Check cities for broken cold records.
 
     All 257 cities by default. Priority cold cities checked first.
@@ -1146,10 +951,17 @@ def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
     try:
         resp = fetch_with_retry(
             f"{BASE_URL}/forecast",
-            params={"latitude": lats, "longitude": lons,
-                    "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
-                    "timezone": "auto", "forecast_days": 1},
-            timeout=30, attempts=3, backoff_base=1.0,
+            params={
+                "latitude": lats,
+                "longitude": lons,
+                "daily": "temperature_2m_max,temperature_2m_min,wet_bulb_temperature_2m_max",
+                "timezone": "auto",
+                "temperature_unit": "celsius",
+                "forecast_days": 1,
+            },
+            timeout=30,
+            attempts=3,
+            backoff_base=1.0,
         )
     except requests.HTTPError as exc:
         if getattr(exc.response, "status_code", None) == 429:
@@ -1166,11 +978,9 @@ def fetch_forecasts_batch(cities: list[dict]) -> dict[str, dict]:
         return {}  # A partial/malformed batch cannot safely align readings to requested places.
     out: dict[str, dict] = {}
     for city, block in zip(cities, blocks):
-        daily = (block or {}).get("daily", {}) or {}
-        # Shared sampling identity prevents cross-place and coordinate-revision reuse.
-        out[places.cache_key(city["city"], city["country"], city["lat"], city["lon"])] = {
-            "max_c": (daily.get("temperature_2m_max") or [None])[0],
-            "min_c": (daily.get("temperature_2m_min") or [None])[0],
-            "tw_max_c": (daily.get("wet_bulb_temperature_2m_max") or [None])[0],
-        }
+        try:
+            forecast = forecast_day(block)
+        except (ValueError, TypeError, AttributeError):
+            continue
+        out[places.cache_key(city["city"], city["country"], city["lat"], city["lon"])] = forecast
     return out

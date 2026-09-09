@@ -13,6 +13,7 @@ from meteostat import Normals, Point
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.data import places
+from src.data.temperature_evidence import utc_now
 
 CITIES_PATH = Path(__file__).parent.parent / "data" / "cities.csv"
 NORMALS_PATH = Path(__file__).parent.parent / "data" / "normals.csv"
@@ -34,17 +35,20 @@ def main():
 
         try:
             point = Point(lat, lon)
-            data = Normals(point, 1991, 2020).fetch()
+            period_start, period_end = 1991, 2020
+            data = Normals(point, period_start, period_end).fetch()
 
             if data.empty or "tmax" not in data.columns:
-                # Try wider period as fallback
-                data = Normals(point, 1961, 1990).fetch()
+                # A different earlier period is explicit in each output row.
+                period_start, period_end = 1961, 1990
+                data = Normals(point, period_start, period_end).fetch()
 
             if data.empty or "tmax" not in data.columns:
                 missing.append(name)
                 print(f"  [{i}/{len(cities)}] {name}: NO DATA")
                 continue
 
+            retrieved_at = utc_now()
             for month_idx, row in data.iterrows():
                 tmax = row.get("tmax")
                 if tmax is not None and not (tmax != tmax):  # not NaN
@@ -54,6 +58,9 @@ def main():
                         "sampling_point_id": city["sampling_point_id"], "lat": lat, "lon": lon,
                         "month": int(month_idx),
                         "avg_high_c": round(float(tmax), 1),
+                        "source_product": "meteostat-normals-point-v1",
+                        "period_start": period_start, "period_end": period_end,
+                        "retrieved_at": retrieved_at,
                     })
 
             print(f"  [{i}/{len(cities)}] {name}: OK ({len(data)} months)")
@@ -64,7 +71,7 @@ def main():
 
     # Write normals.csv
     with open(NORMALS_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["city", "country", "place_id", "sampling_point_id", "lat", "lon", "month", "avg_high_c"])
+        writer = csv.DictWriter(f, fieldnames=["city", "country", "place_id", "sampling_point_id", "lat", "lon", "month", "avg_high_c", "source_product", "period_start", "period_end", "retrieved_at"])
         writer.writeheader()
         writer.writerows(rows)
 

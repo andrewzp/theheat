@@ -92,7 +92,7 @@ class TestGhcnSourceStatus:
 
         newest_missing = (date.today() - timedelta(days=1)).isoformat()
 
-        def fake_ghcn_fetch(*, metrics_out=None):
+        def fake_ghcn_fetch(*, metrics_out=None, bot_state=None):
             if metrics_out is not None:
                 metrics_out.update({
                     "stations_active": 11982,
@@ -1620,10 +1620,10 @@ class TestRunLeaderboard:
             CityTemp("Phoenix", "US", 33.45, -112.07, 45.0),
         ]
         mock_om.compute_anomalies.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
+            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
         ]
         mock_om.rank_hot10.return_value = [
-            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0),
+            CityTemp("Phoenix", "US", 33.45, -112.07, 45.0, 30.0, 15.0, signal_date=date(2026, 5, 4)),
         ]
         mock_two_bot.return_value = True
         mock_state.update_streaks.return_value = {}
@@ -1642,7 +1642,7 @@ class TestRunLeaderboard:
     @patch("src.main.state")
     def test_persists_compact_hot10_rows(self, mock_state, mock_om, mock_two_bot, mock_draft):
         ranked = [
-            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx)
+            CityTemp(f"City {idx}", "US", 0.0, 0.0, 30.0 + idx, 25.0, 10.0 - idx, signal_date=date(2026, 5, 4))
             for idx in range(1, 11)
         ]
         mock_om.load_cities.return_value = []
@@ -2732,7 +2732,7 @@ class TestSynthesisRecording:
 
 
 class TestSynthesisStage:
-    def test_synthesis_stage_creates_draft(self, monkeypatch):
+    def test_synthesis_stage_withholds_reduced_heat_evidence(self, monkeypatch):
         from copy import deepcopy
         from datetime import datetime, timedelta, UTC
         from src.state import (
@@ -2778,17 +2778,10 @@ class TestSynthesisStage:
 
         main.run_alerts(bot_state)
 
-        assert captured.get("legacy_type") == "synthesis_fire_drought_heat"
-        assert captured.get("bundle_signal_kind") == "synthesis_fire_drought_heat"
-        assert captured["components"] == [
-            {"kind": "drought", "d4_pct": 10.0},
-            {"kind": "fire", "peak_frp_mw": 1400.0, "peak_region": "Sacramento"},
-            {"kind": "heat", "peak_city": "Sacramento", "peak_kind": "calendar", "peak_value_c": 40.0},
-        ]
-        assert "california" in captured["event_id"]
-        # Cooldown must have been recorded so a second cycle is suppressed.
+        assert captured == {}  # Source reduction has no member dates/baselines.
+        assert any("temperature_aggregate_unqualified" in row["reasons"] for row in bot_state["suppressions"])
         cooldown = bot_state["synthesis_cooldown"].get("fire_drought_heat") or {}
-        assert "California" in cooldown
+        assert "California" not in cooldown
 
     def test_synthesis_stage_creates_marine_compound_draft(self, monkeypatch):
         from copy import deepcopy

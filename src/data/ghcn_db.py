@@ -12,9 +12,10 @@ Zero external dependencies — stdlib sqlite3 only.
 from __future__ import annotations
 
 import sqlite3
+import json
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Iterable
+from typing import Generator
 
 from src.data.ghcn_format import (
     ElementInventory,
@@ -69,6 +70,11 @@ CREATE TABLE IF NOT EXISTS thresholds (
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS threshold_provenance (
+    station_id TEXT PRIMARY KEY,
+    payload_json TEXT NOT NULL
 );
 """
 
@@ -188,6 +194,12 @@ def upsert_thresholds(
     rows: list[tuple] = []
     sid = t.station_id
 
+    conn.execute(
+        "INSERT INTO threshold_provenance(station_id,payload_json) VALUES(?,?) "
+        "ON CONFLICT(station_id) DO UPDATE SET payload_json=excluded.payload_json",
+        (sid, json.dumps(t.provenance, sort_keys=True, allow_nan=False)),
+    )
+
     conn.execute("DELETE FROM thresholds WHERE station_id = ?", (sid,))
 
     if t.all_time_max_c is not None:
@@ -234,6 +246,14 @@ def load_thresholds(
         return None
 
     t = StationThresholds(station_id=station_id)
+    provenance = conn.execute(
+        "SELECT payload_json FROM threshold_provenance WHERE station_id=?", (station_id,),
+    ).fetchone()
+    if provenance:
+        parsed = json.loads(provenance[0])
+        if not isinstance(parsed, dict):
+            raise ValueError("Invalid stored GHCN baseline provenance")
+        t.provenance = parsed
 
     for kind, month, day, value_c, record_year in rows:
         if kind == "all_time_max":

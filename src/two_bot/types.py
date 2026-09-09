@@ -70,6 +70,9 @@ class StoryBundle:
             self.raw_signal_dump = {**self.raw_signal_dump, **identity}
             self.country = country_key(self.raw_signal_dump.get("country", self.country))
 
+        from src.data.temperature_evidence import project_story_evidence
+        project_story_evidence(self)
+
     def to_dict(self) -> dict:
         data: dict[str, Any] = {
             "signal_kind": self.signal_kind,

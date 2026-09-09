@@ -27,8 +27,11 @@ import csv
 import gzip
 import io
 import tarfile
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+import hashlib
+import json
+import math
 from typing import Generator, Iterable
 
 
@@ -175,6 +178,12 @@ class DailyObs:
     obs_date: date
     element: str     # "TMAX" or "TMIN"
     value_c: float   # converted from tenths-of-°C
+    mflag: str = ""
+    qflag: str = ""
+    sflag: str = ""
+    observation_time: str | None = None
+    retrieved_at: str | None = None
+    source_revision: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +246,9 @@ def _parse_dly_line(
             obs_date=obs_date,
             element=element,
             value_c=raw / 10.0,
+            mflag=line[offset + 5:offset + 6].strip(),
+            qflag=qflag.strip(),
+            sflag=line[offset + 7:offset + 8].strip(),
         )
 
 
@@ -328,17 +340,57 @@ class DiffRecord:
     element: str
     value_c: float | None
     qflag: str = ""
+    mflag: str = ""
+    sflag: str = ""
+    observation_time: str | None = None
 
     def to_daily_obs(self) -> DailyObs | None:
         """Return a valid observation, or None for deletes/missing/QC-failed rows."""
-        if self.action == "delete" or self.value_c is None or self.qflag.strip():
+        if (self.action == "delete" or self.value_c is None or self.qflag.strip()
+                or isinstance(self.value_c, bool) or not math.isfinite(self.value_c)):
             return None
         return DailyObs(
             station_id=self.station_id,
             obs_date=self.obs_date,
             element=self.element,
             value_c=self.value_c,
+            mflag=self.mflag,
+            qflag=self.qflag,
+            sflag=self.sflag,
+            observation_time=self.observation_time,
         )
+
+
+def parse_dly_records_text(
+    text: str, elements: frozenset[str] = frozenset({"TMAX", "TMIN"}),
+) -> list[DiffRecord]:
+    """Retain quality flags and missing observations for revision review.
+
+    A current archive flag describes this retrieval only; it cannot establish
+    which quality flag existed when a historical tweet was published.
+    """
+    records = []
+    for line in text.splitlines():
+        if len(line) < 269 or line[17:21].strip() not in elements:
+            continue
+        try:
+            year, month = int(line[11:15]), int(line[15:17])
+        except ValueError:
+            continue
+        for day in range(1, 32):
+            offset = 21 + (day - 1) * 8
+            try:
+                obs_date = date(year, month, day)
+                value = int(line[offset:offset + 5])
+            except ValueError:
+                continue
+            records.append(DiffRecord(
+                action="archive", station_id=line[:11].strip(), obs_date=obs_date,
+                element=line[17:21].strip(), value_c=None if value == _MISSING else value / 10,
+                mflag=line[offset + 5:offset + 6].strip(), qflag=line[offset + 6:offset + 7].strip(),
+                sflag=line[offset + 7:offset + 8].strip(),
+            ))
+    return records
 
 
 def _parse_diff_date(raw: str) -> date:
@@ -395,6 +447,9 @@ def _parse_superghcnd_csv_text(
             element=element,
             value_c=value_c,
             qflag=row[5],
+            mflag=row[4].strip(),
+            sflag=row[6].strip(),
+            observation_time=row[7].strip() or None if len(row) > 7 else None,
         ))
 
     if malformed:
@@ -422,6 +477,7 @@ def parse_superghcnd_diff_records_text(
                 obs_date=o.obs_date,
                 element=o.element,
                 value_c=o.value_c,
+                mflag=o.mflag, qflag=o.qflag, sflag=o.sflag,
             )
             for o in parse_dly_text(text, elements)
         ]
@@ -544,6 +600,7 @@ class StationThresholds:
     archive_years: int = 0
     tmax_archive_years: int = 0
     tmin_archive_years: int = 0
+    provenance: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.monthly_max is None:
@@ -560,7 +617,10 @@ class StationThresholds:
             self.climatological_mean_min = {}
 
 
-def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
+def compute_thresholds(
+    obs: Iterable[DailyObs], *, before: date | None = None,
+    retrieved_at: str | None = None, source_revision: str | None = None,
+) -> StationThresholds | None:
     """Compute record thresholds from an iterable of DailyObs for one station.
 
     Returns None if no valid observations are provided.
@@ -572,8 +632,13 @@ def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
     station_id: str | None = None
 
     for o in obs:
+        if (o.qflag.strip() or isinstance(o.value_c, bool) or not math.isfinite(o.value_c)
+                or (before is not None and o.obs_date >= before)):
+            continue
         if station_id is None:
             station_id = o.station_id
+        elif station_id != o.station_id:
+            raise ValueError("A station baseline cannot contain another station's observations")
         if o.element == "TMAX":
             tmax_obs.append(o)
         elif o.element == "TMIN":
@@ -654,6 +719,70 @@ def compute_thresholds(obs: Iterable[DailyObs]) -> StationThresholds | None:
 
     thresholds.archive_years = max(thresholds.tmax_archive_years, thresholds.tmin_archive_years)
 
+    variables: dict[str, dict] = {}
+    for name, accepted, choose in (
+        ("temperature_2m_max", tmax_obs, max),
+        ("temperature_2m_min", tmin_obs, min),
+    ):
+        by_date: dict[str, float] = {}
+        period_month: dict[str, list[DailyObs]] = {}
+        by_calendar: dict[str, list[DailyObs]] = {}
+        conflicts = set()
+        for row in accepted:
+            label = row.obs_date.isoformat()
+            if label in by_date and by_date[label] != row.value_c:
+                conflicts.add(label)
+            by_date[label] = row.value_c
+            period_month.setdefault(f"{row.obs_date.month:02d}", []).append(row)
+            by_calendar.setdefault(label[5:], []).append(row)
+        start = min(by_date) if by_date else None
+        cutoff = max(by_date) if by_date else None
+        end = (before - timedelta(days=1)).isoformat() if before else cutoff
+        expected = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1 if start and end else 0
+        peak_sample = choose(accepted, key=lambda row: row.value_c) if accepted else None
+        variables[name] = {
+            "sample_count": len(by_date), "expected_count": expected,
+            "coverage_fraction": len(by_date) / expected if expected else 0,
+            "complete": bool(expected and len(by_date) == expected and not conflicts),
+            "years_with_samples": len({row.obs_date.year for row in accepted}),
+            "start": start, "cutoff": cutoff,
+            "conflicting_dates": sorted(conflicts),
+            "previous_value_c": peak_sample.value_c if peak_sample else None,
+            "previous_date": peak_sample.obs_date.isoformat() if peak_sample else None,
+            "monthly_years": {label: len({row.obs_date.year for row in rows}) for label, rows in period_month.items()},
+            "calendar_years": {label: len({row.obs_date.year for row in rows}) for label, rows in by_calendar.items()},
+            "calendar_samples": {label: len(rows) for label, rows in by_calendar.items()},
+            "monthly_samples": {f"{m:02d}": len(period_month.get(f"{m:02d}", [])) for m in range(1, 13)},
+        }
+        variables[name]["record_dates"] = {
+            "all_time": peak_sample.obs_date.isoformat() if peak_sample else None,
+            "monthly": {
+                label: choose(rows, key=lambda row: row.value_c).obs_date.isoformat()
+                for label, rows in period_month.items()
+            },
+            "calendar": {
+                label: choose(rows, key=lambda row: row.value_c).obs_date.isoformat()
+                for label, rows in by_calendar.items()
+            },
+        }
+    thresholds.provenance = {
+        "schema_version": 2, "source_product": "noaa-ghcn-daily-v2",
+        "station_id": station_id, "evidence_type": "observed",
+        "comparison_scope": "available_source_accepted_station_samples",
+        "comparison_before": before.isoformat() if before else None,
+        # Accepted values alone do not verify source continuity through a
+        # requested cutoff. The archive qualifier establishes that separately.
+        "cutoff": None,
+        "requested_comparison_cutoff": (before - timedelta(days=1)).isoformat() if before else None,
+        "retrieved_at": retrieved_at, "source_payload_sha256": source_revision,
+        "reconciled": bool(before and retrieved_at and source_revision),
+        "variables": variables,
+    }
+    thresholds.provenance["revision_id"] = hashlib.sha256(json.dumps(
+        {key: value for key, value in thresholds.provenance.items() if key != "retrieved_at"},
+        sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode()).hexdigest()
+
     return thresholds
 
 
@@ -668,6 +797,10 @@ def update_thresholds_with_obs(
     updated = False
 
     for o in new_obs:
+        if o.station_id != existing.station_id:
+            raise ValueError("Cannot update thresholds from another station")
+        if o.qflag.strip() or isinstance(o.value_c, bool) or not math.isfinite(o.value_c):
+            continue
         v = o.value_c
         y = o.obs_date.year
         m = o.obs_date.month
@@ -704,5 +837,10 @@ def update_thresholds_with_obs(
             if cur_md is None or v < cur_md[0]:
                 existing.calendar_date_min[md] = (v, y)
                 updated = True
+
+    if updated:
+        # A partial delta does not prove contiguous source reconciliation or
+        # refresh the sample distribution. Keep this cache discovery-only.
+        existing.provenance = {"reconciled": False, "limitation": "partial_threshold_delta"}
 
     return updated

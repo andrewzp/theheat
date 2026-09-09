@@ -187,6 +187,11 @@ def audit_story_bundle(bundle: StoryBundle) -> EvidenceAudit:
                 )
             )
 
+    from src.data.temperature_evidence import temperature_aggregate_failures
+
+    for reason in temperature_aggregate_failures(bundle):
+        issues.append(_issue("error", "temperature_aggregate_unqualified", "raw_signal_dump", reason))
+
     has_errors = any(issue.severity == "error" for issue in issues)
     return EvidenceAudit(
         signal_kind=bundle.signal_kind,

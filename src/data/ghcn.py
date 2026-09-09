@@ -7,10 +7,10 @@ station_id, and station_name.
 Data flow per cycle:
   1. Fetch the latest superghcnd_diff file(s) from NOAA.
   2. Parse TMAX / TMIN observations for active stations.
-  3. For each station with a new reading, load its threshold row from the
-     SQLite cache built by scripts/build_station_thresholds.py.
-  4. Compare reading to all-time / monthly / calendar-date records and the
-     climatological mean (anomaly).
+  3. Use cached SQLite thresholds to discover potential record candidates.
+  4. Verify at most 20 candidate/tracked station archives, recomputing accepted
+     samples strictly before the actual observation day. Unverified history
+     cannot authorize record, anomaly or country comparison claims.
   5. Emit ExtremeSignalBundle for every station that tripped at least one
      signal.
   6. Run country-level aggregation across ALL station readings (same logic as
@@ -36,10 +36,15 @@ from __future__ import annotations
 import logging
 import os
 import re
+import hashlib
+from copy import deepcopy
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from pathlib import Path
+from itertools import zip_longest
 from typing import Callable
+from src.state_schema import BotState
 
 import requests
 
@@ -183,6 +188,12 @@ from src.data.ghcn_format import (
     DailyObs,
     StationThresholds,
     parse_superghcnd_diff_records_bytes,
+    parse_dly_records_text,
+    compute_thresholds,
+)
+from src.data.temperature_evidence import attach_evidence, fingerprint, finite, utc_now
+from src.data.temperature_history import (
+    record_claim_finding, record_observation_revision, retained_claims, tracked_points,
 )
 from src.data.open_meteo import (
     AllTimeRecord,
@@ -227,6 +238,8 @@ ANOMALY_COLD_THRESHOLD_C = float(os.environ.get("THEHEAT_ANOMALY_COLD_THRESHOLD_
 
 # Minimum archive years before we trust thresholds (avoids thin-data false positives)
 MIN_ARCHIVE_YEARS = int(os.environ.get("THEHEAT_GHCN_MIN_ARCHIVE_YEARS", "15"))
+ARCHIVE_VERIFICATION_LIMIT = 20
+GHCN_SOURCE_PRODUCT = "noaa-ghcn-daily-v2"
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +295,8 @@ def _fetch_recent_obs(
     max_obs_age_days: int = MAX_OBS_AGE_DAYS,
     today: date | None = None,
     metrics_out: dict | None = None,
+    revisions_out: list | None = None,
+    tracked_keys: set[tuple[str, date, str]] | None = None,
 ) -> dict[tuple[str, date], list[DailyObs]]:
     """Fetch recent TMAX/TMIN observations for active stations.
 
@@ -331,19 +346,25 @@ def _fetch_recent_obs(
     obs_by_key: dict[tuple[str, date, str], DailyObs] = {}
     skipped_stale = 0
     for d in sorted(raw_by_date):
+        retrieved_at = utc_now()
+        source_revision = hashlib.sha256(raw_by_date[d]).hexdigest()
         records = parse_superghcnd_diff_records_bytes(raw_by_date[d])
         for rec in records:
+            key = (rec.station_id, rec.obs_date, rec.element)
+            if rec.station_id not in active_ids and key not in (tracked_keys or set()):
+                continue
+            if revisions_out is not None and key in (tracked_keys or set()):
+                revisions_out.append((rec, retrieved_at, source_revision))
             if rec.station_id not in active_ids:
                 continue
-            if rec.obs_date < obs_age_cutoff:
+            if rec.obs_date < obs_age_cutoff or rec.obs_date > today:
                 skipped_stale += 1
                 continue
-            key = (rec.station_id, rec.obs_date, rec.element)
             obs = rec.to_daily_obs()
             if obs is None:
                 obs_by_key.pop(key, None)
             else:
-                obs_by_key[key] = obs
+                obs_by_key[key] = replace(obs, retrieved_at=retrieved_at, source_revision=source_revision)
 
     by_station_date: dict[tuple[str, date], list[DailyObs]] = {}
     for o in obs_by_key.values():
@@ -355,7 +376,7 @@ def _fetch_recent_obs(
         "GHCN: fetched diffs for %d/%d dates; %d active station/date groups have fresh readings (%d backfill records skipped, cutoff=%s)",
         len(raw_by_date), lookback_days, len(by_station_date), skipped_stale, obs_age_cutoff.isoformat(),
     )
-    if not by_station_date:
+    if not by_station_date and revisions_out is None:
         raise RuntimeError("GHCN: diff files parsed but contained no active TMAX/TMIN observations within obs-age cutoff")
     return by_station_date
 
@@ -423,18 +444,31 @@ def _detect_signals_for_station(
 
     usable = False
     for o in obs_list:
+        if o.station_id != sid:
+            raise ValueError("GHCN observation belongs to another station")
+        if not finite(o.value_c) or o.qflag.strip():
+            continue
         value_c = o.value_c
+        variable = "temperature_2m_max" if o.element == "TMAX" else "temperature_2m_min"
+        provenance = thresholds.provenance
+        scope = (provenance.get("variables") or {}).get(variable) or {}
+        eligible = (
+            provenance.get("reconciled") is True
+            and provenance.get("station_id") == sid
+            and provenance.get("comparison_before") == obs_date_iso
+            and provenance.get("source_product") == GHCN_SOURCE_PRODUCT
+            and bool(provenance.get("source_payload_sha256"))
+            and bool(provenance.get("retrieved_at"))
+            and not scope.get("conflicting_dates")
+            and scope.get("candidate_accepted") is True
+            and scope.get("source_coverage_complete") is True
+        )
+        archive_years = scope.get("years_with_samples", 0)
         if o.element == "TMAX":
-            archive_years = (
-                thresholds.tmax_archive_years
-                or station.get("tmax_archive_years", 0)
-                or thresholds.archive_years
-                or station.get("archive_years", 0)
-            )
-            if archive_years < MIN_ARCHIVE_YEARS:
-                continue
             usable = True
             bundle.today_max_c = value_c
+            if not eligible or archive_years < MIN_ARCHIVE_YEARS:
+                continue
             bundle.archive_max_c = thresholds.all_time_max_c
             bundle.archive_max_year = thresholds.all_time_max_year
 
@@ -453,7 +487,7 @@ def _detect_signals_for_station(
                 )
 
             monthly_max = thresholds.monthly_max.get(month)
-            if monthly_max and value_c > monthly_max[0] + RECORD_MARGIN_C:
+            if scope.get("monthly_years", {}).get(f"{month:02d}", 0) >= MIN_ARCHIVE_YEARS and monthly_max and value_c > monthly_max[0] + RECORD_MARGIN_C:
                 bundle.monthly_high = MonthlyRecord(
                     city=city, country=country, kind="high", month=month,
                     new_temp_c=value_c,
@@ -468,7 +502,7 @@ def _detect_signals_for_station(
                 )
 
             cal_max = thresholds.calendar_date_max.get(md)
-            if cal_max and value_c > cal_max[0] + RECORD_MARGIN_C:
+            if scope.get("calendar_years", {}).get(f"{month:02d}-{day:02d}", 0) >= MIN_ARCHIVE_YEARS and cal_max and value_c > cal_max[0] + RECORD_MARGIN_C:
                 bundle.calendar_date_high = RecordEvent(
                     city=city, country=country,
                     new_temp_c=value_c,
@@ -483,7 +517,7 @@ def _detect_signals_for_station(
                 )
 
             clim_mean = thresholds.climatological_mean.get(month)
-            if clim_mean is not None:
+            if clim_mean is not None and scope.get("monthly_years", {}).get(f"{month:02d}", 0) >= MIN_ARCHIVE_YEARS:
                 anomaly_c = value_c - clim_mean
                 if anomaly_c >= ANOMALY_HOT_THRESHOLD_C:
                     bundle.anomaly_hot = AnomalyEvent(
@@ -500,16 +534,10 @@ def _detect_signals_for_station(
                     )
 
         elif o.element == "TMIN":
-            archive_years = (
-                thresholds.tmin_archive_years
-                or station.get("tmin_archive_years", 0)
-                or thresholds.archive_years
-                or station.get("archive_years", 0)
-            )
-            if archive_years < MIN_ARCHIVE_YEARS:
-                continue
             usable = True
             bundle.today_min_c = value_c
+            if not eligible or archive_years < MIN_ARCHIVE_YEARS:
+                continue
             bundle.archive_min_c = thresholds.all_time_min_c
             bundle.archive_min_year = thresholds.all_time_min_year
 
@@ -528,7 +556,7 @@ def _detect_signals_for_station(
                 )
 
             monthly_min = thresholds.monthly_min.get(month)
-            if monthly_min and value_c < monthly_min[0] - RECORD_MARGIN_C:
+            if scope.get("monthly_years", {}).get(f"{month:02d}", 0) >= MIN_ARCHIVE_YEARS and monthly_min and value_c < monthly_min[0] - RECORD_MARGIN_C:
                 bundle.monthly_low = MonthlyRecord(
                     city=city, country=country, kind="low", month=month,
                     new_temp_c=value_c,
@@ -543,7 +571,7 @@ def _detect_signals_for_station(
                 )
 
             cal_min = thresholds.calendar_date_min.get(md)
-            if cal_min and value_c < cal_min[0] - RECORD_MARGIN_C:
+            if scope.get("calendar_years", {}).get(f"{month:02d}-{day:02d}", 0) >= MIN_ARCHIVE_YEARS and cal_min and value_c < cal_min[0] - RECORD_MARGIN_C:
                 bundle.calendar_date_low = RecordEvent(
                     city=city, country=country,
                     new_temp_c=value_c,
@@ -558,7 +586,7 @@ def _detect_signals_for_station(
                 )
 
             clim_mean = thresholds.climatological_mean_min.get(month)
-            if clim_mean is not None:
+            if clim_mean is not None and scope.get("monthly_years", {}).get(f"{month:02d}", 0) >= MIN_ARCHIVE_YEARS:
                 anomaly_c = value_c - clim_mean
                 if anomaly_c <= -ANOMALY_COLD_THRESHOLD_C:
                     bundle.anomaly_cold = AnomalyEvent(
@@ -593,6 +621,23 @@ def _detect_signals_for_station(
             abs_ev.event_id = f"absextreme_{abs_ev.kind}_{sid_key}_{obs_date_iso}"
             bundle.absolute_extreme = abs_ev
 
+    evidence = {
+        "domain": "temperature", "evidence_type": "observed", "source_product": GHCN_SOURCE_PRODUCT,
+        "station_id": sid, "valid_date": obs_date_iso,
+        "timezone": None, "valid_start": None, "valid_end": None,
+        "issued_at": None, "model_run": None,
+        "retrieved_at": max((o.retrieved_at for o in obs_list if o.retrieved_at), default=None),
+        "aggregation": "station_reported_daily_extreme", "unit": "C",
+        "reporting_interval_known": False,
+        "variables": {o.element: {
+            "value_c": o.value_c, "mflag": o.mflag, "qflag": o.qflag, "sflag": o.sflag,
+            "observation_time": o.observation_time, "source_payload_sha256": o.source_revision,
+        } for o in obs_list if finite(o.value_c) and not o.qflag.strip()},
+        "baseline": deepcopy(thresholds.provenance),
+        "publication_time_qc_known": False,
+    }
+    evidence["revision_id"] = fingerprint({key: value for key, value in evidence.items() if key != "retrieved_at"})
+    attach_evidence(bundle, evidence)
     return bundle
 
 
@@ -659,6 +704,10 @@ def check_extreme_signals_for_stations(
     db_path: Path | str | None = None,
     _fetch_obs_fn: Callable | None = None,  # injectable for tests
     metrics_out: dict | None = None,
+    bot_state: BotState | dict | None = None,
+    archive_verification_limit: int = ARCHIVE_VERIFICATION_LIMIT,
+    _fetch_archive_fn: Callable | None = None,
+    _now_fn: Callable | None = None,
 ) -> tuple[list[ExtremeSignalBundle], list[CountryRecord]]:
     """Check active GHCN-Daily stations for extreme signals.
 
@@ -675,6 +724,10 @@ def check_extreme_signals_for_stations(
                        passed through to country aggregation for label text.
         db_path: override the default SQLite path.
         _fetch_obs_fn: injectable for testing; replaces _fetch_recent_obs().
+        bot_state: optional durable material-revision/affected-claim history.
+        archive_verification_limit: candidate/tracked station cap; always at most 20.
+        _fetch_archive_fn: offline test seam returning original .dly bytes.
+        _now_fn: explicit UTC retrieval clock seam, never an observation date.
         metrics_out: if provided, populated in-place with funnel counts
             (stations_active, stations_with_obs, station_obs_pairs,
             stations_checked, raw_signals, bundles_after_dedup,
@@ -705,42 +758,122 @@ def check_extreme_signals_for_stations(
     active_ids = frozenset(s["station_id"] for s in stations)
     station_by_id = {s["station_id"]: s for s in stations}
 
-    # 2. Fetch recent observations
-    fetch_fn = _fetch_obs_fn or _fetch_recent_obs
+    # Cached thresholds only discover candidates. Every historical comparison
+    # is recomputed from a bounded, current station archive before the valid day.
+    now = (_now_fn or utc_now)()
+    state = bot_state if bot_state is not None else {}
+    claims = retained_claims(state)
+    points = tracked_points(state)
+    revisions: list = []
     fetch_metrics: dict = {}
     if _fetch_obs_fn is None:
-        latest_obs = fetch_fn(active_ids, metrics_out=fetch_metrics)
+        try:
+            latest_obs = _fetch_recent_obs(
+                active_ids, metrics_out=fetch_metrics, revisions_out=revisions,
+                tracked_keys=points, today=date.fromisoformat(now[:10]),
+            )
+        except RuntimeError:
+            if not points:
+                raise
+            latest_obs = {}
+            fetch_metrics["diff_fetch_failed"] = 1
     else:
-        latest_obs = fetch_fn(active_ids)
-
-    if not latest_obs:
+        latest_obs = _fetch_obs_fn(active_ids)
+    metrics = _empty_pipeline_metrics() | fetch_metrics
+    with open_db(resolved_db) as conn:
+        cached = {sid: load_thresholds(conn, sid) for sid in active_ids}
+    candidates = {
+        sid for (sid, _), obs in latest_obs.items()
+        if sid in active_ids and _could_need_baseline(obs, cached[sid])
+    }
+    tracked_stations = {sid for sid, _, _ in points}
+    # Rotate deterministically by UTC day within each lane, then interleave the
+    # two lanes so neither old published evidence nor new candidates starves.
+    def rotate(ids):
+        ordered = sorted(ids)
+        if not ordered:
+            return ordered
+        offset = date.fromisoformat(now[:10]).toordinal() % len(ordered)
+        return ordered[offset:] + ordered[:offset]
+    tracked_order = rotate(tracked_stations)
+    candidate_order = rotate(candidates)
+    priority = list(dict.fromkeys(
+        sid for pair in zip_longest(tracked_order, candidate_order)
+        for sid in pair if sid is not None
+    ))
+    if isinstance(archive_verification_limit, bool) or not isinstance(archive_verification_limit, int):
+        raise ValueError("GHCN archive verification limit must be an integer")
+    limit = max(0, min(archive_verification_limit, ARCHIVE_VERIFICATION_LIMIT))
+    selected = priority[:limit]
+    metrics["archive_verification_attempted"] = len(selected)
+    metrics["archive_verification_exhausted"] = len(priority) - len(selected)
+    metrics["tracked_stations_unscanned"] = len(tracked_stations - set(selected))
+    snapshots = {}
+    fetch_archive = _fetch_archive_fn or _fetch_station_archive
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {pool.submit(fetch_archive, sid): sid for sid in selected}
+        for future in as_completed(futures):
+            sid = futures[future]
+            try:
+                snapshots[sid] = _archive_snapshot(sid, future.result(), now)
+            except (requests.RequestException, OSError, ValueError, TypeError, UnicodeError) as exc:
+                metrics["archive_verification_failed"] += 1
+                log.warning("GHCN station verification unavailable for %s: %s", sid, exc)
+    metrics["archive_verification_verified"] = len(snapshots)
+    metrics["tracked_stations_unscanned"] = len(tracked_stations - snapshots.keys())
+    # Old-dated QC updates are reviewed even when too old for a news signal.
+    latest_revisions = {}
+    for record, retrieved, source_revision in revisions:
+        _, added = record_observation_revision(state, record, retrieved_at=retrieved, source_revision=source_revision)
+        metrics["material_revisions"] += int(added)
+        latest_revisions[(record.station_id, record.obs_date, record.element)] = (record, retrieved, source_revision)
+    for record, retrieved, source_revision in latest_revisions.values():
+        if record.station_id not in snapshots:
+            _, findings = _retain_changed_point(state, record, retrieved, source_revision, claims)
+            metrics["affected_claims"] += findings
+    for sid, snapshot in snapshots.items():
+        material, findings = _retain_snapshot_revisions(state, sid, snapshot, claims, points)
+        metrics["material_revisions"] += material
+        metrics["affected_claims"] += findings
+    for claim in claims:
+        if claim["station_id"] not in snapshots:
+            metrics["affected_claims"] += int(record_claim_finding(
+                state, claim, reason="current_archive_unverified", source_revision=None,
+                retrieved_at=now, details={"coverage": "station_archive_not_verified_this_run",
+                                          "historical_correctness": "not_determined"},
+            ))
+    if not latest_obs and not tracked_stations:
         if metrics_out is not None:
-            metrics_out.update(_empty_pipeline_metrics() | {
-                "stations_active": len(stations),
-            })
+            metrics_out.update(metrics | {"stations_active": len(stations)})
         raise RuntimeError("GHCN: no observations returned; check NOAA diff endpoints")
-
-    # 3. Load thresholds for stations that have new observations and compare
     all_bundles: list[ExtremeSignalBundle] = []
     signal_bundles: list[ExtremeSignalBundle] = []
-
-    with open_db(resolved_db) as conn:
-        for (station_id, _obs_date), obs_list in latest_obs.items():
-            station = station_by_id.get(station_id)
-            if station is None:
-                continue
-
-            thresholds = load_thresholds(conn, station_id)
-            if thresholds is None:
-                continue
-
-            bundle = _detect_signals_for_station(station, obs_list, thresholds)
-            if bundle is None:
-                continue
-
-            all_bundles.append(bundle)
-            if _has_signal(bundle):
-                signal_bundles.append(bundle)
+    for (station_id, _obs_date), obs_list in latest_obs.items():
+        station = station_by_id.get(station_id)
+        if station is None or not obs_list:
+            continue
+        snapshot = snapshots.get(station_id)
+        if snapshot is not None:
+            thresholds, checked_obs = _thresholds_from_verified_archive(station_id, obs_list, snapshot)
+        else:
+            thresholds = deepcopy(cached[station_id]) or StationThresholds(station_id=station_id)
+            thresholds.provenance = {"reconciled": False, "comparison_scope": "unverified_cached_baseline",
+                                     "limitation": "current_station_archive_not_verified"}
+            checked_obs = obs_list
+        if not thresholds.provenance.get("reconciled") or any(
+            not thresholds.provenance.get("variables", {}).get(
+                "temperature_2m_max" if row.element == "TMAX" else "temperature_2m_min", {}
+            ).get("source_coverage_complete") for row in obs_list
+        ):
+            metrics["baseline_cutoff_gaps"] += 1
+        bundle = _detect_signals_for_station(station, checked_obs, thresholds)
+        if bundle is None:
+            continue
+        all_bundles.append(bundle)
+        if _has_signal(bundle):
+            signal_bundles.append(bundle)
+        if snapshot is not None:
+            metrics["material_revisions"] += _retain_record_points(state, bundle, snapshot)
 
     log.info(
         "GHCN: %d stations checked, %d fired signals",
@@ -763,6 +896,7 @@ def check_extreme_signals_for_stations(
 
     if metrics_out is not None:
         metrics_out.update({
+            **metrics,
             "stations_active": len(stations),
             "stations_with_obs": len({k[0] for k in latest_obs}),
             "station_obs_pairs": len(latest_obs),
@@ -770,7 +904,6 @@ def check_extreme_signals_for_stations(
             "raw_signals": len(signal_bundles),
             "bundles_after_dedup": len(deduped_signal_bundles),
             "country_records": len(country_records),
-            **fetch_metrics,
         })
 
     return deduped_signal_bundles, country_records
@@ -785,4 +918,227 @@ def _empty_pipeline_metrics() -> dict:
         "raw_signals": 0,
         "bundles_after_dedup": 0,
         "country_records": 0,
+        "archive_verification_attempted": 0, "archive_verification_verified": 0,
+        "archive_verification_exhausted": 0, "archive_verification_failed": 0,
+        "baseline_cutoff_gaps": 0, "tracked_stations_unscanned": 0,
+        "material_revisions": 0, "affected_claims": 0, "diff_fetch_failed": 0,
     }
+
+
+def _fetch_station_archive(station_id: str) -> bytes:
+    """Bounded candidate verification; never a bulk archive/bootstrap download."""
+    if not re.fullmatch(r"[A-Z0-9]{11}", station_id):
+        raise ValueError("Invalid GHCN station ID")
+    with requests.get(
+        f"https://www.ncei.noaa.gov/pub/data/ghcn/daily/all/{station_id}.dly", timeout=30,
+        stream=True,
+    ) as response:
+        response.raise_for_status()
+        chunks = []
+        received = 0
+        for chunk in response.iter_content(chunk_size=65536):
+            received += len(chunk)
+            if received > 8_000_000:
+                raise ValueError("GHCN station archive exceeds bounded verification size")
+            chunks.append(chunk)
+        return b"".join(chunks)
+
+
+def _could_need_baseline(obs, thresholds):
+    """Discovery heuristic only; cached thresholds never authorize a record."""
+    for row in obs:
+        if not finite(row.value_c) or row.qflag.strip():
+            continue
+        if thresholds is None:
+            return True
+        high = row.element == "TMAX"
+        values = [thresholds.all_time_max_c if high else thresholds.all_time_min_c]
+        monthly = thresholds.monthly_max if high else thresholds.monthly_min
+        calendar = thresholds.calendar_date_max if high else thresholds.calendar_date_min
+        values.extend([monthly.get(row.obs_date.month, (None,))[0], calendar.get((row.obs_date.month, row.obs_date.day), (None,))[0]])
+        if any(finite(prior) and (row.value_c > prior if high else row.value_c < prior) for prior in values):
+            return True
+        mean = (thresholds.climatological_mean if high else thresholds.climatological_mean_min).get(row.obs_date.month)
+        if finite(mean) and abs(row.value_c - mean) >= min(ANOMALY_HOT_THRESHOLD_C, ANOMALY_COLD_THRESHOLD_C):
+            return True
+    return False
+
+
+def _archive_snapshot(station_id, payload, retrieved_at):
+    if not isinstance(payload, bytes):
+        raise ValueError("GHCN archive verification requires original source bytes")
+    rows = parse_dly_records_text(payload.decode("ascii", errors="strict"))
+    if not rows or any(row.station_id != station_id for row in rows):
+        raise ValueError("GHCN archive is empty or belongs to another station")
+    grouped: dict = {}
+    for row in rows:
+        key = (row.obs_date, row.element)
+        if key in grouped and grouped[key] != row:
+            raise ValueError("GHCN archive has contradictory daily observations")
+        grouped[key] = row
+    return {"records": grouped, "retrieved_at": retrieved_at, "source_revision": hashlib.sha256(payload).hexdigest()}
+
+
+def _thresholds_from_verified_archive(station_id, obs, snapshot):
+    day = obs[0].obs_date
+    accepted = [value for row in snapshot["records"].values() if (value := row.to_daily_obs()) is not None]
+    thresholds = compute_thresholds(
+        accepted, before=day, retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"],
+    ) or StationThresholds(station_id=station_id)
+    _qualify_archive_coverage(thresholds, snapshot, day)
+    reconciled = []
+    for original in obs:
+        row = snapshot["records"].get((original.obs_date, original.element))
+        current = row.to_daily_obs() if row else None
+        variable = "temperature_2m_max" if original.element == "TMAX" else "temperature_2m_min"
+        scope = thresholds.provenance.setdefault("variables", {}).setdefault(variable, {})
+        exact = current is not None and current.value_c == original.value_c
+        scope["candidate_accepted"] = exact
+        if row is not None and (current is None or not exact):
+            # A newer QC failure/value discrepancy cannot support the old value,
+            # including an otherwise valid absolute-temperature threshold claim.
+            continue
+        reconciled.append(replace(
+            current if current is not None and exact else original,
+            retrieved_at=snapshot["retrieved_at"] if exact else original.retrieved_at,
+            source_revision=snapshot["source_revision"] if exact else original.source_revision,
+        ))
+    thresholds.provenance["revision_id"] = fingerprint({key: value for key, value in thresholds.provenance.items() if key != "retrieved_at"})
+    return thresholds, reconciled
+
+
+def _retain_snapshot_revisions(state, station_id, snapshot, claims, points):
+    """Review tracked historical points regardless of news freshness cutoff."""
+    material = findings = 0
+    for (day, element), row in snapshot["records"].items():
+        if (station_id, day, element) not in points:
+            continue
+        added, linked = _retain_changed_point(state, row, snapshot["retrieved_at"], snapshot["source_revision"], claims)
+        material += added
+        findings += linked
+    for claim in claims:
+        if (claim["station_id"] == station_id
+                and (date.fromisoformat(claim["valid_date"]), claim["element"]) not in snapshot["records"]):
+            findings += int(record_claim_finding(
+                state, claim, reason="tracked_observation_absent_from_current_archive",
+                source_revision=snapshot["source_revision"], retrieved_at=snapshot["retrieved_at"],
+                details={"historical_correctness": "not_determined", "current_source_coverage": "missing"},
+            ))
+    accepted = [value for row in snapshot["records"].values() if (value := row.to_daily_obs()) is not None]
+    for claim in claims:
+        if claim["station_id"] != station_id or claim.get("reported_previous_c") is None:
+            continue
+        prior = compute_thresholds(accepted, before=date.fromisoformat(claim["valid_date"]),
+                                   retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"])
+        if prior is None:
+            continue
+        _qualify_archive_coverage(prior, snapshot, date.fromisoformat(claim["valid_date"]))
+        variable = "temperature_2m_max" if claim["element"] == "TMAX" else "temperature_2m_min"
+        if not prior.provenance["variables"][variable].get("source_coverage_complete"):
+            findings += int(record_claim_finding(
+                state, claim, reason="current_archive_comparison_gap", source_revision=snapshot["source_revision"],
+                retrieved_at=snapshot["retrieved_at"],
+                details={"historical_correctness": "not_determined", "variable": variable,
+                         "requested_comparison_cutoff": prior.provenance["requested_comparison_cutoff"]},
+            ))
+            continue
+        high = claim["element"] == "TMAX"
+        day = date.fromisoformat(claim["valid_date"])
+        event = claim["event_id"]
+        if "monthly_" in event:
+            found = (prior.monthly_max if high else prior.monthly_min).get(day.month)
+            value = found[0] if found else None
+        elif "cal_" in event or "record_" in event:
+            found = (prior.calendar_date_max if high else prior.calendar_date_min).get((day.month, day.day))
+            value = found[0] if found else None
+        else:
+            value = prior.all_time_max_c if high else prior.all_time_min_c
+        if value is not None and value != claim["reported_previous_c"]:
+            findings += int(record_claim_finding(
+                state, claim, reason="current_archive_comparator_changed", source_revision=prior.provenance["revision_id"],
+                retrieved_at=snapshot["retrieved_at"], verified_change=True,
+                details={"retained_comparator_c": claim["reported_previous_c"], "current_accepted_comparator_c": value,
+                         "comparison_before": claim["valid_date"], "historical_revision_timing": "not_established"},
+            ))
+    return material, findings
+
+
+def _retain_changed_point(state, row, retrieved_at, source_revision, claims):
+    revision_id, added = record_observation_revision(state, row, retrieved_at=retrieved_at, source_revision=source_revision)
+    findings = 0
+    for claim in claims:
+        if (claim["station_id"], claim["valid_date"], claim["element"]) != (row.station_id, row.obs_date.isoformat(), row.element):
+            continue
+        changed = claim.get("reported_value_c") is not None and claim["reported_value_c"] != row.value_c
+        if row.value_c is None and row.action != "delete" and not row.qflag.strip():
+            findings += int(record_claim_finding(
+                state, claim, reason="tracked_observation_missing_current_value", source_revision=revision_id,
+                retrieved_at=retrieved_at,
+                details={"historical_correctness": "not_determined", "current_source_coverage": "missing"},
+            ))
+        elif row.to_daily_obs() is None or changed:
+            findings += int(record_claim_finding(
+                state, claim, reason="current_source_qc_or_value_revision", source_revision=revision_id,
+                retrieved_at=retrieved_at, verified_change=True,
+                details={"current_value_c": row.value_c, "current_qflag": row.qflag.strip(),
+                         "source_accepted": row.to_daily_obs() is not None,
+                         "publication_time_flag_timing": "unknown" if claim.get("publication_time_qflag") is None else "retained_source_flag"},
+            ))
+    return int(added), findings
+
+
+def _retain_record_points(state, bundle, snapshot):
+    added = 0
+    for field, element, scope_name in (
+        ("all_time_high", "TMAX", "all_time"), ("all_time_low", "TMIN", "all_time"),
+        ("monthly_high", "TMAX", "monthly"), ("monthly_low", "TMIN", "monthly"),
+        ("calendar_date_high", "TMAX", "calendar"), ("calendar_date_low", "TMIN", "calendar"),
+    ):
+        event = getattr(bundle, field)
+        if event is None:
+            continue
+        variable = "temperature_2m_max" if element == "TMAX" else "temperature_2m_min"
+        dates = bundle.evidence["baseline"]["variables"][variable]["record_dates"]
+        prior = dates.get(scope_name)
+        if isinstance(prior, dict):
+            prior = prior.get(bundle.signal_date.strftime("%m" if scope_name == "monthly" else "%m-%d"))
+        for day in (bundle.signal_date, date.fromisoformat(prior) if prior else None):
+            row = snapshot["records"].get((day, element))
+            if row is not None:
+                _, created = record_observation_revision(state, row, retrieved_at=snapshot["retrieved_at"], source_revision=snapshot["source_revision"])
+                added += int(created)
+    return added
+
+
+def _qualify_archive_coverage(thresholds, snapshot, before):
+    """Distinguish omitted source intervals from explicit missing/QC cells.
+
+    A complete source-calendar interval supports only the available accepted
+    station samples. It does not certify missing/QC-rejected values or a physical
+    all-time extreme outside that scope. Missing source months fail closed.
+    """
+    provenance = thresholds.provenance
+    requested = (before - timedelta(days=1)).isoformat()
+    provenance["requested_comparison_cutoff"] = requested
+    qualified = []
+    for variable, element in (("temperature_2m_max", "TMAX"), ("temperature_2m_min", "TMIN")):
+        scope = provenance.setdefault("variables", {}).setdefault(variable, {})
+        start = scope.get("start")
+        source_rows = [row for (day, kind), row in snapshot["records"].items()
+                       if kind == element and start is not None and start <= day.isoformat() < before.isoformat()]
+        expected = scope.get("expected_count", 0)
+        complete = bool(expected and len(source_rows) == expected)
+        scope.update(
+            source_calendar_count=len(source_rows), source_coverage_complete=complete,
+            source_gap_count=max(0, expected - len(source_rows)),
+            source_coverage_fraction=len(source_rows) / expected if expected else 0,
+            source_latest_cell=max((row.obs_date.isoformat() for row in source_rows), default=None),
+            source_missing_count=sum(row.value_c is None for row in source_rows),
+            source_qc_rejected_count=sum(bool(row.qflag.strip()) for row in source_rows),
+            requested_comparison_cutoff=requested,
+            verified_source_cutoff=requested if complete else None,
+        )
+        if expected:
+            qualified.append(complete)
+    provenance["cutoff"] = requested if qualified and all(qualified) else None
+    provenance["revision_id"] = fingerprint({key: value for key, value in provenance.items() if key != "retrieved_at"})
