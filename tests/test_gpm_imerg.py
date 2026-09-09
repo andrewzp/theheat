@@ -33,7 +33,7 @@ def _reading(city="Paris", country="France", mm=55.0, day="2026-05-14"):
     )
 
 
-def test_premint_failure_is_nonfatal(monkeypatch):
+def test_runner_does_not_premint_unneeded_s3_credentials(monkeypatch):
     from src.orchestrator.sources import gpm_imerg as runner
     from src.state import _fresh_state
 
@@ -54,7 +54,7 @@ def test_premint_failure_is_nonfatal(monkeypatch):
 
     runner.run_gpm_imerg(_fresh_state(), {"sources": []}, [_PARIS])
 
-    assert calls == ["premint", "fetch"]
+    assert calls == ["fetch"]
 
 
 class TestGpmFetch:
@@ -735,10 +735,11 @@ class TestGpmGridFetch:
         monkeypatch.setenv("THEHEAT_GPM_SOURCE", "garbage")  # unknown → legacy
         assert _gpm_source() == "opendap"
 
-    def test_datapool_chain_includes_s3(self):
+    def test_datapool_chain_does_not_assume_in_region_s3_access(self):
         from src.data.gpm_imerg import _gpm_grid_source_chain
 
-        assert _gpm_grid_source_chain("datapool") == ("datapool", "s3")
+        assert _gpm_grid_source_chain("datapool") == ("datapool",)
+        assert _gpm_grid_source_chain("s3") == ("s3", "datapool")
 
     def test_subset_grid_extracts_city_value(self):
         from src.data.gpm_imerg import _lat_index, _lon_index, _subset_grid
@@ -933,7 +934,7 @@ class TestGpmGridFetch:
             "3B-DAY-L.MS.MRG.3IMERG.20260605-S000000-E235959.V07C.nc4"
         )
 
-    def test_s3_access_denied_treated_as_not_found(self, monkeypatch):
+    def test_s3_access_denied_is_not_missing_date_evidence(self, monkeypatch):
         from datetime import datetime, timezone
 
         import boto3
@@ -963,9 +964,8 @@ class TestGpmGridFetch:
 
         monkeypatch.setattr(boto3, "client", lambda *a, **kw: _Client())
 
-        # No ListBucket perm → a missing key surfaces as 403; the walk-back must
-        # treat it as "not published", not a hard error.
-        with pytest.raises(gpm._GridNotFound):
+        # Region/permission denial must stop date probing; no missing-key proof.
+        with pytest.raises(gpm._GridTransient, match="access failure"):
             gpm._fetch_grid_bytes_s3(
                 target_date=date(2026, 6, 5), product="late", token="tok"
             )
@@ -1055,7 +1055,7 @@ class TestGpmGridFetch:
 
         readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
-        assert calls == ["datapool", "s3", "opendap"]
+        assert calls == ["datapool", "opendap"]
         assert len(readings) == 1
         assert readings[0].mm_total == 7.0
 
@@ -1063,13 +1063,13 @@ class TestGpmGridFetch:
         import src.data.gpm_imerg as gpm
 
         monkeypatch.setenv("EARTHDATA_TOKEN", "fake-token")
-        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "datapool")
+        monkeypatch.setenv("THEHEAT_GPM_SOURCE", "s3")
 
         lon_i, lat_i = gpm._lon_index(2.35), gpm._lat_index(48.85)
 
         def fake_fetch(source, *, target_date, product, token):
-            if source == "datapool":
-                raise gpm._GridTransient("datapool unavailable")
+            if source == "s3":
+                raise gpm._GridTransient("s3 unavailable")
             return _make_grid_bytes({(0, lon_i, lat_i): 41.0})
 
         monkeypatch.setattr(gpm, "_fetch_grid_bytes", fake_fetch)
@@ -1077,7 +1077,7 @@ class TestGpmGridFetch:
         readings = gpm.fetch_daily_precip([_PARIS], target_date=date(2026, 6, 5), today=date(2026, 6, 11))
 
         assert len(readings) == 1
-        assert "[gpm] grid source s3 served (chain position 2)" in capsys.readouterr().out
+        assert "[gpm] grid source datapool served (chain position 2)" in capsys.readouterr().out
 
     def test_source_opendap_default_skips_grid_path(self, monkeypatch):
         import src.data.gpm_imerg as gpm
