@@ -1503,7 +1503,12 @@ def _write_gist_state(state: BotState) -> bool:
         )
         resp.raise_for_status()
         return True
-    except (requests.RequestException, TypeError, ValueError):
+    except (requests.RequestException, TypeError, ValueError) as exc:
+        # Request/error text can contain URLs or source content. Expose only
+        # the failure class and HTTP status, never payloads or credentials.
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        status_note = f", HTTP {status}" if type(status) is int and 100 <= status <= 599 else ""
+        print(f"[state] Gist write failed ({type(exc).__name__}{status_note})")
         return False
 
 
