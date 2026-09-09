@@ -3,14 +3,14 @@ import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
 import { projectStateForDashboard } from "../../../lib/projection.js"
 import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions.js"
+import { buildRuntimeConfig, dashboardDeployment } from "../../../lib/runtime-inventory.js"
+import { buildProductHealth } from "../../../lib/product-health.js"
 
 export const runtime = "nodejs"
 
 const REPO = "andrewzp/theheat"
 const DEFAULT_SUPPRESSION_LIMIT = 50
 const MAX_SUPPRESSION_LIMIT = 200
-const CHEAP_MODEL_DEFAULT = "gemini-2.5-flash"
-const WRITER_MODEL_DEFAULT = "claude-sonnet-4-6"
 
 function parseLimit(value) {
   const parsed = Number(value)
@@ -102,19 +102,6 @@ function suppressionsPayload(state, { sourceFilter, sinceFilter, limit }) {
   }
 }
 
-function modelConfig() {
-  const cheap = process.env.THEHEAT_CHEAP_MODEL || CHEAP_MODEL_DEFAULT
-  const writer = process.env.THEHEAT_WRITER_MODEL || WRITER_MODEL_DEFAULT
-  return {
-    writer_model: writer,
-    fact_check_model: process.env.THEHEAT_FACT_CHECK_MODEL || cheap,
-    claim_extract_model: process.env.THEHEAT_CLAIM_EXTRACT_MODEL || cheap,
-    voice_gen_model: process.env.GEMINI_MODEL || cheap,
-    evaluator_enabled: (process.env.EVALUATOR_ENABLED || "true").toLowerCase() !== "false",
-    shadow_ab_enabled: process.env.THEHEAT_SHADOW_AB_ENABLED === "1",
-  }
-}
-
 async function githubJson(url, headers) {
   const res = await fetch(url, { headers, cache: "no-store" })
   if (!res.ok) {
@@ -157,7 +144,9 @@ export async function GET(request) {
     drafts: { drafts: [], posted: [] },
     suppressions: { suppressions: [], stats: null },
     sourceHealth: { sources: [], stats: null },
-    config: modelConfig(),
+    config: buildRuntimeConfig(),
+    deployment: dashboardDeployment(),
+    productHealth: null,
     runs: [],
   }
 
@@ -168,6 +157,8 @@ export async function GET(request) {
     results.drafts = { drafts: pendingDrafts(state), posted: postedDraftsWithMetrics(state) }
     results.suppressions = suppressionsPayload(state, { sourceFilter, sinceFilter, limit })
     results.sourceHealth = buildSourceHealthPayload(state)
+    results.config = buildRuntimeConfig(state)
+    results.productHealth = buildProductHealth(state)
   } catch (error) {
     results.stateError = `Failed to fetch state store: ${error.message}`
   }

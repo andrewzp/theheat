@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.4] - 2026-09-08
+
+### Observed bot configuration and product health (P00)
+
+- The bot records its actual loaded models, effective flags, code version, backend and credential presence in timestamped run history. Dashboard configuration now reads that evidence instead of guessing from the separate Vercel environment; missing and stale reports are explicit.
+- Operating status separates nonempty source runs, saved drafts, current reviews, receipt-backed publication, queue age and unresolved delivery. Missing state never becomes a reassuring zero.
+- Writer failures remain distinct from successful workflows, and engagement collection distinguishes disabled, inactive, missing and recorded data. Stored metrics and credentials cannot establish current provider access.
+- Source skips no longer count as successful attempts. Workflow status errors no longer promise self-healing or imply a known failed job. Health details and navigation adapt to narrow screens.
+- Validation: 2,555 offline Python tests, 204 dashboard tests, Ruff, mypy and the production dashboard build pass. Paid replay tests were excluded. Production snapshot verification follows deployment.
+
 ## [0.9.108.3] - 2026-09-08
 
 ### Require the protected Vercel address when app passwords are disabled

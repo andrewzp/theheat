@@ -4,15 +4,16 @@ import { useState } from "react"
 import { formatDuration, timeAgo } from "../../lib/format.js"
 import { SourceStatusBadge } from "./Badge.js"
 import { clipText, draftOutcomeLabel, draftOutcomeTone, formatUtcStamp } from "./shared.js"
+import { summarizeSourceAttempts } from "../../lib/runtime-inventory.js"
 
 function PipelineHero() {
   return (
     <div className="card full hero-card" style={{ marginBottom: 16 }}>
       <div className="hero-eyebrow">Live Ops</div>
-      <h1 className="hero-headline">Operational truth, not workflow vibes.</h1>
+      <h1 className="hero-headline">From source observations to publication.</h1>
       <p className="hero-sub">
-        Source health, funnel quality, queue state, and publishing outcomes — measured in signal
-        quality, not just cron completion.
+        Inspect the latest recorded source attempts, draft queue and publishing outcomes.
+        A completed workflow does not establish factual accuracy or successful publication.
       </p>
     </div>
   )
@@ -280,19 +281,18 @@ function ModelConfigCard({ config }) {
   const rows = [
     { label: "writer", value: config.writer_model },
     { label: "fact-check", value: config.fact_check_model },
-    { label: "claim-extract", value: config.claim_extract_model },
-    { label: "voice-gen", value: config.voice_gen_model },
-    { label: "evaluator", value: config.evaluator_enabled ? "enabled" : "disabled" },
-    { label: "shadow A/B", value: config.shadow_ab_enabled ? "enabled" : "disabled" },
+    { label: "critic", value: config.critic_model },
+    { label: "safety", value: config.safety_model },
   ]
   return (
     <div className="card full" style={{ marginBottom: 16 }}>
-      <h2>Model Config</h2>
+      <h2>Models reported by the bot</h2>
+      <p className="runtime-note">{config.reason} {config.captured_at ? `Reported ${timeAgo(config.captured_at)}.` : ""}</p>
       <div className="model-grid">
         {rows.map((r) => (
           <div className="model-row" key={r.label}>
             <span>{r.label}</span>
-            <strong>{r.value}</strong>
+            <strong>{r.value || "Unknown"}</strong>
           </div>
         ))}
       </div>
@@ -303,12 +303,7 @@ function ModelConfigCard({ config }) {
 function RunSummaryStats({ run, drafts }) {
   if (!run) return null
   const sources = run.sources || []
-  const succeeded = sources.filter((s) => s.status === "success").length
-  const skipped = sources.filter((s) => s.status === "skipped").length
-  // Skipped lanes are intentionally idle (Mondays-only, Fridays-only,
-  // 1st-of-month, "already ran today" caps). They are not failures.
-  const healthy = succeeded + skipped
-  const total = sources.length || 1
+  const attempts = summarizeSourceAttempts(sources)
   const totalObserved = sources.reduce((sum, s) => sum + (s.observed || 0), 0)
   const totalPromoted = sources.reduce((sum, s) => sum + (s.promoted || 0), 0)
   const failures = run.failure_count ?? sources.filter((s) => s.status === "failed").length
@@ -317,10 +312,11 @@ function RunSummaryStats({ run, drafts }) {
     <div className="grid stats-grid">
       <div className="card">
         <h2>Current Run</h2>
-        <div className="stat">{Math.round((healthy / total) * 100)}%</div>
+        <div className="stat">{attempts.success_rate == null ? "—" : `${Math.round(attempts.success_rate * 100)}%`}</div>
         <div className="stat-label">
-          {healthy} of {sources.length} sources healthy
-          {skipped > 0 ? ` · ${skipped} scheduled idle` : ""}
+          {attempts.succeeded} of {attempts.active} source attempts succeeded
+          {attempts.skipped > 0 ? ` · ${attempts.skipped} skipped` : ""}
+          {attempts.unknown > 0 ? ` · ${attempts.unknown} unknown` : ""}
         </div>
       </div>
       <div className="card">
