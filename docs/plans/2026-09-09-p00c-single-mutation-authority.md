@@ -1,6 +1,6 @@
 # P00c: one mutation authority
 
-Status: design, not implemented. P00b pauses automatic publication and closes raw-text posting, but does not make Gist writes atomic. `_state_rev`, a second GET, a process marker or a Gist lock file is not a lock.
+Status: the [local command/reducer/journal foundation](../handoffs/2026-09-09-p00c-local-command-authority.md) is implemented and independently reviewed; the hosted authority and production cutover are not implemented. P00b pauses automatic publication and closes raw-text posting, but does not make Gist writes atomic. `_state_rev`, a second GET, a process marker or a Gist lock file is not a lock.
 
 ## Current writers and cutover
 
