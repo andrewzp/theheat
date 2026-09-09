@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.2] - 2026-09-08
+
+### Revision-safe draft review and publication (P02)
+
+- Editing saved text or choosing an alternate creates a new revision and cancels obsolete checks, approval and scheduled publication. The prior text and decisions remain in revision history.
+- The dashboard requires current source review before approval, preserves unsaved edits on conflicts, and distinguishes human review from model checks. Automatic scheduling requires current model checks.
+- Queued manual requests and the final Python sender validate the exact text, evidence, decision version and publication intent. State merging cannot restore an older approval over a newer edit or cancellation.
+- Unknown publication outcomes remain blocked until reconciled. Receipts and publication memory preserve the exact submitted copy and immutable attempt start time.
+- Validation: 2,549 offline Python tests and 168 dashboard tests pass; Ruff, mypy and the dashboard production build pass. Paid writer replay tests were excluded.
+- Gist atomicity, the separate ad-hoc composer and scientific evidence validation remain follow-up work. This release does not correct historical public posts or re-enable disabled production capabilities.
+
 ## [Unreleased]
 
 ### Production restore — bot.yml schedules re-added (2026-07-16)

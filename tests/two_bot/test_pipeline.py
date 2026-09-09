@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from src.editorial.revisions import initialize_revision, fingerprint, text_hash
 from src.two_bot.fact_check import fact_check as real_fact_check
 from src.two_bot.memory import record_published_draft
 from src.two_bot.pipeline import (
@@ -17,13 +18,13 @@ from tests.two_bot.conftest import _bundle, _fire_event, _state_with_memory
 
 
 def _persisted_draft_from_pipeline_result(draft: dict) -> dict:
-    return {
+    return initialize_revision({
         "text": draft["text"],
         "type": draft["type"],
         "event_id": draft["event_id"],
         "tweet_id": "tweet_123",
         "review_context": {"two_bot": draft["two_bot_metadata"]},
-    }
+    })
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +76,8 @@ def test_pipeline_happy_path(mock_writer, mock_extract, mock_fact_check):
     assert draft["text"].startswith("Mali")
     assert state["memory"]["used_peer_comparisons"] == []
     assert draft["two_bot_metadata"]["bundle"]["event_id"] == "fire_test"
+    assert draft["two_bot_metadata"]["reviewed_text_sha256"] == text_hash(draft["text"])
+    assert draft["two_bot_metadata"]["reviewed_bundle_sha256"] == fingerprint(draft["two_bot_metadata"]["bundle"])
 
 
 def test_pipeline_writer_kills(mock_writer, mock_extract, mock_fact_check):

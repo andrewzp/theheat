@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite"
+import { decisionRevision, draftIdentity, fingerprint } from "./draft-revisions.js"
 
 const DEFAULT_STATE = {
   last_hot10: { date: null, cities: [] },
@@ -289,7 +290,123 @@ function compareTuple(a, b) {
   return a[1] - b[1]
 }
 
-function mergeDrafts(current = [], incoming = [], maxItems = 200) {
+function draftAttemptProtected(draft) {
+  return Boolean(draft.publish_intent_id || draft.revision_conflicts?.length || ["submitted", "unknown"].includes(draft.publish_outcome) || (
+    (draft.autoship_attempted || draft.last_publish_attempt_at)
+    && !["not_sent", "confirmed"].includes(draft.publish_outcome)
+  ))
+}
+
+function uniqueSnapshots(rows) {
+  const byFingerprint = new Map(rows.filter((row) => row && typeof row === "object" && !Array.isArray(row))
+    .map((row) => [fingerprint(row), structuredClone(row)]))
+  return [...byFingerprint.keys()].sort().map((key) => byFingerprint.get(key))
+}
+
+function revisionSnapshot(draft) {
+  return structuredClone(Object.fromEntries(Object.entries(draft)
+    .filter(([key]) => !["revision_history", "revision_conflicts"].includes(key))))
+}
+
+function mergeDraftPair(current, incoming) {
+  const currentIdentity = draftIdentity(current)
+  const incomingIdentity = draftIdentity(incoming)
+  const recencyDelta = compareTuple(draftRecencyKey(incoming), draftRecencyKey(current))
+  const decisionDelta = decisionRevision(incoming) - decisionRevision(current)
+  const incomingWins = incomingIdentity.content_revision > currentIdentity.content_revision
+    || (incomingIdentity.content_revision === currentIdentity.content_revision
+      && (decisionDelta > 0 || (decisionDelta === 0
+        && (recencyDelta > 0 || (recencyDelta === 0 && fingerprint(incomingIdentity) >= fingerprint(currentIdentity))))))
+  const [winner, loser] = incomingWins ? [incoming, current] : [current, incoming]
+  const out = structuredClone(winner)
+  const sameIdentity = fingerprint(currentIdentity) === fingerprint(incomingIdentity)
+  const histories = [...(current.revision_history || []), ...(incoming.revision_history || [])]
+  if (!sameIdentity || fingerprint(current.review_binding ?? null) !== fingerprint(incoming.review_binding ?? null)
+    || fingerprint(current.approval_binding ?? null) !== fingerprint(incoming.approval_binding ?? null)) {
+    histories.push(revisionSnapshot(loser))
+  }
+  if (histories.length) out.revision_history = uniqueSnapshots(histories)
+  const winningRevision = draftIdentity(winner).content_revision
+  const conflicts = [current, incoming].filter((draft) => draftIdentity(draft).content_revision === winningRevision)
+    .flatMap((draft) => draft.revision_conflicts || [])
+  if (!sameIdentity && currentIdentity.content_revision === incomingIdentity.content_revision) {
+    conflicts.push(revisionSnapshot(current), revisionSnapshot(incoming))
+  }
+  if (sameIdentity && decisionRevision(current) === decisionRevision(incoming)
+    && fingerprint(current.approval_binding ?? null) !== fingerprint(incoming.approval_binding ?? null)) {
+    conflicts.push(revisionSnapshot(current), revisionSnapshot(incoming))
+  }
+  if (conflicts.length) {
+    out.revision_conflicts = uniqueSnapshots(conflicts)
+    delete out.approval_binding
+    delete out.auto_approve_at
+    delete out.autoship_on_critic_pass
+  }
+  if (sameIdentity && loser.tweet_id) {
+    for (const key of ["tweet_id", "posted_at", "last_publish_attempt_at"]) {
+      if (loser[key]) out[key] = structuredClone(loser[key])
+    }
+    out.status = "posted"
+    out.publish_outcome = "confirmed"
+  } else if (!sameIdentity && (loser.tweet_id || draftAttemptProtected(loser))) {
+    if (loser.tweet_id || loser.autoship_attempted || loser.last_publish_attempt_at || ["submitted", "unknown"].includes(loser.publish_outcome)) {
+      out.autoship_attempted = true
+      out.publish_outcome = "unknown"
+      out.post_error = "Publication evidence exists for a different draft revision; reconciliation required."
+      if (loser.last_publish_attempt_at) out.last_publish_attempt_at = loser.last_publish_attempt_at
+    }
+  } else if (sameIdentity && draftAttemptProtected(loser)) {
+    const sameAttempt = loser.last_publish_attempt_at === out.last_publish_attempt_at
+    if (!(sameAttempt && ["not_sent", "confirmed"].includes(out.publish_outcome))) {
+      if (loser.autoship_attempted || loser.last_publish_attempt_at || ["submitted", "unknown"].includes(loser.publish_outcome)) {
+        out.autoship_attempted = true
+        out.publish_outcome = "unknown"
+        if (loser.last_publish_attempt_at) out.last_publish_attempt_at = loser.last_publish_attempt_at
+      }
+    }
+  }
+  return out
+}
+
+function attemptRows(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return []
+  return [Object.fromEntries(Object.entries(row).filter(([key]) => key !== "attempt_conflicts")),
+    ...(row.attempt_conflicts || []).filter((child) => child && typeof child === "object" && !Array.isArray(child))]
+}
+
+function attemptRank(row) {
+  return row.tweet_id ? 4 : ({ confirmed: 4, not_sent: 3, unknown: 2, submitted: 1 }[row.phase] || 0)
+}
+
+export function mergePublishLedger(base = {}, next = {}) {
+  const merged = {}
+  for (const eventId of [...new Set([...Object.keys(base || {}), ...Object.keys(next || {})])].sort()) {
+    const attempts = new Map()
+    for (const row of [...attemptRows(base?.[eventId]), ...attemptRows(next?.[eventId])]) {
+      const identity = Object.fromEntries(["intent_id", "at", "content_revision", "text_sha256", "evidence_sha256", "text"]
+        .map((key) => [key, row[key] ?? null]))
+      const key = fingerprint(identity)
+      const existing = attempts.get(key)
+      if (!existing) attempts.set(key, structuredClone(row))
+      else if (existing.tweet_id && row.tweet_id && existing.tweet_id !== row.tweet_id) {
+        attempts.set(fingerprint(row), structuredClone(row))
+      } else {
+        const [winner, loser] = attemptRank(row) >= attemptRank(existing) ? [row, existing] : [existing, row]
+        attempts.set(key, structuredClone({ ...loser, ...winner }))
+      }
+    }
+    const rows = [...attempts.values()].sort((a, b) => Number(Boolean(a.tweet_id)) - Number(Boolean(b.tweet_id))
+      || parseTimestamp(a.at) - parseTimestamp(b.at) || attemptRank(a) - attemptRank(b)
+      || (fingerprint(a) < fingerprint(b) ? -1 : fingerprint(a) > fingerprint(b) ? 1 : 0))
+    const primary = rows.pop()
+    if (!primary) continue
+    if (rows.length) primary.attempt_conflicts = uniqueSnapshots(rows)
+    merged[eventId] = primary
+  }
+  return merged
+}
+
+export function mergeDrafts(current = [], incoming = [], maxItems = 200) {
   const merged = new Map()
   const anonymous = []
 
@@ -300,9 +417,7 @@ function mergeDrafts(current = [], incoming = [], maxItems = 200) {
       return
     }
     const existing = merged.get(copy.id)
-    if (!existing || compareTuple(draftRecencyKey(copy), draftRecencyKey(existing)) >= 0) {
-      merged.set(copy.id, copy)
-    }
+    merged.set(copy.id, existing ? mergeDraftPair(existing, copy) : copy)
   })
 
   const ordered = [...merged.values(), ...anonymous].sort((a, b) => {
@@ -311,7 +426,12 @@ function mergeDrafts(current = [], incoming = [], maxItems = 200) {
     return parseTimestamp(a.updated_at || a.created_at) - parseTimestamp(b.updated_at || b.created_at)
   })
 
-  return ordered.length > maxItems ? ordered.slice(-maxItems) : ordered
+  if (ordered.length <= maxItems) return ordered
+  const protectedDrafts = ordered.filter(draftAttemptProtected)
+  const candidates = ordered.filter((draft) => !draftAttemptProtected(draft))
+  const slots = Math.max(0, maxItems - protectedDrafts.length)
+  const kept = new Set([...protectedDrafts, ...(slots ? candidates.slice(-slots) : [])])
+  return ordered.filter((draft) => kept.has(draft))
 }
 
 function mergeRunHistory(current = [], incoming = [], maxItems = 20) {
@@ -421,6 +541,7 @@ function mergeState(current, incoming) {
     errors: mergeErrors(base.errors, next.errors),
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
+    publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),
   })
 }
 
@@ -471,7 +592,17 @@ async function writeGistState(state) {
 }
 
 function mergeDraftIntoState(state, draft) {
-  return mergeState(state, { drafts: [draft] })
+  const merged = mergeState(state, { drafts: [draft] })
+  const index = merged.drafts.findIndex((candidate) => candidate.id === draft.id)
+  const updated = structuredClone(draft)
+  // This path runs only after the exact observed row and ledger are checked.
+  // Honor intentional status/approval revocation even within one millisecond;
+  // generic snapshot rank must not undo an authorized cancel or rollback.
+  if (index >= 0) {
+    if (merged.drafts[index].revision_history?.length) updated.revision_history = merged.drafts[index].revision_history
+    merged.drafts[index] = updated
+  } else merged.drafts.push(updated)
+  return merged
 }
 
 function connectDb() {
@@ -773,35 +904,56 @@ export async function writeStateStore(state) {
   await writeGistState(merged)
 }
 
-export async function updateDraftStore(draftId, updater) {
+function revisionConflict() {
+  const error = new Error("This draft changed. Refresh it before applying this action.")
+  error.status = 409
+  error.statusCode = 409
+  error.code = "revision_conflict"
+  return error
+}
+
+function checkExpectedRevision(draft, expectedRevision) {
+  if (expectedRevision && fingerprint({ ...draftIdentity(draft), decision_revision: decisionRevision(draft) })
+    !== fingerprint({ decision_revision: 0, ...expectedRevision })) throw revisionConflict()
+}
+
+function draftMutationSnapshot(draft, state) {
+  const eventId = draft.event_id || draft.id
+  return fingerprint({ draft, publish_ledger: state.publish_ledger?.[eventId] ?? null })
+}
+
+export async function updateDraftStore(draftId, updater, { expectedRevision } = {}) {
   if (configuredBackend() === "sqlite") {
     const db = connectDb()
     try {
       await bootstrapSqliteFromGist(db)
-      const state = readSqliteState(db)
-      const drafts = state.drafts || []
-      const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
-      if (draftIndex === -1) {
-        return { state, draft: null }
-      }
-
-      const draft = structuredClone(drafts[draftIndex])
-      const nextDraft = await updater(draft, state)
-      if (!nextDraft) {
-        return { state, draft: null }
-      }
-
-      nextDraft.updated_at = new Date().toISOString()
-      state.drafts[draftIndex] = nextDraft
-      db.exec("BEGIN")
+      // Lock before the read so another SQLite writer cannot invalidate the
+      // authorization check between loading the row and updating it.
+      db.exec("BEGIN IMMEDIATE")
       try {
+        const state = readSqliteState(db)
+        const drafts = state.drafts || []
+        const draftIndex = drafts.findIndex((draft) => draft.id === draftId)
+        if (draftIndex === -1) {
+          db.exec("COMMIT")
+          return { state, draft: null }
+        }
+        const draft = structuredClone(drafts[draftIndex])
+        checkExpectedRevision(draft, expectedRevision)
+        const nextDraft = await updater(draft, state)
+        if (!nextDraft) {
+          db.exec("COMMIT")
+          return { state, draft: null }
+        }
+        nextDraft.updated_at = new Date().toISOString()
+        state.drafts[draftIndex] = nextDraft
         upsertSqliteDraft(db, draftId, nextDraft, draftIndex)
         db.exec("COMMIT")
+        return { state, draft: nextDraft }
       } catch (error) {
         db.exec("ROLLBACK")
         throw error
       }
-      return { state, draft: nextDraft }
     } finally {
       db.close()
     }
@@ -815,6 +967,8 @@ export async function updateDraftStore(draftId, updater) {
   }
 
   const draft = structuredClone(drafts[draftIndex])
+  checkExpectedRevision(draft, expectedRevision)
+  const observedSnapshot = draftMutationSnapshot(draft, state)
   const nextDraft = await updater(draft, state)
   if (!nextDraft) {
     return { state, draft: null }
@@ -822,6 +976,11 @@ export async function updateDraftStore(draftId, updater) {
 
   nextDraft.updated_at = new Date().toISOString()
   const latestState = await readGistState()
+  const latestDraft = latestState.drafts?.find((candidate) => candidate.id === draftId)
+  // Reject changes visible at the second read, including approval revocation or
+  // a newly submitted platform attempt with an unchanged content revision.
+  // Gist has no transaction here: the remaining GET-to-PATCH race is unchanged.
+  if (!latestDraft || draftMutationSnapshot(latestDraft, latestState) !== observedSnapshot) throw revisionConflict()
   const mergedState = mergeDraftIntoState(latestState, nextDraft)
   await writeGistState(mergedState)
   const mergedDraft = (mergedState.drafts || []).find((candidate) => candidate.id === draftId) || nextDraft

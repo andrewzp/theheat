@@ -1,6 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import { formatDuration, timeAgo } from "../../lib/format.js"
+import { draftReviewControls, draftTextLength, revisionKey } from "../../lib/draft-review-ui.js"
 import {
   ScoreMeter,
   clipText,
@@ -19,12 +21,20 @@ export function DraftWorkbench({
   setEditingId,
   editText,
   setEditText,
+  editingRevision,
+  startEditing,
+  acceptLatestEditRevision,
   draftAct,
   draftAction,
   draftFeedback,
   botRuns,
 }) {
+  const [reviewConfirmedIdentity, setReviewConfirmedIdentity] = useState("")
   const selectedDraft = drafts.find((d) => d.id === selectedDraftId) || drafts[0] || null
+  const controls = draftReviewControls(selectedDraft)
+  const currentRevisionKey = revisionKey(selectedDraft?.revision_identity)
+  const reviewKey = `${selectedDraft?.id}:${currentRevisionKey}`
+  const editConflict = editingId === selectedDraft?.id && revisionKey(editingRevision) !== currentRevisionKey
   const selectedDraftRun = findDraftRun(selectedDraft, botRuns)
   const selectedDraftSourceRun = findDraftSourceRun(selectedDraft, botRuns)
   const selectedCandidate =
@@ -40,7 +50,7 @@ export function DraftWorkbench({
             Review the queue with source facts, score context, alternate copy, and approval policy in one place.
           </p>
         </div>
-        <span className="backend-pill">{drafts.length} pending drafts</span>
+        <span className="backend-pill">{drafts.length} awaiting publication</span>
       </div>
 
       {drafts.length > 0 ? (
@@ -66,7 +76,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{policySummary(draft)}</span>
+                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.status === "approved" ? "awaiting publication" : draft.review_status !== "passed" ? "review needed" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
                 </div>
               </button>
             ))}
@@ -85,6 +95,9 @@ export function DraftWorkbench({
                 </div>
 
                 <div className="draft-status-row">
+                  <span className="workbench-pill">
+                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.status === "approved" ? "awaiting publication" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
+                  </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
                     {selectedDraft.score?.label ? ` · ${selectedDraft.score.label}` : ""}
@@ -117,15 +130,60 @@ export function DraftWorkbench({
                       onChange={(e) => setEditText(e.target.value)}
                       rows={4}
                     />
-                    <div className={`draft-chars ${editText.length > 280 ? "over" : ""}`}>
-                      {editText.length}/280
+                    <div className={`draft-chars ${draftTextLength(editText) > 280 ? "over" : ""}`}>
+                      {draftTextLength(editText)}/280
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="draft-text">{selectedDraft.text}</div>
-                    <div className="draft-chars">{selectedDraft.text.length}/280</div>
+                    <div className="draft-chars">{draftTextLength(selectedDraft.text)}/280</div>
                   </>
+                )}
+
+                {editConflict && (
+                  <div className="draft-feedback error" role="alert">
+                    <p>This draft changed while you were editing. Your edit is preserved. Review the latest saved text before replacing it:</p>
+                    <div className="candidate-text">{selectedDraft.text}</div>
+                    <button type="button" className="btn sm" disabled={!controls.canEdit || !!draftAction} onClick={() => acceptLatestEditRevision(selectedDraft)}>
+                      Use my edit on this version
+                    </button>
+                  </div>
+                )}
+
+                {selectedDraft.publish_blocked && (
+                  <div className="draft-feedback error" role="alert">
+                    A publication attempt needs reconciliation. Editing and approval are paused until its outcome is known.
+                  </div>
+                )}
+
+                {controls.conflict && !selectedDraft.publish_blocked && (
+                  <div className="draft-feedback error" role="alert">
+                    Conflicting versions were found. Edit and save the intended text, then review it against its sources.
+                  </div>
+                )}
+
+                {controls.canReview && editingId !== selectedDraft.id && (
+                  <div className="workbench-panel">
+                    <h3>Review this version</h3>
+                    <p>Previous checks do not cover this text. Check it against the source evidence below. Recording your review permits manual approval; it does not run or replace model checks.</p>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={reviewConfirmedIdentity === reviewKey}
+                        onChange={(event) => setReviewConfirmedIdentity(event.target.checked ? reviewKey : "")}
+                      />
+                      {" "}I checked this exact text against its source evidence.
+                    </label>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      disabled={!!draftAction || reviewConfirmedIdentity !== reviewKey}
+                      onClick={() => draftAct(selectedDraft.id, "review", { reviewConfirmed: true, expectedRevision: selectedDraft.revision_identity })}
+                    >
+                      Record human review
+                    </button>
+                  </div>
                 )}
 
                 {(selectedDraft.score?.reasons?.length > 0 ||
@@ -149,7 +207,7 @@ export function DraftWorkbench({
                     <div className="shadow-label">SHADOW (TWO-BOT)</div>
                     <div className="shadow-text">{selectedDraft.review_context.shadow_two_bot.text}</div>
                     <div className="shadow-meta">
-                      <span>{selectedDraft.review_context.shadow_two_bot.text.length}/280</span>
+                      <span>{draftTextLength(selectedDraft.review_context.shadow_two_bot.text)}/280</span>
                       {selectedDraft.review_context.shadow_two_bot.angle_chosen && (
                         <span>angle: {selectedDraft.review_context.shadow_two_bot.angle_chosen}</span>
                       )}
@@ -222,7 +280,11 @@ export function DraftWorkbench({
                   <div className="workbench-panel">
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
-                      {selectedDraft.approval_policy?.mode === "armed_auto"
+                      {controls.needsReview
+                        ? "This version needs review before approval."
+                        : selectedDraft.review_kind === "human"
+                        ? "Human review permits manual posting. Automatic scheduling requires current model checks."
+                        : selectedDraft.approval_policy?.mode === "armed_auto"
                         ? "Policy armed this draft automatically."
                         : selectedDraft.approval_policy?.mode === "suggested_auto"
                         ? "Policy recommends a timed auto-approval."
@@ -303,7 +365,7 @@ export function DraftWorkbench({
                             <button
                               type="button"
                               className="btn sm"
-                              disabled={!!draftAction}
+                              disabled={!!draftAction || !controls.canEdit || editingId === selectedDraft.id}
                               onClick={() =>
                                 draftAct(selectedDraft.id, "select_candidate", { candidateRank: c.rank })
                               }
@@ -326,7 +388,7 @@ export function DraftWorkbench({
                       <button
                         type="button"
                         className="btn approve sm"
-                        disabled={draftAction === selectedDraft.id || editText.length > 280}
+                        disabled={!!draftAction || !controls.canEdit || editConflict || !editText.trim() || draftTextLength(editText) > 280}
                         onClick={() => draftAct(selectedDraft.id, "edit", { editedText: editText })}
                       >
                         Save
@@ -340,7 +402,7 @@ export function DraftWorkbench({
                       <button
                         type="button"
                         className="btn approve sm"
-                        disabled={!!draftAction}
+                        disabled={!!draftAction || !controls.canApprove}
                         onClick={() => draftAct(selectedDraft.id, "approve")}
                       >
                         {draftAction === selectedDraft.id ? "..." : "Approve + Post"}
@@ -348,33 +410,31 @@ export function DraftWorkbench({
                       <button
                         type="button"
                         className="btn sm"
-                        onClick={() => {
-                          setEditingId(selectedDraft.id)
-                          setEditText(selectedDraft.text)
-                        }}
+                        disabled={!!draftAction || !controls.canEdit}
+                        onClick={() => startEditing(selectedDraft)}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         className="btn reject sm"
-                        disabled={!!draftAction}
+                        disabled={!!draftAction || !controls.canEdit}
                         onClick={() => draftAct(selectedDraft.id, "reject")}
                       >
                         Reject
                       </button>
-                      {selectedDraft.auto_approve_at ? (
+                      {selectedDraft.auto_approve_at || selectedDraft.status === "approved" ? (
                         <button
                           type="button"
                           className="btn sm"
-                          disabled={!!draftAction}
+                          disabled={!!draftAction || !controls.canEdit}
                           onClick={() => draftAct(selectedDraft.id, "cancel_auto_approve")}
                         >
-                          Cancel {countdownText(selectedDraft.auto_approve_at)}
+                          {selectedDraft.status === "approved" ? "Cancel queued approval" : `Cancel ${countdownText(selectedDraft.auto_approve_at)}`}
                         </button>
-                      ) : selectedDraft.approval_policy?.can_auto_approve === false ? (
+                      ) : !controls.canSchedule ? (
                         <button type="button" className="btn sm" disabled>
-                          Review Only
+                          {selectedDraft.review_kind === "human" ? "Manual posting only" : "Auto unavailable"}
                         </button>
                       ) : (
                         <button
@@ -393,7 +453,7 @@ export function DraftWorkbench({
                     </>
                   )}
                 </div>
-                {draftFeedback && (
+                {draftFeedback && (!draftFeedback.draftId || draftFeedback.draftId === selectedDraft.id) && (
                   <div className={`draft-feedback ${draftFeedback.type}`} role="alert">
                     {draftFeedback.text}
                   </div>

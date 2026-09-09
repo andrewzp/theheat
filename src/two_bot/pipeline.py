@@ -9,6 +9,7 @@ from typing import Any
 
 from src import config
 from src.data.firms import FireEvent
+from src.editorial.revisions import fingerprint, text_hash
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, memory, writer
 from src.two_bot.evidence_contract import audit_story_bundle
@@ -422,9 +423,17 @@ def generate_draft(
         elif slate_critic_result is not None:
             metadata["critic"] = slate_critic_result.to_dict()
             metadata["critic_model"] = critic.CRITIC_MODEL
+        # Bind the checks where their actual input is known. Later URL appends or
+        # edits must not silently inherit these verdicts for different text.
+        checked_text = writer_result.tweet
+        if checked_text is None:
+            _record_kill("writer", "No checked text available for revision binding")
+            return None
+        metadata["reviewed_text_sha256"] = text_hash(checked_text)
+        metadata["reviewed_bundle_sha256"] = fingerprint(metadata["bundle"])
         return {
             "type": bundle.signal_kind,
-            "text": writer_result.tweet,
+            "text": checked_text,
             "event_id": bundle.event_id,
             "two_bot_metadata": metadata,
         }

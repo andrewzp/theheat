@@ -106,6 +106,8 @@ def test_record_published_draft_writes_memory_from_persisted_two_bot_metadata():
         },
     }
 
+    from tests.revision_helpers import bind_reviewed_draft
+    bind_reviewed_draft(draft, mode="manual")
     assert record_published_draft(state, draft) is True
 
     memory = state["memory"]

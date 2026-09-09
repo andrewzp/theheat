@@ -446,8 +446,8 @@ def record_published_draft(state: BotState, draft: dict) -> bool:
 
     if not isinstance(draft, dict):
         return False
-    tweet_text = _tweet_text(draft).strip()
-    if not tweet_text:
+    tweet_text = _tweet_text(draft)
+    if not tweet_text.strip():
         return False
     two_bot = _two_bot_metadata_from_draft(draft)
     if two_bot is None:
@@ -459,26 +459,32 @@ def record_published_draft(state: BotState, draft: dict) -> bool:
     memory = _memory(state)
     if _published_memory_already_recorded(memory, tweet_id):
         return False
+    from src.editorial.revisions import review_is_current
+
+    current_model_review = (
+        review_is_current(draft)
+        and (draft.get("review_binding") or {}).get("kind") == "model"
+    )
     writer = WriterResult(
         tweet=tweet_text,
         kill_reason=None,
-        angle_chosen=str(two_bot.get("angle_chosen") or ""),
+        angle_chosen=str(two_bot.get("angle_chosen") or "") if current_model_review else "",
         era_anchor_used=(
             str(two_bot.get("era_anchor_used"))
-            if two_bot.get("era_anchor_used") is not None else None
+            if current_model_review and two_bot.get("era_anchor_used") is not None else None
         ),
         peer_comparison_used=(
             str(two_bot.get("peer_comparison_used"))
-            if two_bot.get("peer_comparison_used") is not None else None
+            if current_model_review and two_bot.get("peer_comparison_used") is not None else None
         ),
-        reasoning=str(two_bot.get("reasoning") or ""),
+        reasoning=str(two_bot.get("reasoning") or "") if current_model_review else "",
     )
     shipped_at = str(draft.get("posted_at") or "").strip() or None
     record_shipped(
         state,
         bundle,
         writer,
-        _claims_from_metadata(two_bot),
+        _claims_from_metadata(two_bot) if current_model_review else [],
         tweet_id=tweet_id or None,
         shipped_at=shipped_at,
     )

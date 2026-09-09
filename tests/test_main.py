@@ -9,6 +9,8 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from src.state import DEFAULT_STATE
+from src.editorial.revisions import draft_identity
+from tests.revision_helpers import bind_reviewed_draft, model_review_context
 from src.main import (
     _classify_ghcn_source_status,
     save_draft,
@@ -417,6 +419,7 @@ class TestSaveDraft:
             "hot10_evt",
             score=score,
             candidate_score={"total": 81},
+            review_context=model_review_context("Hot 10 draft"),
         )
 
         assert state["drafts"][0]["approval_policy"]["mode"] == "armed_auto"
@@ -455,11 +458,16 @@ class TestSaveDraft:
 
     def test_cyclone_draft_gets_advisory_url_when_fits(self, monkeypatch):
         from src.editorial.scoring import score_cyclone_tier_crossing
+        from src.editorial.revisions import review_is_current
         dispatch = self._dispatch_module()
+        checked_text = "Beryl jumped to Category 4 in the Atlantic."
 
         monkeypatch.setattr(
             "src.two_bot.pipeline.generate_draft",
-            lambda *args, **kwargs: {"text": "Beryl jumped to Category 4 in the Atlantic.", "two_bot_metadata": {}},
+            lambda *args, **kwargs: {
+                "text": checked_text,
+                "two_bot_metadata": model_review_context(checked_text)["two_bot"],
+            },
         )
         state = _fresh_state()
         url = "https://www.nhc.noaa.gov/text/MIATCPAT1.shtml"
@@ -475,6 +483,7 @@ class TestSaveDraft:
 
         assert saved is True
         assert state["drafts"][0]["text"].endswith(f"\n{url}")
+        assert not review_is_current(state["drafts"][0])
 
     def test_url_omitted_when_over_budget(self, monkeypatch):
         from src.editorial.scoring import score_cyclone_tier_crossing
@@ -1172,6 +1181,7 @@ class TestPostApproved:
             "publish_intent_id": "intent_1",
             "text": "test tweet",
         }
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
         assert result == "failed"
         mock_tw.assert_not_called()
@@ -1189,10 +1199,11 @@ class TestPostApproved:
             "text": "test tweet",
         }
 
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
 
         assert result == "failed"
-        mock_state.write_state.assert_called_once_with(state)
+        mock_state.write_state.assert_called_once_with(state, expected_draft=ANY, expected_publish_ledger=None)
         mock_tw.assert_not_called()
 
     @patch("src.main.state")
@@ -1209,6 +1220,7 @@ class TestPostApproved:
             "publish_intent_id": "intent_1",
             "text": "test tweet",
         }
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
         assert result == "posted"
         assert state["publish_ledger"]["event_1"]["tweet_id"] == "123"
@@ -1267,6 +1279,7 @@ class TestPostApproved:
             },
         }
 
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
 
         assert result == "posted"
@@ -1289,6 +1302,7 @@ class TestPostApproved:
             "publish_intent_id": "intent_1",
             "text": "test tweet",
         }
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
         assert result == "failed"
 
@@ -1305,6 +1319,7 @@ class TestPostApproved:
             "publish_intent_id": "intent_1",
             "text": "test tweet",
         }
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
         assert result == "rate_limited"
         mock_state.increment_daily_count.assert_not_called()
@@ -1333,6 +1348,7 @@ class TestPostApproved:
             ],
         }
 
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
 
         assert result == "posted"
@@ -1364,6 +1380,7 @@ class TestPostApproved:
             "hot10_rows": rows,
         }
 
+        bind_reviewed_draft(draft, mode="manual", intent_id=draft.get("publish_intent_id"))
         result = post_approved(draft, state)
 
         assert result == "posted"
@@ -1852,7 +1869,7 @@ class TestTwitterMetricsIngestion:
 
 
 class TestRunManualTweet:
-    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1", "PUBLISH_INTENT_ID": "intent_1"}, clear=True)
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
     def test_updates_matching_draft_by_id(self, mock_safety, mock_post):
@@ -1865,13 +1882,14 @@ class TestRunManualTweet:
             "status": "approved",
         }]
 
+        bind_reviewed_draft(state["drafts"][-1], mode="manual", intent_id="intent_1")
         result = run_manual_tweet(state)
 
         assert result["drafts"][0]["status"] == "posted"
         assert result["drafts"][0]["posted_at"].endswith("Z")
         assert "publish_intent_id" not in result["drafts"][0]
 
-    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1", "PUBLISH_INTENT_ID": "intent_1"}, clear=True)
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
     def test_returns_draft_to_pending_on_safety_failure(self, mock_safety, mock_post):
@@ -1883,6 +1901,7 @@ class TestRunManualTweet:
             "status": "approved",
         }]
 
+        bind_reviewed_draft(state["drafts"][-1], mode="manual", intent_id="intent_1")
         result = run_manual_tweet(state)
 
         mock_post.assert_not_called()
@@ -1911,7 +1930,7 @@ class TestRunManualTweet:
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "approved"
 
-    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1", "PUBLISH_INTENT_ID": "intent_1"}, clear=True)
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
     def test_rejects_non_approved_draft_posts(self, mock_safety, mock_post):
@@ -1928,7 +1947,7 @@ class TestRunManualTweet:
         mock_post.assert_not_called()
         assert result["drafts"][0]["status"] == "pending"
 
-    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1"}, clear=True)
+    @patch.dict("os.environ", {"TWEET_TEXT": "Manual draft", "DRAFT_ID": "draft_1", "PUBLISH_INTENT_ID": "intent_1"}, clear=True)
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
     def test_manual_tweet_ignores_spacing_guard(self, mock_safety, mock_post):
@@ -1952,6 +1971,7 @@ class TestRunManualTweet:
             },
         ]
 
+        bind_reviewed_draft(state["drafts"][-1], mode="manual", intent_id="intent_1")
         result = run_manual_tweet(state)
 
         mock_post.assert_called_once_with(state["drafts"][1], state)
@@ -1996,6 +2016,10 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
+        state["publish_ledger"]["event_1"].update(draft_identity(state["drafts"][0]))
         result = process_due_drafts(state)
 
         mock_safety.assert_not_called()
@@ -2005,7 +2029,7 @@ class TestProcessDueDrafts:
         assert result["drafts"][0]["posted_at"] == "2026-06-12T12:00:00Z"
 
     @patch("src.main.post_approved")
-    def test_stale_intent_cleared_after_2h(self, mock_post):
+    def test_unknown_legacy_intent_preserved_after_2h(self, mock_post):
         state = _fresh_state()
         state["publish_ledger"] = {
             "event_1": {
@@ -2015,10 +2039,13 @@ class TestProcessDueDrafts:
             }
         }
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
-        assert "event_1" not in result["publish_ledger"]
+        assert result["publish_ledger"]["event_1"]["intent_id"] == "intent_1"
 
     @patch("src.main.post_approved")
     @patch("src.main.run_safety_pipeline")
@@ -2037,6 +2064,9 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_safety.assert_called_once_with("Queued draft")
@@ -2055,6 +2085,9 @@ class TestProcessDueDrafts:
             self._due_auto_draft("draft_2", "Queued draft 2"),
         ]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         assert mock_post.call_count == 1
@@ -2079,6 +2112,9 @@ class TestProcessDueDrafts:
             self._due_auto_draft("draft_1", "Queued draft 1"),
         ]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_called_once_with(state["drafts"][1], state)
@@ -2104,6 +2140,9 @@ class TestProcessDueDrafts:
             self._due_auto_draft("draft_1", "Queued draft 1"),
         ]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
@@ -2120,6 +2159,9 @@ class TestProcessDueDrafts:
             "auto_approve_at": "2999-01-01T00:00:00Z",
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
@@ -2136,6 +2178,9 @@ class TestProcessDueDrafts:
             "approval_policy": {"can_auto_approve": False},
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
@@ -2158,6 +2203,9 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
@@ -2184,6 +2232,9 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_called_once_with(state["drafts"][0], state)
@@ -2204,6 +2255,10 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
+        state["drafts"][0]["approval_mode"] = "manual"
         result = process_due_drafts(state)
 
         mock_post.assert_not_called()
@@ -2227,6 +2282,9 @@ class TestProcessDueDrafts:
             },
         }]
 
+        for draft in state.get("drafts", []):
+            if draft.get("status") == "pending":
+                bind_reviewed_draft(draft)
         result = process_due_drafts(state)
 
         mock_post.assert_called_once_with(state["drafts"][0], state)

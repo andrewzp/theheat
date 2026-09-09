@@ -2,6 +2,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 
 from src.state import DEFAULT_STATE
+from tests.revision_helpers import model_review_context
 
 
 def test_dead_zone_deferred_to_1230utc():
@@ -39,6 +40,7 @@ def test_flag_off_no_change(monkeypatch):
         "hot10_evt",
         score=score_hot10(9.2, 10, 3),
         candidate_score={"total": 81},
+        review_context=model_review_context("Hot 10 draft"),
     )
 
     assert saved is True
@@ -64,6 +66,7 @@ def test_flag_on_deferred_at_draft_save(monkeypatch):
         "hot10_evt",
         score=score_hot10(9.2, 10, 3),
         candidate_score={"total": 81},
+        review_context=model_review_context("Hot 10 draft"),
     )
 
     assert saved is True

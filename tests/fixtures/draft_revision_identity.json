@@ -1,0 +1,81 @@
+[
+  {
+    "name": "legacy",
+    "draft": {
+      "id": "legacy",
+      "text": "A forecast high of 40°C.",
+      "event_id": "e",
+      "type": "monthly_high"
+    },
+    "identity": {
+      "content_revision": 0,
+      "text_sha256": "a1119380eb1fbf6c6b4cdc27edfebd56626c38c0fa1459d4622a3389691c9e94",
+      "evidence_sha256": "fc172c154312df4fd93ad96f3b4dde8d10cd8297f4131d857bebd30773db16b2"
+    }
+  },
+  {
+    "name": "unicode-and-numbers",
+    "draft": {
+      "content_revision": 7,
+      "text": "Tromsø → 40°C 🌡️\nحديث",
+      "event_id": "world",
+      "type": "hot10",
+      "tweet_date": "2026-09-08",
+      "hot10_rows": [
+        {
+          "city": "Tromsø",
+          "temperature": 40.0,
+          "anomaly": 0.1
+        }
+      ],
+      "review_context": {
+        "source": "source",
+        "zero": -0.0,
+        "unicode": "café \t",
+        "two_bot": {
+          "bundle": {
+            "when": "2026-09-08",
+            "numbers": [
+              1,
+              1.0,
+              1e-07,
+              1e+20,
+              1e-05
+            ],
+            "flag": true,
+            "none": null
+          },
+          "fact_check": {
+            "passed": true
+          },
+          "writer_model": "excluded"
+        }
+      }
+    },
+    "identity": {
+      "content_revision": 7,
+      "text_sha256": "8193f8264b27c2760d84ec90fbe3a6ba7508e51e453de4eb8fef514e6575023d",
+      "evidence_sha256": "86e1bde72bea39cd085bbd6666050d2c9d618ce4d25d6725fba079b056167890"
+    }
+  },
+  {
+    "name": "utf8-object-order",
+    "draft": {
+      "content_revision": 1,
+      "text": "Keys and controls",
+      "review_context": {
+        "": 1,
+        "😀": 2,
+        "a": "\b\n\r\f\t",
+        "two_bot": {
+          "bundle": {}
+        }
+      }
+    },
+    "identity": {
+      "content_revision": 1,
+      "text_sha256": "66476e47549d3f87764f283bb169cf5b750e056b2b3411b82d73efba9ec210b3",
+      "evidence_sha256": "f0c5ba1eb23f348f7397139a421ac8214a50621c0771830c23c841a1cddad560"
+    }
+  }
+]

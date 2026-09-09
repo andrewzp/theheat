@@ -2,6 +2,7 @@ import { getStateBackend, readStateStore } from "../../../lib/state-store.js"
 import { requireDashboardAuth } from "../../../lib/auth.js"
 import { buildSourceHealthPayload } from "../../../lib/source-health.js"
 import { projectStateForDashboard } from "../../../lib/projection.js"
+import { hasUnresolvedPublish, projectDraft } from "../../../lib/draft-revisions.js"
 
 export const runtime = "nodejs"
 
@@ -25,7 +26,7 @@ function tsValue(s) {
 
 function pendingDrafts(state) {
   return (state?.drafts || [])
-    .filter((d) => d.status === "pending")
+    .filter((d) => ["pending", "approved"].includes(d.status))
     .sort((a, b) => {
       const priorityA = (a.score?.total || 0) + (a.candidate_score?.total || 0) * 0.35
       const priorityB = (b.score?.total || 0) + (b.candidate_score?.total || 0) * 0.35
@@ -33,7 +34,13 @@ function pendingDrafts(state) {
       if (scoreDiff !== 0) return scoreDiff
       return new Date(b.created_at || 0) - new Date(a.created_at || 0)
     })
-    .map((d) => ({ ...d, tweet_id: d.tweet_id ?? null }))
+    .map((d) => {
+      try {
+        return { ...projectDraft(d), publish_blocked: hasUnresolvedPublish(d, state), tweet_id: d.tweet_id ?? null }
+      } catch (error) {
+        return { ...d, text: typeof d.text === "string" ? d.text : "[Invalid draft text]", revision_identity: null, review_status: "conflict", review_kind: null, publish_blocked: true, review_error: error.message, tweet_id: d.tweet_id ?? null }
+      }
+    })
 }
 
 // Row 9: posted drafts joined to their captured engagement metrics, so the

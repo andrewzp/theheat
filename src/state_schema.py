@@ -187,6 +187,45 @@ class TweetMetric(TypedDict):
     replies: int
 
 
+class DraftIdentity(TypedDict):
+    """Exact editable revision bound to reviews, approvals and platform attempts."""
+
+    content_revision: int
+    text_sha256: str
+    evidence_sha256: str
+
+
+class DraftRevisionFields(TypedDict, total=False):
+    """Additive fields carried in each heterogeneous draft's JSON payload.
+
+    The complete draft remains a dict because source-specific fields vary. These
+    nested fields require no new top-level state key or SQLite column.
+    """
+
+    content_revision: int
+    decision_revision: int
+    review_binding: dict
+    approval_binding: dict
+    revision_history: list[dict]
+    revision_conflicts: list[dict]
+    publish_outcome: str
+
+
+class PublishAttempt(TypedDict, total=False):
+    """Platform evidence survives independently of the current editable text."""
+
+    intent_id: str
+    at: str
+    confirmed_at: str
+    content_revision: int
+    text_sha256: str
+    evidence_sha256: str
+    text: str
+    phase: str
+    tweet_id: str | None
+    attempt_conflicts: list[dict]
+
+
 class AirQualityTier(TypedDict):
     """Last successfully drafted air-quality tier for one city/date."""
 
