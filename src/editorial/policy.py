@@ -57,7 +57,7 @@ def current_editorial_policy() -> dict | None:
         from src.voice import safety
         execution = {"prompts": {module.__name__: {name: text for name, text in vars(module).items()
                      if name.isupper() and isinstance(text, str) and ("PROMPT" in name or "GUIDANCE" in name)}
-                     for module in (writer, critic, fact_check)},
+                     for module in (writer, critic, fact_check, safety)},
                      "writer_schema": writer.WRITER_OUTPUT_SCHEMA, "fact_check_schema": fact_check.FACT_CHECK_OUTPUT_SCHEMA}
         value = {"schema_version": 1, "execution_sha256": fingerprint(execution), "source_sha256": source_manifest()["source_sha256"],
                  "models": {"writer": writer.WRITER_MODEL, "writer_provider": writer.WRITER_PROVIDER,

@@ -66,12 +66,17 @@ def test_unexpected_provider_boundary_cannot_be_hidden_by_exception_handler():
                 pass
 
 
-def test_optional_safety_key_does_not_enable_paid_calls_and_is_restored(monkeypatch):
+def test_injected_safety_model_cannot_call_provider_and_restores_required_check(monkeypatch):
     from src.voice import safety
+    original_check = safety.check_llm
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "synthetic-key-never-used")
     spec, variant = VARIANTS[0]
-    assert evaluation.run_probe(variant["tweet"], spec, pipeline_mode=True)["provider_calls"] == 0
+    observation = evaluation.run_probe(variant["tweet"], spec, pipeline_mode=True)
+    assert observation["provider_calls"] == 0 and observation["safety_model_evaluated"] is False
     assert safety.GEMINI_API_KEY == "synthetic-key-never-used"
+    assert safety.check_llm is original_check
+    monkeypatch.setattr(safety, "GEMINI_API_KEY", "")
+    assert safety.check_llm("A synthetic fixture.")[0] is False
 
 
 def test_private_text_and_diagnostics_never_escape_streams_or_report(capsys):

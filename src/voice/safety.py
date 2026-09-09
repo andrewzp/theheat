@@ -3,7 +3,14 @@ from __future__ import annotations
 """Two-layer safety pipeline for generated tweets."""
 
 import os
+from collections import OrderedDict
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+import hashlib
+import threading
+import time
 import re
+from string import Formatter
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # Safety LLM model ID. Same env-driven config as the generator — can be
@@ -191,43 +198,110 @@ def check_regex(tweet: str) -> tuple[bool, str | None]:
     return True, None
 
 
-def check_llm(tweet: str) -> tuple[bool, str | None]:
-    """Layer 2: LLM safety check via Gemini Flash. Returns (passed, reason)."""
-    if not GEMINI_API_KEY:
-        return True, None  # Skip if no API key
+SAFETY_PROMPT_TEMPLATE = (
+    "You are a content safety reviewer for a climate data Twitter bot. "
+    "The bot uses dark humor but must never mock human suffering, trivialize "
+    "death or injury, or cross from dry wit into cruelty.\n\n"
+    'Tweet to review:\n"{tweet}"\n\n'
+    "Does this tweet mock human suffering, trivialize death, or cross from "
+    "dark humor into cruelty? Answer only YES or NO."
+)
+SAFETY_CACHE_SECONDS = 300
+SAFETY_CACHE_SIZE = 128
+_CACHE_LOCK = threading.Lock()
+_SAFETY_CACHE: OrderedDict[tuple[str, str, str], tuple[float, "SafetyCheckResult"]] = OrderedDict()
 
+
+@dataclass(frozen=True)
+class SafetyCheckResult:
+    execution_status: str
+    verdict: str | None
+    reason: str | None
+    model: str
+    text_sha256: str | None
+    prompt_sha256: str | None
+    checked_at: str
+    cache_hit: bool = False
+
+    @property
+    def allowed(self) -> bool:
+        return self.execution_status == "completed" and self.verdict == "allow"
+
+
+def check_llm_result(tweet: str) -> SafetyCheckResult:
+    """A check must complete explicitly; unavailable is never a passing verdict.
+
+    Completed same-process checks can be reused for five minutes with exact
+    model/prompt/text identity. Regex checks still run on every pipeline call.
+    The cache is bounded and does not deduplicate simultaneous in-flight calls.
+    """
+    at = datetime.now(timezone.utc).isoformat()
+    model = GEMINI_SAFETY_MODEL
+    text_sha = prompt_sha = None
+    try:
+        if not isinstance(tweet, str) or not tweet.strip() or len(tweet) > 280:
+            raise ValueError("Invalid tweet")
+        text_sha = hashlib.sha256(tweet.encode("utf-8")).hexdigest()
+    except (ValueError, UnicodeError):
+        return SafetyCheckResult("failed", None, "safety_invalid_input", model, text_sha, prompt_sha, at)
+    try:
+        fields = [(field, spec, conversion) for _, field, spec, conversion in Formatter().parse(SAFETY_PROMPT_TEMPLATE) if field is not None]
+        if fields != [("tweet", "", None)]:
+            raise ValueError("Safety prompt must review the exact tweet")
+        prompt = SAFETY_PROMPT_TEMPLATE.format(tweet=tweet)
+        prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    except (ValueError, UnicodeError, KeyError):
+        return SafetyCheckResult("failed", None, "safety_invalid_prompt", model, text_sha, prompt_sha, at)
+    if not GEMINI_API_KEY:
+        return SafetyCheckResult("unavailable", None, "safety_unavailable: missing credential", model, text_sha, prompt_sha, at)
+
+    key = (model, prompt_sha, text_sha)
+    clock = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _SAFETY_CACHE.get(key)
+        if cached is not None:
+            elapsed = clock - cached[0]
+            if 0 <= elapsed < SAFETY_CACHE_SECONDS:
+                _SAFETY_CACHE.move_to_end(key)
+                return replace(cached[1], cache_hit=True)
+            del _SAFETY_CACHE[key]
     try:
         from google import genai
+        from google.genai import types as genai_types
 
-        client = genai.Client(api_key=GEMINI_API_KEY)
-
-        prompt = (
-            "You are a content safety reviewer for a climate data Twitter bot. "
-            "The bot uses dark humor but must never mock human suffering, trivialize "
-            "death or injury, or cross from dry wit into cruelty.\n\n"
-            f"Tweet to review:\n\"{tweet}\"\n\n"
-            "Does this tweet mock human suffering, trivialize death, or cross from "
-            "dark humor into cruelty? Answer only YES or NO."
-        )
-
-        response = client.models.generate_content(
-            model=GEMINI_SAFETY_MODEL,
-            contents=prompt,
-        )
-        from src.two_bot.usage_ledger import record_response
-        record_response("safety", response, GEMINI_SAFETY_MODEL, "google")
-        # response.text is Optional — empty answer routes to NO (allow through;
-        # regex pipeline already did the deterministic gating).
+        client = genai.Client(api_key=GEMINI_API_KEY,
+                             http_options=genai_types.HttpOptions(timeout=90000,
+                                 retry_options=genai_types.HttpRetryOptions(attempts=1)))
+        response = client.models.generate_content(model=model, contents=prompt)
+        try:
+            from src.two_bot.usage_ledger import record_response
+            record_response("safety", response, model, "google")
+        except Exception:
+            pass  # Accounting cannot change an already returned check response.
         answer = (response.text or "").strip().upper()
+        if answer not in {"YES", "NO"}:
+            return SafetyCheckResult("failed", None, "safety_invalid_response: expected YES or NO", model, text_sha, prompt_sha, at)
+        verdict = "allow" if answer == "NO" else "reject"
+        result = SafetyCheckResult("completed", verdict,
+            None if verdict == "allow" else "LLM flagged as potentially harmful", model,
+            text_sha, prompt_sha, datetime.now(timezone.utc).isoformat())
+        with _CACHE_LOCK:
+            _SAFETY_CACHE[key] = (time.monotonic(), result)
+            _SAFETY_CACHE.move_to_end(key)
+            while len(_SAFETY_CACHE) > SAFETY_CACHE_SIZE:
+                _SAFETY_CACHE.popitem(last=False)
+        return result
+    except Exception as exc:
+        # A transport/parser failure is operational uncertainty, never "NO".
+        # Do not expose provider exception bodies or cache an unavailable check.
+        return SafetyCheckResult("unavailable", None,
+            f"safety_unavailable: {type(exc).__name__}", model, text_sha, prompt_sha, at)
 
-        if answer.startswith("YES"):
-            return False, "LLM flagged as potentially harmful"
-        return True, None
 
-    except Exception as e:
-        # If LLM check fails, allow the tweet through (regex already passed)
-        print(f"[safety] LLM safety check failed, falling back to regex only: {e}")
-        return True, None
+def check_llm(tweet: str) -> tuple[bool, str | None]:
+    """Compatibility boundary used by drafting, review and final posting."""
+    result = check_llm_result(tweet)
+    return result.allowed, result.reason
 
 
 def run_safety_pipeline(tweet: str) -> tuple[bool, str | None]:

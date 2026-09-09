@@ -28,7 +28,7 @@ LIMITS = [
     "Targeted retained failures; not representative tweets or worldwide event coverage.",
     "No provider calls, incumbent generation, blind editorial judgments, reach or cost-lift measurement.",
     "Exact-text probes use synthetic structural evidence, not recovered complete historical input packets.",
-    "Pipeline probes inject writer output and disable optional LLM safety locally; neither is evaluated.",
+    "Pipeline probes inject writer output and a completed safety-model result locally; neither model is evaluated.",
     "A control reaching the checker boundary still requires verification; it is not publishable gold.",
     "Local lexical checks are bounded and do not establish complete semantic or scientific correctness.",
 ]
@@ -158,7 +158,7 @@ def run_probe(tweet, spec, *, pipeline_mode=False):
                 injected = WriterResult(tweet, None, "offline_probe", None, None, "Injected offline text.")
                 with patch.object(pipeline, "_writer_samples", return_value=1), \
                      patch.object(pipeline.writer, "write_tweet", return_value=injected), \
-                     patch.object(safety, "GEMINI_API_KEY", ""):
+                     patch.object(safety, "check_llm", return_value=(True, None)):
                     result = pipeline.generate_draft(bundle, {}, result_out=telemetry)
                 if result is not None:
                     raise OfflineViolation("A pipeline probe unexpectedly became an accepted draft")
@@ -174,6 +174,7 @@ def run_probe(tweet, spec, *, pipeline_mode=False):
         except VerificationRequired:
             outcome = "verification_required"
     return {"outcome": outcome, "observed_codes": codes, "provider_calls": 0,
+            "safety_model_evaluated": False,
             "checker_boundary_reached": calls["checker_boundary_reached"],
             "unexpected_boundary_attempts": calls["unexpected_boundary_attempts"],
             "pipeline_kill_stage": telemetry.get("kill_stage") if pipeline_mode else None}

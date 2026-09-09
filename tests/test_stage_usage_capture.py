@@ -21,8 +21,10 @@ NOW = datetime(2026, 9, 9, tzinfo=timezone.utc)
 @pytest.fixture(autouse=True)
 def isolated_buffer():
     ledger._BUFFER.clear()
+    safety._SAFETY_CACHE.clear()
     yield
     ledger._BUFFER.clear()
+    safety._SAFETY_CACHE.clear()
 
 
 def response(text="{}", **usage):
@@ -67,6 +69,7 @@ def test_capture_preserves_request_and_output_even_for_empty_or_invalid_text(mon
     generate.reset_mock()
     client.reset_mock()
     monkeypatch.setattr(ledger, "record_response", observer)
+    safety._SAFETY_CACHE.clear()  # Compare observer behavior with identical uncached inputs.
     assert invoke(stage) == before
     assert generate.call_args_list == requests and client.call_args_list == clients
     assert generate.call_count == 1 and len(ledger._BUFFER) == 1
@@ -91,7 +94,7 @@ def test_response_accounted_before_text_access_fails(sdk, stage):
     generate, _ = sdk
     generate.return_value = BrokenText()
     if stage == "safety":
-        assert invoke(stage) == (True, None)  # Existing disposition, not a completed check.
+        assert invoke(stage)[0] is False  # Unreadable model output cannot establish completion.
     else:
         with pytest.raises(ValueError, match="text unavailable"):
             invoke(stage)
@@ -114,6 +117,7 @@ def test_metadata_or_accounting_failure_never_retries_provider(monkeypatch, sdk,
     ledger._BUFFER.clear()
     generate.reset_mock()
     monkeypatch.setattr(ledger, "record_usage", Mock(side_effect=RuntimeError("accounting unavailable")))
+    safety._SAFETY_CACHE.clear()
     invoke(stage)
     assert generate.call_count == 1 and ledger._BUFFER == []
 
@@ -160,7 +164,7 @@ def test_deterministic_and_missing_key_paths_have_no_invented_response(monkeypat
     assert not safety.run_safety_pipeline("x" * 281)[0]
     monkeypatch.delenv("GEMINI_API_KEY")
     monkeypatch.setattr(safety, "GEMINI_API_KEY", "")
-    assert safety.check_llm("Some clean tweet.") == (True, None)
+    assert safety.check_llm("Some clean tweet.") == (False, "safety_unavailable: missing credential")
     for stage in ("fact_check", "critic", "newsworthiness_search", "newsworthiness_verify"):
         with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
             invoke(stage)
