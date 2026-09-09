@@ -132,7 +132,9 @@ test("dashboard API hydrates page data with one state read and one workflow read
     assert.equal(payload.suppressions.stats.total, 1)
     assert.equal(payload.sourceHealth.sources[0].source, "ghcn")
     assert.equal(payload.sourceHealth.sources[0].avg_duration_ms, 1200)
-    assert.equal(payload.config.writer_model, "claude-sonnet-4-6")
+    assert.equal(payload.config.writer_model, null)
+    assert.equal(payload.config.status, "unknown")
+    assert.equal(payload.productHealth.queue.waiting_count, 2)
     assert.equal(payload.runs[0].id, 123)
     assert.equal(fetchCalls.filter((href) => href.includes("/gists/")).length, 1)
     assert.equal(fetchCalls.filter((href) => href.includes("/actions/runs")).length, 1)
@@ -204,4 +206,51 @@ test("dashboard API joins posted drafts to their tweet_metrics (row 9)", async (
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test("state read failure stays unknown even when workflow runs succeed", async () => {
+  setupEnv()
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("/actions/runs")) return actionsResponse()
+    return { ok: false, status: 503, text: async () => "unavailable" }
+  }
+  try {
+    const { GET } = await importFresh("app/api/dashboard/route.js")
+    const response = await GET(new Request("http://localhost/api/dashboard", {
+      headers: { authorization: basicAuth("reviewer", "secret-pass") },
+    }))
+    const payload = await response.json()
+    assert.match(payload.stateError, /Failed to fetch state/)
+    assert.equal(payload.productHealth, null)
+    assert.equal(payload.config.status, "unknown")
+    assert.equal(payload.config.writer_model, null)
+    assert.equal(payload.runs[0].conclusion, "success")
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test("config endpoint reads the same actual bot snapshot and fails closed on unavailable state", async () => {
+  setupEnv()
+  const at = new Date().toISOString()
+  const state = { run_history: [{ id: "actual-run", started_at: at, runtime_inventory: {
+    schema_version: 1, captured_at: at, mode: "alerts", models: { writer: "recorded-bot-model" },
+    flags: { metrics_enabled: false },
+  } }] }
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => gistResponse(state)
+  const request = () => new Request("http://localhost/api/config", {
+    headers: { authorization: basicAuth("reviewer", "secret-pass") },
+  })
+  try {
+    const { GET } = await importFresh("app/api/config/route.js")
+    assert.equal((await GET(new Request("http://localhost/api/config"))).status, 401)
+    const payload = await (await GET(request())).json()
+    assert.equal(payload.writer_model, "recorded-bot-model")
+    assert.equal(payload.status, "recorded")
+    assert.equal(payload.flags.metrics_enabled, false)
+    globalThis.fetch = async () => { throw new Error("unavailable") }
+    const failed = await GET(request())
+    assert.equal(failed.status, 503)
+    assert.equal((await failed.json()).writer_model, null)
+  } finally { globalThis.fetch = originalFetch }
 })

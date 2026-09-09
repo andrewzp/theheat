@@ -59,9 +59,9 @@ export function AutomationStatusStrip({ status, error }) {
         <div className="automation-banner" role="alert">
           <span className="automation-banner-icon" aria-hidden="true">⚠</span>
           <span className="automation-banner-text">
-            {failing.length} workflow{failing.length > 1 ? "s" : ""} failing:{" "}
+            {failing.length} workflow check{failing.length > 1 ? "s" : ""} need{failing.length === 1 ? "s" : ""} attention:{" "}
             <strong>{failing.map((wf) => wf.name).join(", ")}</strong>
-            {" "}— self-heal will attempt a fix.
+            {" "}— inspect run results and access errors; recovery is unverified.
           </span>
         </div>
       )}

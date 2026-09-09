@@ -9,6 +9,7 @@ import { PipelineView } from "./components/PipelineView.js"
 import { RunsTable } from "./components/RunsTable.js"
 import { SourcesView } from "./components/SourcesView.js"
 import { SourceHealthContent } from "./health/page.js"
+import { ProductHealthPanel } from "./components/ProductHealthPanel.js"
 import { SuppressedView } from "./components/SuppressedView.js"
 import { hot10IsStale, hot10StaleDays, timeAgo, todayTweetCount } from "../lib/format.js"
 import { draftReviewControls, draftTextLength, revisionKey } from "../lib/draft-review-ui.js"
@@ -85,6 +86,8 @@ export default function Dashboard() {
         stateError: payload.stateError,
         runs: payload.runs || [],
         runsError: payload.runsError,
+        productHealth: payload.productHealth,
+        deployment: payload.deployment,
       })
       // Show the review queue in time order (newest first) — the API returns
       // drafts in insertion order, which reads as jumbled. created_at is ISO 8601,
@@ -416,6 +419,10 @@ export default function Dashboard() {
           </div>
         )}
 
+        {!loading && ["dashboard", "health"].includes(activeTab) && (
+          <ProductHealthPanel health={data?.productHealth} config={modelConfig} deployment={data?.deployment} stale={Boolean(refreshError)} />
+        )}
+
         {loading ? (
           <div className="loading">loading...</div>
         ) : activeTab === "suppressed" ? (
@@ -430,7 +437,7 @@ export default function Dashboard() {
         ) : activeTab === "sources" ? (
           <SourcesView sources={sources} stats={sourcesStats} />
         ) : activeTab === "health" ? (
-          <SourceHealthContent embedded sources={sources} stats={sourcesStats} />
+          <SourceHealthContent embedded sources={sources} stats={sourcesStats} error={stateError || ""} />
         ) : activeTab === "pipeline" ? (
           <PipelineView
             run={latestRichRun}
