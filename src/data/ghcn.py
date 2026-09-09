@@ -452,17 +452,7 @@ def _detect_signals_for_station(
         variable = "temperature_2m_max" if o.element == "TMAX" else "temperature_2m_min"
         provenance = thresholds.provenance
         scope = (provenance.get("variables") or {}).get(variable) or {}
-        eligible = (
-            provenance.get("reconciled") is True
-            and provenance.get("station_id") == sid
-            and provenance.get("comparison_before") == obs_date_iso
-            and provenance.get("source_product") == GHCN_SOURCE_PRODUCT
-            and bool(provenance.get("source_payload_sha256"))
-            and bool(provenance.get("retrieved_at"))
-            and not scope.get("conflicting_dates")
-            and scope.get("candidate_accepted") is True
-            and scope.get("source_coverage_complete") is True
-        )
+        eligible = record_comparison_qualified(provenance, sid, obs_date_iso, variable)
         archive_years = scope.get("years_with_samples", 0)
         if o.element == "TMAX":
             usable = True
@@ -652,44 +642,29 @@ def _has_signal(bundle: ExtremeSignalBundle) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Top-level dedup: keep at most 2 firing stations per (country, nearest city)
+# Shared scientific qualification for detected station comparisons
 # ---------------------------------------------------------------------------
 
-def _dedup_by_metro(
-    bundles: list[ExtremeSignalBundle],
-    max_per_country: int = 2,
-) -> list[ExtremeSignalBundle]:
-    """Cap at max_per_country signal-firing bundles per country.
+def record_comparison_qualified(provenance, station_id: str, valid_date: str, variable: str) -> bool:
+    """The same source-verification floor for detection and cluster membership.
 
-    Within a country, ranks by number of signals fired (all-time > monthly >
-    calendar-date > anomaly) and keeps the top N.
-
-    This prevents a single country with thousands of stations (e.g. USA)
-    from flooding the draft queue on record-breaking days.
+    This qualifies available accepted station samples, not complete physical
+    history, simultaneous observations or an official record.
     """
-    def _signal_rank(b: ExtremeSignalBundle) -> int:
-        score = 0
-        if b.all_time_high or b.all_time_low:
-            score += 100
-        if b.monthly_high or b.monthly_low:
-            score += 10
-        if b.absolute_extreme:
-            score += 8
-        if b.calendar_date_high or b.calendar_date_low:
-            score += 5
-        if b.anomaly_hot or b.anomaly_cold:
-            score += 2
-        return score
-
-    by_country: dict[str, list[ExtremeSignalBundle]] = {}
-    for b in bundles:
-        by_country.setdefault(b.country or "UNKNOWN", []).append(b)
-
-    out: list[ExtremeSignalBundle] = []
-    for country, group in by_country.items():
-        ranked = sorted(group, key=_signal_rank, reverse=True)
-        out.extend(ranked[:max_per_country])
-    return out
+    if not isinstance(provenance, dict) or not isinstance(provenance.get("variables"), dict):
+        return False
+    scope = provenance["variables"].get(variable)
+    return isinstance(scope, dict) and (
+        provenance.get("reconciled") is True
+        and provenance.get("station_id") == station_id
+        and provenance.get("comparison_before") == valid_date
+        and provenance.get("source_product") == GHCN_SOURCE_PRODUCT
+        and bool(provenance.get("source_payload_sha256"))
+        and bool(provenance.get("retrieved_at"))
+        and not scope.get("conflicting_dates")
+        and scope.get("candidate_accepted") is True
+        and scope.get("source_coverage_complete") is True
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -713,7 +688,8 @@ def check_extreme_signals_for_stations(
 
     Mirrors check_extreme_signals_for_cities() from open_meteo.py:
       returns (bundles, country_records)
-      bundles — only stations that fired at least one signal
+      bundles — every station/date that fired at least one signal; publication
+                limits belong to the downstream individual editorial selection
       country_records — aggregated across all stations in the sample
 
     Args:
@@ -891,8 +867,8 @@ def check_extreme_signals_for_stations(
             detect_country_records(group, archive_years=archive_years, record_date=signal_date)
         )
 
-    # 5. Dedup: cap at 2 signal-firing bundles per country
-    deduped_signal_bundles = _dedup_by_metro(signal_bundles)
+    # Preserve the complete scientifically qualified supply for regional
+    # detection. The individual-station country cap runs after clustering.
 
     if metrics_out is not None:
         metrics_out.update({
@@ -902,11 +878,14 @@ def check_extreme_signals_for_stations(
             "station_obs_pairs": len(latest_obs),
             "stations_checked": len(all_bundles),
             "raw_signals": len(signal_bundles),
-            "bundles_after_dedup": len(deduped_signal_bundles),
+            "scientific_signal_bundles": len(signal_bundles),
+            # Compatibility alias for existing dashboard consumers; no
+            # editorial country truncation happens in the source anymore.
+            "bundles_after_dedup": len(signal_bundles),
             "country_records": len(country_records),
         })
 
-    return deduped_signal_bundles, country_records
+    return signal_bundles, country_records
 
 
 def _empty_pipeline_metrics() -> dict:
@@ -916,6 +895,7 @@ def _empty_pipeline_metrics() -> dict:
         "station_obs_pairs": 0,
         "stations_checked": 0,
         "raw_signals": 0,
+        "scientific_signal_bundles": 0,
         "bundles_after_dedup": 0,
         "country_records": 0,
         "archive_verification_attempted": 0, "archive_verification_verified": 0,

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import os
 from datetime import date
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from src.state_schema import BotState
+
+if TYPE_CHECKING:
+    from src.data.open_meteo import ExtremeSignalBundle
 
 
 MAX_DRAFTS = 200
@@ -21,6 +24,38 @@ SNOW_ANNUAL_CAP = 8
 SST_ANOM_ANNUAL_CAP = 10
 
 _DEFAULT_DRAFTS_TARGET_PER_CYCLE = 3
+GHCN_INDIVIDUALS_PER_COUNTRY = 2
+
+
+def select_individual_station_bundles(
+    bundles: list["ExtremeSignalBundle"], *, max_per_country: int | None = None,
+) -> list["ExtremeSignalBundle"]:
+    """Apply the existing GHCN individual cap AFTER scientific clustering.
+
+    Moved from ghcn._dedup_by_metro without changing its ranking weights.
+    Forecast city bundles pass through; final triage and spending caps still
+    apply to the resulting complete event candidates.
+    """
+    limit = GHCN_INDIVIDUALS_PER_COUNTRY if max_per_country is None else max_per_country
+
+    def rank(bundle: "ExtremeSignalBundle") -> int:
+        return (
+            100 * bool(bundle.all_time_high or bundle.all_time_low)
+            + 10 * bool(bundle.monthly_high or bundle.monthly_low)
+            + 8 * bool(bundle.absolute_extreme)
+            + 5 * bool(bundle.calendar_date_high or bundle.calendar_date_low)
+            + 2 * bool(bundle.anomaly_hot or bundle.anomaly_cold)
+        )
+
+    by_country: dict[str, list["ExtremeSignalBundle"]] = {}
+    for bundle in bundles:
+        if bundle.station_id:
+            by_country.setdefault(bundle.country or "UNKNOWN", []).append(bundle)
+    selected = [
+        bundle for group in by_country.values()
+        for bundle in sorted(group, key=rank, reverse=True)[:max(0, limit)]
+    ]
+    return selected + [bundle for bundle in bundles if not bundle.station_id]
 
 
 def refill_enabled() -> bool:

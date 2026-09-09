@@ -765,6 +765,20 @@ def compute_thresholds(
                 for label, rows in by_calendar.items()
             },
         }
+        # Retain the actual per-tier comparator alongside its source date.
+        # Downstream regional detection must not trust a changed event value
+        # merely because its enclosing archive carries a qualified boolean.
+        variables[name]["record_values_c"] = {
+            "all_time": peak_sample.value_c if peak_sample else None,
+            "monthly": {
+                label: choose(rows, key=lambda row: row.value_c).value_c
+                for label, rows in period_month.items()
+            },
+            "calendar": {
+                label: choose(rows, key=lambda row: row.value_c).value_c
+                for label, rows in by_calendar.items()
+            },
+        }
     thresholds.provenance = {
         "schema_version": 2, "source_product": "noaa-ghcn-daily-v2",
         "station_id": station_id, "evidence_type": "observed",

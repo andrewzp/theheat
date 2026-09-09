@@ -10,6 +10,7 @@ from src.orchestrator.common import *
 from src.orchestrator.signal_partition import is_us_location, partition_us_world
 from src.data import open_meteo, places
 from src.orchestrator import world_cache
+from src.orchestrator.caps import select_individual_station_bundles
 from src.data.world_thresholds import CityThresholds, compute_city_thresholds, evaluate_city
 from src.data.openmeteo_budget import OpenMeteoBudget, OpenMeteoSaturated
 
@@ -75,22 +76,89 @@ def _records_cluster_member(
     reanalysis samples earlier this year), so guarding here would silently drop world monthly
     members and make the class US-only — the exact failure the tier rework fixes.
     """
+    from src.data.temperature_evidence import finite
+    from src.editorial.records_cluster import _coords
+    from src.two_bot.evidence_contract import audit_story_bundle
+    from src.two_bot.intern import (
+        build_all_time_record_bundle, build_monthly_high_bundle, build_record_bundle,
+    )
+
+    # A run date is not a missing station/forecast valid date. Validate each
+    # prospective member before it reaches the spatial detector or any count.
+    if type(bundle.signal_date) is not date or bundle.signal_date.isoformat() != date_iso:
+        return None
     observed = bool(bundle.station_id)
     ch = bundle.calendar_date_high
     cal_id = (
         ch.event_id
-        if (ch is not None and ch.lat is not None and ch.lon is not None)
+        if (isinstance(ch, RecordEvent) and ch.lat is not None and ch.lon is not None)
         else None
     )
     at = bundle.all_time_high
     mh = bundle.monthly_high
-    if at is not None and at.lat is not None and at.lon is not None:
-        member = _cluster_member_row(at, "all_time", date_iso)
-    elif mh is not None and mh.lat is not None and mh.lon is not None:
-        member = _cluster_member_row(mh, "monthly", date_iso)
-    elif ch is not None and ch.lat is not None and ch.lon is not None:
-        member = _cluster_member_row(ch, "daily", date_iso)
+    ev: RecordEvent | AllTimeRecord | MonthlyRecord
+    if isinstance(at, AllTimeRecord) and at.lat is not None and at.lon is not None:
+        ev, tier = at, "all_time"
+    elif isinstance(mh, MonthlyRecord) and mh.lat is not None and mh.lon is not None:
+        ev, tier = mh, "monthly"
+    elif isinstance(ch, RecordEvent) and ch.lat is not None and ch.lon is not None:
+        ev, tier = ch, "daily"
     else:
+        return None
+    try:
+        if (ev.kind != "high" or ev.signal_date != bundle.signal_date
+            or ev.city != bundle.city or ev.country != bundle.country
+            or not finite(ev.new_temp_c) or not finite(ev.old_record_c)
+            or ev.new_temp_c <= ev.old_record_c
+            or _coords({"lat": ev.lat, "lon": ev.lon}) is None):
+            return None
+        if observed:
+            evidence = ev.evidence
+            baseline = evidence.get("baseline") or {}
+            if not ghcn.record_comparison_qualified(
+                baseline, bundle.station_id, date_iso, "temperature_2m_max",
+            ):
+                return None
+            reading = evidence.get("variables", {}).get("TMAX", {})
+            scope = baseline["variables"]["temperature_2m_max"]
+            if (evidence.get("evidence_type") != "observed"
+                or evidence.get("source_product") != ghcn.GHCN_SOURCE_PRODUCT
+                or evidence.get("station_id") != bundle.station_id
+                or evidence.get("valid_date") != date_iso or evidence.get("unit") != "C"
+                or reading.get("value_c") != ev.new_temp_c
+                or not isinstance(reading.get("qflag"), str) or reading["qflag"].strip()
+                or reading.get("source_payload_sha256") != baseline["source_payload_sha256"]
+                or scope.get("years_with_samples", 0) < ghcn.MIN_ARCHIVE_YEARS
+                or scope.get("verified_source_cutoff") != (bundle.signal_date - timedelta(days=1)).isoformat()):
+                return None
+            period = "calendar" if tier == "daily" else tier
+            prior_day = scope["record_dates"][period]
+            prior_value = scope["record_values_c"][period]
+            if tier != "all_time":
+                period_key = date_iso[5:7] if tier == "monthly" else date_iso[5:]
+                prior_day, prior_value = prior_day[period_key], prior_value[period_key]
+                if scope[f"{period}_years"].get(period_key, 0) < ghcn.MIN_ARCHIVE_YEARS:
+                    return None
+            if isinstance(ev, MonthlyRecord) and ev.month != bundle.signal_date.month:
+                return None
+            prior_date = date.fromisoformat(prior_day)
+            if (not finite(prior_value) or ev.old_record_c != prior_value
+                or ev.old_record_year != prior_date.year or prior_date >= bundle.signal_date
+                or ev.new_temp_c <= prior_value + ghcn.RECORD_MARGIN_C
+                or (tier == "monthly" and prior_date.month != bundle.signal_date.month)
+                or (tier == "daily" and prior_date.strftime("%m-%d") != date_iso[5:])):
+                return None
+        source_name = "ghcn" if observed else "open_meteo"
+        if isinstance(ev, AllTimeRecord):
+            story = build_all_time_record_bundle(ev, source=source_name)
+        elif isinstance(ev, MonthlyRecord):
+            story = build_monthly_high_bundle(ev, source=source_name)
+        else:
+            story = build_record_bundle(ev, source=source_name)
+        if not audit_story_bundle(story).prompt_ready:
+            return None
+        member = _cluster_member_row(ev, tier, date_iso)
+    except (AttributeError, KeyError, TypeError, ValueError, OverflowError):
         return None
     member["place_key"] = bundle.station_id or places.event_location_key(bundle.city, bundle.country, member["lat"], member["lon"])
     member["observed"] = observed
@@ -390,7 +458,7 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
 
             _rows_by_date: dict[str, list[dict]] = _defaultdict(list)
             for _b in bundles:
-                _d = (_b.signal_date or date.today()).isoformat()
+                _d = _b.signal_date.isoformat() if type(_b.signal_date) is date else ""
                 _member = _records_cluster_member(_b, _d)
                 if _member is not None:
                     _rows_by_date[_d].append(_member)
@@ -436,7 +504,13 @@ def run_extreme_signals(bot_state: BotState, current_run: dict | None, cities: l
                         (_rc_bundle, _rc_score, _rc_event_id, _cname, _tier_counts, _date_iso)
                     )
 
-        for bundle in bundles:
+        # Publication diversity must not remove the stations needed to detect
+        # a regional event. Keep the historical individual cap here, after the
+        # complete scientific supply has reached the cluster prepass.
+        individual_bundles = select_individual_station_bundles(bundles)
+        ghcn_pipeline_metrics["individual_station_candidates"] = sum(bool(b.station_id) for b in individual_bundles)
+        ghcn_pipeline_metrics["individual_station_cap_excluded"] = sum(bool(b.station_id) for b in bundles) - ghcn_pipeline_metrics["individual_station_candidates"]
+        for bundle in individual_bundles:
             # Process signals in descending order of priority:
             # all-time > monthly > absolute-extreme > anomaly > calendar-date.
             # The strongest signal wins — we don't draft multiple tweets for the same city.
