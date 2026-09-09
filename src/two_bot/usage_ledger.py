@@ -1,8 +1,8 @@
-"""Retained writer-response usage and table estimates, with explicit gaps.
+"""Retained model-response usage and table estimates, with explicit gaps.
 
-Only the two instrumented writer response sites feed the bounded in-process
-buffer. State-writing runs drain into day/stage/model cumulative aggregates;
-dryruns, replays and other model stages do not establish persisted accounting.
+Writer, checker, critic, safety and news response sites feed a shared bounded
+in-process buffer. State-writing runs drain day/stage/model aggregates.
+Dryruns, replays, late responses and other account usage may never be persisted.
 The buffer retains at most 500 responses; the ledger retains 45 day buckets.
 Each bucket/model retains at most 32 compact cumulative coverage witnesses,
 so contradictory snapshots cannot be hidden by later MAX merges. Overflow
@@ -115,6 +115,7 @@ def record_usage(
     cache_write_tokens: int = 0,
     cache_read_tokens: int = 0,
     usage_complete: bool = True,
+    pricing_supported: bool = True,
 ) -> None:
     """Buffer one provider call's usage. Thread-safe (writer samples run in a
     ThreadPoolExecutor). Never raises — the ledger must not take down a call
@@ -122,7 +123,7 @@ def record_usage(
     try:
         quantities = (input_tokens, output_tokens, cache_write_tokens, cache_read_tokens)
         complete = usage_complete is True and all(type(value) is int and 0 <= value <= _TOKEN_CLAMP for value in quantities)
-        priced = complete and any(_price_for(str(model)))
+        priced = complete and pricing_supported is True and any(_price_for(str(model)))
         usd = estimate_usd(str(model), input_tokens=input_tokens, output_tokens=output_tokens,
                            cache_write_tokens=cache_write_tokens, cache_read_tokens=cache_read_tokens) if priced else 0.0
         row = {
@@ -145,34 +146,46 @@ def record_usage(
         print(f"[usage_ledger] record error (ignored): {exc!r}")
 
 
-def record_writer_response(response: Any, model: str, provider: str) -> None:
-    """Observe existing successful responses; never call/retry a provider here.
+def record_response(stage: str, response: Any, model: str, provider: str) -> None:
+    """Observe one returned response without changing provider/output behavior.
 
-    Missing metadata records an unpriced response, not a known billed charge.
-    Provider failures before a response remain outside this capture scope.
+    Capture precedes text parsing, outside transport retries. A missing or
+    raising metadata object records one unpriced response; pre-response errors
+    do not invent a response. Google token semantics and tool charges are not
+    priced by the Anthropic-only table, even for a coincident model name.
     """
+    values: dict[str, Any] = {}
+    complete = False
     try:
-        usage = getattr(response, "usage" if provider == "anthropic" else "usage_metadata", None)
-        if usage is None:
-            record_usage("writer", model, usage_complete=False)
-            return
-        def optional_count(field):
-            value = getattr(usage, field, None)
-            return 0 if value is None else value
+        if provider in {"anthropic", "google"}:
+            usage = getattr(response, "usage" if provider == "anthropic" else "usage_metadata", None)
+            if usage is not None:
+                def optional_count(field):
+                    value = getattr(usage, field, None)
+                    return 0 if value is None else value
 
-        values: dict[str, Any]
-        if provider == "anthropic":
-            values = {"input_tokens": getattr(usage, "input_tokens", None),
-                      "output_tokens": getattr(usage, "output_tokens", None),
-                      "cache_write_tokens": optional_count("cache_creation_input_tokens"),
-                      "cache_read_tokens": optional_count("cache_read_input_tokens")}
-        else:
-            values = {"input_tokens": getattr(usage, "prompt_token_count", None),
-                      "output_tokens": getattr(usage, "candidates_token_count", None),
-                      "cache_read_tokens": optional_count("cached_content_token_count")}
-        record_usage("writer", model, **values)
-    except Exception:  # Metadata access itself can fail on an otherwise successful response.
-        record_usage("writer", model, usage_complete=False)
+                if provider == "anthropic":
+                    values = {"input_tokens": getattr(usage, "input_tokens", None),
+                              "output_tokens": getattr(usage, "output_tokens", None),
+                              "cache_write_tokens": optional_count("cache_creation_input_tokens"),
+                              "cache_read_tokens": optional_count("cache_read_input_tokens")}
+                else:
+                    values = {"input_tokens": getattr(usage, "prompt_token_count", None),
+                              "output_tokens": getattr(usage, "candidates_token_count", None),
+                              "cache_read_tokens": optional_count("cached_content_token_count")}
+                complete = True
+    except Exception:  # Metadata access cannot turn a returned response into a retry.
+        values = {}
+    try:
+        record_usage(stage, model, usage_complete=complete,
+                     pricing_supported=provider == "anthropic", **values)
+    except Exception:  # Accounting failure must neither retry nor change stage disposition.
+        pass
+
+
+def record_writer_response(response: Any, model: str, provider: str) -> None:
+    """Compatibility entry point for the two existing writer capture sites."""
+    record_response("writer", response, model, provider)
 
 
 def _valid_agg(raw: Any) -> dict:

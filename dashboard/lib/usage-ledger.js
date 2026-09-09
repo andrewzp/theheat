@@ -129,15 +129,19 @@ export function summarizeUsage(state, { now = Date.now() } = {}) {
     recorded_calls: available ? calls : null, priced_calls: available ? pricedCalls : null,
     unpriced_calls: available ? unpricedCalls : null, missing_usage_calls: available ? missingUsage : null,
     legacy_calls: available ? legacyCalls : null, legacy_rows: legacyRows, inconsistent_rows: inconsistent, excluded_rows: excluded,
-    untracked_stages: ["fact_check", "critic", "safety", "newsworthiness"],
-    scope: "Instrumented writer responses in state-writing runs only; table estimates, not account totals or invoices.",
+    instrumented_stages: ["writer", "fact_check", "critic", "safety", "newsworthiness_search", "newsworthiness_verify"],
+    untracked_stages: ["workflow_agents", "other_account_usage"],
+    scope: "Instrumented writer, checker, critic, safety and news responses in state-writing runs; table estimates, not account totals or invoices.",
     limitations: [
-      "Other model stages and non-state-writing replays are untracked; no budget enforcement is implemented here.",
-      "Pre-response failures, dropped buffers and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
+      "Instrumented stages describe this code version, not proof that retained runs captured every call; historical usage is not backfilled.",
+      "Workflow agents, other account usage and non-state-writing evaluations remain untracked; no budget enforcement is implemented here.",
+      "Pre-response failures, late source threads and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
+      "The shared buffer retains 500 responses; new stage traffic can evict earlier writer responses before a drain.",
+      "Google thought/tool/modality/tier and grounding charges are not priced or fully represented; Google responses remain unpriced.",
       "The ledger retains 45 day buckets. MAX cumulative merges can undercount concurrent writers and cannot prove zero spending on missing days.",
       "Coverage keeps up to 32 original cumulative snapshots per day/model; conflicts or overflow make the subtotal unknown.",
-      "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader.",
-    ],
+      "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader."
+],
     budget_enforced: false,
   }
 }

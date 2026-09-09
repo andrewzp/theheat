@@ -7,14 +7,18 @@ import math
 from src.two_bot.usage_ledger import _COVERAGE_FIELDS, _is_valid_day_key, coverage_fields_valid
 from src.two_bot.usage_coverage import count as valid_count, evidence_inconsistent
 
-UNTRACKED_STAGES = ["fact_check", "critic", "safety", "newsworthiness"]
-SCOPE = "Instrumented writer responses in state-writing runs only; table estimates, not account totals or invoices."
+INSTRUMENTED_STAGES = ['writer', 'fact_check', 'critic', 'safety', 'newsworthiness_search', 'newsworthiness_verify']
+UNTRACKED_STAGES = ['workflow_agents', 'other_account_usage']
+SCOPE = 'Instrumented writer, checker, critic, safety and news responses in state-writing runs; table estimates, not account totals or invoices.'
 LIMITS = [
-    "Other model stages and non-state-writing replays are untracked; no budget enforcement is implemented here.",
-    "Pre-response failures, dropped buffers and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
+    "Instrumented stages describe this code version, not proof that retained runs captured every call; historical usage is not backfilled.",
+    "Workflow agents, other account usage and non-state-writing evaluations remain untracked; no budget enforcement is implemented here.",
+    "Pre-response failures, late source threads and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
+    "The shared buffer retains 500 responses; new stage traffic can evict earlier writer responses before a drain.",
+    "Google thought/tool/modality/tier and grounding charges are not priced or fully represented; Google responses remain unpriced.",
     "The ledger retains 45 day buckets. MAX cumulative merges can undercount concurrent writers and cannot prove zero spending on missing days.",
     "Coverage keeps up to 32 original cumulative snapshots per day/model; conflicts or overflow make the subtotal unknown.",
-    "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader.",
+    "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader."
 ]
 
 
@@ -89,6 +93,6 @@ def summarize_usage(state, *, now=None) -> dict:
         "missing_usage_calls": missing_usage if available else None,
         "legacy_calls": legacy_calls if available else None,
         "legacy_rows": legacy_rows, "inconsistent_rows": inconsistent, "excluded_rows": excluded,
-        "untracked_stages": list(UNTRACKED_STAGES), "scope": SCOPE, "limitations": list(LIMITS),
+        "instrumented_stages": list(INSTRUMENTED_STAGES), "untracked_stages": list(UNTRACKED_STAGES), "scope": SCOPE, "limitations": list(LIMITS),
         "budget_enforced": False,
     }

@@ -14,9 +14,9 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
-    "src/two_bot/critic.py": "60092dccc12420b5065fd53205243992096755859766b793d7a166ca696bde2e",
+    "src/two_bot/critic.py": "fee5cc8bc1caa92cbd807bbdfcd4999d3af243650764a7f2727f736a94e0b3a2",
     "src/two_bot/evidence_contract.py": "4fdf6237b57fc708c195a2d91795845ab21d0704545cc6d7fe1a2f5c994b591a",
-    "src/two_bot/fact_check.py": "d23ce9825e8dad67d374d9c23ba69a7d21afacb075fdd65386435c7534ace4db",
+    "src/two_bot/fact_check.py": "3f73e8bec367ddc3fd78b4ed908a2c9203fc35296b9ced314fb4fc48e096fe62",
     "src/two_bot/intern/__init__.py": "dcffb07bbe259b7f179f6b341500afc0d8df47ab2dd8b010315da8ce798d14b1",
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
     "src/two_bot/intern/air_quality.py": "c3763ae98e371b373d53bb9c44ae3f4790010e1f303c45be8738766ca4d22f91",
@@ -40,8 +40,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/strict_contract.py": "319469ca3bcd584b6162364d770b89e44b0698076f10ae92eb9c538368234575",
     "src/two_bot/types.py": "1ca82f8ae83306bfc5e1693f6de14d3da0c0b51c8473429873bd7443cde08d02",
     "src/two_bot/writer.py": "c1a3826765885290eefe48cbda6df364b78cbcfa524ee42c6fad54964cc4a273",
-    "src/voice/safety.py": "356d431ccbd0e5eed0d7c21acfd20cacf6cade1b9d9a2b8654747740af08721e"
+    "src/voice/safety.py": "be3bff564882cf7b5b4105ebc6e76e335454aad238f2ad37e3798b3ccdc96318"
   },
   "schema_version": 1,
-  "source_sha256": "99455fd4bf2ee3439a1b3001821c6a09fbbcb9d3502c4340f4a9c039fe5b913c"
+  "source_sha256": "a1607cd87c09ea8e019bd329f749c6ab15b3ff59487ba7d2735220364dcbdd99"
 }

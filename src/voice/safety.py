@@ -214,6 +214,8 @@ def check_llm(tweet: str) -> tuple[bool, str | None]:
             model=GEMINI_SAFETY_MODEL,
             contents=prompt,
         )
+        from src.two_bot.usage_ledger import record_response
+        record_response("safety", response, GEMINI_SAFETY_MODEL, "google")
         # response.text is Optional — empty answer routes to NO (allow through;
         # regex pipeline already did the deterministic gating).
         answer = (response.text or "").strip().upper()

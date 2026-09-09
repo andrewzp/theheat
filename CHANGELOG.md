@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.14] - 2026-09-09
+
+### Account for existing checker, critic, safety and news responses
+
+- Capture five previously untracked SDK return sites before text parsing. Empty, rejected and malformed responses count; pre-response transport failures do not invent usage. Exact requests, model selection, retries and output behavior are unchanged.
+- Keep Google responses explicitly unpriced under the existing Anthropic-only table. Shared reporting names the current code's instrumented stages while disclosing incomplete historical capture, late responses, shared-buffer eviction and non-state-writing evaluations. Existing legacy estimates and budget-incident behavior are preserved.
+- Validation: 3,661 offline Python tests, 294 dashboard tests and the production build pass; standard Ruff/mypy and both generated contracts pass. Direct newsworthiness type checking reproduces three pre-existing narrowing errors outside the standard mypy scope. A separate AST check confirms all four stage modules are unchanged after removing the five accounting insertions. Private historical checks have no unexpected observations; all 41 paid tests were excluded.
+- No provider invocation, new retry, price-table update, paid evaluation, automatic publication, test tweet or public correction is part of this release. Complete spend attribution, verified Gemini pricing and enforcement remain open.
+
 ## [0.9.108.13] - 2026-09-09
 
 ### Source failure containment, qualified graphics and truthful usage reporting
