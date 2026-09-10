@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.18] - 2026-09-10
+
+- Add a pure local review packet for one qualified station temperature comparison. Bind exact draft revision, evidence, policy, render provenance, PNG bytes and generated alt text.
+- Refuse stale requests, changed source bundles, inconsistent renderer assets and altered packets, including edits that recompute their own hashes. Preserve explicit synthetic and unreviewed status; matching content never grants publication approval.
+- Keep the packet separate from production state, model calls, rendering, uploads and publishing. Private package assembly and joint semantic review remain follow-up work.
+
 ## [0.9.108.17] - 2026-09-09
 
 - Require the safety model to complete with an unambiguous answer. Missing credentials, provider failures and invalid output block drafting/posting instead of becoming passes; existing posting paths revoke obsolete approval and retain the draft.
