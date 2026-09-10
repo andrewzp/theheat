@@ -11,6 +11,184 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-10 — Daily corpus grading (0 fresh drafts; 49th consecutive; billing outage still open, dry spell now 49 days — `main`'s engineering wave continues, 5 more commits, still no billing fix)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is now `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), 5 commits past yesterday's `03cce77` read (PR #521–#525, all
+`codex/*` branches merged by the operator, 66 files / +4,414/-387 lines). None touch
+`docs/DRAFT_CORPUS.md`, `docs/QUALITY_TREND.md`, or `docs/IMPROVEMENT_PLAN.md`; commit
+subjects ("bound news verification calls," "retain local command evidence," "require
+completed safety checks," "report unknown LLM costs," "qualified weather graphics") read as
+continued reliability/observability hardening, not a billing or publishing-resume change.
+Checked out `daily-plan-current`; `git rebase origin/main` conflicted on the same known
+pre-merge Jul 7 commit as every prior attempt, aborted per the runbook fallback.
+`git merge-base --is-ancestor 4b4d965 origin/main` still returns true — nothing this routine
+owns is missing from the rolling branch. Gist read via git-clone path (success, no rate
+limit).
+
+**Queue: 0 pending, unchanged from Sep 9.** Total draft count held flat at **40** (38 posted,
+0 rejected, 2 approved) — a **19th consecutive day** with no change. The most recent
+`created_at` across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has
+been created in **49 days**.
+
+**Billing outage: still open, 5 pairs this cycle (abort cadence back up from Sep 9's 2).**
+Since the last pull's cutoff (08:32:23Z Sep 9), **5** `budget_exhausted` + `billing_cycle_abort`
+pairs: 16:17:28Z, 19:00:48Z, 22:12:00Z (Sep 9), then 02:18:06Z, 08:35:33Z (Sep 10) — **~55
+candidates skipped total** (16/12/14/7/6, summed from each run's `triaged_out` counts in
+`run_history`). All five cite the identical writer error verbatim: *"anthropic writer:
+provider billing exhausted: ... 'Your credit balance is too low to access the Anthropic API.
+Please go to Plans & Billing to upgrade or purchase credits.'"* **Cross-checked against GitHub
+issue #462**, updated **2026-09-10T11:33:56Z**, citing **"5 draft(s) died with
+`budget_exhausted` in the last 24h (latest 2026-09-10T08:35:33.426243Z)"** — matches this
+session's read exactly, down to the microsecond. **GitHub issue #467** ("Workflow failing:
+voice-regression") updated **2026-09-09T16:47:35Z** (moved since Sep 9's report but still
+citing the same "20 consecutive failed run(s)" — no material change). **GitHub issue #500**
+(`refresh-thresholds`) unchanged since **2026-09-06T11:09:15Z**, now **11 days** old (opened
+Aug 30), last green run still 2026-08-16T03:04:44Z. **The rolling PR (#207) is still open,
+unmerged, since 2026-06-09** — **93 days** now.
+
+**New this cycle: `publication_control` now carries an explicit structured policy record,**
+consistent with Sep 9's PR #511 ("Pause automatic publishing... across runtimes"):
+`epoch: "p00b-paused-2026-09-09"`, `enabled: false`, `reason: "Automatic publication is
+paused. Ingestion and review remain available."` Every `auto_publish_due` run in this pull's
+`run_history` reports `status: "skipped"` with that same reason string. This is the first
+cycle where the pause is visible as first-class state rather than inferred from source notes
+— confirms PR #511 is live in the data this routine reads, independent of the billing outage
+(publishing would stay paused even if credits were topped up right now, until the operator
+lifts this epoch).
+
+**The writer-killed slot rotated off the record-type station entirely for the first time in
+this streak.** Sep 9's two carried-over aborts (02:20:13Z, 08:32:23Z — already counted in
+yesterday's entry) were the last to die on `all_time_high_USC00088368_2026-09-05` (S Bay,
+FL). The next three (16:17:28Z, 19:00:48Z, 22:12:00Z, all Sep 9) died on
+`dust_loc1-pl0467-pt240af9c59868f95c_2026-09-09_tier2` (**Riyadh, Saudi Arabia**,
+`dust_event`, score 75). Then one (02:18:06Z, Sep 10) died on `sst_anom_nino34_tier1_2026-09-08`
+(**Niño 3.4**, `regional_sst_anomaly`, score 78) — the first `regional_sst_anomaly` candidate
+ever observed holding this slot. The last (08:35:33Z, Sep 10) rolled back to Riyadh dust_event,
+its own event date advanced one day (`_2026-09-10_tier2`) — the same same-station date-roll
+sub-pattern first seen Sep 8 on Casey, IL, now confirmed on a second, different station and
+signal type. Three distinct candidates held the slot in a single pull for the first time in
+this streak (previously: one station per pull, occasionally two).
+
+**Score-gate near-misses, read across this pull's suppression window (Sep 9T02:17Z through
+Sep 10T08:33Z).** The `fire_footprint` cluster is **byte-for-byte identical between this
+pull's two full readouts** (02:17:50Z Sep 9 and 02:15:13Z Sep 10): same 15 items (1 tier2 at
+124,992 ha Oregon lead + 2 tier1 [`WACOA-260140`, `UTFIF-260341`] + 12 tier0), same scores,
+same IDs — a genuine static cluster, not just a description carried forward. Note: this
+pull's window shows **15** items where Sep 9's entry cited **16** for the same cluster; both
+readouts visible to *this* pull agree with each other at 15, so the discrepancy most plausibly
+reflects one item aging out of the fixed 100-entry suppression window between pulls rather
+than a real one-item contraction — flagged rather than silently reconciled. `fire` near-misses
+this pull are the widest geographic spread logged yet: a dense 15-point Texas Gulf Coast
+cluster around ~29.6°N, -94.3°W (Sep 9, repeating coordinates suggests either a real
+multi-point marsh/agricultural burn or a stationary industrial flare artifact — worth an
+operator sanity check whenever fire drafting resumes), plus single points in Wyoming,
+Oklahoma, Kansas, the Northern Territory/Queensland Australia pair (held over from Sep 9),
+Tanzania, Brazil (Bahia), and Western Australia (~-20.6°, 127.7°, Sep 10) — first appearances
+this streak for the three US Great Plains states and for Tanzania/Brazil together in one
+pull. Two near-miss categories not seen in recent corpus entries also surfaced: `anomaly`
+(2 `anomaly_hot` instances, scores 71-72, just under an apparent ~73-75 gate) and `record_low`
+(1 `cal_low` instance, score 68). `usgs_earthquake`, `snow_extreme`, the China
+`cyclone_land_threat` near-miss, the `RQC00660152` anomaly near-miss, and the Trujillo Alto, PR
+`record` near-miss remain absent from this pull's window — consistent with the fire cluster's
+volume continuing to dominate the fixed-size view.
+
+**`gpm_imerg` now reports the root cause explicitly instead of a generic HTTP 401.** All four
+`gpm_imerg` failures this pull (16:16:58Z, 19:00:16Z, 22:11:04Z Sep 9; 02:17:51Z, 08:35:10Z
+Sep 10 — 5 total) read *"EARTHDATA_TOKEN expired at 2026-08-22T15:18:07+00:00; renew the
+credential before GPM collection"* — a more specific error message than the generic "HTTP 401"
+string logged through Sep 8, suggesting an upstream code change now surfaces the credential
+check directly (consistent with this cycle's `main` wave, though none of the 5 read PR bodies
+mentioned `gpm_imerg` specifically). `credential_expiry.EARTHDATA_TOKEN` itself is unchanged:
+`expires_at: 2026-08-22T15:18:07Z` — now **19 days past expiry**, still unrenewed. `gdacs`
+continued its known GeoRSS schema-drift failure, unchanged.
+
+**`state_size`'s peak this pull is 3,740,060B (~3.74MB, 2026-09-10T11:37:07Z)** — a new high,
+up from Sep 9's cited peak of 3,669,687B (+~70KB in one day, the largest single-pull jump
+logged in several cycles). Growth continues with no plateau; GitHub issue #390's Jul 7 800KB
+warning threshold remains far exceeded (the state is now ~4.7x that threshold).
+
+**Staleness review as of 2026-09-10 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write
+MCP tool available this session. Skipped per the hard constraints, logged rather than failing
+the cycle — **104th consecutive skip** (May 13 → Sep 10). Moot regardless: nothing to reject.
+
+### Patterns / operational notes
+
+1. **49 consecutive zero-fresh-draft cycles, all attributable to the same single root cause**
+   (Anthropic API billing exhaustion, confirmed live in every cycle's suppression log and
+   independently corroborated by GitHub issue #462 every day since it opened Jul 23). This is
+   an infra/billing blocker, not a voice-quality regression — no new voice evidence can
+   accumulate until it's fixed.
+2. **`main`'s engineering wave continued for a 2nd cycle** — 5 more commits (PR #521-525,
+   Sep 9 evening) on top of Sep 9's 13-commit wave, still none touching billing/publishing
+   resumption per commit subjects and still none touching this routine's three docs. The wave
+   now spans 18 commits across 2 days after the prior 46-day freeze.
+3. **`publication_control` surfaced as explicit first-class state for the first time this
+   cycle**, confirming PR #511's pause policy (`epoch: "p00b-paused-2026-09-09"`,
+   `enabled: false`) is live independent of the billing outage — publishing stays paused by
+   policy even after credits are restored, until the operator lifts the epoch. Worth watching
+   for an epoch change as the actual resumption signal, separate from the billing fix.
+4. **The writer-killed slot rotated through 3 distinct candidates in one pull for the first
+   time in this streak** (S Bay FL all_time_high carried over from Sep 9 → Riyadh dust_event →
+   Niño 3.4 regional_sst_anomaly, the type's first-ever slot hold → back to Riyadh dust_event
+   on an advanced event date) — the underlying candidate/triage pipeline is still churning
+   normally; only the writer step is dark.
+5. **Two infra defects remain open and independently fixable, untouched by the `main` wave:**
+   `EARTHDATA_TOKEN` now 19 days past expiry (keeping `gpm_imerg`/`precipitation_extreme` dark
+   regardless of billing), and issue #500 (`refresh-thresholds`) now 11 days open.
+6. **The rolling PR (#207) is now 93 days open**, unmerged since 2026-06-09.
+   `main`'s copies of these three docs remain frozen at their Jul 6/Jul 24 states even as
+   `main`'s code keeps moving.
+7. **`docs/IMPROVEMENT_PLAN.md`'s duplicated daily-narrative table cells continue growing**
+   (flagged Sep 7, still true; several cells now comfortably exceed 20,000 characters). Still
+   outside this routine's editing mandate to restructure unilaterally.
+8. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for any proposal. P_dust/P_tier/P9 remain CONFIRMED with tracking closed; the
+   remaining unimplemented proposals (P_close, P_compound, A7, A8) are unchanged since Jul 23.
+
+### Followups (in priority order)
+
+1. **Operator: top up Anthropic API credits.** Per issue #462's own text, this is the entire
+   fix for the billing outage — the single highest-priority item blocking all further editorial
+   supply and voice-quality measurement. Now 49 days unresolved; today's `main` commits again
+   do not touch it.
+2. **Operator: once credits are topped up, also lift the `publication_control` pause epoch**
+   (`p00b-paused-2026-09-09`, `enabled: false`) — per PR #511's own design, billing recovery
+   alone will not resume automatic publishing; the epoch is a separate, deliberate gate.
+3. **Operator: renew the `EARTHDATA_TOKEN` NASA Earthdata credential** (expired 2026-08-22,
+   now 19 days past expiry) — a second, independently-fixable infra defect, untouched by the
+   `main` wave.
+4. **Operator: investigate GitHub issue #500** (`refresh-thresholds` workflow failing since
+   2026-08-30, last green 2026-08-16) — a third, independently-fixable infra defect, also
+   untouched by the `main` wave.
+5. **Operator: merge or close rolling PR #207** (93 days open, unmerged since Jun 9) so `main`'s
+   copies of these three docs stop drifting further from the live state.
+6. **Operator: sanity-check the Texas Gulf Coast fire near-miss cluster** (~29.6°N, -94.3°W,
+   15 repeating-coordinate suppression entries Sep 9) once fire drafting resumes — the tight
+   coordinate repetition is consistent with either a real multi-point burn or a stationary
+   industrial/flare-stack FIRMS artifact.
+7. **P_close, P_compound, A7, A8 remain ready for implementation** once fresh drafts resume —
+   see `docs/IMPROVEMENT_PLAN.md` for full specs, all unchanged since Jul 23.
+
+### Numbers
+
+- Pending drafts in queue: 0 (49th consecutive zero-fresh-draft cycle)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent measured cycle: 50%, 2/4, 2026-07-23 — not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close/P_compound/A7/A8 unchanged since
+  Jul 23; P_dust/P_tier/P9 SHIPPED+CONFIRMED, tracking closed)
+- Staleness bulk-reject: 0 candidates (moot, 0 pending); write skipped — `gh` CLI absent, no
+  gist-write MCP tool available (104th consecutive skip, May 13 → Sep 10)
+- Operational anomalies: billing outage 49 days open (issue #462); EARTHDATA_TOKEN 19 days past
+  expiry; issue #500 11 days open; rolling PR #207 93 days open; `main`'s engineering wave
+  continued a 2nd cycle (5 more commits, PR #521-525, still no billing/publish-resume change);
+  `publication_control` now exposes an explicit paused epoch (`p00b-paused-2026-09-09`)
+  confirming PR #511 is live and that publishing stays gated independent of the billing fix
+
+---
+
 ## 2026-09-09 — Daily corpus grading (0 fresh drafts; 48th consecutive; billing outage still open, dry spell now 48 days — but `main` breaks a 46-day silence with a 13-commit engineering wave)
 
 **Context:** Step 0 fetched and hard-reset `main` — this pull's `main` tip is `03cce77` (Sep
