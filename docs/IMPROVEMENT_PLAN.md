@@ -2,6 +2,329 @@
 
 Living plan for closing the gap between the bot's current voice quality and the **resumption bar** (majority A-grade rate per cycle). Refined daily by the autonomous grading agent (cron `0 15 * * *`), reviewed and implemented by the human operator.
 
+> **Jul 19: 4 fresh drafts, 25% A-rate (n=4) — same rate as Jul 18, execution- and signal-mix
+> driven.** 9 pending (5 Jul 17–18 carry-overs unchanged: Deaver A-, Delhi B+, Anchorage B, Astana
+> B+, Wausaukee A-; 4 fresh, 3 of them `absolute_extreme`). 1 A-: Ahvaz, Iran `absolute_extreme`
+> (score 84; fresh idiom-flip close, "shade is infrastructure, not comfort" — declarative,
+> unstranded, breaks cleanly from A8's reused-clause axis). 2 B+: W Allis, Wisconsin
+> `all_time_high` (P_compound overcome by "overwhelms that buffer" — same Great-Lakes
+> buffer-failure mechanism as Jul 18's Wausaukee, one day apart in record date, weaker verb); Al
+> Basrah, Iraq `absolute_extreme` (**repeats Jul 17 Basrah's exact stranded-mechanic failure** — a
+> genuinely declarative buffer-failure line buried as a sentence-1 qualifier while the actual
+> closer is a bare peer-comparison fact, "Nearby Basrah is forecast to hit 50.6°C the same day").
+> 1 B: Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` (mechanism-only close, no threshold
+> framing at all — breaks from A8's opener-skeleton shape). **Headline: A8 clears its promotion
+> bar on both remaining axes.** The stranded-mechanic shape recurs a 2nd time (Jul 17 Basrah, Jul
+> 19 Al Basrah) and the reused survivability-threshold clause a 3rd (Jul 10 Ahvaz "shade and rest
+> alone stop being enough" → Jul 17 Basrah "shade and stillness stop being enough" → Jul 19 Al
+> Basrah "shade, hydration, and rest stop being adequate buffers") — both now promoted to active
+> below. P_close 26th cycle (1 positive, 2 failing). P_compound 14th cycle (W Allis, overcome).
+> A4/A5/A6/A7 not tested (no target-type draft this cycle). Zero Wodehouse violations, 4th
+> consecutive cycle. P_tier/P_dust/P9 remain CONFIRMED, tracking closed — all 3 fresh
+> `absolute_extreme` drafts stayed clean of the banned tier-jargon form. **Operational notes:** 2
+> Jul-17 `absolute_extreme` carry-overs (Basrah B+, Al Basrah A-) dropped from the queue, cause
+> unconfirmed — same recurring contraction pattern. 0 strict staleness candidates; 1 watch item
+> (Ahvaz, forecast-date-elapsed under 48h — same open PR #385 auto-reject question as Jul 11/18).
+> `gh` CLI absent, 51st consecutive skip. **Process correction, logged for the operator:** this
+> session's Step 0 initially synced only to `main`, which was many cycles behind the rolling
+> `daily-plan-current` branch (unmerged since 2026-06-08) and led to briefly re-grading
+> already-graded carry-overs before the mistake was caught — corrected by checking out
+> `daily-plan-current` directly (confirmed running with no gap since Jul 7). Recommend merging
+> `main` soon, or clarifying Step 0 to check the rolling branch first when one exists.
+>
+> **Jul 18: 4 fresh drafts, 25% A-rate (n=4) — comedown from Jul 17's 80%, signal-mix driven
+> (zero fresh `absolute_extreme` this cycle, the type that carried 3 of Jul 17's 4 A-grades).** 7
+> pending (3 Jul 17 carry-overs unchanged: Basrah B+, Deaver WY A-, Al Basrah A-; 4 fresh, drawn
+> from `precipitation_extreme` ×2 and `air_quality_hazard` ×1 instead). 1 A-: Wausaukee, Wisconsin
+> `all_time_high` (P_compound double-qualifier overcome by "without the lake bleeding it off
+> first," a named-absence declarative). 2 B+: Delhi, India `air_quality_hazard` (WHO 10.8× stated;
+> the strongest device this signal type has produced — a monsoon expectation-reversal, "rains are
+> supposed to wash the air... the seasonal scour isn't keeping up" — graded conservatively as
+> P_close FAILING per the established `air_quality_hazard` precedent, though flagged explicitly as
+> a genuine judgment call that a future grader might read as this type's first P_close-POSITIVE
+> instance); Astana, Kazakhstan `precipitation_extreme` (lands the exact baseline-comparison move
+> P9 prescribed before its own tracking closed — companion-city triple + annual-average contrast,
+> "three cities delivered a sixth of that at once" — but the arithmetic is genuinely ambiguous
+> per-city vs. combined, a new clarity/accuracy risk distinct from the four already-catalogued
+> Wodehouse violations, capping it below A-). 1 B: Anchorage, Alaska `precipitation_extreme`
+> (mechanism-only close, 51× ratio unstated, P_close FAILING). **Headline: A7 promoted from
+> awaiting-evidence to an active proposal.** Anchorage's close — "compress moisture into short,
+> intense bursts" — is the 3rd instance (Jun 26 → Jul 9 → Jul 18) of the same
+> "wring-out/compress-moisture...bursts" phrase family on one station, and the 2nd location (after
+> Randolph, Jun 24 → Jul 14) confirming the "writer reuses its own prior closing construction"
+> pattern past the 2-location promotion bar A7's Jul 14 filing set. P_close 25th cycle (1
+> positive, 1 conservatively-failing, 1 partial/ambiguous, 1 failing). P_compound 13th cycle
+> (Wausaukee, overcome). A4/A5/A6/A8 not tested (no signal-kind-self-naming/cyclone/fire/fresh-
+> `absolute_extreme` draft this cycle). Zero Wodehouse violations, 3rd consecutive cycle.
+> P_tier/P_dust/P9 remain CONFIRMED, tracking closed — untested this cycle (no fresh
+> `absolute_extreme`) but not reopened. **Operational notes (not voice proposals):** 4 Jul-17
+> drafts dropped from the queue, cause unconfirmed — Bandar-E Mahshahr A-, Tunis A-, interior
+> Alaska fire B+, and notably the **western Siberia fire cluster**, the corpus's longest-standing
+> staleness candidate (5 consecutive unactioned cycles), plausibly the operator finally acting on
+> the repeated reject recommendation, though cause isn't confirmable from the gist alone. 0 strict
+> staleness candidates this cycle; **2 watch items** (Basrah ~37.0h, Al Basrah ~29.1h, both
+> forecast-date-elapsed-but-under-48h) — reopens the still-unresolved Jul 11 question of whether
+> PR #385's forecast-elapsed auto-reject is age-gated by design or has a coverage gap, since
+> neither draft was removed ~12–15h past its stated forecast date. `gh` CLI absent, 50th
+> consecutive skip (May 13 → Jul 18).
+>
+> **Jul 17: 5 fresh drafts, 80% A-rate (n=5) — first n≥5 bar-clearing cycle since Jun 29's
+> 80%/n=5, and a materially stronger read than Jul 16's small-n 100%.** 7 pending (2 Jul 11 fire
+> carry-overs unchanged: interior Alaska B+, western Siberia cluster B+; 5 fresh). 4 A-:
+> Bandar-E Mahshahr, Iran `absolute_extreme` ("the air has nowhere to cool" — named-absence
+> declarative, clean P_tier form); Deaver, Wyoming `all_time_high` (score 91, batch high; 111yr
+> archive — longest in corpus — P_compound double-qualifier overcome by "the terrain that blocks
+> moisture also traps heat"); Al Basrah, Iraq `absolute_extreme` ("one of the few places on earth
+> where outdoor survival becomes genuinely contested" — batch's strongest declarative, no
+> hedging); Tunis `hot10` (leaderboard-aggregate reframe — "heat this far from seasonal average
+> has stopped arriving one city at a time," a genuinely new close-shape, 1st cross-cohort framing
+> in the corpus). 1 B+: Basrah, Iraq `absolute_extreme` — **stranded mechanic**: its one real
+> declarative move ("shade and stillness stop being enough") is buried mid-sentence-1 as a
+> qualifier instead of landing in the closer; the actual close is hedged ("rarely what the dry
+> number suggests"), P_close FAILING despite a real declarative existing elsewhere in the draft.
+> Also a near-verbatim reuse of Jul 10 Ahvaz's "shade and rest alone stop being enough" — **new
+> awaiting-evidence item A8 filed**, covering both this reused clause (2 instances now) and a
+> same-cycle 3-of-3 `absolute_extreme` opener-skeleton convergence ("[City] is forecast to hit
+> XX°C — [above/just inside] the 47°C threshold where..."). P_close 24th cycle (4 positive, 1
+> failing — best single-cycle ratio yet). P_compound 12th cycle (Deaver WY, overcome, same
+> soften-not-cap pattern). P5: `all_time_high`/`absolute_extreme` self-select again; `hot10`
+> confirms a 2nd self-selecting instance (Tunis, after Oslo). A4/A5/A6/A7 not tested (no
+> target-type draft). **Zero Wodehouse violations, 2nd consecutive cycle.** P_tier/P_dust/P9
+> remain CONFIRMED — all 3 `absolute_extreme` drafts today stayed clean of the banned tier-jargon
+> form, further supporting the fix. **Operational notes (not voice proposals):** likely
+> duplicate-signal generation (Basrah/Al Basrah, same metro area, 47.9°C vs 48°C, 8h apart —
+> graded independently per the Jul 3 precedent, and correctly: their quality diverges sharply);
+> signal-mix monoculture (3 of 5 fresh drafts `absolute_extreme`, all Persian Gulf/lower-
+> Mesopotamian — the 80% A-rate leans on that type's current strength more than a fully diverse
+> batch would). **Western Siberia fire cluster now unactioned for a 5th consecutive cycle
+> (~152.8h), the corpus's longest-standing staleness candidate to date.** Write skipped — `gh`
+> CLI absent, no gist-write tool available via the GitHub MCP server this session (49th
+> consecutive skip, May 13 → Jul 17).
+>
+> **Jul 16: 2 fresh drafts, 100% A-rate (n=2) — first 100%-of-cycle reading since Jun 22's
+> retroactive n=1.** Queue contracted sharply: 4 of Jul 15's 6 pending drop (Stevensville A-,
+> Riyadh dust_event B+, Tepee Creek B+, Basrah A-), leaving only the 2 Jul 11 fire carry-overs
+> (interior Alaska B+, western Siberia cluster B+, both unchanged) plus 2 fresh. **Operational
+> finding:** `main`'s `bot.yml` posting/drafting/leaderboard schedules were stopped 2026-07-14
+> 12:49 ET (`#441`) and restored 2026-07-15 22:46 ET (`#449`) — this timeline lines up exactly
+> with Jul 15's zero-fresh-draft cycle and today being the first fresh drafts since the restore
+> (Powderville 10:05 UTC, Oslo 14:09 UTC), and is the likely (if unconfirmed) explanation for
+> today's contraction too. 2 A-: Powderville, Montana `all_time_high` (63yr archive, 4°F margin —
+> P_compound double-qualifier present, 11th cycle, overcome by a declarative named-absence close,
+> "no marine layer... no terrain to interrupt heat building," same family as Basrah's "no
+> evaporative relief"); Oslo `hot10` (+10.4°C July anomaly — peer/climate-analogy comparison +
+> declarative accelerating-warming reframe, "is what a warmer baseline looks like at high
+> latitudes," same interpretive-reframe shape as Jun 29's marine_heatwave A-; first `hot10` draft
+> graded under this framework, n=1). P_close 23rd cycle (2 positive, 0 failing) — with P_tier,
+> P_dust, and P9 all shipped and confirmed (Jul 14), **P_close and P_compound are now the only
+> two structural levers left** between the pipeline and a sustained majority-A cycle, and today's
+> cycle is a clean small-n demonstration of both landing correctly in the same draft. P_compound
+> 11th cycle (Powderville, overcome). P5: `all_time_high` self-selects again (extreme-heat/record
+> family streak extends); `hot10` self-selects a real mechanic on its corpus debut. A4/A5/A6/A7
+> not tested (no target-type draft). **1 strict staleness bulk-reject candidate, 4th consecutive
+> unactioned cycle and the corpus's oldest to date:** western Siberia fire cluster (~128.7h,
+> present-tense "today" still in the text). Write skipped — `gh` CLI absent, no gist-write tool
+> available via the GitHub MCP server this session (48th consecutive skip, May 13 → Jul 16).
+>
+> **Jul 15: 0 fresh drafts; queue contracted from 8 to 6 (Randolph, Utah `all_time_high` B+
+> and Ontario, Canada `fire` C+ both drop, cause unconfirmed).** Remaining 6 pending are an
+> exact match to prior grading — Stevensville, Maryland `all_time_high` (A-, Jul 9), Riyadh,
+> Saudi Arabia `dust_event` (B+, Jul 10), Tepee Creek, Montana `all_time_high` (B+, Jul 10),
+> interior Alaska `fire` (B+, Jul 11), western Siberia 3-signal `fire` cluster (B+, Jul 11),
+> Basrah, Iraq `absolute_extreme` (A-, Jul 14); no re-grading performed, all grades stand.
+> Randolph and Ontario's disappearance is another instance of this plan's recurring
+> unexplained queue-contraction pattern (after Anchorage Jul 10→11, Ahvaz Jul 11→12) — losing
+> Ontario in particular removes the corpus's cleanest live P5 counter-instance test case from
+> the pending queue, though the Jul 14 grading record and its evidence stand regardless of
+> queue presence. No active-proposal evidence updates this cycle (no fresh drafts): **P_close**
+> (22 cycles), **P_compound** (10 cycles), **P5**, **A4/A5/A6/A7** all retain their Jul 14
+> counts and "Last seen" dates. P_tier/P_dust/P9 remain CONFIRMED, tracking closed. **Western
+> Siberia fire cluster crosses into a 3rd consecutive unactioned staleness cycle** (~104.7h old
+> at grading, present-tense "today" still in the text; flagged Jul 13 at ~56.6h, Jul 14 at
+> ~80.6h). Write attempted and skipped — `gh` CLI absent, no gist-write tool available via the
+> GitHub MCP server this session (**47th consecutive skip**, May 13 → Jul 15). Operator should
+> reject the western Siberia draft via dashboard, independent of any A-rate/posting decision.
+>
+> **Jul 14: 3 fresh drafts, 5 carry-overs, 33% A-rate. Headline: P_tier's tracking closes —
+> all three of this plan's shipped code fixes (P_tier, P_dust, P9) are now CONFIRMED.** Basrah,
+> Iraq `absolute_extreme` ([7], A-) is the 2nd independent post-fix confirmation on a named
+> target type (after Jul 10's Ahvaz): "3°C above the 47°C threshold where the body's cooling
+> mechanisms begin to fail faster than they can recover" — no band-label/tier-jargon citation,
+> the same clean form PR #386 prescribed, plus a declarative P_close ("removes the ceiling").
+> 1 B+: Randolph, Utah `all_time_high` ([6], 134yr archive, standard P_compound double-
+> qualifier — 10th cycle; P_close implied/failing — "normally bleeds off the heat that pools
+> across the Great Basin floor" is a near-verbatim echo of this same city's own Jun 24 corpus
+> draft's "normally blunts the heat," 20 days apart, a different record type — **new
+> awaiting-evidence item A7 filed**). 1 C+: Ontario, Canada `fire` cluster ([8], 2,374.8/883.7/
+> 817.1 MW — **P5 counter-instance, breaks fire's 6-cycle self-selection streak**: a bare
+> 3-signal-count restatement with zero ecosystem-specific mechanic, notable because this same
+> cycle's western Siberia carry-over proves the multi-fire-cluster framing and a real mechanic
+> are compatible when the writer reaches for one). P_close 22nd cycle (1 positive: Basrah; 1
+> failing: Randolph). P_compound 10th cycle. A4/A5/A6 not tested (no target-type draft). **1
+> strict staleness bulk-reject candidate, 2nd consecutive cycle unactioned:** western Siberia
+> fire cluster (~80.6h old, present-tense "today" still in the text). Write skipped — `gh` CLI
+> absent, no gist-write tool available via the GitHub MCP server this session (46th consecutive
+> skip). Bot commit note: `main`'s `VERSION` now reads `0.9.100.0` (was `0.9.97.0` per the Jul 8
+> BRIEFING.md snapshot this plan has been citing); intervening `main` commits are a new
+> `heat_records_cluster` signal type (#414, default-OFF, manual-approval-only, no instance in
+> today's queue) plus unrelated docs/economics work — not expected to affect grading.
+>
+> **Jul 13: 0 fresh drafts.** Queue is an exact match to Jul 12's 5 graded drafts (Stevensville
+> MD A-, Riyadh dust_event B+, Tepee Creek MT B+, interior Alaska fire B+, western Siberia fire
+> cluster B+); no re-grading performed, all grades stand. No active-proposal evidence updates
+> this cycle — P_close, P_compound, P5, P_tier, P_dust, P9, A4, A5, and A6 all retain their Jul
+> 12 counts and "Last seen" dates. **1 new strict staleness bulk-reject candidate:** western
+> Siberia fire cluster crosses 48h (~56.6h) with present-tense "today" still in the text — the
+> exact crossing flagged proactively in the Jul 11 and Jul 12 entries. Write skipped (`gh` CLI
+> absent, no gist-write tool available via the GitHub MCP server this session — 45th consecutive
+> skip). **Docs-freshness note:** `main`'s copies of these three docs were still frozen at their
+> Jul 6 state at this session's start — the Jul 7 `#384` merge was a one-time snapshot, not a
+> standing sync, and nothing had refreshed `main` in the 6 days since. The rolling
+> `daily-plan-current` branch itself had NOT gone stale: it carries an unbroken daily run
+> Jul 7–12 (`main`'s corpus merge, the P_tier/P_dust code fixes, and every cycle's grading are
+> all already reflected there). This session rebased cleanly onto fresh `main` (docs-only,
+> zero conflicts) before appending here — recommend the operator periodically fast-forward
+> `main`'s copies of these three docs even outside program-adoption milestones, so a future
+> session's Step-0 sync doesn't mistake the rolling branch's genuine currency for staleness.
+> **P_tier still needs a 2nd post-fix confirmation** on a fresh `absolute_extreme`/
+> `fire_footprint`/cyclone/`regional_sst_anomaly` draft — none of today's 5 carry-overs qualify.
+>
+> **Jul 12: 0 fresh drafts.** 5 pending — exact match to 5 of Jul 11's 6 graded drafts
+> (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+, interior Alaska fire B+,
+> western Siberia fire cluster B+); no re-grading performed, all grades stand. **Ahvaz, Iran
+> `absolute_extreme` (A-) drops from the queue** — cause unconfirmed, 2nd consecutive cycle of
+> unexplained single-draft contraction (Anchorage dropped Jul 10→11; now Ahvaz Jul 11→12).
+> Losing Ahvaz costs the corpus its best open P_tier test case — it was 1 of the 2
+> confirmations this proposal's tracking needs to close; the Jul 10 grade record stands, but
+> closing P_tier now needs a fresh `absolute_extreme`/`fire_footprint`/cyclone/
+> `regional_sst_anomaly` draft. No active-proposal evidence updates this cycle — P_close,
+> P_compound, P5, P_tier, P_dust, P9, A4, A5, and A6 all retain their Jul 11 counts and "Last
+> seen" dates. 0 staleness candidates (Stevensville/Riyadh/Tepee Creek past-tense carve-out;
+> both fires <33h; western Siberia's "today" still under 48h, watch ~2026-07-13T06:25Z). `gh`
+> CLI absent, 44th consecutive skip.
+>
+> **Jul 11: 2 fresh drafts, 4 carry-overs (partial turnover), 0% A-rate.** 4 of Jul 9/10's
+> drafts survive unchanged (Stevensville MD A-, Riyadh dust_event B+, Tepee Creek MT B+,
+> Ahvaz A-); Anchorage AK precipitation_extreme drops from the queue (cause unconfirmed). 2
+> fresh, both `fire`, both graded B+: interior Alaska (926.3 MW, 66°N, "doesn't just consume
+> trees — it burns into the organic layer above the frozen ground" — 6th permafrost-carbon-
+> mechanic instance) and a western Siberia 3-signal comic-triple cluster (1,387.9/958.0/
+> 720.7 MW, "burning across peat that took centuries to accumulate"). Both close in the
+> mechanic's established declarative-but-weak P_close form (positive, same tier as Jul 3's
+> near-dup). **Headline: new proposal A6 filed** — the permafrost-carbon fire mechanic,
+> this plan's most reliable fire-category A-grade path (6 corpus instances, all B+/A-),
+> shows its first sign of reusing a prior draft's exact phrasing on a *different* fire
+> event: Alaska's close reuses Jul 5 eastern Siberia's "doesn't just X — it Y" contrastive-
+> negation construction near-verbatim; Siberia's close reuses Jul 3's near-duplicate
+> Canadian Arctic close's exact clause, "...that took centuries to accumulate." This is
+> distinct from the already-tracked within-location duplicate-generation anomaly (same
+> bundle/event re-issued under a new draft_id) — here the writer is reaching for its own
+> prior sentence shape across genuinely different locations/dates/readings. 1 cycle; watch
+> for a 3rd instance before promoting to an active proposal, per the A3/A4/A5 precedent.
+> P_close 21st cycle (2 positive, both weak-declarative). P5: fire self-selects again (5th/
+> 6th consecutive confirming cycle) — same organic-deployment pattern now showing early
+> signs of formulaic drift. P_tier/P_dust/P9/P_compound/A4/A5 not tested this cycle (no
+> target-type draft among the 2 fresh). 0 staleness candidates (Stevensville/Riyadh
+> past-tense carve-out regardless of age; all others <29h); 43rd consecutive `gh` skip.
+> **Operator note:** Ahvaz's forecast date (July 10) has elapsed but sits under 48h — worth
+> confirming whether PR #385's forecast-elapsed auto-reject is age-gated by design or has a
+> gap here.
+>
+> **Jul 10: 3 fresh drafts, 2 carry-overs (complete-turnover streak breaks), 33% A-rate.**
+> First non-full-turnover cycle since Jul 6: Stevensville MD (A-) and Anchorage AK (B) survive
+> from Jul 9, ungraded, alongside 3 fresh. **Headline: P_tier's first post-fix confirmation on
+> a named target type.** Ahvaz, Iran `absolute_extreme` — the exact signal type this proposal
+> targeted — reaches pending 3+ days post-#386 with no band-label/tier-jargon citation ("just
+> above the 47°C threshold where heat in this part of the Middle East historically crosses into
+> the range where shade and rest alone stop being enough" vs. this same city's Jul 7 pre-fix
+> "above the 47°C absolute-extreme threshold for the Northern Subtropics"). Paired with a
+> strong declarative P_close, this is the corpus's **first A-grade `absolute_extreme` draft**
+> — graded A-. **P_dust closes its tracking**: Riyadh `dust_event` states its WHO multiple for
+> a 2nd independent post-fix cycle (24.9×, after Jul 8's 27.9×), same 2-clean-cycles bar P9
+> used to close Jul 9. Riyadh graded B+ (close still structural, not declarative — P_close's
+> orthogonal gap persists). Tepee Creek, MT `all_time_high` graded B+ (standard P_compound
+> double-qualifier + implied P_close, 9th P_compound cycle). **P_close 20th cycle** (1
+> positive: Ahvaz; 2 failing/borderline: Riyadh, Tepee Creek). **P_tier: 1 post-fix
+> confirmation** — watch for a 2nd on any of the 4 target types before moving to Resolved,
+> same position P_dust was in after Jul 8. **P_dust: 2nd post-fix confirmation — tracking
+> closes.** A4/A5 not tested (no `air_quality_hazard`/`cyclone_land_threat` draft). 0 stale
+> drafts (oldest carry-over ~35.7h); 42nd consecutive `gh` staleness skip.
+>
+> **Jul 9: 2 fresh drafts, complete queue turnover (4th occurrence), 50% A-rate (n=2, not
+> a majority) — 2nd consecutive cycle landing exactly on the half-boundary.** All 8 of
+> Jul 8's drafts are gone; 2 fresh, both created 2026-07-09T03:26–03:29Z. 1 A-:
+> Stevensville, Maryland `all_time_high` (103°F, "beating a record from 1934, by 2°F, in
+> 101 years of data" — **P_compound's worst instance to date**, a triple-stacked
+> qualifier one past every prior double-qualifier form; overcome by a clean
+> buffer-failure declarative close, "that buffer failed," same shape as Jun 29's Congo
+> fire A-). 1 B: Anchorage, Alaska `precipitation_extreme` (61.2mm/day against a 0.9mm
+> prior record — exactly 68×, the corpus's most dramatic precip ratio, left unstated;
+> P9-clean of restate-math and the legacy template, but P_close FAILING on "wring out
+> moisture in concentrated bursts" — one word from Jun 26's own Anchorage draft, "wring
+> out moisture in compressed bursts," and notably weaker than this same station's Jul 8
+> A- draft two days earlier on a different bundle metric [7-day accumulation vs. daily
+> record]). **P9 gets its 2nd independent clean cycle (Jul 8 3/3 + Jul 9 1/1) — closing
+> the tracking**, though today's instance also shows the fix's benefit may be
+> metric-shaped (proven on accumulation bundles, not yet on daily-record bundles). P_close
+> 19th cycle (1 positive, 1 failing). P_compound 8th cycle (new worst instance). P_tier
+> still not tested on a named target type (none appeared Jul 7, 8, or 9). P_dust/A4/A5
+> not tested (no target-type draft). 41st consecutive `gh` staleness skip (0 candidates —
+> both same-day fresh).
+>
+> **Jul 8: 8 fresh drafts, complete queue turnover (3rd occurrence), 50% A-rate — closest
+> approach to the bar since Jun 29's 80% clearance** (50% is exactly half, not a
+> majority, so the bar is technically not cleared). All 8 drafts postdate every fix
+> shipped since Jul 5 (#386 P_tier/P_dust, #397 precip four-moves/P9, #404 cyclone
+> four-moves) — **the first cycle where every fresh draft is safely post-fix for all
+> three.** **P_dust and P9 are both empirically confirmed clean for the first time.** 4
+> A-: Barrow AK precip ("one storm just delivered two-thirds of a normal year in a day"
+> — first fully clean `precipitation_extreme` draft in corpus history); Astana precip
+> (same clean ratio-close form); Anchorage precip (ratio-anchor leads sentence 1,
+> declarative orographic close — best-constructed of the three); Riyadh
+> air_quality_hazard ("basin-scale loading, not a street-corner spike" — new
+> scale-honesty-contrast close subtype; A4 does not recur). 3 B+: Snowshoe WV
+> all_time_high (P_compound 7th cycle; P_close failing — notably weaker than this same
+> station's Jul 7 A- draft one day earlier); Typhoon Bavi `cyclone_landfall` (**new
+> signal type**, P_close positive, but a 2nd raw-JTWC-URL bundle-leak bug); Riyadh
+> dust_event (**P_dust fix confirmed** — 27.9× WHO PM10 stated, closing the 11-for-11 gap
+> tracked since Jun 13; P_close still failing, mechanism-only, untouched by the WHO-anchor
+> fix — the two proposals are orthogonal). 1 B: Typhoon Bavi `cyclone_land_threat` (**new
+> signal type**, the kind PR #388 added to close the "Bavi gap" — forecast-tense rules
+> followed precisely, but P_close fails on a purely expository debut close, same as every
+> other type's first appearance). P_close 18th cycle (5 positive, 3 failing; 16th/17th
+> confirmed signal types via the two new cyclone kinds). P_compound 7th cycle. P_tier not
+> tested on a named target type this cycle (no `absolute_extreme`/`fire_footprint`/
+> `cyclone_rapid_intensification`/`regional_sst_anomaly` draft; the 2 new cyclone kinds
+> are governed by the same rule and came back clean, which is supporting but not
+> definitive evidence). **Operator notes:** possible Bavi landfall/land_threat
+> bundle-sequencing inconsistency (verify advisory timestamps before publishing both
+> today's Bavi drafts); 2nd occurrence of the raw-URL bundle-leak bug (flag to engineer
+> directly). 40th consecutive `gh` staleness skip (0 candidates this cycle).
+>
+> **Jul 7: 6 fresh drafts, complete queue turnover (2nd occurrence), 33% A-rate — best
+> cycle since Jul 3.** **Major overnight pipeline push, most consequential cycle for this
+> plan to date:** `main` MERGED (#384, 2026-07-06T23:42Z) — the 29-cycle "unmerged since
+> Jun 8" saga is over. **P_tier and P_dust SHIPPED as code** (#386, "detection-plumbing
+> ban + dust PM10 WHO anchor," merged 2026-07-07T05:06:48Z) — moved from Active to
+> Shipped below, awaiting empirical confirmation. **Basra-class staleness got a
+> structural pipeline fix** (#385, forecast-elapsed auto-reject, merged
+> 2026-07-07T04:55:15Z) — very likely why the 2 unactionable bulk-reject candidates
+> flagged Jul 6 are simply gone from today's queue, along with all 13 other carry-overs.
+> 2 A-: Snowshoe, WV all_time_high (P_compound overcome by a declarative
+> elevation-inversion close); Soweto air_quality_hazard (**first A- for this type** —
+> "nowhere to vent"). 3 B: Ahvaz absolute_extreme (pre-fix P_tier violation, strong
+> close); Aibonito, Puerto Rico **`record` — new signal type debut** (day-of-year
+> record, P_close mechanism-only on its first instance, same as every type's debut); Riyadh
+> air_quality_hazard (post-fix, but "This is a PM2.5 signal, not dust" is a fresh
+> self-reference variant — **new proposal A4 filed**). 1 B-: Zaragoza absolute_extreme
+> (pre-fix P_tier violation on a new band name, "northern mid-latitudes"). **Fix-timing
+> straddle:** the 2 P_tier violations here (Zaragoza, Ahvaz, 03:39/03:40 UTC) predate the
+> 05:06 UTC fix by ~1.5h; the 4 post-fix drafts are all non-targeted types — neither
+> P_tier nor P_dust is empirically confirmed yet. P_close 17th cycle (3 positive, 3
+> failing; 15th signal type via `record`). P_compound 6th cycle (Snowshoe).
+> `air_quality_hazard` self-selects for a 4th consecutive cycle. 39th consecutive `gh`
+> staleness skip (0 candidates this cycle).
+>
 > **Jul 6: 0 fresh drafts — queue is an exact match to Jul 5's 15 graded drafts (same
 > `draft_id`s, scores, text); no re-grading performed, all grades stand at Jul 5's levels.**
 > No active-proposal evidence updates: P_close (16 cycles), P_tier (7 cycles/10 instances),
@@ -183,26 +506,343 @@ Living plan for closing the gap between the bot's current voice quality and the 
 
 | | |
 |---|---|
-| Bot commit | `0.9.81.0`+ per BRIEFING.md 2026-06-28 (reganom recency window + honesty-gating, PR #347; world-half eval-gating fix, PR #345; reganom writer-voice upgrade, PR #349. Prior: 0.9.67.0, R-02 NOAA HMS independent fire witness; 30-item audit backlog complete [S-01..S-35]; source-redundancy lane R-00..R-09; bot active since 2026-06-01) |
-| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=1` + `THEHEAT_CRITIC_REVISE_ENABLED=0` since 2026-07-14 (economics P0 paired flip; was 2/1 from 2026-06-13); reganom (`reanalysis_anomaly`) enabled `manual_only` since 2026-06-27 with 2-day recency + honesty-gating [PR #347]; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle) |
-| Last cycle A-rate | **— (0 fresh drafts, Jul 6).** Most recent measured: **20% (1/5 fresh, Jul 5)** — eastern Siberia fire A- (4th confirmation of the permafrost-carbon fire mechanic), 1 B+, 1 B, 1 B-, 1 C+. Prior: 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
-| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts to measure**. |
-| Gap | **30 pp below bar** (50% − 20%, most recent measured cycle Jul 5, n=5). No fresh measurement Jul 6. Seven cycles since the Jun 29 peak have ranged 0–33% depending on signal mix. P_tier and P_close remain the two most active-capping levers, both unchanged since Jul 5 (no fresh evidence Jul 6). |
-| Posting | paused; operator decision pending — Jun 29 cleared bar (80%), Jun 30–Jul 5 all below, Jul 6 no fresh drafts. **Queue unchanged at 15 pending as of Jul 6** (exact match to Jul 5's graded batch) — zero new drafts entered between the Jul 5 and Jul 6 pulls. |
+| Bot commit | `0.9.108.1` per `main`'s `VERSION` file (unchanged since checked 2026-07-16). **2026-08-20: `git rebase origin/main` was attempted and conflicted again** on the same old (Jul 7) daily-plan commit — the same recurring rebase-replays-pre-merge-commits pattern seen Jul 13/17 and Aug 10/11/16/17/18/19 — aborted per the runbook fallback. `git merge-base --is-ancestor origin/main daily-plan-current` still confirms `main`'s tip is already an ancestor of this branch (carried in by Aug 12's `git merge origin/main`), so the conflict is moot — nothing from `main` is missing. No `main` commit has landed at all since `4b4d965` (2026-07-24) — 27 days quiet, consistent with the billing outage below. **2026-08-21: same rebase-conflict/abort, still moot** — no `main` commit since Jul 24 (28 days quiet). **2026-08-22: same rebase-conflict/abort, still moot** — no `main` commit since Jul 24 (29 days quiet). **2026-08-23: ancestry re-confirmed clean (`git merge-base --is-ancestor origin/main daily-plan-current` holds); rebase skipped rather than attempted-and-aborted since the outcome is known** — no `main` commit since Jul 24 (30 days quiet). **2026-08-24: ancestry re-confirmed clean again, rebase skipped** — no `main` commit since Jul 24 (31 days quiet). **2026-08-25: rebase attempted, conflicted on the same known pre-merge Jul 7 commit, aborted; ancestry re-confirmed clean** — no `main` commit since Jul 24 (32 days quiet). **2026-08-26: same rebase-conflict/abort, ancestry re-confirmed clean** — no `main` commit since Jul 24 (33 days quiet). **2026-08-27: same rebase-conflict/abort, ancestry re-confirmed clean** — no `main` commit since Jul 24 (34 days quiet). **2026-08-28: same rebase-conflict/abort, ancestry re-confirmed clean** — no `main` commit since Jul 24 (35 days quiet). **2026-08-29: same rebase-conflict/abort (conflicted on the same known pre-merge Jul 7 commit), ancestry re-confirmed clean (`main`'s tip remains an ancestor)** — no `main` commit since Jul 24 (36 days quiet). **2026-08-30: same rebase-conflict/abort, ancestry re-confirmed clean** — no `main` commit since Jul 24 (37 days quiet). **2026-08-31: same rebase-conflict/abort, ancestry re-confirmed clean** — no `main` commit since Jul 24 (38 days quiet). **2026-09-01: ancestry re-confirmed clean (`git merge-base --is-ancestor origin/main daily-plan-current` holds); rebase skipped rather than attempted since the outcome is known** — no `main` commit since Jul 24 (39 days quiet). **2026-09-02: ancestry re-confirmed clean again, rebase skipped** — no `main` commit since Jul 24 (40 days quiet). **2026-09-03: ancestry re-confirmed clean again (`git merge-base --is-ancestor origin/main origin/daily-plan-current` holds), rebase skipped** — no `main` commit since Jul 24 (41 days quiet). **2026-09-04: ancestry re-confirmed clean again, rebase skipped** — no `main` commit since Jul 24 (42 days quiet). **2026-09-05: rebase attempted, conflicted on the same known pre-merge Jul 7 commit, aborted per runbook fallback; ancestry re-confirmed clean** — no `main` commit since Jul 24 (43 days quiet). **2026-09-09: `main` broke its 46-day freeze — 13 commits landed Sep 8T21:58Z–Sep 9T14:59Z (tip `03cce77`, PR #520), none touching this file or its two siblings.** `git rebase origin/main` still conflicts on the same known pre-merge Jul 7 commit; aborted per runbook fallback. Bot VERSION bumped in the new commits (PR #511 cites `0.9.108.5`, PR #520 cites `0.9.108.12`) but automatic publishing remains explicitly paused per PR #511/#520's own release notes — no credit top-up, no resumption. **2026-09-10: `main` continued its wave — 5 more commits (PR #521-525, tip `c71d6cf`, merged 2026-09-09T20:26:22Z UTC, 66 files/+4,414/-387), still none touching this file or its two siblings, none restoring billing or resuming publication.** `git rebase origin/main` still conflicts on the same known pre-merge Jul 7 commit; aborted per runbook fallback; ancestry re-confirmed clean (`4b4d965` remains an ancestor). **2026-09-11: `main` static — 0 new commits since Sep 9-10's 18-commit wave (tip still `c71d6cf`); rebase conflict/abort repeated on the same known pre-merge Jul 7 commit, ancestry re-confirmed clean.** **2026-09-12: `main` static a 2nd consecutive cycle — 0 new commits since Sep 9-10's wave (tip still `c71d6cf`); same rebase conflict/abort, ancestry re-confirmed clean.** |
+| Voice engine version | **two-bot + Attenborough/Economist voice + all-sources triage + evidence contract + diversity gate + automation dashboard** (Sonnet 4.6 writer prompt-cached + Gemini 2.5 Flash fact-checker [skips unknown kinds] + Gemini 2.5 Pro critic [assesses relative to available data]; all 23 sources on triage path via PR #150; evidence contract gates writer via 0.9.0.0; pending-type cap default 3 + per-type TTL sweep [fast 7d, coral/DHW 21d] via 0.9.6.0/0.9.16.0; `THEHEAT_TRIAGE_ENABLED=1` in CI; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live since 2026-06-13; reganom enabled `manual_only` since 2026-06-27 [PR #347]; **2026-07-07 AM: "DETECTION PLUMBING IS NOT A FACT" writer rule + paired fact-check/critic gates [PR #386], dust bundles carry `who_pm10_multiple` [PR #386], `cyclone_land_threat` signal type [PR #388]; 2026-07-07 PM: precipitation "four moves" section bans restate-math + prescribes the annual-ratio anchor [PR #397], cyclone "four moves" section covers all 5 cyclone signal_kinds including the new `cyclone_landfall` [PR #404]**; routine beacon writes the `ROUTINE_BEACON` repo variable via `gh variable set` each cycle — though this session confirms `gh` is absent and no MCP equivalent exists, so the beacon write is skipped again this cycle) |
+| Last cycle A-rate | **— (0 fresh drafts, Sep 12 — 51st consecutive zero-fresh cycle, dry spell now 51 days).** Most recent measured: **50% (2/4, Jul 23) — bar NOT cleared** (not a majority; same convention as Jul 8/Jul 9). Prior: 67% (2/3, Jul 22) — BAR CLEARED, 4th clearance since Jun 29; 0% (0/1, Jul 21, smallest fresh sample in the corpus's history); 33% (1/3, Jul 20); 25% (1/4, Jul 19); 25% (1/4, Jul 18); 80% (4/5, Jul 17); 100% (2/2, Jul 16, small-n); no fresh drafts Jul 15; 33% (1/3, Jul 14); no fresh drafts Jul 12–13; 0% (0/2, Jul 11); 33% (1/3, Jul 10); 50% (1/2, Jul 9, not a majority); 50% (4/8, Jul 8); 33% (2/6, Jul 7); no fresh drafts Jul 6; 20% (1/5, Jul 5); 20% (2/10, Jul 4); 33% (1/3, Jul 3); 0% (0/3, Jul 2); 0% (0/4, Jul 1); 22% (2/9 non-stale, Jun 30); 80% Jun 29 [BAR CLEARED]. |
+| Resumption bar | majority A (>50%) sustained — **cleared Jun 29 (80%, n=5); Jun 30 returned 22%; Jul 1 0% (n=4); Jul 2 0% (n=3); Jul 3 33% (n=3); Jul 4 20% (n=10); Jul 5 20% (n=5); Jul 6 no fresh drafts; Jul 7 33% (n=6); Jul 8 50% (n=8, not a majority); Jul 9 50% (n=2, not a majority); Jul 10 33% (n=3); Jul 11 0% (n=2); Jul 12–13 no fresh drafts; Jul 14 33% (n=3); Jul 15 no fresh drafts; Jul 16 100% (n=2, small-n); Jul 17 80% (n=5) — cleared again, first n≥5 confirmation since Jun 29; Jul 18 25% (n=4); Jul 19 25% (n=4); Jul 20 33% (n=3); Jul 21 0% (n=1); Jul 22 67% (n=3) — cleared a 4th time; Jul 23 50% (n=4) — not a majority; Jul 24 no fresh drafts; Jul 25 no fresh drafts; Jul 26 no fresh drafts; Jul 27 no fresh drafts; Jul 28 no fresh drafts (5th consecutive); Jul 29 no fresh drafts (6th consecutive); Jul 30 no fresh drafts (7th consecutive, queue reached 0); Jul 31 no fresh drafts (8th consecutive, billing outage directly confirmed in pipeline logs); Aug 1 no fresh drafts (9th consecutive, billing outage still open); Aug 2 no fresh drafts (10th consecutive, billing outage confirmed within the hour of that grading run); Aug 3 no fresh drafts (11th consecutive, billing outage confirmed across three separate runs today, including a sharp escalation in candidates skipped); Aug 4 no fresh drafts (12th consecutive, escalation did not recur — cadence stabilized at ~1 abort/4h); Aug 5 no fresh drafts (13th consecutive, cadence holds at ~1 abort/4h, no new escalation); Aug 6 no fresh drafts (14th consecutive, cadence holds, candidates-skipped trending toward the high end of normal, new score-gate fire cluster noted); Aug 7 no fresh drafts (15th consecutive, 2 aborts instead of 3, writer-killed candidate switched stations for the first time, `state_size` warning dropped to 0); Aug 8 no fresh drafts (16th consecutive, 3 aborts, writer-killed candidate rotated stations twice within the day, `state_size` warning returned at its highest level yet, independently corroborated via GitHub issue #462 plus a newly-opened second sentinel #479); Aug 9 no fresh drafts (17th consecutive, 3 aborts, writer-killed candidate repeated Aug 8's exact 2-station sequence verbatim, `state_size` warning at a new high, #479 auto-closed as expected, #462 still open); Aug 10 no fresh drafts (18th consecutive, 4 aborts — up from the recent 2–3/day cadence, writer-killed candidate switched off the La Paz/Victoria pair back to Williams Fk Dam CO, new 14-item US Western `fire_footprint` score-gate cluster, `state_size` hit a new peak byte size on fewer warnings, #462 still open); Aug 11 no fresh drafts (19th consecutive, 3 aborts, writer-killed candidate held Williams Fk Dam CO for a full day for the first time, the "new" fire_footprint cluster confirmed persisting rather than new, `state_size` hit a new peak byte size again, #462 still open, GitHub issue #467 [`voice-regression` CI red 20 runs, same Jul 24 start date] noted in passing); Aug 12 no fresh drafts (20th consecutive, 4 aborts — up from 3, all on the same candidate for a 2nd consecutive full day, 181 total candidates skipped across the 4 aborts, fire_footprint near-miss cluster grew to 15 items [+1], `state_size` hit a new peak byte size (~3.04MB), #462 still open [6 deaths/24h], #467 still red, and the standing `docs/IMPROVEMENT_PLAN.md` merge conflict that had blocked `daily-plan-current` from syncing to `main` since Jul 13/17 was finally resolved this cycle — see Bot commit row); Aug 13 no fresh drafts (21st consecutive, 4 aborts — same as Aug 12, 214 total candidates skipped across the 4 aborts [up from 181], writer-killed candidate rotated off Williams Fk Dam CO after 2 full days back to Randolph UT, fire_footprint near-miss cluster grew to 16 items, `state_size` hit a new peak byte size (~3.10MB), #462 still open [5 deaths/24h], #467 still red, `daily-plan-current`↔`main` sync clean this cycle); Aug 14 no fresh drafts (22nd consecutive, 4 aborts — same as Aug 13, 201 total candidates skipped across the 4 aborts [down from 214], writer-killed candidate switched off Randolph UT onto a brand-new station, Webster Dam KS, fire_footprint near-miss cluster contracted from 16 to 15 items [first contraction observed since tracking began Aug 6], `fire` near-misses dropped to 4 [from 10] with a new Pantanal, Brazil location hook, a new HTTP 401 `gpm_imerg` failure variant recurred alongside the usual 503s, `state_size` hit a new peak byte size (~3.14MB), #462 still open [6 deaths/24h], #467 still red, `daily-plan-current`↔`main` sync clean this cycle); Aug 15 no fresh drafts (23rd consecutive, 4 aborts — same as Aug 14, 179 total candidates skipped across the 4 aborts [down from 201], writer-killed candidate cycled through 3 distinct stations in one day for the first time [La Paz, Bolivia → Santiago de Cuba, a brand-new station → back to La Paz, Bolivia], fire_footprint near-miss cluster grew from 15 to 16 items with the first tier2-scored item observed in this cluster's tracking, the Puerto Rico record/record_low pair absent for the first time since it entered tracking, a new M6.9 usgs_earthquake near-miss replaced the M3.8 fixture that had repeated Aug 12–14, a new `ocean_sst_anomaly` hard failure appeared [227-day-stale NOAA STAR fallback data — first occurrence of this failure class], `state_size` warnings jumped from 26 to 36 [largest single-day increase observed], #462 still open [6 deaths/24h, timestamp-matched], #467 still red, `daily-plan-current`↔`main` sync clean this cycle); Aug 16 no fresh drafts (24th consecutive, only 3 aborts visible in the retained suppressions window [00:49Z, 04:31Z, 12:53Z] — a window-visibility artifact, not a real drop, per GitHub issue #462's independent "5 deaths/24h" count and the 12:41Z `both` run's own `failure_count=3`; 155 total candidates skipped across the 3 visible aborts; writer-killed candidate switched from La Paz, Bolivia to a not-previously-named station, Brundage Reservoir ID; fire_footprint cluster held steady at 16 items; usgs_earthquake near-miss recurred a 3rd consecutive day; `gpm_imerg`/GDACS/`ocean_sst_anomaly` visibility lost this cycle as the 50-entry `errors` cap filled entirely with `state_size` warnings; `state_size` hit a new peak byte size (~3.18MB); **largest single-cycle draft-count pruning event yet observed** — gist total dropped 61→57, all 4 removed from the `rejected` bucket; #462 still open [5 deaths/24h, timestamp-matched], #467 still red; `daily-plan-current`↔`main` rebase conflicted on the known recurring pattern, aborted, moot — see Bot commit row); Aug 17 no fresh drafts (25th consecutive, cadence back to normal ~4 aborts [179 total candidates skipped], writer-killed candidate held a single new station [Mt Plymouth, Florida] all day, fire_footprint cluster grew to 17 items with its first-ever tier1 member, usgs_earthquake near-miss absent for the first time after 3 days, gpm_imerg/GDACS/ocean_sst visibility recovered, `state_size` hit a new peak byte size (~3.19MB) on a higher warning count, **second consecutive 4-item draft-count pruning event** [57→53, again all from `rejected`], #462 still open [5 deaths/24h, timestamp-matched], #467 still red, `daily-plan-current`↔`main` rebase conflicted again on the known recurring pattern, aborted, moot); Aug 18 no fresh drafts (26th consecutive, same ~4/day abort cadence, writer-killed candidate rotated mid-day for the first time in several cycles [Mt Plymouth FL → Clinton Nas OK], fire_footprint cluster fully static at 17 items for the first time since it began growing Aug 10, usgs_earthquake near-miss absent a 2nd day, fire near-miss location mix flipped entirely away from Kazakhstan steppe, gpm_imerg/ocean_sst/firms visibility lost again (reversing Aug 17's recovery), `state_size` hit a new peak byte size (~3.22MB) on fewer warnings, **third consecutive 4-item draft-count pruning event** [53→49, again all from `rejected`, exactly 4/day for 3 straight days — now reads as a likely fixed-rate sweep rather than an irregular pruning event], #462 still open [6 deaths/24h, timestamp-matched], #467 still red, `daily-plan-current`↔`main` rebase conflicted again on the known recurring pattern, aborted, moot); Aug 19 no fresh drafts (27th consecutive, same ~4/day abort cadence, writer-killed candidate opened on a new non-US station [Valencia, Venezuela] before rotating to Vicksburg Caa Ap 2, Mississippi, fire_footprint cluster grew for the first time since Aug 10 [17→18, +1 tier0], usgs_earthquake near-miss returned as a genuinely new M5.9 event rather than the prior M6.9 recurring, fire near-misses reconcentrated on western Siberia, `state_size` hit a new peak byte size (~3.24MB) on slightly fewer warnings, **draft-count pruning event broke its exact-4/day cadence for the first time in 4 days** [49→46, a -3 rather than -4, still all from `rejected`], #462 still open [6 deaths/24h, timestamp-matched], #467 still red, `daily-plan-current`↔`main` rebase conflicted again on the known recurring pattern, aborted, moot); Aug 20 no fresh drafts (28th consecutive, same ~4/day abort cadence but **candidates skipped fell to 108 — lowest in this tracking, down from 180 — in a tight 25–31 per-abort band**, writer-killed candidate showed two firsts [an event date lagging its run by 4 days, `all_time_high_USC00035189_2026-08-16` on an Aug 20 run; then La Paz, Bolivia returning after a 4-day absence as **the first cold-side `absolute_extreme` to hold the slot**], 1-then-3 rotation shape for a 3rd consecutive day, `fire_footprint` cluster fully static at 18 items [2nd static day ever, identical composition], `usgs_earthquake` near-miss absent after a 1-day appearance, `fire` near-misses at 2 — lowest in tracking, both a single point under threshold at 63/64, **`gpm_imerg` visibility recovered and revealed a stuck target date** [4 runs over 12+ hours all retrying `2026-08-18` on HTTP 503 — a defect separate from the billing outage that would keep `precipitation_extreme` dark on its own], `state_size` hit a new peak byte size (~3.25MB) on 36 warnings, **the `rejected`-bucket drain decelerated to -1** [46→45; five-day sequence -4/-4/-4/-3/-1, falsifying Aug 18's fixed-rate-sweep read], #462 still open [6 deaths/24h, timestamp-matched], #467 still red, `daily-plan-current`↔`main` rebase conflicted again on the known recurring pattern, aborted, moot); Aug 21 no fresh drafts (29th consecutive, same root cause — 29 days; candidates skipped jumped back to 170 from Aug 20's low of 108, writer-killed slot held a 2nd consecutive multi-day-stale event date on a new station [Cane Creek Sp, AR], fire_footprint cluster static a 3rd day, new usgs_earthquake identity, first Arabian Peninsula fire near-miss, first `anomaly`-category near-miss, gpm_imerg's stuck date advanced 1 day but stays 2 days behind, state_size hit a new peak (~3.27MB), rejected-bucket drain continued [-2], #462/#467 both still open); Aug 22 no fresh drafts (30th consecutive, a full month — same root cause; candidates skipped rose again to 182 [76/42/30/34] from Aug 21's 170, writer-killed slot held one station [Cane Creek Sp, AR] for all 4 aborts for the first time (previously always 1-then-3), event date now 4 days stale, fire_footprint cluster static a 4th day, fire near-misses jumped to 8 with the location mix fully turning over [Amazon/Congo Basin/Kalimantan/2 Siberia points], both of Aug 21's new near-miss categories [usgs_earthquake, anomaly] absent again after 1-day appearances, gpm_imerg/ocean_sst/firms crowded out of the errors window entirely, state_size warnings jumped to 46 [from 36] on a new peak (~3.30MB), gist `rejected` bucket fully drained to 0 for the first time, #462/#467 both still open); Aug 23 no fresh drafts (31st consecutive, same root cause — 31 days; writer-killed slot rotated to a new station [Snake River Station, WY] but repeated the full-day single-station-hold shape for a 2nd consecutive day, 4 days stale; fire_footprint cluster grew for the first time in 4 days [18→19]; fire near-misses fell back to 3, usgs_earthquake reappeared; gpm_imerg/gdacs regained visibility; state_size warnings fell to 36 but byte-size peak still climbed (~3.31MB); gist total count held flat at 40 for the first time since the pruning sequence began [rejected bucket empty, nothing left to drain]; #462/#467 both still open, both now exactly 31 days old with zero movement); Aug 24 no fresh drafts (32nd consecutive, same root cause — 32 days; 4 aborts, 143 candidates skipped [39/38/32/34]; writer-killed slot opened same-day on La Paz [cold] for the 1st abort, then rotated to a brand-new station, Larsen Creek WY [`all_time_high_USS0009G06S_2026-08-21`, 3-day-stale], for the remaining 3 — 1-then-3 split shape continues; fire_footprint cluster static a 2nd day at 19 items [same composition]; fire near-misses held at 3 with the location mix fully turning over [Brazil, Canadian Arctic, Eastern Europe, all 63/64]; usgs_earthquake absent again after a 1-day appearance; gpm_imerg's HTTP 401 auth failures continue — now traced to a concrete cause: `credential_expiry.EARTHDATA_TOKEN` shows the NASA Earthdata JWT expired 2026-08-22T15:18:07Z, 2 days ago, a second and independently-fixable infra defect (rotate the token) distinct from the billing outage; gdacs GeoRSS schema drift unchanged; state_size warnings fell to 32 but byte-size peak climbed again [~3.34MB]; gist total held flat at 40 [nothing left in rejected to drain]; #462 still open [updated today 13:28:03Z, "6 draft(s) died... latest 2026-08-24T12:58:15Z", timestamp-matched exactly], #467 still open and still red [20 consecutive failed runs, assigned to the operator], both now 32 days old with zero movement); Aug 25 no fresh drafts (33rd consecutive, same root cause — 33 days; only 3 aborts today [39/38→33/30/35 candidates skipped, 98 total] traced to a genuine reduced pipeline-run cadence (an 8h20m gap swallowed the ~08:xx `alerts` slot), not a window-visibility artifact; writer-killed slot held one station, Larsen Creek WY [`all_time_high_USS0009G06S_2026-08-21`], for all 3 aborts for the first time [previously 1-then-3], now 4 days stale; fire_footprint cluster static a 3rd day at 19 items, unchanged composition; fire near-misses fell to 1 on a brand-new Indonesia location; usgs_earthquake absent a 2nd day; gpm_imerg's HTTP 401 failures continue on the same expired `EARTHDATA_TOKEN` [now 3 days past expiry, still unrenewed]; state_size warnings jumped to 43 [largest single-day jump yet] but the byte-size peak ticked down slightly for the first time [3,335,357B vs Aug 24's 3,344,309B]; gist total held flat at 40 a 3rd day; #462 still open [3 deaths/24h — down from the usual 4-6 — timestamp-matched, updated 13:25:47Z], #467 still red [20 consecutive failed runs, frozen], #462 now 33 days old and #467 now 32 days old, neither moved); Aug 26 no fresh drafts (34th consecutive, same root cause — 34 days; 2 budget_exhausted+billing_cycle_abort pairs visible in this session's suppression window [01:04Z La Paz cold fresh, 04:34Z Randolph UT all_time_high 3-days-stale] — issue #462 independently states "3" deaths/24h with a timestamp-matched latest entry but an unreconciled count, likely a window-eviction artifact; writer-killed slot rotated between the two stations today rather than holding one all day, breaking Aug 25's full-day single-station hold; fire_footprint cluster grew for the first time in 4 days [19→20]; fire near-misses rose to 3 on a fully turned-over location set [2× Hawaii, 1× Amazon]; usgs_earthquake reappeared after a 2-day absence; a new cyclone_land_threat near-miss appeared [China-approaching JTWC system]; the recurring cold record_low near-miss [cal_low_RQC00666730] went absent for the first time since entering tracking; gpm_imerg's HTTP 401 failures continue on the same expired EARTHDATA_TOKEN [now 4 days past expiry]; firms logged a fresh connection-pool failure variant; state_size's peak byte size resumed climbing [3,350,527B, a new high] after Aug 25's one-day dip; gist total held flat at 40 a 4th day; #462 now 34 days old, #467 now 33 days old, neither moved); Aug 27 no fresh drafts (35th consecutive, same root cause — 35 days; 3 budget_exhausted+billing_cycle_abort pairs since the last pull [16:46Z/22:41Z Aug 26, 05:58Z Aug 27], all on the same candidate [`all_time_high_USC00427165_2026-08-23`, Randolph UT] — the first time one writer-killed candidate has held the slot across a cycle boundary, now 4 days stale; issue #462 fully reconciles with this session's read for the first time since Aug 25 [count 3, timestamp exact match]; fire_footprint cluster grew again [20→21]; fire near-misses fell to 1 [from 3], smallest sample yet; usgs_earthquake and the China cyclone_land_threat near-miss both absent after single-day appearances; a new anomaly-category cold near-miss appeared on a previously-unseen station [RQC00660152]; EARTHDATA_TOKEN now 5 days past expiry, unrenewed; state_size's peak byte size hit a new high [3,382,815B]; gist total held flat at 40 a 5th day; #462 now 35 days old, #467 now 34 days old, neither moved; rolling PR #207 now 79 days open, unmerged since Jun 9); Aug 28 no fresh drafts (36th consecutive, same root cause — 36 days; 3 more budget_exhausted+billing_cycle_abort pairs since the last pull [18:43:40Z, 22:00:53Z Aug 27, 04:00:34Z Aug 28], the first two still on Randolph UT [`all_time_high_USC00427165_2026-08-23`], the third finally rotating off it onto a new station, Altus AFB, Oklahoma [`all_time_high_USW00013902_2026-08-24`, 4 days stale] — ending Randolph's cycle-boundary hold; fire_footprint cluster contracted for the first time in this tracking [21→20 items, 17 tier0 down from 18, same tier2/tier1 leaders]; fire near-misses read as 1 [Russian Far East] in this narrow window, likely visibility not a real drop; usgs_earthquake and the China cyclone_land_threat near-miss both still absent; the anomaly-category cold near-miss on `RQC00660152` recurred a 2nd day; EARTHDATA_TOKEN now 6 days past expiry, still unrenewed; state_size hit a new peak byte size [~3.43MB, 3,427,225B]; gist total held flat at 40 a 6th day; #462 now 36 days old [reconciles exactly: 4 deaths/24h, latest 2026-08-28T04:00:34Z], #467 now 35 days old [updated 20:37:28Z Aug 27 but no new comment — same 20-run-red text, not a material change]; rolling PR #207 now 80 days open, unmerged since Jun 9)**; Aug 29 no fresh drafts (37th consecutive, same root cause, only 1 abort visible this pull, writer-killed slot rotated to a brand-new station, fire_footprint cluster static, EARTHDATA_TOKEN 7 days past expiry, #462/#467 both still open, rolling PR #207 now 81 days open); Aug 30 no fresh drafts (38th consecutive, same root cause, 4 more aborts [149 candidates skipped], writer-killed slot rotated to Beaver Dams UT and held across the day boundary, fire_footprint cluster contracted 20→19, a new `record`-category near-miss appeared [Trujillo Alto, PR], EARTHDATA_TOKEN 8 days past expiry, #462/#467 both still open, rolling PR #207 now 82 days open); Aug 31 no fresh drafts (39th consecutive, same root cause, 5 more aborts [138 candidates skipped], writer-killed slot held Beaver Dams UT then rotated onto a newer event date on the same station for the first same-station date-only rotation observed, fire_footprint cluster fully static, fire near-misses churned through a peak of 8 before settling back to a Siberia-only 6, EARTHDATA_TOKEN 9 days past expiry, #462/#467 both still open, rolling PR #207 now 83 days open); Sep 1 no fresh drafts (40th consecutive, same root cause — 40 days, 3 more aborts [131 candidates skipped], writer-killed slot held Beaver Dams UT with zero rotation across all 3 aborts for the first fully-stable single-station hold observed, fire_footprint cluster contracted 19→17, fire near-misses collapsed 6→1 on a brand-new Brazil location, the Trujillo Alto PR record near-miss went fully absent for the first time, EARTHDATA_TOKEN 10 days past expiry, state_size jumped back up sharply (falsifying Aug 31's plateau read), #462/#467 both still open, rolling PR #207 now 84 days open); Sep 2 no fresh drafts (41st consecutive, same root cause — 41 days, but the daily abort count eased to 2 [66 candidates skipped, down from Sep 1's 3/131], writer-killed slot fully rotated off Beaver Dams UT (held since Aug 30) onto two brand-new same-day-fresh candidates [Quito then La Paz, both 0 days stale — the first zero-staleness writer-kills observed in several cycles], fire_footprint cluster fully static at 17 items, fire near-misses reversed sharply from 1 back to 24 with a full flip to eastern Siberia, 2 new near-miss items appeared on a fresh station [USC00483944], Trujillo Alto PR record near-miss absent a 2nd day, EARTHDATA_TOKEN now 11 days past expiry, state_size hit a new peak (3,553,585B), #462/#467 both still open, rolling PR #207 now 85 days open); Sep 3 no fresh drafts (42nd consecutive, same root cause — 42 days, abort count back up to 4 pairs [178 candidates skipped, up from Sep 2's 66], writer-killed slot held La Paz, Bolivia for 3 aborts then rotated to a brand-new station, Meadows Of Dan VA — the first `monthly_low` ever observed holding the slot, fire_footprint cluster fully static a 2nd day, fire near-misses jumped to 76 [largest cluster in this tracking], Trujillo Alto PR record near-miss reappeared after a 2-day absence, EARTHDATA_TOKEN now 12 days past expiry, state_size hit a new peak (3,561,038B), #462/#467 both still open, rolling PR #207 now 86 days open); Sep 4 no fresh drafts (43rd consecutive, same root cause — 43 days, abort count eased slightly to 5 pairs [119 candidates skipped, down from Sep 3's 178], writer-killed slot held La Paz, Bolivia across all 5 aborts with zero rotation [longest single-station hold in this tracking, re-anchoring to a same-day-fresh event rather than going stale], fire_footprint cluster fully static a 3rd day, fire near-misses fell to 35 [from 76] with the first location-mix broadening in days, usgs_earthquake reappeared after several days absent, Trujillo Alto PR record near-miss absent again, EARTHDATA_TOKEN now 13 days past expiry, state_size hit a new peak (3,594,096B), #462/#467 both still open [issue #462 fully reconciles: 5 deaths/24h, exact timestamp match], rolling PR #207 now 87 days open); Sep 5 no fresh drafts (44th consecutive, same root cause — 44 days; abort count eased further to 3 pairs [59 candidates skipped: 24/17/18, down from Sep 4's 119], writer-killed slot held La Paz, Bolivia for a 3rd consecutive day by re-anchoring to a fresh same-day event rather than rotating stations, fire_footprint cluster fully static a 4th day, fire near-misses read sparse in the visible window [3, likely window-visibility not a real drop], a new snow_extreme near-miss category appeared for the first time [Younts Peak, 135mm SWE], EARTHDATA_TOKEN now 14 days past expiry, state_size hit a new peak [3,605,882B], #462/#467 both still open [issue #462 fully reconciles: 4 deaths/24h, exact timestamp match], rolling PR #207 now 88 days open). Sep 6: same picture again, same root cause — 45 days; only 1 budget_exhausted+billing_cycle_abort pair visible since the last pull (08:18:19Z, 23 candidates skipped), down from Sep 5's 3 pairs/59 candidates; the writer-killed slot **finally rotated off La Paz, Bolivia** (held 3 consecutive days, Sep 3–5) **onto a new candidate**, `all_time_high_USC00115841_2026-09-03` (Morrisonville, Illinois, score 89/80, 3 days stale); the US Western `fire_footprint` score-gate cluster **grew for the first time in 5 days** (15→16 items: 1 tier2 + 2 tier1 + 13 tier0, same Oregon tier2 leader unchanged at 124,992 ha) — ending the Sep 2–5 static streak; `usgs_earthquake` reappeared (1 item, M3.7) after being absent from Sep 5's pull; `fire` near-misses read as 1 (eastern Siberia) in this pull's narrow single-run window; the `snow_extreme`, `cyclone_land_threat`, `RQC00660152` anomaly, and Trujillo Alto PR `record` near-misses are all absent from this pull's window (window-visibility, not necessarily real drops — only 1 `alerts` run visible since the last pull, vs. Sep 5's 4); `EARTHDATA_TOKEN` now 15 days past expiry, still unrenewed; `state_size`'s highest visible warning this pull is 3,593,129B (08:18:24Z) — below Sep 5's reported peak of 3,605,882B, but the 50-entry rolling `errors` window makes this a visibility artifact, not a confirmed decrease; gist total held flat at 40 a 15th consecutive day; issue #462 updated 2026-09-06T11:09:06Z, citing "3 draft(s) died... in the last 24h (latest 2026-09-06T08:18:19Z)" — the count reconciles once the trailing-24h window is read across the Sep 5→6 boundary (it captures Sep 5's 14:51Z and 21:53Z aborts plus this pull's 08:18Z abort); issue #467 updated 2026-09-06T14:16:13Z, still citing the same frozen 20-run-red streak, no material change; #462 now 45 days old, #467 now 44 days old, neither has moved; rolling PR #207 now 89 days open.  Sep 7: same picture again, same root cause — 46 days; 4 budget_exhausted+billing_cycle_abort pairs since the last pull (17:58:17Z, 21:59:18Z Sep 6, 02:04:37Z, 08:50:14Z Sep 7; 78 candidates skipped total: 16/14/25/23); the writer-killed slot held Morrisonville, Illinois (`all_time_high_USC00115841_2026-09-03`) for 3 more aborts before rotating to a new station, Casey, Illinois (`all_time_high_USC00111329_2026-09-03`), for the day's final abort — a second consecutive Illinois `all_time_high` candidate holding the slot; `fire_footprint` cluster returned to static at 16 items (same composition, same Oregon tier2 leader at 124,992 ha), ending Sep 6's one-day growth blip after a single cycle; `fire` near-misses read as 1 (Indonesia, ~4.00°S 137.62°E) in this pull's narrow window; a 2nd `snow_extreme` near-miss station appeared, Banner Summit, alongside the continuing Younts Peak reading; `usgs_earthquake` persisted a 2nd day; China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss all remain absent; `EARTHDATA_TOKEN` now 16 days past expiry, still unrenewed; `state_size`'s highest visible warning this pull is 3,603,718B — again below Sep 6's reported peak, within the window's visibility noise, not a confirmed decrease; gist total held flat at 40 a 16th day; issue #462 updated 2026-09-07T12:49:30Z, citing "5 draft(s) died... in the last 24h (latest 2026-09-07T08:50:14.580008Z)" — exact timestamp match; issue #467 unchanged since 2026-09-06T14:16:13Z, no new update; #462 now 46 days old, #467 now 45 days old, neither has moved; rolling PR #207 now 90 days open. Sep 8 no fresh drafts (47th consecutive); billing outage (#462) now 47 days old — 5 budget_exhausted/billing_cycle_abort pairs since the Sep 7 pull (17:33Z, 19:35Z, 22:28Z Sep 7; 02:16Z, 08:31Z Sep 8), 119 candidates skipped total (22/25/24/27/21); the writer-killed slot held Casey, IL (`all_time_high_USC00111329`) across all 5 aborts, rolling its own event date from 2026-09-03 to 2026-09-04 partway through — the first same-station date-rollover observed (previously the slot only ever changed station, not date); issue #467 (`voice-regression`) now 46 days old, unchanged (still 20 consecutive failed runs); **new this cycle: GitHub issue #500 (`refresh-thresholds` workflow failing, opened 2026-08-30, last green 2026-08-16) surfaced for the first time** — a third, independently-fixable infra defect alongside the billing outage and the expired EARTHDATA_TOKEN; rolling PR #207 now 91 days open, unmerged since Jun 9. Sep 9: no fresh drafts (48th consecutive); Sep 10: no fresh drafts (49th consecutive, dry spell now 49 days) — `main` resumed activity Sep 9 (13-commit wave) and continued it Sep 10 (5 more commits, PR #521-525), still no billing fix or publish resumption; `publication_control` now exposes an explicit paused epoch (`p00b-paused-2026-09-09`); issue #500 now 11 days open; rolling PR #207 now 93 days open. Sep 11: no fresh drafts (50th consecutive, dry spell now 50 days) — `main` quiet for the first time in 3 cycles (0 new commits); writer-killed slot re-froze on Riyadh dust_event with a new tier2→tier3 escalation-on-date-roll sub-pattern; issue #500 now 12 days open; rolling PR #207 now 94 days open. |
+| Gap | **2pp below majority** (50% vs. >50% required, most recent measured cycle Jul 23, n=4) — the smallest miss in the corpus's history, but still ✗ by the letter. No fresh measurement Jul 24–Sep 7 (46 consecutive zero-fresh cycles) — and per the finding below, none is possible until the writer's API billing is restored. P_close, P_compound, A7, and A8 remain the highest-leverage unimplemented voice levers, all unchanged since Jul 23, but **none of them can be acted on empirically while the pipeline produces zero drafts.** No fresh measurement Sep 8 (47th consecutive zero-fresh cycle). No fresh measurement Sep 9 either (48th consecutive) — `main`'s 13-commit Sep 8-9 engineering wave hardens the pipeline's publish-safety and observability but explicitly does not restore Anthropic API credits (see Bot commit row); the gap stays frozen until it does. No fresh measurement Sep 10 either (49th consecutive zero-fresh cycle) — `main`'s wave continued a 2nd day (5 more commits) still without a billing fix; the gap stays frozen at 2pp below majority (last measured Jul 23) until fresh drafts resume. No fresh measurement Sep 11 either (50th consecutive zero-fresh cycle) — gap remains frozen pending billing recovery. No fresh measurement Sep 12 either (51st consecutive zero-fresh cycle) — gap remains frozen pending billing recovery. |
+| Posting | paused; operator decision pending — Jun 29 cleared bar (80%, n=5), Jul 16 cleared it again (100%, n=2, small-n), Jul 17 cleared it a 3rd time with the first large-n confirmation (80%, n=5), Jul 18–21 fell back below bar (25%/25%/33%/0%), Jul 22 cleared it a 4th time (67%, n=3), Jul 23 fell back to 50% (n=4, just short of majority), **Jul 24–Aug 22 no fresh drafts (30 consecutive, a full month, a new record).** Queue contracted from 14 (Jul 23) to 11 (Jul 24) to 5 (Jul 25) to 4 (Jul 26) to 2 (Jul 27) to 1 (Jul 28–29) to 0 (Jul 30) and **remains 0 (Jul 31–Aug 21)** — zero new drafts entered any of the twenty-nine cycles. **Root cause confirmed live and continuing, still cross-confirmed via GitHub's own health-monitoring:** the gist's `suppressions` window shows **4** `budget_exhausted` + 4 `billing_cycle_abort` pairs today (00:47:42Z, 04:36:52Z, 08:37:07Z, 13:02:08Z) — same ~4/day cadence as Aug 17–19. All aborts cite the writer's exact error — `"Error code: 400 - ... Your credit balance is too low to access the Anthropic API"`. This matches GitHub issue **#462** ("Writer watch: the Anthropic writer is down [budget exhausted]," open since 2026-07-23T15:30Z, updated again 2026-08-20T13:24:35Z, ~22min after this cycle's final abort) — its own text cites **"6 draft(s) died... in the last 24h (latest 2026-08-20T13:02:08.115432Z)"**, a timestamp matching this session's own read exactly. One sentinel remains open (#462); #479 stays auto-closed since Aug 8. **Candidates skipped per abort fell sharply today: 31, 25, 26, 26 — 108 total, down from Aug 19's 180 and the lowest in this tracking**; Aug 19's 78-candidate first-abort outlier is gone and today's four sit in a tight 25–31 band. **The candidate that dies at the writer produced two firsts.** The 00:47Z abort died on `all_time_high_USC00035189_2026-08-16` (score 88/80) — **the first candidate observed carrying an event date that lags its run by days** (an Aug 16 event still queued on an Aug 20 run); every previously logged writer-kill carried a same-day or next-day event date. The slot then rotated to **`absextreme_cold_La_Paz_2026-08-20`** (score 88/78) for the remaining three aborts — **La Paz returns after a 4-day absence (last seen Aug 15–16), and this is the first cold-side `absolute_extreme` observed holding the slot**, every prior holder having been a heat or all-time-high event. A 1-then-3 split for the third consecutive day (Aug 18 Mt Plymouth→Clinton Nas, Aug 19 Valencia→Vicksburg, Aug 20 USC00035189→La Paz) — the rotation shape is now the stable pattern, not the exception. **The US Western `fire_footprint` score-gate cluster is fully static at 18 items**, unchanged in both count and composition from Aug 19 (same tier2 leader, Oregon `ORBUD-002696` 124,935 ha/68/72; same tier1 member, Idaho `IDBOD-265460` 63,951 ha/64/72; same 16 tier0 items by value, 43,377 → 21,043 ha) — its second fully-static day, after Aug 18's first. **The `usgs_earthquake` near-miss is absent again** — Aug 19's genuinely-new M5.9 `us6000tlrj` did not recur, a 1-day appearance rather than the M6.9's 5-day run. **`fire` near-misses fell to 2, the lowest in this tracking** (from 4), and both sit at **63/64 — a single point under threshold**: the Northern Territory, Australia coordinate (`-12.76_132.76`) and one western Siberia coordinate (`66.98_75.73`), identical in both the 08:27Z and 12:53Z runs. **`gpm_imerg` visibility recovered this cycle — and revealed a stuck target date:** 4 entries (00:47:13Z, 04:35:45Z, 08:36:18Z, 13:01:32Z) all cite "3 repeated HTTP 503 failures for `2026-08-18`" — the same 2-day-old target date across runs spanning 12+ hours. The fetcher is not merely failing; it is re-attempting a fixed stale date rather than advancing, which would keep `precipitation_extreme` dark independent of the billing outage. **Flagged for the operator as a separate defect.** `ocean_sst` and `firms` remain invisible in the 50-entry `errors` window; GDACS dropped to 1 entry (from 5), same GeoRSS schema drift. **`state_size` warnings: 36 today (up from 34), and a new peak byte size of 3,246,362B (~3.25MB)** — up again from Aug 19's 3,238,215B, the climb GitHub issue #390 flagged Jul 7 (800KB warning threshold) continuing with no plateau. **GitHub issue #467 ("Workflow failing: voice-regression") remains open**, updated 2026-08-20T09:56:37Z, still citing the same frozen 20-run streak — same root cause. **Separately, the `rejected`-bucket drain decelerated again:** the gist's total draft count fell 46 → 45, `rejected` losing 1 item. The five-day sequence now reads 61→57→53→49→46→45 (**-4, -4, -4, -3, -1**), which **falsifies Aug 18's "fixed-rate scheduled sweep" hypothesis** — the decaying batch sizes instead read as an age/TTL cutoff draining a finite backlog of old `rejected` entries, now nearly exhausted at 5 remaining; posted (38) and approved (2) unchanged throughout. Not something this routine did or could have done (no gist-write capability this session). **This is a live, ongoing billing/infra blocker, not a voice-quality or triage regression** — posting cannot resume, and no further voice evidence can accumulate, until it's fixed. **Now 31 days unresolved since the Jul 24 outage began.** Aug 21: same picture, 4 more aborts (170 candidates skipped, up from Aug 20's low), still 0 pending, `rejected` bucket kept draining (-2). Aug 22: same picture again, 4 more aborts (182 candidates skipped, up from Aug 21's 170) all on the same writer-killed candidate for the first time all day, still 0 pending, `rejected` bucket now fully drained to 0. Aug 23: same picture again, 4 more aborts, writer-killed slot rotated to a new station (Snake River Station, WY) but repeated the full-day single-station hold; gist total held flat at 40 (nothing left in `rejected` to drain); #462's own text still cites the same "6 draft(s) died... in the last 24h" pattern, timestamp-matched to this session's read; **the fix per #462 is explicit and simple: top up Anthropic API credits.** Aug 24: same picture again, 4 more aborts (143 candidates skipped, up from Aug 23), writer-killed slot opened on La Paz (same-day cold) then rotated to a brand-new station (Larsen Creek, WY, 3-day-stale) for the rest of the day; gist total held flat at 40; #462 and #467 both still open, both now 32 days old with zero movement. **A second, independent infra defect surfaced this cycle:** `gpm_imerg`'s HTTP 401 auth failures (recurring since Aug 14) trace to `credential_expiry.EARTHDATA_TOKEN`, whose NASA Earthdata JWT expired 2026-08-22T15:18:07Z — the token needs manual renewal, a fix separate from and simpler than the billing outage, and one this routine cannot perform (no write access to the credential store). Aug 25: same picture again, but only 3 aborts (98 candidates skipped, down from Aug 24's 143), traced to a genuine reduction in pipeline-run cadence (`run_history` shows only 3 `alerts`/`both` runs today vs. 16 `auto_publish_due` no-ops, with an 8h20m gap swallowing the ~08:xx slot) rather than a window artifact; writer-killed slot held Larsen Creek, WY for all 3 aborts (first full-day hold for this candidate, 4 days stale); gist total held flat at 40; `EARTHDATA_TOKEN` remains expired and unrenewed (now 3 days past expiry); #462 and #467 both still open, 33 and 32 days old respectively. Aug 26: same picture again, but only 2 budget_exhausted+billing_cycle_abort pairs visible in this session's suppression window (01:04Z La Paz cold fresh, 04:34Z Randolph UT all_time_high 3-days-stale) against issue #462's independently-stated "3" deaths/24h (latest timestamp matched exactly; count unreconciled, likely a window-eviction artifact); writer-killed slot rotated between the two stations today rather than holding one all day; `fire_footprint` cluster grew for the first time in 4 days (19→20); `fire` near-misses rose to 3 on a fully turned-over location set; `usgs_earthquake` reappeared after a 2-day absence; a new `cyclone_land_threat` near-miss appeared (China-approaching JTWC system); the recurring cold record_low near-miss (`cal_low_RQC00666730`) went absent for the first time since entering tracking; `EARTHDATA_TOKEN` remains expired (now 4 days past expiry); `firms` logged a fresh connection-pool failure variant; `state_size`'s peak byte size resumed climbing to a new high (3,350,527B) after Aug 25's one-day dip; gist total held flat at 40 a 4th day; #462 now 34 days old, #467 now 33 days old, neither has moved. Aug 27: same picture again, 3 budget_exhausted+billing_cycle_abort pairs since the last pull, all on the same candidate (`all_time_high_USC00427165_2026-08-23`, Randolph UT) — the first time one writer-killed candidate has held the slot across a cycle boundary rather than resetting, now 4 days stale; issue #462 fully reconciles with this session's read for the first time since Aug 25 (count 3, latest timestamp exact match); `fire_footprint` cluster grew again (20→21); `fire` near-misses fell sharply to 1 (from 3), smallest sample yet, reflecting only one `alerts` run in this narrower window; `usgs_earthquake` and the China `cyclone_land_threat` near-miss both absent after single-day appearances; a new `anomaly`-category cold near-miss appeared on a previously-unseen station (`RQC00660152`); `EARTHDATA_TOKEN` remains expired (now 5 days past expiry, still unrenewed); `state_size`'s peak byte size hit a new high (3,382,815B); gist total held flat at 40 a 5th day; #462 now 35 days old, #467 now 34 days old, neither has moved. **The rolling PR (#207) is itself now 79 days open, unmerged since 2026-06-09 — a 3rd, purely-process item alongside the two infra defects.** Aug 28: same picture again, 3 more budget_exhausted+billing_cycle_abort pairs since the last pull; the writer-killed slot finally rotated off Randolph UT (held across 3 aborts spanning 2 days) onto a new station, Altus AFB OK (4 days stale); `fire_footprint` cluster contracted for the first time in this tracking (21→20); `EARTHDATA_TOKEN` now 6 days past expiry, still unrenewed; `state_size` hit a new peak (~3.43MB); gist total held flat at 40 a 6th day; #462 now 36 days old and fully reconciles (4 deaths/24h, exact timestamp match); #467 now 35 days old, no material change; rolling PR #207 now 80 days open. Aug 29: same picture again, but only 1 budget_exhausted+billing_cycle_abort pair visible in this session's suppression window (00:21:28Z), rotating the writer-killed slot off Altus AFB OK (held across all 3 of Aug 28's aborts) onto a brand-new station (`all_time_high_USC00341750_2026-08-25`, 4 days stale); `fire_footprint` cluster held fully static a 2nd day at 20 items, identical composition to Aug 28 down to the hectare; `fire` near-misses read as 0 in this narrow window — the lowest yet, likely visibility rather than a real drop; `usgs_earthquake` and the China `cyclone_land_threat` near-miss both still absent; the `anomaly`-category cold near-miss on `RQC00660152` (present Aug 27–28) is absent this pull, its first gap since entering tracking; `EARTHDATA_TOKEN` now 7 days past expiry, still unrenewed; `state_size` hit a new peak (~3.48MB, 3,483,091B); gist total held flat at 40 a 7th day; #462 now 37 days old and fully reconciles (3 deaths/24h, exact timestamp match against the trailing-24h window); #467 now 36 days old, updated again but no material change; rolling PR #207 now 81 days open. Aug 30: same picture again, 4 more budget_exhausted+billing_cycle_abort pairs since the last pull (149 candidates skipped); writer-killed slot rotated onto Beaver Dams, Utah (`USS0011K13S_2026-08-26`) and held across the Aug 29→30 boundary, 4 days stale; `fire_footprint` cluster contracted 20→19 (17→16 tier0), tier1/tier2 leaders unchanged; `fire` near-misses recovered to 5 (eastern Siberia); a new `record`-category near-miss appeared (Trujillo Alto, PR, recurring fixture); `usgs_earthquake`/`cyclone_land_threat`/`RQC00660152` anomaly near-miss all still absent; `EARTHDATA_TOKEN` now 8 days past expiry, still unrenewed; `state_size` hit a new peak (~3.52MB, 3,515,122B); gist total held flat at 40 an 8th day; #462 now 38 days old and fully reconciles (4 deaths/24h, exact timestamp match); #467 now 37 days old, no material change since Aug 29; rolling PR #207 now 82 days open. Aug 31: same picture again, 5 more budget_exhausted+billing_cycle_abort pairs since the last pull (138 candidates skipped: 22/26/23/30/37); writer-killed slot held Beaver Dams, Utah (`USS0011K13S_2026-08-26`) across 3 more aborts before rotating — for the first time observed — onto a **newer event date on the same station** (`USS0011K13S_2026-08-28`, 3 days stale) rather than a different station entirely; `fire_footprint` cluster held fully static a 2nd day (19 items, 16 tier0, identical composition); `fire` near-misses churned through a peak of 8 (briefly adding Zambia/DRC, Brazil, and California points) before settling back to 6, all eastern Siberia, by the final run; the Trujillo Alto, PR `record` near-miss persisted, narrowing from 2 dated instances to 1; `usgs_earthquake`, the China `cyclone_land_threat` near-miss, and the `RQC00660152` anomaly near-miss all remain absent; `EARTHDATA_TOKEN` now 9 days past expiry, still unrenewed; `state_size`'s peak byte size ticked up only marginally to a new high (3,515,315B, +193B over Aug 30 — the smallest increase in this tracking, a possible first plateau sign); gist total held flat at 40 a 9th day; #462 now 39 days old and fully reconciles (5 deaths/24h, exact timestamp match against issue text updated 07:08:47Z); #467 now 38 days old, no material change since Aug 30; rolling PR #207 now 83 days open. Sep 1: same picture again, 3 more budget_exhausted+billing_cycle_abort pairs since the last pull (131 candidates skipped: 40/41/50); writer-killed slot held Beaver Dams, Utah (`USS0011K13S_2026-08-28`) with zero rotation across all 3 aborts — the first fully-stable single-station hold observed in this tracking, now 4 days stale; `fire_footprint` cluster contracted for the first time since Aug 30 (19→17 items, 16→14 tier0), same tier1/tier2 leaders; `fire` near-misses collapsed from Aug 31's ending 6 (eastern Siberia) to 1, on a brand-new, non-overlapping Tocantins, Brazil point; the Trujillo Alto, PR `record` near-miss, present through Aug 31's final run, is absent this pull — its first full absence since entering tracking; `usgs_earthquake`, the China `cyclone_land_threat` near-miss, and the `RQC00660152` anomaly near-miss all remain absent; `EARTHDATA_TOKEN` now 10 days past expiry, still unrenewed; `state_size`'s peak byte size jumped back up sharply to a new high (3,535,426B, +20,111B over Aug 31) — falsifying Aug 31's first-plateau read within a single cycle; gist total held flat at 40 a 10th day; #462 now 40 days old and fully reconciles (3 deaths/24h, exact timestamp match); #467 now 39 days old, no material change since Aug 31; rolling PR #207 now 84 days open. Sep 2: same picture again, but the daily abort count eased — only 2 budget_exhausted+billing_cycle_abort pairs since the last pull (02:09:21Z Quito, Ecuador `all_time_record`; 08:20:11Z La Paz, Bolivia `absolute_extreme` cold; 66 candidates skipped total, down from Sep 1's 131); the writer-killed slot fully rotated off Beaver Dams, Utah (held since Aug 30) onto two brand-new, same-day-fresh candidates — Quito then La Paz, both 0 days stale, the first zero-staleness writer-kills observed in several cycles, breaking the multi-day-stale pattern that dominated most of August; `fire_footprint` cluster fully static (17 items, identical composition and hectare values to Sep 1); `fire` near-misses reversed sharply from 1 (Tocantins, Brazil) back up to 24 (23 eastern Siberia + 1 Northern Territory, Australia) — a full flip back to the Siberia cluster with zero overlap with Sep 1's Brazil point; 2 new near-miss items appeared on a fresh station (`USC00483944`: `anomaly_cold` + `cal_low`, both dated Aug 29), plus a new `cal_high_RQC00669521`; the Trujillo Alto, PR `record` near-miss remains absent a 2nd day; `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent; `EARTHDATA_TOKEN` now 11 days past expiry, still unrenewed; `state_size`'s peak byte size climbed again to a new high (3,553,585B, +18,159B); gist total held flat at 40 an 11th day; issue #462 updated 2026-09-02T11:31:27Z, latest timestamp matches this session's read exactly (trailing-24h count of 4 vs. 2 visible in-window, a window-eviction artifact); #462 now 41 days old, #467 now 40 days old, neither has moved; rolling PR #207 now 85 days open. Sep 3: same picture again, abort count back up to 4 budget_exhausted+billing_cycle_abort pairs since the last pull (16:10:06Z, 19:07:08Z, 22:11:17Z Sep 2, 02:11:17Z Sep 3; 178 candidates skipped total: 46/48/58/26), up from Sep 2's 2 pairs/66 candidates; the writer-killed slot held La Paz, Bolivia (`absextreme_cold_La_Paz_2026-09-02`) with zero rotation across the first 3 aborts, then rotated to a brand-new station, `monthly_low_USC00445453_08_2026-08-31` (Meadows Of Dan, Virginia, 3 days stale) — the first `monthly_low` event ever observed holding the writer-killed slot, every prior holder having been `all_time_high`/`all_time_record`/`absolute_extreme`; `fire_footprint` cluster fully static a 2nd day (17 items, identical composition to Sep 2); `fire` near-misses jumped sharply to 76 — the largest cluster in this tracking (from 24), still entirely eastern Siberia with no location turnover; the Trujillo Alto, PR `record` near-miss (`RQC00669521`) reappeared after a 2-day absence; `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all remain absent; `EARTHDATA_TOKEN` now 12 days past expiry, still unrenewed; `state_size`'s peak byte size climbed again to a new high (3,561,038B, +7,453B over Sep 2); gist total held flat at 40 a 12th day; issue #462 updated 2026-09-03T05:58:56Z, latest timestamp matches this session's read exactly (trailing-24h count of 3 vs. 4 visible in-window, a window-eviction artifact running the opposite direction from usual); issue #467 updated 2026-09-03T15:05:45Z, during this very run, no material change; #462 now 42 days old, #467 now 41 days old, neither has moved; rolling PR #207 now 86 days open. Sep 4: same picture again, abort count eased slightly to 5 budget_exhausted+billing_cycle_abort pairs since the last pull (16:04:44Z, 19:03:35Z, 22:06:40Z Sep 3, 02:11:33Z, 08:24:32Z Sep 4; 119 candidates skipped total: 24/24/31/21/19), down from Sep 3's 178; the writer-killed slot held La Paz, Bolivia across all 5 aborts with zero rotation — the longest single-station hold in this tracking — by re-anchoring to a same-day-fresh reissue of the same event type mid-window rather than switching stations or going stale; `fire_footprint` cluster fully static a 3rd day (17 items, identical composition to Sep 2–3); `fire` near-misses fell sharply to 35 (from Sep 3's record 76) with the first location-mix broadening in days — Siberia cluster contracted to ~24 while Africa/South America/Australia/Indonesia points appeared; `usgs_earthquake` reappeared (2 items) after several days absent; the Trujillo Alto, PR `record` near-miss is absent again; China `cyclone_land_threat` and the `RQC00660152` anomaly near-miss both remain absent; `EARTHDATA_TOKEN` now 13 days past expiry, still unrenewed; `state_size`'s peak byte size climbed again to a new high (3,594,096B, +33,058B); gist total held flat at 40 a 13th day; issue #462 updated 2026-09-04T09:46:07Z, count (5) and latest timestamp both match this session's read exactly — the cleanest reconciliation in several cycles; issue #467 updated 2026-09-04T14:26:08Z, during this very run, no material change; #462 now 43 days old, #467 now 42 days old, neither has moved; rolling PR #207 now 87 days open. Sep 5: same picture again, abort count eased further to 3 budget_exhausted+billing_cycle_abort pairs since the last pull (02:12:24Z, 08:00:51Z, 14:51:21Z; 59 candidates skipped total: 24/17/18, down from Sep 4's 119); the writer-killed slot held La Paz, Bolivia for a 3rd consecutive day, re-anchoring to a fresh same-day event (`absextreme_cold_La_Paz_2026-09-05`) rather than rotating stations or going stale; `fire_footprint` cluster fully static a 4th day (same 15-item composition as Sep 2–4, same Oregon leader at 124,992 ha); `fire` near-misses read sparse in this pull's visible window (3: Indonesia ×2, eastern Siberia ×1), likely a window-visibility effect; a new `snow_extreme` near-miss category appeared for the first time in this tracking (Younts Peak, 135mm seasonal SWE, 1-year archive); `usgs_earthquake`, China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss all absent from this pull's window; `EARTHDATA_TOKEN` now 14 days past expiry, still unrenewed; `state_size`'s peak byte size climbed again to a new high (3,605,882B, +11,786B); gist total held flat at 40 a 14th day; issue #462 updated 2026-09-05T10:46:56Z, latest timestamp matches this session's read exactly (trailing-24h count of 4 vs. 3 visible in-window, a window-boundary artifact); issue #467 updated 2026-09-05T13:55:32Z, no material change; #462 now 44 days old, #467 now 43 days old, neither has moved; rolling PR #207 now 88 days open. Sep 6: same picture again, same root cause — 45 days; abort count eased sharply to only 1 budget_exhausted+billing_cycle_abort pair since the last pull (08:18:19Z; 23 candidates skipped, down from Sep 5's 59); the writer-killed slot finally rotated off La Paz, Bolivia (held Sep 3–5) onto a new candidate, `all_time_high_USC00115841_2026-09-03` (Morrisonville, Illinois, 3 days stale); `fire_footprint` cluster grew for the first time in 5 days (15→16 items), ending the Sep 2–5 static streak; `usgs_earthquake` reappeared (1 item, M3.7) after Sep 5's absence; `fire` near-misses read as 1 in this pull's single-run window, the narrowest sample yet (only 1 `alerts` run visible vs. Sep 5's 4); `snow_extreme`, China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss all absent this pull, plausibly the same narrow-window effect; `EARTHDATA_TOKEN` now 15 days past expiry, still unrenewed; `state_size`'s highest visible warning this pull is 3,593,129B, below Sep 5's reported peak but within the window's visibility noise; gist total held flat at 40 a 15th day; issue #462 updated 2026-09-06T11:09:06Z, latest timestamp matches this session's read exactly (trailing-24h count of 3 reconciles across the Sep 5→6 boundary); issue #467 updated 2026-09-06T14:16:13Z, no material change; #462 now 45 days old, #467 now 44 days old, neither has moved; rolling PR #207 now 89 days open.  Sep 7: same picture again, same root cause — 46 days; 4 budget_exhausted+billing_cycle_abort pairs since the last pull (17:58:17Z, 21:59:18Z Sep 6, 02:04:37Z, 08:50:14Z Sep 7; 78 candidates skipped total: 16/14/25/23); the writer-killed slot held Morrisonville, Illinois (`all_time_high_USC00115841_2026-09-03`) for 3 more aborts before rotating to a new station, Casey, Illinois (`all_time_high_USC00111329_2026-09-03`), for the day's final abort — a second consecutive Illinois `all_time_high` candidate holding the slot; `fire_footprint` cluster returned to static at 16 items (same composition, same Oregon tier2 leader at 124,992 ha), ending Sep 6's one-day growth blip after a single cycle; `fire` near-misses read as 1 (Indonesia, ~4.00°S 137.62°E) in this pull's narrow window; a 2nd `snow_extreme` near-miss station appeared, Banner Summit, alongside the continuing Younts Peak reading; `usgs_earthquake` persisted a 2nd day; China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss all remain absent; `EARTHDATA_TOKEN` now 16 days past expiry, still unrenewed; `state_size`'s highest visible warning this pull is 3,603,718B — again below Sep 6's reported peak, within the window's visibility noise, not a confirmed decrease; gist total held flat at 40 a 16th day; issue #462 updated 2026-09-07T12:49:30Z, citing "5 draft(s) died... in the last 24h (latest 2026-09-07T08:50:14.580008Z)" — exact timestamp match; issue #467 unchanged since 2026-09-06T14:16:13Z, no new update; #462 now 46 days old, #467 now 45 days old, neither has moved; rolling PR #207 now 90 days open. Sep 8 no fresh drafts (47th consecutive, dry spell 47 days); same billing-outage cause as the Resumption-bar row above; nothing to flip while the writer stays budget_exhausted. Sep 9 no fresh drafts (48th consecutive, dry spell 48 days); rolling PR #207 now 92 days open. **`main` resumed commit activity this cycle for the first time since Jul 24 (13 commits, PR #511 defaults automatic publishing to paused as explicit policy) — still nothing to flip while billing (issue #462) remains open.** Sep 10 no fresh drafts (49th consecutive, dry spell 49 days); rolling PR #207 now 93 days open. **New this cycle: `publication_control` now carries an explicit structured record** (`epoch: "p00b-paused-2026-09-09"`, `enabled: false`) confirming PR #511's pause policy is live — publishing stays gated by this epoch even after credits are restored, until the operator lifts it. Sep 11: `publication_control` unchanged; `llm_usage` confirms the ingestion/triage lane (`newsworthiness_search`) still runs at $0 cost under the pause, isolating the writer as the only dark stage. |
 | Coverage | **638 cities × 180 countries** (was 613 × 179; +25 via PR #81) |
-| Queue status | **15 pending as of Jul 6 grading, unchanged from Jul 5** (10 carry-overs from Jul 4: 2 A- [Typhoon Bavi, Loxahatchee FL], 2 B+ [Island Pond VT, Antwerpen], 6 B [Barrow, Astana, Basrah, Al Başrah al Qadīmah, Rocky Mountains CO fire, Urumqi Jul 4 reading]; 5 from Jul 5: 1 A- eastern Siberia fire, 1 B+ Johannesburg air_quality_hazard, 1 B Doha absolute_extreme, 1 B- Urumqi Jul 5 reading, 1 C+ Phalodi dust_event). **2 of the 15 ([4] Basrah, [6] Al Başrah al Qadīmah) are now strict staleness bulk-reject candidates** (>48h old, forecast date July 4 elapsed) — flagged for operator, write unavailable this session. Bot at 0.9.81.0+ (no newer BRIEFING.md handoff confirmed this cycle); reganom enabled post-PR #347 with writer-voice upgrade (PR #349); `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live. |
+| Queue status | **0 pending as of Aug 29 grading, unchanged from Aug 28.** 40 total drafts of any status in the gist (0 rejected, 38 posted, 2 approved) — **held flat a 7th consecutive day** (the `rejected` bucket drained to zero Aug 22 and has nothing left to prune); most recent `created_at` still 2026-07-23T14:11:46Z (37 days). **0 staleness candidates (moot, nothing pending).** Bot at 0.9.108.1 per `main`'s `VERSION`; `THEHEAT_WRITER_SAMPLES=2` + `THEHEAT_CRITIC_REVISE_ENABLED=1` live (though inert while billing is down). **P_tier's tracking remains CLOSED** (unchanged, no fresh `absolute_extreme` draft to retest). **`state_size` peak byte size climbed again to a new high, ~3.48MB (3,483,091B, vs Aug 28's 3,427,225B)** — still no plateau. US Western `fire_footprint` score-gate cluster **held fully static a 2nd day** (20 items, 17 tier0, identical composition to Aug 28); `usgs_earthquake` and the China `cyclone_land_threat` near-miss both still absent; `fire`-type near-misses read as 0 in this narrow window (the lowest yet, likely visibility, not a real drop); the `anomaly`-category cold near-miss on `RQC00660152` (present Aug 27–28) is absent this pull. `gpm_imerg`'s failure mode is still HTTP 401 (auth), still tied to the expired `EARTHDATA_TOKEN` (now 7 days past its 2026-08-22T15:18:07Z expiry, still unrenewed), the 2nd independent infra defect alongside the billing outage. Only 1 `alerts`-mode pipeline run plus 3 `auto_publish_due` no-op runs are visible in the 20-entry `run_history` window in this cycle's pull. **0 pending as of Aug 30 grading, unchanged from Aug 29.** 40 total drafts, held flat an 8th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (38 days). US Western `fire_footprint` cluster **contracted by one item** (20→19, 17→16 tier0; tier1/tier2 leaders unchanged). `fire` near-misses recovered to 5 (eastern Siberia). A new `record`-category near-miss appeared for the first time in this tracking (Trujillo Alto, Puerto Rico, the recurring PR fixture). `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent. `EARTHDATA_TOKEN` now 8 days past expiry, still unrenewed. `state_size` peak byte size climbed again to a new high (~3.52MB, 3,515,122B). Two `alerts`-mode runs (02:35Z, 09:35Z) visible in this pull's `run_history` window. **0 pending as of Aug 31 grading, unchanged from Aug 30.** 40 total drafts, held flat a 9th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (39 days). `fire_footprint` cluster held fully static a 2nd day (19 items, 16 tier0, identical composition). `fire` near-misses churned between 0 and 8 across the window's five runs, settling at 6 (eastern Siberia) by the final one. The Trujillo Alto, PR `record` near-miss persisted, narrowing to 1 dated instance. `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent. `EARTHDATA_TOKEN` now 9 days past expiry, still unrenewed. `state_size` peak byte size climbed only marginally to a new high (3,515,315B) — smallest increase yet, possibly the first plateau sign. Five `alerts`/`both`-mode runs visible in this pull's `run_history` window. **0 pending as of Sep 1 grading, unchanged from Aug 31.** 40 total drafts, held flat a 10th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (40 days). `fire_footprint` cluster contracted for the first time since Aug 30 (19→17 items, 16→14 tier0; tier1/tier2 leaders unchanged). `fire` near-misses collapsed from 6 (eastern Siberia) to 1, on a brand-new Tocantins, Brazil location with zero overlap. The Trujillo Alto, PR `record` near-miss went fully absent, its first gap since entering tracking. `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent. `EARTHDATA_TOKEN` now 10 days past expiry, still unrenewed. `state_size` peak byte size jumped back up sharply to a new high (3,535,426B, +20,111B) — falsifies Aug 31's plateau read. One `alerts`-mode run (02:45Z) plus 2 `auto_publish_due` no-ops visible in this pull's `run_history` window. **0 pending as of Sep 2 grading, unchanged from Sep 1.** 40 total drafts, held flat an 11th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (41 days). `fire_footprint` cluster fully static (17 items, 14 tier0, identical composition to Sep 1). `fire` near-misses reversed sharply from 1 to 24 (23 eastern Siberia + 1 Northern Territory, Australia), a full flip back from Sep 1's Brazil point. 2 new near-miss items appeared on a fresh station (`USC00483944`), plus a new `cal_high_RQC00669521`. Trujillo Alto, PR `record` near-miss absent a 2nd day. `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent. `EARTHDATA_TOKEN` now 11 days past expiry, still unrenewed. `state_size` peak byte size climbed again to a new high (3,553,585B, +18,159B) — no plateau. Two `alerts`-mode runs (02:05Z, 08:15Z) visible in this pull's `run_history` window. **0 pending as of Sep 3 grading, unchanged from Sep 2.** 40 total drafts, held flat a 12th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (42 days). `fire_footprint` cluster fully static a 2nd day (17 items, 14 tier0, identical composition to Sep 2). `fire` near-misses jumped sharply to 76 (from 24) — the largest cluster in this tracking, still entirely eastern Siberia. The Trujillo Alto, PR `record` near-miss reappeared after a 2-day absence. `usgs_earthquake`, China `cyclone_land_threat`, and the `RQC00660152` anomaly near-miss all still absent. `EARTHDATA_TOKEN` now 12 days past expiry, still unrenewed. `state_size` peak byte size climbed again to a new high (3,561,038B, +7,453B) — no plateau. Four `alerts`/`both`-mode runs (16:10Z, 19:07Z, 22:11Z Sep 2; 02:11Z Sep 3) visible in this pull's `run_history` window. **0 pending as of Sep 4 grading, unchanged from Sep 3.** 40 total drafts, held flat a 13th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (43 days). `fire_footprint` cluster fully static a 3rd day (17 items, 14 tier0, identical composition to Sep 2–3). `fire` near-misses fell to 35 (from Sep 3's record 76), first location-mix broadening in days (Siberia contracted to ~24, Africa/South America/Australia/Indonesia points appeared). `usgs_earthquake` reappeared (2 items) after several days absent. Trujillo Alto, PR `record` near-miss absent again. China `cyclone_land_threat` and the `RQC00660152` anomaly near-miss both still absent. `EARTHDATA_TOKEN` now 13 days past expiry, still unrenewed. `state_size` peak byte size climbed again to a new high (3,594,096B, +33,058B) — no plateau. Five `alerts`/`both`-mode runs (16:04Z, 19:03Z, 22:06Z Sep 3; 02:11Z, 08:24Z Sep 4) visible in this pull's `run_history` window. **0 pending as of Sep 5 grading, unchanged from Sep 4.** 40 total drafts, held flat a 14th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (44 days). `fire_footprint` cluster fully static a 4th day (same 15-item composition as Sep 2–4). `fire` near-misses read sparse (3 in the visible window), likely window-visibility. A new `snow_extreme` near-miss category appeared for the first time (Younts Peak, 135mm SWE). `usgs_earthquake`, China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss all absent from this pull's window. `EARTHDATA_TOKEN` now 14 days past expiry, still unrenewed. `state_size` peak byte size climbed again to a new high (3,605,882B, +11,786B) — no plateau. Four `alerts`/`both`-mode runs (18:43Z Sep 4; 02:08Z, 07:56Z, 14:47Z Sep 5) visible in this pull's `run_history` window. **0 pending as of Sep 6 grading, unchanged from Sep 5.** 40 total drafts, held flat a 15th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (45 days). `fire_footprint` cluster grew for the first time in 5 days (15→16 items). `usgs_earthquake` reappeared (1 item, M3.7). `fire` near-misses read as 1 in this pull's narrow window (single `alerts` run visible). `snow_extreme`, China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss are all absent from this pull's window. `EARTHDATA_TOKEN` now 15 days past expiry, still unrenewed. `state_size`'s highest visible warning this pull is 3,593,129B — below Sep 5's reported peak, but within the 50-entry window's visibility noise, not a confirmed decrease. One `alerts`-mode run (08:14:15Z) visible in this pull's `run_history` window — the narrowest window since tracking began, consistent with the single billing-abort pair observed this cycle.  **0 pending as of Sep 7 grading, unchanged from Sep 6.** 40 total drafts, held flat a 16th consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (46 days). `fire_footprint` cluster back to static at 16 items (same composition). `usgs_earthquake` persisted a 2nd day. `fire` near-misses read as 1 (Indonesia) in this pull's window. A 2nd `snow_extreme` station appeared (Banner Summit, alongside Younts Peak). China `cyclone_land_threat`, the `RQC00660152` anomaly near-miss, and the Trujillo Alto PR `record` near-miss remain absent. `EARTHDATA_TOKEN` now 16 days past expiry, still unrenewed. `state_size`'s highest visible warning this pull is 3,603,718B — again below Sep 6's reported peak, visibility noise, not a confirmed decrease. Four `alerts`-mode runs (17:54Z, 21:52Z Sep 6; 02:00Z, 08:46Z Sep 7) visible in this pull's `run_history` window, matching the 4 billing-abort pairs observed this cycle. **Refreshed Sep 8: still 0 pending, 40 total drafts of any status (38 posted, 2 approved, 0 rejected) — flat for a 17th consecutive day.** Most recent `created_at` across all drafts remains 2026-07-23T14:11:46Z — 47 days with no new draft. `credential_expiry.EARTHDATA_TOKEN` (NASA Earthdata) is now 17 days past its 2026-08-22T15:18:07Z expiry, keeping `gpm_imerg` (precipitation_extreme's primary feed) on HTTP 401 independent of the billing outage; `gdacs` continues its known GeoRSS schema-drift failure. `state_size` peaked at 3,641,896B this pull (up from Sep 7's reported 3,603,718B) — steady growth, no plateau. 0 staleness candidates (moot, nothing pending); write skipped, `gh` CLI absent (102nd consecutive skip, May 13 → Sep 8). **Sep 9: still 0 pending, 40 total (18th consecutive flat day), `created_at` still Jul 23 (48 days no new draft).** `EARTHDATA_TOKEN` now 18 days past expiry. `state_size` new peak 3,669,687B. 0 staleness candidates; write skipped (103rd consecutive skip, May 13 → Sep 9). **Sep 10: still 0 pending, 40 total (19th consecutive flat day), `created_at` still Jul 23 (49 days no new draft).** `EARTHDATA_TOKEN` now 19 days past expiry. `state_size` new peak 3,740,060B. Writer-killed slot rotated through 3 distinct candidates (S Bay FL all_time_high -> Riyadh dust_event -> Nino 3.4 regional_sst_anomaly -> Riyadh dust_event) for the first time in one pull. 0 staleness candidates; write skipped (104th consecutive skip, May 13 -> Sep 10). Sep 11: queue still 0 pending, 40 total (20th consecutive static day); `fire_footprint` cluster near-identical across readouts (19 IDs, 1 score change); `fire` near-misses contracted sharply (Texas Gulf cluster gone, new Northern California point); `state_size` new peak 3,802,203B. 0 staleness candidates; write skipped (105th consecutive skip, May 13 -> Sep 11). **0 pending as of Sep 12 grading, unchanged from Sep 11.** 40 total drafts (38 posted, 2 approved), held flat a 21st consecutive day; most recent `created_at` still 2026-07-23T14:11:46Z (51 days). Writer-killed slot **rotated across 3 candidates this pull** (fire Northern California -> Riyadh dust_event tier3 -> absextreme_cold USW00021514), a reversal of Sep 11's single-station freeze; 3 budget_exhausted+billing_cycle_abort pairs (down from Sep 11's 5), latest 2026-09-12T08:28:42Z, matching GitHub issue #462's own text exactly. `fire_footprint` cluster still 19 unique event_ids (14 score_gate + 5 evidence_contract, no overlap) but almost entirely different specific IDs than Sep 11's set — composition still rotating fast. `fire` near-misses **rebounded sharply to 24 unique coordinates** (up from Sep 11's 6) — the Texas Gulf Coast point (29.68,-94.16) flagged Sep 9-10 and absent Sep 11 is back, alongside Wyoming/Idaho/Washington/Belize/Mexico clusters. `record_low` and `severe_weather` both absent this pull, but the visible suppression window narrowed to ~10h (Sep 11T22:15Z-Sep 12T08:29Z, vs Sep 11's ~24h) so absence may be a sampling-window artifact, not a real drop. `EARTHDATA_TOKEN` now 21 days past expiry, still unrenewed. Raw gist file size 3,765,392B (~3.77MB) — below Sep 11's cited peak (3,802,203B), first observed decrease, plausibly suppression-ledger rollover rather than a real shrink. 0 staleness candidates; write skipped (106th consecutive skip, May 13 -> Sep 12). |
 
 ## Active proposals
 
-Ordered by leverage. Priority as of Jul 6 (unchanged from Jul 5 — zero fresh drafts means no
-new evidence to reorder against): **P_close** (16 cycles, last evidence Jul 5: 2 positive/3
-failing) > **P_tier** (7 cycles/10 instances across 4 signal types, 1st cross-location
-confirmation via Doha, Jul 5) > **P_dust** (9 cycles, last evidence Jul 5, 11 of 11
-`dust_event` drafts still unconfirmed) > **P9** (reopened Jul 4, not tested Jul 5 or Jul 6 — no
-`precipitation_extreme` draft in either cycle) > **P_compound** (5 cycles, not tested Jul 5 or
-Jul 6 — no record-type draft in either cycle) > **P5** (dust_event gap ongoing, last evidence
-Jul 5). Ordering carried forward verbatim from Jul 5's recency logic; nothing to re-rank
-without fresh drafts.
+Ordered by leverage. Priority as of Sep 12 (unchanged from Jul 24–Sep 11 — zero fresh drafts for a
+51st consecutive cycle means no new evidence to reorder against): **P_dust, P9, and P_tier remain
+CONFIRMED, tracking closed** (unchanged). The remaining *unimplemented* active proposals, in
+order, carried forward verbatim from Jul 23's recency logic (last cycle with fresh evidence):
+**P_close** (30 cycles, last evidence Jul 23: 2 positive — Al Başrah Al Qadīmah, Pikine; 1 partial
+— Doha; 1 hedged-weak — Capitol Hill) > **P_compound** (re-activated Jul 23, 15 cycles cumulative,
+not tested Jul 24 through Sep 11 — no record-type draft among any of the fifty-one days' 0 fresh
+drafts) > **A8** (opener-skeleton axis at 5 cycles, last evidence Jul 23; not tested Jul 24–Sep 11) >
+**A7** (not tested Jul 22 through Sep 11) > **P5** (last evidence Jul 23). **A4, A5, A6, and A9 not
+tested this cycle** (zero fresh drafts, 51st consecutive).
+
+**Sep 3 update:** billing outage now **42 consecutive days**, abort count back up to **4**
+budget_exhausted+billing_cycle_abort pairs since the last pull — 16:10:06Z, 19:07:08Z, 22:11:17Z
+(Sep 2), then 02:11:17Z (Sep 3), 178 candidates skipped total (46/48/58/26), up from Sep 2's 2
+pairs/66 candidates. GitHub issue #462, updated 2026-09-03T05:58:56Z, independently states "3
+draft(s) died... latest 2026-09-03T02:15:11Z" — latest timestamp matches this session's read
+exactly, though the trailing-24h count (3) is lower than the 4 pairs visible in this session's
+window, a window-eviction artifact running the opposite direction from the usual pattern. The
+writer-killed slot **held La Paz, Bolivia across three aborts, then rotated onto a brand-new
+station for the fourth** — `absextreme_cold_La_Paz_2026-09-02` held zero-rotation through
+16:10Z/19:07Z/22:11Z, then `monthly_low_USC00445453_08_2026-08-31` (Meadows Of Dan, Virginia, 3
+days stale) took over at 02:11Z — **the first `monthly_low` event ever observed holding the
+slot**, every prior holder having been `all_time_high`/`all_time_record`/`absolute_extreme`.
+`fire_footprint` cluster is **fully static a 2nd day**: 17 items (14 tier0/2 tier1/1 tier2),
+identical composition to Sep 2. `fire` near-misses **jumped sharply to 76** — the largest cluster
+in this tracking (from 24), still entirely eastern Siberia with no location turnover this time.
+The Trujillo Alto, PR `record` near-miss (`RQC00669521`) **reappeared** after a 2-day absence.
+`usgs_earthquake`, the China `cyclone_land_threat` near-miss, and the `RQC00660152` anomaly
+near-miss all remain absent. `gpm_imerg`'s HTTP 401 auth failures continue on the same expired
+`EARTHDATA_TOKEN` (now 12 days past its 2026-08-22T15:18:07Z expiry, still unrenewed). `gdacs`
+GeoRSS schema drift unchanged. `state_size`'s peak byte size climbed again to a new high,
+3,561,038B (+7,453B over Sep 2's 3,553,585B) — still no plateau. Gist total held flat at 40 a
+12th day (`rejected` still empty). #467 updated 2026-09-03T15:05:45Z, during this very run — same
+20-consecutive-failed-run text, no material change. #462 now 42 days old, #467 now 41 days old,
+neither has moved. **Rolling PR #207 is now 86 days open, unmerged since 2026-06-09.** Full
+detail in `docs/DRAFT_CORPUS.md`'s Sep 3 entry.
+
+**Sep 2 update:** billing outage now **41 consecutive days**, but the daily abort count eased to
+**2** budget_exhausted+billing_cycle_abort pairs — 02:09:21Z (Quito, Ecuador `all_time_record`)
+and 08:20:11Z (La Paz, Bolivia `absolute_extreme` cold), 66 candidates skipped total (30/36), down
+from Sep 1's 3 pairs/131 candidates. GitHub issue #462, updated 2026-09-02T11:31:27Z, independently
+states "4 draft(s) died... latest 2026-09-02T08:20:11Z" — latest timestamp matches this session's
+read exactly, though the trailing-24h count (4) exceeds the 2 pairs visible in this session's
+window, a window-eviction artifact consistent with several prior cycles. The writer-killed slot
+**fully rotated off Beaver Dams, Utah** (held with zero rotation since Aug 30) **onto two
+brand-new, same-day-fresh candidates** — `alltime_high_Quito_2026-09-02` then
+`absextreme_cold_La_Paz_2026-09-02`, both 0 days stale — the first zero-staleness writer-kills
+observed in several cycles, a clean break from the multi-day-stale pattern that dominated most of
+August. `fire_footprint` cluster is **fully static**: 17 items (14 tier0/2 tier1/1 tier2),
+identical composition and hectare values to Sep 1's final read. `fire` near-misses **reversed
+sharply**, from Sep 1's ending 1 (Tocantins, Brazil) back up to 24 — 23 eastern Siberia
+coordinates plus 1 Northern Territory, Australia point — a full flip back to the Siberia cluster
+with zero overlap with Sep 1's Brazil point. Two new near-miss items appeared on a fresh station,
+`USC00483944` (`anomaly_cold` −8.2°C from normal + `cal_low` 1.7°C below record, both dated Aug
+29), plus a new `cal_high_RQC00669521` (33-year-old record). The Trujillo Alto, PR `record`
+near-miss remains absent a 2nd consecutive day. `usgs_earthquake`, the China `cyclone_land_threat`
+near-miss, and the `RQC00660152` anomaly near-miss all remain absent. `gpm_imerg`'s HTTP 401 auth
+failures continue on the same expired `EARTHDATA_TOKEN` (now 11 days past its
+2026-08-22T15:18:07Z expiry, still unrenewed). `gdacs` GeoRSS schema drift unchanged.
+`state_size`'s peak byte size climbed again to a new high, 3,553,585B (+18,159B over Sep 1's
+3,535,426B) — still no plateau. Gist total held flat at 40 an 11th day (`rejected` still empty).
+#467 last updated 2026-09-01T16:46:52Z — same 20-consecutive-failed-run text, no material change.
+#462 now 41 days old, #467 now 40 days old, neither has moved. **Rolling PR #207 is now 85 days
+open, unmerged since 2026-06-09.** Full detail in `docs/DRAFT_CORPUS.md`'s Sep 2 entry.
+
+**Sep 1 update:** billing outage now **40 consecutive days.** 3 budget_exhausted+billing_cycle_abort
+pairs since the last pull — 18:59:52Z, 21:17:38Z (Aug 31), then 02:49:04Z (Sep 1), 131 candidates
+skipped total (40/41/50). GitHub issue #462, updated 2026-09-01T11:50:35Z, independently states
+"3 draft(s) died... latest 2026-09-01T02:49:04Z" — count and timestamp both match this session's
+own read exactly. The writer-killed slot held `all_time_high_USS0011K13S_2026-08-28` (Beaver Dams,
+Utah) with zero rotation across all 3 aborts — the first fully-stable single-station hold observed
+in this tracking, now 4 days stale. `fire_footprint` cluster contracted for the first time since
+Aug 30 (19 → 17 items, 16 → 14 tier0; same tier2/tier1 leaders unchanged). `fire` near-misses
+collapsed from Aug 31's ending count of 6 (eastern Siberia) to a single item on a brand-new,
+non-overlapping location — Tocantins, Brazil. The Trujillo Alto, PR `record` near-miss, present
+through Aug 31's final run, is absent from this pull — its first full absence since entering
+tracking Aug 30. `usgs_earthquake`, the China `cyclone_land_threat` near-miss, and the
+`RQC00660152` anomaly near-miss all remain absent. `gpm_imerg`'s HTTP 401 auth failures continue
+on the same expired `EARTHDATA_TOKEN` (now 10 days past its 2026-08-22T15:18:07Z expiry, still
+unrenewed). `gdacs` GeoRSS schema drift unchanged. `state_size`'s peak byte size jumped back up
+sharply to a new high, 3,535,426B (+20,111B over Aug 31's 3,515,315B) — over 100× Aug 31's own
++193B increase, falsifying Aug 31's first-plateau read within a single cycle. Gist total held
+flat at 40 a 10th day (`rejected` still empty). #467 last updated 2026-08-31T20:54:06Z — a new
+failing-run link, same 20-consecutive-failed-run text, no material change. #462 now 40 days old,
+#467 now 39 days old, neither has moved. **Rolling PR #207 is now 84 days open, unmerged since
+2026-06-09.** Full detail in `docs/DRAFT_CORPUS.md`'s Sep 1 entry.
+
+**Aug 31 update:** billing outage now **39 consecutive days.** 5 budget_exhausted+billing_cycle_abort
+pairs since the last pull — 16:22:26Z, 19:01:21Z, 22:19:18Z (Aug 30), then 02:34:56Z, 10:22:37Z
+(Aug 31), 138 candidates skipped total (22/26/23/30/37). GitHub issue #462, updated
+2026-08-31T07:08:47Z, independently states "5 draft(s) died... latest 2026-08-31T02:34:56Z" —
+count and timestamp both match this session's own read exactly. The writer-killed slot held
+Beaver Dams, Utah (`USS0011K13S_2026-08-26`) across 3 more aborts, then — for the first time
+observed — rotated onto a **newer event date on the same station** (`USS0011K13S_2026-08-28`)
+rather than a different station entirely; now 3 days stale. `fire_footprint` cluster held fully
+static a 2nd day (19 items, 16 tier0, same tier2/tier1 leaders unchanged to the hectare). `fire`
+near-misses churned hard within the window — briefly adding Zambia/DRC, Brazil, and California
+points to reach a peak of 8, then dropping to 0 in one run — before settling back to 6, all
+eastern Siberia (62–65°N, 110–116°E), by the final run. The Trujillo Alto, PR `record` near-miss
+persisted, narrowing from 2 dated instances to 1 (69/72, unchanged). `usgs_earthquake`, the China
+`cyclone_land_threat` near-miss, and the `RQC00660152` anomaly near-miss all remain absent.
+`gpm_imerg`'s HTTP 401 auth failures continue on the same expired `EARTHDATA_TOKEN` (now 9 days
+past its 2026-08-22T15:18:07Z expiry, still unrenewed). `gdacs` GeoRSS schema drift unchanged.
+`state_size`'s peak byte size ticked up only marginally to a new high, 3,515,315B (+193B over
+Aug 30's 3,515,122B) — the smallest increase in this tracking, a possible first plateau sign.
+Gist total held flat at 40 a 9th day (`rejected` still empty). #467 last updated
+2026-08-30T16:51:27Z — same 20-consecutive-failed-run text, no material change. #462 now 39 days
+old, #467 now 38 days old, neither has moved. **Rolling PR #207 is now 83 days open, unmerged
+since 2026-06-09.** Full detail in `docs/DRAFT_CORPUS.md`'s Aug 31 entry.
+
+**Aug 30 update:** billing outage now **38 consecutive days.** 4 budget_exhausted+billing_cycle_abort
+pairs since the last pull — 16:27:27Z and 22:12:39Z (Aug 29), then 02:40:29Z and 09:40:35Z (Aug 30),
+149 candidates skipped total (50/47/27/25). GitHub issue #462, updated 2026-08-30T12:03:27Z,
+independently states "4 draft(s) died... latest 2026-08-30T09:40:35.228757Z" — count and timestamp
+both match this session's own read exactly. The writer-killed slot rotated onto a new station,
+`all_time_high_USS0011K13S_2026-08-26` (Beaver Dams, Utah, 93/80), on the first abort and then held
+it across the Aug 29→30 boundary for the remaining 3 aborts — now 4 days stale. `fire_footprint`
+cluster contracted by one item (20→19, 17→16 tier0; same tier2/tier1 leaders unchanged to the
+hectare). `fire` near-misses recovered to 5 (from Aug 29's visibility-artifact 0), clustered
+entirely on eastern Siberia. A new score-gate category appeared for the first time in this
+tracking — `record` — two `cal_high` near-misses on Trujillo Alto, Puerto Rico (`RQC00669521`, the
+recurring PR fixture), 69/72. `usgs_earthquake`, the China `cyclone_land_threat` near-miss, and the
+`RQC00660152` anomaly near-miss all remain absent. `gpm_imerg`'s HTTP 401 auth failures continue on
+the same expired `EARTHDATA_TOKEN` (now 8 days past its 2026-08-22T15:18:07Z expiry, still
+unrenewed). `gdacs` GeoRSS schema drift unchanged. `state_size`'s peak byte size climbed again to a
+new high, ~3.52MB (3,515,122B vs. Aug 29's 3,483,091B) — still no plateau. Gist total held flat at
+40 an 8th day (`rejected` still empty). #467 still last updated 2026-08-29T14:35:41Z — no new touch
+this cycle. #462 now 38 days old, #467 now 37 days old, neither has moved. **Rolling PR #207 is now
+82 days open, unmerged since 2026-06-09.** Full detail in `docs/DRAFT_CORPUS.md`'s Aug 30 entry.
+
+**Aug 21 update:** billing outage now **29 consecutive days**. 4 aborts today (00:52:52Z,
+04:36:21Z, 08:33:57Z, 12:57:43Z); candidates skipped jumped back to 170 (81/30/35/24) from Aug
+20's tracking-low 108, the 3rd first-abort outlier observed. Writer-killed slot: La Paz (fresh,
+same-day) → `all_time_high_USC00031191_2026-08-18` (Cane Creek Sp, Arkansas, new station,
+3-day-stale event date) — 2nd consecutive day the slot has held a multi-day-lagging event,
+now reading as a small recurring class rather than a one-off. `fire_footprint` cluster static
+for a 3rd day (18 items, unchanged composition). New `usgs_earthquake` identity (`us6000tm81`,
+3rd distinct event in 4 days). First Arabian Peninsula `fire` near-miss. First `anomaly`-category
+near-miss (`anomaly_cold_USC00483944`). `gpm_imerg`'s stuck target date advanced one day
+(`2026-08-18`→`2026-08-19`) but remains 2 days behind. `state_size` peak byte size climbed again
+(~3.27MB). Gist `rejected` bucket kept draining (45→43, -2), breaking Aug 20's
+"nearly-exhausted" read. #462/#467 both still open, timestamp-matched. Full detail in
+`docs/DRAFT_CORPUS.md`'s Aug 21 entry.
+
+**Aug 22 update:** billing outage now **30 consecutive days — a full month.** 4 aborts today
+(00:47:31Z, 04:28:55Z, 08:23:38Z, 12:46:02Z); candidates skipped rose again to 182 (76/42/30/34)
+from Aug 21's 170. Writer-killed slot held **one station, `all_time_high_USC00031191_2026-08-18`
+(Cane Creek Sp, Arkansas), for all 4 aborts** — the first full-day hold observed, breaking the
+1-then-3 rotation shape that had stood for 4 straight days; the event date is now 4 days stale.
+`fire_footprint` cluster static for a 4th day (18 items, unchanged composition). Both of Aug 21's
+new near-miss categories (`usgs_earthquake`, `anomaly`) proved 1-day appearances, absent again
+today. `fire` near-misses jumped to 8 (from 3) with the location mix fully turning over (Amazon,
+Congo Basin, Kalimantan, 2 Siberia points). `gpm_imerg`/`ocean_sst`/`firms` crowded out of the
+errors window entirely. `state_size` warnings jumped to 46 (from 36) on a new peak byte size
+(~3.30MB). Gist `rejected` bucket fully drained to 0 for the first time (43→40, -3). #462/#467
+both still open, timestamp-matched. Full detail in `docs/DRAFT_CORPUS.md`'s Aug 22 entry.
+
+**Aug 24 update:** billing outage now **32 consecutive days.** 4 aborts today (00:48:47Z,
+04:40:23Z, 08:41:38Z, 12:58:15Z); candidates skipped 143 total (39/38/32/34). Writer-killed slot
+opened on `absextreme_cold_La_Paz_2026-08-24` (same-day) for the 1st abort, then rotated to a
+brand-new station, `all_time_high_USS0009G06S_2026-08-21` (Larsen Creek, Wyoming, 3-day-stale),
+for the remaining 3 — the 1-then-3 split shape holds. `fire_footprint` cluster static a 2nd day
+(19 items, tier2 leader unchanged at 124,992 ha). `usgs_earthquake` near-miss absent again (1-day
+appearance). `fire` near-misses held at 3, location mix fully turned over (Brazil, Canadian
+Arctic, Eastern Europe, all 63/64). **New root-cause detail: `gpm_imerg`'s HTTP 401 auth
+failures (recurring since Aug 14) trace to `credential_expiry.EARTHDATA_TOKEN`, expired
+2026-08-22T15:18:07Z** — a 2nd, independent, and simpler-to-fix infra defect (manual token
+renewal) than the billing outage; not something this routine can act on (no credential-store
+write access). `gdacs` GeoRSS schema drift unchanged. `state_size` warnings fell to 32 but new
+peak byte size ~3.34MB. Gist total held flat at 40 (nothing left in `rejected`). #462 still open,
+updated today citing the same "6 draft(s) died... in the last 24h" pattern, timestamp-matched
+exactly; #467 still open and still red (20 consecutive failed runs, assigned to the operator).
+Full detail in `docs/DRAFT_CORPUS.md`'s Aug 24 entry.
+
+**Aug 25 update:** billing outage now **33 consecutive days.** Only 3 aborts today (00:49:08Z,
+04:37:19Z, 12:54:48Z) — down from the usual 4 — traced to a genuine reduction in pipeline-run
+cadence, not a suppressions-window artifact: `run_history` shows only 3 full `alerts`/`both` runs
+today against 16 `auto_publish_due` no-ops, with an 8h20m gap between the 04:30Z and 12:50Z runs
+swallowing the expected ~08:xx slot. Candidates skipped 98 total (33/30/35). Writer-killed slot
+held **one station, `all_time_high_USS0009G06S_2026-08-21` (Larsen Creek, Wyoming), for all 3
+aborts** — its first full-day single-station hold (Aug 24 was 1-then-3); event date now 4 days
+stale. `fire_footprint` cluster static a 3rd day (19 items, unchanged composition and scores).
+`usgs_earthquake` near-miss absent a 2nd day. `fire` near-misses fell to 1, a brand-new Indonesia
+location — possibly reflecting today's reduced run count. `gpm_imerg`'s HTTP 401 auth failures
+continue on the same expired `EARTHDATA_TOKEN` (now 3 days past its 2026-08-22T15:18:07Z expiry,
+still unrenewed). `gdacs` GeoRSS schema drift unchanged. `state_size` warnings jumped to 43 (from
+32, the largest single-day jump yet), but the peak byte size ticked down slightly to ~3.34MB
+(3,335,357B vs. Aug 24's 3,344,309B) — the first non-increase since the "no plateau" climb began.
+Gist total held flat at 40 a 3rd day (`rejected` still empty). #462 still open, updated today
+13:25:47Z citing "3 draft(s) died... in the last 24h" (down from the usual 4-6, timestamp-matched
+exactly to this session's read); #467 still open and still red (20 consecutive failed runs).
+#462 now 33 days old, #467 now 32 days old, neither has moved. Full detail in
+`docs/DRAFT_CORPUS.md`'s Aug 25 entry.
+
+**Aug 26 update:** billing outage now **34 consecutive days.** 2 budget_exhausted+billing_cycle_abort
+pairs visible in this session's suppression window (01:04:39Z, 04:34:51Z) — `run_history`'s
+20-entry window shows only 1 `alerts`-mode run today (04:31Z, `partial_failure`); the run behind
+the first abort (00:44Z) is confirmed only via its `run_id`, already rolled off the window.
+GitHub issue #462, updated 13:31:11Z, independently states "3 draft(s) died... in the last 24h" —
+the latest timestamp matches exactly, but the count (3) doesn't reconcile against the 2 pairs
+visible here; likely a 3rd death aged out of the 100-entry suppression window before this pull.
+Writer-killed slot rotated between two stations today — La Paz, Bolivia (fresh, same-day cold
+`absolute_extreme`) then Randolph, Utah `all_time_high` (`USC00427165`, 3-days-stale) — breaking
+Aug 25's full-day single-station hold. `fire_footprint` cluster grew for the first time in 4 days
+(19→20 items, 17 tier0 up from 16). `fire` near-misses rose to 3 on a fully turned-over location
+set (2× Hawaii Big Island, 1× Amazon Basin, Brazil). `usgs_earthquake` reappeared after a 2-day
+absence. A new `cyclone_land_threat` near-miss appeared (JTWC system approaching China, 69/70).
+The recurring cold `record_low` near-miss (`cal_low_RQC00666730_2026-08-21`) is absent today —
+its first gap since entering tracking around Aug 20/21. `gpm_imerg`'s HTTP 401 auth failures
+continue on the same expired `EARTHDATA_TOKEN` (now 4 days past its 2026-08-22T15:18:07Z expiry,
+still unrenewed). `gdacs` GeoRSS schema drift unchanged. `firms` logged a fresh connection-pool
+failure variant. `state_size` warnings held at 25 (down from Aug 25's 43), but the peak byte size
+resumed climbing to a new high, ~3.35MB (3,350,527B vs. Aug 25's 3,335,357B) — Aug 25's dip was a
+one-day blip, not a plateau. Gist total held flat at 40 a 4th day (`rejected` still empty). #467
+still open and still red (20 consecutive failed runs, updated 10:03:48Z). #462 now 34 days old,
+#467 now 33 days old, neither has moved. Full detail in `docs/DRAFT_CORPUS.md`'s Aug 26 entry.
+
+**Aug 27 update:** billing outage now **35 consecutive days.** 3 budget_exhausted+billing_cycle_abort
+pairs visible since the last pull, all on **the same candidate** — `all_time_high_USC00427165_2026-08-23`
+(Randolph, Utah) — at 16:46:36Z and 22:41:03Z (Aug 26) and 05:58:49Z (Aug 27): the first time one
+writer-killed candidate has held the slot across a cycle boundary rather than resetting; event date
+now 4 days stale. `run_history` shows exactly 3 `alerts`-mode runs in this window, all
+`partial_failure`. GitHub issue #462, updated 2026-08-27T10:02:48Z, independently states "3
+draft(s) died... latest 2026-08-27T05:58:49Z" — both count and timestamp match this session's own
+read exactly, the first full reconciliation since Aug 25 (Aug 26 had an unreconciled count gap).
+`fire_footprint` cluster grew again (20→21 items, 18 tier0 up from 17; same tier2/tier1 leaders).
+`fire` near-misses fell sharply to 1 (from 3), a single Russian Far East coordinate — the smallest
+sample yet, reflecting only one `alerts` run's worth of data this window. `usgs_earthquake` and the
+China `cyclone_land_threat` near-miss are both absent after single-day appearances. A new
+`anomaly`-category cold near-miss appears on a previously-unseen station (`RQC00660152`).
+`gpm_imerg`'s HTTP 401 auth failures continue on the same expired `EARTHDATA_TOKEN` (now 5 days
+past its 2026-08-22T15:18:07Z expiry, still unrenewed). `gdacs` GeoRSS schema drift unchanged.
+`state_size`'s peak byte size climbed again to a new high, ~3.38MB (3,382,815B vs. Aug 26's
+3,358,274B) — still no plateau. Gist total held flat at 40 a 5th day (`rejected` still empty).
+#467 still open and still red (20 consecutive failed runs, no new update since 10:03:48Z Aug 26).
+#462 now 35 days old, #467 now 34 days old, neither has moved. **Rolling PR #207 is now 79 days
+open, unmerged since 2026-06-09** — a 3rd, purely-process item alongside the two infra defects.
+Full detail in `docs/DRAFT_CORPUS.md`'s Aug 27 entry.
+
+**Aug 28 update:** billing outage now **36 consecutive days.** 3 budget_exhausted+billing_cycle_abort
+pairs visible since the last pull — 18:43:40Z and 22:00:53Z (Aug 27), both still on
+`all_time_high_USC00427165_2026-08-23` (Randolph, Utah), then 04:00:34Z (Aug 28) finally rotating
+off it onto a new station, `all_time_high_USW00013902_2026-08-24` (Altus AFB, Oklahoma, 4 days
+stale) — ending the multi-cycle-boundary hold flagged Aug 27. Candidates skipped: 33, 36, 43 (112
+total). GitHub issue #462, updated 2026-08-28T05:30:14Z, independently states "4 draft(s)
+died... latest 2026-08-28T04:00:34Z" — reconciles exactly against this session's read once Aug
+27's already-counted 05:58:49Z abort is included in the trailing-24h window. `fire_footprint`
+cluster **contracted for the first time in this tracking** (21→20 items, 17 tier0 down from 18;
+same tier2 leader Oregon `ORBUD-002696`, now 124,992 ha, up slightly; same 2 tier1 members Idaho
+`IDBOD-265460` and Utah `UTFIF-260341`). `fire` near-misses read as 1 (Russian Far East) in this
+narrow window — only 1 `alerts`-mode run (03:56:12Z) plus 1 `both`-mode run (21:56:36Z Aug 27) are
+visible in the 20-entry `run_history` window this pull, so this likely reflects visibility, not a
+real drop, same caveat as Aug 27. `usgs_earthquake` and the China `cyclone_land_threat` near-miss
+both remain absent. The `anomaly`-category cold near-miss on `RQC00660152` recurred a 2nd day.
+`gpm_imerg`'s HTTP 401 auth failures continue on the same expired `EARTHDATA_TOKEN` (now 6 days
+past its 2026-08-22T15:18:07Z expiry, still unrenewed). `gdacs` GeoRSS schema drift unchanged.
+`state_size`'s peak byte size climbed again to a new high, ~3.43MB (3,427,225B vs. Aug 27's
+3,382,815B) — still no plateau. Gist total held flat at 40 a 6th day (`rejected` still empty).
+#467 updated 2026-08-27T20:37:28Z (a body-only touch, no new comment; still cites the same
+20-consecutive-failed-run text) — not a material change. #462 now 36 days old, #467 now 35 days
+old, neither has moved. **Rolling PR #207 is now 80 days open, unmerged since 2026-06-09.** Full
+detail in `docs/DRAFT_CORPUS.md`'s Aug 28 entry.
+
+**One operational item, not a voice proposal, still supersedes every ranking below and is the
+plan's sole top priority: the pipeline has no Anthropic API billing credit and cannot draft —
+confirmed live in the pipeline's own logs for 30 consecutive days, a full month.**
+The gist's `suppressions` window carries 4 `budget_exhausted` + 4 `billing_cycle_abort`
+pairs today (00:47:42Z, 04:36:52Z, 08:37:07Z, 13:02:08Z) — same ~4/day cadence as Aug 17–19. All
+aborts cite the writer's exact HTTP 400 error (`"Your credit balance is too low to access the
+Anthropic API"`). GitHub issue **#462** ("Writer watch: the Anthropic writer is down [budget
+exhausted]," open since 2026-07-23T15:30Z, still updating — last update 2026-08-20T13:24:35Z,
+~22min after this cycle's final abort) now cites "6 draft(s) died... in the last 24h (latest
+2026-08-20T13:02:08.115432Z)," a timestamp matching this session's own read exactly. One sentinel
+remains open (#462); #479 stays auto-closed since Aug 8, no new sentinel opened this cycle.
+**Noted in passing, not tracked by this routine: GitHub issue #467 ("Workflow failing:
+voice-regression") remains open since 2026-07-24T10:31:30Z — the same day the outage began —
+assigned to the operator; likely shares the billing root cause, flagged here for awareness
+rather than as a new proposal or tracked item.**
+**Candidates skipped fell sharply today: 31, 25, 26, 26 — 108 total, down from Aug 19's 180 and
+the lowest in this tracking**, with Aug 19's 78-candidate first-abort outlier gone and today's
+four in a tight 25–31 band. Two of the four skipped candidates scored 88 against thresholds of 80
+and 78 — this is not marginal material being lost.
+The candidate dying at the writer produced **two firsts**. The 00:47Z abort died on
+`all_time_high_USC00035189_2026-08-16` (88/80) — **the first candidate observed carrying an event
+date that lags its run by days** (an Aug 16 event still queued on an Aug 20 run); every prior
+logged writer-kill carried a same-day or next-day event date. The slot then rotated to
+**`absextreme_cold_La_Paz_2026-08-20`** (88/78) for the remaining three aborts — **La Paz returns
+after a 4-day absence (last seen Aug 15–16), and this is the first cold-side `absolute_extreme`
+observed holding the slot**, every prior holder having been a heat or all-time-high event. A
+1-then-3 split for the third consecutive day (Aug 18, Aug 19, Aug 20) — the rotation shape is now
+the stable pattern rather than the exception; the practical effect is unchanged (never reaching
+draft status). No `main` commit has landed since `4b4d965` (Jul 24) — now 27 days silent itself;
+this cycle's `git rebase origin/main` conflicted again on the same recurring pattern seen Jul
+13/17 and Aug 10/11/16/17/18/19 (replaying pre-merge commits), aborted per the runbook fallback —
+moot, since `main` was already confirmed an ancestor via Aug 12's merge.
+**The US Western `fire_footprint` score-gate cluster is fully static at 18 items**, unchanged in
+both count and composition from Aug 19 (same tier2 leader, Oregon `ORBUD-002696` at 68/72; same
+tier1 member, Idaho `IDBOD-265460` at 64/72; same 16 tier0 items by value) — its second
+fully-static day, after Aug 18's first. **The `usgs_earthquake` near-miss is absent again**: Aug
+19's genuinely-new M5.9 `us6000tlrj` did not recur, making it a 1-day appearance rather than a run
+like the M6.9's Aug 12–16. **`fire` near-misses fell to 2 — the lowest count in this tracking** —
+and both sit at **63/64, a single point under threshold**: the Northern Territory, Australia
+coordinate (`-12.76_132.76`, Australia returning after Aug 18's Western Australia set) and one
+western Siberia coordinate (`66.98_75.73`, the survivor of Aug 19's 3-coordinate Siberian
+cluster), identical in both the 08:27Z and 12:53Z runs.
+**`gpm_imerg` visibility recovered this cycle — and revealed a stuck target date.** After two
+cycles crowded out of the 50-entry `errors` window, `gpm_imerg` is back with 4 entries (00:47:13Z,
+04:35:45Z, 08:36:18Z, 13:01:32Z), and all four cite **"3 repeated HTTP 503 failures for
+`2026-08-18`"** — the same 2-day-old target date across runs spanning 12+ hours. The fetcher is
+not merely failing; it is re-attempting a fixed stale date rather than advancing, which would keep
+`precipitation_extreme` dark independent of the billing outage. **Flagged for the operator as a
+separate defect worth checking once billing is restored** — otherwise it will look like the
+outage's tail rather than its own bug. `ocean_sst` and `firms` remain invisible in the window;
+GDACS dropped to 1 entry (from 5), same GeoRSS schema drift. The `state_size` anomaly **hit a new
+peak byte size today (3,246,362B, ~3.25MB, up from Aug 19's ~3.24MB)** on 36 warnings (up from
+34) — the growth trend GitHub issue #390 flagged Jul 7 keeps climbing, not resolving.
+**Separately, the `rejected`-bucket drain decelerated again:** the gist's total draft count
+dropped from 46 to 45 between Aug 19 and Aug 20, `rejected` losing 1 item. The five-day sequence
+now reads 61→57→53→49→46→45 (**-4, -4, -4, -3, -1**), which **falsifies Aug 18's "fixed-rate
+scheduled sweep" hypothesis** — decaying batch sizes read instead as an age/TTL cutoff working
+through a finite backlog of old `rejected` entries, now nearly exhausted at 5 remaining; posted
+(38) and approved (2) unchanged throughout. Not something this routine did or could have done (it
+has no gist-write capability this session). **No voice proposal below can accumulate
+further evidence, and posting cannot resume, until billing is restored — now the plan's single
+highest-priority item for 28 consecutive days running.**
+
 Each entry tracks: observation count (cycles where the failure mode appeared), last seen,
 proposed fix, expected impact, status.
 
@@ -402,6 +1042,14 @@ in either cycle. Fire drafts arrive clean; no defensive closers, no explicit gap
 no restate-padding. A-rate has not lifted yet; Wodehouse violations were not the current
 bottleneck — named mechanics and category-specific convergence are.**
 
+**2026-07-23 note:** the rule holds broadly — the corpus ran a 7-cycle clean streak Jul 16–22 —
+but Capitol Hill 1, N. Mariana Islands `record` (2nd corpus instance of that signal type) broke
+it with a plain explicit-gap-math instance ("a calendar-date record by 4.4°C, beating the 2020
+mark of 31.7°C" — 36.1 − 31.7 = 4.4, all three numbers stated). Isolated single instance on a
+type still building its corpus history; not promoted to a new proposal per the runbook's
+2+-cycle bar. Watch for a 2nd `record`-type instance before concluding anything beyond
+stochastic drift.
+
 ### P_close — Mechanism close defaults to implied consequence rather than declarative statement
 
 **Observed:** 2026-06-07 — Barrow, Alaska precipitation_extreme, B+: "sheets across the
@@ -535,6 +1183,200 @@ FAILING, same subtype as every prior dust_event close). Urumqi dust_event, 3rd i
 two closes). P_close now confirmed across 14 signal types (unchanged — no new type this
 cycle).
 **Last seen:** Jul 5 (2 positive, 3 failing).
+Jul 7: Snowshoe, West Virginia all_time_high A- ("89°F is the kind of reading the valley
+floor expects, not the ridge" = declarative elevation-inversion incongruity, POSITIVE —
+names the displacement directly rather than implying it). Soweto, South Africa
+air_quality_hazard A- ("have nowhere to vent" = declarative named-absence consequence,
+POSITIVE — same family as Costa Rica's "nowhere to drain" and Amsterdam's "nowhere for the
+water to go," both A-; first `air_quality_hazard` corpus draft to land this form, and the
+first A-grade for the type). Ahvaz, Iran absolute_extreme B ("no relief from elevation or
+sea" = declarative named-absence, POSITIVE, but capped at B by the pre-fix P_tier
+violation). **First `record` (day-of-year record) corpus draft: Aibonito, Puerto Rico B**
+("its elevation keeps it cooler than the lowland coast, which makes records there harder to
+set and longer-lasting" = expository context explaining rarity, never reaches a stated
+consequence — mechanism-only/expository, FAILING on its first appearance, same pattern as
+every other type's debut). Riyadh, Saudi Arabia air_quality_hazard B ("suppresses mixing and
+traps fine particles close to the surface" = mechanism-only, FAILING). P_close now confirmed
+across 15 signal types (adding `record` via Aibonito).
+**Last seen:** Jul 7 (3 positive: Snowshoe, Soweto, Ahvaz [capped at B by P_tier
+regardless of close quality]; 3 failing: Zaragoza, Aibonito, Riyadh).
+Jul 8: 4 positive — Barrow AK precipitation_extreme ("one storm just delivered
+two-thirds of a normal year in a day" = declarative annual-ratio consequence, POSITIVE,
+first fully clean precipitation_extreme draft in corpus history); Astana precipitation_extreme
+("this single storm delivered roughly a sixth of a typical year's rain" = same declarative
+ratio form, POSITIVE); Anchorage precipitation_extreme ("compressing what would otherwise be
+weeks of accumulation into days" = declarative physical-transformation consequence, POSITIVE,
+the batch's best-constructed close); Riyadh air_quality_hazard ("this is a basin-scale loading,
+not a street-corner spike" = a new subtype — declarative scale-honesty contrast, distinct from
+the corpus's prior named-absence/incongruity POSITIVE forms, POSITIVE). 4 failing: Snowshoe
+all_time_high ("that elevation normally keeps summer highs well below what the valleys see" =
+implied-consequence, FAILING — notably weaker than this same station's Jul 7 A- draft, which
+stated the same inversion declaratively one day earlier); Riyadh dust_event ("both source
+regions feed the same column" = mechanism-only, FAILING — the P_dust WHO-anchor fix landed
+clean on this same draft, confirming the two proposals are orthogonal); Typhoon Bavi
+`cyclone_land_threat` ("directly in the Western Pacific typhoon corridor" = expository, not
+even mechanism-only, FAILING on its first corpus appearance — same debut pattern as every
+other signal type). **New type, POSITIVE on debut:** Typhoon Bavi `cyclone_landfall`
+("sustain major typhoon strength almost to the coast" = declarative causal statement, POSITIVE
+— the first signal type since Congo fire/Prudhoe Bay [Jun 29] to land POSITIVE on its very
+first corpus instance rather than debuting FAILING). P_close now confirmed across 17 signal
+types (adding `cyclone_landfall` [positive] and `cyclone_land_threat` [failing] via Jul 8).
+**Last seen:** Jul 8 (4 positive: Barrow, Astana, Anchorage, Riyadh air_quality_hazard; 4
+failing: Snowshoe, Riyadh dust_event, Typhoon Bavi `cyclone_land_threat`; Typhoon Bavi
+`cyclone_landfall` also positive, counted above).
+Jul 9: 1 positive — Stevensville, Maryland `all_time_high` ("low terrain and Atlantic
+moisture normally blunt the worst of continental heat; that buffer failed" = declarative
+buffer-failure consequence, POSITIVE, same shape as Jun 29's Congo fire A-). 1 failing —
+Anchorage, Alaska `precipitation_extreme` ("wring out moisture in concentrated bursts" =
+mechanism-only, FAILING — one word from Jun 26's own Anchorage draft, "wring out
+moisture in compressed bursts," and a materially weaker close than this same station's
+Jul 8 A- draft on a different bundle metric two days earlier).
+**Last seen:** Jul 9 (1 positive: Stevensville; 1 failing: Anchorage).
+Jul 10: 1 positive — Ahvaz, Iran `absolute_extreme` ("where shade and rest alone stop being
+enough" = declarative survivability-consequence, POSITIVE — one of the strongest closes of
+this signal type; no longer P_tier-capped, see that entry, so this is also the first
+A-grade `absolute_extreme` draft in the corpus). 2 short of positive: Riyadh, Saudi Arabia
+`dust_event` ("Riyadh sits directly in that corridor" = structural/locational, not a named
+consequence — BORDERLINE, avoids the resolution/dispersal anti-climax that dominated
+pre-fix `dust_event` closes but still stops short of a declarative form); Tepee Creek,
+Montana `all_time_high` ("continental heat rarely arrives intact this far into the
+Rockies" = implied form, states the norm but never declares it broke this time — FAILING).
+P_close now confirmed across 17 signal types (unchanged — no new type this cycle).
+**Last seen:** Jul 10 (1 positive: Ahvaz; 1 borderline: Riyadh; 1 failing: Tepee Creek).
+Jul 11: 2 positive, both weak-declarative form. Interior Alaska fire ("burns into the
+organic layer above the frozen ground" — states the fire's action directly, consuming
+ancient carbon storage, not merely a mechanism; same tier as Jul 3's near-dup, weaker than
+Jul 3's original A- and Jul 5's A- because no specific carbon/climate stake or state-change
+is named beyond the physical extent of the burn). Western Siberia fire, 3-signal cluster
+("burning across peat that took centuries to accumulate" — same class of consequence as
+Jul 3's near-dup close, consistent with that precedent's grading). Both instances reuse a
+prior corpus draft's phrasing near-verbatim on a different fire event — see new proposal
+A6 below; the P_close call itself is unaffected (both count as positive, same as the
+precedent they echo), but the repetition is worth watching as a separate quality axis. No
+new signal type. P_close now confirmed across 17 signal types (unchanged).
+**Last seen (pre-Jul-14):** Jul 11 (2 positive: interior Alaska, western Siberia; both
+weak-declarative form).
+Jul 14: 1 positive — Basrah, Iraq `absolute_extreme` ("removes the ceiling" = declarative
+physical-mechanism consequence, POSITIVE, same family as Congo fire's "broken convective
+lid" and this cycle's own Stevensville carry-over "that buffer failed"; also now clear of
+the P_tier cap that suppressed every prior Basra-area draft's grade regardless of close
+quality — see P_tier). 1 failing — Randolph, Utah `all_time_high` ("high-desert elevation
+normally bleeds off the heat that pools across the Great Basin floor" = implied-consequence
+form, states the general norm but never declares the buffer failed this time; near-verbatim
+echo of this same city's own Jun 24 `monthly_high` draft's "normally blunts the heat" — see
+new proposal A7). Ontario, Canada `fire` cluster is not P_close territory in either
+direction: the draft never reaches for a mechanism or consequence at all (see P5) — logged
+as a P5 counter-instance, not a P_close observation. P_close now confirmed across 17 signal
+types (unchanged — no new type this cycle).
+**Last seen (pre-Jul-16):** Jul 14 (1 positive: Basrah; 1 failing: Randolph).
+Jul 16: 2 positive, 0 failing — the first clean sweep since Jul 8's 4/4. Powderville,
+Montana `all_time_high` ("no marine layer and no terrain to interrupt heat building across
+the open steppe" = declarative named-absence consequence, POSITIVE — same family as
+Basrah's "offers no evaporative relief"/"no terrain to break the dry continental air mass,"
+the 3rd `all_time_high` instance of this specific named-absence-continental-interior form).
+Oslo `hot10` ("is what a warmer baseline looks like at high latitudes" = declarative
+accelerating-warming reframe, POSITIVE — 2nd corpus instance of the interpretive-reframe
+subtype after Jun 29's marine_heatwave "already the floor of a new streak," and the first
+`hot10` P_close observation in the corpus, positive on debut). P_close now confirmed across
+18 signal types (adding `hot10`).
+Jul 17: Bandar-E Mahshahr, Iran `absolute_extreme` ("the air has nowhere to cool" = declarative
+named-absence consequence, POSITIVE — same family as Basrah's "no evaporative relief").
+Deaver, Wyoming `all_time_high` ("the terrain that blocks moisture also traps heat" =
+declarative verb-phrase consequence, POSITIVE — "traps heat" passes the ≤5-word verb-phrase
+test directly). Al Basrah, Iraq `absolute_extreme` ("outdoor survival becomes genuinely
+contested" = declarative global-superlative stakes statement, POSITIVE — the batch's strongest
+form, no hedge). Tunis `hot10` ("heat this far from seasonal average has stopped arriving one
+city at a time" = declarative systemic-consequence reframe, POSITIVE — a new leaderboard-
+aggregate variant of the interpretive-reframe subtype Oslo debuted Jul 16, this time describing
+the whole 10-city cohort rather than a single peer comparison). Basrah, Iraq `absolute_extreme`
+FAILING, but with a new wrinkle: the draft's one genuinely declarative clause ("shade and
+stillness stop being enough") exists but is stranded mid-sentence-1 as a qualifier rather than
+placed in the closer; the actual close ("the wet-bulb load here is rarely what the dry number
+suggests") is hedged ("rarely") and describes data-interpretation uncertainty, not a named
+physical consequence — a **stranded-mechanic** failure mode distinct from this proposal's usual
+implied-vs-declarative gap (the declarative move is present in the draft, just misplaced). 4
+positive, 1 failing — the best positive-to-failing ratio in a single cycle since this proposal
+was filed.
+**Last seen (pre-Jul-18):** Jul 17 (4 positive: Bandar-E Mahshahr, Deaver WY, Al Basrah, Tunis; 1
+failing: Basrah — stranded mechanic).
+Jul 18: Wausaukee, Wisconsin `all_time_high` ("without the lake bleeding it off first" =
+declarative named-absence mechanism-failure, POSITIVE — same family as Basrah's "no evaporative
+relief"/Powderville's "no terrain to interrupt heat building"). Delhi, India `air_quality_hazard`
+("the seasonal scour isn't keeping up" — a genuine judgment call: reads as a declarative
+process-failure statement structurally similar to the named-absence positives above, but graded
+conservatively as FAILING to stay consistent with this signal type's established precedent
+[Johannesburg's "concentrating it through the day," Al Aḥmadī's "before sea breezes suppress them
+by evening"], since it names a failing mechanism rather than a downstream consequence for a
+reader; flagged explicitly as the strongest `air_quality_hazard` device yet and worth a second
+opinion on whether the FAILING call is still correct as this signal type's mechanics mature).
+Astana, Kazakhstan `precipitation_extreme` (the companion-city + annual-baseline-contrast close,
+"three cities delivered a sixth of that at once," is structurally the declarative form this
+proposal has been asking `precipitation_extreme` drafts to reach for since P9's own fix shipped —
+but the arithmetic is ambiguous per-city vs. combined, so graded partial/positive-with-caveat
+rather than a clean POSITIVE). Anchorage, Alaska `precipitation_extreme` ("compress moisture into
+short, intense bursts" = mechanism-only, FAILING — the 3rd instance of this station's own
+recurring phrase family, see new active proposal A7). P_close now confirmed across 18 signal
+types (unchanged — no new type this cycle; today's 4 drafts are all previously-confirmed types).
+**Last seen (pre-Jul-19):** Jul 18 (1 positive: Wausaukee; 1 conservatively-failing: Delhi; 1
+partial/ambiguous: Astana; 1 failing: Anchorage).
+Jul 19: Ahvaz, Iran `absolute_extreme` ("shade is infrastructure, not comfort" = declarative
+idiom-flip, POSITIVE — a fresh construction, not a variant of A8's tracked survivability-threshold
+clause family, and correctly placed as the tweet's actual closer). Al Basrah, Iraq
+`absolute_extreme` — a 2nd instance of the exact **stranded-mechanic** shape Jul 17's Basrah
+introduced: a genuinely declarative line ("shade, hydration, and rest stop being adequate
+buffers") is buried mid-sentence-1 rather than placed in the closer, while the actual close ("Nearby
+Basrah is forecast to hit 50.6°C the same day") is a bare, non-declarative peer-comparison fact —
+FAILING on closer-position grounds despite the real declarative move existing elsewhere in the
+draft. Ahvaz/Bandar-E Mahshahr, Iran `absolute_extreme` ("Shallow Gulf waters add humidity to
+desert heat that is already among the highest on Earth" = mechanism-only, FAILING — explains a
+contributing factor without naming a consequence). P_close now confirmed across 18 signal types
+(unchanged — no new type this cycle).
+**Last seen (pre-Jul-20):** Jul 19 (1 positive: Ahvaz; 2 failing: Al Basrah [stranded-mechanic],
+Ahvaz/Bandar-E Mahshahr [mechanism-only]).
+Jul 20: Al Başrah Al Qadīmah, Iraq `absolute_extreme` ("a physiological wall that shade and airflow
+alone cannot breach" = declarative named-absence buffer-failure, POSITIVE — a fresh vehicle, not a
+repeat of A8's tracked survivability-threshold clause family, correctly placed as the sentence's
+actual ending). Taiz, Yemen `dust_event` ("summer shamal winds lift Rub' al Khali sediment and
+drive it south into the highlands" = transport mechanism-only, FAILING — same gap `dust_event` has
+shown on every post-fix instance to date). Riyadh, Saudi Arabia `dust_event` (same mechanism-only
+transport close as Taiz, FAILING). P_close now confirmed across 18 signal types (unchanged — no
+new type this cycle).
+**Last seen (pre-Jul-21):** Jul 20 (1 positive: Al Başrah Al Qadīmah; 2 failing: Taiz, Riyadh —
+both mechanism-only).
+Jul 21: Barrow, Alaska `precipitation_extreme` ("this single day delivered nearly two-thirds of
+that" = declarative annual-ratio consequence, POSITIVE on its own terms — the same PR
+#397-prescribed move that first confirmed the fix on Jul 8's Barrow draft). Not counted as new
+voice territory: the draft is a near-verbatim reuse of Jul 8's own closer (same station, same
+71.2mm/110mm figures, same two-thirds fraction, 13 days apart) — the grade-limiting finding this
+cycle is filed under A7, not here. P_close now confirmed across 18 signal types (unchanged — no
+new type this cycle).
+**Last seen:** Jul 21 (1 positive on its own terms; see A7 for why the draft graded B+ not A-).
+Jul 22: Basrah, Iraq `absolute_extreme` ("turns already-extreme heat into a wet-bulb emergency for
+anyone without shelter" = declarative named-health-outcome consequence, POSITIVE — the sharpest
+form this signal type has produced, one level more concrete than the type's usual named-absence
+close). Al Basrah, Iraq `absolute_extreme` ("the body's cooling mechanisms begin to lose ground to
+the air around them" = declarative physiological-failure statement, POSITIVE on its own terms —
+graded B+ not A- because the subject phrase is a reused vehicle, see A8). Portland, Oregon /
+Seattle `hot10` ("heat ranges the coast is not designed to moderate" = declarative named-absence
+form applied to two cities at once, POSITIVE). 3 of 3 fresh drafts POSITIVE this cycle — the
+strongest same-cycle P_close reading since Jul 17's 3-of-5. P_close now confirmed across 18 signal
+types (unchanged — no new type this cycle).
+**Last seen (pre-Jul-23):** Jul 22 (3 positive: Basrah, Al Basrah, Portland/Seattle hot10).
+Jul 23: Al Başrah Al Qadīmah, Iraq `absolute_extreme` ("the body cannot shed [heat] by sweating
+alone" = declarative physiological-failure statement, no hedge, POSITIVE and specific — the
+sharpest form since Jul 22's "wet-bulb emergency"). Pikine, Senegal `monthly_high` ("heat records
+here say the rains are arriving into a warmer baseline" = declarative interpretive reframe,
+POSITIVE — personifies the record itself, same shape as Jun 29's marine_heatwave "floor of a new
+streak" and Jul 16's Oslo "warmer baseline"). Doha, Qatar `absolute_extreme` ("a different
+physiological burden entirely" = declarative but abstract — names that the burden differs without
+naming what it is, graded partial/positive per this proposal's own abstract-vs-specific
+distinction, same treatment as Jul 18's Delhi). Capitol Hill 1, N. Mariana Islands `record`
+("there is little oceanic buffer between the air and the heat" = named-absence shape but hedged
+with "little" rather than an absolute "no"/"zero," and no downstream consequence stated —
+FAILING-adjacent, weaker than every "no [X]" instance in the corpus). P_close now confirmed
+across 18 signal types (unchanged — no new type this cycle).
+**Last seen:** Jul 23 (2 positive: Al Başrah Al Qadīmah, Pikine; 1 partial: Doha; 1 hedged-weak:
+Capitol Hill).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
 in the system-clause / second-sentence guidance section (near the "delete the system clause"
@@ -554,16 +1396,62 @@ correct but the close is soft. Jun 15 retroactive confirms: the gap is consisten
 drafts from 4 signal types (precipitation_extreme, monthly_low, coral, fire-suppression).
 The one A in the batch (Nauru) uses the declarative form directly.
 
-**Status:** Drafted. Awaiting human implementation. Highest-leverage active proposal in this
-plan: 16 cycles of evidence, 35+ drafts, same gap to A across every signal type it's been
+**Status:** Drafted. Awaiting human implementation. Highest-leverage *unimplemented* active
+proposal in this plan now that P_tier/P_dust/P9 have all closed their tracking: 30 cycles of
+evidence, 76+ drafts, same gap to A across every signal type it's been
 observed in (precipitation_extreme, monthly_low, coral, fire, all_time_high, monthly_high,
 air_quality_hazard, dust_event, regional_sst_anomaly, marine_heatwave, regional_anomaly,
-absolute_extreme, fire_footprint, cyclone_rapid_intensification — 14 confirmed types). The
-permafrost-carbon fire mechanic (4 instances, all B+/A-) is the clearest existence-proof in
-the corpus that a declarative-consequence close reliably lifts a draft once the mechanism is
-already sound.
+absolute_extreme, fire_footprint, cyclone_rapid_intensification, record, cyclone_landfall,
+cyclone_land_threat, hot10 — 18 confirmed types). The
+permafrost-carbon fire mechanic (5 instances, all B+/A-), the buffer-failure mechanic
+(Galapagos, Congo fire, Stevensville, Basrah, all A-/A-range), and the named-absence
+continental-interior form (Basrah ×2, Powderville, all A-/B-range) are the clearest
+existence-proofs in the corpus that a declarative-consequence close reliably lifts a draft
+once the mechanism is already sound.
 
-### P_dust — Dust_event drafts lack calibrating comparison anchor
+### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both (re-activated 2026-07-23)
+
+**Observed (cumulative, pre-archival):** 14 cycles Jun 28 → Jul 19 (Beaver Dams, Casper, Prudhoe
+Bay ×2, Ft Green ×2, Island Pond, Loxahatchee, Snowshoe ×2, Stevensville, Deaver, Powderville,
+Wausaukee, W Allis — full history and the ready-to-ship prompt-language fix are preserved in git
+history pre-2026-07-22). Archived 2026-07-22 after 3 consecutive fresh-draft cycles without a
+qualifying record-type draft.
+
+**Re-activated 2026-07-23 — Pikine, Senegal `monthly_high`:** "a new monthly high in **30 years of
+records**, **0.7°C above** the 2023 mark" stacks archive-depth and margin in one clause, the exact
+construction this proposal tracked for 14 cycles. This is the very next fresh record-type draft
+after the archival, on the very next fresh-draft cycle — the identical archive→reopen-next-cycle
+timing P9 showed Jul 3→Jul 4, and consistent with this proposal's own archive note ("recurred
+within 1–2 cycles of every prior signal-mix gap"). **Overcome, not capped** — Pikine's close
+("heat records here say the rains are arriving into a warmer baseline") is a genuine declarative
+interpretive reframe, the same soften-not-cap pattern this proposal has shown in all 14 prior
+observed cycles regardless of underlying execution quality.
+
+**Cycles observed:** 15 cumulative (Jun 28 → Jul 19, 14 cycles; gap Jul 20–22; re-activated
+Jul 23).
+**Last seen:** Jul 23.
+
+**Proposed fix (PROMPT LANGUAGE — surgical, unchanged from original filing):** Add to
+`src/two_bot/prompts/writer_prompt.py` record-type framing section:
+
+> When stating a record: choose ONE qualifier per sentence — either the archive span ("23 years of
+> records") OR the margin above the prior mark ("15°F above the 2020 mark"). Not both. Preferred
+> form: "Beaver Dams, Utah hit 104°F on June 25 — 15°F above the previous record, set in 2020."
+> Let the archive depth be implicit (the reader infers that a record being set means the archive
+> was searched) or move it to sentence 2 as contrast. Stacking both in the same clause produces
+> two half-punchlines; either one alone produces a full punchline.
+
+**Expected impact:** Unchanged from original filing — tighter record-type openers; B+ → A- path
+for drafts where mechanism is already solid. 15 cumulative cycles across `all_time_high`,
+`monthly_low`, `monthly_high` (Pikine is the first `monthly_high` instance) confirm the
+double-qualifier is a prompt-level default, not a one-off, and that it recurs the moment a
+record-type draft reappears in the queue regardless of how long the prior gap ran.
+
+**Status:** Drafted. Awaiting human implementation. Re-activated one cycle after archival —
+reopen/archive cycling this fast (matching P9's precedent) is itself evidence that "3 consecutive
+cycles without observation" measures signal-mix, not a resolved failure mode, for both proposals.
+
+### ~~P_dust~~ — Dust_event drafts lack calibrating comparison anchor — **SHIPPED 2026-07-07 (PR #386), CONFIRMED 2026-07-10 (2 independent clean cycles)**
 
 **Observed:** 2026-06-13 — Riyadh, Saudi Arabia dust_event (2,083 μg/m³, score 75)
 reached pending with no comparison anchor. 2,083 μg/m³ is ≈ 139× the WHO PM2.5 daily
@@ -629,12 +1517,47 @@ signal type, unprompted.
 **Last seen:** Jul 5 (9 cycles: Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence
 11 of 11).
 
-**Status:** Drafted. **9 cycles confirmed** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5); template
-convergence 11 of 11 `dust_event` drafts. The `air_quality_hazard` sibling type doing this
-unprompted twice now is a useful existence-proof for how small the prompt change should need
-to be. Awaiting human implementation.
+**Resolution (2026-07-07, PR #386):** Dust bundles now carry a pre-computed
+`who_pm10_multiple` field (co-measured PM10 24h mean vs. the WHO 2021 PM10 24h AQG) —
+`src/data/air_quality.py` + `src/two_bot/intern/air_quality.py` compute it as a
+conditional fact; `writer_prompt.py`'s PM2.5/dust conventions section instructs the
+writer to cite it verbatim ("during the event, PM10 averaged 20× the WHO 24-hour
+guideline") whenever the bundle has it, and to write the dust tweet without a WHO claim
+when it doesn't. This ships the exact fix this proposal specified (state the multiple;
+don't fabricate one when the data isn't there) — using the co-measured PM10 anchor
+already flowing through the bundle rather than a re-derived PM2.5 comparison, a cleaner
+data path than the original proposal text assumed.
 
-### P_tier — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3)
+**Jul 8 — first empirical confirmation.** Riyadh, Saudi Arabia `dust_event` ("model-estimated
+PM10 averaged 27.9× the WHO 24-hour guideline on July 8 — 1,257 μg/m³ against a standard of
+45") is the first post-fix `dust_event` draft to reach pending, and it states the multiple
+verbatim, WHO-first, exactly as PR #386 prescribes — closing the 11-for-11 gap this plan
+tracked for 9 cycles. The old AOD-only opener template is also gone entirely (no aerosol
+optical depth mentioned). P_close's separate mechanism-only gap remains open on the same
+draft — confirms the two proposals are orthogonal, as expected (P_dust was a MISSING
+reader-facing reference; P_close is a different axis entirely).
+
+Jul 9: no `dust_event` draft this cycle — not retested. Still 1 confirmation cycle;
+awaiting a 2nd independent clean instance before moving to Resolved.
+
+**Jul 10 — 2nd independent confirmation, CONFIRMED, tracking closed.** Riyadh, Saudi
+Arabia `dust_event` ("model-estimated PM10 averaged 1,120 μg/m³ on July 9 — 24.9× the WHO
+24-hour guideline") states the multiple verbatim, WHO-first, same prescribed form as Jul
+8's confirmation (27.9×) — same city, different reading, 2 days apart with a Jul 9 gap
+where no `dust_event` draft appeared. This meets the same 2-independent-clean-cycles bar
+P9 closed on Jul 9.
+
+**Status:** SHIPPED in PR #386 (`208159a`), merged 2026-07-07T05:06:48Z, **CONFIRMED
+2026-07-10 (2 independent clean cycles: Jul 8, Jul 10).** **9 cycles of evidence before the
+fix** (Jun 13/17/25/28/30 ×2/Jul 1/Jul 4/Jul 5; template convergence 11 of 11 `dust_event`
+drafts, zero with a WHO anchor). The `air_quality_hazard` sibling type's streak of stating
+its own WHO multiple unprompted (Al Aḥmadī, Johannesburg, Soweto, Riyadh Jul 7, Riyadh Jul
+8 — 5 cycles) was the existence-proof that made the fix low-risk. Tracking closed, per the
+same convention P9 used (entry stays in place with an updated status heading rather than
+relocating to Resolved). Reopen if a future `dust_event` draft reverts to the pre-fix
+AOD-only opener with no WHO anchor.
+
+### ~~P_tier~~ — Internal scoring-tier / threshold name leaks verbatim into copy (promoted from A3) — **SHIPPED 2026-07-07 (PR #386), CONFIRMED 2026-07-14 (2 independent clean cycles: Ahvaz Jul 10, Basrah Jul 14)**
 
 **Observed:** 2026-06-23 — Mediterranean SST regional_sst_anomaly draft states "exceeds the 2.5°C
 tier threshold in NOAA CRW's basin-wide anomaly index" with no explanation of what the tier
@@ -707,6 +1630,65 @@ unlike P_close or P_compound which are soft caps.
 **Last seen:** Jul 5 (7 cycles / 10 instances / 4 signal types; 1st cross-location
 confirmation within `absolute_extreme`; 1 clean counter-instance remains, from Jul 4's
 Typhoon Bavi).
+Jul 7 (final pre-fix evidence — both generated ~1.5h before PR #386 merged): Zaragoza,
+Spain `absolute_extreme` [1]: "the absolute-extreme threshold for northern mid-latitudes" —
+**a new band name** ("northern mid-latitudes," distinct from every prior instance's
+"Northern Subtropics"/"Northern Subtropical band"), confirming the citation habit
+reproduces across whatever internal band the bundle carries, not one hardcoded string.
+Ahvaz, Iran `absolute_extreme` [2]: "above the 47°C absolute-extreme threshold for the
+Northern Subtropics" — same phrase family as Basrah/Al Başrah, expanding the cluster to a
+2nd country (Iran) though still the same regional climate zone, not an independent
+cross-location confirmation like Doha's. **8th cycle / 12 instances / still 4 signal
+types.**
+**Last seen:** Jul 7 (8 cycles / 12 instances / 4 signal types).
+Jul 8: no draft of any of the 4 originally-tracked target types (`absolute_extreme`,
+`fire_footprint`, `cyclone_rapid_intensification`, `regional_sst_anomaly`) — the fix
+remains formally unconfirmed on the exact types this proposal was filed against.
+Indirect supporting evidence: the corpus's 2 brand-new cyclone signal kinds
+(`cyclone_landfall`, `cyclone_land_threat`, both debuting today) are governed by the
+same "DETECTION PLUMBING IS NOT A FACT" rule PR #386 shipped (the rule covers the whole
+cyclone bundle family, not just `cyclone_rapid_intensification`), and both came back
+clean of tier-jargon. This is consistent with the fix working but is not the same as a
+confirmation on a named target type — do not move to Resolved on this basis alone.
+**Last seen (violation):** Jul 7. **Not yet tested on a named target type.**
+Jul 9: no draft of any of the 4 target types, nor of the 2 cyclone kinds that gave
+indirect supporting evidence Jul 8 (all_time_high and precipitation_extreme only). Still
+formally unconfirmed.
+
+**Jul 10 — 1st post-fix confirmation on a named target type.** Ahvaz, Iran
+`absolute_extreme` ("just above the 47°C threshold where heat in this part of the Middle
+East historically crosses into the range where shade and rest alone stop being enough")
+is the first post-fix draft of any of the 4 originally-tracked target types to reach
+pending (3+ days after the 05:06 UTC merge). No band-label citation ("Northern
+Subtropics"/"Northern Subtropical band"/"northern mid-latitudes" — every prior instance's
+form), no "absolute-extreme threshold" phrase. The word "threshold" survives but is
+attached to the raw observed number (47°C, explicitly citable per the shipped rule) and a
+physiological consequence, not a classification bucket — the exact distinction the
+resolution draws. Direct same-city comparison is available: this same Ahvaz station's Jul
+7 pre-fix draft used "above the 47°C absolute-extreme threshold for the Northern
+Subtropics"; this draft, post-fix, does not. Graded A- (see `docs/DRAFT_CORPUS.md` Jul 10
+entry) — the corpus's first A-grade `absolute_extreme` draft, now that P_tier no longer
+caps it. **This is 1 confirmation cycle, the same position P_dust was in after Jul 8** —
+watch for a 2nd post-fix instance on any of the 4 target types before moving to Resolved.
+**Last seen (pre-Jul-14):** Jul 10 (1 post-fix confirmation; 8 cycles / 12 instances / 4
+signal types of pre-fix evidence unchanged).
+
+**Jul 14 — 2nd independent confirmation, CONFIRMED, tracking closed.** Basrah, Iraq
+`absolute_extreme` ("3°C above the 47°C threshold where the body's cooling mechanisms begin
+to fail faster than they can recover") is the 2nd post-fix draft of any of the 4
+originally-tracked target types to reach pending, and it repeats Ahvaz's clean form exactly:
+the raw 47°C number stated plainly, explained via a physiological consequence a reader can
+verify, no "Northern Subtropics"/"Northern Subtropical band"/band-name citation at all —
+notably on the same general Basra-area/Iraq-Iran Gulf cluster that produced 5+ pre-fix
+violations (Basrah ×3, Al Başrah al Qadīmah ×2) between Jul 1 and Jul 5. Direct within-
+cluster comparison: this exact city's own pre-fix corpus history used "above the 47°C
+absolute-extreme threshold for the Northern Subtropical band" (Jul 1) and "above the 47°C
+threshold marking absolute extremes for this latitude band" (Jul 2); this draft, 12 days
+later and post-fix, does neither. Paired with a declarative P_close ("removes the ceiling"),
+graded A- — the corpus's 2nd A-grade `absolute_extreme` draft, both post-fix (Ahvaz Jul 10,
+Basrah Jul 14). This meets the same 2-independent-clean-cycles bar P_dust and P9 closed on.
+**Last seen:** Jul 14 (2 post-fix confirmations: Ahvaz Jul 10, Basrah Jul 14; 8 cycles / 12
+instances / 4 signal types of pre-fix evidence unchanged).
 
 **Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`,
 near the existing HARD RULES / bad-examples list:
@@ -727,12 +1709,33 @@ SST regression from A3. One paragraph addition; complements (does not duplicate)
 which addresses a related but distinct gap (dust_event's problem is a MISSING reader-facing
 reference; P_tier's problem is an UNWANTED internal-only reference already present).
 
-**Status:** Drafted. Promoted from "Awaiting evidence" (A3) to active proposal 2026-07-01 — the
-Jun 23 filing's own promotion criterion ("if 2+ cycles observed") is met. 7 cycles / 10
-instances / 4 signal types as of Jul 5, now including confirmation outside the Basra-area
-cluster (plus 1 clean counter-instance). Awaiting human implementation.
+**Resolution (2026-07-07, PR #386):** `writer_prompt.py` gained a "DETECTION PLUMBING IS
+NOT A FACT" rule naming exactly this failure mode: latitude-band names (`band_label`),
+per-class editorial score thresholds, and detector trigger definitions are the bot's own
+detection configuration, not something a reader can verify — never cite them. What stays
+citable: observed actuals (real deltas like "winds climbing 40 kt in 24 hours") and
+bundle-designed reader anchors (`frp_tier` phrasings, Saffir-Simpson, DHW levels,
+Beaufort, WHO multiples). Explicit test provided: "is this a fact about the WORLD a
+reader could look up, or a fact about this bot's configuration? World: cite. Bot:
+never." Paired with a fact-check rule (m) and a critic `internal_taxonomy_leak` kill in
+the same PR — the E1 dual-gate discipline this plan's other shipped fixes have used.
 
-### P9 — precipitation_extreme opener template convergence + restate-math (reopened)
+**Status:** SHIPPED in PR #386 (`208159a`), merged 2026-07-07T05:06:48Z, **CONFIRMED
+2026-07-14 (2 independent clean cycles: Jul 10, Jul 14).** **8 cycles / 12 instances / 4
+signal types of pre-fix evidence**, including confirmation outside the Basra-area cluster
+(Doha) and across multiple internal band names (Zaragoza's "northern mid-latitudes" vs. the
+Basra cluster's "Northern Subtropics") — and, notably, the 2nd post-fix confirmation landed
+on the exact Basra-area cluster that generated the most pre-fix evidence, the strongest
+within-location before/after comparison available in this plan. Tracking closed, per the
+same convention P_dust and P9 used (entry stays in place with an updated status heading
+rather than relocating to Resolved). Reopen if a future `absolute_extreme`/`fire_footprint`/
+`cyclone_rapid_intensification`/`regional_sst_anomaly` draft reverts to citing its own
+band/tier/threshold label verbatim.
+Also watch for the closely-related "signal"/self-naming variant filed as new proposal A4
+below — a post-fix `air_quality_hazard` draft this cycle shows a lexically different but
+conceptually adjacent self-reference the shipped rule's wording may not explicitly cover.
+
+### ~~P9~~ — precipitation_extreme opener template convergence + restate-math — **SHIPPED 2026-07-07 (PR #397), CONFIRMED 2026-07-09 (2 independent clean cycles)**
 
 **Observed:** First observed 2026-06-18. Archived 2026-07-03 after 3 consecutive fresh-draft
 cycles without a `precipitation_extreme` draft (Jul 1, Jul 2, Jul 3), with an explicit note
@@ -748,33 +1751,62 @@ available punchline: its own third sentence states the region's annual rainfall 
 "roughly 300 mm total" — the 7-day total exceeds a typical year's rainfall — without ever
 connecting the two numbers for the reader.
 
-**Cycles observed:** 10 cycles total across the proposal's full history (Jun 7, Jun 18, Jun 22
-retroactive, Jun 25, Jun 26 ×3, Jun 28, Jun 29, Jun 30, then reopened Jul 4). Confirmed pattern
-now stands at 15 of 15 corpus `precipitation_extreme` drafts sharing the opener structure.
-**Not tested Jul 5** — none of today's 5 fresh drafts were `precipitation_extreme` (the 10
-carry-overs include Barrow and Astana, both already counted at Jul 4's grading). One
-untested cycle does not meet the 3-consecutive-absence bar for re-archiving.
-**Last seen:** Jul 4.
+**Cycles observed (pre-fix):** 10 cycles total (Jun 7, Jun 18, Jun 22 retroactive, Jun 25,
+Jun 26 ×3, Jun 28, Jun 29, Jun 30, reopened Jul 4). Confirmed pattern stood at 15 of 15 corpus
+`precipitation_extreme` drafts sharing the opener structure. Not tested Jul 5 or Jul 7 (no
+`precipitation_extreme` draft in either cycle — 2 consecutive precip-free fresh-draft cycles,
+one short of the 3-cycle re-archive threshold when the fix shipped).
+**Last seen (pre-fix):** Jul 4.
 
-**Proposed fix (PROMPT LANGUAGE — surgical, unchanged from original filing):** Add to
-`src/two_bot/prompts/writer_prompt.py` precipitation_extreme framing section: burn the default
-opener (3 alternative sentence-1 forms — period-and-restate; lead with mechanism/context;
-preserve punchline placement when the comparator IS the joke) and explicitly ban the
-restate-math form ("14.4 mm above a previous record of 300.0 mm" — use ratio form or
-period-and-restate instead). Additionally: when the bundle carries both a short-window extreme
-total and a longer-baseline average (annual, seasonal, monthly normal) for a comparable window,
-and the short-window total approaches or exceeds the longer baseline, state that comparison
-directly as the closer (Astana's case — "that's a year of rain in a week" — is the clearest
-example in the corpus of a landable baseline contrast left unstated). Full worked examples are
-preserved in `docs/DRAFT_CORPUS.md`'s Jun 7/18/22/25/26/28/29/30/Jul 4 entries.
+**Resolution (2026-07-07 evening, PR #397):** `writer_prompt.py`'s precipitation section
+gained a "four moves" framing (Section: Precipitation bundles) that bans re-deriving the
+margin as arithmetic ("never re-derive a per-day rate... derived rates are BUNDLE_FACT
+mismatches waiting to happen and read as effort"), explicitly reclassifies
+`alert_threshold_mm` as internal detection config never to be cited as a record or scale,
+and prescribes the annual/seasonal-baseline ratio ("a week's rain where a year's usually
+falls") as the significance anchor for bare-threshold bundles — this ships almost exactly
+the fix this proposal specified, including the baseline-comparison-as-closer move.
 
-**Expected impact:** Unchanged from original filing — breaks the writer's convergence on the
-stated opener form for every `precipitation_extreme` draft, and additionally unlocks the
-highest-value punchline available when the bundle supports a baseline comparison.
+**Jul 8 — first empirical confirmation, and the strongest possible test:** all 3 fresh
+`precipitation_extreme` drafts this cycle are clean. Barrow, Alaska ("one storm just
+delivered two-thirds of a normal year in a day"): no restate-math, declarative annual-ratio
+close. Astana, Kazakhstan ("this single storm delivered roughly a sixth of a typical year's
+rain"): same clean form, colon/"smashing"-lead opener instead of the old template. Anchorage,
+Alaska ("roughly a full year's average in one week... compressing what would otherwise be
+weeks of accumulation into days"): ratio-anchor leads sentence 1 instead of being stranded as
+a closer, correctly omits record language on a bare `multi_day_accumulation` bundle. This is
+the first `precipitation_extreme` batch in the corpus's history with zero P9 violations across
+all 3 fresh drafts — closing a pattern that held at 15-for-15 for 10 cycles.
+**Last seen (violation):** Jul 4. **First clean cycle:** Jul 8.
 
-**Status:** Drafted. Awaiting human implementation. The Jul 3 archival's prediction was
-correct on the first test — this proposal should not be re-archived without at least 3
-consecutive `precipitation_extreme`-free cycles per the runbook, same as before.
+**Proposed fix (as shipped, for reference):** burn the default opener (period-and-restate,
+lead-with-mechanism, colon-lead, ratio-as-lead forms all now observed in the corpus); ban
+restate-math; state the annual/seasonal baseline ratio directly as significance when the
+bundle supports it. Full worked examples preserved in `docs/DRAFT_CORPUS.md`'s Jun
+7/18/22/25/26/28/29/30/Jul 4/Jul 8 entries.
+
+**Jul 9 — 2nd empirical confirmation.** Anchorage, Alaska `precipitation_extreme` (61.2
+mm/day against a 0.9 mm prior daily record): no restate-math, no legacy opener template —
+"against a previous daily record of 0.9 mm set earlier in 2026" is a distinct, clean
+construction. This confirms the fix holds on its narrow terms a 2nd time on an
+independent draft. **Caveat worth tracking, not re-opening the proposal over:** the draft
+leaves a real punchline unstated — 61.2 mm against 0.9 mm is exactly 68×, the most
+dramatic ratio in the `precipitation_extreme` corpus, and unlike Jul 4's Astana (which
+needed an external annual baseline), this ratio is arithmetic on the two numbers already
+in the sentence. PR #397's shipped rule prescribes the annual/seasonal-baseline ratio
+specifically, not a record-to-record ratio, so this isn't a rule violation — but it's the
+same shape of missed opportunity, on a bundle shape (single-day record vs. prior record)
+distinct from the one the fix was proven against (7-day accumulation with an annual
+baseline, all 3 of Jul 8's drafts). Watch whether daily-record precipitation_extreme
+bundles keep reverting to a flatter close than accumulation bundles; if a 2nd instance of
+this specific gap appears, it may warrant a small follow-on proposal scoped to
+record-to-record ratios specifically.
+
+**Status:** SHIPPED in PR #397, merged 2026-07-07 (evening session, after that day's 15:00
+UTC grading run — this plan's Jul 7 entry still showed it as unimplemented for that reason).
+**CONFIRMED — 2 independent clean cycles** (Jul 8, 3/3 clean; Jul 9, 1/1 clean). Tracking
+closes here; reopen only if restate-math or the pre-fix opener template reappears in a
+future `precipitation_extreme` draft.
 
 ~~### P_new — Cold-record quality floor~~ → **[Archived 2026-06-21 — see Resolved section]**
 
@@ -841,6 +1873,158 @@ continues to sharpen with each cycle.
 **Last seen:** Jul 5 (dust_event gap now 5 consecutive confirming cycles: Jun 30, Jul 1, Jul 4,
 Jul 5, plus Jun 28; fire self-selection streak now 4 cycles; air_quality_hazard self-selection
 streak now 2 cycles).
+Jul 7: No dust_event draft this cycle — that gap's count holds at 5 cycles, unchanged.
+`air_quality_hazard` self-selects for a 4th instance across a 3rd distinct cycle: Soweto
+("coal season" + household-fuel source attribution + "nowhere to vent") and Riyadh (WHO
+ratio + heat-suppresses-mixing mechanism) both build real causal chains unprompted, extending
+the Jun 24/Jul 5/Jul 7 streak. **New signal type `record` debuts with zero named humor move**
+(Aibonito states only expository rarity-context, no comic/incongruity/declarative device) —
+too early to call this a confirmed gap category on 1 instance, but worth watching alongside
+dust_event given both are debuting into the same "explains but doesn't land" shape.
+**Last seen:** Jul 7 (dust_event gap unchanged at 5 cycles; air_quality_hazard
+self-selection now 4 instances/3 cycles; `record` new-type instance inconclusive, 1 data
+point).
+Jul 8: dust_event gap continues — Riyadh's `dust_event` draft builds a genuine two-source
+causal chain (Nafud + Rub' al Khali deserts feeding one column under peak shamal winds)
+but, per the established convention for this category, sophisticated mechanism
+construction still isn't counted as a named humor move — 6th cycle confirming the gap
+(Jun 28, Jun 30, Jul 1, Jul 4, Jul 5, now Jul 8; Jul 7 had no dust_event draft to test).
+Meanwhile
+`air_quality_hazard` self-selects for a 5th cycle (Riyadh's other draft, same day: WHO
+ratio + convective-mixing mechanism), and its close surfaces a genuinely new move —
+"this is a basin-scale loading, not a street-corner spike," a declarative
+**scale-honesty contrast** not on the existing 8-item list. 1 instance; watching for a
+2nd before proposing its formal addition to the "Voice moves available" list below.
+**Last seen:** Jul 8 (dust_event gap now 6 cycles; air_quality_hazard self-selection now
+5 instances/4 cycles; candidate 9th move — scale-honesty contrast — 1 instance).
+Jul 9: split evidence. Stevensville, Maryland `all_time_high` self-selects the
+buffer-failure mechanic cleanly and unprompted — consistent with the extreme-heat/record
+family's established organic-deployment pattern. Anchorage, Alaska
+`precipitation_extreme`, though, shows the category can regress: this same city's Jul 8
+draft (a 7-day accumulation bundle) self-selected a strong declarative ratio-anchor move,
+but today's daily-record-bundle draft falls back to mechanism-only description with no
+named move at all — the same station, 2 days apart, opposite outcomes. Precipitation's
+self-selection appears to depend on bundle shape (accumulation bundles land moves;
+single-day-record bundles default to mechanism-only), not just signal category.
+**Last seen:** Jul 9 (extreme-heat/record family self-selection streak continues;
+precipitation_extreme now shows metric-dependent split behavior rather than uniform
+self-selection).
+Jul 10: dust_event gap continues — Riyadh again builds real named mechanism (Shamal wind
+system, two named source deserts) but, per the established convention, this still isn't
+counted as a landed move — 7th cycle confirming the gap (Jun 28, Jun 30, Jul 1, Jul 4, Jul
+5, Jul 8, now Jul 10; Jul 7/9 had no dust_event draft to test). Ahvaz, Iran
+`absolute_extreme` self-selects a clean declarative survivability-consequence move
+unprompted, extending the extreme-heat/record family's streak. Tepee Creek, Montana
+`all_time_high` shows only an implied close (states the norm, doesn't declare it broke) —
+weaker self-selection than Stevensville's Jul 9 buffer-failure form or Ahvaz's today,
+consistent with the pattern that `all_time_high` self-selects a real move less
+consistently than `absolute_extreme`/`fire`/`air_quality_hazard`.
+**Last seen:** Jul 10 (dust_event gap now 7 cycles; extreme-heat self-selection streak
+continues via Ahvaz; all_time_high remains the more inconsistent record-family member).
+Jul 11: fire self-selects the permafrost-carbon mechanic again on both fresh drafts
+(interior Alaska, western Siberia) — 5th/6th consecutive confirming fire cycle. New wrinkle:
+both instances reuse a prior corpus draft's exact phrasing rather than composing a fresh
+move, which is a different failure mode than P5 tracks (P5 is about whether ANY named
+mechanic is used, not phrase-level uniqueness) — filed separately as new proposal A6 below,
+not folded into this proposal's count.
+**Last seen (pre-Jul-14):** Jul 11 (fire self-selection streak now 5/6 cycles, unchanged
+qualitatively; dust_event gap not tested this cycle — no dust_event draft).
+Jul 14: **fire's self-selection streak breaks for the first time.** Ontario, Canada's
+3-signal fire cluster (2,374.8/883.7/817.1 MW) closes with a bare restatement of the count
+("Three simultaneous signals above 800 MW in one Canadian afternoon") — no forest type, no
+permafrost/peat framing, no ecosystem specificity, nothing beyond the numbers already given.
+The writer's own stated reasoning for this draft names the cause directly: "the cluster
+enumeration is the system clause, requiring no invented context and no archive" — i.e. the
+multi-fire-cluster framing was treated as sufficient on its own, in place of reaching for a
+mechanic. This is a genuine counter-instance, not a data gap: this SAME cycle's western
+Siberia carry-over (also a 3-signal cluster, graded Jul 11) proves the cluster format and a
+named mechanic ("burning across peat that took centuries to accumulate") are compatible —
+so the gap tracks with the *specific angle chosen* (bare enumeration vs.
+enumeration-plus-mechanism), not with clusters as a class. Basrah's `absolute_extreme`
+self-selects a clean declarative mechanic unprompted, extending the extreme-heat family's
+streak; Randolph's `all_time_high` self-selects a real elevation mechanism but only reaches
+the implied form (see P_close), consistent with `all_time_high` remaining the more
+inconsistent record-family member (per Jul 10's note).
+**Last seen (pre-Jul-16):** Jul 14 (fire self-selection streak breaks for the first time via
+Ontario's cluster-enumeration-only draft, after 6 consecutive confirming cycles Jun 25 →
+Jul 11; dust_event gap not tested this cycle — no dust_event draft).
+Jul 16: `all_time_high` self-selects a real named-absence mechanism unprompted (Powderville —
+"no marine layer and no terrain to interrupt heat building") — extends the extreme-heat/
+record family's organic-deployment pattern. **`hot10` self-selects a real mechanic on its
+corpus debut** (Oslo — peer/climate-analogy comparison + declarative accelerating-warming
+reframe), joining fire/absolute_extreme/air_quality_hazard/marine_heatwave as another
+self-selecting type on first appearance; n=1, watching for a 2nd instance before calling it
+a confirmed streak the way fire's was before Jul 14's break. dust_event gap not tested this
+cycle (no dust_event draft); fire self-selection not tested (no fresh fire draft, only
+carry-overs already counted at Jul 11's grading).
+**Last seen (pre-Jul-17):** Jul 16 (`all_time_high` self-selects again; `hot10` self-selects on
+debut, n=1; dust_event/fire gaps not retested this cycle).
+Jul 17: `absolute_extreme` self-selects clean mechanics on 2 of 3 fresh instances (Bandar-E
+Mahshahr's Gulf-humidity framing, Al Basrah's delta-survivability framing — both organic, no
+prompting); the 3rd instance (Basrah) technically deploys a mechanic too but strands it outside
+the closer (see P_close). `all_time_high` self-selects again (Deaver WY — terrain-traps-heat
+mechanism), 3rd consecutive confirming cycle. **`hot10` confirms a 2nd self-selecting instance**
+(Tunis — leaderboard-aggregate reframe, a genuinely new move variant, not a repeat of Oslo's
+peer-comparison form) — no longer n=1, now a confirmed self-selecting type alongside fire/
+absolute_extreme/air_quality_hazard/marine_heatwave. dust_event gap not tested (no dust_event
+draft); fire self-selection not tested (no fresh fire draft, only unchanged carry-overs).
+**Last seen (pre-Jul-18):** Jul 17 (`absolute_extreme`/`all_time_high` self-select again; `hot10`
+confirms 2nd self-selecting instance; dust_event/fire gaps not retested this cycle).
+Jul 18: `all_time_high` self-selects a real named-absence mechanism unprompted for a **3rd
+consecutive cycle** (Wausaukee — "without the lake bleeding it off first," after Powderville Jul
+16 and Deaver Jul 17). `air_quality_hazard` self-selects its strongest device yet (Delhi's
+monsoon expectation-reversal, "rains are supposed to wash the air... the seasonal scour isn't
+keeping up") — 3rd consecutive corpus `air_quality_hazard` draft to build a real causal/rhetorical
+device unprompted (after Al Aḥmadī, Johannesburg). `precipitation_extreme` is mixed: Astana
+reaches for a genuinely new move (companion-city triple + annual-baseline contrast, see P_close)
+while Anchorage's mechanism has calcified into a 3rd-instance self-repeat (see new active proposal
+A7) — worth reading as evidence that this category's organic-deployment streak is real but
+starting to show the same per-location formulaic risk P6/P9 addressed at the category level.
+`absolute_extreme`/`dust_event`/fire gaps not tested (no fresh instance of any this cycle).
+**Last seen (pre-Jul-20):** Jul 18 (`all_time_high` 3rd consecutive self-selecting cycle;
+`air_quality_hazard` 3rd consecutive self-selecting cycle; `precipitation_extreme` mixed — 1 new
+move, 1 self-echo).
+Jul 19: `absolute_extreme` self-selects a real mechanic again on Ahvaz's fresh idiom-flip closer
+("shade is infrastructure, not comfort") — a genuinely new construction, not a repeat of any
+tracked clause family. dust_event/fire/precipitation_extreme gaps not tested (no fresh instance of
+any this cycle).
+Jul 20: dust_event gap reaches an **8th confirming cycle** (Jun 28, Jun 30, Jul 1, Jul 4, Jul 5,
+Jul 8, Jul 10, now Jul 20) — Taiz and Riyadh, the category's first same-cycle pair since Jul 4,
+both build real transport mechanisms (shamal winds, named source deserts) but neither reaches for
+a landing move beyond mechanism description, the same convention-established gap. `absolute_extreme`
+self-selects again via Al Başrah Al Qadīmah's fresh "physiological wall" metaphor — a genuinely new
+vehicle, distinct from the tracked survivability-threshold clause family (see A8) — extending the
+extreme-heat family's self-selection streak.
+**Last seen (pre-Jul-21):** Jul 20 (dust_event gap now 8 cycles; `absolute_extreme` self-selects
+again with a fresh vehicle).
+Jul 21: dust_event gap not tested (no fresh `dust_event` draft). `precipitation_extreme`
+self-selects a mechanic again on Barrow's annual-ratio close — but it's the same mechanic in the
+same words as this station's own Jul 8 draft, so the more precise finding is filed under A7 rather
+than logged here as fresh self-selection evidence.
+**Last seen:** Jul 21 (dust_event gap untested; `precipitation_extreme` self-selection evidence
+redirected to A7 — see that entry).
+Jul 22: `absolute_extreme` self-selects again (Basrah's "wet-bulb emergency" — a fresh vehicle) and
+`hot10` self-selects a genuinely new device for a **3rd straight cycle** (Portland/Seattle's
+same-day companion-city comparison, after Oslo's peer-analogy and Tunis's leaderboard-aggregate) —
+useful evidence that `hot10`'s repeating sentence-1 skeleton isn't dragging its sentence-2 variety
+down with it (see A8's opener-skeleton axis for the contrasting case where a shared skeleton
+coexists with reused, not varied, closes). dust_event/fire/cyclone gaps not tested (no fresh
+instance of any this cycle).
+**Last seen (pre-Jul-23):** Jul 22 (`absolute_extreme` and `hot10` both self-select fresh vehicles;
+`hot10`'s 3rd-cycle streak of varying its 2nd-sentence move is a positive counter-example to A8's
+pattern of the same signal family reusing its own closes).
+Jul 23: `absolute_extreme` self-selects again on both fresh instances (Doha's dry/humid contrast
+device, Al Başrah Al Qadīmah's wet-bulb-load mechanism — though see A8 for why the latter is also
+a reused-vehicle watch note). `monthly_high` self-selects a real ecosystem mechanic (Pikine's
+Sahel wet-dry-cycle framing plus a declarative interpretive-reframe close) on its return to the
+queue after an absence — first `monthly_high` instance since Jun 24's Randolph. `record`, still
+building its own corpus history (2nd instance after Jul 7's Aibonito), deploys a real mechanism
+(warm-pool buffer scarcity) but pairs it with an explicit-gap-math Wodehouse violation — a
+reminder that self-selecting a mechanism and avoiding every shipped writer-prompt rule are
+independent axes, especially for a type with only 2 corpus instances. dust_event/fire/cyclone/
+precipitation_extreme gaps not tested (no fresh instance of any this cycle).
+**Last seen:** Jul 23 (`absolute_extreme` self-selects twice; `monthly_high` self-selects on
+return; `record` shows mechanism but not full rule compliance).
 **Proposed fix (REDIRECTED to two-bot):** Add a "Voice moves available" section to
 `src/two_bot/prompts/writer_prompt.py` after the hard rules. List: comic triple
 (period-stop), idiom-flip (Steven Wright), understatement closer (British dry),
@@ -862,59 +2046,236 @@ extends evidence to fire/hot10/dust categories; coral/record categories may not 
 
 ~~### P8 — Snow/extreme record: ratio-as-punchline unused~~ → **[Resolved 2026-06-17 — see Resolved section]**
 
-### P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+~~### P_compound~~ — Compound-qualifier first sentence: choose archive OR margin, not both → **[Archived 2026-07-22 — see Resolved section]**
 
-**Observed:** 2026-06-28 — two record-type drafts in the same cycle open with both archive-depth
-qualifier AND margin qualifier in one sentence. Beaver Dams UT all_time_high [6]: "Beaver Dams,
-Utah hit 104°F (39.9°C) on June 25 — hottest daily maximum in 23 years of records, 15°F above
-the 2020 mark." Casper WY monthly_low [7]: "Casper, Wyoming hit 27°F (-2.8°C) on June 25 —
-coldest June low in 26 years of records, 3°F below the 2018 mark." Double-qualification dilutes
-both data points: neither archive depth ("23 years of records") nor margin ("15°F above the 2020
-mark") lands with full force when immediately followed by the other. The punchline is split, and
-neither half is the punchline. Compare: Jun 15 retroactive Cope Rch TX A- ("hottest daily
-maximum ever recorded, 1.5°F above the 2018 mark") — same structure, but "ever recorded" is a
-stronger qualifier than "in 23 years" and 1.5°F margin is implicit-tight rather than stated-loose.
+Filed Jun 28, 14 cycles of evidence through Jul 19 (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4, Jul 7,
+Jul 8, Jul 9, Jul 10, Jul 14, Jul 16, Jul 17, Jul 18, Jul 19). 3 consecutive fresh-draft cycles
+since without a qualifying record-type draft (Jul 20 `absolute_extreme`+`dust_event`, Jul 21
+`precipitation_extreme`, Jul 22 `absolute_extreme`+`hot10`) meets the runbook's 3-cycle archival
+threshold. Full history, evidence, and the ready-to-ship prompt-language fix are preserved in git
+history (this section, pre-2026-07-22) and summarized under Resolved. Reopen immediately if a
+record-type (`all_time_high`/`monthly_low`/`monthly_high`/`country_record`) draft with a stacked
+archive-depth + margin qualifier reappears in pending — per the Jul 4→Jul 9 precedent this pattern
+has never gone more than a few cycles without recurring once a record-type draft reappears.
 
-**Cycles observed:** Jun 28 (1 cycle; 2 of 5 fresh drafts in the same cycle — confirms the
-pattern is structural, not coincidence in a single draft); Jun 29 (Prudhoe Bay [5] A-:
-"hottest daily maximum in 24 years of records, 2°F above the 2024 mark" — same archive+margin
-double-qualifier structure. Smaller margin (2°F) makes double-qualification less visible but
-the structural pattern recurs in record-type openers. 2nd consecutive cycle with P_compound.);
-Jun 30 (Prudhoe Bay all_time_high carry-over — same double-qualifier structure observed again
-in the 3rd grading cycle where this draft appears. Pattern holds across grading cycles:
-archive+margin double-qualifier is the default form for record-type openers.)
-Jul 2 (Ft Green, Florida all_time_high [15] and [17], near-duplicate drafts one day apart — both
-open "hottest daily maximum in 26 years of records, 1°F above the 2025 mark," identical phrasing
-in both. A gap of 1 cycle since Jun 30 — the pattern was dormant Jul 1 [that cycle's 4 fresh
-drafts were monthly-record-free: 2 `absolute_extreme`, 1 `fire_footprint`, 1 `dust_event`, none of
-which use the archive+margin record-opener form] — but recurred immediately once an `all_time_high`
-draft reappeared, confirming the gap was signal-mix, not a resolving trend.)
-Jul 4 (Island Pond, Vermont [1] and Loxahatchee, Florida [3], both `all_time_high`, both open
-"hottest daily maximum in 37 years of records, 1°F above the [year] mark" — identical archive
-depth and margin by coincidence, same double-qualifier construction. Notable split: Loxahatchee
-overcomes it with a strong P_close-positive close and grades A-; Island Pond doesn't and grades
-B+ — reconfirms P_compound softens rather than hard-caps a draft, unlike P_tier.)
-**Last seen:** Jul 4 (5 cycles: Jun 28, Jun 29, Jun 30, Jul 2, Jul 4). **Not tested Jul 5** — none
-of today's 5 fresh drafts were record-type (`all_time_high`/monthly_low/monthly_high); the
-2 carry-over `all_time_high` drafts (Island Pond, Loxahatchee) were already counted at Jul 4's
-grading. One untested cycle does not meet the 3-consecutive-absence bar for re-archiving.
+### A7 — Location reuses its own prior closing construction across different draft events (promoted from awaiting-evidence)
 
-**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`
-record-type framing section:
+**Observed:** 2026-07-14 — Randolph, Utah `all_time_high` closes with "high-desert elevation
+normally bleeds off the heat that pools across the Great Basin floor." This same station's Jun 24
+corpus draft, a `monthly_high` (B+), closed with "normally blunts the heat." Both share the
+identical "normally [verb]s the heat" shape and the identical implied-not-declared P_close gap, on
+the same city, 20 days apart, across two *different* record types. Filed as awaiting-evidence item
+A7 with an explicit promotion bar: "2+ locations show this pattern."
 
-> When stating a record: choose ONE qualifier per sentence — either the archive span ("23 years of
-> records") OR the margin above the prior mark ("15°F above the 2020 mark"). Not both. Preferred
-> form: "Beaver Dams, Utah hit 104°F on June 25 — 15°F above the previous record, set in 2020."
-> Let the archive depth be implicit (the reader infers that a record being set means the archive
-> was searched) or move it to sentence 2 as contrast. Stacking both in the same clause produces
-> two half-punchlines; either one alone produces a full punchline.
+**2026-07-18 — 2nd location confirms, promoted to active.** Anchorage, Alaska's fresh
+`precipitation_extreme` draft closes with "compress moisture into short, intense bursts" — the
+same underlying "wring-out/compress-moisture...bursts" construction this exact station has now
+used **three times**: Jun 26 ("wring out moisture in compressed bursts," graded B, mechanism-only
+failing), Jul 9 ("wring out moisture in concentrated bursts," graded B, P_close FAILING — "one
+word from Jun 26's own Anchorage draft" per that cycle's own grading), and today ("compress
+moisture into short, intense bursts," graded B, P_close FAILING again). Each individual instance
+still clears a B/B+ floor on the strength of a genuinely correct orographic mechanism — this
+isn't a factual or Wodehouse problem — but the writer is visibly reaching for its own prior
+sentence shape rather than composing fresh phrasing for what is, each time, an actually-new
+storm event. Two distinct locations (Randolph: record-type system-clause reuse; Anchorage:
+precipitation-mechanism close reuse) now confirm the underlying pattern — the writer's own prior
+phrasing calcifying into a per-location default — meeting A7's stated 2-location promotion bar.
 
-**Expected impact:** Tighter record-type openers; B+ → A- path for drafts where mechanism is
-already solid. Immediate two-observation confirmation within a single cycle suggests the
-double-qualifier is a prompt-level default, not a one-off. Affects all_time_high, monthly_low,
-monthly_high, country_record signal types where both archive depth and margin are available.
+**Cycles observed:** 5 (Jun 26 and Jul 9 — Anchorage, retroactively relevant; Jul 14 — Randolph,
+A7 filed; Jul 18 — Anchorage's 3rd instance, promotion trigger; Jul 21 — Barrow, 3rd location)
+across 3 locations (Anchorage ×3, Randolph ×1, Barrow ×1).
+**Last seen (pre-Jul-21):** Jul 18.
 
-**Status:** Drafted. Awaiting human implementation. 5 cycles (Jun 28, Jun 29, Jun 30, Jul 2, Jul 4).
+**2026-07-21 — 3rd location, and the cleanest instance yet.** Barrow, Alaska's fresh
+`precipitation_extreme` draft closes "this single day delivered nearly two-thirds of that" — a
+near-paraphrase of this exact station's own Jul 8 corpus draft, "one storm just delivered
+two-thirds of a normal year in a day," itself the first draft that confirmed PR #397's
+precipitation fix clean (graded A- at the time). Same city, same 71.2mm headline figure, same
+~110mm annual baseline, same two-thirds fraction, 13 days apart. Unlike Anchorage's and Randolph's
+instances — which were each already capped by a separate P_close-failing close, so A7 was
+additional color on an already-B-range grade — today's Barrow draft would otherwise clear A- on
+P9 and P_close grounds alone (matching Jul 8's precedent exactly). This is the first A7 instance
+where phrase reuse is the *sole* reason a draft doesn't reach A-, not a secondary flaw layered on
+top of another failure — the clearest single demonstration yet that "the mechanism can recur; the
+sentence shape shouldn't" is the actual gap, independent of whether the mechanism executes well.
+
+**Cycles observed:** 5 (Jun 26 and Jul 9 — Anchorage, retroactively relevant; Jul 14 — Randolph,
+A7 filed; Jul 18 — Anchorage's 3rd instance, promotion trigger; Jul 21 — Barrow, 3rd location,
+cleanest instance) across 3 locations (Anchorage ×3, Randolph ×1, Barrow ×1).
+**Last seen:** Jul 21.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`, in
+the memory-usage guidance section (near where the `recent_categories` 24h cooldown is already
+described):
+
+> When the bundle's location has appeared in a prior corpus draft, do not reuse that prior draft's
+> system-clause or closing-sentence construction verbatim or near-verbatim — even when the
+> underlying physical mechanism genuinely applies again. Randolph, Utah's "normally blunts the
+> heat" (Jun 24) → "normally bleeds off the heat that pools..." (Jul 14), Anchorage, Alaska's
+> "wring out moisture in compressed bursts" (Jun 26) → "...in concentrated bursts" (Jul 9) →
+> "compress moisture into short, intense bursts" (Jul 18), and Barrow, Alaska's "one storm just
+> delivered two-thirds of a normal year in a day" (Jul 8) → "this single day delivered nearly
+> two-thirds of that" (Jul 21), are the same mechanism restated in near-identical language two or
+> three times. The mechanism can recur; the sentence shape shouldn't. When re-describing a
+> familiar mechanism for a repeat location, vary the vehicle (a different physical detail, a
+> different comparison, or a named consequence instead of another mechanism restatement) rather
+> than a synonym-substituted copy of the prior sentence.
+
+**Expected impact:** Prevents formulaic drift at the per-location level — the same failure class
+P6 (fire opener) and P9 (precipitation opener) addressed at the per-category level before their
+fixes shipped, this time one level down (the closing construction, not the opener) and keyed by
+place rather than category. Currently only observed at a B/B+ ceiling — none of Anchorage's,
+Randolph's, or Barrow's instances have graded below B+ — so this isn't hard-capping grades today,
+but Barrow's Jul 21 instance shows the ceiling cost is real even for an otherwise-clean execution:
+it's the difference between B+ and A- with nothing else wrong. The pattern is accelerating
+(3 locations now, Barrow appearing just 13 days after the construction it reused was itself the
+fix-confirming exemplar) and risks becoming an unexamined default the way P6's fire-opener
+template did before its fix, if left unaddressed.
+
+**Status:** Promoted from awaiting-evidence (A7) 2026-07-18 — Anchorage's 3rd instance is the 2nd
+location confirming the pattern, meeting A7's own stated 2-location promotion bar. Barrow (Jul 21)
+is a 3rd location and the cleanest single-cause demonstration yet. Awaiting human implementation.
+
+### A8 — `absolute_extreme` opener-skeleton convergence + stranded/reused declarative clauses (promoted from awaiting-evidence)
+
+**Observed:** 2026-07-17 — two related but distinct convergence signals surfaced in the same
+cycle, both specific to `absolute_extreme`. (1) **Same-cycle opener-skeleton convergence:** all 3
+fresh drafts shared an identical sentence-1 shape — "[City], [Country] is forecast to hit XX.X°C
+(YYY°F) [on Date/today] — [above/just inside] the 47°C threshold where..." (2) **Reused
+declarative clause:** Basrah's mid-sentence-1 qualifier, "shade and stillness stop being enough,"
+near-verbatim echoed Jul 10 Ahvaz's A- close, "shade and rest alone stop being enough." Basrah's
+draft also introduced a third, related shape: its one genuinely declarative move was **stranded**
+mid-sentence-1 rather than placed in the closer, while the actual closer was a hedged,
+non-declarative form — graded B+ on that basis, distinct from P_close's usual implied-vs-
+declarative gap (the declarative move exists, it's just misplaced).
+
+**2026-07-19 — both remaining axes clear their promotion bar.** Al Basrah, Iraq's fresh draft
+repeats Jul 17 Basrah's stranded-mechanic shape exactly: "shade, hydration, and rest stop being
+adequate buffers" is buried as a sentence-1 tail qualifier, while the tweet's actual last sentence
+("Nearby Basrah is forecast to hit 50.6°C the same day") is a bare peer-comparison fact with no
+mechanism or consequence — 2nd instance of the stranding shape, different city, 2 days apart. The
+same buried clause is also the **3rd instance** of the reused survivability-threshold construction:
+"shade and rest alone stop being enough" (Jul 10, Ahvaz) → "shade and stillness stop being enough"
+(Jul 17, Basrah) → "shade, hydration, and rest stop being adequate buffers" (Jul 19, Al Basrah, now
+expanded to a 3-item list). Meanwhile the opener-skeleton axis gets both confirmation and
+counter-evidence in the same cycle: Ahvaz [6] and Al Basrah [8] both repeat the "forecast to hit
+XX°C — above the 47°C threshold where..." skeleton (a 2nd cycle showing it, after Jul 17's
+same-cycle 3-instance debut — now cross-cycle, not just within one day), while Ahvaz/Bandar-E
+Mahshahr [9] breaks from it entirely with a two-city comparison construction instead. All three
+Jul 19 `absolute_extreme` drafts stay clean of P_tier (the confirmed post-fix "threshold where
+[region] does X" world-knowledge form, not an internal band/tier label).
+
+**Cycles observed:** 2 (Jul 17, Jul 19) across all three tracked shapes. Reused-clause axis: 3
+instances (Jul 10, Jul 17, Jul 19) across 2 cycles. Stranded-mechanic axis: 2 instances (Jul 17,
+Jul 19) across 2 cycles. Opener-skeleton axis: now observed across 2 distinct cycles (Jul 17
+same-cycle ×3, Jul 19 ×2 of 3), plus 1 clean counter-instance same cycle (Ahvaz/Bandar-E Mahshahr).
+**Last seen (pre-Jul-20):** Jul 19.
+
+**2026-07-20 — opener-skeleton axis extends to a 3rd cycle; the other two axes get their cleanest
+counter-instance yet.** Al Başrah Al Qadīmah's fresh draft repeats the "[City] is forecast to hit
+XX.X°C — above the 47°C threshold where..." skeleton for a 3rd distinct cycle (Jul 17, Jul 19, Jul
+20). But its declarative payoff — "a physiological wall that shade and airflow alone cannot breach"
+— is a fresh vehicle, not a repeat of the "shade and rest/stillness/hydration stop being enough"
+family, and lands as the sentence's actual final clause rather than a buried qualifier: clean of
+both the reused-clause axis and the stranded-mechanic axis. Notable: this draft (and Jul 19's
+Ahvaz, the corpus's other clean A8 counter-instance) both dropped from the queue the cycle after
+being graded, cause unconfirmed — the two cleanest counter-instances have had no chance at a
+second independent read via carry-over, unlike the failure instances (Basrah, Al Basrah), which
+have each been re-confirmed by surviving in the queue.
+
+**Cycles observed:** 3 (Jul 17, Jul 19, Jul 20) for the opener-skeleton axis specifically; reused-
+clause and stranded-mechanic axes unchanged at 3 and 2 instances respectively (no new instance
+either way this cycle — the one axis tested got a counter-instance, not a repeat).
+**Last seen (pre-Jul-22):** Jul 20.
+
+**2026-07-22 — opener-skeleton axis extends to a 4th cycle; reused-clause axis gains a 2nd family,
+drawn from the fix's own suggested alternative.** Basrah's fresh draft ("is forecast to hit 47.3°C
+[117°F] today — crossing the 47°C threshold where...") repeats the tracked opener skeleton for a
+4th cycle (Jul 17, Jul 19, Jul 20, now Jul 22) but lands a genuinely fresh, unstranded declarative
+close ("turns already-extreme heat into a wet-bulb emergency for anyone without shelter") — clean
+of both the reused-clause and stranded-mechanic axes, the strongest close of any A8-tracked draft
+to date. Al Basrah's fresh draft, forecasting 13 hours later in the same metro area, closes "the
+body's cooling mechanisms begin to lose ground to the air around them" — a verbatim 5-word reuse
+of the subject phrase from Jul 14's Basrah close ("the body's cooling mechanisms fail faster than
+they can recover"), the exact alternative this proposal's own fix cited as the way to escape the
+"shade and rest/stillness/hydration" cliché. Eight days on, that alternative is itself recurring on
+a different city — a 2nd reused-clause family, distinct from but structurally identical in kind to
+the first, now at 2 instances (Jul 14, Jul 22) and meeting the same promotion bar the first family
+used. Notable: unlike the first family's 3 near-identical instances, the predicate here genuinely
+varies ("fail faster than they can recover" vs. "begin to lose ground to the air around them") —
+weaker evidence of literal copying, but the specific 5-word subject noun phrase converging twice on
+the same regional cluster in 8 days is still a real signal of self-reuse, not independent
+composition.
+
+**Cycles observed:** 4 (Jul 17, Jul 19, Jul 20, Jul 22) for the opener-skeleton axis; stranded-
+mechanic axis unchanged at 2 instances (not tested this cycle — both fresh drafts place their
+declarative move correctly); reused-clause axis now tracks 2 families — "shade and X stop being
+enough" (3 instances: Jul 10, Jul 17, Jul 19) and "the body's cooling mechanisms [verb phrase]" (2
+instances: Jul 14, Jul 22, new this cycle).
+**Last seen (pre-Jul-23):** Jul 22.
+
+**2026-07-23 — opener-skeleton axis extends to a 5th cycle with a clean counter-instance same
+cycle; a possible 3rd reused-clause family surfaces, weaker evidence than the first two.** Al
+Başrah Al Qadīmah's fresh draft ("is forecast to hit 47.3°C [117°F] on July 23 — above the 47°C
+threshold where...") repeats the tracked skeleton for a 5th cycle (Jul 17, 19, 20, 22, now 23),
+while Doha's same-cycle fresh draft breaks from it entirely — a bare forecast statement with no
+"threshold where" clause in sentence 1 at all, the cleanest counter-instance yet (structurally
+distinct from Ahvaz/Bandar-E Mahshahr's Jul 19 two-city-comparison break and Al Başrah Al
+Qadīmah's Jul 20 break, both of which still used a threshold clause, just not the exact skeleton
+shape). Separately: the noun "wet-bulb" — introduced Jul 22 in Basrah's close as "currently the
+only clean, unreused vehicle this signal type has produced" — recurs one day later in Al Başrah Al
+Qadīmah's close ("a wet-bulb load the body cannot shed by sweating alone" vs. Jul 22's "a wet-bulb
+emergency for anyone without shelter"). The exact wording differs more than either established
+family's near-verbatim repeats, so this is logged as a watch note rather than a 3rd confirmed
+family — plausibly independent convergence on the correct physiological term rather than
+copied phrasing, but worth a 3rd instance to settle either way, especially since it would mark the
+2nd time this proposal's own suggested "fresh vehicle" has begun recurring within days of being
+cited as the escape route.
+
+**Cycles observed:** 5 (Jul 17, Jul 19, Jul 20, Jul 22, Jul 23) for the opener-skeleton axis;
+stranded-mechanic axis unchanged at 2 instances (not tested this cycle); reused-clause axis
+unchanged at 2 confirmed families (3 and 2 instances respectively) plus 1 new watch note
+("wet-bulb," 2 instances, not yet promoted).
+**Last seen:** Jul 23.
+
+**Proposed fix (PROMPT LANGUAGE — surgical):** Add to `src/two_bot/prompts/writer_prompt.py`'s
+`absolute_extreme` framing section, near the existing "delete the system clause" test:
+
+> When the second sentence's genuinely declarative move (a named-absence consequence, a
+> survivability-threshold statement) is embedded as a sentence-1 qualifier rather than placed in
+> the closer, MOVE it to the closer — don't let the tweet end on a bare comparative fact ("Nearby
+> [City] is forecast to hit YY°C the same day") when a real consequence is available elsewhere in
+> the draft. Separately: "shade and rest/stillness/hydration stop being enough/adequate buffers"
+> has now been used verbatim or near-verbatim on 3 different cities across 3 different cycles —
+> retire it as a reusable phrase and vary the specific vehicle each time the mechanism recurs.
+> "The body's cooling mechanisms [fail/lose ground/...]" is ALSO now a repeating construction (2
+> instances, Jul 14 and Jul 22, both Basra-area) — it is not a safe substitute for "shade and X";
+> treat it as an equally retired phrase, not a fresh one. Name a different failing buffer each
+> time, or state the physiological consequence in a form that hasn't already appeared in this
+> corpus (a wet-bulb-specific outcome, a named health/infrastructure failure, per Jul 22's Basrah
+> "wet-bulb emergency for anyone without shelter" — currently the only clean, unreused vehicle this
+> signal type has produced). Finally: the "[City] is forecast to hit XX.X°C — above/crossing the
+> 47°C threshold where..." skeleton is now a repeating default (4 cycles); alternate with a
+> location-led or stakes-led opener (see P6's fire-opener precedent) at least some of the time.
+
+**Expected impact:** Same class of fix as P6 (fire opener) and P9 (precipitation opener) applied
+to `absolute_extreme`'s two failure axes plus a third (clause placement) unique to this type.
+Currently caps at B+ rather than hard-capping (like P_tier did pre-fix), so the ceiling lift is
+B+ → A- for drafts where the mechanism and declarative move are both already present but
+misplaced or reused — a comparatively cheap fix given the underlying signal quality is already
+there in every observed instance.
+
+**Status:** Promoted from awaiting-evidence (A8) 2026-07-19 — both the stranded-mechanic axis (2
+instances) and the reused-clause axis (3 instances) clear the standard 2-instance promotion bar
+this precedent has used since A3. The opener-skeleton axis now has 5 cycles of cross-cycle
+evidence (Jul 17/19/20/22/23), with 3 clean counter-instances (Jul 19 Ahvaz/Bandar-E Mahshahr, Jul
+20 Al Başrah Al Qadīmah, Jul 23 Doha) showing the skeleton alone doesn't cap a grade. The
+reused-clause axis tracks 2 confirmed families ("shade and X stop being enough," 3 instances; "the
+body's cooling mechanisms [verb phrase]," 2 instances, added 2026-07-22) plus 1 unconfirmed watch
+note ("wet-bulb," 2 instances, added 2026-07-23) — both confirmed families are drawn from this
+proposal's own previously-proposed escape vehicles, which are themselves now calcifying; the
+watch note may be a 3rd instance of the same irony or simply convergent correct terminology.
+Awaiting human implementation.
 
 ~~### P_precip_floor — Precipitation quality floor~~ → **[Archived 2026-07-02 — see Resolved section]**
 
@@ -1010,10 +2371,162 @@ SST tiers but any internal scoring-tier/threshold label leaking into copy across
 signal types. Full current writeup, evidence, and proposed fix now live under **P_tier** in
 Active proposals above.
 
+### A4 — Signal-kind self-naming leaks into `air_quality_hazard` copy, post-P_tier-fix
+
+**Observed:** 2026-07-07 — Riyadh, Saudi Arabia `air_quality_hazard` (created
+2026-07-07T14:56:03Z, ~9.8h **after** PR #386 merged the detection-plumbing ban): "This is
+a PM2.5 signal, not dust; the Arabian interior's summer heat suppresses mixing and traps
+fine particles close to the surface." "This is a PM2.5 signal" names the bot's own
+`signal_kind` categorization (`air_quality_hazard` vs. `dust_event`) rather than describing
+a fact a reader could verify about the world — the word "signal" is the tell; no lay
+reader would disambiguate smog this way unprompted. This is a close lexical cousin of the
+tier-jargon violation P_tier tracked and PR #386 just banned, but a different shape:
+disambiguating the bot's own event-category label, not citing a severity band/threshold/
+trigger definition. The shipped rule's own test ("is this a fact about the WORLD, or a
+fact about this bot's configuration?") answers "configuration" here just as cleanly as it
+does for tier-jargon, but the rule's actual wording (`band_label`, score thresholds,
+trigger definitions) doesn't explicitly name signal-kind self-disambiguation as a banned
+category — this may be a gap in the fix's coverage, or may simply need one more cycle to
+confirm it's a real pattern rather than a single stochastic instance.
+
+**Cycles observed:** 1 (Jul 7).
+**Last seen:** Jul 7.
+Jul 8: **does not recur.** Today's 2 PM-signal drafts (Riyadh `dust_event`, Riyadh
+`air_quality_hazard`, same city/day) both cite their WHO multiples cleanly with no
+signal-kind self-naming — the `air_quality_hazard` draft's close ("this is a basin-scale
+loading, not a street-corner spike") is superficially similar in cadence to Jul 7's "This
+is a PM2.5 signal, not dust" but is a genuinely different construction: it clarifies
+model-grid resolution honesty (a verifiable fact about the data), not the bot's internal
+`signal_kind` category. Useful negative evidence against a 2nd real instance — worth not
+conflating the two constructions in future grading (see `docs/DRAFT_CORPUS.md` Jul 8
+entry for the explicit distinction). Still 1 cycle; not promoted.
+
+**Watch for:** a 2nd instance of a draft naming its own `signal_kind`/category/bundle-type
+label (words like "signal," "event," "bundle," "this is a/an [X]-type reading" used to
+self-classify rather than describe a physical phenomenon) in `air_quality_hazard`,
+`dust_event`, or any other signal type with an adjacent sibling category the writer might
+feel a need to disambiguate from. **Promote to an active proposal if 2+ cycles are
+observed**, per the same promotion rule A3 used before becoming P_tier. If it recurs, the
+fix is almost certainly a one-line addition to the existing "DETECTION PLUMBING IS NOT A
+FACT" rule in `writer_prompt.py` (PR #386) rather than a new rule — extending its examples
+to cover signal-kind self-naming explicitly.
+
+### A5 — `cyclone_land_threat` packs two wind-speed values without marking the time-shift between them
+
+**Observed:** 2026-07-08 — Typhoon Bavi, the corpus's first `cyclone_land_threat` draft:
+"Typhoon Bavi, packing 125 kt winds, is forecast to pass within about 42 NM of Ishigaki,
+Japan in roughly 60 hours — at 110 kt per the JTWC track." Two different wind values ride
+one sentence — 125 kt (the current, observed intensity that correctly leads per move 4)
+and 110 kt (the forecast intensity at the moment of closest approach, ~60 hours out) —
+with no explicit marker that the second number is a different point in time. A reader
+who isn't already tracking the storm could read this as an internal contradiction (which
+number is right?) rather than a forecast weakening trend. The bundle fields and the
+forecast-tense discipline are both used correctly; this is a phrasing/clarity gap, not a
+rule violation.
+
+**Cycles observed:** 1 (Jul 8) — also this signal type's corpus debut, so there is no
+prior instance to compare against.
+**Last seen:** Jul 8.
+
+**Watch for:** a 2nd `cyclone_land_threat` draft that either (a) repeats the same
+unmarked dual-wind-value construction, or (b) resolves it naturally (e.g., "now 125 kt,
+forecast to weaken to 110 kt by closest approach"). **Promote to an active proposal if
+2+ cycles show the unmarked-dual-value form.** If it recurs, the likely fix is a small
+addition to the cyclone bundles' move 4 guidance: when both `current_wind_kt` and a
+forecast-time wind value are cited in the same sentence, mark the time-shift explicitly
+("now... by the time it's closest to Ishigaki...") rather than stacking two bare numbers.
+
+### A6 — Permafrost-carbon fire mechanic reuses near-verbatim phrasing across different locations/events
+
+**Observed:** 2026-07-11 — two independent phrase-level repeats surface in the same cycle,
+both drawn from the fire category's most reliable A-grade path (the permafrost-carbon
+mechanic, first established Jun 25 Siberia and confirmed across Jul 3/Jul 5/now Jul 11 —
+6 corpus instances total). (1) Western Siberia fire's close — "Western Siberia's summer
+fire season is burning across peat that took centuries to accumulate" — is a near-verbatim
+repeat of Jul 3's Canadian Arctic near-duplicate close, "burns into organic soil layers
+that took centuries to accumulate" (same "took centuries to accumulate" clause, different
+location/event, 8 days apart). (2) Interior Alaska fire's close — "doesn't just consume
+trees — it burns into the organic layer above the frozen ground" — reuses the exact
+contrastive-negation construction ("doesn't just [verb] — it [verb]s...") from Jul 5's
+eastern Siberia draft, "doesn't just burn the surface — it thaws the ground beneath it" (6
+days apart, different location). Distinct from the already-tracked "duplicate-generation"
+operational anomaly (same bundle/event re-issued under a new draft_id, e.g., Ft Green,
+Basrah, Canadian Arctic same-day near-duplicates): both of today's repeats are genuinely
+different fire events (different location, date, MW reading) reusing the writer's own
+prior phrasing for a structurally similar but distinct signal. Risk: the mechanic that has
+been this plan's most reliable fire-category A-grade path (6 corpus instances, all B+/A-)
+may be curdling into its own stock phrase bank exactly the way P6's original opener-template
+convergence did in May, just one level down the sentence (the close, not the opener).
+
+**Cycles observed:** 1 (Jul 11) — 2 independent phrase-level recurrences in the same cycle,
+each with a single prior confirmed instance (Jul 3, Jul 5 respectively).
+**Last seen:** Jul 11.
+
+**Watch for:** a 3rd instance of either construction ("...that took centuries to
+accumulate" / "doesn't just X — it Y") applied to a permafrost-carbon fire mechanic on a
+different location. **Promote to an active proposal if 2+ cycles show either construction
+recurring**, per the same promotion rule A3/A4/A5 used. If it recurs, the likely fix is a
+small addition to the fire section of `writer_prompt.py`: when the permafrost-carbon
+mechanic applies, name 2-3 alternative closing constructions (e.g., a specific downstream
+consequence — methane release, decades-scale recovery time — instead of restating the
+carbon-age fact in the same shape every time) so the mechanic doesn't calcify into a single
+reusable sentence the way this plan's other shipped fixes (P6, P9) addressed at the
+opener level.
+
+### A9 — Subject-verb number agreement error in dust_event copy
+
+**Observed:** 2026-07-20 — Riyadh, Saudi Arabia `dust_event`: "The Arabian Peninsula's summer
+shamal winds lift desert sediment from the Rub' al Khali and funnels it northeast toward the
+capital." The subject ("winds," plural) takes a singular verb ("funnels") in the sentence's second
+clause — a plain grammatical error, not a voice-quality or Wodehouse-rule issue. Distinct from
+every other tracked pattern in this plan: those are about phrasing choices (reused clauses,
+opener templates, tier-jargon); this is a correctness defect the fact-checker/critic stages
+apparently don't check for (they verify numeric/factual claims, not grammar). Same-cycle sibling
+draft (Taiz, `dust_event`) uses correct agreement throughout ("winds lift... and drive"), so this
+isn't a systematic per-category template issue — more likely isolated model stochasticity on this
+one generation.
+
+**Cycles observed:** 1 (Jul 20).
+**Last seen:** Jul 20.
+
+**Watch for:** a 2nd instance of a number-agreement error (or a comparable grammatical defect —
+dangling modifier, tense mismatch) in any signal type. **Promote to an active proposal if 2+
+cycles show a recurring grammatical-correctness gap**, per the same promotion rule A3–A8 used. If
+it recurs, the likely fix is a small addition asking the critic or fact-checker stage to flag
+grammatical agreement errors, since this class of defect sits outside what either stage currently
+checks for (facts and voice, not sentence mechanics) — not a `writer_prompt.py` phrasing rule, since
+the failure mode isn't about word choice.
+
+~~### A7 — Location reuses its own prior system-clause construction across different draft events~~ → **Promoted 2026-07-18 — see Active proposals, A7**
+
+Filed Jul 14 on a single location (Randolph, Utah, reusing its own `monthly_high`→`all_time_high`
+system-clause across 2 draft events), with an explicit promotion condition ("2+ locations show
+this pattern"). 2026-07-18 cleared that bar: Anchorage, Alaska's fresh `precipitation_extreme`
+draft is the 2nd location, reusing its own closing-mechanism phrasing across 3 draft events (Jun
+26, Jul 9, Jul 18). Full current write-up, evidence, and proposed fix now live under **A7** in
+Active proposals above.
+
+~~### A8 — `absolute_extreme` opener-skeleton convergence + reused survivability-threshold clause~~ → **Promoted 2026-07-19 — see Active proposals, A8**
+
+Filed Jul 17 on a single cycle's 3-instance opener-skeleton convergence plus a 2-instance reused
+declarative clause, with an explicit promotion condition ("2+ cycles show either axis recurring").
+2026-07-19 cleared that bar on both the reused-clause axis (3 instances: Jul 10, Jul 17, Jul 19)
+and a newly-identified stranded-mechanic axis (2 instances: Jul 17, Jul 19) from the same signal
+type's convergence pattern. Full current write-up, evidence, and proposed fix now live under
+**A8** in Active proposals above.
+
 ## Resolved (archive)
 
 History of fixes that landed or became obsolete — added when a failure mode either held
 for 3+ cycles without appearing, or when the target code was retired.
+
+### [Archived 2026-07-22, Re-activated 2026-07-23] P_compound — Compound-qualifier first sentence: choose archive OR margin, not both
+
+Archived Jul 22 after 3 consecutive fresh-draft cycles without a qualifying record-type draft
+(Jul 20, Jul 21, Jul 22), with an explicit note that this was absence-of-opportunity, not a
+confirmed fix, and that the pattern "recurred within 1–2 cycles of every prior signal-mix gap."
+It did — see Active proposals above for the reopened entry with Jul 23's confirming evidence
+(Pikine, Senegal `monthly_high`), the same archive→reopen-next-cycle timing P9 showed Jul 3→Jul 4.
 
 ### [Archived 2026-07-03, Re-activated 2026-07-04] P9 — precipitation_extreme opener template convergence + restate-math
 
