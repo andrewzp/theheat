@@ -11,6 +11,143 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-14 — Daily corpus grading (0 fresh drafts; 53rd consecutive; billing outage now 53 days — the 6-hold writer-killed-slot freeze broke into a 3-candidate churn, `main` static a 4th consecutive cycle, `fire_footprint` cluster unchanged)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), **zero new commits for a 4th consecutive cycle** (Sep 11-13 were all
+also static after Sep 9-10's 18-commit wave). Checked out `daily-plan-current` and attempted
+`git rebase origin/main` per the runbook: conflicted on the same known pre-merge Jul 7 commit
+every prior attempt has hit; aborted cleanly per the fallback (ancestry re-confirmed clean —
+`4b4d965` remains an ancestor). Gist read via git-clone path (success, no rate limit).
+
+**Queue: 0 pending, unchanged from Sep 13.** Total draft count held flat at **40** (38 posted, 0
+rejected, 2 approved) — a **23rd consecutive day** with no change. Most recent `created_at`
+across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
+**53 days**.
+
+**Billing outage: still open, 5 new pairs this cycle (same count as Sep 13's 5).** Since the
+prior pull's cutoff (2026-09-13T08:42:12Z), **5** new `budget_exhausted` + `billing_cycle_abort`
+pairs: 15:51:53Z, 18:30:57Z, 22:01:23Z (Sep 13), then 02:35:32Z, 09:28:38Z (Sep 14). All five cite
+the identical writer error verbatim (credit balance too low). **Cross-checked against GitHub
+issue #462**, updated **2026-09-14T14:17:03Z**, citing "5 draft(s) died with `budget_exhausted`
+in the last 24h (latest `2026-09-14T09:28:38.133060Z`)" — matches this session's read exactly,
+down to the microsecond. **GitHub issue #467** (voice-regression) still citing "20 consecutive
+failed run(s)," updated 2026-09-13T14:29:56Z (unchanged from that read) — now **52 days** old
+(opened Jul 24). **GitHub issue #500** (`refresh-thresholds`) still citing "3 consecutive failed
+run(s)" (unchanged), last green run still 2026-08-16T03:04:44Z, now **15 days** old (opened
+Aug 30). **The rolling PR (#207) is still open, unmerged, since 2026-06-09** — **97 days** now.
+
+**The writer-killed slot's 6-consecutive freeze broke this cycle — a 3-candidate churn, ending on
+a brand-new candidate's 2nd consecutive hold.** Sequence across the 5 new aborts: 15:51:53Z
+(Sep 13) landed on `absextreme_hot_USW00053139_2026-09-10` — a **brand-new candidate**, ending
+the prior cycle's 6-hold freeze on `absextreme_cold_USW00021514_2026-09-09`. 18:30:57Z (Sep 13)
+reverted to that same frozen cold candidate for one more hold. 22:01:23Z (Sep 13) went back to
+`USW00053139`. Then 02:35:32Z (Sep 14) landed on a **second brand-new candidate**,
+`absextreme_hot_USC00042319_2026-09-10`, which held again at 09:28:38Z (Sep 14) — its 2nd
+consecutive hold. This is the first cycle with **two** never-before-seen candidates in the same
+window, and both are `absolute_extreme` **hot** readings dated 2026-09-10 (~4 days stale at this
+pull) — notably fresher than the cold candidate they displaced, which was ~5-6 days stale
+throughout its freeze. Candidates-skipped counts (6, 6, 6, 11, 12) show a step up at the two
+Sep 14 aborts — clearly above the tight 6-9 range that held across Sep 12-13 — worth watching
+whether this is the start of a new trend or a one-cycle blip.
+
+**`fire_footprint` cluster unchanged (18 unique event_ids), `ORVAD-260201_tier2` still absent.**
+The 14-item `score_gate` set (tier0-tier2) is identical to Sep 12/13's list. The `evidence_contract`
+set remains 4 (`WAOWF`-260406, `WANES`-001791, `IDBOD`-265460, `UTFIF`-260341, all tier1),
+re-verified again at 2026-09-14T02:32:53Z. `fire_footprint_2026-ORVAD-260201_tier2`, absent since
+Sep 13's pull, is **still absent a 2nd consecutive day** — cause remains unconfirmed (no
+downstream promotion or writer-kill observed involving it either day).
+
+**`gpm_imerg` continues citing the expired-credential root cause directly.** `credential_expiry.
+EARTHDATA_TOKEN` unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **23 days past expiry**,
+still unrenewed; `source_health.gpm_imerg` shows 10 failed / 0 success this window, `last_error`
+verbatim unchanged from Sep 13.
+
+**Raw gist file size 3,859,078B (~3.86MB) at this pull** — up from Sep 13's cited 3,812,111B, but
+below an interim peak of 3,871,861B logged at 09:28:39Z earlier this window (the size oscillates
+run to run rather than monotonically climbing). The `state_size` sentinel's "approaching gist
+inline cliff" WARNING has now fired continuously since 2026-09-11T19:54:38Z (32 occurrences
+total in the retained `errors` log) with no sign of a plateau — flagged as a standing
+operational watch item, not new this cycle.
+
+**`publication_control` unchanged**: `epoch: "p00b-paused-2026-09-09"`, `enabled: false`, same
+reason string. The visible `run_history` window (2026-09-12T19:32:07Z-2026-09-14T14:18:27Z, 20
+entries) shows the usual `alerts`-mode runs (all `partial_failure`) interleaved with
+`auto_publish_due` no-op runs (all `success`), plus a **2nd** `mode: "both"` run at
+2026-09-13T15:47:34Z (`partial_failure`) — confirming the Sep 12T15:11:45Z appearance of that
+mode value was not a one-off; still not investigated further (outside the hard constraints'
+code-change scope).
+
+**Staleness review as of 2026-09-14 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` -> not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **108th consecutive skip** (May 13 -> Sep 14). Moot regardless: nothing to reject.
+**Beacon write also skipped**: no `gh` CLI and no repo-variable-write MCP tool exposed this
+session (confirmed via `ToolSearch`); per the hard constraints this is best-effort and logged,
+not cycle-failing.
+
+### Patterns / operational notes
+
+1. **53 consecutive zero-fresh-draft cycles, all attributable to the same single root cause**
+   (Anthropic API billing exhaustion, confirmed live in every cycle's suppression log and
+   independently corroborated by GitHub issue #462 every day since it opened Jul 23).
+2. **`main` held static for a 4th consecutive cycle** — 0 new commits since Sep 9-10's 18-commit
+   wave (tip still `c71d6cf`).
+3. **The writer-killed slot's longest-observed freeze (6 consecutive holds) ended this cycle**,
+   replaced by rapid 3-candidate churn including two never-before-seen candidates in a single
+   window — worth watching whether this reflects the `candidates_log`/triage-queue-head position
+   turning over normally now that the frozen candidate has aged further, or is itself a new
+   transient pattern.
+4. **`fire_footprint` cluster composition held flat this cycle** after Sep 13's 1-item
+   contraction — the missing `ORVAD-260201_tier2` candidate has now been absent 2 consecutive
+   days without a downstream event explaining its disappearance.
+5. **Two infra defects remain open and independently fixable, untouched by any `main` wave:**
+   `EARTHDATA_TOKEN` now 23 days past expiry, and issue #500 (`refresh-thresholds`) now 15 days
+   open (failure-count reading unchanged at 3).
+6. **The rolling PR (#207) is now 97 days open**, unmerged since 2026-06-09.
+7. **The `state_size` "approaching gist inline cliff" WARNING continues unresolved** — now 4
+   consecutive days (32 occurrences since Sep 11), oscillating rather than monotonically
+   growing, still with no observable plateau.
+8. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for any proposal. P_dust/P_tier/P9 remain CONFIRMED with tracking closed; the
+   remaining unimplemented proposals (P_close, P_compound, A7, A8, P5) are unchanged since Jul 23.
+
+### Followups (in priority order)
+
+1. **Operator: top up Anthropic API credits.** Per issue #462's own text, this is the entire
+   fix for the billing outage — the single highest-priority item blocking all further editorial
+   supply and voice-quality measurement. Now 53 days unresolved.
+2. **Operator: once credits are topped up, also lift the `publication_control` pause epoch**
+   (`p00b-paused-2026-09-09`, `enabled: false`) — billing recovery alone will not resume
+   automatic publishing; the epoch is a separate, deliberate gate.
+3. **Operator: renew the `EARTHDATA_TOKEN` NASA Earthdata credential** (expired 2026-08-22, now
+   23 days past expiry).
+4. **Operator: investigate GitHub issue #500** (`refresh-thresholds` workflow failing since
+   2026-08-30, last green 2026-08-16) — consecutive-failure count reading has held at 3 for two
+   cycles running, worth checking whether it's mid-recovery or stalled there.
+5. **Operator: merge or close rolling PR #207** (97 days open, unmerged since Jun 9) so `main`'s
+   copies of these three docs stop drifting further from the live state.
+6. **P_close, P_compound, A7, A8, P5 remain ready for implementation** once fresh drafts resume —
+   see `docs/IMPROVEMENT_PLAN.md` for full specs, all unchanged since Jul 23.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Sep 13)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4, not a majority)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_dust/P_tier/P9 CONFIRMED, tracking closed;
+  P_close/P_compound/A7/A8/P5 unchanged since Jul 23)
+- Staleness bulk-reject: 0 candidates (moot, nothing pending); write skipped — `gh` CLI absent,
+  no gist-write MCP tool available (108th consecutive skip, May 13 -> Sep 14)
+- Operational anomalies: billing outage 53 days open (#462); `EARTHDATA_TOKEN` 23 days past
+  expiry; issue #500 15 days open (failure-count reading holding at 3); rolling PR #207 97 days
+  open; `main` static a 4th cycle; writer-killed-slot freeze broke into 3-candidate churn (2
+  never-before-seen candidates); `fire_footprint` cluster unchanged, `ORVAD-260201_tier2` absent
+  a 2nd day; `state_size` "approaching gist inline cliff" WARNING continuing, no plateau
+
+---
+
 ## 2026-09-13 — Daily corpus grading (0 fresh drafts; 52nd consecutive; billing outage now 52 days — `main` static a 3rd consecutive cycle, writer-killed slot froze on a single stale-dated candidate for the longest single-candidate hold observed, fire_footprint cluster contracted by 1)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
