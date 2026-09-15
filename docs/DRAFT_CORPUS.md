@@ -11,6 +11,140 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-15 — Daily corpus grading (0 fresh drafts; 54th consecutive; billing outage now 54 days — the Death Valley hot candidate's freeze extended to 4 holds then broke to a brand-new Riyadh dust_event candidate, `main` static a 5th consecutive cycle, `fire_footprint` cluster holds at 18 items with membership churn)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), **zero new commits for a 5th consecutive cycle** (Sep 11-14 were all
+also static after Sep 9-10's 18-commit wave). Checked out `daily-plan-current` and attempted
+`git rebase origin/main` per the runbook: conflicted on the same known pre-merge Jul 7 commit
+every prior attempt has hit; aborted cleanly per the fallback (ancestry re-confirmed clean —
+`c71d6cf` remains an ancestor of `daily-plan-current`). Gist read via git-clone path (success, no
+rate limit).
+
+**Queue: 0 pending, unchanged from Sep 14.** Total draft count held flat at **40** (38 posted, 0
+rejected, 2 approved) — a **24th consecutive day** with no change. Most recent `created_at`
+across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
+**54 days**.
+
+**Billing outage: still open, 4 new pairs this cycle (down from Sep 14's 5).** Since the prior
+pull's cutoff (2026-09-14T09:28:38Z), **4** new `budget_exhausted` + `billing_cycle_abort` pairs:
+18:05:31Z, 20:08:55Z (Sep 14), then 02:40:38Z, 09:10:12Z (Sep 15). All four cite the identical
+writer error verbatim (credit balance too low). **Cross-checked against GitHub issue #462**,
+updated **2026-09-15T13:42:27Z**, citing "4 draft(s) died... in the last 24h (latest
+`2026-09-15T09:10:12.046043Z`)" — matches this session's read exactly, down to the microsecond.
+**GitHub issue #467** (voice-regression) still citing "20 consecutive failed run(s)," updated
+2026-09-14T19:30:21Z — now **53 days** old (opened Jul 24). **GitHub issue #500**
+(`refresh-thresholds`) still citing "3 consecutive failed run(s)" (unchanged), last green run
+still 2026-08-16T03:04:44Z, now **16 days** old (opened Aug 30). **The rolling PR (#207) is still
+open, unmerged, since 2026-06-09** — **98 days** now.
+
+**The Death Valley NP hot candidate's freeze extended to 4 consecutive holds, then broke to a
+brand-new Riyadh dust_event candidate.** Sequence across the 4 new aborts: 18:05:31Z and
+20:08:55Z (Sep 14) both held on `absextreme_hot_USC00042319_2026-09-10` (Death Valley NP,
+California) — its 3rd and 4th consecutive holds, extending the streak that started Sep 14's
+first appearance of that candidate. Then 02:40:38Z (Sep 15) broke to a **brand-new candidate**,
+`dust_loc1-pl0467-pt240af9c59868f95c_2026-09-15_tier2` (Riyadh, Saudi Arabia dust_event, score
+75/threshold 66) — the same station/type that held the slot briefly on Sep 12 (that time at
+tier3). 09:10:12Z (Sep 15) held on Riyadh again, its 2nd consecutive hold. Candidates-skipped
+counts (12, 15, 9, 9) show a drop back down after Sep 14's step-up to 15 — consistent with a
+one-cycle blip rather than a new trend, as flagged as a possibility on Sep 14.
+
+**`fire_footprint` cluster holds at 18 unique event_ids (14 score_gate + 4 evidence_contract) for
+a 3rd consecutive day, but score_gate membership has churned.** The evidence_contract set is
+unchanged (`WAOWF-260406`, `WANES-001791`, `IDBOD-265460`, `UTFIF-260341`, all tier1). The
+score_gate set now includes `fire_footprint_2026-ORBUD-002696_tier2` — the first tier2
+`fire_footprint` score_gate entry observed in recent cycles (previously all tier0/tier1 in this
+set) — and a `fire_footprint_2026-WACOA-260140_tier1` not previously catalogued.
+`fire_footprint_2026-ORVAD-260201_tier2`, absent since Sep 13, **remains absent** (3rd
+consecutive day), though a same-complex-prefix `fire_footprint_2026-ORVAD-260204_tier0` now
+appears — plausibly a fresh tier0 detection on the same fire complex under a new event ID, not a
+reappearance of the missing one. Total count held constant even as specific IDs rotate, the same
+pattern noted across Sep 11-14.
+
+**`gpm_imerg` continues citing the expired-credential root cause directly.** `credential_expiry.
+EARTHDATA_TOKEN` unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **24 days past expiry**,
+still unrenewed; `source_health.gpm_imerg` shows 10 failed / 0 success this window, `last_error`
+verbatim unchanged from Sep 14.
+
+**Raw gist file size 3,948,865B (~3.95MB) at this pull — a new peak**, up from Sep 14's cited
+3,859,078B (and above Sep 14's interim peak of 3,871,861B). The `state_size` sentinel logged 9
+new "approaching gist inline cliff" WARNINGs since the Sep 14 pull, monotonically climbing this
+window (3,883,111 → 3,900,057 → 3,886,992 → 3,942,115 → 3,930,161 → 3,948,865B) rather than
+oscillating as in some prior windows — worth watching as a standing operational item, not new
+this cycle, but the steepest single-window rise observed so far.
+
+**`publication_control` unchanged**: `epoch: "p00b-paused-2026-09-09"`, `enabled: false`, same
+reason string. The visible `run_history` window (2026-09-13T15:47:34Z-2026-09-15T13:44:38Z, 20
+entries) shows the usual `alerts`-mode runs (all `partial_failure`) interleaved with
+`auto_publish_due` no-op runs (all `success`), plus a **3rd** `mode: "both"` run at
+2026-09-14T17:53:10Z (`partial_failure`) — confirming the Sep 12/13 appearances of that mode
+value are a recurring pattern, still not investigated further (outside the hard constraints'
+code-change scope).
+
+**Staleness review as of 2026-09-15 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` -> not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **109th consecutive skip** (May 13 -> Sep 15). Moot regardless: nothing to reject.
+**Beacon write also skipped**: no `gh` CLI and no repo-variable-write MCP tool exposed this
+session (confirmed via `ToolSearch`); per the hard constraints this is best-effort and logged,
+not cycle-failing.
+
+### Patterns / operational notes
+
+1. **Billing outage now 54 days (started 2026-07-24), zero fresh drafts for a 54th consecutive
+   cycle.** No structural change this cycle — GitHub issue #462 continues auto-filing the same
+   diagnosis (Anthropic writer credit balance exhausted), and the fix remains an operator/billing
+   action outside this routine's scope.
+2. **Writer-killed slot broke a 2nd time in as many cycles.** Sep 14 broke a 6-hold freeze into a
+   3-candidate churn; this cycle extended one of those candidates (Death Valley hot) to 4 holds
+   before breaking cleanly to a single new candidate (Riyadh dust_event) that has now held twice
+   in a row. The slot's behavior continues to look like intermittent candidate-set churn rather
+   than a fixed rotation — not itself a voice-quality signal (no draft reaches the writer to
+   grade), logged as an operational observation only.
+3. **`fire_footprint` cluster size is stable (18) but composition is not** — a 3rd consecutive
+   day at the same total with different specific IDs underneath, consistent with ordinary
+   upstream fire-detection churn (new detections entering/aging out of the score_gate window)
+   rather than anything actionable.
+4. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, A4/A5/A6/A9, or the closed-tracking
+   P_dust/P9/P_tier. All retain their Jul 23 counts and "Last seen" dates.
+5. **`main` unmerged since 2026-06-09 — now 98 days**, rolling PR #207 the only place these three
+   docs reflect current reality. No change to the operator recommendation: merge when convenient;
+   not urgent while the bot itself is dark on billing.
+
+### Followups (in priority order)
+
+1. **Operator: the billing outage is the single blocker for everything downstream** — restore
+   Anthropic API credits (issue #462) to resume drafting; until then, this routine has nothing
+   new to grade regardless of voice-plan readiness.
+2. **Operator: `EARTHDATA_TOKEN` is now 24 days past expiry** — renew to restore `gpm_imerg`
+   precipitation coverage once billing is restored (otherwise the writer will have no
+   precipitation_extreme candidates to draft from even after credits return).
+3. **Operator: `main` remains unmerged since 2026-06-09** — 98 days, rolling PR #207. Merge when
+   convenient; the ancestry is clean, so this is a housekeeping action, not a data-loss risk.
+4. **P_close, P_compound, A7, A8, P5 remain ready for implementation**, unchanged since Jul 23 —
+   see `docs/IMPROVEMENT_PLAN.md` for full specs. None of this can be empirically re-tested until
+   fresh drafts resume.
+
+### Numbers
+
+- Pending drafts in queue: 0 (0 fresh; billing outage blocks all drafting)
+- Fresh drafts graded: 0
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, the last cycle before
+  the Jul 24 billing outage began)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (P_close 30 cycles, P_compound 15 cycles, A8 5
+  cycles, A7/P5 unchanged, all counts stand at Jul 23's levels; P_dust/P9/P_tier CONFIRMED and
+  tracking closed)
+- Staleness bulk-reject: 0 candidates — moot, 0 pending drafts; write skipped (`gh` CLI absent,
+  no gist-write MCP tool, 109th consecutive skip, May 13 → Sep 15)
+- Operational anomalies: (a) billing outage 54 days running, issue #462 open since Jul 24; (b)
+  `EARTHDATA_TOKEN` 24 days past expiry; (c) `main` unmerged since Jun 9, 98 days; (d)
+  `fire_footprint` cluster composition churn within a stable 18-item total; (e) gist file size
+  hit a new peak (3,948,865B) this window
+
+---
+
 ## 2026-09-14 — Daily corpus grading (0 fresh drafts; 53rd consecutive; billing outage now 53 days — the 6-hold writer-killed-slot freeze broke into a 3-candidate churn, `main` static a 4th consecutive cycle, `fire_footprint` cluster unchanged)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
