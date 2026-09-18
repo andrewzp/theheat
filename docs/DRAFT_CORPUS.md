@@ -11,6 +11,104 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-18 — Daily corpus grading (0 fresh drafts; 57th consecutive; billing outage now 57 days — Mauna Loa's writer-killed hold breaks a new 10-hold record to a first-ever `fire` candidate in Brazil, then rotates to a re-dated Mauna Loa reissue; a 7-cycle "ancestry re-confirmed clean" claim corrected; gist state sets a new peak above 4.1MB)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), **zero new commits for an 8th consecutive cycle** (Sep 10's 18-commit
+wave remains the last activity). Checked out `daily-plan-current` and attempted
+`git rebase origin/main` per the runbook: conflicted on the same known pre-merge Jul 7 commit
+every prior attempt has hit; aborted cleanly per the fallback. Gist read via git-clone path
+(success, no rate limit).
+
+**Correction, logged honestly rather than quietly fixed:** every cycle from Sep 11 through
+Sep 17 asserted "ancestry re-confirmed clean" or "`main`'s tip remains an ancestor" as the reason
+the recurring rebase conflict was moot. Running the actual check this session —
+`git merge-base --is-ancestor $(git rev-parse origin/main) daily-plan-current` — against `main`'s
+**current** tip (`c71d6cf`) returns **false**. It is not an ancestor. Digging into why: Sep 13's
+entry was the one precise phrasing in that run ("`4b4d965` remains an ancestor"), and `4b4d965`
+was `main`'s tip *before* the Sep 9-10 wave landed 18 new commits ending at `c71d6cf` — that
+specific commit never stopped being an ancestor (it can't; it doesn't move), but citing it as
+proof of ancestry stopped being meaningful the moment `main` advanced past it. The shorthand used
+Sep 11/12 and Sep 14–17 ("ancestry re-confirmed clean") implied the current tip was covered; it
+wasn't, and nobody re-ran the check against the moving target for a week. **Practically moot**:
+`git log 4b4d965..c71d6cf -- docs/DRAFT_CORPUS.md docs/QUALITY_TREND.md docs/IMPROVEMENT_PLAN.md`
+returns zero commits, so none of the 18 intervening commits touch these three files — nothing is
+actually missing from this branch's copies. But the claim itself was wrong for 7 cycles running,
+and future sessions should test against `main`'s literal current tip each time rather than
+trusting a repeated phrase.
+
+**Queue: 0 pending, unchanged from Sep 17.** Total draft count held flat at **40** (38 posted, 0
+rejected, 2 approved) — a **28th consecutive day** with no change. Most recent `created_at`
+across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
+**57 days**.
+
+**Billing outage: still open, 5 new pairs this cycle (same count as Sep 17).** Since the prior
+pull's cutoff (2026-09-17T09:07:15Z), **5** new `budget_exhausted` + `billing_cycle_abort` pairs:
+16:29:19Z, 19:25:58Z, 22:32:55Z (Sep 17), then 02:19:47Z, 08:37:00Z (Sep 18). All five cite the
+identical writer error verbatim (credit balance too low); 70 candidates skipped total
+(15/15/15/13/12). **Cross-checked against GitHub issue #462**, updated **2026-09-18T11:31:15Z**,
+citing "5 draft(s) died... in the last 24h (latest `2026-09-18T08:42:20.192457Z`)" — matches this
+session's read exactly. **GitHub issue #467** (voice-regression) still citing "20 consecutive
+failed run(s)," unchanged since 2026-09-17T18:22:43Z — now **56 days** old (opened Jul 24).
+**GitHub issue #500** (`refresh-thresholds`) still citing "3 consecutive failed run(s)" (unchanged
+since 2026-09-13T10:24:33Z), last green run still 2026-08-16T03:04:44Z, now **19 days** old
+(opened Aug 30). **The rolling PR (#207) is still open, unmerged, since 2026-06-09** — **101 days**
+now.
+
+**The Mauna Loa freeze finally broke — but not before setting a new record.** The prior candidate
+(`absextreme_cold_USW00021514_2026-09-13`, Mauna Loa, Hawaii) held 3 more consecutive aborts today
+(16:29:19Z, 19:25:58Z, 22:32:55Z), extending the freeze to **10 consecutive holds** — surpassing
+Sep 17's 7-hold record by 3. It then broke at **02:19:47Z** to a genuinely new candidate class: a
+**Brazil `fire` signal** (`fire_-4.57_-42.96_2026-09-18`, budget_exhausted) — the first `fire`-type
+candidate observed holding this specific writer-killed slot anywhere in this tracking's history.
+The same batch's `shadow_slate` carried 3 more Brazil fire coordinates as `billing_abort` entries
+(`fire_-4.57_-42.95`, `fire_-4.58_-42.96`, `fire_-4.58_-42.97`, all `2026-09-18`) — a tight
+four-point cluster, a genuinely new location/signal mix distinct from the dust_event-heavy
+Middle East/Central Asia rotation that has dominated the shadow slate for weeks. The very next
+abort (**08:37:00Z**) rotated again, this time back to Mauna Loa but under a **rolled event date**
+(`absextreme_cold_USW00021514_2026-09-15`, vs. the frozen candidate's `_2026-09-13`) — the same
+station reissued with a newer date rather than a genuinely fresh candidate, the same
+date-roll-without-station-change sub-pattern first observed on Riyadh and now confirmed on Mauna
+Loa too.
+
+**`fire_footprint`'s visible candidates_log read is unchanged from Sep 17.** The same 7 named
+members are present and unchanged: `WACOA-260140_tier1`, `ORVAD-260201_tier2`,
+`ORBUD-002696_tier2`, `IDBOD-265460_tier1`, `WANES-001791_tier1`, `UTFIF-260341_tier1`,
+`WAOWF-260406_tier1`. Same methodology gap as Sep 17: this session's gist read does not surface
+the ~11 additional tier0 score_gate members this tracking has cited before, so the full cluster
+count is not independently re-verified today either — only the 7 named members are confirmed
+present.
+
+**`gpm_imerg` continues citing the expired-credential root cause directly.** `credential_expiry.
+EARTHDATA_TOKEN` unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **27 days past expiry**,
+still unrenewed; `gpm_imerg` fetch failures this window cite the same expired-token error
+verbatim.
+
+**Raw gist file size sets a new peak: 4,117,262B (~4.12MB) at 08:42:21Z**, up from Sep 17's peak
+of 4,059,840B. The `state_size` sentinel continues logging "approaching gist inline cliff"
+warnings on a regular cadence — the size has not plateaued or shrunk since crossing 4.0MB two
+days ago.
+
+**`publication_control` unchanged**: `epoch: "p00b-paused-2026-09-09"`, `enabled: false`, same
+reason string.
+
+**Staleness review as of 2026-09-18 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` -> not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **112th consecutive skip** (May 13 -> Sep 18). Moot regardless: nothing to reject.
+**Beacon write also skipped**: no `gh` CLI and no repo-variable-write MCP tool exposed this
+session; per the hard constraints this is best-effort and logged, not cycle-failing.
+
+**No active-proposal evidence updates** — 57th consecutive cycle without a fresh draft to grade.
+**Operator: billing has been down 57 days since the Jul 24 outage began — this remains the single
+highest-priority item in this plan; a simple Anthropic API credit top-up (per #462's own text) is
+the entire fix.** Once topped up, the operator must also separately lift the `publication_control`
+pause epoch (`p00b-paused-2026-09-09`) — billing recovery alone will not resume automatic
+publishing per PR #511's design. The `EARTHDATA_TOKEN` renewal (27 days overdue) and GitHub issue
+#500 (`refresh-thresholds`, since Aug 30) are separate, independently-fixable defects. The rolling
+PR itself is now 101 days unmerged — a purely-process item on top of the three product-facing
+fixes above.
+
 ## 2026-09-17 — Daily corpus grading (0 fresh drafts; 56th consecutive; billing outage now 56 days — writer-killed slot's Mauna Loa absolute_extreme cold hold extends to 7 consecutive aborts, a new tracking record; `fire_footprint`'s `ORVAD-260201_tier2` reappears after a 4-day absence; gist state size sets a new peak above 4.0MB)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
