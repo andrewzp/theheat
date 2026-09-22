@@ -11,7 +11,7 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
-## 2026-09-22 — Daily corpus grading (0 fresh drafts; 61st consecutive; billing outage now 61 days — writer-killed slot escalates to 4 new aborts including its first-ever `regional_sst_anomaly` and `cyclone_rapid_intensification` victims, GitHub issue #462 stays closed through all 4, gist state sets a new peak above 4.29MB)
+## 2026-09-22 — Daily corpus grading (0 fresh drafts; 61st consecutive; billing outage now 61 days — writer-killed slot ties Sep 3's 4-abort high, claiming its first-ever `cyclone_rapid_intensification` victim, GitHub issue #462 stays closed through all 4, gist state sets a new peak above 4.29MB)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
 2026-09-09T20:26:22Z UTC), **zero new commits for a 12th consecutive cycle** (Sep 10's 18-commit
@@ -26,21 +26,25 @@ rejected, 2 approved) — a **32nd consecutive day** with no change. Most recent
 across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
 **61 days**.
 
-**Billing outage: still open, and this cycle is the sharpest escalation since it began — 4 new
-`budget_exhausted` + `billing_cycle_abort` pairs since the prior cutoff, up from the steady
-1-per-cycle rate every day since Sep 15.** Since Sep 21's counted event (09:30:44Z), four new
-kills landed: 18:13:00Z (Sep 21, Riyadh `dust_event` `_tier2`, 26 skipped), 20:16:08Z (Sep 21,
-the same Riyadh `dust_event` `_tier2` candidate reissued, 18 skipped), 02:36:35Z (Sep 22, **the
-outage's first-ever `regional_sst_anomaly` victim** — Niño 3.4, `sst_anom_nino34_tier1_2026-09-20`,
-score 78, 7 skipped), and 09:00:37Z (Sep 22, **the outage's first-ever `cyclone_rapid_intensification`
-victim** — Pacific tropical cyclone Polo, `nhc_ri_ep172026_130`, score 81, 10 skipped). 61
-candidates skipped in total across the four aborts. All four cite the identical writer error
-verbatim (credit balance too low). Unlike the Mauna Loa/Riyadh candidates, which are re-dated
-reissues of the same underlying station recurring day after day, **Polo is a live, one-time NHC
+**Billing outage: still open, and this cycle ties the previous high-water mark for a single
+pull — 4 new `budget_exhausted` + `billing_cycle_abort` pairs since the prior cutoff, up from
+the steady 1-per-cycle rate every day since Sep 15.** (Sep 3 previously logged the same count,
+4 pairs/178 candidates skipped, so this is a repeat of a known worse-case rate, not an
+unprecedented one — though today's non-recurring casualty, below, is new.) Since Sep 21's
+counted event (09:30:44Z), four new kills landed: 18:13:00Z (Sep 21, Riyadh `dust_event`
+`_tier2`, 26 skipped), 20:16:08Z (Sep 21, the same Riyadh `dust_event` `_tier2` candidate
+reissued, 18 skipped), 02:36:35Z (Sep 22, Niño 3.4 `regional_sst_anomaly`,
+`sst_anom_nino34_tier1_2026-09-20`, score 78, 7 skipped — this signal type has held the slot
+before, on Sep 10, so not a first), and 09:00:37Z (Sep 22, **the outage's first-ever
+`cyclone_rapid_intensification` victim** — Pacific tropical cyclone Polo,
+`nhc_ri_ep172026_130`, score 81, 10 skipped). 61 candidates skipped in total across the four
+aborts. All four cite the identical writer error verbatim (credit balance too low). Unlike the
+Mauna Loa/Riyadh/Niño 3.4 candidates, which are re-dated or re-scored reissues of the same
+underlying station or index recurring across pulls, **Polo is a live, one-time NHC
 rapid-intensification event** — the kind of signal that cannot be recovered once its window
-passes. This is the clearest evidence yet that the outage is no longer just repeatedly killing
-the same handful of stale stand-ins; it is now also erasing genuinely new, non-recurring news as
-it happens.
+passes. This is the first time this specific signal type has been lost to the outage, and a
+reminder that every additional day without a top-up risks losing more one-time events like it,
+on top of the recurring stand-ins this tracking has documented for weeks.
 
 **GitHub issue #462 has now stayed closed through a full cycle despite 4 intervening kills — the
 same-day timing gap flagged Sep 21 has hardened into something that should not be mistaken for
@@ -88,9 +92,9 @@ session; per the hard constraints this is best-effort and logged, not cycle-fail
 
 **No active-proposal evidence updates** — 61st consecutive cycle without a fresh draft to grade.
 **Operator: billing has been down 61 days since the last draft was created (Jul 23), and today's
-escalation — 4 kills instead of the usual 1, including the outage's first non-recurring,
-first-ever-signal-type casualties (a live Niño 3.4 anomaly and a real hurricane's
-rapid-intensification window) — is a reason to treat the top-up as more urgent, not less.** A
+rate — 4 kills instead of the usual 1, including the first time a genuinely non-recurring event
+(a real hurricane's rapid-intensification window, Pacific storm Polo) has been lost to the
+outage — is a reason to treat the top-up as more urgent, not less.** A
 simple Anthropic API credit top-up (per #462's own text) is the entire fix to resume drafting.
 Note issue #462's closed state above before treating it as resolved — it has now stayed closed
 through 4 more kills. Once topped up, the operator must also separately lift the
