@@ -11,6 +11,95 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-24 — Daily corpus grading (0 fresh drafts; 63rd consecutive; billing outage now 63 days — Basrah, Iraq takes 2 more hits before the slot rotates to a returning Riyadh dust_event candidate that rolls its own forecast date forward within a day, fire_footprint's visible slice matches Sep 23 item-for-item, EARTHDATA_TOKEN now 33 days past expiry, gist state sets a new peak above 4.43MB)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), **zero new commits for a 14th consecutive cycle** (Sep 10's 18-commit
+wave remains the last activity). Checked out `daily-plan-current` and attempted `git rebase
+origin/main` per the runbook: conflicted on the same known pre-merge Jul 7 commit every prior
+attempt since Aug 20 has hit; aborted cleanly per the fallback. Re-verified ancestry against
+`main`'s literal current tip: `git merge-base --is-ancestor origin/main HEAD` **fails** —
+`main`'s Sep 9-10 wave (18 commits) was never merged into this branch — but confirmed, again,
+that 0 of those 18 commits touch `docs/IMPROVEMENT_PLAN.md`, `docs/QUALITY_TREND.md`, or
+`docs/DRAFT_CORPUS.md` — nothing is actually missing from this branch, so the conflict stays
+moot in substance. Gist read via the git-clone path (success, no rate limit).
+
+**Queue: 0 pending, unchanged from Sep 23.** Total draft count held flat at **40** (38 posted, 0
+rejected, 2 approved) — a **34th consecutive day** with no change. Most recent `created_at`
+across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
+**63 days**.
+
+**Billing outage: still open. 5 new `budget_exhausted` + `billing_cycle_abort` pairs since Sep
+23's counted cutoff (09:02:05Z), 73 candidates skipped in total.** In order: 16:25:13Z (Sep 23,
+Basrah, Iraq `absolute_extreme` candidate's 4th consecutive hit, 16 skipped), 19:25:32Z (Sep 23,
+Basrah's 5th consecutive hit, 18 skipped) — **Basrah held the slot across 5 consecutive aborts
+spanning the Sep 22–23 day boundary before finally rotating out** — then the slot rotates to a
+**returning candidate**: 22:39:53Z (Sep 23, Riyadh dust_event tier3,
+`dust_loc1-pl0467-pt240af9c59868f95c_2026-09-23_tier3`, score 78, 13 skipped) — this is the same
+station that held the slot Sep 18–21, now back after a 3-day absence — then 02:25:44Z (Sep 24,
+the same candidate re-hit, but its `event_id` **rolled its own date forward to `_2026-09-24`
+without a station change**, 14 skipped) — the identical date-roll-without-rotation sub-pattern
+this station has now shown at least 3 times (Sep 18→19, Sep 21, and now Sep 23→24) — then
+08:57:19Z (Sep 24, the re-dated candidate held a 2nd consecutive time, 12 skipped). All five
+kills cite the identical writer error verbatim (credit balance too low).
+
+**GitHub issue #462's closed state remains unreliable.** Direct check today confirms it is still
+**CLOSED** (closed 2026-09-21T06:36:59Z, `state_reason: completed`), with an auto-close-bot
+comment from that date claiming "no budget_exhausted kills in the window — the writer is drafting
+again" — contradicted by the 5 further kills logged just above, and by this rolling PR's own
+running note that the issue has now been closed and silently outlived by continuing failures
+across multiple days without the underlying credit-balance error being fixed. **Do not read
+issue #462's open/closed state as a billing-recovery signal** — verify the suppression log or the
+publication_control epoch directly instead.
+
+**Issue #467** (`voice-regression`) still open, last updated 2026-09-23T17:18:46Z, still citing
+20 consecutive failed runs — now **62 days** old (opened Jul 24). **Issue #500**
+(`refresh-thresholds`) still open, last updated 2026-09-20T12:31:19Z, still citing 4 consecutive
+failed runs, last green run still 2026-08-16T03:04:44Z — now **25 days** open (opened Aug 30).
+**The rolling PR (#207) is still open, unmerged, since 2026-06-09** — **107 days** now (83
+commits).
+
+**`fire_footprint`'s visible suppression slice matches Sep 23 item-for-item — the first fully
+static composition after 4 consecutive narrowing days (Sep 20→23).** All 13: `COCUX-001160_tier0`,
+`NVNAFQ-500729_tier0`, `OR951S-000433_tier0`, `OR953S-000587_tier0`, `ORBUD-002687_tier0`,
+`ORBUD-002693_tier0`, `ORBUD-002696_tier2`, `ORFWF-260286_tier0`, `ORMHF-000688_tier0`,
+`ORUMF-000324_tier0`, `ORWSA-000100_tier0`, `WACOA-260140_tier1`, `WANES-260149_tier0`.
+`IDBOD-265460_tier1` remains absent. Given the 100-entry suppression buffer, item-for-item
+stability across a full day is worth noting but not proof the underlying cluster itself is
+static — a lower `score_gate` volume today would produce the same visible read.
+
+**`gpm_imerg` continues citing the expired-credential root cause directly.**
+`credential_expiry.EARTHDATA_TOKEN` unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **33
+days past expiry**, still unrenewed.
+
+**Raw gist state size sets a new peak: 4,435,511B (~4.44MB)**, observed at both the 08:57Z and
+10:18Z pulls — up from Sep 23's cited peak of 4,388,672B. Still no plateau since crossing 4.0MB
+on Sep 16.
+
+**`publication_control` unchanged**: `epoch: "p00b-paused-2026-09-09"`, `enabled: false`, same
+reason string.
+
+**Staleness review as of 2026-09-24 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **118th consecutive skip** (May 13 → Sep 24). Moot regardless: nothing to reject.
+**Beacon write also skipped**: no `gh` CLI and no repo-variable-write MCP tool exposed this
+session; per the hard constraints this is best-effort and logged, not cycle-failing.
+
+**No active-proposal evidence updates** — 63rd consecutive cycle without a fresh draft to grade.
+**Operator: billing has been down 63 days since the last draft was created (Jul 23). Today's
+casualty list closes out Basrah, Iraq's 5-hold run and adds a returning Riyadh dust_event
+candidate that had already rolled its own forecast date forward within a single day — every one
+of these was a live, dated signal aging past usefulness behind the credit-balance error.** A
+simple Anthropic API credit top-up (per #462's own text) is the entire fix to resume drafting.
+Note issue #462's closed state above before treating it as resolved — it has stayed closed
+through repeated kills without the root cause being addressed. Once topped up, the operator must
+also separately lift the `publication_control` pause epoch (`p00b-paused-2026-09-09`) — billing
+recovery alone will not resume automatic publishing per PR #511's design. The `EARTHDATA_TOKEN`
+renewal (33 days overdue), GitHub issue #500 (`refresh-thresholds`, 4 consecutive failed runs),
+and GitHub issue #467 (`voice-regression`, since Jul 24, 20 consecutive failures) are separate,
+independently-fixable defects. The rolling PR itself is now 107 days unmerged.
+
 ## 2026-09-23 — Daily corpus grading (0 fresh drafts; 62nd consecutive; billing outage now 62 days — Polo takes 2 more hits before the slot rotates to a brand-new Basrah, Iraq `absolute_extreme` candidate that then holds across the day boundary, fire_footprint's visible slice narrows to 13, EARTHDATA_TOKEN now 32 days past expiry, gist state sets a new peak above 4.38MB)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
