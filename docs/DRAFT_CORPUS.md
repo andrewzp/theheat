@@ -11,6 +11,147 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-28 — Daily corpus grading (0 fresh drafts; 67th consecutive; billing outage now 66 days — Riyadh dust_event holds the writer-killed slot 3 more consecutive times before rotating to a brand-new Eastern Pacific `cyclone_rapid_intensification` candidate, its first loss since Polo (Sep 22–23); fire_footprint's visible slice holds flat at 14; EARTHDATA_TOKEN still 36 days past expiry; gist state sets a new peak above 4.67MB; issue #500 unchanged at 5 consecutive failed runs)
+
+**Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
+2026-09-09T20:26:22Z UTC), zero new commits for an 18th consecutive cycle. Checked out
+`daily-plan-current` and attempted `git rebase origin/main` per the runbook: conflicted on the
+same known pre-merge Jul 7 commit every prior attempt since Aug 20 has hit; aborted cleanly per
+the fallback. 0 of `main`'s unmerged Sep 9-10 commits touch these three tracked docs, so the
+conflict remains moot in substance. Gist read via the git-clone path (success, no rate limit;
+`state.json` 4,670,613B on disk, a new peak).
+
+**Queue: 0 pending, unchanged from Sep 27.** Total draft count held flat at **40** (38 posted, 0
+rejected, 2 approved) — a **39th consecutive day** with no change. Most recent `created_at`
+across all drafts, any status, is still **2026-07-23T14:11:46Z** — no draft has been created in
+**66 days**.
+
+**Billing outage: still open. 5 new `budget_exhausted` + `billing_cycle_abort` pairs since Sep
+27's counted cutoff (09:45:27Z), 80 candidates skipped in total.** In order: 16:40:41Z (Sep 27,
+Riyadh, Saudi Arabia `dust_event` tier2, same undated event_id
+`dust_loc1-pl0467-pt240af9c59868f95c_2026-09-27_tier2` that first took the slot at 09:45:27Z, 19
+skipped), 19:30:21Z (Sep 27, 2nd consecutive hold on the same event_id, 21 skipped), 22:46:38Z
+(Sep 27, 3rd consecutive hold, 22 skipped) — a 3-hold streak matching the Beaver Dams/La Paz/
+Riyadh "frozen candidate" shape this tracking has followed since Aug 30. The slot then rotates to
+a **brand-new candidate class**: 02:46:39Z (Sep 28, an Eastern Pacific `cyclone_rapid_intensification`
+signal, `nhc_ri_ep152026_125`, 8 skipped) — the **outage's first `cyclone_rapid_intensification`
+loss since Polo (Sep 22–23)** — then holds a 2nd consecutive time on the same storm at a higher
+intensity checkpoint: 10:24:47Z (Sep 28, `nhc_ri_ep152026_135`, 10 skipped). All five kills cite
+the identical writer error verbatim (credit balance too low).
+
+**Fire near-miss mix eases back sharply.** Only 21 `fire` score_gate suppressions since
+yesterday's cutoff, down from Sep 27's 63 (Texas 29/California 22) — the sharp Texas/California
+spike did not persist into today's window. Consistent with a suppression-log window artifact
+rather than a confirmed fire-season shift, per yesterday's flag.
+
+**GitHub issue #462's closed state remains stale.** Live API check today confirms it is still
+**CLOSED** (closed 2026-09-21T06:36:59Z, `updated_at` identical to `closed_at` — no metadata
+touch since close, `state_reason: completed`, same auto-close-bot comment claiming the writer is
+drafting again) — contradicted again by the 5 further kills logged above. **Do not read issue
+#462's open/closed state as a billing-recovery signal.**
+
+**Issue #467** (`voice-regression`) still open (live API check), updated 2026-09-27T18:32:44Z (a
+metadata touch, not a material change — body still cites 20 consecutive failed runs), now **66
+days** old (opened Jul 24). **Issue #500** (`refresh-thresholds`) still open (live API check),
+unchanged since yesterday's escalation: last updated 2026-09-27T08:24:14Z, still citing **5
+consecutive failed runs**, last green run still 2026-08-16T03:04:44Z — now **29 days** open
+(opened Aug 30). **The rolling PR (#207) is still open, unmerged, mergeable_state clean, since
+2026-06-09** — **111 days** now before this cycle's push (88 commits after).
+
+**`fire_footprint`'s visible suppression slice holds flat at 14 unique `event_id`s** — unchanged
+from Sep 27, first static readout since the Sep 25→27 narrowing.
+
+**`gpm_imerg` continues citing the expired-credential root cause directly.**
+`credential_expiry.EARTHDATA_TOKEN` unchanged: `expires_at: 2026-08-22T15:18:07Z` — now **36
+days** past expiry, still unrenewed.
+
+**Raw gist state size sets a new peak: 4,670,613B (~4.67MB)**, observed at today's pull — up
+from Sep 27's cited peak of 4,604,210B (~4.60MB). Still no plateau since crossing 4.0MB on Sep 16.
+
+**`publication_control` unchanged**: `epoch: "p00b-paused-2026-09-09"`, `enabled: false`, same
+reason string.
+
+**Staleness review as of 2026-09-28 grading pull:** **0 candidates — moot.** 0 pending drafts.
+**Bulk-reject attempted:** `gh` CLI confirmed absent (`which gh` → not found); no gist-write MCP
+tool available this session. Skipped per the hard constraints, logged rather than failing the
+cycle — **122nd consecutive skip** (May 13 → Sep 28). Moot regardless: nothing to reject.
+**Beacon write also skipped**: no `gh` CLI and no repo-variable-write MCP tool exposed this
+session; per the hard constraints this is best-effort and logged, not cycle-failing.
+
+**No active-proposal evidence updates** — 67th consecutive cycle without a fresh draft to grade.
+**Operator: billing has been down 66 days since the last draft was created (Jul 23), unchanged
+from yesterday's count (same floor-day reading). Today's kills confirm the writer-killed slot can
+now lose a live NHC rapid-intensification signal, not just recurring dust/heat candidates — the
+2nd distinct non-recurring signal class lost to the outage after fires (Sep 25–27).** A simple
+Anthropic API credit top-up (per #462's own text) is the entire fix to resume drafting. Note issue
+#462's closed state above before treating it as resolved — it has stayed closed through repeated
+kills without the root cause being addressed. Once topped up, the operator must also separately
+lift the `publication_control` pause epoch (`p00b-paused-2026-09-09`) — billing recovery alone
+will not resume automatic publishing per PR #511's design. The `EARTHDATA_TOKEN` renewal (36 days
+overdue) and GitHub issue #467 (`voice-regression`, since Jul 24, 20 consecutive failures) are
+separate, independently-fixable defects. The rolling PR itself is now 111 days unmerged (112
+after this cycle's push). **This session is escalating the outage directly to the operator via
+push notification given its length, cost, and how cheap the fix is — matching the prior two
+sessions' (Sep 26, Sep 27) stated intent to escalate.**
+
+### Patterns / operational notes
+
+1. **Billing outage crosses into its 10th week with no resolution signal.** 66 days since the
+   last draft (Jul 23), 67 consecutive zero-fresh grading cycles. The writer-killed slot has now
+   demonstrably cost the pipeline fresh signals across at least 3 distinct categories since Sep
+   25 (fire ×3, `regional_sst_anomaly` ×1, `cyclone_rapid_intensification` ×1 today) — this is no
+   longer purely a "stale carry-over" cost, it is an ongoing loss of current, newsworthy content.
+
+2. **GitHub's own auto-health tracking (#462) is not a reliable outage signal.** It has read
+   CLOSED since 2026-09-21T06:36:59Z through at least 25 subsequent `budget_exhausted` kills
+   across 8 days. Any future session (or the operator) checking #462's state alone would
+   incorrectly conclude the writer is healthy.
+
+3. **No active-proposal evidence updates this cycle.** Zero fresh drafts means zero new
+   observations for P_close, P_compound, A7, A8, P5, or P_dust/P9/P_tier (tracking closed,
+   unchanged). All retain their Jul 23 counts and "Last seen" dates unchanged — now 67
+   consecutive cycles frozen.
+
+4. **Rolling PR #207 remains unmerged since 2026-06-09** — 111 days before this cycle's push (88
+   commits after), 87 of which post-date the billing outage's onset. Repeating the operator
+   recommendation from every recent cycle: the outage fix (credit top-up) is independent of and
+   does not require merging this PR, but merging would at least let `main`'s copy of these three
+   docs reflect current reality.
+
+### Followups (in priority order)
+
+1. **Operator: top up Anthropic API credits.** This is the single blocking item — 66 days, 67
+   consecutive cycles, and (per issue #462's own text) the entire fix. Everything else in this
+   plan is inert until this lands.
+2. **Operator: separately lift the `publication_control` pause** (`epoch:
+   p00b-paused-2026-09-09`) once billing is restored — per PR #511's design, publication does not
+   auto-resume from a credit top-up alone.
+3. **Operator: renew `EARTHDATA_TOKEN`** (36 days past expiry) — independent of the billing
+   outage, blocks `gpm_imerg` precipitation collection.
+4. **Operator: `main` remains unmerged from `daily-plan-current` (PR #207, 111 days open)** — not
+   urgent relative to the billing outage, but the longest-running item in this plan.
+5. **Do not read GitHub issue #462's closed/open state as a billing-recovery signal** — it has
+   been demonstrably wrong for 8 consecutive days.
+
+### Numbers
+
+- Pending drafts in queue: 0 (unchanged from Sep 27)
+- Fresh drafts graded: 0 (67th consecutive cycle)
+- A-rate: — (no fresh drafts; most recent graded cycle: 50% on 2026-07-23, n=4, bar NOT cleared)
+- Grade distribution: n/a (no fresh drafts)
+- Active proposals: no evidence updates this cycle (all proposals frozen at Jul 23 evidence
+  counts, 67 consecutive cycles)
+- Billing outage: **66 days** (since Jul 23), **5 new kill pairs this pull** (80 candidates
+  skipped) — Riyadh dust_event ×3, then a brand-new Eastern Pacific `cyclone_rapid_intensification`
+  candidate ×2 (first such loss since Polo)
+- Staleness bulk-reject: moot (0 pending); write skipped 122nd consecutive (May 13 → Sep 28)
+- Operational anomalies: `main` unmerged since Jun 9 (PR #207, 111 days open before this push);
+  EARTHDATA_TOKEN 36 days past expiry; issue #462 closed-but-stale 8 consecutive days; issue #500
+  at 5 consecutive failed runs, unchanged; `publication_control` still paused
+  (`p00b-paused-2026-09-09`)
+
+---
+
 ## 2026-09-27 — Daily corpus grading (0 fresh drafts; 66th consecutive; billing outage now 66 days — 2 brand-new non-recurring fire candidates lost in Texas and Western Australia in a single pull before the slot rotates back to a re-dated Riyadh dust_event; fire_footprint's visible slice narrows to 14; EARTHDATA_TOKEN now 36 days past expiry; gist state sets a new peak above 4.60MB; GitHub issue #500 escalates to 5 consecutive failed runs)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
