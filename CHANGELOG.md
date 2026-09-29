@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.26] - 2026-09-29
+
+- Add bounded local worker leases and monotonically increasing fences for registered batch work. Commit the exact submission grant with spending dispatch once; expired ownership, changed inputs and insufficient deadlines cannot grant a request.
+- Preserve uncertain holds across lost acknowledgments and restarts. Late responses are immutable evidence until a current owner adopts them; malformed and conflicting batch identities cannot advance the job or approve a draft.
+- Exercise separate-process competition, crashes before and after commit, late receipts, schema protection and backup/restore. No provider transport, production activation or publication is introduced.
+
 ## [0.9.108.25] - 2026-09-29
 
 - Atomically register an exact local batch request artifact, immutable job identity and spending reservation in the experimental authority. Require matching job, request, provider, model and writer role; no request, job or new hold survives a failed commit.
