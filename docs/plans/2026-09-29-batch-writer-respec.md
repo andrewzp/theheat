@@ -180,8 +180,10 @@ a revert of the safety work. Complete a private end-to-end rehearsal first.
 ## Remaining limits
 
 The request/result contract and local spending journal are tested foundations,
-not a working batch lane. Local registration is atomic; job leases, transport, required-check
-integration and an authorized measured trial remain. No $10–15/month or quality uplift is claimed. Dollar ceilings, provider
+not a production batch lane. Local registration, fenced ownership, default-OFF
+submission/collection and durable result review are implemented. Required-check
+integration, complete production authority and an authorized measured trial remain.
+No $10–15/month or quality uplift is claimed. Dollar ceilings, provider
 workspace/account scope and the production durable authority remain explicit
 decisions. Global source recall, source recovery, joint graphic approval/attachment and
 publication reconciliation still have independent work; batch pricing does not solve them.
