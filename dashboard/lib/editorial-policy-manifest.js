@@ -16,7 +16,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
     "src/two_bot/critic.py": "fee5cc8bc1caa92cbd807bbdfcd4999d3af243650764a7f2727f736a94e0b3a2",
     "src/two_bot/evidence_contract.py": "4fdf6237b57fc708c195a2d91795845ab21d0704545cc6d7fe1a2f5c994b591a",
-    "src/two_bot/fact_check.py": "3f73e8bec367ddc3fd78b4ed908a2c9203fc35296b9ced314fb4fc48e096fe62",
+    "src/two_bot/fact_check.py": "bc3ad41711bc943453b2abc26fec497a03be6aabd2c13fd10425084254503e29",
     "src/two_bot/intern/__init__.py": "dcffb07bbe259b7f179f6b341500afc0d8df47ab2dd8b010315da8ce798d14b1",
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
     "src/two_bot/intern/air_quality.py": "c3763ae98e371b373d53bb9c44ae3f4790010e1f303c45be8738766ca4d22f91",
@@ -31,7 +31,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/wetbulb.py": "76cbe14776d3e95bbbea1b7dc74f1f79af9fd3a4d32ec75c49f4c44946a250f8",
     "src/two_bot/json_utils.py": "87bc4c7174797ed5cddf96d60af0e6e2237094859001cdeeb93eaf794497db03",
     "src/two_bot/memory.py": "4c865c07065298a5134f54bfc51c7bf14c4dc28ba819ad547314a461db4c1e6e",
-    "src/two_bot/pipeline.py": "798fa92b3f5cb82157c89cbf46c4da62d4b8fbefd5defcf114ad065cfec61c34",
+    "src/two_bot/pipeline.py": "a6af75a4eb29412d86547371327d0355be97aab4b832258b8532afaeb5226be8",
     "src/two_bot/prompts/__init__.py": "b08ec3ae2e477637b1fa3aa7f04935b7744b5ea7548bb384965e20ade7fabd2b",
     "src/two_bot/prompts/critic_prompt.py": "72910f153dbe2c80f28dfaebb73b15947777bb2aca2e6c06afda2e6c7eb367b1",
     "src/two_bot/prompts/fact_check_prompt.py": "b0cc2f5e1edfc1fe56fa2ac3d35e7506f33e1a941e1b63969c36bcf098bbf8ed",
@@ -44,5 +44,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "0d57e3c7771930165869ab7694d2d5355fc6b9bc5ac3776bbbd5c6c4a093ebbd"
   },
   "schema_version": 1,
-  "source_sha256": "6eb6ed0ceefc693e828d73b6f6e0cd1884905811b0152c6851acdf1273f40f87"
+  "source_sha256": "415af45e3d5f3878c9f946ed39aa4d2c45d827ef4c81f80deb57fa2380b78c62"
 }

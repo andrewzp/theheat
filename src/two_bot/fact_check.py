@@ -173,13 +173,27 @@ def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> 
     return response.text or ""
 
 
-def fact_check(
+def _claim_reuse_failures(claims: list[ExtractedClaim], state: BotState) -> list[str]:
+    reuse_failures: list[str] = []
+    for claim in claims:
+        if claim.kind == "era_anchor" and memory.is_reuse(state, claim.text, "era_anchor"):
+            reuse_failures.append(f"reuse: era anchor '{claim.text}' already used")
+        if claim.kind == "peer_comparison" and memory.is_reuse(state, claim.text, "peer_comparison"):
+            reuse_failures.append(f"reuse: peer comparison '{claim.text}' already used")
+    return reuse_failures
+
+
+def local_rejection(
     tweet: str,
     extracted: list[ExtractedClaim],
     bundle: StoryBundle,
     state: BotState,
-) -> FactCheckResult:
-    """Run strict local reuse checks, then LLM verification."""
+) -> FactCheckResult | None:
+    """Return an existing deterministic rejection, or None if models are needed.
+
+    None is not a factual pass or completed check. The full fact checker always
+    repeats this cheap boundary; callers cannot supply a cached local approval.
+    """
 
     failures: list[str] = [f"{code}: {field}: {message}" for code, field, message in bundle_schema_issues(bundle)]
     if not failures:
@@ -204,16 +218,7 @@ def fact_check(
     if isinstance(tweet, str) and memory.is_reuse(state, tweet, "tweet_text"):
         failures.append("reuse: tweet text duplicates shipped tweet")
 
-    def _claim_reuse_failures(claims: list[ExtractedClaim]) -> list[str]:
-        reuse_failures: list[str] = []
-        for claim in claims:
-            if claim.kind == "era_anchor" and memory.is_reuse(state, claim.text, "era_anchor"):
-                reuse_failures.append(f"reuse: era anchor '{claim.text}' already used")
-            if claim.kind == "peer_comparison" and memory.is_reuse(state, claim.text, "peer_comparison"):
-                reuse_failures.append(f"reuse: peer comparison '{claim.text}' already used")
-        return reuse_failures
-
-    failures.extend(_claim_reuse_failures(extracted))
+    failures.extend(_claim_reuse_failures(extracted, state))
 
     if failures:
         return FactCheckResult(
@@ -222,6 +227,21 @@ def fact_check(
             raw_response="(local deterministic checks)",
             extracted_claims=extracted,
         )
+
+    return None
+
+
+def fact_check(
+    tweet: str,
+    extracted: list[ExtractedClaim],
+    bundle: StoryBundle,
+    state: BotState,
+) -> FactCheckResult:
+    """Run strict local reuse checks, then required model verification."""
+    rejected = local_rejection(tweet, extracted, bundle, state)
+    if rejected is not None:
+        return rejected
+    extracted = list(extracted)
 
     # JSON-parse retry loop. The Gemini fact-checker occasionally returns
     # empty / mid-truncated / non-JSON output (stochastic refusal class).
@@ -256,7 +276,7 @@ def fact_check(
             canonical_claims = llm_extracted
             all_failures = list(llm_failures)
             all_failures.extend(material_span_failures(tweet, canonical_claims))
-            all_failures.extend(_claim_reuse_failures(canonical_claims))
+            all_failures.extend(_claim_reuse_failures(canonical_claims, state))
             return FactCheckResult(
                 passed=passed and not all_failures,
                 failures=all_failures,

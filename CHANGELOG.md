@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.30] - 2026-09-29
+
+- Run existing deterministic scientific, scope and reuse rejections before paid safety/factual checking. Keep the full fact checker independently rechecking those rules; local eligibility is never a completed model check.
+- Preserve exact text through every mandatory check for eligible drafts and revised text. Update positive orchestration fixtures to distinguish thermal detections from verified fire incidents and forecasts from observations; keep explicit adversarial counterexamples.
+- Regenerate the approval policy manifest. Offline historical regressions retain their expected findings with no provider calls; actual writing quality and production savings remain unmeasured.
+
 ## [0.9.108.29] - 2026-09-29
 
 - Add an independently default-OFF local batch collector that performs at most one metadata GET and one results GET. Keep canonical provider routes, no retries or redirects, bounded reads and explicit partial-download evidence.

@@ -198,15 +198,6 @@ def _check_safety_honesty_fact(
     mark_stage: Callable[[str, str], None] | None = None,
     result_out: dict | None = None,
 ) -> FactCheckResult | None:
-    safety_passed, safety_reason = run_safety_pipeline(tweet)
-    if not safety_passed:
-        print(
-            f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
-            f"draft: {safety_reason}"
-        )
-        record_kill("safety", safety_reason or "unknown")
-        return None
-
     forbidden_hit = _forbidden_claim_violation(tweet, bundle)
     if forbidden_hit is not None:
         print(
@@ -225,7 +216,20 @@ def _check_safety_honesty_fact(
         record_kill("cross_signal", f"unverifiable cross-signal claim: {cross_signal_hit!r}")
         return None
 
-    fact_result = fact_check.fact_check(tweet, [], bundle, state)
+    # Existing deterministic rules can reject unsupported/reused text without
+    # buying safety or factual-model work. They never grant a completed pass.
+    fact_result = fact_check.local_rejection(tweet, [], bundle, state)
+    if fact_result is None:
+        safety_passed, safety_reason = run_safety_pipeline(tweet)
+        if not safety_passed:
+            print(
+                f"[two_bot.pipeline] Safety rejected {bundle.signal_kind} "
+                f"draft: {safety_reason}"
+            )
+            record_kill("safety", safety_reason or "unknown")
+            return None
+
+        fact_result = fact_check.fact_check(tweet, [], bundle, state)
     if not fact_result.passed:
         failures_str = "; ".join(fact_result.failures)
         print(

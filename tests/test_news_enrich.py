@@ -878,6 +878,14 @@ class TestPipelineMetadata:
             raw_signal_dump={"event_id": "pm1", "frp": 400.0},
         )
         bundle.human_impact = [_impact()]
+        # Explicit synthetic incident warrant for this metadata propagation
+        # fixture; thermal power alone cannot certify a vegetation fire.
+        bundle.raw_signal_dump["evidence"] = {"incident": {
+            "source_product": "synthetic-incident-fixture", "revision_id": "fixture-1",
+            "source_url": "https://example.invalid/incident/pm1", "valid_date": bundle.when,
+            "target_event_id": bundle.event_id, "evidence_type": "verified_incident",
+            "classification": "vegetation_fire",
+        }}
 
         writer_result = WriterResult(
             tweet="Per NIFC, 3 firefighters were killed on the Alpine fire.",

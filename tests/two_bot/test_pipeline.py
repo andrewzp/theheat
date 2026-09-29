@@ -63,7 +63,7 @@ def _critic_passes_in_pipeline_tests(monkeypatch, request):
 
 def test_pipeline_happy_path(mock_writer, mock_extract, mock_fact_check):
     mock_writer.return_value = WriterResult(
-        tweet="Mali fire is 1.4x a 250 MW gas plant.",
+        tweet="Mali thermal power is 1.4x a 250 MW gas plant.",
         kill_reason=None,
         angle_chosen="named_comparison_scale",
         era_anchor_used=None,
@@ -113,7 +113,7 @@ def test_pipeline_writer_kills(mock_writer, mock_extract, mock_fact_check):
 
 def test_pipeline_fact_check_fails(mock_writer, mock_extract, mock_fact_check):
     mock_writer.return_value = WriterResult(
-        tweet="Mali fire is 361 MW.",
+        tweet="Mali thermal power is 361 MW.",
         kill_reason=None,
         angle_chosen="plain_number",
         era_anchor_used=None,
@@ -152,7 +152,7 @@ def test_pipeline_writer_raises(mock_writer, mock_extract, mock_fact_check):
 
 def test_pipeline_fact_check_raises_records_stage(mock_writer, mock_extract, mock_fact_check):
     mock_writer.return_value = WriterResult(
-        tweet="Mali fire is 361 MW.",
+        tweet="Mali thermal power is 361 MW.",
         kill_reason=None,
         angle_chosen="plain_number",
         era_anchor_used=None,
@@ -230,7 +230,7 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
     state = _state_with_memory()
 
     mock_writer.return_value = WriterResult(
-        tweet="Mali burned. Spider-Man 2002 was the era.",
+        tweet="Mali thermal detection. Spider-Man 2002 was the era.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used="Spider-Man 2002",
@@ -252,7 +252,7 @@ def test_pipeline_memory_loop_blocks_reuse(mock_writer, mock_extract, mock_fact_
     assert "spider-man 2002" in state["memory"]["used_era_anchors"]
 
     mock_writer.return_value = WriterResult(
-        tweet="Another Mali fire. Spider-Man 2002 was new last time.",
+        tweet="Another Mali thermal detection. Spider-Man 2002 was new last time.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -288,7 +288,7 @@ def test_samples_1_is_byte_identical_to_legacy_path(
     def write_once(bundle, memory):
         calls.append(("writer", bundle.event_id))
         return WriterResult(
-            tweet="Mali fire is 1.4x a 250 MW gas plant.",
+            tweet="Mali thermal power is 1.4x a 250 MW gas plant.",
             kill_reason=None,
             angle_chosen="plain_number",
             era_anchor_used=None,
@@ -785,7 +785,7 @@ def test_pipeline_safety_passes_through_to_fact_check(
 ):
     """Sanity: when safety passes, fact-check runs as before."""
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea hit 39C in May. Hottest in 12 years.",
+        tweet="Conakry, Guinea is forecast to reach 35.4C in May.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -805,7 +805,7 @@ def test_pipeline_safety_passes_through_to_fact_check(
     assert mock_safety.called
     assert mock_fact_check.called
     # Safety was called once with the writer output verbatim.
-    mock_safety.assert_called_once_with("Conakry, Guinea hit 39C in May. Hottest in 12 years.")
+    mock_safety.assert_called_once_with("Conakry, Guinea is forecast to reach 35.4C in May.")
 
 
 # ----------------------- critic stage tests --------------------------------
@@ -822,7 +822,7 @@ def test_pipeline_critic_rejects_after_fact_check_pass(
     from src.two_bot.types import CriticResult
 
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea hit 39C in May. Hottest in 12 years.",
+        tweet="Conakry, Guinea is forecast to reach 35.4C in May.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -862,7 +862,7 @@ def test_pipeline_critic_passes_and_records_metadata(
     from src.two_bot.types import CriticResult
 
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea hit 39C in May. Hottest in 12 years.",
+        tweet="Conakry, Guinea is forecast to reach 35.4C in May.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -899,7 +899,7 @@ def test_pipeline_skips_critic_when_env_disabled(
     monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "0")
 
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea hit 39C in May.",
+        tweet="Conakry, Guinea is forecast to reach 35.4C in May.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -931,7 +931,7 @@ def test_pipeline_critic_exception_records_pipeline_error(
     THEHEAT_CRITIC_ENABLED=0 if Gemini is having a sustained bad day.
     """
     mock_writer.return_value = WriterResult(
-        tweet="Conakry, Guinea hit 39C in May.",
+        tweet="Conakry, Guinea is forecast to reach 35.4C in May.",
         kill_reason=None,
         angle_chosen="rarity",
         era_anchor_used=None,
@@ -959,7 +959,7 @@ def test_late_checked_response_cannot_acquire_policy_that_changed_during_generat
     from src.two_bot import writer
     def delayed(*args, **kwargs):
         monkeypatch.setattr(writer, "WRITER_MODEL", writer.WRITER_MODEL + "-changed")
-        return WriterResult("Mali fire is 361 MW.", None, "plain_number", None, None, "test")
+        return WriterResult("Mali thermal power is 361 MW.", None, "plain_number", None, None, "test")
     mock_writer.side_effect = delayed
     mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok")
     outcome = {}

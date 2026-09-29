@@ -17,7 +17,7 @@ from tests.two_bot.conftest import _fire_event, _state_with_memory
 pytestmark = pytest.mark.usefixtures("configured_pipeline_providers")
 
 
-def _writer(tweet="Mali fire burned an area larger than a major city this week."):
+def _writer(tweet="A satellite measured 361 MW of thermal power near Mali."):
     return WriterResult(
         tweet=tweet, kill_reason=None, angle_chosen="plain_number",
         era_anchor_used=None, peer_comparison_used=None, reasoning="test",
