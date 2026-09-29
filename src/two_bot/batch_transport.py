@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import hashlib
 import os
+import re
 import time
 from typing import Protocol, cast
 
@@ -23,6 +25,13 @@ class BatchTransportError(ValueError):
 class BatchTransport(Protocol):
     def submit(self, requests: list[dict]) -> bytes: ...
     def close(self) -> None: ...
+
+
+@dataclass(frozen=True)
+class BatchDownload:
+    raw: bytes
+    complete: bool
+    reason: str | None = None
 
 
 class AnthropicBatchTransport:
@@ -72,6 +81,58 @@ class AnthropicBatchTransport:
 
     def close(self) -> None:
         self._client.close()
+
+    def retrieve(self, provider_id: str) -> BatchDownload:
+        return self._download(provider_id, results=False)
+
+    def results(self, provider_id: str) -> BatchDownload:
+        return self._download(provider_id, results=True)
+
+    def _download(self, provider_id, *, results):
+        import httpx
+        from src.commands.batch_result_journal import MAX_RESULT_BYTES
+
+        if not isinstance(provider_id, str) or re.fullmatch(
+            r"msgbatch_[A-Za-z0-9_-]{1,128}", provider_id
+        ) is None:
+            raise BatchTransportError("invalid_provider_batch_id")
+        limit = MAX_RESULT_BYTES if results else ACK_LIMIT
+        path = f"/v1/messages/batches/{provider_id}" + ("/results" if results else "")
+        data = bytearray()
+        response = None
+        outcome = None
+        started = _monotonic()
+        try:
+            # The SDK's convenience results() follows results_url and retrieves
+            # metadata again. Use its raw HTTP interface with the documented
+            # canonical route, preserving bounded exact JSONL bytes instead.
+            response = self._client.get(
+                path, cast_to=httpx.Response, stream=True, options={"timeout": NETWORK_TIMEOUT}
+            )
+            for chunk in response.iter_bytes(chunk_size=4096):
+                remaining = limit - len(data)
+                data.extend(chunk[:remaining])
+                if len(chunk) > remaining:
+                    outcome = BatchDownload(bytes(data), False, "batch_read_size_exceeded")
+                    break
+                if _monotonic() - started > NETWORK_TIMEOUT:
+                    outcome = BatchDownload(bytes(data), False, "batch_read_time_exceeded")
+                    break
+            if outcome is None:
+                outcome = (
+                    BatchDownload(bytes(data), False, "batch_read_time_exceeded")
+                    if _monotonic() - started > NETWORK_TIMEOUT
+                    else BatchDownload(bytes(data), True)
+                )
+        except Exception:
+            outcome = BatchDownload(bytes(data), False, "batch_read_unavailable")
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    outcome = BatchDownload(bytes(data), False, "batch_read_cleanup_failed")
+        return outcome
 
 
 def _report(outcome, record=None, *, reason=None):

@@ -327,6 +327,9 @@ class SQLiteAuthority:
         return self._batch_results_transaction("record", payload, now=now,
             metadata=metadata, results=results, before_commit=before_commit)
 
+    def batch_results_status(self, job_id: str, *, now: str) -> dict:
+        return self._batch_results_transaction("index", {"job_id": job_id}, now=now)
+
     def review_batch_results(self, payload: dict, *, now: str,
                              before_commit: Callable[[], None] | None = None) -> dict:
         return self._batch_results_transaction("review", payload, now=now, before_commit=before_commit)
@@ -340,6 +343,8 @@ class SQLiteAuthority:
                 self._check_environment(connection)
                 if action == "record":
                     result = batch_result_journal.record(connection, payload, metadata, results, now=now)
+                elif action == "index":
+                    result = batch_result_journal.index(connection, payload, now=now)
                 else:
                     result = batch_result_journal.review(connection, payload, now=now)
                 if before_commit is not None:

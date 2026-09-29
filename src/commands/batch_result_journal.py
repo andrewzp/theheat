@@ -204,6 +204,34 @@ def _withhold(report, reasons):
             row["eligible_for_checks"] = False
 
 
+def index(connection, payload, *, now):
+    """Validated evidence inventory, never a cached eligibility decision."""
+    validate(connection)
+    _require(isinstance(payload, dict) and set(payload) == {"job_id"}, "invalid_result_index")
+    at = _at(connection, now)
+    job = payload["job_id"]
+    status = worker.apply(connection, "status", payload, now=at)
+    receipts = _receipts(connection, job, status["grant_id"])
+    choice = connection.execute(
+        "SELECT * FROM batch_result_choices WHERE job_id=?", (job,)
+    ).fetchone()
+    _require(
+        choice is None or any(r["receipt_id"] == choice["receipt_id"] for r in receipts),
+        "changed_result_choice",
+    )
+    return dict(
+        submission=status,
+        chosen_receipt_id=choice["receipt_id"] if choice else None,
+        receipts=[
+            dict(receipt_id=r["receipt_id"], complete=r["binding"]["complete"],
+                 recorded_at=r["recorded_at"])
+            for r in receipts
+        ],
+        capacity_remaining=MAX_RECEIPTS - len(receipts),
+        publication_approved=False,
+    )
+
+
 def _decode(plan_raw, plan, receipt, context, at, provider_id):
     from src.two_bot import batch_contract as contract
 

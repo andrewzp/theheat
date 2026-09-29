@@ -2,7 +2,8 @@
 
 Status: local immutable plans, spending reservations, atomic job registration,
 fenced ownership, default-OFF submission and durable result review are implemented.
-Result retrieval and ordinary mandatory-check integration remain unfinished. The
+Bounded result retrieval is also implemented; ordinary mandatory-check integration
+remains unfinished. The
 local lane is unwired to production and OFF until its acceptance gates pass.
 This supersedes the July proposal to store pending batch work directly in Gist.
 It does not activate publishing, increase writer samples, authorize a paid trial,
@@ -138,7 +139,8 @@ charge or create drafts; all backups restore jobs, artifacts and reservations.
 
 One-attempt submission is implemented locally in `80e654a`, with retries and
 redirects disabled. Raw result retention and fenced review are implemented locally;
-provider retrieval and exact mandatory-check integration remain. The SDK was tested
+bounded provider retrieval is implemented as an independent default-OFF read
+cycle. Exact mandatory-check integration remains. The SDK was tested
 through a fake HTTP transport; no real provider request, schedule or flag flip ran.
 
 

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.29] - 2026-09-29
+
+- Add an independently default-OFF local batch collector that performs at most one metadata GET and one results GET. Keep canonical provider routes, no retries or redirects, bounded reads and explicit partial-download evidence.
+- Reuse retained complete results after restart without credentials or another download, but perform a fresh fenced review. Preserve late and expired usage, reject conflicting results, and use the actual loaded policy before considering text eligible for required checks.
+- Keep collection separate from paid submission, check execution, drafting and publishing. Exercise actual SDK HTTP mocks, interrupted reads, lost local acknowledgments, cleanup failures and stale ownership; no live provider request or activation ran.
+
 ## [0.9.108.28] - 2026-09-29
 
 - Retain exact bounded batch metadata and result bytes in the experimental local authority before parsing, including partial downloads, malformed output and late worker responses. Unknown charges remain held.
