@@ -27,11 +27,12 @@ def pair(name):
         return [r for r in csv.DictReader(handle) if r["city"] == name]
 
 
-def threshold(row, high=40):
+def threshold(row, high=40, *, valid_date=None):
+    as_of = valid_date or date.today().isoformat()
     return compute_city_thresholds(
         row["city"],
-        complete_archive({"time": ["2000-09-08"], "temperature_2m_max": [high], "temperature_2m_min": [10]}),
-        as_of=date.today().isoformat(),
+        complete_archive({"time": ["2000-09-08"], "temperature_2m_max": [high], "temperature_2m_min": [10]}, valid_date=as_of),
+        as_of=as_of,
         country=row["country"],
         lat=row["lat"],
         lon=row["lon"],
@@ -276,7 +277,8 @@ def test_legacy_published_receipts_immutable_and_attribution_specific(monkeypatc
                 r["city"],
                 r["country"],
                 dated_forecast({"max_c": 60}, "2026-09-08"),
-                threshold(r),
+                # The historical receipt's fixed date also owns its source fixture.
+                threshold(r, valid_date="2026-09-08"),
                 lat=float(r["lat"]),
                 lon=float(r["lon"]),
                 today=date(2026, 9, 8),

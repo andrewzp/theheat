@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.19] - 2026-09-29
+
+- Assemble explicit local draft, identity, policy and qualified graphic inputs into an immutable private review package. Verify all five renderer assets and current local renderer fingerprints before packaging; no model, render, upload or publishing call is made by the package command.
+- Bound reads, refuse duplicate JSON keys, symlinks and unignored output paths, serialize writers and atomically install complete private directories. Reuse only byte-identical packages and preserve changed contents for diagnosis.
+- Keep scientific agreement unreviewed and posting approval false. Full-size synthetic visual review passed; source and qualification text remains too small at phone width, so mobile graphic layout and production attachment are still open.
+- Pin a historical receipt test's archive to the same fixed date as its forecast. This repairs a reproduced pre-existing calendar-sensitive fixture failure without relaxing production cutoff validation.
+
 ## [0.9.108.18] - 2026-09-10
 
 - Add a pure local review packet for one qualified station temperature comparison. Bind exact draft revision, evidence, policy, render provenance, PNG bytes and generated alt text.
