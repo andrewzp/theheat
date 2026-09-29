@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.31] - 2026-09-29
+
+- Encode nullable writer rejection enums as explicit string-enum/null branches. This avoids the observed Anthropic HTTP400 schema rejection while retaining exactly the same allowed fields and values, parser, prompts, models and one-sample default.
+- Stop repeating definitive HTTP4xx requests in the shared retry owner. Read structured Anthropic, Google and HTTP client status fields; preserve billing's distinct error, retryable 408/409/429, server/transport retry bounds and original exception identity.
+- Reproduce the old schema failure through the actual SDK with a fake HTTP endpoint, and check the compatible wire request plus output-contract equivalence. Regenerate the approval policy manifest. Live provider acceptance remains to be verified after authorized release.
+
 ## [0.9.108.30] - 2026-09-29
 
 - Run existing deterministic scientific, scope and reuse rejections before paid safety/factual checking. Keep the full fact checker independently rechecking those rules; local eligibility is never a completed model check.

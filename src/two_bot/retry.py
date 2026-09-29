@@ -39,6 +39,32 @@ def _is_budget_exhausted(exc: Exception) -> bool:
     return any(pattern in message for pattern in _BUDGET_EXHAUSTED_PATTERNS)
 
 
+def _nonretryable_client_error(exc: Exception) -> bool:
+    """Read SDK status fields, never numbers embedded in an error message.
+
+    Anthropic exposes status_code; Google exposes code; HTTP clients expose
+    response.status_code. Preserve bounded retries for 408/409/429 and unknown
+    transport failures. A malformed request or denied credential needs a change,
+    not another identical request seconds later.
+    """
+    values = []
+    for field in ("status_code", "code"):
+        try:
+            values.append(getattr(exc, field, None))
+        except Exception:
+            pass
+    try:
+        values.append(getattr(getattr(exc, "response", None), "status_code", None))
+    except Exception:
+        pass
+    codes = {value for value in values if type(value) is int and 100 <= value < 600}
+    # Conflicting structured statuses are not enough to classify the failure.
+    if len(codes) != 1:
+        return False
+    status = next(iter(codes))
+    return 400 <= status < 500 and status not in {408, 409, 429}
+
+
 def call_with_retries(
     label: str,
     fn: Callable[[], T],
@@ -48,7 +74,7 @@ def call_with_retries(
 ) -> T:
     """Run a provider call with bounded retry and preserve the final error.
 
-    Non-retryable errors (currently: billing/credit exhaustion) short-
+    Non-retryable errors (billing/credit exhaustion and definitive 4xx) short-
     circuit the loop and raise :class:`BudgetExhaustedError` on the
     FIRST failure — sleeping 4 seconds before re-confirming the bill
     is unpaid wastes runtime and floods the suppression ledger with
@@ -67,6 +93,8 @@ def call_with_retries(
                 raise BudgetExhaustedError(
                     f"{label}: provider billing exhausted: {exc}"
                 ) from exc
+            if _nonretryable_client_error(exc):
+                raise
             if attempt >= attempts:
                 raise
             print(
