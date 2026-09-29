@@ -11,6 +11,23 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-09-29 — Daily corpus grading (0 fresh drafts; 68th consecutive; dry spell now 68 days)
+
+**Context:** Step 0 hard-reset `main` (tip still `c71d6cf`, PR #525). Checked out
+`daily-plan-current`; `git rebase origin/main` conflicted on the same pre-merge Jul 7 commit as
+every attempt since Aug 20 and was aborted per the fallback. Gist read via git-clone (success).
+
+**Queue: 0 pending.** 40 drafts total (38 posted, 2 approved, 0 rejected), unchanged from Sep 28.
+Most recent `created_at` is still 2026-07-23T14:11:46Z — no draft created in **68 days**.
+Nothing to grade; nothing fabricated. Billing/suppression detail was not re-pulled this cycle
+(gist `state.json` carries drafts only); Sep 28's outage record stands until the operator
+confirms recovery. No proposal evidence updates; P-order unchanged.
+
+**A-rate:** — (no fresh drafts). Last measured cycle: 20% (1/5, 2026-07-05).
+
+**Staleness bulk-reject:** 0 candidates (queue empty, moot); `gh` CLI absent — write skipped
+(123rd consecutive skip).
+
 ## 2026-09-28 — Daily corpus grading (0 fresh drafts; 67th consecutive; billing outage now 66 days — Riyadh dust_event holds the writer-killed slot 3 more consecutive times before rotating to a brand-new Eastern Pacific `cyclone_rapid_intensification` candidate, its first loss since Polo (Sep 22–23); fire_footprint's visible slice holds flat at 14; EARTHDATA_TOKEN still 36 days past expiry; gist state sets a new peak above 4.67MB; issue #500 unchanged at 5 consecutive failed runs)
 
 **Context:** Step 0 fetched and hard-reset `main` — tip is still `c71d6cf` (PR #525, merged
