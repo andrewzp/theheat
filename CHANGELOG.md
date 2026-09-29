@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.27] - 2026-09-29
+
+- Add an unwired, default-OFF local batch submission adapter. Require current policy, provider prerequisites and a committed fenced grant before sending exact planned requests; a restart cannot resend an existing attempt.
+- Use one SDK HTTP attempt with retries and redirects disabled, fixed provider origin, network timeout and bounded successful-response reads. Retain acknowledgment bytes before adoption; late, malformed, oversized or lost responses preserve uncertain spending and bounded diagnostics.
+- Exercise the actual installed SDK through a fake HTTP transport, including rate limits, server errors, timeouts, redirects, oversized responses and lost local commit acknowledgments. No live provider request or production activation occurred; collection and mandatory-check integration remain.
+
 ## [0.9.108.26] - 2026-09-29
 
 - Add bounded local worker leases and monotonically increasing fences for registered batch work. Commit the exact submission grant with spending dispatch once; expired ownership, changed inputs and insufficient deadlines cannot grant a request.
