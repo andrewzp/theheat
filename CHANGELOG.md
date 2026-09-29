@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.22] - 2026-09-29
+
+- Add immutable bounded batch plans using the shared synchronous writer request. Bind evidence, memory, policy, model, job, epoch, deadline and sample identity; keep one sample by default and require an explicit experiment for larger slates.
+- Parse bounded result files by exact custom ID. Refuse unknown/duplicate IDs, preserve reported usage for unusable text, and withhold stale, expired, refused, invalid or incomplete results without repair calls. Every usable candidate still requires ordinary checks and approval.
+- Keep this contract separate from production queues, provider submission and billing. No network call, feature activation or savings measurement is introduced.
+
 ## [0.9.108.21] - 2026-09-29
 
 - Share the current writer user-prompt construction and detached Anthropic request arguments with future offline batch planning. Preserve exact guidance order, cached system prefix, selected model, output schema, token bound and retry ownership.
