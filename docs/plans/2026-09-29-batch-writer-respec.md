@@ -1,6 +1,8 @@
 # Batch writer revision against the September pipeline
 
-Status: design for staged implementation, OFF until its acceptance gates pass.
+Status: request/result contracts and local spending reservations are implemented;
+durable batch jobs and transport remain unbuilt. The lane is OFF until its
+acceptance gates pass.
 This supersedes the July proposal to store pending batch work directly in Gist.
 It does not activate publishing, increase writer samples, authorize a paid trial,
 buy credits, or establish a monthly savings forecast.
@@ -51,6 +53,11 @@ Do not sum overlapping assumed savings or price Gemini calls as free.
 
 ### B1: immutable request planning and result contract
 
+Implemented locally in `78e3d5b` (shared synchronous requests) and `8e45214`
+(immutable plans/results). See the September 29 request-parity and plan-results
+handoffs. These are pure contracts with no network submission or draft approval.
+
+
 Build a no-provider-call planner and result parser first. Extract shared writer
 request construction with synchronous argument-parity tests; do not fork a stale
 prompt. Inputs: qualified bundle and its independently retained hash, memory and
@@ -83,6 +90,13 @@ one sample remains default; zero provider calls. New parser tests use synthetic
 evidence and do not turn old high prose grades into factual qualification.
 
 ### B2: durable lifecycle and spending reservations
+
+The spending reservation subset is implemented locally in `8629037`; see
+`docs/handoffs/2026-09-29-local-spend-reservations.md`. It serializes reservations,
+grants dispatch once, retains uncertain charges and blocks on reconciliation
+overruns. Batch-specific artifact/job/lease integration remains unbuilt. The
+experimental authority is not the production store or a complete cost ceiling.
+
 
 Use an explicit local authority extension for rehearsal. Atomically persist the
 request intent, immutable artifacts, expected source/policy/deadline, reservation
@@ -151,8 +165,9 @@ a revert of the safety work. Complete a private end-to-end rehearsal first.
 
 ## Remaining limits
 
-The request/lifecycle/transport slices above are a specification, not a built batch
-lane. No $10–15/month or quality uplift is claimed. Dollar ceilings, provider
+The request/result contract and local spending journal are tested foundations,
+not a working batch lane. Durable batch jobs, leases, transport, required-check
+integration and an authorized measured trial remain. No $10–15/month or quality uplift is claimed. Dollar ceilings, provider
 workspace/account scope and the production durable authority remain explicit
-decisions. Global source recall, source recovery, mobile graphics and publication
-reconciliation still have independent work; batch pricing does not solve them.
+decisions. Global source recall, source recovery, joint graphic approval/attachment and
+publication reconciliation still have independent work; batch pricing does not solve them.
