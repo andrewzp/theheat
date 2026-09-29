@@ -48,3 +48,5 @@ live compiler. Successful funded generation is not yet observed. No API request,
 production publishing, credit change, paid replay or public correction ran.
 A release must still pass required CI and manually deploy the regenerated dashboard
 policy manifest. Local tests cannot substitute for that release or runtime proof.
+
+The HTTP-family gap is resolved by the subsequent [tested dependency change](2026-09-29-tested-provider-sdk-dependencies.md); the failed probe above remains historical evidence.

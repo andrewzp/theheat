@@ -5,17 +5,19 @@ from dataclasses import replace
 import json
 from unittest.mock import Mock
 
-import httpx
 import pytest
 
 from src.commands.sqlite_authority import SQLiteAuthority
 from src.editorial.policy import current_editorial_policy
 from src.two_bot import batch_collector as collect, batch_transport as batch
+from src.two_bot.provider_http import anthropic_httpx
 from src.voice import safety
 from tests import test_batch_result_journal as receipts
 from tests import test_batch_worker_journal as workers
 from tests.two_bot import test_batch_contract as contracts
 from tests.two_bot.test_batch_transport import Clock, sdk_transport
+
+httpx = anthropic_httpx()
 
 store = workers.store
 inputs = workers.inputs

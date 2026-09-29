@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.32] - 2026-09-29
+
+- Pin core provider SDK, HTTP and schema dependencies to tested versions instead of accepting silent major upgrades during deployments. Preserve runtime models, prompts, sample settings and billing controls.
+- Select the HTTP family declared by Anthropic's public default client. Support both verified HTTPX generations without mixing clients; refuse unknown families before provider access. Preserve all request, timeout, redirect and retry controls.
+- Exercise the same actual-SDK wire regressions against legacy and current SDKs, and build a clean dependency-resolved environment from the complete requirements. These checks do not activate batch work, make provider calls or establish production recovery.
+
 ## [0.9.108.31] - 2026-09-29
 
 - Encode nullable writer rejection enums as explicit string-enum/null branches. This avoids the observed Anthropic HTTP400 schema rejection while retaining exactly the same allowed fields and values, parser, prompts, models and one-sample default.

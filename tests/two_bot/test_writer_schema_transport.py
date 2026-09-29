@@ -5,12 +5,14 @@ import json
 from unittest.mock import Mock
 
 import anthropic
-import httpx
 import pytest
 
 from src.two_bot import writer
+from src.two_bot.provider_http import anthropic_httpx
 from src.two_bot.json_utils import ModelOutputContractError
 from tests.two_bot.conftest import _bundle, _memory
+
+httpx = anthropic_httpx()
 
 # Technical API diagnostic only; no production prompt, event or receipt included.
 SCHEMA_ERROR = ("output_config.format.schema: Invalid schema: Enum value 'evidence' "

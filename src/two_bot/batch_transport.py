@@ -11,6 +11,7 @@ import time
 from typing import Protocol, cast
 
 from src.commands.sqlite_authority import SQLiteAuthority
+from src.two_bot.provider_http import anthropic_httpx
 
 ACK_LIMIT = 65536
 LEASE_SECONDS = 60
@@ -41,7 +42,7 @@ class AnthropicBatchTransport:
         if not isinstance(api_key, str) or not api_key.strip():
             raise BatchTransportError("missing_batch_credential")
         from anthropic import Anthropic
-        import httpx
+        httpx = anthropic_httpx()
 
         if http_client is not None and http_client.follow_redirects:
             raise BatchTransportError("batch_redirects_must_be_disabled")
@@ -89,7 +90,7 @@ class AnthropicBatchTransport:
         return self._download(provider_id, results=True)
 
     def _download(self, provider_id, *, results):
-        import httpx
+        httpx = anthropic_httpx()
         from src.commands.batch_result_journal import MAX_RESULT_BYTES
 
         if not isinstance(provider_id, str) or re.fullmatch(

@@ -159,7 +159,9 @@ errors without secret bodies, raw payload logging or automatic provider switchin
 Acceptance: OFF performs no submit; mocked submit/retrieve/cancel/results paths
 preserve lifecycle and charge uncertainty; all required checks still execute on
 the exact selected text; no production state, upload, send or feature flip during
-offline verification. SDK/CI dependency compatibility must be verified explicitly.
+offline verification. The subsequent tested-dependency handoff verifies both HTTP client families
+and pins current core SDK versions. Remote CI remains a release gate; local
+transport mocks do not prove provider acceptance or funded access.
 
 ### B4: private measured trial, then production decision
 
