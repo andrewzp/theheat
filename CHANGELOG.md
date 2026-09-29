@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.23] - 2026-09-29
+
+- Extend the experimental local command authority with immutable spending limits, request-bound reservations and lifecycle events. Real SQLite transactions serialize daily, monthly and per-job allowance checks across processes and provider roles; no production dollar ceiling is selected.
+- Grant dispatch once per reserved attempt. Replayed, restarted or uncertain attempts cannot grant another dispatch; uncertain charges retain their full hold across calendar boundaries. Only never-dispatched reservations can release without settlement evidence.
+- Record reconciled costs even when they exceed a reservation, then block additional spending pending resolution. Preserve holds through crash rollback and backup/restore. Production callers, complete pricing and the hosted authority are not yet integrated, so this is not an account-wide spending guarantee.
+
 ## [0.9.108.22] - 2026-09-29
 
 - Add immutable bounded batch plans using the shared synchronous writer request. Bind evidence, memory, policy, model, job, epoch, deadline and sample identity; keep one sample by default and require an explicit experiment for larger slates.

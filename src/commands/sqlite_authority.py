@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import domain_journal
+from src.commands import domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -72,6 +72,7 @@ class SQLiteAuthority:
     def _check_tables(connection: sqlite3.Connection) -> None:
         allowed = {"authority_metadata", "authority_state", "command_intents", "command_results", "command_events"}
         allowed.update(domain_journal._TABLES)
+        allowed.update(spend_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -115,6 +116,7 @@ class SQLiteAuthority:
                     connection.execute("INSERT INTO authority_metadata(singleton, environment) VALUES(1, ?)", (self.environment,))
                     connection.execute("INSERT INTO authority_state(singleton, version, state_json) VALUES(1, 0, ?)", (encoded,))
                 installed = domain_journal.install(connection, source_namespace)
+                spend_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -251,6 +253,27 @@ class SQLiteAuthority:
                               completed_at=utc_text(clock), actor_subject=command.actor_subject)
                 connection.execute("INSERT INTO command_results(command_id,result_json) VALUES(?,?)", (command.command_id, canonical_json(result)))
                 connection.execute("INSERT INTO command_events(command_id,event,recorded_at,data_json) VALUES(?,'completed',?,?)", (command.command_id, utc_text(clock), canonical_json(result)))
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def spending(self, action: str, payload: dict, *, now: str,
+                 before_commit: Callable[[], None] | None = None) -> dict:
+        """Trusted local spending rehearsal; no provider or production mutation.
+
+        Only a true dispatch_granted result permits the caller's one network
+        attempt. A replay/unknown acknowledgment never grants another attempt.
+        """
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                domain_journal.validate_schema(connection)
+                result = spend_journal.apply(connection, action, payload, now=now)
                 if before_commit is not None:
                     before_commit()
                 connection.commit()
