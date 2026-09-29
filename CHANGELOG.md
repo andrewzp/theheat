@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.33] - 2026-09-29
+
+- Fix the observed writer HTTP400 schema rejection by expressing nullable rejection enums as string-enum/null branches, with unchanged allowed values, strict fields and parser.
+- Stop futile retries of definitive HTTP4xx while retaining existing bounded retry handling for 408/409/429, server and transport failures. Preserve billing's distinct error classification.
+- Pin tested core provider SDK, transport and schema dependencies to prevent unreviewed major upgrades at deployment. Runtime models, prompts, samples, paid features and publishing controls are unchanged.
+- Regenerate the dashboard approval-policy manifest and exercise the actual SDK with offline HTTP fixtures. Live recovery remains to be verified after release.
+- Pin a historical-place test's archive to its forecast date so advancing calendar time cannot break the release gate; scientific cutoff rules are unchanged.
+
 ## [0.9.108.17] - 2026-09-09
 
 - Require the safety model to complete with an unambiguous answer. Missing credentials, provider failures and invalid output block drafting/posting instead of becoming passes; existing posting paths revoke obsolete approval and retain the draft.

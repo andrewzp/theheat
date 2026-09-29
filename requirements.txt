@@ -1,9 +1,12 @@
 tweepy>=4.14,<5
 atproto>=0.0.61
-# The same-call response_json_schema contract is tested against this SDK floor.
-google-genai>=1.71
-# PR #463: output_config requires a compatible SDK; local validation remains mandatory.
-anthropic>=0.77
+# Core provider contracts are pinned to tested versions. Upgrade deliberately
+# with the actual-SDK offline wire tests; do not float across major releases.
+google-genai==2.25.0
+anthropic==1.9.0
+httpx==0.28.1
+httpx2==2.13.1
+pydantic==2.13.5
 requests>=2.31
 Pillow==12.2.0
 # GPM IMERG alternate fetch (THEHEAT_GPM_SOURCE=datapool|s3): single daily-grid

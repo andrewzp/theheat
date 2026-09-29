@@ -76,3 +76,96 @@ def test_call_with_retries_reraises_budget_exhausted_from_callee():
     with pytest.raises(BudgetExhaustedError) as exc_info:
         call_with_retries("test", already_classified, attempts=3, sleep_seconds=0)
     assert exc_info.value is pre_classified  # Not re-wrapped
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 405, 410, 413, 415, 422])
+def test_real_anthropic_client_errors_preserve_identity_without_retry(status):
+    import anthropic
+    import httpx
+    from unittest.mock import Mock
+
+    response = httpx.Response(status, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+    error = anthropic.APIStatusError("fixture rejection", response=response, body={})
+    call = Mock(side_effect=error)
+    with pytest.raises(anthropic.APIStatusError) as captured:
+        call_with_retries("fixture", call, sleep_seconds=0)
+    assert captured.value is error and call.call_count == 1
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+def test_real_google_client_errors_are_not_retried(status):
+    from google.genai import errors
+    from unittest.mock import Mock
+
+    error = errors.ClientError(status, {"error":{"code":status, "message":"fixture", "status":"INVALID_ARGUMENT"}})
+    call = Mock(side_effect=error)
+    with pytest.raises(errors.ClientError) as captured:
+        call_with_retries("fixture", call, sleep_seconds=0)
+    assert captured.value is error and call.call_count == 1
+
+
+@pytest.mark.parametrize("status", [408, 409, 429, 500, 503])
+def test_retryable_statuses_keep_existing_attempt_bound(status):
+    import anthropic
+    import httpx
+    from unittest.mock import Mock
+
+    error = anthropic.APIStatusError("fixture", response=httpx.Response(status,
+        request=httpx.Request("POST", "https://api.anthropic.com/v1/messages")), body={})
+    call = Mock(side_effect=error)
+    with pytest.raises(anthropic.APIStatusError) as captured:
+        call_with_retries("fixture", call, attempts=3, sleep_seconds=0)
+    assert captured.value is error and call.call_count == 3
+
+
+def test_httpx_response_status_is_read_without_relying_on_exception_text():
+    import httpx
+    from unittest.mock import Mock
+
+    request = httpx.Request("POST", "https://example.invalid")
+    error = httpx.HTTPStatusError("no status number in text", request=request,
+                                  response=httpx.Response(400, request=request))
+    call = Mock(side_effect=error)
+    with pytest.raises(httpx.HTTPStatusError) as captured:
+        call_with_retries("fixture", call, sleep_seconds=0)
+    assert captured.value is error and call.call_count == 1
+
+
+def test_text_numbers_do_not_classify_unknown_error_as_nonretryable():
+    from unittest.mock import Mock
+    call = Mock(side_effect=RuntimeError("Network stopped while sending 400 tokens"))
+    with pytest.raises(RuntimeError):
+        call_with_retries("fixture", call, attempts=2, sleep_seconds=0)
+    assert call.call_count == 2
+
+
+def test_conflicting_or_raising_status_fields_remain_unknown():
+    from unittest.mock import Mock
+
+    class Conflicting(Exception):
+        status_code = 400
+        code = 503
+
+    class Raising(Exception):
+        @property
+        def status_code(self):
+            raise ValueError("unavailable")
+
+    for error in (Conflicting("fixture"), Raising("fixture")):
+        call = Mock(side_effect=error)
+        with pytest.raises(type(error)):
+            call_with_retries("fixture", call, attempts=2, sleep_seconds=0)
+        assert call.call_count == 2
+
+
+def test_structured_billing_400_keeps_distinct_budget_error():
+    import anthropic
+    import httpx
+    from unittest.mock import Mock
+
+    response = httpx.Response(400, request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+    error = anthropic.BadRequestError("Your credit balance is too low", response=response, body={})
+    call = Mock(side_effect=error)
+    with pytest.raises(BudgetExhaustedError):
+        call_with_retries("fixture", call, sleep_seconds=0)
+    assert call.call_count == 1
