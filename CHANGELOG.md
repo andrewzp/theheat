@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.24] - 2026-09-29
+
+- Make both deterministic temperature previews readable at phone width with a 1200 by 1500 canvas, material labels of at least 40 pixels and measured wrapping. Keep source types, complete dates, archive bounds, sample scope and synthetic status visible; preserve exact alt text and evidence binding.
+- Refuse overflowing qualifications and crowded trajectory dates instead of shrinking or truncating them. Advance template identity so old cached graphics cannot be mistaken for the new layout.
+- Verify four real synthetic renders at full and 390-pixel width, material text preservation, font size, deterministic reuse and tamper rejection. This remains local review media: no image-model call, attachment or publication activation.
+
 ## [0.9.108.23] - 2026-09-29
 
 - Extend the experimental local command authority with immutable spending limits, request-bound reservations and lifecycle events. Real SQLite transactions serialize daily, monthly and per-job allowance checks across processes and provider roles; no production dollar ceiling is selected.
