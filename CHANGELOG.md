@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.20] - 2026-09-29
+
+- Stop drafting before the writer when its selected provider or a mandatory downstream checker lacks a credential. Keep loaded safety configuration distinct from current environment configuration, retain a bounded blocked reason, and never equate configured keys with working or funded access.
+- Gate the paid self-heal agent on explicit opt-in and both required credentials. A blocked red run reports an error beacon, which the observer treats as a failure immediately; detecting red workflows remains keyless. These controls do not activate repair or establish a spending cap.
+- Add pure offline contracts for supplied copy pairs and explicit human ratings. Bind ratings to exact text, evidence, qualification and side assignment; exclude unqualified pairs from preference counts and preserve missing ratings, ties and abstentions. Existing prose grades are historical evidence, not factual certification.
+- Respec the batch writer against current evidence, policy and output contracts, including durable intent, uncertain submissions, late-result accounting and default-OFF transport. The batch lane and complete shared budget enforcement are still unbuilt; no monthly savings or writing-quality improvement is claimed.
+
 ## [0.9.108.19] - 2026-09-29
 
 - Assemble explicit local draft, identity, policy and qualified graphic inputs into an immutable private review package. Verify all five renderer assets and current local renderer fingerprints before packaging; no model, render, upload or publishing call is made by the package command.

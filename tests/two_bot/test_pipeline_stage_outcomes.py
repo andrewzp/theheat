@@ -7,10 +7,14 @@ so the funnel's critic_pass_rate denominator can never lie.
 
 from __future__ import annotations
 
+import pytest
+
 from src.two_bot.pipeline import generate_fire_draft
 from src.two_bot.types import CriticResult, FactCheckResult, WriterResult
 
 from tests.two_bot.conftest import _fire_event, _state_with_memory
+
+pytestmark = pytest.mark.usefixtures("configured_pipeline_providers")
 
 
 def _writer(tweet="Mali fire burned an area larger than a major city this week."):

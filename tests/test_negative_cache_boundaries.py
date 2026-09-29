@@ -16,13 +16,20 @@ from tests.test_negative_cache import _score, _entry, row_map
 
 
 @pytest.fixture(autouse=True)
-def restore_compatibility_facade():
+def restore_compatibility_facade(monkeypatch):
     # Earlier integration tests deliberately sync temporary src.main patches
     # into split modules. Restore the normal facade before exercising the
     # actual dispatcher; no pipeline or evidence gate is replaced here.
     from src import main
 
     main._sync_compat_globals()
+    # These orchestration tests mock model calls but exercise the real cheap
+    # preflight. Presence fixtures do not establish provider access or funding.
+    from src.voice import safety
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-fixture-no-provider-access")
+    monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture-no-provider-access")
+    monkeypatch.setattr(safety, "GEMINI_API_KEY", "offline-fixture-no-provider-access")
 
 
 def bundle(event="event", value=8.2):

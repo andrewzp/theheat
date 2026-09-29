@@ -170,7 +170,7 @@ def selfheal_liveness_verdict(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any] | None:
-    """Flag the self-heal routine as failing only if its beacon EXISTS but is stale.
+    """Flag an explicit repair error, stuck work or a stale existing beacon.
 
     A never-set beacon (None) returns None — the routine may simply not be
     configured yet, and we refuse to file rollout noise or alarm on a token-scope
@@ -184,6 +184,19 @@ def selfheal_liveness_verdict(
     if run_at is None:
         return None
     age_h = (now - run_at).total_seconds() / 3600.0
+    if beacon.get("outcome") == "error":
+        return {
+            "workflow": SELFHEAL_SOURCE,
+            "file": None,
+            "category": "failing",
+            "conclusion": "repair_error",
+            "run_url": None,
+            "run_created_at": None,
+            "consecutive_failures": 0,
+            "last_success_url": None,
+            "last_success_at": None,
+            "age_hours": round(age_h, 1),
+        }
     # Stuck "pending": the gate found red and dispatched the healer, but no
     # final beacon arrived within the healer's runtime budget — the healer
     # crashed or failed. Fires well before the 26h staleness rule so a fresh

@@ -15,6 +15,7 @@ from src.two_bot import critic, fact_check, memory, writer
 from src.two_bot.evidence_contract import audit_story_bundle, evidence_rejection_details
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.retry import BudgetExhaustedError
+from src.two_bot.provider_preflight import current_provider_preflight
 from src.two_bot.strict_contract import model_failure_snapshot
 from src.two_bot.json_utils import model_response_diagnostic
 from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
@@ -283,8 +284,9 @@ def generate_draft(
         # A caller may reuse its telemetry dict. A prior model verdict must
         # never authorize caching a later style, transport or contract failure.
         for field in ("cacheable", "kill_scope", "kill_code", "negative_cache_recorded",
-                      "negative_cache_input_sha", "negative_cache_epoch"):
+                      "negative_cache_input_sha", "negative_cache_epoch", "provider_preflight"):
             result_out.pop(field, None)
+        result_out["stage_outcomes"] = stage_outcomes
 
     def _record_kill(stage: str, reason: str) -> None:
         if result_out is not None:
@@ -303,6 +305,16 @@ def generate_draft(
             _record_kill("editorial_policy", "Current editorial policy cannot be established")
             return None
         if not _audit_bundle_for_generation(bundle, record_kill=_record_kill, result_out=result_out):
+            return None
+
+        preflight = current_provider_preflight(critic_enabled=_critic_enabled())
+        if result_out is not None:
+            result_out["provider_preflight"] = preflight
+        if preflight["status"] == "blocked":
+            _mark_stage("provider_preflight", "kill")
+            _record_kill("provider_preflight", "; ".join(
+                row["stage"] + ": " + row["reason"] for row in preflight["blocked_stages"]
+            ))
             return None
 
         memory_slice = memory.build_memory_slice(state, bundle)

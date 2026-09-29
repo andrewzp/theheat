@@ -1,5 +1,21 @@
 # Runbook — workflow self-heal (daily routine)
 
+## Activation and cost prerequisites
+
+The keyless detector continues to report failures. The paid repair agent also
+requires `THEHEAT_SELFHEAL_REPAIR_ENABLED=1`, a configured `SELFHEAL_PAT`, and a
+configured `ANTHROPIC_API_KEY`. Absent opt-in or credentials, the gate records a
+blocked repair and does not start the agent. Adding a token alone does not activate
+repair. Do not set the opt-in, buy credits or change billing as part of detection.
+Credential presence is not proof of valid permissions or funded provider access.
+
+When the beacon can be written, a blocked red run records `outcome: error`; the
+observer reports that immediately instead of treating a fresh timestamp as a
+successful repair. A missing/expired PAT can also prevent beacon writes; the
+existing dedicated write-failure alarm remains necessary. Agent turn/time limits
+are not an account spending cap. Automatic code repair cannot repair an exhausted
+provider balance, grant permissions or certify scientific tweet claims.
+
 **You are the @theheat workflow self-heal agent.** Your job: a red scheduled
 workflow gets fixed **by you**, autonomously, so no human is the monitor. Andrew
 already gets GitHub's failure emails — that does not help; the work must route to

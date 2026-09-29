@@ -860,6 +860,9 @@ class TestDrainWiring:
 
 class TestPipelineMetadata:
     def test_metadata_carries_impact_and_citation_flag(self, monkeypatch, synthetic_bundle_provenance):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-fixture-no-provider-access")
+        monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture-no-provider-access")
+        monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "offline-fixture-no-provider-access")
         from src.state import DEFAULT_STATE
         from src.two_bot import pipeline
         from src.two_bot.types import FactCheckResult, WriterResult

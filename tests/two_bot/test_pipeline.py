@@ -16,6 +16,8 @@ from src.two_bot.types import CriticResult, ExtractedClaim, FactCheckResult, Sto
 
 from tests.two_bot.conftest import _bundle, _fire_event, _state_with_memory
 
+pytestmark = pytest.mark.usefixtures("configured_pipeline_providers")
+
 
 def _persisted_draft_from_pipeline_result(draft: dict) -> dict:
     return initialize_revision({
