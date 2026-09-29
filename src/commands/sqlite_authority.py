@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import domain_journal, spend_journal
+from src.commands import batch_journal, domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -73,6 +73,7 @@ class SQLiteAuthority:
         allowed = {"authority_metadata", "authority_state", "command_intents", "command_results", "command_events"}
         allowed.update(domain_journal._TABLES)
         allowed.update(spend_journal._TABLES)
+        allowed.update(batch_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -117,6 +118,7 @@ class SQLiteAuthority:
                     connection.execute("INSERT INTO authority_state(singleton, version, state_json) VALUES(1, 0, ?)", (encoded,))
                 installed = domain_journal.install(connection, source_namespace)
                 spend_journal.install(connection)
+                batch_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -281,6 +283,30 @@ class SQLiteAuthority:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def prepare_batch(self, plan_bytes: bytes, *, expected_plan_sha256: str,
+                      reservation: dict, now: str,
+                      before_commit: Callable[[], None] | None = None) -> dict:
+        """Atomically retain one local batch plan, job and spending hold; never send."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                result = batch_journal.register(connection, plan_bytes,
+                    expected_plan_sha256=expected_plan_sha256, reservation=reservation, now=now)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def batch_status(self, job_id: str) -> dict:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            return batch_journal.read(connection, job_id)
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

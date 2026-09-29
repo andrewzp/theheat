@@ -230,10 +230,10 @@ def _plan(plan_bytes, expected_plan_sha256):
     return plan
 
 
-def batch_requests(plan_bytes: bytes, *, expected_plan_sha256: str) -> list[dict]:
-    """Detached requests, verified against an independently retained plan hash."""
+def validated_batch_plan(plan_bytes: bytes, *, expected_plan_sha256: str) -> dict:
+    """Detached complete plan verified against its independently retained hash."""
     try:
-        return _plan(plan_bytes, expected_plan_sha256)["requests"]
+        return _plan(plan_bytes, expected_plan_sha256)
     except (
         ValueError,
         TypeError,
@@ -244,6 +244,11 @@ def batch_requests(plan_bytes: bytes, *, expected_plan_sha256: str) -> list[dict
         OverflowError,
     ):
         raise BatchContractError("invalid_or_changed_batch_plan") from None
+
+
+def batch_requests(plan_bytes: bytes, *, expected_plan_sha256: str) -> list[dict]:
+    """Detached requests, verified against an independently retained plan hash."""
+    return validated_batch_plan(plan_bytes, expected_plan_sha256=expected_plan_sha256)["requests"]
 
 
 def _usage(message):

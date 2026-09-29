@@ -1,7 +1,8 @@
 # Batch writer revision against the September pipeline
 
 Status: request/result contracts and local spending reservations are implemented;
-durable batch jobs and transport remain unbuilt. The lane is OFF until its
+atomic local job registration is also implemented. Job ownership and transport
+remain unbuilt. The lane is OFF until its
 acceptance gates pass.
 This supersedes the July proposal to store pending batch work directly in Gist.
 It does not activate publishing, increase writer samples, authorize a paid trial,
@@ -94,7 +95,9 @@ evidence and do not turn old high prose grades into factual qualification.
 The spending reservation subset is implemented locally in `8629037`; see
 `docs/handoffs/2026-09-29-local-spend-reservations.md`. It serializes reservations,
 grants dispatch once, retains uncertain charges and blocks on reconciliation
-overruns. Batch-specific artifact/job/lease integration remains unbuilt. The
+overruns. Atomic local plan/job/reservation registration is also implemented; see
+`docs/handoffs/2026-09-29-atomic-batch-registration.md`. Fenced job ownership,
+submission uncertainty, collection and transport remain unbuilt. The
 experimental authority is not the production store or a complete cost ceiling.
 
 
@@ -166,7 +169,7 @@ a revert of the safety work. Complete a private end-to-end rehearsal first.
 ## Remaining limits
 
 The request/result contract and local spending journal are tested foundations,
-not a working batch lane. Durable batch jobs, leases, transport, required-check
+not a working batch lane. Local registration is atomic; job leases, transport, required-check
 integration and an authorized measured trial remain. No $10–15/month or quality uplift is claimed. Dollar ceilings, provider
 workspace/account scope and the production durable authority remain explicit
 decisions. Global source recall, source recovery, joint graphic approval/attachment and

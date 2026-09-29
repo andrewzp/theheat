@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.25] - 2026-09-29
+
+- Atomically register an exact local batch request artifact, immutable job identity and spending reservation in the experimental authority. Require matching job, request, provider, model and writer role; no request, job or new hold survives a failed commit.
+- Make identical retries safe after restart and expiry, while returning the actual reservation disposition. Reject changed bindings, used attempts, exhausted allowances, insufficient usefulness windows and modified stored plans.
+- Exercise separate-process contention and process death, rollback, schema protection and backup/restore. This adds local registration only: leases, provider transport, mandatory-check integration and production spending enforcement remain unfinished.
+
 ## [0.9.108.24] - 2026-09-29
 
 - Make both deterministic temperature previews readable at phone width with a 1200 by 1500 canvas, material labels of at least 40 pixels and measured wrapping. Keep source types, complete dates, archive bounds, sample scope and synthetic status visible; preserve exact alt text and evidence binding.
