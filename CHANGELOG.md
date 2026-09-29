@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.28] - 2026-09-29
+
+- Retain exact bounded batch metadata and result bytes in the experimental local authority before parsing, including partial downloads, malformed output and late worker responses. Unknown charges remain held.
+- Review only under current fenced ownership. Match terminal metadata, request IDs, evidence, policy, epoch and deadline; contradictory complete results invalidate earlier text. Normalize result ordering without losing original bytes.
+- Persist fresh review reports bound to the entire receipt set and submission evidence. Stable candidate identities remain unapproved and require ordinary factual, safety and editorial checks; no drafts or provider calls are introduced.
+
 ## [0.9.108.27] - 2026-09-29
 
 - Add an unwired, default-OFF local batch submission adapter. Require current policy, provider prerequisites and a committed fenced grant before sending exact planned requests; a restart cannot resend an existing attempt.

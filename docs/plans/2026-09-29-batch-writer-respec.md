@@ -1,9 +1,9 @@
 # Batch writer revision against the September pipeline
 
-Status: request/result contracts and local spending reservations are implemented;
-atomic local job registration is also implemented. Job ownership and transport
-remain unbuilt. The lane is OFF until its
-acceptance gates pass.
+Status: local immutable plans, spending reservations, atomic job registration,
+fenced ownership, default-OFF submission and durable result review are implemented.
+Result retrieval and ordinary mandatory-check integration remain unfinished. The
+local lane is unwired to production and OFF until its acceptance gates pass.
 This supersedes the July proposal to store pending batch work directly in Gist.
 It does not activate publishing, increase writer samples, authorize a paid trial,
 buy credits, or establish a monthly savings forecast.
@@ -96,8 +96,9 @@ The spending reservation subset is implemented locally in `8629037`; see
 `docs/handoffs/2026-09-29-local-spend-reservations.md`. It serializes reservations,
 grants dispatch once, retains uncertain charges and blocks on reconciliation
 overruns. Atomic local plan/job/reservation registration is also implemented; see
-`docs/handoffs/2026-09-29-atomic-batch-registration.md`. Fenced job ownership,
-submission uncertainty, collection and transport remain unbuilt. The
+`docs/handoffs/2026-09-29-atomic-batch-registration.md`. Fenced ownership, submission uncertainty and durable result review are also
+implemented; see the September 29 worker-ownership and durable-results handoffs.
+The
 experimental authority is not the production store or a complete cost ceiling.
 
 
@@ -134,6 +135,12 @@ do not cause duplicate spend; duplicate/out-of-order/late responses do not doubl
 charge or create drafts; all backups restore jobs, artifacts and reservations.
 
 ### B3: bounded transport and collection, default OFF
+
+One-attempt submission is implemented locally in `80e654a`, with retries and
+redirects disabled. Raw result retention and fenced review are implemented locally;
+provider retrieval and exact mandatory-check integration remain. The SDK was tested
+through a fake HTTP transport; no real provider request, schedule or flag flip ran.
+
 
 Add an explicit feature flag defaulting OFF. Use the existing Anthropic SDK's batch
 endpoints with one transport-attempt owner, timeouts and bounded polling. Do not

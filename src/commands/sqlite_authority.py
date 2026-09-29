@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import batch_journal, batch_worker_journal, domain_journal, spend_journal
+from src.commands import batch_journal, batch_worker_journal, batch_result_journal, domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -75,6 +75,7 @@ class SQLiteAuthority:
         allowed.update(spend_journal._TABLES)
         allowed.update(batch_journal._TABLES)
         allowed.update(batch_worker_journal._TABLES)
+        allowed.update(batch_result_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -121,6 +122,7 @@ class SQLiteAuthority:
                 spend_journal.install(connection)
                 batch_journal.install(connection)
                 batch_worker_journal.install(connection)
+                batch_result_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -312,6 +314,34 @@ class SQLiteAuthority:
             try:
                 self._check_environment(connection)
                 result = batch_worker_journal.apply(connection, action, payload, now=now, raw=raw)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def record_batch_results(self, payload: dict, *, metadata: bytes, results: bytes,
+                             now: str, before_commit: Callable[[], None] | None = None) -> dict:
+        return self._batch_results_transaction("record", payload, now=now,
+            metadata=metadata, results=results, before_commit=before_commit)
+
+    def review_batch_results(self, payload: dict, *, now: str,
+                             before_commit: Callable[[], None] | None = None) -> dict:
+        return self._batch_results_transaction("review", payload, now=now, before_commit=before_commit)
+
+    def _batch_results_transaction(self, action: str, payload: dict, *, now: str,
+                                   metadata: bytes | None = None, results: bytes | None = None,
+                                   before_commit: Callable[[], None] | None = None) -> dict:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                if action == "record":
+                    result = batch_result_journal.record(connection, payload, metadata, results, now=now)
+                else:
+                    result = batch_result_journal.review(connection, payload, now=now)
                 if before_commit is not None:
                     before_commit()
                 connection.commit()
