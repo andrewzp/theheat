@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.34] - 2026-09-29
+
+- Rotate remote rainfall fallback over canonical sampling identities instead of repeatedly selecting the first cities in CSV order. Preserve the per-run 75-city ceiling and complete local-grid extraction.
+- Freeze one UTC sampling date for primary and weather-model fallback paths; changing source availability dates or worker completion order cannot change that run's selection.
+- Verify conditional daily coverage, aliases, invalid input, bounded requests and both actual fallback call sites offline. This does not establish recovered access, fresh global observations or official rainfall records.
+
 ## [0.9.108.32] - 2026-09-29
 
 - Pin core provider SDK, HTTP and schema dependencies to tested versions instead of accepting silent major upgrades during deployments. Preserve runtime models, prompts, sample settings and billing controls.

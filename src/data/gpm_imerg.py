@@ -152,10 +152,11 @@ def load_cities(cities_path: str = "data/cities.csv") -> list[dict[str, str]]:
     return places.load_cities(cities_path)
 
 
-def _qualified_watchlist(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _qualified_watchlist(
+    rows: Iterable[Mapping[str, Any]], *, canonical_order: bool = False,
+) -> list[dict[str, Any]]:
     """Keep distinct valid sampling identities; bad rows cannot dark the grid."""
-    qualified: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    valid: list[tuple[str, dict[str, Any]]] = []
     for row in rows:
         try:
             city, country = row["city"], row["country"]
@@ -167,22 +168,50 @@ def _qualified_watchlist(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, An
             # must qualify their own explicit point before reserving a key.
             places.sampling_point_id(row["lat"], row["lon"])
             key = places.event_location_key(city, country, row["lat"], row["lon"])
-            if key in seen:
-                continue
-            seen.add(key)
-            qualified.append(dict(row))
+            valid.append((key, dict(row)))
         except (KeyError, TypeError, ValueError, OverflowError):
             continue
+    if canonical_order:
+        # Sort before deduplication so equivalent identities with different
+        # labels/coordinate representations choose the same sampling point.
+        valid.sort(key=lambda item: (
+            item[0], item[1]["city"], item[1]["country"],
+            float(item[1]["lat"]), float(item[1]["lon"]),
+        ))
+    qualified: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for key, row in valid:
+        if key not in seen:
+            seen.add(key)
+            qualified.append(row)
     return qualified
 
 
-def _network_watchlist(rows: Iterable[Mapping[str, Any]], max_cities: int | None) -> list[dict[str, Any]]:
+def _network_watchlist(
+    rows: Iterable[Mapping[str, Any]], max_cities: int | None, *, scan_date: date | None = None,
+) -> list[dict[str, Any]]:
+    """Rotate a bounded canonical window once per UTC date, independent of CSV order.
+
+    A stable N-city list with a positive K-city bound covers every identity in
+    any ceil(N/K) consecutive daily attempts. Skipped runs, failed retrievals
+    and population changes do not establish that actual observations recur.
+    """
     # None no longer removes the remote budget. Full local grid coverage does
     # not authorize an unbounded fallback fan-out when the grid source fails.
     if max_cities is not None and (type(max_cities) is not int or max_cities < 0):
         raise ValueError("max_cities must be a nonnegative integer or None")
     limit = min(max_cities if max_cities is not None else DEFAULT_CITY_LIMIT, MAX_NETWORK_CITIES)
-    return _qualified_watchlist(rows)[:limit]
+    scan_date = scan_date if scan_date is not None else datetime.now(timezone.utc).date()
+    if type(scan_date) is not date:
+        raise ValueError("scan_date must be a UTC calendar date")
+    qualified = _qualified_watchlist(rows, canonical_order=True)
+    count = len(qualified)
+    if not count or not limit:
+        return []
+    if count <= limit:
+        return qualified
+    start = (scan_date.toordinal() * limit) % count
+    return [qualified[(start + offset) % count] for offset in range(limit)]
 
 
 def fetch_daily_precip(
@@ -205,6 +234,9 @@ def fetch_daily_precip(
     ``max_cities`` caps only per-city network paths, up to MAX_NETWORK_CITIES.
     Return shape is unchanged.
     """
+    # One sampling date for both legs even if the primary crosses midnight or
+    # walks back to an older available grid. No durable cursor or extra request.
+    today = today if today is not None else datetime.now(timezone.utc).date()
 
     def primary() -> list[CityPrecipReading]:
         return _fetch_daily_precip_primary(
@@ -242,8 +274,9 @@ def _fetch_daily_precip_primary(
 ) -> list[CityPrecipReading]:
     """Primary GESDISC-family daily precip fetch (grid chain then OPeNDAP).
 
-    Returns city readings sorted in input order. Missing credentials skip the
-    source in non-strict mode; strict mode raises so smoke tests can fail loud.
+    Grid results retain input order; bounded remote results retain the canonical
+    daily selection order regardless of worker completion order. Missing credentials
+    skip in non-strict mode; strict mode raises so smoke tests can fail loud.
     """
 
     token = os.environ.get("EARTHDATA_TOKEN", "")
@@ -307,7 +340,7 @@ def _fetch_daily_precip_primary(
         )
     assert_freshness(requested_date, "gpm_imerg", max_age_days=6, today=today)
     rows = cities if cities is not None else load_cities()
-    selected = _network_watchlist(rows, max_cities)
+    selected = _network_watchlist(rows, max_cities, scan_date=today)
     readings_by_index: list[CityPrecipReading | None] = [None] * len(selected)
     failures = 0
     first_failure_detail: str | None = None
@@ -534,8 +567,9 @@ def _fetch_precip_open_meteo(
     event_id mirrors the primary so dedup is consistent. The detector still does
     the thresholding; this only supplies the daily readings."""
     rows = cities if cities is not None else load_cities()
-    selected = _network_watchlist(rows, max_cities)
-    target_date = (today or date.today()) - timedelta(days=1)
+    today = today if today is not None else datetime.now(timezone.utc).date()
+    selected = _network_watchlist(rows, max_cities, scan_date=today)
+    target_date = today - timedelta(days=1)
     date_key = target_date.isoformat()
     readings: list[CityPrecipReading] = []
     for city in selected:
