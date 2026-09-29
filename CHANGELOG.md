@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.21] - 2026-09-29
+
+- Share the current writer user-prompt construction and detached Anthropic request arguments with future offline batch planning. Preserve exact guidance order, cached system prefix, selected model, output schema, token bound and retry ownership.
+- Exercise the actual mocked synchronous SDK boundary and both provider routes. Evidence/scope rejection still happens before request construction; returned request dictionaries cannot mutate the global output schema. No batch transport or additional model call is introduced.
+
 ## [0.9.108.20] - 2026-09-29
 
 - Stop drafting before the writer when its selected provider or a mandatory downstream checker lacks a credential. Keep loaded safety configuration distinct from current environment configuration, retain a bounded blocked reason, and never equate configured keys with working or funded access.
