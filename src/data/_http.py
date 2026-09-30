@@ -92,12 +92,21 @@ def fetch_with_retry(
             ):
                 _waf_budget["remaining"] = max(int(_waf_budget.get("remaining", 0)) - 1, 0)
                 waf_retried = True
+                if kwargs.get("stream"):
+                    response.close()
                 _waf_sleep()
                 continue
             if 500 <= response.status_code < 600 and attempt_index < attempts - 1:
+                if kwargs.get("stream"):
+                    response.close()
                 _sleep_before_retry(attempt_index, backoff_base)
                 continue
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except requests.HTTPError:
+                if kwargs.get("stream"):
+                    response.close()
+                raise
             return response
         except (requests.ConnectionError, requests.Timeout) as exc:
             last_transport_error = exc

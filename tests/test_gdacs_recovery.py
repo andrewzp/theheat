@@ -111,19 +111,21 @@ def test_malformed_xml_and_parser_bounds_are_not_empty_success(monkeypatch):
 
 @responses.activate
 @pytest.mark.parametrize("json_payload", [{}, [], {"features": []}, {"features": [{}]}, {"features": [{"properties": {}}]}])
-def test_invalid_primary_can_recover_from_valid_same_provider_feed(json_payload, monkeypatch):
+def test_unqualified_map_payload_is_never_requested_when_rss_is_available(json_payload, monkeypatch):
     responses.add(responses.GET, gdacs.GDACS_URL, json=json_payload)
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=SOURCE.read_text())
     events = gdacs.fetch_disasters(strict=True)
     assert len(events) == 1
-    assert events.source_diagnostics["primary_error_class"] == "ValueError"
+    assert "primary_error_class" not in events.source_diagnostics
+    assert events.source_diagnostics["configured_product"] == "gdacs-georss"
+    assert events.source_diagnostics["map_status"] == "withdrawn_unqualified"
+    assert [call.request.url for call in responses.calls] == [gdacs.GDACS_GEORSS_URL]
     assert events.source_diagnostics["feed_items_validated"] == 2
 
 
 @responses.activate
 @pytest.mark.parametrize("rss", ["<rss><channel /></rss>", "<rss><channel>"])
 def test_malformed_or_empty_fallback_does_not_invoke_unrelated_witnesses(rss, monkeypatch):
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=rss)
     def forbidden(*args, **kwargs):
         raise AssertionError("Schema failure must not trigger more source calls")
@@ -136,7 +138,6 @@ def test_malformed_or_empty_fallback_does_not_invoke_unrelated_witnesses(rss, mo
 def test_zero_selected_alerts_keeps_validated_feed_and_fallback_telemetry(monkeypatch):
     body = SOURCE.read_text().replace("<gdacs:alertlevel>Red</gdacs:alertlevel>", "<gdacs:alertlevel>Orange</gdacs:alertlevel>")
     body = body.replace("<gdacs:episodealertlevel>Red</gdacs:episodealertlevel>", "<gdacs:episodealertlevel>Orange</gdacs:episodealertlevel>")
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=body)
     state = deepcopy(DEFAULT_STATE)
     run = {"sources": []}
@@ -152,7 +153,6 @@ def test_zero_selected_alerts_keeps_validated_feed_and_fallback_telemetry(monkey
 
 @responses.activate
 def test_stale_valid_fallback_still_fails_freshness(monkeypatch):
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=SOURCE.read_text())
     monkeypatch.setattr(gdacs, "_publication_clock", lambda: datetime(2026, 10, 1, tzinfo=UTC))
     with pytest.raises(SourceFetchError, match="stale data"):

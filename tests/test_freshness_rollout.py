@@ -82,26 +82,11 @@ def test_co2_stale_data_raises_freshness():
 
 @responses.activate
 def test_gdacs_stale_data_raises_freshness():
-    responses.add(
-        responses.GET,
-        gdacs.GDACS_URL,
-        json={
-            "features": [
-                {
-                    "properties": {
-                        "eventtype": "TC",
-                        "alertlevel": "Red",
-                        "name": "Old Cyclone",
-                        "country": "Mozambique",
-                        "description": "stale",
-                        "eventid": "old-1",
-                        "fromdate": "2020-01-01T00:00:00Z",
-                    }
-                }
-            ]
-        },
-        status=200,
-    )
+    # Stale source publication must fail the live RSS route, regardless of event start.
+    from pathlib import Path
+    body = Path("tests/fixtures/gdacs_georss_sample.xml").read_text()
+    body = body.replace("2026", "2020")
+    responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=body, status=200)
 
     with pytest.raises(SourceFetchError, match="gdacs stale data"):
         gdacs.fetch_disasters(strict=True)

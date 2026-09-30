@@ -2,11 +2,13 @@
 
 from copy import deepcopy
 from pathlib import Path
+from datetime import UTC, datetime
+import xml.etree.ElementTree as ET
 
 import pytest
 import responses
 
-from src.data.gdacs import GDACS_GEORSS_URL, GDACS_URL, GlobalDisasterEvent, fetch_disasters, _intensity_tier
+from src.data.gdacs import GDACS_GEORSS_URL, GlobalDisasterEvent, fetch_disasters, _intensity_tier
 from src.data.cyclones import CycloneAdvisory
 from src.data.source_status import SourceFetchError
 from src.state import DEFAULT_STATE
@@ -62,14 +64,33 @@ SAMPLE_RESPONSE = {
 }
 
 
+@pytest.fixture(autouse=True)
+def fixed_publication_clock(monkeypatch):
+    monkeypatch.setattr("src.data.gdacs._publication_clock", lambda: datetime(2026, 6, 12, tzinfo=UTC))
+
+
+def rss_sample():
+    # Existing retained-format fixture plus one explicitly synthetic Green peer.
+    from src.data.gdacs import _GEORSS_NS
+    root = ET.fromstring(Path("tests/fixtures/gdacs_georss_sample.xml").read_text())
+    channel = root.find("channel")
+    peer = deepcopy(channel.findall("item")[1])
+    for field, value in {"gdacs:eventtype": "FL", "gdacs:eventid": "1003",
+                         "gdacs:alertlevel": "Green", "gdacs:episodealertlevel": "Green"}.items():
+        peer.find(field, _GEORSS_NS).text = value
+    peer.find("title").text = "Synthetic Green flood"
+    channel.append(peer)
+    return ET.tostring(root, encoding="unicode")
+
+
 class TestFetchDisasters:
     @responses.activate
     def test_default_filters_to_red_only(self):
         """Default is Red-only — Orange isn't extraordinary."""
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters()
@@ -82,8 +103,8 @@ class TestFetchDisasters:
         """Can still pass Orange explicitly if needed."""
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters(min_severity="Orange")
@@ -95,8 +116,8 @@ class TestFetchDisasters:
     def test_maps_event_type_codes(self):
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters(min_severity="Orange")
@@ -109,8 +130,8 @@ class TestFetchDisasters:
         """Cyclone event_id includes tier, not date — so strengthening storms get re-drafted."""
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters()
@@ -122,8 +143,8 @@ class TestFetchDisasters:
         """Non-evolving events still use date-based dedup."""
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters(min_severity="Orange")
@@ -136,7 +157,7 @@ class TestFetchDisasters:
     def test_api_error_returns_empty(self):
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
+            GDACS_GEORSS_URL,
             status=500,
         )
         assert fetch_disasters() == []
@@ -145,18 +166,17 @@ class TestFetchDisasters:
     def test_green_severity_included_when_min_green(self):
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters(min_severity="Green")
         assert len(events) == 3
 
     @responses.activate
-    def test_gdacs_falls_back_to_georss_on_json_failure(self, capsys, monkeypatch):
+    def test_gdacs_uses_configured_limited_georss(self, capsys, monkeypatch):
         from datetime import UTC, datetime
         monkeypatch.setattr("src.data.gdacs._publication_clock", lambda: datetime(2026, 6, 12, tzinfo=UTC))
-        responses.add(responses.GET, GDACS_URL, status=500, body="down")
         responses.add(
             responses.GET,
             GDACS_GEORSS_URL,
@@ -166,7 +186,8 @@ class TestFetchDisasters:
 
         events = fetch_disasters(min_severity="Orange")
 
-        assert "[gdacs] served by georss fallback" in capsys.readouterr().out
+        assert "[gdacs] configured limited GeoRSS product" in capsys.readouterr().out
+        assert all(call.request.url == GDACS_GEORSS_URL for call in responses.calls)
         assert [event.name for event in events] == ["Cyclone Freddy", "Orange earthquake alert in Turkey"]
         cyclone = events[0]
         assert cyclone.disaster_type == "Tropical Cyclone"
@@ -180,7 +201,6 @@ class TestFetchDisasters:
 
     @responses.activate
     def test_gdacs_georss_insufficient_fields_raises(self):
-        responses.add(responses.GET, GDACS_URL, status=500, body="down")
         responses.add(
             responses.GET,
             GDACS_GEORSS_URL,
@@ -193,7 +213,6 @@ class TestFetchDisasters:
 
     @responses.activate
     def test_gdacs_primary_outage_uses_usgs_and_cyclone_subtype_witnesses(self, monkeypatch, capsys):
-        responses.add(responses.GET, GDACS_URL, status=500, body="down")
         responses.add(responses.GET, GDACS_GEORSS_URL, status=504, body="timeout")
         monkeypatch.setattr(
             "src.data.gdacs.usgs_quakes.fetch_significant_earthquakes",
@@ -334,8 +353,8 @@ class TestFetchDisastersRich:
         """Cyclone should expose wind speed, alert score, population."""
         responses.add(
             responses.GET,
-            "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP",
-            json=SAMPLE_RESPONSE,
+            GDACS_GEORSS_URL,
+            body=rss_sample(),
             status=200,
         )
         events = fetch_disasters()
