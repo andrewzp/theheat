@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.48] - 2026-09-30
+
+- Preserve GDACS subtype-witness identity when backup feeds return no qualifying records. Report degraded primary availability for both empty and populated fallback results, with per-leg received/selected counts and unknown counts for failed legs.
+- Retain full diagnostic details in run history and the bounded summary in source health. Distinguish successful empty responses, severity-filtered records and partial failures; do not infer global absence or unique-event counts from these limited earthquake/cyclone feeds.
+- Verify real strict fetch, runner, Gist serialization/merge and dashboard health projection. Preserve existing retries, stale-provider fallback eligibility, schema/auth/clock guards, source identities and duplicate-draft suppression. Regenerate the dashboard policy manifest.
+
 ## [0.9.108.47] - 2026-09-30
 
 - Withdraw the unqualified GDACS MAP request and deliberately use the existing qualified GeoRSS alert product. Keep its limited/degraded status visible, with current-episode, publication-time, country, quarantine and scientific safeguards unchanged.
