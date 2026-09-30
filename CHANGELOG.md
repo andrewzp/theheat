@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.45] - 2026-09-30
+
+- Retain the complete serialized source bundle for new accepted synchronous drafts, including raw inputs, headline, historical and related-event context, country and human impacts. Bind all of it to the existing review identity; leave old incomplete evidence unchanged.
+- Capture before paid generation with a 32 KiB per-bundle bound and JSON/JavaScript-safe values. Reject unsupported or oversized capture without truncation, and refuse to bind verdicts if the bundle changes during checks.
+- Detach retained evidence from mutable caller inputs, preserve compact publication memory, and verify Python generation/save plus JavaScript edit/merge/save. Regenerate the dashboard policy. This is not a full provider-request or rejected-candidate archive, nor a total storage cap.
+
 ## [0.9.108.44] - 2026-09-30
 
 - Remove the orchestrator's legacy pending-only draft pruning; leave retention to the shared persistence policy after cycle selection. Approved and posted history, old pending drafts, unresolved attempts and revision conflicts survive a full queue.
