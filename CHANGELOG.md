@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.39] - 2026-09-30
+
+- Retain exact graphic assets and joint-review decisions atomically in the separate experimental local command authority. Recheck the authoritative draft and reviewer role after obtaining the write lock.
+- Add immutable, byte-verified historical receipts with idempotent retries, crash rollback and backup/restore coverage. Reads verify historical binding without treating retained inputs as current approval.
+- Keep all draft state, approval fields, revision counters and publication intents unchanged. No production backend migration, asset activation or provider call.
+
 ## [0.9.108.38] - 2026-09-30
 
 - Add local joint text/graphic review decisions tied to independently current tweet, evidence, policy, PNG, renderer and alt-text bindings. Acceptance requires five explicit confirmations and a supplied permitted reviewer.
