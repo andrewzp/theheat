@@ -70,15 +70,16 @@ def build_severe_weather_bundle(alert: SevereWeatherAlert) -> StoryBundle:
     )
 
 def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
-    """A live-running natural disaster surfaced via GDACS."""
+    """A source-qualified disaster alert, not proof of observed intensity."""
+    gdacs_rss = disaster.source_product == "gdacs-georss"
     current_facts: list[dict[str, Any]] = [
         {"label": "disaster_type", "value": disaster.disaster_type},
         {"label": "name", "value": disaster.name},
         {"label": "country", "value": disaster.country},
         {"label": "severity", "value": disaster.severity},
-        {"label": "alert_score", "value": disaster.alert_score},
-        {"label": "severity_value", "value": disaster.severity_value},
-        {"label": "severity_unit", "value": disaster.severity_unit},
+        {"label": "overall_alert_score" if gdacs_rss else "alert_score", "value": disaster.alert_score},
+        {"label": "unqualified_source_severity_value" if gdacs_rss else "severity_value", "value": disaster.severity_value},
+        {"label": "unqualified_source_severity_unit" if gdacs_rss else "severity_unit", "value": disaster.severity_unit},
         {"label": "population_affected", "value": disaster.population_affected},
         {"label": "description", "value": disaster.description},
     ]
@@ -88,14 +89,20 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
             current_facts.append({"label": label, "value": value})
     if disaster.source_provenance.get("source_country_known") is False:
         current_facts.append({"label": "claim_limit", "value": "GDACS reports affected country as unknown; do not infer a country or landfall from the cyclone position."})
-    if disaster.source_product == "gdacs-georss":
-        for label in ("source_updated_at", "source_update_kind", "fromdate", "todate"):
+    if gdacs_rss:
+        for label in ("source_updated_at", "source_update_kind", "fromdate", "todate",
+                      "overall_alert_level", "episode_alert_level", "episode_id", "is_current",
+                      "episode_alert_score", "severity_text", "severity_temporal_scope"):
             value = disaster.source_provenance.get(label)
             if value:
                 current_facts.append({"label": label, "value": value})
         current_facts.append({
             "label": "claim_limit",
             "value": "Source publication time and event window are different. A fresh alert does not establish observed intensity, landfall or confirmed impacts.",
+        })
+        current_facts.append({
+            "label": "claim_limit",
+            "value": "Overall alert history is not the current episode alert. The RSS severity metric has no qualified wind-advisory time or averaging period; do not claim a wind speed or cyclone category from it.",
         })
     if disaster.source_leg == "subtype_witnesses":
         current_facts.extend([

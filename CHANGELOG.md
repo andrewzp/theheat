@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.43] - 2026-09-30
+
+- Qualify GDACS RSS alerts using explicit current status and current episode severity. Withhold inactive, unverified, inconsistent or below-threshold episodes before drafting, with distinct diagnostic counts.
+- Preserve overall alert history separately from the episode used in headlines. Keep raw severity fields explicitly unqualified and reject recognizable numeric wind/category claims before paid checks when the RSS source lacks a timed wind advisory.
+- Recognize the actual GDACS cyclone bundle fields in the existing landfall confirmation rule. Preserve independent advisory checks, core-field containment and source publication bounds; regenerate the editorial policy manifest.
+
 ## [0.9.108.42] - 2026-09-30
 
 - Quarantine GDACS RSS items that fail core-field validation without discarding independently valid alerts. Invalid items never contribute events or feed freshness.

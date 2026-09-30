@@ -11,6 +11,7 @@ from src.two_bot import fact_check, pipeline
 from src.two_bot.types import CriticResult, FactCheckResult, WriterResult
 from tests.two_bot.conftest import _bundle, _state_with_memory
 from tests.two_bot.test_pipeline import _monthly_high_bundle
+from tests.test_gdacs_current_episode import cyclone_bundle
 
 pytestmark = pytest.mark.usefixtures("configured_pipeline_providers")
 
@@ -162,4 +163,53 @@ def test_revised_unsupported_text_cannot_buy_another_safety_or_fact_call(monkeyp
     outcome = {}
     assert pipeline.generate_draft(_bundle(), _state_with_memory(), result_out=outcome) is None
     assert outcome["kill_stage"] == "fact_check"
+    assert [model.call_count for model in calls] == [1, 1, 1]
+
+
+@pytest.mark.parametrize("text", [
+    "Synthetic cyclone: winds of 240 km/h.", "Winds of 240kmh.", "Winds of 240 kph.",
+    "Winds at 140 mph.", "Winds at 120kt.", "Winds at 120 kts.", "Winds of 120 knots.",
+    "A 120-knot cyclone.", "A 120–knot cyclone.", "A 120‑knot cyclone.",
+    "A Category 4 cyclone.", "A category-4 cyclone.", "A Cat. 4 cyclone.",
+    "A Cat4 cyclone.", "Winds of 240.5 km/h.", "Winds of 240,5 km/h.",
+    "A cyclone made landfall in India.",
+])
+@pytest.mark.parametrize("retained_projection", [False, True])
+def test_gdacs_rss_unqualified_wind_category_and_landfall_cost_no_checks(text, retained_projection, calls):
+    bundle = cyclone_bundle()
+    if retained_projection:
+        bundle.raw_signal_dump = {}  # Legacy recheck retains facts, not raw input.
+    outcome = {}
+    assert check(text, bundle, _state_with_memory(), outcome=outcome) is None
+    assert outcome["stage"] == "fact_check"
+    assert ("unconfirmed_landfall" if "landfall" in text else "unqualified_gdacs_wind") in outcome["reason"]
+    assert all(not model.mock_calls for model in calls)
+
+
+@pytest.mark.parametrize("text", [
+    "GDACS reports a Red cyclone alert for India.",
+    "GDACS reports a cyclone alert; landfall remains possible.",
+])
+def test_source_qualified_rss_alert_still_requires_all_model_checks(text, monkeypatch, calls):
+    monkeypatch.setattr(pipeline.writer, "write_tweet",
+                        Mock(return_value=WriterResult(text, None, "alert", None, None, "fixture")))
+    draft = pipeline.generate_draft(cyclone_bundle(), _state_with_memory())
+    assert draft and draft["text"] == text
+    assert [model.call_count for model in calls] == [1, 1, 1]
+
+
+@pytest.mark.parametrize("source", ["nhc", "jtwc"])
+def test_independent_cyclone_advisory_numeric_wind_reaches_required_checks(source, monkeypatch, calls):
+    from src.data.cyclones import CycloneAdvisory
+    from src.data.gdacs import _cyclone_to_gdacs_event
+    from src.two_bot.intern.disasters import build_global_disaster_bundle
+    advisory = CycloneAdvisory(source=source, storm_id="synthetic-storm", storm_name="Synthetic cyclone",
+        basin="Synthetic basin", advisory_number="3", issued_at="2026-09-30T12:00:00Z", wind_kt=120,
+        public_advisory_url="https://example.org/synthetic-advisory")
+    bundle = build_global_disaster_bundle(_cyclone_to_gdacs_event(advisory))
+    text = f"{source.upper()} reports winds of 120 knots in its cyclone advisory."
+    monkeypatch.setattr(pipeline.writer, "write_tweet",
+                        Mock(return_value=WriterResult(text, None, "number", None, None, "fixture")))
+    draft = pipeline.generate_draft(bundle, _state_with_memory())
+    assert draft and draft["text"] == text
     assert [model.call_count for model in calls] == [1, 1, 1]

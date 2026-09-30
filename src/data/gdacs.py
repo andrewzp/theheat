@@ -262,6 +262,13 @@ def _events_from_georss(
         if issue:
             raise GDACSPublicationError("GDACS GeoRSS channel publication is " + issue)
     alert_counts = {level: 0 for level in severity_order}
+    episode_counts = {**dict.fromkeys(severity_order, 0), "unknown": 0}
+    current_counts = dict.fromkeys(("true", "false", "unknown"), 0)
+    current_withheld = dict.fromkeys((
+        "not_current", "unverified_current", "unverified_episode",
+        "episode_below_threshold", "inconsistent_alert_levels",
+    ), 0)
+    current_candidates = 0
     unknown_country_count = 0
     selected_before_freshness = 0
     withheld = dict.fromkeys(("missing", "invalid", "future", "stale"), 0)
@@ -317,9 +324,33 @@ def _events_from_georss(
             publication_dates.append(updated)
         alert_counts[alert_level] += 1
         unknown_country_count += int(country_unknown)
-        if severity_order[alert_level] < min_level:
+        episode_level = _xml_text(item, "gdacs:episodealertlevel")
+        episode_id = _xml_text(item, "gdacs:episodeid")
+        current = _xml_text(item, "gdacs:iscurrent")
+        episode_counts[episode_level if episode_level in severity_order else "unknown"] += 1
+        current_counts[current if current in ("true", "false") else "unknown"] += 1
+        overall_selected = severity_order[alert_level] >= min_level
+        episode_selected = severity_order.get(episode_level, -1) >= min_level
+        selected_before_freshness += int(overall_selected)
+        # Also expose an elevated episode under a lower overall level as a
+        # contradiction, rather than hiding it as a healthy absence of alerts.
+        if not (overall_selected or episode_selected):
             continue
-        selected_before_freshness += 1
+        current_candidates += 1
+        current_issue = None
+        if current == "false":
+            current_issue = "not_current"
+        elif current != "true":
+            current_issue = "unverified_current"
+        elif episode_level not in severity_order or not episode_id:
+            current_issue = "unverified_episode"
+        elif severity_order[episode_level] > severity_order[alert_level]:
+            current_issue = "inconsistent_alert_levels"
+        elif not episode_selected:
+            current_issue = "episode_below_threshold"
+        if current_issue is not None:
+            current_withheld[current_issue] += 1
+            continue
         if updated is not None and (clock.date() - updated.date()).days > MAX_PUBLICATION_AGE_DAYS:
             update_issue = "stale"
         if update_issue is not None:
@@ -340,7 +371,7 @@ def _events_from_georss(
             disaster_type=event_type,
             name=name,
             country=country,
-            severity=alert_level,
+            severity=episode_level,
             description=description,
             event_id=event_id,
             alert_score=alert_score,
@@ -353,6 +384,12 @@ def _events_from_georss(
             source_event_id=gdacs_id,
             source_provenance={
                 "eventtype": event_type_code, "fromdate": from_date,
+                "overall_alert_level": alert_level, "episode_alert_level": episode_level,
+                "episode_id": episode_id, "is_current": True,
+                "overall_alert_score": _xml_text(item, "gdacs:alertscore"),
+                "episode_alert_score": _xml_text(item, "gdacs:episodealertscore"),
+                "severity_text": _xml_text(item, "gdacs:severity"),
+                "severity_temporal_scope": "unqualified_source_metric",
                 "todate": _xml_text(item, "gdacs:todate"),
                 "datemodified": modified, "published_at": published,
                 "source_update_kind": update_kind,
@@ -386,6 +423,10 @@ def _events_from_georss(
             rejected_selected_alerts=rejected_selected,
             rejected_unknown_alert_level=rejected_unknown_level,
             alert_counts=alert_counts, selected_alerts=len(events),
+            episode_alert_counts=episode_counts, current_flag_counts=current_counts,
+            current_candidates_examined=current_candidates,
+            withheld_current_alerts=sum(current_withheld.values()),
+            withheld_current_by_reason=current_withheld,
             unknown_country_items=unknown_country_count,
             selected_before_freshness=selected_before_freshness,
             withheld_selected_alerts=sum(withheld.values()),
@@ -393,6 +434,7 @@ def _events_from_georss(
             publication_time=feed_time.isoformat().replace("+00:00", "Z"),
             publication_clock="channel_pubDate" if channel_time is not None else "item_update",
             status=("partial_feed" if quarantined else
+                    "withheld_current_alerts" if any(current_withheld.values()) else
                     "withheld_selected_alerts" if any(withheld.values()) else
                     "valid_alerts" if events else "valid_no_qualifying_alerts"),
         )

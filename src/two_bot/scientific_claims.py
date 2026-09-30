@@ -89,7 +89,16 @@ def scientific_claim_failures(tweet: str, bundle) -> list[str]:
         if re.search(r"\b(?:convective lid|atmospheric cap|pyrocumul\w*|fire[- ]generated thunderstorm)\b", text):
             failures.append("unwarranted_fire_cause: event-specific atmospheric explanation requires a reviewed diagnostic; thermal power alone is insufficient")
 
-    if signal.startswith("cyclone") or "cyclone" in str(raw.get("event_type", "")).lower():
+    cyclone = signal.startswith("cyclone") or any(
+        "cyclone" in str(value).lower() or value == "TC"
+        for value in (raw.get("event_type"), raw.get("disaster_type"), facts.get("disaster_type"))
+    )
+    if cyclone and (raw.get("source_product") == "gdacs-georss" or facts.get("source_product") == "gdacs-georss"):
+        normalized = re.sub(r"[\s\-\u2010-\u2015\u2212]+", " ", text)
+        if re.search(r"\b\d+(?:[.,]\d+)*\s*(?:km\s*/\s*h|kmh|kph|mph|kt|kts|knots?)\b", normalized) or re.search(r"\b(?:category|cat\.?)\s*[1-5]\b", normalized):
+            failures.append("unqualified_gdacs_wind: numeric wind and category claims require a qualified timed advisory; the RSS severity metric has unverified temporal scope")
+
+    if cyclone:
         for match in re.finditer(r"\blandfall\b", text):
             before = text[max(0, match.start() - 70):match.start()]
             after = text[match.end():match.end() + 30]

@@ -26,6 +26,8 @@ def item(*, event_id="synthetic", level="Red", published=CURRENT, modified=None,
     for name, value in {
         "title": "Synthetic event alert", "description": "Synthetic timing fixture.",
         "pubDate": published, NS + "eventtype": "FL", NS + "alertlevel": level,
+        NS + "iscurrent": "true", NS + "episodealertlevel": level,
+        NS + "episodeid": "synthetic-episode",
         NS + "eventid": event_id, NS + "country": country, NS + "fromdate": start,
         NS + "todate": end, NS + "datemodified": modified,
         "{http://www.georss.org/georss}point": "20 77",

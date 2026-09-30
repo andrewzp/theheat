@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic eligibility additions: both iscurrent fields and the earthquake
+     episode level/ID. These do not qualify a historical source notice. -->
 <rss version="2.0"
      xmlns:dc="http://purl.org/dc/elements/1.1/"
      xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#"
@@ -22,6 +24,7 @@
       <georss:point>-18.5000 37.0000</georss:point>
       <gdacs:eventtype>TC</gdacs:eventtype>
       <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
       <gdacs:alertscore>3.5</gdacs:alertscore>
       <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
       <gdacs:episodealertscore>3.5</gdacs:episodealertscore>
@@ -44,6 +47,9 @@
       <georss:point>37.24 36.45</georss:point>
       <gdacs:eventtype>EQ</gdacs:eventtype>
       <gdacs:alertlevel>Orange</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Orange</gdacs:episodealertlevel>
+      <gdacs:episodeid>synthetic-earthquake</gdacs:episodeid>
       <gdacs:alertscore>2.1</gdacs:alertscore>
       <gdacs:eventname />
       <gdacs:eventid>1002</gdacs:eventid>
