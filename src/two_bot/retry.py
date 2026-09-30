@@ -74,11 +74,10 @@ def call_with_retries(
 ) -> T:
     """Run a provider call with bounded retry and preserve the final error.
 
-    Non-retryable errors (billing/credit exhaustion and definitive 4xx) short-
-    circuit the loop and raise :class:`BudgetExhaustedError` on the
-    FIRST failure — sleeping 4 seconds before re-confirming the bill
-    is unpaid wastes runtime and floods the suppression ledger with
-    duplicate retries.
+    Billing/credit exhaustion raises :class:`BudgetExhaustedError` on the
+    first failure. Other definitive 4xx preserve the original exception and
+    stop immediately; repeating an unchanged invalid request cannot fix it.
+    Transient and unknown failures retain the bounded retry budget.
     """
     if attempts < 1:
         raise ValueError("attempts must be >= 1")
