@@ -4,7 +4,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/draft-revisions.js": "0ec65e63b612baf1bec8a613d2469cd3e68a8c1db60450cd7259fe6d5e23f6a0",
     "dashboard/lib/editorial-policy.js": "df41493de12fe26dccd7d93a9c710a6a7bb97a4871ad7e086578ba19b388f568",
     "src/commands/batch_result_journal.py": "261b6572b49e827502629ab6eecd53d613d45d66f44c7c3d8dfeb39438a45ec4",
-    "src/commands/check_journal.py": "7b16c679a209ab5a18be2ea02c6c4946ddf432f37b22d987d00c1da69c99e98d",
+    "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
@@ -46,5 +46,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "0d57e3c7771930165869ab7694d2d5355fc6b9bc5ac3776bbbd5c6c4a093ebbd"
   },
   "schema_version": 1,
-  "source_sha256": "6de5a1ffe387fa62acbb357634fbbc83967cb97208e052029ddcdae4f6829cde"
+  "source_sha256": "b35b6584c759c0fe1ccdbca5e18f2305782cf163a952dc1473a02bf8e5ece0fe"
 }

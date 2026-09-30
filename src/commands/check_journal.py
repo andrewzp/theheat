@@ -25,7 +25,7 @@ _TABLES = {
     "check_attempts": "grant_id TEXT PRIMARY KEY, check_set_id TEXT NOT NULL REFERENCES check_sets(check_set_id), stage TEXT NOT NULL CHECK(stage IN ('deterministic','safety','fact_check','critic')), binding_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), intent_id TEXT UNIQUE REFERENCES spend_intents(intent_id), recorded_at TEXT NOT NULL, UNIQUE(check_set_id,stage)",
     "check_receipts": "grant_id TEXT PRIMARY KEY REFERENCES check_attempts(grant_id), receipt_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), disposition TEXT NOT NULL CHECK(disposition IN ('passed','rejected','error','unavailable','stale')), recorded_at TEXT NOT NULL",
 }
-_BASE = {"check_set_id", "owner", "fence", "current_context"}
+_BASE = {"check_set_id", "owner", "fence", "current_context", "checker_state_sha256"}
 _REVIEW_FIELDS = {"job_id", "owner", "fence", "receipt_id", "current_context"}
 
 
@@ -128,7 +128,7 @@ def _review(connection, payload, now):
 
 def intake(connection, payload, *, now):
     validate(connection)
-    _shape(payload, _REVIEW_FIELDS | {"custom_id", "bundle", "memory"})
+    _shape(payload, _REVIEW_FIELDS | {"custom_id", "bundle", "memory", "checker_state"})
     at = _at(connection, now)
     _require(isinstance(payload["current_context"], dict), "invalid_check_context")
     for key in ("bundle", "memory"):
@@ -138,6 +138,8 @@ def intake(connection, payload, *, now):
             fingerprint(payload[key]) == payload["current_context"].get(key + "_sha256"),
             "changed_check_input",
         )
+    _require(isinstance(payload["checker_state"], dict), "missing_checker_state")
+    _encoded(payload["checker_state"], MAX_INPUT_BYTES)
     review_input = {k: payload[k] for k in _REVIEW_FIELDS}
     review = _review(connection, review_input, at)
     row = next(
@@ -164,8 +166,11 @@ def intake(connection, payload, *, now):
         bundle=payload["bundle"],
         memory=payload["memory"],
         required_stages=list(STAGES),
+        checker_state=payload["checker_state"],
+        checker_state_sha256=fingerprint(payload["checker_state"]),
+        check_date=at[:10],
     )
-    raw = _encoded(packet, 2 * MAX_INPUT_BYTES + MAX_RECEIPT_BYTES)
+    raw = _encoded(packet, 3 * MAX_INPUT_BYTES + MAX_RECEIPT_BYTES)
     identity = fingerprint(packet)
     prior = connection.execute(
         "SELECT * FROM check_sets WHERE job_id=? AND custom_id=?",
@@ -214,6 +219,10 @@ def _packet(connection, identity):
 
 
 def _current(connection, packet, payload, at):
+    spend_journal._sha(payload["checker_state_sha256"])
+    _require(
+        payload["checker_state_sha256"] == packet["checker_state_sha256"], "changed_checker_state"
+    )
     _require(isinstance(payload["current_context"], dict), "invalid_check_context")
     _require(payload["current_context"] == packet["current_context"], "changed_check_context")
     index = results.index(connection, {"job_id": packet["job_id"]}, now=at)
@@ -236,6 +245,9 @@ def _current(connection, packet, payload, at):
         and row["candidate_id"] == packet["candidate_id"],
         "check_candidate_no_longer_current",
     )
+    # The critic windows pending drafts by UTC calendar day. Even identical
+    # state bytes may select a different comparison set after midnight.
+    _require(at[:10] == packet["check_date"], "changed_checker_calendar_day")
 
 
 def _attempt(connection, identity, stage):

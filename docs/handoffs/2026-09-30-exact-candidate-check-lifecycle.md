@@ -11,7 +11,10 @@ required-check lifecycle. `SQLiteAuthority.candidate_checks` now offers `intake`
 
 Intake re-evaluates the retained result under the current fenced owner, loaded
 policy, exact evidence/memory hashes, publication epoch and useful-until deadline.
-It retains the supplied bundle/memory and exact writer result. A unique batch
+It retains the supplied bundle/memory, checker state and exact writer result.
+Checker state includes the pending-draft comparison and reuse history provided to
+the actual check functions; its hash must match on every later operation. UTC day
+rollover also invalidates readiness because the critic selects today's drafts. A unique batch
 job/item key prevents a second candidate identity from replacing the first.
 Equivalent reordered/whitespace result receipts reuse the same candidate.
 

@@ -38,6 +38,7 @@ def case(store, inputs, monkeypatch):
         custom_id=json.loads(pair[0])["requests"][0]["custom_id"],
         bundle=inputs["bundle"].to_dict(),
         memory=inputs["memory"].to_dict(),
+        checker_state=deepcopy(store.read()[1]),
     )
     result = store.candidate_checks("intake", payload, now=NOW)
     identity = dict(
@@ -45,6 +46,7 @@ def case(store, inputs, monkeypatch):
         owner="worker-one",
         fence=1,
         current_context=payload["current_context"],
+        checker_state_sha256=fingerprint(payload["checker_state"]),
     )
     return dict(
         store=store,
@@ -409,6 +411,7 @@ def test_disabled_required_stage_cannot_be_omitted_from_intake(store, inputs, mo
         custom_id=json.loads(pair[0])["requests"][0]["custom_id"],
         bundle=inputs["bundle"].to_dict(),
         memory=inputs["memory"].to_dict(),
+        checker_state=deepcopy(store.read()[1]),
     )
     with pytest.raises(checks.CheckJournalError, match="required_checks_disabled"):
         store.candidate_checks("intake", payload, now=NOW)
@@ -534,3 +537,42 @@ def test_changed_request_cannot_take_over_an_existing_grant(case):
             request=b"different request",
             now=NOW,
         )
+
+
+@pytest.mark.parametrize("field", ["drafts", "memory"])
+def test_pending_drafts_and_reuse_state_invalidate_existing_checks(case, field):
+    passed(case)
+    changed = deepcopy(case["payload"]["checker_state"])
+    changed[field] = {"changed": True}
+    digest = fingerprint(changed)
+    assert not status(case, checker_state_sha256=digest)["required_checks_completed"]
+    with pytest.raises(checks.CheckJournalError, match="changed_checker_state"):
+        start(case, checker_state_sha256=digest)
+    with pytest.raises(checks.CheckJournalError, match="conflicting_check_candidate"):
+        case["store"].candidate_checks(
+            "intake", dict(case["payload"], checker_state=changed), now=NOW
+        )
+
+
+def test_late_completion_with_changed_checker_state_is_retained_as_stale(case):
+    started = start(case)
+    changed = (started[0], started[1], dict(started[2], checker_state_sha256="b" * 64))
+    assert finish(case, changed)["disposition"] == "stale"
+    assert status(case)["stages"]["deterministic"] == "stale"
+
+
+def test_utc_rollover_changes_critic_comparison_window_before_usefulness_expiry(case):
+    passed(case)
+    at = "2026-09-30T00:00:00Z"  # Twelve hours before the plan's deadline.
+    workers.acquire(case["store"], owner="new-owner", at=at)
+    case["identity"].update(owner="new-owner", fence=2)
+    assert not status(case, at=at)["required_checks_completed"]
+    with pytest.raises(checks.CheckJournalError, match="changed_checker_calendar_day"):
+        start(case, at=at)
+
+
+def test_missing_checker_state_never_implies_empty_history(case):
+    payload = dict(case["payload"])
+    del payload["checker_state"]
+    with pytest.raises(checks.CheckJournalError, match="invalid_check_fields"):
+        case["store"].candidate_checks("intake", payload, now=NOW)
