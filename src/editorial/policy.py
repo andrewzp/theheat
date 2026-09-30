@@ -22,6 +22,7 @@ POLICY_FILES = (
     "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/memory.py", "src/two_bot/types.py",
     "src/two_bot/strict_contract.py", "src/two_bot/evidence_contract.py",
     "src/two_bot/scientific_claims.py", "src/two_bot/json_utils.py",
+    "src/two_bot/bundle_capture.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py",

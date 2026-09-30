@@ -327,6 +327,14 @@ def generate_draft(
         if not _audit_bundle_for_generation(bundle, record_kill=_record_kill, result_out=result_out):
             return None
 
+        from src.two_bot.bundle_capture import BundleCaptureError, capture_bundle
+        try:
+            checked_bundle = capture_bundle(bundle)
+        except BundleCaptureError as exc:
+            _mark_stage("bundle_retention", "kill")
+            _record_kill("bundle_retention", str(exc))
+            return None
+
         preflight = current_provider_preflight(critic_enabled=_critic_enabled())
         if result_out is not None:
             result_out["provider_preflight"] = preflight
@@ -472,6 +480,15 @@ def generate_draft(
                 return None
             _mark_stage("critic", "pass")
 
+        try:
+            if capture_bundle(bundle) != checked_bundle:
+                raise BundleCaptureError("bundle_changed_during_checks")
+        except BundleCaptureError as exc:
+            _mark_stage("bundle_retention", "kill")
+            _record_kill("bundle_retention", str(exc))
+            return None
+
+        retained_bundle = checked_bundle.payload()
         metadata: dict[str, Any] = {
             "signal_kind": bundle.signal_kind,
             "angle_chosen": writer_result.angle_chosen,
@@ -479,14 +496,17 @@ def generate_draft(
             "peer_comparison_used": writer_result.peer_comparison_used,
             "reasoning": writer_result.reasoning,
             "fact_check": fact_result.to_dict(),
-            "bundle": memory.bundle_memory_snapshot(bundle),
+            "bundle": retained_bundle,
+            # Informational scope only. All actual evidence stays in bundle,
+            # under the existing cross-runtime reviewed_bundle fingerprint.
+            "bundle_capture": {"schema_version": 1, "scope": "complete_story_bundle"},
             "writer_model": writer.WRITER_MODEL,
             "fact_checker_model": fact_check.FACT_CHECKER_MODEL,
         }
         # Bet A (A1): carry the offered impact facts + the writer's citation
         # self-report into review_context, where save_draft's decision-4 gate
         # (forced manual_only) and the dashboard reviewer read them.
-        human_impact = getattr(bundle, "human_impact", None)
+        human_impact = checked_bundle.payload().get("human_impact")
         if human_impact:
             metadata["human_impact"] = human_impact
             metadata["cited_impact"] = writer_result.cited_impact

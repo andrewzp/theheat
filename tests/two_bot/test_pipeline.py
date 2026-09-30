@@ -664,6 +664,10 @@ def test_generate_draft_defers_memory_until_publish(mock_writer, mock_extract, m
         "where": "Conakry, Guinea",
         "when": "2026-05-01",
         "event_id": "meteo_monthly_Conakry_2026-05-01",
+        "headline_metric": {"label": "forecast_high_c", "value": 35.4, "unit": "C"},
+        "historical_context": {"prior_record_c": 34.3, "prior_record_year": 2022,
+                               "archive_years": 30, "month": "May", "margin_c": 1.1},
+        "raw_signal_dump": {"source": "test", "event_id": "meteo_monthly_Conakry_2026-05-01"},
         "current_facts": [
             {"label": "city", "value": "Conakry"},
             {"label": "country", "value": "Guinea"},
