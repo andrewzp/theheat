@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.47] - 2026-09-30
+
+- Withdraw the unqualified GDACS MAP request and deliberately use the existing qualified GeoRSS alert product. Keep its limited/degraded status visible, with current-episode, publication-time, country, quarantine and scientific safeguards unchanged.
+- Stream RSS responses under the existing 2 MB decoded-body bound, decode UTF-8 incrementally without replacement, and close responses on success, size/encoding failure and interrupted reads. Close discarded streaming responses before existing header/status retries.
+- Preserve transport-only subtype witnesses and exact event identities. A successful unqualified JSON response cannot bypass RSS checks; valid zero selection cannot trigger a witness. Regenerate the dashboard policy manifest. This is not MAP recovery or measured global completeness.
+
 ## [0.9.108.46] - 2026-09-30
 
 - Retain bounded private context for new selected factual rejections: exact candidate text, complete input bundle, structured verdict, attempt and response correlation. Preserve the actual selected slate text or revised text without another model call.

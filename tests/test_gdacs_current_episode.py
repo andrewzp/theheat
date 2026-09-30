@@ -162,14 +162,13 @@ def test_gdacs_cyclone_landfall_accepts_only_existing_dated_warrant():
 @pytest.mark.parametrize("kwargs", [{"current": "false"}, {"current": None}, {"level": "Green"}])
 def test_runner_exposes_current_withholding_without_drafting_or_extra_calls(monkeypatch, kwargs):
     monkeypatch.setattr(gdacs, "_publication_clock", lambda: NOW)
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=feed(episode(**kwargs)))
     enqueue = Mock(side_effect=AssertionError("Unqualified episode must not reach a writer"))
     monkeypatch.setattr("src.orchestrator.sources.gdacs._enqueue_story_candidate", enqueue)
     run = {"sources": []}
     run_gdacs(deepcopy(DEFAULT_STATE), run)
     enqueue.assert_not_called()
-    assert len(responses.calls) == 2
+    assert [call.request.url for call in responses.calls] == [gdacs.GDACS_GEORSS_URL]
     row = run["sources"][0]
     assert row["status"] == "degraded" and row["observed"] == row["promoted"] == 0
     assert "withheld_current_alerts:1" in row["note"]

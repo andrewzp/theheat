@@ -138,7 +138,6 @@ def test_no_red_alerts_is_distinct_from_all_red_alerts_withheld():
 @responses.activate
 def test_runner_exposes_withholding_without_drafting_or_extra_source_calls(monkeypatch):
     monkeypatch.setattr(gdacs, "_publication_clock", lambda: NOW)
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=feed(item(published=None)))
     enqueue = Mock(side_effect=AssertionError("withheld alerts must not reach drafting"))
     monkeypatch.setattr("src.orchestrator.sources.gdacs._enqueue_story_candidate", enqueue)
@@ -146,7 +145,7 @@ def test_runner_exposes_withholding_without_drafting_or_extra_source_calls(monke
     run = {"sources": []}
     run_gdacs(state, run)
     enqueue.assert_not_called()
-    assert len(responses.calls) == 2
+    assert [call.request.url for call in responses.calls] == [gdacs.GDACS_GEORSS_URL]
     source = run["sources"][0]
     assert source["status"] == "degraded" and source["observed"] == source["promoted"] == 0
     assert "withheld_selected_alerts:1" in source["note"]

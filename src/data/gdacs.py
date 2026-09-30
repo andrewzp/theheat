@@ -1,11 +1,12 @@
 """GDACS (Global Disaster Alert and Coordination System) events.
 
-Free API, no auth required. Returns global cyclones, floods,
-volcanoes, droughts, and wildfires with severity ratings.
-Docs: https://www.gdacs.org/Knowledge/models.aspx
+Use the qualified, limited GeoRSS alert product. The legacy MAP JSON route is
+withdrawn pending qualification; an HTTP200 there cannot bypass RSS safeguards.
+Docs: https://www.gdacs.org/documents/2025/GDACS_MHEWS_guide.pdf
 """
 
 from dataclasses import dataclass, field
+import codecs
 from datetime import UTC, date, datetime, timedelta
 from email.utils import parsedate_to_datetime
 import math
@@ -13,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-from src.data._freshness import assert_freshness, newest_freshness_date, parse_freshness_date
+from src.data._freshness import assert_freshness, parse_freshness_date
 from src.data._http import fetch_with_retry
 from src.data._witness import tag_source_leg, with_witness
 from src.data import jtwc, nhc, usgs_quakes
@@ -21,6 +22,7 @@ from src.data.cyclones import CycloneAdvisory
 from src.data.source_status import SourceFetchError
 from src.data.usgs_quakes import SignificantEarthquakeEvent
 
+# Inactive legacy format/provenance identity only; not a production fetch route.
 GDACS_URL = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP"
 GDACS_GEORSS_URL = "https://www.gdacs.org/xml/rss.xml"
 GDACS_SUBTYPE_LEG = "subtype_witnesses"
@@ -139,6 +141,7 @@ def _events_from_features(
     min_level: int,
     severity_order: dict[str, int],
 ) -> list[GlobalDisasterEvent]:
+    """Inactive legacy JSON decoder for compatibility/replay, not admission."""
     events = []
     for feature in features:
         props = feature.get("properties", {})
@@ -468,63 +471,58 @@ def fetch_disasters(
         raise SourceFetchError(f"GDACS fetch failed: {exc}") from exc
 
 
+def _read_georss_body() -> str:
+    """Bound decompressed body consumption, including chunked/gzip responses."""
+    response = fetch_with_retry(
+        GDACS_GEORSS_URL, timeout=30, attempts=3, backoff_base=1.0, stream=True,
+    )
+    try:
+        chunks = []
+        size = 0
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        for chunk in response.iter_content(chunk_size=32_768):
+            size += len(chunk)
+            if size > MAX_GEORSS_BYTES:
+                raise SourceFetchError("GDACS GeoRSS schema drift: response exceeds body byte bound")
+            # Strict incremental decoding preserves split characters/BOM and
+            # stops at the first invalid byte instead of consuming later chunks.
+            chunks.append(decoder.decode(chunk))
+        chunks.append(decoder.decode(b"", final=True))
+        return "".join(chunks)
+    except UnicodeDecodeError:
+        raise SourceFetchError("GDACS GeoRSS schema drift: invalid UTF-8 body") from None
+    except requests.exceptions.ContentDecodingError:
+        raise SourceFetchError("GDACS GeoRSS schema drift: invalid content encoding") from None
+    finally:
+        response.close()
+
+
 def _fetch_disasters_primary(
     min_severity: str = "Red",
     *,
     strict: bool = False,
 ) -> list[GlobalDisasterEvent]:
+    """Serve the deliberate limited RSS product; never probe unqualified MAP."""
     severity_order = {"Green": 0, "Orange": 1, "Red": 2}
     min_level = severity_order.get(min_severity, 1)
-
+    diagnostics = {"configured_product": "gdacs-georss", "map_status": "withdrawn_unqualified"}
     try:
-        resp = fetch_with_retry(GDACS_URL, timeout=30, attempts=3, backoff_base=1.0)
-        data = resp.json()
-        if not isinstance(data, dict) or not isinstance(data.get("features"), list) or not data["features"]:
-            raise ValueError("GDACS JSON schema drift: missing or empty feature collection")
-        features = data["features"]
-        if any(not isinstance(row, dict) or not isinstance(row.get("properties"), dict) for row in features):
-            raise ValueError("GDACS JSON schema drift: invalid feature properties")
-        if any(not all(row["properties"].get(field) for field in ("eventtype", "eventid", "alertlevel")) for row in features):
-            raise ValueError("GDACS JSON schema drift: missing event identity or alert level")
-        events = _events_from_features(
-            features,
-            min_level=min_level,
-            severity_order=severity_order,
+        text = _read_georss_body()
+        events, _ = _events_from_georss(
+            text, min_level=min_level, severity_order=severity_order, diagnostics=diagnostics,
         )
-        if newest_date := newest_freshness_date([
-            (feature.get("properties", {}) or {}).get("fromdate")
-            or (feature.get("properties", {}) or {}).get("datemodified")
-            or (feature.get("properties", {}) or {}).get("lastupdate")
-            or (feature.get("properties", {}) or {}).get("date")
-            for feature in features
-        ]):
-            assert_freshness(newest_date, "gdacs", max_age_days=3)
-        return events
-
-    except (requests.RequestException, ValueError, KeyError) as exc:
-        try:
-            diagnostics = {"primary_error_class": type(exc).__name__}
-            resp = fetch_with_retry(
-                GDACS_GEORSS_URL, timeout=30, attempts=3, backoff_base=1.0
-            )
-            events, newest_date = _events_from_georss(
-                resp.text,
-                min_level=min_level,
-                severity_order=severity_order,
-                diagnostics=diagnostics,
-            )
-            print("[gdacs] served by georss fallback")
-        except (requests.RequestException, ValueError, ET.ParseError, SourceFetchError) as georss_exc:
-            if isinstance(georss_exc, GDACSPublicationError):
-                raise
-            if isinstance(georss_exc, (SourceFetchError, ET.ParseError)):
-                raise SourceFetchError(f"GDACS GeoRSS schema drift: {georss_exc}") from georss_exc
-            if strict:
-                raise SourceFetchError(
-                    f"GDACS fetch failed: {exc}; GeoRSS fallback failed: {georss_exc}"
-                ) from georss_exc
-            return []
-        return DisasterBatch(events, source_diagnostics=diagnostics)
+    except requests.RequestException:
+        # Preserve structured status for with_witness's transport-only decision.
+        # The public strict wrapper retains the existing SourceFetchError surface.
+        if strict:
+            raise
+        return []
+    except SourceFetchError:
+        raise
+    except (ValueError, ET.ParseError) as exc:
+        raise SourceFetchError(f"GDACS GeoRSS schema drift: {exc}") from exc
+    print("[gdacs] configured limited GeoRSS product; MAP withdrawn pending qualification")
+    return DisasterBatch(events, source_diagnostics=diagnostics)
 
 
 def _fetch_subtype_witnesses(min_severity: str) -> list[GlobalDisasterEvent]:

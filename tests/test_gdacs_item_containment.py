@@ -86,20 +86,18 @@ def test_mixed_quarantines_and_freshness_failures_are_order_independent():
 @responses.activate
 def test_all_invalid_items_fail_source_without_extra_witness_calls(monkeypatch):
     monkeypatch.setattr(gdacs, "_publication_clock", lambda: NOW)
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=feed(broken(), broken(level="Green")))
     witness = Mock(side_effect=AssertionError("Schema failure cannot purchase more source calls"))
     monkeypatch.setattr(gdacs, "_fetch_subtype_witnesses", witness)
     with pytest.raises(SourceFetchError, match="all 2 items quarantined; invalid fields: country:2"):
         gdacs.fetch_disasters(strict=True)
-    assert not witness.called and len(responses.calls) == 2
+    assert not witness.called and [call.request.url for call in responses.calls] == [gdacs.GDACS_GEORSS_URL]
 
 
 @responses.activate
 @pytest.mark.parametrize("valid_level,expected_count", [("Green", 0), ("Red", 1)])
 def test_runner_exposes_quarantine_and_only_enqueues_valid_peers(monkeypatch, valid_level, expected_count):
     monkeypatch.setattr(gdacs, "_publication_clock", lambda: NOW)
-    responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL,
                   body=feed(broken(), item(event_id="valid", level=valid_level)))
     enqueue = Mock()
@@ -107,7 +105,7 @@ def test_runner_exposes_quarantine_and_only_enqueues_valid_peers(monkeypatch, va
     monkeypatch.setattr("src.orchestrator.sources.gdacs._should_draft", lambda *a: True)
     run = {"sources": []}
     run_gdacs(deepcopy(DEFAULT_STATE), run)
-    assert enqueue.call_count == expected_count and len(responses.calls) == 2
+    assert enqueue.call_count == expected_count and [call.request.url for call in responses.calls] == [gdacs.GDACS_GEORSS_URL]
     if expected_count:
         assert enqueue.call_args.kwargs["bundle"].raw_signal_dump["source_event_id"] == "valid"
     row = run["sources"][0]

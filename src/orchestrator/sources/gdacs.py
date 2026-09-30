@@ -51,8 +51,13 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
         degraded_note = degraded_via(disasters)
         diagnostics = getattr(disasters, "source_diagnostics", None)
         if diagnostics and diagnostics.get("source_leg") == gdacs.GDACS_GEORSS_LEG:
+            product_note = (
+                "configured limited GeoRSS product; MAP withdrawn pending qualification"
+                if diagnostics.get("configured_product") == "gdacs-georss"
+                else "served via georss"
+            )
             degraded_note = (
-                f"served via georss; validated_feed_items:{diagnostics['feed_items_validated']} "
+                f"{product_note}; validated_feed_items:{diagnostics['feed_items_validated']} "
                 f"selected_alerts:{diagnostics['selected_alerts']} "
                 f"unknown_country_items:{diagnostics['unknown_country_items']}"
             )
