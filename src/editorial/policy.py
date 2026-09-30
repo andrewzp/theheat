@@ -12,6 +12,7 @@ from src.editorial.revisions import fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_FILES = (
+    "src/commands/check_journal.py", "src/commands/batch_result_journal.py",
     "src/config.py", "src/editorial/policy.py", "src/editorial/revisions.py",
     "src/orchestrator/posting.py",
     "dashboard/lib/editorial-policy.js", "dashboard/lib/draft-revisions.js",

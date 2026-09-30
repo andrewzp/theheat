@@ -290,7 +290,8 @@ def _decode(plan_raw, plan, receipt, context, at, provider_id):
     return report, semantic, items
 
 
-def review(connection, payload, *, now):
+def evaluate(connection, payload, *, now):
+    """Fresh fenced evaluation without consuming review capacity or choosing a receipt."""
     from src.two_bot import batch_contract as contract
 
     validate(connection)
@@ -339,10 +340,6 @@ def review(connection, payload, *, now):
         choices.add(choice["semantic_sha256"])
     if len(choices) > 1:
         _withhold(report, ["conflicting_complete_results"])
-    elif semantic and choice is None:
-        connection.execute(
-            "INSERT INTO batch_result_choices VALUES(?,?,?)", (job, payload["receipt_id"], semantic)
-        )
     if status["state"] != "submitted":
         _withhold(report, ["submission_not_confirmed"])
     for row in report["rows"]:
@@ -379,6 +376,21 @@ def review(connection, payload, *, now):
     )
     review_id = fingerprint(binding)
     document = dict(binding=binding, report=report, review_id=review_id, semantic_sha256=semantic)
+    return document
+
+
+def review(connection, payload, *, now):
+    document = evaluate(connection, payload, now=now)
+    binding = document["binding"]
+    job, at, review_id = binding["job_id"], binding["reviewed_at"], document["review_id"]
+    semantic = document["semantic_sha256"]
+    if (semantic and "conflicting_complete_results" not in document["report"]["context_blocked_reasons"]
+            and not connection.execute(
+                "SELECT 1 FROM batch_result_choices WHERE job_id=?", (job,)
+            ).fetchone()):
+        connection.execute(
+            "INSERT INTO batch_result_choices VALUES(?,?,?)", (job, payload["receipt_id"], semantic)
+        )
     encoded = canonical_json(document).encode()
     _require(len(encoded) <= 4_000_000, "oversized_result_review")
     sha = hashlib.sha256(encoded).hexdigest()

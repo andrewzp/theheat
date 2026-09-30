@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import batch_journal, batch_worker_journal, batch_result_journal, domain_journal, spend_journal
+from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -76,6 +76,7 @@ class SQLiteAuthority:
         allowed.update(batch_journal._TABLES)
         allowed.update(batch_worker_journal._TABLES)
         allowed.update(batch_result_journal._TABLES)
+        allowed.update(check_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -123,6 +124,7 @@ class SQLiteAuthority:
                 batch_journal.install(connection)
                 batch_worker_journal.install(connection)
                 batch_result_journal.install(connection)
+                check_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -347,6 +349,32 @@ class SQLiteAuthority:
                     result = batch_result_journal.index(connection, payload, now=now)
                 else:
                     result = batch_result_journal.review(connection, payload, now=now)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def candidate_checks(self, action: str, payload: dict, *, now: str,
+                         request: bytes | None = None, receipt: dict | None = None,
+                         before_commit: Callable[[], None] | None = None) -> dict:
+        """Trusted local check lifecycle. No provider call or publication grant."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                if action == "intake":
+                    result = check_journal.intake(connection, payload, now=now)
+                elif action == "begin":
+                    result = check_journal.begin(connection, payload, request=request, now=now)
+                elif action == "complete":
+                    result = check_journal.complete(connection, payload, receipt=receipt, now=now)
+                elif action == "status":
+                    result = check_journal.status(connection, payload, now=now)
+                else:
+                    raise check_journal.CheckJournalError("unknown_check_action")
                 if before_commit is not None:
                     before_commit()
                 connection.commit()

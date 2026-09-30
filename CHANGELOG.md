@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.35] - 2026-09-30
+
+- Add a local immutable lifecycle for exact batch candidates and mandatory deterministic, safety, fact-check and critic stages; missing, unavailable, stale or conflicting outcomes never pass.
+- Atomically bind each model-check request to one spending reservation and dispatch grant. Preserve unresolved attempts and unknown charges across crashes without buying another request.
+- Revalidate evidence, policy, epoch, deadline, worker ownership and provider-result conflicts before advancing checks; retain late receipts without creating drafts or publication approvals.
+- Include check/result code in the editorial policy identity and regenerate the dashboard manifest. Production batch integration, hosted authority and measured outcomes remain unfinished.
+
 ## [0.9.108.34] - 2026-09-29
 
 - Rotate remote rainfall fallback over canonical sampling identities instead of repeatedly selecting the first cities in CSV order. Preserve the per-run 75-city ceiling and complete local-grid extraction.

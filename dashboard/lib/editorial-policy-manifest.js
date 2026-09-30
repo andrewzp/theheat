@@ -3,6 +3,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
   "files": {
     "dashboard/lib/draft-revisions.js": "0ec65e63b612baf1bec8a613d2469cd3e68a8c1db60450cd7259fe6d5e23f6a0",
     "dashboard/lib/editorial-policy.js": "df41493de12fe26dccd7d93a9c710a6a7bb97a4871ad7e086578ba19b388f568",
+    "src/commands/batch_result_journal.py": "261b6572b49e827502629ab6eecd53d613d45d66f44c7c3d8dfeb39438a45ec4",
+    "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
@@ -10,7 +12,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "067043e5145437aa62eb3fd0f7669cac1d1c3b9dac935f18fb7e4cb01fc77402",
+    "src/editorial/policy.py": "9a9c86e310227f0a351dc5519bab688ebe017ac9ea0ca087b57e7dd3295460c8",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
@@ -44,5 +46,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "0d57e3c7771930165869ab7694d2d5355fc6b9bc5ac3776bbbd5c6c4a093ebbd"
   },
   "schema_version": 1,
-  "source_sha256": "0cd29cc837e1aab29240154fd9432cde06a6fe3eca09754bf785afa9780b5708"
+  "source_sha256": "b35b6584c759c0fe1ccdbca5e18f2305782cf163a952dc1473a02bf8e5ece0fe"
 }
