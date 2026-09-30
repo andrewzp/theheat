@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.40] - 2026-09-30
+
+- Use GDACS RSS publication and update timestamps for freshness, independently of event start and end dates. A future event window cannot freshen an old feed; an ongoing event can remain eligible when its source update is current.
+- Withhold selected alerts with missing, invalid, future or stale update times before drafting. Preserve counts and reasons even when all selected alerts are withheld; keep independently valid alerts available for existing checks.
+- Preserve explicit unknown cyclone countries and separate source timing from observed intensity, landfall and impact claims. Bind the source rule to the editorial policy manifest. Primary JSON timing remains separate work.
+
 ## [0.9.108.39] - 2026-09-30
 
 - Retain exact graphic assets and joint-review decisions atomically in the separate experimental local command authority. Recheck the authoritative draft and reviewer role after obtaining the write lock.

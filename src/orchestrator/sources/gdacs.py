@@ -56,6 +56,10 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
                 f"selected_alerts:{diagnostics['selected_alerts']} "
                 f"unknown_country_items:{diagnostics['unknown_country_items']}"
             )
+            if diagnostics.get("withheld_selected_alerts"):
+                degraded_note += (
+                    f" withheld_selected_alerts:{diagnostics['withheld_selected_alerts']}"
+                )
         _record_source_run(
             current_run, bot_state, "gdacs", gdacs_start,
             status="degraded" if degraded_note else "success",

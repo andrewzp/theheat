@@ -24,7 +24,8 @@ POLICY_FILES = (
     "src/two_bot/scientific_claims.py", "src/two_bot/json_utils.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
-    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/orchestrator/sources/open_meteo.py",
+    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py",
+    "src/orchestrator/sources/open_meteo.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
 FLAG_KEYS = {"critic_enabled", "critic_revise_enabled", "writer_samples", "safety_llm_enabled"}
