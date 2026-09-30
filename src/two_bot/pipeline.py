@@ -213,6 +213,7 @@ def _check_safety_honesty_fact(
     record_kill: Callable[[str, str], None],
     mark_stage: Callable[[str, str], None] | None = None,
     result_out: dict | None = None,
+    candidate_attempt: int = 1,
 ) -> FactCheckResult | None:
     forbidden_hit = _forbidden_claim_violation(tweet, bundle)
     if forbidden_hit is not None:
@@ -234,6 +235,9 @@ def _check_safety_honesty_fact(
 
     # Existing deterministic rules can reject unsupported/reused text without
     # buying safety or factual-model work. They never grant a completed pass.
+    from src.two_bot.rejected_candidate import capture_fact_input, capture_fact_rejection
+    captured_input = capture_fact_input(bundle) if result_out is not None else None
+    fact_origin = "local_precheck"
     fact_result = fact_check.local_rejection(tweet, [], bundle, state)
     if fact_result is None:
         safety_passed, safety_reason = run_safety_pipeline(tweet)
@@ -245,6 +249,7 @@ def _check_safety_honesty_fact(
             record_kill("safety", safety_reason or "unknown")
             return None
 
+        fact_origin = "required_checker"
         fact_result = fact_check.fact_check(tweet, [], bundle, state)
     if not fact_result.passed:
         failures_str = "; ".join(fact_result.failures)
@@ -256,6 +261,11 @@ def _check_safety_honesty_fact(
             result_out.setdefault("model_diagnostics", []).append(
                 model_failure_snapshot("fact_check", fact_result.raw_response)
             )
+            if captured_input is not None:
+                result_out["rejected_candidate"] = capture_fact_rejection(
+                    tweet, bundle, captured_input, fact_result,
+                    origin=fact_origin, attempt=candidate_attempt,
+                )
         if mark_stage is not None:
             mark_stage("fact_check", "kill")
         record_kill("fact_check", failures_str or "unknown")
@@ -304,7 +314,9 @@ def generate_draft(
         # A caller may reuse its telemetry dict. A prior model verdict must
         # never authorize caching a later style, transport or contract failure.
         for field in ("cacheable", "kill_scope", "kill_code", "negative_cache_recorded",
-                      "negative_cache_input_sha", "negative_cache_epoch", "provider_preflight"):
+                      "negative_cache_input_sha", "negative_cache_epoch", "provider_preflight",
+                      "kill_stage", "kill_reason", "model_diagnostics", "evidence_readiness",
+                      "rejected_candidate"):
             result_out.pop(field, None)
         result_out["stage_outcomes"] = stage_outcomes
 
@@ -460,6 +472,7 @@ def generate_draft(
                     record_kill=_record_kill,
                     mark_stage=_mark_stage,
                     result_out=result_out,
+                    candidate_attempt=2,
                 )
                 if fact_result is None:
                     return None
