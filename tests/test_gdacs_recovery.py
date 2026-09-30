@@ -1,5 +1,6 @@
 """Bounded GDACS GeoRSS recovery from source-explicit unknown cyclone country."""
 from copy import deepcopy
+from datetime import UTC, datetime
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -14,6 +15,12 @@ from src.state import DEFAULT_STATE
 
 SOURCE = Path(__file__).parent / "fixtures/gdacs_georss_unknown_country.xml"
 LEVELS = {"Green": 0, "Orange": 1, "Red": 2}
+
+
+@pytest.fixture(autouse=True)
+def fixed_publication_clock(monkeypatch):
+    # Source/fixture date screens use an explicit clock, not a production pass.
+    monkeypatch.setattr(gdacs, "_publication_clock", lambda: datetime(2026, 9, 9, tzinfo=UTC))
 
 
 def parsed(text=None, level=2):
@@ -41,7 +48,10 @@ def test_explicit_unknown_country_in_green_cyclone_does_not_block_red_alert():
     assert str(newest) == "2026-09-09"
     assert diagnostics == {"source_leg": "georss", "feed_items_validated": 2,
         "alert_counts": {"Green": 1, "Orange": 0, "Red": 1}, "selected_alerts": 1,
-        "unknown_country_items": 1, "status": "valid_alerts"}
+        "unknown_country_items": 1, "status": "valid_alerts",
+        "selected_before_freshness": 1, "withheld_selected_alerts": 0,
+        "withheld_by_reason": {"missing": 0, "invalid": 0, "future": 0, "stale": 0},
+        "publication_time": "2026-09-09T00:00:00Z", "publication_clock": "channel_pubDate"}
     all_events, _, _ = parsed(level=0)
     assert all_events[0].name == "TWENTYTHREE-26" and all_events[0].country == ""
 
@@ -84,7 +94,6 @@ def test_malformed_xml_and_parser_bounds_are_not_empty_success(monkeypatch):
 @responses.activate
 @pytest.mark.parametrize("json_payload", [{}, [], {"features": []}, {"features": [{}]}, {"features": [{"properties": {}}]}])
 def test_invalid_primary_can_recover_from_valid_same_provider_feed(json_payload, monkeypatch):
-    monkeypatch.setattr(gdacs, "assert_freshness", lambda *args, **kwargs: None)
     responses.add(responses.GET, gdacs.GDACS_URL, json=json_payload)
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=SOURCE.read_text())
     events = gdacs.fetch_disasters(strict=True)
@@ -110,8 +119,6 @@ def test_zero_selected_alerts_keeps_validated_feed_and_fallback_telemetry(monkey
     body = SOURCE.read_text().replace("<gdacs:alertlevel>Red</gdacs:alertlevel>", "<gdacs:alertlevel>Orange</gdacs:alertlevel>")
     responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=body)
-    from datetime import date
-    monkeypatch.setattr(gdacs, "assert_freshness", lambda value, name, max_age_days: assert_freshness(value, name, max_age_days, today=date(2026, 9, 9)))
     state = deepcopy(DEFAULT_STATE)
     run = {"sources": []}
     run_gdacs(state, run)
@@ -126,10 +133,9 @@ def test_zero_selected_alerts_keeps_validated_feed_and_fallback_telemetry(monkey
 
 @responses.activate
 def test_stale_valid_fallback_still_fails_freshness(monkeypatch):
-    from datetime import date
     responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=SOURCE.read_text())
-    monkeypatch.setattr(gdacs, "assert_freshness", lambda value, name, max_age_days: assert_freshness(value, name, max_age_days, today=date(2026, 10, 1)))
+    monkeypatch.setattr(gdacs, "_publication_clock", lambda: datetime(2026, 10, 1, tzinfo=UTC))
     with pytest.raises(SourceFetchError, match="stale data"):
         gdacs._fetch_disasters_primary(strict=True)
 

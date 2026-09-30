@@ -6,7 +6,8 @@ Docs: https://www.gdacs.org/Knowledge/models.aspx
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
+from email.utils import parsedate_to_datetime
 import math
 import xml.etree.ElementTree as ET
 
@@ -26,6 +27,33 @@ GDACS_SUBTYPE_LEG = "subtype_witnesses"
 GDACS_GEORSS_LEG = "georss"
 MAX_GEORSS_BYTES = 2_000_000
 MAX_GEORSS_ITEMS = 1_000
+MAX_PUBLICATION_AGE_DAYS = 3
+
+
+class GDACSPublicationError(SourceFetchError):
+    """Source publication cannot establish freshness; distinct from XML shape."""
+
+
+def _publication_clock() -> datetime:
+    return datetime.now(UTC)
+
+
+def _publication_time(value: str, clock: datetime) -> tuple[datetime | None, str | None]:
+    if not isinstance(value, str) or not value.strip():
+        return None, "missing"
+    try:
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            parsed = parsedate_to_datetime(value.strip())
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            return None, "invalid"
+        parsed = parsed.astimezone(UTC)
+        if parsed > clock + timedelta(minutes=5):
+            return None, "future"
+        return parsed, None
+    except (ValueError, TypeError, OverflowError, IndexError):
+        return None, "invalid"
 
 # Event types GDACS tracks
 EVENT_TYPES = {
@@ -212,25 +240,43 @@ def _events_from_georss(
     min_level: int,
     severity_order: dict[str, int],
     diagnostics: dict | None = None,
+    now: datetime | None = None,
 ) -> tuple[list[GlobalDisasterEvent], date | None]:
+    clock = _publication_clock() if now is None else now
+    if not isinstance(clock, datetime) or clock.tzinfo is None or clock.utcoffset() is None:
+        raise GDACSPublicationError("GDACS GeoRSS requires an aware source-check clock")
+    clock = clock.astimezone(UTC)
     if len(text.encode("utf-8")) > MAX_GEORSS_BYTES:
         raise SourceFetchError("GDACS GeoRSS schema drift: response exceeds parser byte bound")
     root = ET.fromstring(text.lstrip("\ufeff"))
     channel = root.find("channel")
     items = channel.findall("item") if channel is not None else []
-    if root.tag != "rss" or not items or len(items) > MAX_GEORSS_ITEMS:
+    if root.tag != "rss" or channel is None or not items or len(items) > MAX_GEORSS_ITEMS:
         raise SourceFetchError("GDACS GeoRSS schema drift: missing or invalid bounded RSS item collection")
     events: list[GlobalDisasterEvent] = []
-    payload_dates: list[date | datetime | int | float | str | None] = []
+    publication_dates: list[datetime] = []
+    channel_publication = channel.find("pubDate")
+    channel_time = None
+    if channel_publication is not None:
+        channel_time, issue = _publication_time(channel_publication.text or "", clock)
+        if issue:
+            raise GDACSPublicationError("GDACS GeoRSS channel publication is " + issue)
     alert_counts = {level: 0 for level in severity_order}
     unknown_country_count = 0
+    selected_before_freshness = 0
+    withheld = dict.fromkeys(("missing", "invalid", "future", "stale"), 0)
     for item in items:
         event_type_code = _xml_text(item, "gdacs:eventtype")
         alert_level = _xml_text(item, "gdacs:alertlevel")
         gdacs_id = _xml_text(item, "gdacs:eventid")
         country = _xml_text(item, "gdacs:country")
         from_date = _xml_text(item, "gdacs:fromdate")
-        payload_dates.append(from_date or _xml_text(item, "gdacs:todate"))
+        modified = _xml_text(item, "gdacs:datemodified")
+        published = _xml_text(item, "pubDate")
+        update_kind = "datemodified" if modified else "pubDate"
+        updated, update_issue = _publication_time(modified or published, clock)
+        if updated is not None:
+            publication_dates.append(updated)
         description = _xml_text(item, "description")
         title = _xml_text(item, "title")
         name = _xml_text(item, "gdacs:eventname") or title
@@ -258,6 +304,14 @@ def _events_from_georss(
         unknown_country_count += int(country_unknown)
         if severity_order[alert_level] < min_level:
             continue
+        selected_before_freshness += 1
+        if updated is not None and (clock.date() - updated.date()).days > MAX_PUBLICATION_AGE_DAYS:
+            update_issue = "stale"
+        if update_issue is not None:
+            withheld[update_issue] += 1
+            continue
+        # No event-window or retrieval-time fallback can reach this boundary.
+        assert updated is not None
 
         severity_value = _xml_attr_float(item, "gdacs:severity", "value")
         severity_unit = _xml_attr_text(item, "gdacs:severity", "unit")
@@ -285,7 +339,9 @@ def _events_from_georss(
             source_provenance={
                 "eventtype": event_type_code, "fromdate": from_date,
                 "todate": _xml_text(item, "gdacs:todate"),
-                "datemodified": _xml_text(item, "gdacs:datemodified"),
+                "datemodified": modified, "published_at": published,
+                "source_update_kind": update_kind,
+                "source_updated_at": updated.isoformat().replace("+00:00", "Z"),
                 "report_link": _xml_text(item, "link"),
                 "source_country_known": bool(country),
                 "coordinates": _xml_text(item, "georss:point") or {
@@ -294,14 +350,27 @@ def _events_from_georss(
                 },
             },
         ))
+    feed_time = channel_time or max(publication_dates, default=None)
+    if feed_time is None:
+        raise GDACSPublicationError("GDACS GeoRSS has no usable source publication timestamp")
+    try:
+        assert_freshness(feed_time.date(), "gdacs", MAX_PUBLICATION_AGE_DAYS, today=clock.date())
+    except SourceFetchError as exc:
+        raise GDACSPublicationError(str(exc)) from exc
     if diagnostics is not None:
         diagnostics.update(
             source_leg=GDACS_GEORSS_LEG, feed_items_validated=len(items),
             alert_counts=alert_counts, selected_alerts=len(events),
             unknown_country_items=unknown_country_count,
-            status="valid_alerts" if events else "valid_no_qualifying_alerts",
+            selected_before_freshness=selected_before_freshness,
+            withheld_selected_alerts=sum(withheld.values()),
+            withheld_by_reason=withheld,
+            publication_time=feed_time.isoformat().replace("+00:00", "Z"),
+            publication_clock="channel_pubDate" if channel_time is not None else "item_update",
+            status=("withheld_selected_alerts" if any(withheld.values()) else
+                    "valid_alerts" if events else "valid_no_qualifying_alerts"),
         )
-    return events, newest_freshness_date(payload_dates)
+    return events, feed_time.date()
 
 
 def fetch_disasters(
@@ -378,6 +447,8 @@ def _fetch_disasters_primary(
             )
             print("[gdacs] served by georss fallback")
         except (requests.RequestException, ValueError, ET.ParseError, SourceFetchError) as georss_exc:
+            if isinstance(georss_exc, GDACSPublicationError):
+                raise
             if isinstance(georss_exc, (SourceFetchError, ET.ParseError)):
                 raise SourceFetchError(f"GDACS GeoRSS schema drift: {georss_exc}") from georss_exc
             if strict:
@@ -385,8 +456,6 @@ def _fetch_disasters_primary(
                     f"GDACS fetch failed: {exc}; GeoRSS fallback failed: {georss_exc}"
                 ) from georss_exc
             return []
-        if newest_date:
-            assert_freshness(newest_date, "gdacs", max_age_days=3)
         return DisasterBatch(events, source_diagnostics=diagnostics)
 
 

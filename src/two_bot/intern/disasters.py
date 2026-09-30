@@ -88,6 +88,15 @@ def build_global_disaster_bundle(disaster: GlobalDisasterEvent) -> StoryBundle:
             current_facts.append({"label": label, "value": value})
     if disaster.source_provenance.get("source_country_known") is False:
         current_facts.append({"label": "claim_limit", "value": "GDACS reports affected country as unknown; do not infer a country or landfall from the cyclone position."})
+    if disaster.source_product == "gdacs-georss":
+        for label in ("source_updated_at", "source_update_kind", "fromdate", "todate"):
+            value = disaster.source_provenance.get(label)
+            if value:
+                current_facts.append({"label": label, "value": value})
+        current_facts.append({
+            "label": "claim_limit",
+            "value": "Source publication time and event window are different. A fresh alert does not establish observed intensity, landfall or confirmed impacts.",
+        })
     if disaster.source_leg == "subtype_witnesses":
         current_facts.extend([
             {"label": "data_source", "value": "USGS/NHC/JTWC subtype witness"},

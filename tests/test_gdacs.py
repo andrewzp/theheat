@@ -154,7 +154,8 @@ class TestFetchDisasters:
 
     @responses.activate
     def test_gdacs_falls_back_to_georss_on_json_failure(self, capsys, monkeypatch):
-        monkeypatch.setattr("src.data.gdacs.assert_freshness", lambda *args, **kwargs: None)
+        from datetime import UTC, datetime
+        monkeypatch.setattr("src.data.gdacs._publication_clock", lambda: datetime(2026, 6, 12, tzinfo=UTC))
         responses.add(responses.GET, GDACS_URL, status=500, body="down")
         responses.add(
             responses.GET,
