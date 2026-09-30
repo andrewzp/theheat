@@ -534,37 +534,54 @@ def _fetch_subtype_witnesses(min_severity: str) -> list[GlobalDisasterEvent]:
     """
     errors: list[str] = []
     events: list[GlobalDisasterEvent] = []
+    legs: dict[str, dict] = {}
+    severity_order = {"Green": 0, "Orange": 1, "Red": 2}
+    min_level = severity_order.get(min_severity, 1)
+
+    def record_leg(name: str, received: list[GlobalDisasterEvent]) -> None:
+        selected = [event for event in received if severity_order.get(event.severity, 0) >= min_level]
+        events.extend(selected)
+        # Counts are supplying-leg records, not distinct global events. Two
+        # cyclone feeds can report the same storm; do not imply global recall.
+        legs[name] = {"status": "success", "records_received": len(received),
+                      "records_selected": len(selected)}
+
+    def record_failure(name: str, exc: Exception) -> None:
+        errors.append(f"{name}: {exc}")
+        # An unavailable feed is not evidence that it had zero events.
+        legs[name] = {"status": "failed", "records_received": None, "records_selected": None}
 
     try:
-        events.extend(
+        record_leg("usgs_quakes", [
             _quake_to_gdacs_event(quake)
             for quake in usgs_quakes.fetch_significant_earthquakes(strict=True)
-        )
+        ])
     except (requests.RequestException, SourceFetchError) as exc:
-        errors.append(f"usgs_quakes: {exc}")
+        record_failure("usgs_quakes", exc)
 
     for source_name, fetch_fn in (
         ("nhc", nhc.fetch_active_cyclones),
         ("jtwc", jtwc.fetch_active_cyclones),
     ):
         try:
-            events.extend(_cyclone_to_gdacs_event(advisory) for advisory in fetch_fn(strict=True))
+            record_leg(source_name, [_cyclone_to_gdacs_event(advisory) for advisory in fetch_fn(strict=True)])
         except (requests.RequestException, SourceFetchError) as exc:
-            errors.append(f"{source_name}: {exc}")
+            record_failure(source_name, exc)
 
-    severity_order = {"Green": 0, "Orange": 1, "Red": 2}
-    min_level = severity_order.get(min_severity, 1)
-    filtered = [
-        event for event in events
-        if event is not None and severity_order.get(event.severity, 0) >= min_level
-    ]
-    if filtered:
-        return tag_source_leg(filtered, GDACS_SUBTYPE_LEG)
-    if errors and len(errors) >= 3:
+    if len(errors) == 3:
         raise SourceFetchError(
             "GDACS subtype witnesses failed: " + "; ".join(errors)
         )
-    return []
+    return DisasterBatch(tag_source_leg(events, GDACS_SUBTYPE_LEG), source_diagnostics={
+        "source_leg": GDACS_SUBTYPE_LEG,
+        "configured_product": "gdacs-subtype-witnesses",
+        "primary_product": "gdacs-georss",
+        "primary_status": "unavailable",
+        "scope": ["Earthquake", "Tropical Cyclone"],
+        "status": "partial_witness_failure" if errors else "witnesses_completed",
+        "legs": legs,
+        "selected_alerts": len(events),
+    })
 
 
 def _quake_to_gdacs_event(quake: SignificantEarthquakeEvent) -> GlobalDisasterEvent:
