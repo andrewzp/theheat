@@ -7,7 +7,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/check_execution_journal.py": "4abdf688a7b8aeccc1d0ae083f47700e67b26102411e5a9d601fd2472101ad39",
     "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
-    "src/data/gdacs.py": "90b7561aa66c1fdba7c99d12b972161e5e8594d9fe8c59d01ca0b43d3628a4fd",
+    "src/data/gdacs.py": "938743ff4b95821227e8ec53ededd3973e5463da49ab8c5fe9843b476dcfe814",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
     "src/data/open_meteo.py": "58fa0a9135a526370e2daa3a832b290203615187d165b47d95ac05025523d508",
@@ -51,5 +51,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "3b23962c14c7eb659977ddbb7ec5db484e52399cea58c61797d2c55e5361c600"
+  "source_sha256": "31b5a987b3a03661d432defc1221d543d8b2ace501edb1730a10c19479db6666"
 }

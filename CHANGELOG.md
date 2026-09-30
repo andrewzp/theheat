@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.42] - 2026-09-30
+
+- Quarantine GDACS RSS items that fail core-field validation without discarding independently valid alerts. Invalid items never contribute events or feed freshness.
+- Report total, validated and quarantined item counts, bounded field failures, rejected severe alerts and unknown severity. A partial feed remains visible even when no draft candidates survive.
+- Keep empty, all-invalid, oversized and malformed feeds as source failures, preserve publication-time checks and explicit unknown cyclone countries, and regenerate the editorial policy manifest. Source endpoints and request counts are unchanged.
+
 ## [0.9.108.41] - 2026-09-30
 
 - Reject explicit single/shared weather-event assertions when a draft has only related-signal facts, with no relationship warrant. Cover bounded one/single/same event phrasing, whitespace and Unicode hyphens before paid checks.

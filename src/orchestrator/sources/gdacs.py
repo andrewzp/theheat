@@ -60,6 +60,8 @@ def run_gdacs(bot_state: BotState, current_run: dict | None) -> None:
                 degraded_note += (
                     f" withheld_selected_alerts:{diagnostics['withheld_selected_alerts']}"
                 )
+            if diagnostics.get("quarantined_items"):
+                degraded_note += f" quarantined_items:{diagnostics['quarantined_items']}"
         _record_source_run(
             current_run, bot_state, "gdacs", gdacs_start,
             status="degraded" if degraded_note else "success",
