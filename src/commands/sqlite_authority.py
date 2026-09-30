@@ -16,6 +16,7 @@ import sqlite3
 from typing import Any
 
 from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
+from src.commands import media_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -78,6 +79,7 @@ class SQLiteAuthority:
         allowed.update(batch_result_journal._TABLES)
         allowed.update(check_journal._TABLES)
         allowed.update(check_execution_journal._TABLES)
+        allowed.update(media_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -127,6 +129,7 @@ class SQLiteAuthority:
                 batch_result_journal.install(connection)
                 check_journal.install(connection)
                 check_execution_journal.install(connection)
+                media_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -405,6 +408,50 @@ class SQLiteAuthority:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def retain_media_review(
+        self, draft_id: str, request: dict, *, principal: Principal,
+        resolve_principal: Callable[[str], Principal | None], assets: dict[str, bytes],
+        now: datetime, before_commit: Callable[[], None] | None = None,
+    ) -> dict:
+        """Retain one exact private package, with role resolution under the lock.
+
+        The caller authenticates ingress and supplies a bounded trusted resolver.
+        Neither this local method nor constructing a Principal authenticates a
+        person. Only evidence storage changes; no draft, approval or intent does.
+        """
+        if not isinstance(principal, Principal):
+            raise CommandError("invalid_principal", "A trusted ingress principal is required")
+        ingress = Principal(principal.subject, principal.role, principal.authentication_context)
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_tables(connection)
+                self._check_environment(connection)
+                resolved = resolve_principal(ingress.subject)
+                if not isinstance(resolved, Principal) or resolved.subject != ingress.subject:
+                    raise CommandError("forbidden", "Reviewer identity is unavailable at retention")
+                actor = Principal(ingress.subject, resolved.role, ingress.authentication_context)
+                authorize(actor, "record_review")
+                result = media_journal.retain(
+                    connection, draft_id, request, principal=actor, assets=assets,
+                    recorded_at=utc_text(now),
+                )
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def read_media_review(self, review_sha256: str) -> dict:
+        """Read exact historical evidence only; current acceptance is not inferred."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_tables(connection)
+            self._check_environment(connection)
+            return media_journal.read(connection, review_sha256)
 
     def batch_status(self, job_id: str) -> dict:
         with closing(self._connect()) as connection:
