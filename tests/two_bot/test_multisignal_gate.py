@@ -7,11 +7,15 @@ rejected in CODE, not just the prompt.
 
 from __future__ import annotations
 
+import pytest
+
 from src.two_bot.intern import build_fire_bundle
 from src.two_bot.pipeline import _cross_signal_violation, generate_draft
 from src.two_bot.types import CriticResult, FactCheckResult, RelatedSignal, WriterResult
 
 from tests.two_bot.conftest import _fire_event, _state_with_memory
+
+pytestmark = pytest.mark.usefixtures("configured_pipeline_providers")
 
 
 def _related():
@@ -98,7 +102,7 @@ class TestPipelineIntegration:
 
     def test_bare_enumeration_passes_gate(self, mock_writer, mock_fact_check, mock_critic, mock_safety):
         mock_writer.return_value = _writer(
-            "Mali's biggest fire this week. The same week, a drought also struck.")
+            "A thermal detection near Mali. The same week, a drought also struck.")
         mock_fact_check.return_value = FactCheckResult(passed=True, failures=[], raw_response="ok", extracted_claims=[])
         mock_critic.return_value = CriticResult(passed=True, kill_reason=None, raw_response="pass")
         bundle = build_fire_bundle(_fire_event())

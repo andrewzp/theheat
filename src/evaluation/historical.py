@@ -28,12 +28,12 @@ LIMITS = [
     "Targeted retained failures; not representative tweets or worldwide event coverage.",
     "No provider calls, incumbent generation, blind editorial judgments, reach or cost-lift measurement.",
     "Exact-text probes use synthetic structural evidence, not recovered complete historical input packets.",
-    "Pipeline probes inject writer output and a completed safety-model result locally; neither model is evaluated.",
+    "Pipeline probes inject configured-provider preflight, writer output and completed safety locally; no provider or model is evaluated.",
     "A control reaching the checker boundary still requires verification; it is not publishable gold.",
     "Local lexical checks are bounded and do not establish complete semantic or scientific correctness.",
 ]
 RUNTIME_FILES = (
-    "src/evaluation/historical.py", "src/two_bot/pipeline.py", "src/two_bot/fact_check.py",
+    "src/evaluation/historical.py", "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/fact_check.py",
     "src/two_bot/scientific_claims.py", "src/two_bot/strict_contract.py",
     "src/two_bot/evidence_contract.py", "src/two_bot/types.py", "src/voice/safety.py",
     "src/data/temperature_evidence.py", "src/data/ghcn.py", "src/data/ghcn_format.py",
@@ -157,6 +157,7 @@ def run_probe(tweet, spec, *, pipeline_mode=False):
             if pipeline_mode:
                 injected = WriterResult(tweet, None, "offline_probe", None, None, "Injected offline text.")
                 with patch.object(pipeline, "_writer_samples", return_value=1), \
+                     patch.object(pipeline, "current_provider_preflight", return_value={"status": "configured_unverified", "blocked_stages": [], "provider_access_verified": False, "funding_verified": False}), \
                      patch.object(pipeline.writer, "write_tweet", return_value=injected), \
                      patch.object(safety, "check_llm", return_value=(True, None)):
                     result = pipeline.generate_draft(bundle, {}, result_out=telemetry)
@@ -174,6 +175,7 @@ def run_probe(tweet, spec, *, pipeline_mode=False):
         except VerificationRequired:
             outcome = "verification_required"
     return {"outcome": outcome, "observed_codes": codes, "provider_calls": 0,
+            "provider_preflight_evaluated": False,
             "safety_model_evaluated": False,
             "checker_boundary_reached": calls["checker_boundary_reached"],
             "unexpected_boundary_attempts": calls["unexpected_boundary_attempts"],

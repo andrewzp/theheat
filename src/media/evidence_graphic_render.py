@@ -85,24 +85,50 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
     colors = {key: HexColor(value) for key, value in {"bg": BACKGROUND, "text": TEXT, "muted": MUTED, "warm": WARM, "grid": GRID}.items()}
     drawing.add(Rect(0, 0, WIDTH, HEIGHT, fillColor=colors["bg"], strokeColor=None))
 
-    def text(x, y, value, size=24, color="text", anchor="start"):
+    def text(x, y, value, size=40, color="text", anchor="start"):
         width = pdfmetrics.stringWidth(value, "TheHeatMono", size)
-        if width > 1090 or (anchor == "start" and x + width > WIDTH - 30) or (anchor == "end" and x - width < 30):
+        if (size < 40 or width > 1088 or y < 38 or y + size > HEIGHT - 20
+                or (anchor == "start" and x + width > WIDTH - 40)
+                or (anchor == "end" and x - width < 40)):
             raise ValueError("Graphic label exceeds readable template bounds; revise label without clipping")
         drawing.add(String(x, y, value, fontName="TheHeatMono", fontSize=size, fillColor=colors[color], textAnchor=anchor))
 
-    text(56, 622, "THEHEAT / DATA", 22, "muted")
-    text(1144, 622, "SYNTHETIC · PRIVATE PREVIEW" if evidence["synthetic"] else "LOCAL REVIEW PREVIEW", 20, "warm", "end")
-    text(56, 565, chart_title(template, evidence), 42)
-    text(56, 520, evidence["location"], 27, "muted")
+    def block(y, value, *, size=40, color="muted", bottom=40):
+        # Wrap at actual font widths; dates/words are never truncated or shrunk.
+        line = ""
+        for word in value.split():
+            candidate = (line + " " + word).strip()
+            if pdfmetrics.stringWidth(candidate, "TheHeatMono", size) > 1088:
+                if not line:
+                    raise ValueError("Graphic word exceeds readable width")
+                if y < bottom:
+                    raise ValueError("Graphic qualifications exceed readable template capacity")
+                text(56, y, line, size, color)
+                y -= size + 12
+                line = word
+            else:
+                line = candidate
+        if line:
+            if y < bottom:
+                raise ValueError("Graphic qualifications exceed readable template capacity")
+            text(56, y, line, size, color)
+            y -= size + 12
+        return y
+
+    text(56, 1418, "THEHEAT", 48)
+    text(1144, 1418, "SYNTHETIC DATA" if evidence["synthetic"] else "REVIEW PREVIEW", 40, "warm", "end")
+    text(56, 1312, chart_title(template, evidence), 48 if template == "temperature_trajectory" else 62)
+    location_bottom = block(1245, evidence["location"], color="text", bottom=1190)
     as_of_label = datetime.fromisoformat(evidence["evidence_as_of"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-    text(56, 484, "As of " + as_of_label, 20, "muted")
+    text(56, location_bottom - 12, "As of " + as_of_label, 40, "muted")
+    if template == "temperature_comparator":
+        text(56, location_bottom - 76, VARIABLE_LABELS[evidence["variable"]], 40, "muted")
 
     plot = LinePlot()
-    plot.x, plot.y, plot.width, plot.height = 110, 217, 1000, 250
+    plot.x, plot.y, plot.width, plot.height = 135, 755, 940, 280
     plot.strokeColor = None
     plot.xValueAxis.labels.fontName = plot.yValueAxis.labels.fontName = "TheHeatMono"
-    plot.xValueAxis.labels.fontSize = plot.yValueAxis.labels.fontSize = 23
+    plot.xValueAxis.labels.fontSize = plot.yValueAxis.labels.fontSize = 40
     plot.xValueAxis.labels.fillColor = plot.yValueAxis.labels.fillColor = colors["muted"]
     plot.xValueAxis.strokeColor = plot.yValueAxis.strokeColor = colors["grid"]
     plot.xValueAxis.tickDown = 8
@@ -119,7 +145,7 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
     if template == "temperature_comparator":
         baseline, current = evidence["baseline"], points[0]
         prior = baseline["point"]
-        plot.x, plot.width, plot.height = 378, 704, 205
+        plot.x, plot.width, plot.height = 555, 515, 250
         plot.yValueAxis.visible = False
         plot.yValueAxis.visibleGrid = False
         plot.yValueAxis.valueMin, plot.yValueAxis.valueMax = -0.5, 1.5
@@ -132,28 +158,22 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         plot.joinedLines = False
         for index, kind in enumerate((prior["evidence_type"], current["evidence_type"])):
             marker = makeMarker("Diamond" if kind == "forecast" else "FilledCircle")
-            marker.size = 22
+            marker.size = 30
             marker.strokeColor = colors["warm"] if index else colors["text"]
             marker.fillColor = colors["bg"] if kind == "forecast" else marker.strokeColor
             marker.strokeWidth = 3
             plot.lines[index].symbol = marker
-        text(56, 373, current["evidence_type"].capitalize(), 25)
-        text(56, 337, f"{current['value']:g}{evidence['unit']}", 35, "warm")
-        text(56, 270, prior["evidence_type"].capitalize() + " comparator", 22)
-        text(56, 234, f"{prior['value']:g}{evidence['unit']}", 35)
-        text(56, 203, point_label(prior, evidence)[:10], 20, "muted")
-        text(1082, 459, f"Difference {current['value'] - prior['value']:+g}{evidence['unit']}", 27, "warm", "end")
-        text(56, 416, VARIABLE_LABELS[evidence["variable"]] + " / " + evidence["scope"], 20, "muted")
-        text(1120, 170, evidence["unit"], 24, "muted", "end")
+        text(56, 951, current["evidence_type"].capitalize(), 40)
+        text(56, 878, f"{current['value']:g}{evidence['unit']}", 62, "warm")
+        text(56, 792, "Comparator", 40)
+        text(56, 725, f"{prior['value']:g}{evidence['unit']}", 62)
+        text(1144, 1015, f"Difference {current['value'] - prior['value']:+g}{evidence['unit']}", 40, "warm", "end")
+        text(1144, 687, evidence["unit"], 40, "muted", "end")
         source_products.append(prior["source"]["product"])
-        if date_only(evidence):
-            subtitle = f"Source date {current['valid_date']} / archive cutoff {baseline['cutoff']}"
-        else:
-            valid_label = datetime.fromisoformat(current["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-            cutoff_label = datetime.fromisoformat(baseline["cutoff"].replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%d %H:%MZ")
-            subtitle = f"Valid {valid_label} / cutoff {cutoff_label}"
-        text(56, 118, subtitle, 24)
-        text(56, 84, baseline["scope"], 21, "muted")
+        notes = ["Current: " + point_label(current, evidence),
+                 "Observed comparator: " + point_label(prior, evidence),
+                 "Archive: " + baseline["start"] + " to " + baseline["cutoff"],
+                 baseline["scope"], evidence["scope"]]
     else:
         times = ([date.fromisoformat(point["valid_date"]) for point in points] if date_only(evidence) else
                  [datetime.fromisoformat(point["valid_time"].replace("Z", "+00:00")).astimezone(timezone.utc) for point in points])
@@ -169,7 +189,7 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         labels = {x: value.strftime(time_format) for x, value in zip(xs, times)}
         for left, right in zip(xs, xs[1:]):
             gap = (right - left) / (plot.xValueAxis.valueMax - plot.xValueAxis.valueMin) * plot.width
-            label_space = sum(pdfmetrics.stringWidth(labels[x], "TheHeatMono", 23) for x in (left, right)) / 2
+            label_space = sum(pdfmetrics.stringWidth(labels[x], "TheHeatMono", 40) for x in (left, right)) / 2
             if gap < label_space + 12:
                 raise ValueError("Trajectory time labels would overlap; use fewer reviewed points")
         plot.xValueAxis.valueSteps = xs
@@ -188,29 +208,32 @@ def render_preview(template, evidence, *, expected_evidence_sha256, output_dir, 
         for index, (kind, _) in enumerate(series):
             forecast = kind.startswith("forecast")
             plot.lines[index].strokeColor = colors["warm"] if forecast else colors["text"]
-            plot.lines[index].strokeWidth = 4
+            plot.lines[index].strokeWidth = 5
             plot.lines[index].strokeDashArray = [10, 7] if forecast else None
             if kind != "forecast-connector":
                 marker = makeMarker("Diamond" if forecast else "FilledCircle")
-                marker.size = 14
+                marker.size = 24
                 marker.strokeColor = plot.lines[index].strokeColor
                 marker.fillColor = colors["bg"] if forecast else colors["text"]
                 marker.strokeWidth = 2.5
                 plot.lines[index].symbol = marker
-        text(60, 461, evidence["unit"], 23, "muted")
+        text(60, 1060, evidence["unit"], 40, "muted")
         legend = "   ".join(("◇ " if kind == "forecast" else "● ") + kind.capitalize() for kind, _ in series if kind != "forecast-connector")
-        text(1095, 484, legend, 23, "muted", "end")
-        period_label = (f"{times[0].isoformat()}–{times[-1].isoformat()} / source dates; times unknown"
-                        if date_only(evidence) else f"{times[0].strftime('%Y-%m-%d %H:%M')}–{times[-1].strftime('%Y-%m-%d %H:%M')} UTC")
-        text(56, 119, period_label, 23)
-        text(56, 85, evidence["scope"], 21, "muted")
+        text(1144, 1070, legend, 40, "muted", "end")
+        notes = [evidence["scope"],
+                 "From " + point_label(points[0], evidence),
+                 "Through " + point_label(points[-1], evidence)]
     drawing.add(plot)
-    # Source labels are derived from evidence, not editable renderer copy.
-    text(56, 47, "Source: " + " / ".join(dict.fromkeys(source_products)), 20, "muted")
+    notes.append("Source: " + " / ".join(dict.fromkeys(source_products)))
+    if date_only(evidence):
+        notes.append("Dates are source-calendar labels; reporting interval and timezone unknown.")
+    if template == "temperature_comparator" and "no official record" not in evidence["baseline"]["scope"].lower():
+        notes.append("Dated sample comparison; no official record.")
     if evidence["synthetic"]:
-        text(1144, 18, "Illustrative values only · not actual weather", 17, "warm", "end")
-    else:
-        text(1144, 18, f"Evidence {expected_evidence_sha256[:12]} · dated sample scope", 17, "muted", "end")
+        notes.append("Illustrative values; not actual weather.")
+    bottom = 610
+    for note in notes:
+        bottom = block(bottom, note)
     (folder / "input.json").write_text(json.dumps({"template": template, "expected_evidence_sha256": expected_evidence_sha256, "evidence": evidence}, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
     (folder / "alt.txt").write_text(build_alt_text(template, evidence) + "\n")
     renderPDF.drawToFile(drawing, str(folder / "preview.pdf"))

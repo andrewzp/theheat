@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.34] - 2026-09-29
+
+- Rotate remote rainfall fallback over canonical sampling identities instead of repeatedly selecting the first cities in CSV order. Preserve the per-run 75-city ceiling and complete local-grid extraction.
+- Freeze one UTC sampling date for primary and weather-model fallback paths; changing source availability dates or worker completion order cannot change that run's selection.
+- Verify conditional daily coverage, aliases, invalid input, bounded requests and both actual fallback call sites offline. This does not establish recovered access, fresh global observations or official rainfall records.
+
 ## [0.9.108.33] - 2026-09-29
 
 - Fix the observed writer HTTP400 schema rejection by expressing nullable rejection enums as string-enum/null branches, with unchanged allowed values, strict fields and parser.
@@ -9,6 +15,97 @@ All notable changes to this project will be documented in this file.
 - Pin tested core provider SDK, transport and schema dependencies to prevent unreviewed major upgrades at deployment. Runtime models, prompts, samples, paid features and publishing controls are unchanged.
 - Regenerate the dashboard approval-policy manifest and exercise the actual SDK with offline HTTP fixtures. Live recovery remains to be verified after release.
 - Pin a historical-place test's archive to its forecast date so advancing calendar time cannot break the release gate; scientific cutoff rules are unchanged.
+
+## [0.9.108.32] - 2026-09-29
+
+- Pin core provider SDK, HTTP and schema dependencies to tested versions instead of accepting silent major upgrades during deployments. Preserve runtime models, prompts, sample settings and billing controls.
+- Select the HTTP family declared by Anthropic's public default client. Support both verified HTTPX generations without mixing clients; refuse unknown families before provider access. Preserve all request, timeout, redirect and retry controls.
+- Exercise the same actual-SDK wire regressions against legacy and current SDKs, and build a clean dependency-resolved environment from the complete requirements. These checks do not activate batch work, make provider calls or establish production recovery.
+
+## [0.9.108.31] - 2026-09-29
+
+- Encode nullable writer rejection enums as explicit string-enum/null branches. This avoids the observed Anthropic HTTP400 schema rejection while retaining exactly the same allowed fields and values, parser, prompts, models and one-sample default.
+- Stop repeating definitive HTTP4xx requests in the shared retry owner. Read structured Anthropic, Google and HTTP client status fields; preserve billing's distinct error, retryable 408/409/429, server/transport retry bounds and original exception identity.
+- Reproduce the old schema failure through the actual SDK with a fake HTTP endpoint, and check the compatible wire request plus output-contract equivalence. Regenerate the approval policy manifest. Live provider acceptance remains to be verified after authorized release.
+
+## [0.9.108.30] - 2026-09-29
+
+- Run existing deterministic scientific, scope and reuse rejections before paid safety/factual checking. Keep the full fact checker independently rechecking those rules; local eligibility is never a completed model check.
+- Preserve exact text through every mandatory check for eligible drafts and revised text. Update positive orchestration fixtures to distinguish thermal detections from verified fire incidents and forecasts from observations; keep explicit adversarial counterexamples.
+- Regenerate the approval policy manifest. Offline historical regressions retain their expected findings with no provider calls; actual writing quality and production savings remain unmeasured.
+
+## [0.9.108.29] - 2026-09-29
+
+- Add an independently default-OFF local batch collector that performs at most one metadata GET and one results GET. Keep canonical provider routes, no retries or redirects, bounded reads and explicit partial-download evidence.
+- Reuse retained complete results after restart without credentials or another download, but perform a fresh fenced review. Preserve late and expired usage, reject conflicting results, and use the actual loaded policy before considering text eligible for required checks.
+- Keep collection separate from paid submission, check execution, drafting and publishing. Exercise actual SDK HTTP mocks, interrupted reads, lost local acknowledgments, cleanup failures and stale ownership; no live provider request or activation ran.
+
+## [0.9.108.28] - 2026-09-29
+
+- Retain exact bounded batch metadata and result bytes in the experimental local authority before parsing, including partial downloads, malformed output and late worker responses. Unknown charges remain held.
+- Review only under current fenced ownership. Match terminal metadata, request IDs, evidence, policy, epoch and deadline; contradictory complete results invalidate earlier text. Normalize result ordering without losing original bytes.
+- Persist fresh review reports bound to the entire receipt set and submission evidence. Stable candidate identities remain unapproved and require ordinary factual, safety and editorial checks; no drafts or provider calls are introduced.
+
+## [0.9.108.27] - 2026-09-29
+
+- Add an unwired, default-OFF local batch submission adapter. Require current policy, provider prerequisites and a committed fenced grant before sending exact planned requests; a restart cannot resend an existing attempt.
+- Use one SDK HTTP attempt with retries and redirects disabled, fixed provider origin, network timeout and bounded successful-response reads. Retain acknowledgment bytes before adoption; late, malformed, oversized or lost responses preserve uncertain spending and bounded diagnostics.
+- Exercise the actual installed SDK through a fake HTTP transport, including rate limits, server errors, timeouts, redirects, oversized responses and lost local commit acknowledgments. No live provider request or production activation occurred; collection and mandatory-check integration remain.
+
+## [0.9.108.26] - 2026-09-29
+
+- Add bounded local worker leases and monotonically increasing fences for registered batch work. Commit the exact submission grant with spending dispatch once; expired ownership, changed inputs and insufficient deadlines cannot grant a request.
+- Preserve uncertain holds across lost acknowledgments and restarts. Late responses are immutable evidence until a current owner adopts them; malformed and conflicting batch identities cannot advance the job or approve a draft.
+- Exercise separate-process competition, crashes before and after commit, late receipts, schema protection and backup/restore. No provider transport, production activation or publication is introduced.
+
+## [0.9.108.25] - 2026-09-29
+
+- Atomically register an exact local batch request artifact, immutable job identity and spending reservation in the experimental authority. Require matching job, request, provider, model and writer role; no request, job or new hold survives a failed commit.
+- Make identical retries safe after restart and expiry, while returning the actual reservation disposition. Reject changed bindings, used attempts, exhausted allowances, insufficient usefulness windows and modified stored plans.
+- Exercise separate-process contention and process death, rollback, schema protection and backup/restore. This adds local registration only: leases, provider transport, mandatory-check integration and production spending enforcement remain unfinished.
+
+## [0.9.108.24] - 2026-09-29
+
+- Make both deterministic temperature previews readable at phone width with a 1200 by 1500 canvas, material labels of at least 40 pixels and measured wrapping. Keep source types, complete dates, archive bounds, sample scope and synthetic status visible; preserve exact alt text and evidence binding.
+- Refuse overflowing qualifications and crowded trajectory dates instead of shrinking or truncating them. Advance template identity so old cached graphics cannot be mistaken for the new layout.
+- Verify four real synthetic renders at full and 390-pixel width, material text preservation, font size, deterministic reuse and tamper rejection. This remains local review media: no image-model call, attachment or publication activation.
+
+## [0.9.108.23] - 2026-09-29
+
+- Extend the experimental local command authority with immutable spending limits, request-bound reservations and lifecycle events. Real SQLite transactions serialize daily, monthly and per-job allowance checks across processes and provider roles; no production dollar ceiling is selected.
+- Grant dispatch once per reserved attempt. Replayed, restarted or uncertain attempts cannot grant another dispatch; uncertain charges retain their full hold across calendar boundaries. Only never-dispatched reservations can release without settlement evidence.
+- Record reconciled costs even when they exceed a reservation, then block additional spending pending resolution. Preserve holds through crash rollback and backup/restore. Production callers, complete pricing and the hosted authority are not yet integrated, so this is not an account-wide spending guarantee.
+
+## [0.9.108.22] - 2026-09-29
+
+- Add immutable bounded batch plans using the shared synchronous writer request. Bind evidence, memory, policy, model, job, epoch, deadline and sample identity; keep one sample by default and require an explicit experiment for larger slates.
+- Parse bounded result files by exact custom ID. Refuse unknown/duplicate IDs, preserve reported usage for unusable text, and withhold stale, expired, refused, invalid or incomplete results without repair calls. Every usable candidate still requires ordinary checks and approval.
+- Keep this contract separate from production queues, provider submission and billing. No network call, feature activation or savings measurement is introduced.
+
+## [0.9.108.21] - 2026-09-29
+
+- Share the current writer user-prompt construction and detached Anthropic request arguments with future offline batch planning. Preserve exact guidance order, cached system prefix, selected model, output schema, token bound and retry ownership.
+- Exercise the actual mocked synchronous SDK boundary and both provider routes. Evidence/scope rejection still happens before request construction; returned request dictionaries cannot mutate the global output schema. No batch transport or additional model call is introduced.
+
+## [0.9.108.20] - 2026-09-29
+
+- Stop drafting before the writer when its selected provider or a mandatory downstream checker lacks a credential. Keep loaded safety configuration distinct from current environment configuration, retain a bounded blocked reason, and never equate configured keys with working or funded access.
+- Gate the paid self-heal agent on explicit opt-in and both required credentials. A blocked red run reports an error beacon, which the observer treats as a failure immediately; detecting red workflows remains keyless. These controls do not activate repair or establish a spending cap.
+- Add pure offline contracts for supplied copy pairs and explicit human ratings. Bind ratings to exact text, evidence, qualification and side assignment; exclude unqualified pairs from preference counts and preserve missing ratings, ties and abstentions. Existing prose grades are historical evidence, not factual certification.
+- Respec the batch writer against current evidence, policy and output contracts, including durable intent, uncertain submissions, late-result accounting and default-OFF transport. The batch lane and complete shared budget enforcement are still unbuilt; no monthly savings or writing-quality improvement is claimed.
+
+## [0.9.108.19] - 2026-09-29
+
+- Assemble explicit local draft, identity, policy and qualified graphic inputs into an immutable private review package. Verify all five renderer assets and current local renderer fingerprints before packaging; no model, render, upload or publishing call is made by the package command.
+- Bound reads, refuse duplicate JSON keys, symlinks and unignored output paths, serialize writers and atomically install complete private directories. Reuse only byte-identical packages and preserve changed contents for diagnosis.
+- Keep scientific agreement unreviewed and posting approval false. Full-size synthetic visual review passed; source and qualification text remains too small at phone width, so mobile graphic layout and production attachment are still open.
+- Pin a historical receipt test's archive to the same fixed date as its forecast. This repairs a reproduced pre-existing calendar-sensitive fixture failure without relaxing production cutoff validation.
+
+## [0.9.108.18] - 2026-09-10
+
+- Add a pure local review packet for one qualified station temperature comparison. Bind exact draft revision, evidence, policy, render provenance, PNG bytes and generated alt text.
+- Refuse stale requests, changed source bundles, inconsistent renderer assets and altered packets, including edits that recompute their own hashes. Preserve explicit synthetic and unreviewed status; matching content never grants publication approval.
+- Keep the packet separate from production state, model calls, rendering, uploads and publishing. Private package assembly and joint semantic review remain follow-up work.
 
 ## [0.9.108.17] - 2026-09-09
 

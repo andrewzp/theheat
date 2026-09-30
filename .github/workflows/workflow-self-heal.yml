@@ -10,12 +10,13 @@ name: workflow-self-heal
 #
 #   heal — the Claude Code agent against docs/runbooks/workflow-self-heal.md,
 #     pinned to claude-haiku-4-5 (mechanical triage; JUDGMENT items are
-#     PR-and-stop anyway). Runs ONLY when the gate found red — previously the
+#     PR-and-stop anyway). Runs only with a red finding, explicit repair opt-in,
+#     a repair PAT and a configured model key — previously the
 #     agent ran unpinned every day, green or not (an observed green-day run
 #     selected an Opus-class model: $0.39 for "nothing is red").
 #
-# Cost: gate $0/run daily; heal ≈ $0.02–0.10/run (Haiku) × observed red-day
-# rate (~1–2/week) ≈ $0.2–0.8/month — replaces ~$5–15/month unpinned-daily.
+# Cost: the gate makes no model calls. A red day can incur agent/tool usage only
+# when prerequisites pass; turn/time bounds are not a dollar spending guarantee.
 #
 # Why GitHub Actions (not a claude.ai Routine): the fixer needs gh + a real dev
 # env to run pytest, open PRs, and merge. The claude.ai Routine env has no gh CLI
@@ -51,6 +52,7 @@ jobs:
     outputs:
       red_count: ${{ steps.detect.outputs.red_count }}
       red_names: ${{ steps.detect.outputs.red_names }}
+      repair_allowed: ${{ steps.repair_preflight.outputs.repair_allowed }}
     steps:
       - name: Detect red / stale / disabled workflows (keyless)
         id: detect
@@ -151,21 +153,58 @@ jobs:
           echo "red_names=${RED_NAMES}" >> "$GITHUB_OUTPUT"
           echo "RED_COUNT=${RED_COUNT}" >> "$GITHUB_ENV"
 
-      - name: Write SELFHEAL_BEACON heartbeat (green days cost $0)
+      - name: Check repair prerequisites without calling a model
+        id: repair_preflight
+        env:
+          REPAIR_ENABLED: ${{ vars.THEHEAT_SELFHEAL_REPAIR_ENABLED || '0' }}
+          HAS_REPAIR_PAT: ${{ secrets.SELFHEAL_PAT != '' }}
+          HAS_MODEL_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          RED_COUNT: ${{ steps.detect.outputs.red_count }}
+        run: |
+          set -euo pipefail
+          ALLOWED=false
+          REASON=none
+          if ! [[ "$RED_COUNT" =~ ^[0-9]+$ ]]; then
+            REASON=invalid_detection_result
+          elif [ "$RED_COUNT" = "0" ]; then
+            REASON=no_red_workflows
+          elif [ "$REPAIR_ENABLED" != "1" ]; then
+            REASON=repair_not_enabled
+          elif [ "$HAS_REPAIR_PAT" != "true" ]; then
+            REASON=missing_repair_pat
+          elif [ "$HAS_MODEL_KEY" != "true" ]; then
+            REASON=missing_model_key
+          else
+            ALLOWED=true
+          fi
+          echo "repair_allowed=$ALLOWED" >> "$GITHUB_OUTPUT"
+          echo "blocked_reason=$REASON" >> "$GITHUB_OUTPUT"
+          if [ "$ALLOWED" != "true" ] && [ "$REASON" != "no_red_workflows" ]; then
+            echo "::warning::Self-heal repair blocked: $REASON. No model agent will run."
+          fi
+          echo "Self-heal repair allowed: $ALLOWED ($REASON). Credential presence does not prove funded access." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write SELFHEAL_BEACON heartbeat (no model call)
         env:
           GH_TOKEN: ${{ secrets.SELFHEAL_PAT || github.token }}
           ISSUES_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          REPAIR_ALLOWED: ${{ steps.repair_preflight.outputs.repair_allowed }}
+          BLOCKED_REASON: ${{ steps.repair_preflight.outputs.blocked_reason }}
         run: |
           set -uo pipefail
           NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          # Green days finalize as "ok". Red days write "pending" — the heal
-          # agent's end-of-run beacon finalizes the outcome, and the hourly
+          # Green days finalize as "ok". Blocked red days report "error".
+          # Allowed red days write "pending"; the heal agent's beacon finalizes
+          # the outcome, and the hourly
           # observer alarms on a beacon stuck "pending" >3h (codex P1: a
           # fresh gate "ok" every morning would mask a forever-failing heal).
           OUTCOME="ok"
           [ "${RED_COUNT}" != "0" ] && OUTCOME="pending"
-          BODY=$(printf '{"run_at":"%s","outcome":"%s","checked":5,"failing":%d,"fixed":0}' "$NOW" "$OUTCOME" "${RED_COUNT}")
+          if [ "${RED_COUNT}" != "0" ] && [ "$REPAIR_ALLOWED" != "true" ]; then
+            OUTCOME="error"
+          fi
+          BODY=$(printf '{"run_at":"%s","outcome":"%s","checked":5,"failing":%d,"fixed":0,"blocked_reason":"%s"}' "$NOW" "$OUTCOME" "${RED_COUNT}" "$BLOCKED_REASON")
           if gh variable set SELFHEAL_BEACON --repo "$REPO" --body "$BODY"; then
             echo "beacon written: $BODY"
           else
@@ -185,7 +224,7 @@ jobs:
 
   heal:
     needs: gate
-    if: needs.gate.outputs.red_count != '0'
+    if: needs.gate.outputs.repair_allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

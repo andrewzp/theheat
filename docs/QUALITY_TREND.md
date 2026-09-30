@@ -1,5 +1,19 @@
 # Quality Trend & Rejection Log
 
+> September 29 evaluation boundary: the grades below are historical editorial
+> observations. They are not independent factual qualification, a controlled
+> comparison, or authorization to resume posting. The historical resumption rule
+> below is retained as history and is superseded by current evidence, policy,
+> revision and publication controls. Never revert those controls to resume.
+>
+> New comparisons use `src/evaluation/copy_comparison.py`: exact same-evidence
+> pairs, explicit factual dispositions and provenance, supplied blinded order,
+> and hash-bound human ratings. Record punch, clarity and unnecessary words;
+> report eligible/rated/unrated denominators, ties and abstentions separately.
+> No human ratings means no preference result. A shorter rejected or unverified
+> candidate cannot establish a quality win. No new live quality measurement is
+> claimed by adding this contract. Retain source/QC timing and archive limits.
+
 Two views of the same thing: **are the bot's tweets getting better over time, or not.**
 
 ## The resumption bar

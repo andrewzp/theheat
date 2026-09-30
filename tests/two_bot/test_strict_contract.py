@@ -381,7 +381,7 @@ def test_model_diagnostic_storage_is_bounded_and_keeps_full_response_digest():
 
 
 @pytest.mark.parametrize("stage", ["writer", "fact_check"])
-def test_failed_model_response_survives_real_dispatch_suppression_without_public_log(stage, monkeypatch, capsys):
+def test_failed_model_response_survives_real_dispatch_suppression_without_public_log(stage, monkeypatch, capsys, configured_pipeline_providers):
     from src.orchestrator import two_bot_dispatch as dispatch
     from src.two_bot import pipeline
     from src.two_bot.types import FactCheckResult, WriterResult

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from copy import deepcopy
 
 from src.config import WRITER_MODEL as _DEFAULT_WRITER_MODEL
 from src.two_bot.prompts.writer_prompt import (
@@ -142,6 +143,38 @@ def _memory_json(memory: MemorySlice) -> str:
     return json.dumps(memory.to_dict(), sort_keys=True, default=_json_default, allow_nan=False)
 
 
+def build_writer_user_prompt(
+    bundle: StoryBundle,
+    memory: MemorySlice,
+    *,
+    revision_constraint: str | None = None,
+) -> str:
+    """Construct current copy instructions; the caller still qualifies evidence."""
+    prompt = WRITER_USER_PROMPT_TEMPLATE.format(
+        bundle_json=_bundle_json(bundle), memory_json=_memory_json(memory),
+    )
+    if getattr(bundle, "related_signals", None):
+        prompt = f"{prompt}\n\n{MULTISIGNAL_GUIDANCE}"
+    if getattr(bundle, "human_impact", None):
+        prompt = f"{prompt}\n\n{IMPACT_GUIDANCE}"
+    if revision_constraint:
+        prompt = f"{prompt}\n\n[Revision context: {revision_constraint}]"
+    return prompt
+
+
+def anthropic_writer_request(user_prompt: str) -> dict:
+    """Detached current SDK arguments, shared with offline batch planning."""
+    return {
+        "model": WRITER_MODEL,
+        "max_tokens": 1024,
+        "system": [{"type": "text", "text": WRITER_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"}}],
+        "messages": [{"role": "user", "content": user_prompt}],
+        "output_config": {"format": {"type": "json_schema",
+                                     "schema": deepcopy(WRITER_OUTPUT_SCHEMA)}},
+    }
+
+
 def _parse_writer_json(raw: str) -> WriterResult:
     try:
         parsed = loads_model_json(raw, expected="object")
@@ -194,25 +227,7 @@ def _call_anthropic(user_prompt: str) -> str:
     # within the 5-minute TTL.
     response = call_with_retries(
         "anthropic writer",
-        lambda: client.messages.create(
-            model=WRITER_MODEL,
-            max_tokens=1024,
-            system=[
-                {
-                    "type": "text",
-                    "text": WRITER_SYSTEM_PROMPT,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
-            messages=[{"role": "user", "content": user_prompt}],
-            # Economics P2.2: constrained decoding to the writer contract.
-            # On a safety refusal the output may not match the schema — the
-            # existing _parse_writer_json ValueError path + JSON-retry lane
-            # stay in place as the net for exactly that case.
-            output_config={
-                "format": {"type": "json_schema", "schema": WRITER_OUTPUT_SCHEMA}
-            },
-        ),
+        lambda: client.messages.create(**anthropic_writer_request(user_prompt)),
     )
     # Capture this returned writer response, including missing usage metadata.
     # Failed pre-response requests and other model stages remain untracked. The WHOLE
@@ -358,23 +373,9 @@ def write_tweet(
     if WRITER_PROVIDER == "unsupported_openai":
         raise NotImplementedError("OpenAI writer provider is not implemented")
 
-    base_user_prompt = WRITER_USER_PROMPT_TEMPLATE.format(
-        bundle_json=_bundle_json(bundle),
-        memory_json=_memory_json(memory),
+    base_user_prompt = build_writer_user_prompt(
+        bundle, memory, revision_constraint=revision_constraint,
     )
-    # Phase D: cross-signal guidance rides the USER prompt (cache-safe) only when
-    # this bundle actually carries related_signals.
-    if getattr(bundle, "related_signals", None):
-        base_user_prompt = f"{base_user_prompt}\n\n{MULTISIGNAL_GUIDANCE}"
-    # Bet A (A1): sourced-impact guidance rides the USER prompt (cache-safe)
-    # only when this bundle actually carries human_impact facts.
-    if getattr(bundle, "human_impact", None):
-        base_user_prompt = f"{base_user_prompt}\n\n{IMPACT_GUIDANCE}"
-    if revision_constraint:
-        base_user_prompt = (
-            f"{base_user_prompt}\n\n"
-            f"[Revision context: {revision_constraint}]"
-        )
 
     last_overlong_tweet: str | None = None
     last_parse_error: str | None = None

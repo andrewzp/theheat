@@ -8,10 +8,11 @@ import anthropic
 import pytest
 
 from src.two_bot import writer
+from src.two_bot.provider_http import anthropic_httpx
 from src.two_bot.json_utils import ModelOutputContractError
 from tests.two_bot.conftest import _bundle, _memory
 
-import httpx2 as httpx
+httpx = anthropic_httpx()
 
 # Technical API diagnostic only; no production prompt, event or receipt included.
 SCHEMA_ERROR = ("output_config.format.schema: Invalid schema: Enum value 'evidence' "
@@ -109,14 +110,16 @@ def test_actual_writer_wire_handles_compatible_schema_and_preserves_exact_output
 
     clients = sdk_fixture(monkeypatch, handler)
     try:
-        result = writer._parse_writer_json(writer._call_anthropic("Offline current user prompt"))
+        result = writer.write_tweet(_bundle(), _memory())
     finally:
         for client in clients:
             client.close()
     assert result.tweet == returned["tweet"] and len(requests) == 1
     sent = json.loads(requests[0].content)
     assert sent["output_config"]["format"]["schema"] == writer.WRITER_OUTPUT_SCHEMA
-    assert sent["messages"] == [{"role":"user", "content":"Offline current user prompt"}]
+    assert sent["messages"] == writer.anthropic_writer_request(
+        writer.build_writer_user_prompt(_bundle(), _memory())
+    )["messages"]
 
 
 def test_actual_writer_wire_reproduces_old_schema_400_once_without_repair(monkeypatch):

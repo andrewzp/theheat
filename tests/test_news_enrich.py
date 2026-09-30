@@ -860,6 +860,9 @@ class TestDrainWiring:
 
 class TestPipelineMetadata:
     def test_metadata_carries_impact_and_citation_flag(self, monkeypatch, synthetic_bundle_provenance):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-fixture-no-provider-access")
+        monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture-no-provider-access")
+        monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "offline-fixture-no-provider-access")
         from src.state import DEFAULT_STATE
         from src.two_bot import pipeline
         from src.two_bot.types import FactCheckResult, WriterResult
@@ -875,6 +878,14 @@ class TestPipelineMetadata:
             raw_signal_dump={"event_id": "pm1", "frp": 400.0},
         )
         bundle.human_impact = [_impact()]
+        # Explicit synthetic incident warrant for this metadata propagation
+        # fixture; thermal power alone cannot certify a vegetation fire.
+        bundle.raw_signal_dump["evidence"] = {"incident": {
+            "source_product": "synthetic-incident-fixture", "revision_id": "fixture-1",
+            "source_url": "https://example.invalid/incident/pm1", "valid_date": bundle.when,
+            "target_event_id": bundle.event_id, "evidence_type": "verified_incident",
+            "classification": "vegetation_fire",
+        }}
 
         writer_result = WriterResult(
             tweet="Per NIFC, 3 firefighters were killed on the Alpine fire.",

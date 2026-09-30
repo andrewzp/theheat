@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import domain_journal
+from src.commands import batch_journal, batch_worker_journal, batch_result_journal, domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -72,6 +72,10 @@ class SQLiteAuthority:
     def _check_tables(connection: sqlite3.Connection) -> None:
         allowed = {"authority_metadata", "authority_state", "command_intents", "command_results", "command_events"}
         allowed.update(domain_journal._TABLES)
+        allowed.update(spend_journal._TABLES)
+        allowed.update(batch_journal._TABLES)
+        allowed.update(batch_worker_journal._TABLES)
+        allowed.update(batch_result_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -115,6 +119,10 @@ class SQLiteAuthority:
                     connection.execute("INSERT INTO authority_metadata(singleton, environment) VALUES(1, ?)", (self.environment,))
                     connection.execute("INSERT INTO authority_state(singleton, version, state_json) VALUES(1, 0, ?)", (encoded,))
                 installed = domain_journal.install(connection, source_namespace)
+                spend_journal.install(connection)
+                batch_journal.install(connection)
+                batch_worker_journal.install(connection)
+                batch_result_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -258,6 +266,100 @@ class SQLiteAuthority:
             except BaseException:
                 connection.rollback()
                 raise
+
+    def spending(self, action: str, payload: dict, *, now: str,
+                 before_commit: Callable[[], None] | None = None) -> dict:
+        """Trusted local spending rehearsal; no provider or production mutation.
+
+        Only a true dispatch_granted result permits the caller's one network
+        attempt. A replay/unknown acknowledgment never grants another attempt.
+        """
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                domain_journal.validate_schema(connection)
+                result = spend_journal.apply(connection, action, payload, now=now)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def prepare_batch(self, plan_bytes: bytes, *, expected_plan_sha256: str,
+                      reservation: dict, now: str,
+                      before_commit: Callable[[], None] | None = None) -> dict:
+        """Atomically retain one local batch plan, job and spending hold; never send."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                result = batch_journal.register(connection, plan_bytes,
+                    expected_plan_sha256=expected_plan_sha256, reservation=reservation, now=now)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def batch_work(self, action: str, payload: dict, *, now: str, raw: bytes | None = None,
+                   before_commit: Callable[[], None] | None = None) -> dict:
+        """Local fenced lifecycle rehearsal. One committed grant, no provider I/O."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                result = batch_worker_journal.apply(connection, action, payload, now=now, raw=raw)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def record_batch_results(self, payload: dict, *, metadata: bytes, results: bytes,
+                             now: str, before_commit: Callable[[], None] | None = None) -> dict:
+        return self._batch_results_transaction("record", payload, now=now,
+            metadata=metadata, results=results, before_commit=before_commit)
+
+    def batch_results_status(self, job_id: str, *, now: str) -> dict:
+        return self._batch_results_transaction("index", {"job_id": job_id}, now=now)
+
+    def review_batch_results(self, payload: dict, *, now: str,
+                             before_commit: Callable[[], None] | None = None) -> dict:
+        return self._batch_results_transaction("review", payload, now=now, before_commit=before_commit)
+
+    def _batch_results_transaction(self, action: str, payload: dict, *, now: str,
+                                   metadata: bytes | None = None, results: bytes | None = None,
+                                   before_commit: Callable[[], None] | None = None) -> dict:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                if action == "record":
+                    result = batch_result_journal.record(connection, payload, metadata, results, now=now)
+                elif action == "index":
+                    result = batch_result_journal.index(connection, payload, now=now)
+                else:
+                    result = batch_result_journal.review(connection, payload, now=now)
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def batch_status(self, job_id: str) -> dict:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN")
+            self._check_environment(connection)
+            return batch_journal.read(connection, job_id)
 
     def read(self) -> tuple[int, dict]:
         with closing(self._connect()) as connection:

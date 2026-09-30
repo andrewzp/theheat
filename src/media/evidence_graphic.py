@@ -15,11 +15,11 @@ from urllib.parse import urlparse
 
 from src.editorial.revisions import fingerprint
 
-TEMPLATE_VERSION = "p31-preview-2"
+TEMPLATE_VERSION = "p31-preview-3-mobile"
 TEMPLATES = frozenset({"temperature_comparator", "temperature_trajectory"})
 VARIABLE_LABELS = {"daily_maximum_temperature": "Daily maximum temperature",
                    "daily_minimum_temperature": "Daily minimum temperature"}
-WIDTH, HEIGHT = 1200, 675
+WIDTH, HEIGHT = 1200, 1500
 
 
 def _text(value, name, limit=160):

@@ -14,6 +14,18 @@ from src.state import DEFAULT_STATE
 from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
 
 
+@pytest.fixture
+def configured_pipeline_providers(monkeypatch):
+    """Dummy presence for orchestration fixtures; all model calls stay mocked.
+
+    Missing/invalid provider prerequisites are tested separately against the real
+    preflight. These values grant no access and never opt out of network barriers.
+    """
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "offline-fixture-no-provider-access")
+    monkeypatch.setenv("GEMINI_API_KEY", "offline-fixture-no-provider-access")
+    monkeypatch.setattr("src.voice.safety.GEMINI_API_KEY", "offline-fixture-no-provider-access")
+
+
 def _bundle(
     *,
     country: str = "ML",
