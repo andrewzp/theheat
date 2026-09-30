@@ -2,17 +2,17 @@
 
 The Anthropic writer call passes ``output_config.format`` with
 ``WRITER_OUTPUT_SCHEMA`` so decoding is constrained to the prompt's
-`# OUTPUT` JSON contract — retiring the paid JSON-parse retry lane on the
-Anthropic path. These tests pin three load-bearing facts:
+`# OUTPUT` JSON contract, reducing malformed output on the Anthropic path.
+Explicit JSON and length retry paths still exist. These tests pin three facts:
 
 1. The create() call actually carries the schema (a silently dropped kwarg
    would quietly reinstate the retry-lane burn).
 2. The schema stays in lockstep with what ``_parse_writer_json`` reads —
    with ``additionalProperties: false``, a field parsed but missing from the
    schema (or vice versa) is a contract fork.
-3. The schema shape follows the structured-outputs rules the API enforces
-   (all-required + additionalProperties false), so a drifted edit fails here
-   before it 400s in production.
+3. The schema retains required fields and additionalProperties false. Shape
+   checks are not a live provider-compiler compatibility proof; the observed
+   nullable-enum rejection has a separate SDK-wire regression.
 """
 
 from __future__ import annotations
@@ -89,7 +89,8 @@ def test_schema_shape_is_strict():
     nullable = {
         field
         for field, spec in schema["properties"].items()
-        if isinstance(spec.get("type"), list) and "null" in spec["type"]
+        if (isinstance(spec.get("type"), list) and "null" in spec["type"])
+        or any(branch.get("type") == "null" for branch in spec.get("anyOf", []))
     }
     assert nullable == {
         "tweet",

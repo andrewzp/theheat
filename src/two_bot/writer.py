@@ -82,8 +82,9 @@ LENGTH_RETRY_BUDGET = 2
 # typically stochastic refusal — a second sampling usually produces JSON.
 # Economics P2.2: on the Anthropic path this lane is now a residual safety
 # net — structured outputs (WRITER_OUTPUT_SCHEMA below) constrain decoding
-# to schema-valid JSON, so the lane fires only on refusal-shaped responses
-# and provider-side schema failures; both supported providers receive a schema.
+# to schema-valid JSON, reducing this lane to exceptional returned payloads
+# such as refusals/truncation. Provider HTTP schema failures raise before parsing;
+# both supported providers receive a schema.
 JSON_PARSE_RETRY_BUDGET = 1
 
 # Reused from PR #463, commit 61ae9ee4ab41f333de57ab2400925f2700af98d8.
@@ -109,8 +110,16 @@ WRITER_OUTPUT_SCHEMA: dict = {
         "peer_comparison_used": {"type": ["string", "null"]},
         "reasoning": {"type": "string"},
         "cited_impact": {"type": ["boolean", "null"]},
-        "kill_scope": {"type": ["string", "null"], "enum": ["evidence", "style", "context", "unknown", None]},
-        "kill_code": {"type": ["string", "null"], "enum": ["insufficient_evidence", "conflicting_evidence", None]},
+        # Anthropic rejected enum + type-array even though it is valid JSON
+        # Schema. Separate the nullable branch without changing allowed values.
+        "kill_scope": {"anyOf": [
+            {"type": "string", "enum": ["evidence", "style", "context", "unknown"]},
+            {"type": "null"},
+        ]},
+        "kill_code": {"anyOf": [
+            {"type": "string", "enum": ["insufficient_evidence", "conflicting_evidence"]},
+            {"type": "null"},
+        ]},
     },
     "required": [
         "tweet",
