@@ -47,7 +47,8 @@ from src.two_bot.types import CriticResult, StoryBundle
 JSON_PARSE_RETRY_BUDGET = 1
 
 
-def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = None) -> list[dict]:
+def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = None,
+                           today: str | None = None) -> list[dict]:
     """Pending drafts created since UTC midnight, freshest first.
 
     Used by the critic so it can detect template convergence inside a
@@ -59,7 +60,7 @@ def _collect_pending_today(state: BotState, *, exclude_event_id: str | None = No
     """
 
     drafts = state.get("drafts", [])
-    today = datetime.now(UTC).date().isoformat()
+    today = today or datetime.now(UTC).date().isoformat()
     pending_today: list[dict] = []
     for draft in drafts:
         if not isinstance(draft, dict):
@@ -226,7 +227,7 @@ def _parse_critic_json(raw: str) -> tuple[bool, str | None]:
     return result.passed, result.kill_reason
 
 
-def _call_gemini(
+def prepare_request(
     draft_text: str,
     bundle: StoryBundle,
     pending_today: list[dict],
@@ -235,30 +236,8 @@ def _call_gemini(
     retry_suffix: str = "",
     allow_revise: bool = False,
     candidate_drafts: list[str] | None = None,
-) -> str:
-    """Call Gemini 2.5 Pro with the critic prompt.
-
-    Network-level retries handled by call_with_retries; JSON-parse retries
-    handled by the caller (critic_review) via ``retry_suffix``, which
-    appends a contract-reinforcement message to the user prompt on the
-    second attempt.
-
-    Mirrors fact_check._call_gemini's HttpOptions timeout posture exactly
-    — timeout=90000 is MILLISECONDS (90s). The fact_check.py comment
-    documents why a bare integer like 90 silently breaks the call in
-    <300ms; this module replicates the safe value rather than re-import.
-    """
-
-    api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for editorial critic")
-    from google import genai
-    from google.genai import types as genai_types
-
-    # google-genai HttpOptions.timeout is MILLISECONDS — see fact_check.py
-    # for the 4-day production outage that taught us this. 90000 = 90s.
-    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
-
+) -> dict:
+    """Pure request; preserve synchronous prompts, slate and revision semantics."""
     if candidate_drafts is None:
         user_prompt = CRITIC_USER_PROMPT_TEMPLATE.format(
             draft_text=draft_text,
@@ -285,12 +264,28 @@ def _call_gemini(
         )
     if retry_suffix:
         user_prompt = f"{user_prompt}{retry_suffix}"
+    return dict(model=CRITIC_MODEL, contents=f"{CRITIC_SYSTEM_PROMPT}\n\n{user_prompt}")
+
+
+def _call_gemini(
+    draft_text: str, bundle: StoryBundle, pending_today: list[dict], shipped_recent: list[str],
+    *, retry_suffix: str = "", allow_revise: bool = False,
+    candidate_drafts: list[str] | None = None,
+) -> str:
+    """Synchronous transport retains its existing retry behavior and timeout."""
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for editorial critic")
+    from google import genai
+    from google.genai import types as genai_types
+
+    client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
+    request = prepare_request(draft_text, bundle, pending_today, shipped_recent,
+                              retry_suffix=retry_suffix, allow_revise=allow_revise,
+                              candidate_drafts=candidate_drafts)
     response = call_with_retries(
         "gemini critic",
-        lambda: client.models.generate_content(
-            model=CRITIC_MODEL,
-            contents=f"{CRITIC_SYSTEM_PROMPT}\n\n{user_prompt}",
-        ),
+        lambda: client.models.generate_content(**request),
     )
     from src.two_bot.usage_ledger import record_response
     record_response("critic", response, CRITIC_MODEL, "google")

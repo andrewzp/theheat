@@ -1,0 +1,190 @@
+"""Immutable raw check observations, retained before provider output is parsed.
+
+Separate additive schema: existing candidate/check grants are unchanged. Nothing
+here interprets a provider verdict, releases a spending hold or approves posting.
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+
+from src.commands import check_journal as checks, domain_journal
+from src.commands.schema import canonical_json, utc_datetime
+from src.editorial.revisions import fingerprint
+
+MAX_RESPONSE_BYTES = 131_072
+_TABLES = {
+    "check_execution_schema": "singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_sha256 TEXT NOT NULL",
+    "check_observations": "grant_id TEXT PRIMARY KEY REFERENCES check_attempts(grant_id), metadata_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), raw_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), recorded_at TEXT NOT NULL",
+}
+
+
+def _objects():
+    objects = {}
+    for name, columns in _TABLES.items():
+        objects[name] = f"CREATE TABLE {name} ({columns})"
+        for action in ("UPDATE", "DELETE"):
+            key = f"{name}_no_{action.lower()}"
+            objects[key] = (
+                f"CREATE TRIGGER {key} BEFORE {action} ON {name} BEGIN SELECT RAISE(ABORT, 'immutable check observation'); END"
+            )
+        key = f"{name}_no_replace"
+        match = (
+            "singleton=NEW.singleton"
+            if name == "check_execution_schema"
+            else "grant_id=NEW.grant_id"
+        )
+        objects[key] = (
+            f"CREATE TRIGGER {key} BEFORE INSERT ON {name} WHEN EXISTS(SELECT 1 FROM {name} WHERE {match}) BEGIN SELECT RAISE(ABORT, 'immutable check observation'); END"
+        )
+    return objects
+
+
+SCHEMA_SHA256 = fingerprint(_objects())
+
+
+def validate(connection):
+    checks.validate(connection)
+    try:
+        row = connection.execute(
+            "SELECT schema_sha256 FROM check_execution_schema WHERE singleton=1"
+        ).fetchone()
+        checks._require(
+            row is not None and row[0] == SCHEMA_SHA256, "changed_check_execution_schema"
+        )
+        for name, sql in _objects().items():
+            row = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name=?", (name,)
+            ).fetchone()
+            checks._require(row is not None and row[0] == sql, "changed_check_execution_schema")
+    except sqlite3.DatabaseError:
+        raise checks.CheckJournalError("check_execution_migration_required") from None
+
+
+def install(connection):
+    checks.validate(connection)
+    if connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE name='check_execution_schema'"
+    ).fetchone():
+        validate(connection)
+        return
+    for sql in _objects().values():
+        connection.execute(sql)
+    connection.execute("INSERT INTO check_execution_schema VALUES(1,?)", (SCHEMA_SHA256,))
+
+
+def observation(connection, grant_id):
+    row = connection.execute(
+        "SELECT * FROM check_observations WHERE grant_id=?", (grant_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    data = json.loads(domain_journal.read_artifact(connection, row["metadata_sha256"]))
+    checks._require(
+        data["grant_id"] == grant_id and data["raw_sha256"] == row["raw_sha256"],
+        "changed_check_observation",
+    )
+    return data
+
+
+def read(connection, payload):
+    validate(connection)
+    checks._shape(payload, {"check_set_id"})
+    packet = checks._packet(connection, payload["check_set_id"])
+    attempts = {}
+    for stage in checks.STAGES:
+        attempt = checks._attempt(connection, payload["check_set_id"], stage)
+        if attempt:
+            attempts[stage] = dict(
+                attempt, observation=observation(connection, attempt["grant_id"])
+            )
+    return dict(packet=packet, attempts=attempts, publication_approved=False)
+
+
+def record(connection, payload, *, raw, now):
+    validate(connection)
+    checks._shape(
+        payload,
+        {
+            "check_set_id",
+            "stage",
+            "grant_id",
+            "request_sha256",
+            "raw_sha256",
+            "http_status",
+            "complete",
+            "reason",
+        },
+    )
+    checks._require(payload["stage"] in checks.STAGES, "unknown_required_check")
+    checks._packet(connection, payload["check_set_id"])
+    attempt = checks._attempt(connection, payload["check_set_id"], payload["stage"])
+    checks._require(
+        attempt is not None and attempt["grant_id"] == payload["grant_id"], "unknown_check_grant"
+    )
+    checks._require(
+        payload["request_sha256"] == attempt["binding"]["request_sha256"],
+        "check_observation_request_mismatch",
+    )
+    checks._require(
+        type(raw) is bytes and len(raw) <= MAX_RESPONSE_BYTES, "invalid_check_observation_bytes"
+    )
+    checks._require(
+        domain_journal._digest(raw) == payload["raw_sha256"], "check_observation_digest_mismatch"
+    )
+    checks._require(type(payload["complete"]) is bool, "invalid_check_observation_completeness")
+    status = payload["http_status"]
+    checks._require(
+        status is None or (type(status) is int and 100 <= status <= 599),
+        "invalid_check_http_status",
+    )
+    checks._require(
+        payload["reason"]
+        in {
+            "local",
+            "received",
+            "transport_unavailable",
+            "size_exceeded",
+            "time_exceeded",
+            "cleanup_failed",
+        },
+        "invalid_check_observation_reason",
+    )
+    checks._require(
+        (payload["stage"] == "deterministic") == (payload["reason"] == "local"),
+        "invalid_local_check_observation",
+    )
+    checks._require(
+        payload["complete"] == (payload["reason"] in {"received", "local"})
+        and (
+            status is None
+            if payload["reason"] == "local"
+            else not payload["complete"] or status is not None
+        ),
+        "inconsistent_check_observation",
+    )
+    at = checks._at(connection, now)
+    latest = connection.execute("SELECT MAX(recorded_at) FROM check_observations").fetchone()[0]
+    checks._require(
+        utc_datetime(at) >= utc_datetime(attempt["recorded_at"])
+        and (latest is None or at >= latest),
+        "observation_clock_went_backwards",
+    )
+    previous = observation(connection, payload["grant_id"])
+    if previous:
+        checks._require(
+            previous == payload
+            and domain_journal.read_artifact(connection, payload["raw_sha256"]) == raw,
+            "conflicting_check_observation",
+        )
+        return dict(reused=True, raw_retained=True, publication_approved=False)
+    encoded = canonical_json(payload).encode()
+    checks._require(len(encoded) <= 4096, "oversized_check_observation_metadata")
+    domain_journal._artifact(connection, raw)
+    sha = domain_journal._artifact(connection, encoded)
+    connection.execute(
+        "INSERT INTO check_observations VALUES(?,?,?,?)",
+        (payload["grant_id"], sha, payload["raw_sha256"], at),
+    )
+    return dict(reused=False, raw_retained=True, publication_approved=False)

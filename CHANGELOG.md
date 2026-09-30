@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.36] - 2026-09-30
+
+- Add an OFF-by-default local batch-check worker using the existing deterministic, safety, factual and critic rules. Each invocation advances at most one required stage; synchronous prompts, models and retry defaults are preserved.
+- Bind one provider request to its exact reservation, capture bounded response bytes before check interpretation, and recover retained responses after a crash without purchasing another attempt. Missing responses and unknown costs remain unresolved.
+- Disable SDK/network retries and redirects for this experimental lane, bound response size, time and output tokens, and block work near lease, evidence or UTC-day expiry. Malformed, truncated, conflicting or unavailable checks cannot approve a candidate.
+- Keep the production Gist backend and publishing pause unchanged. Production authority, complete accounting and measured batch savings remain separate work.
+
 ## [0.9.108.35] - 2026-09-30
 
 - Add a local immutable lifecycle for exact batch candidates and mandatory deterministic, safety, fact-check and critic stages; missing, unavailable, stale or conflicting outcomes never pass.

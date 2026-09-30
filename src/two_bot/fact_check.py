@@ -131,6 +131,29 @@ def _parse_fact_check_json(
     )
 
 
+def prepare_request(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> dict:
+    """Pure request shared by synchronous and single-attempt check execution."""
+    user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
+        tweet=tweet,
+        bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default, allow_nan=False),
+    )
+    return dict(
+        model=FACT_CHECKER_MODEL,
+        contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}{retry_suffix}",
+        config=dict(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA),
+    )
+
+
+def interpret_response(tweet: str, raw: str, state: BotState) -> FactCheckResult:
+    """Apply the actual strict inventory and reuse checks, without a retry."""
+    passed, failures, claims = _parse_fact_check_json(raw, require_extracted_claims=True)
+    failures.extend(material_span_failures(tweet, claims))
+    failures.extend(_claim_reuse_failures(claims, state))
+    return FactCheckResult(
+        passed=passed and not failures, failures=failures, raw_response=raw, extracted_claims=claims,
+    )
+
+
 def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> str:
     """One Gemini fact-check call. Network-level retries handled by
     call_with_retries; JSON-parse retries handled by the caller (fact_check)
@@ -151,18 +174,12 @@ def _call_gemini(tweet: str, bundle: StoryBundle, *, retry_suffix: str = "") -> 
     # killing every draft from 2026-05-03 onward (4-day production outage).
     # 90000 = 90 seconds, the original intent.
     client = genai.Client(api_key=api_key, http_options=genai_types.HttpOptions(timeout=90000))
-    user_prompt = FACT_CHECK_USER_PROMPT_TEMPLATE.format(
-        tweet=tweet,
-        bundle_json=json.dumps(bundle.to_dict(), sort_keys=True, default=_json_default, allow_nan=False),
-    )
-    if retry_suffix:
-        user_prompt = f"{user_prompt}{retry_suffix}"
+    request = prepare_request(tweet, bundle, retry_suffix=retry_suffix)
     response = call_with_retries(
         "gemini fact-check",
         lambda: client.models.generate_content(
-            model=FACT_CHECKER_MODEL,
-            contents=f"{FACT_CHECK_SYSTEM_PROMPT}\n\n{user_prompt}",
-            config=genai_types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=FACT_CHECK_OUTPUT_SCHEMA),
+            model=request["model"], contents=request["contents"],
+            config=genai_types.GenerateContentConfig(**request["config"]),
         ),
     )
     from src.two_bot.usage_ledger import record_response
@@ -267,22 +284,9 @@ def fact_check(
             )
         raw = _call_gemini(tweet, bundle, retry_suffix=retry_suffix)
         try:
-            passed, llm_failures, llm_extracted = _parse_fact_check_json(
-                raw,
-                require_extracted_claims=True,
-            )
             # A prior extractor is context, not permission for this checker to
             # omit its inventory. Each completed factual check owns its claims.
-            canonical_claims = llm_extracted
-            all_failures = list(llm_failures)
-            all_failures.extend(material_span_failures(tweet, canonical_claims))
-            all_failures.extend(_claim_reuse_failures(canonical_claims, state))
-            return FactCheckResult(
-                passed=passed and not all_failures,
-                failures=all_failures,
-                raw_response=raw,
-                extracted_claims=canonical_claims,
-            )
+            return interpret_response(tweet, raw, state)
         except ModelOutputContractError as exc:
             return FactCheckResult(
                 passed=False, failures=[f"Fact-check output contract rejected: {exc}"],
