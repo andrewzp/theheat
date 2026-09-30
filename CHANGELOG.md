@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.38] - 2026-09-30
+
+- Add local joint text/graphic review decisions tied to independently current tweet, evidence, policy, PNG, renderer and alt-text bindings. Acceptance requires five explicit confirmations and a supplied permitted reviewer.
+- Readback requires a separately retained decision fingerprint and a current reviewer role; edits, substituted assets, revoked access and tampered records cannot reuse acceptance.
+- This pure helper performs no paid calls, authentication, storage writes, production attachment or publication approval. Synthetic previews stay marked; production integration and human evaluation remain separate work.
+
 ## [0.9.108.37] - 2026-09-30
 
 - Keep the standalone `model-estimated` source qualifier reusable when a checker misclassifies it as an era anchor or peer comparison. It must not become a one-use novelty ban in writer context or factual reuse checks.
