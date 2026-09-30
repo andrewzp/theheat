@@ -16,7 +16,7 @@ from src.editorial.approval import (
 from src.editorial.newsworthiness import detect_impact_citation
 from src.editorial.revisions import authorize_draft, initialize_revision, review_is_current
 from src.editorial.scoring import EditorialScore
-from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE, MAX_DRAFTS
+from src.orchestrator.caps import CITY_COOLDOWN_DAYS, ELITE_COPY_SCORE
 from src.orchestrator.common import (
     _parse_iso_utc,
     _utc_after_minutes_iso,
@@ -245,15 +245,6 @@ def save_draft(
         )
         return False
 
-    # Prune oldest non-pending drafts to prevent unbounded growth
-    if len(drafts) >= MAX_DRAFTS:
-        before = len(drafts)
-        bot_state["drafts"] = [
-            d for d in drafts if d.get("status") == "pending"
-        ][-MAX_DRAFTS:]
-        drafts = bot_state["drafts"]
-        print(f"[draft] Pruned {before - len(drafts)} old drafts")
-
     draft: dict[str, Any] = {
         "id": f"draft_{_utc_now().strftime('%Y%m%d_%H%M%S')}_{len(drafts)}",
         "text": tweet_text,
@@ -358,6 +349,8 @@ def save_draft(
         authorize_draft(draft, "auto", publication_epoch=publication_policy["epoch"])
 
     drafts.append(draft)
+    # Retention belongs at state persistence, after cycle selection. Pruning
+    # here could drop protected history and shift the cycle's starting index.
     print(f"[draft] Saved: {tweet_text[:60]}...")
     return True
 
