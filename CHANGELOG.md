@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.37] - 2026-09-30
+
+- Keep the standalone `model-estimated` source qualifier reusable when a checker misclassifies it as an era anchor or peer comparison. It must not become a one-use novelty ban in writer context or factual reuse checks.
+- Preserve existing memory records and shipped texts, omit new standalone qualifier entries from novelty memory, and retain full-tweet deduplication and substantive comparison/era reuse checks. All required factual and safety gates remain in force.
+- Regenerate the editorial-policy manifest for the corrected memory rule. Runtime improvement remains to be observed; no model, prompt, sample, publishing or billing flag changes.
+
 ## [0.9.108.36] - 2026-09-30
 
 - Add an OFF-by-default local batch-check worker using the existing deterministic, safety, factual and critic rules. Each invocation advances at most one required stage; synchronous prompts, models and retry defaults are preserved.
