@@ -96,6 +96,16 @@ def _tokens(s: str) -> set[str]:
     return {tok for tok in re.findall(r"\w+", str(s).lower()) if tok not in _STOPWORDS}
 
 
+def _reusable_source_qualifier(value: str) -> bool:
+    """A standalone evidence label is not a one-use historical/comparison hook.
+
+    Keep this narrow: a longer substantive claim containing the qualifier still
+    participates in novelty checks. Full tweet reuse and factual checks are
+    separate and are never exempted. Legacy stored entries remain untouched.
+    """
+    return re.fullmatch(r"model(?:\s+|\s*[-‐‑‒–—−]\s*)estimated", _normalize(value)) is not None
+
+
 def _parse_time(value: Any) -> datetime | None:
     if not value:
         return None
@@ -301,8 +311,8 @@ def build_memory_slice(state: BotState, bundle: StoryBundle) -> MemorySlice:
         recent_tweets_same_country=[_tweet_text(row) for row in same_country_rows[:5]],
         recent_tweets_same_event=[_tweet_text(row) for row in same_event_rows[:5]],
         ongoing_event=ongoing_event,
-        used_era_anchors=list(memory.get("used_era_anchors", []))[-200:],
-        used_peer_comparisons=list(memory.get("used_peer_comparisons", []))[-200:],
+        used_era_anchors=[item for item in memory.get("used_era_anchors", []) if not _reusable_source_qualifier(item)][-200:],
+        used_peer_comparisons=[item for item in memory.get("used_peer_comparisons", []) if not _reusable_source_qualifier(item)][-200:],
         used_framings=list(memory.get("used_framings", []))[-200:],
         shipped_tweet_texts=[
             _tweet_text(row) for row in shipped_rows[:_SHIPPED_TWEET_TEXTS_LIMIT]
@@ -344,6 +354,8 @@ def record_shipped(
     memory.setdefault("shipped_tweets", []).append(shipped_row)
 
     for claim in extracted:
+        if _reusable_source_qualifier(claim.text):
+            continue
         if claim.kind == "era_anchor":
             _dedup_append(memory.setdefault("used_era_anchors", []), _normalize(claim.text))
         elif claim.kind == "peer_comparison":
@@ -523,6 +535,8 @@ def is_reuse(state: BotState, candidate: str, kind: str) -> bool:
 
     if kind not in {"era_anchor", "peer_comparison"}:
         raise ValueError(f"Unsupported reuse kind: {kind}")
+    if _reusable_source_qualifier(candidate):
+        return False
 
     # Branch on the literal key so MemoryState.get returns the precise
     # list[str] type instead of widening to object for runtime keys.
@@ -532,6 +546,8 @@ def is_reuse(state: BotState, candidate: str, kind: str) -> bool:
     )
     candidate_tokens = _tokens(candidate)
     for stored in stored_items:
+        if _reusable_source_qualifier(stored):
+            continue
         stored_norm = _normalize(stored)
         if stored_norm and stored_norm in candidate_norm:
             return True
