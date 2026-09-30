@@ -265,6 +265,11 @@ def _events_from_georss(
     unknown_country_count = 0
     selected_before_freshness = 0
     withheld = dict.fromkeys(("missing", "invalid", "future", "stale"), 0)
+    quarantined = rejected_selected = rejected_unknown_level = 0
+    rejected_by_field = dict.fromkeys((
+        "event_type", "alert_level", "event_id", "country", "from_date",
+        "description", "name", "coordinates",
+    ), 0)
     for item in items:
         event_type_code = _xml_text(item, "gdacs:eventtype")
         alert_level = _xml_text(item, "gdacs:alertlevel")
@@ -275,8 +280,6 @@ def _events_from_georss(
         published = _xml_text(item, "pubDate")
         update_kind = "datemodified" if modified else "pubDate"
         updated, update_issue = _publication_time(modified or published, clock)
-        if updated is not None:
-            publication_dates.append(updated)
         description = _xml_text(item, "description")
         title = _xml_text(item, "title")
         name = _xml_text(item, "gdacs:eventname") or title
@@ -299,7 +302,19 @@ def _events_from_georss(
         }
         missing = [field for field, valid in required.items() if not valid]
         if missing:
-            raise SourceFetchError("GDACS GeoRSS insufficient GeoRSS fields: " + ", ".join(missing))
+            # Quarantine this item without allowing its fields or timestamp to
+            # support any candidate or feed freshness. Keep the coverage gap
+            # visible even when the remaining valid items are only Green.
+            quarantined += 1
+            rejected_unknown_level += int(alert_level not in severity_order)
+            rejected_selected += int(
+                alert_level in severity_order and severity_order[alert_level] >= min_level
+            )
+            for field in missing:
+                rejected_by_field[field] += 1
+            continue
+        if updated is not None:
+            publication_dates.append(updated)
         alert_counts[alert_level] += 1
         unknown_country_count += int(country_unknown)
         if severity_order[alert_level] < min_level:
@@ -350,6 +365,12 @@ def _events_from_georss(
                 },
             },
         ))
+    validated = len(items) - quarantined
+    if not validated:
+        reasons = ", ".join(f"{key}:{count}" for key, count in rejected_by_field.items() if count)
+        raise SourceFetchError(
+            f"GDACS GeoRSS insufficient GeoRSS fields: all {quarantined} items quarantined; invalid fields: {reasons}"
+        )
     feed_time = channel_time or max(publication_dates, default=None)
     if feed_time is None:
         raise GDACSPublicationError("GDACS GeoRSS has no usable source publication timestamp")
@@ -359,7 +380,11 @@ def _events_from_georss(
         raise GDACSPublicationError(str(exc)) from exc
     if diagnostics is not None:
         diagnostics.update(
-            source_leg=GDACS_GEORSS_LEG, feed_items_validated=len(items),
+            source_leg=GDACS_GEORSS_LEG, feed_items_validated=validated,
+            feed_items_total=len(items), quarantined_items=quarantined,
+            rejected_by_field=rejected_by_field,
+            rejected_selected_alerts=rejected_selected,
+            rejected_unknown_alert_level=rejected_unknown_level,
             alert_counts=alert_counts, selected_alerts=len(events),
             unknown_country_items=unknown_country_count,
             selected_before_freshness=selected_before_freshness,
@@ -367,7 +392,8 @@ def _events_from_georss(
             withheld_by_reason=withheld,
             publication_time=feed_time.isoformat().replace("+00:00", "Z"),
             publication_clock="channel_pubDate" if channel_time is not None else "item_update",
-            status=("withheld_selected_alerts" if any(withheld.values()) else
+            status=("partial_feed" if quarantined else
+                    "withheld_selected_alerts" if any(withheld.values()) else
                     "valid_alerts" if events else "valid_no_qualifying_alerts"),
         )
     return events, feed_time.date()

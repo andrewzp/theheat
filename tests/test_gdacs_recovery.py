@@ -49,6 +49,10 @@ def test_explicit_unknown_country_in_green_cyclone_does_not_block_red_alert():
     assert diagnostics == {"source_leg": "georss", "feed_items_validated": 2,
         "alert_counts": {"Green": 1, "Orange": 0, "Red": 1}, "selected_alerts": 1,
         "unknown_country_items": 1, "status": "valid_alerts",
+        "feed_items_total": 2, "quarantined_items": 0,
+        "rejected_by_field": {"event_type": 0, "alert_level": 0, "event_id": 0,
+            "country": 0, "from_date": 0, "description": 0, "name": 0, "coordinates": 0},
+        "rejected_selected_alerts": 0, "rejected_unknown_alert_level": 0,
         "selected_before_freshness": 1, "withheld_selected_alerts": 0,
         "withheld_by_reason": {"missing": 0, "invalid": 0, "future": 0, "stale": 0},
         "publication_time": "2026-09-09T00:00:00Z", "publication_clock": "channel_pubDate"}
@@ -69,8 +73,17 @@ def test_explicit_unknown_country_in_green_cyclone_does_not_block_red_alert():
     ("georss:point", "28.5 181", "coordinates"),
 ])
 def test_unknown_country_exception_does_not_skip_core_validation(field, value, diagnostic):
+    # The malformed cyclone remains ineligible; its valid flood peer survives.
+    events, _, diagnostics = parsed(changed(field, value), level=0)
+    assert [event.source_event_id for event in events] == ["fixture-red"]
+    assert diagnostics["quarantined_items"] == 1
+    assert diagnostics["rejected_by_field"][diagnostic] == 1
+    assert diagnostics["status"] == "partial_feed"
+    root = ET.fromstring(changed(field, value))
+    channel = root.find("channel")
+    channel.remove(channel.findall("item")[1])
     with pytest.raises(SourceFetchError, match=diagnostic):
-        parsed(changed(field, value))
+        parsed(ET.tostring(root, encoding="unicode"))
 
 
 @pytest.mark.parametrize("body", ["<rss><channel /></rss>", "<rss />", "<html><body>maintenance</body></html>"])
