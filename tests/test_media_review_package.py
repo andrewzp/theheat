@@ -252,6 +252,18 @@ def test_preview_filesystem_anomalies_refused(local, kind):
         b"[]",
         b"{" + b" " * MAX_JSON_BYTES,
     ],
+    # Pytest exports the case ID via PYTEST_CURRENT_TEST to fixture subprocesses.
+    # Keep the one-megabyte payload out of that environment variable on Linux.
+    ids=[
+        "duplicate-key",
+        "nested-duplicate-key",
+        "nan",
+        "infinity",
+        "invalid-utf8",
+        "lone-surrogate",
+        "non-object",
+        "oversized",
+    ],
 )
 def test_json_input_limits_and_ambiguity(local, key, bad):
     local[key].write_bytes(bad)
