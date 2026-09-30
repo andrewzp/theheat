@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.46] - 2026-09-30
+
+- Retain bounded private context for new selected factual rejections: exact candidate text, complete input bundle, structured verdict, attempt and response correlation. Preserve the actual selected slate text or revised text without another model call.
+- Return an explicit unavailable disposition for changed, invalid or oversized context; never label truncated input complete. Clear stale diagnostics between generation attempts and cache skips, and detach retained packets from callers.
+- Verify real generation, suppression, state persistence and the authenticated dashboard API. Keep existing recent suppression retention; other rejection stages and complete provider-request archives remain separate. Regenerate the dashboard policy manifest.
+
 ## [0.9.108.45] - 2026-09-30
 
 - Retain the complete serialized source bundle for new accepted synchronous drafts, including raw inputs, headline, historical and related-event context, country and human impacts. Bind all of it to the existing review identity; leave old incomplete evidence unchanged.

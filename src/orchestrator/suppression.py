@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+from copy import deepcopy
 import os
 import secrets
 import threading
@@ -156,6 +157,7 @@ def _record_downstream_suppression(
     summary: str | None,
     evidence_readiness: dict | None = None,
     model_diagnostics: list[dict] | None = None,
+    rejected_candidate: dict | None = None,
 ) -> None:
     """Append a downstream-kill suppression — a bundle that passed the
     editorial score gate but died in the two-bot pipeline (writer kill,
@@ -192,6 +194,8 @@ def _record_downstream_suppression(
         row["evidence_readiness"] = evidence_readiness
     if model_diagnostics:
         row["model_diagnostics"] = model_diagnostics
+    if rejected_candidate is not None:
+        row["rejected_candidate"] = deepcopy(rejected_candidate)
     with _SUPPRESSIONS_LOCK:
         suppressions = bot_state.setdefault("suppressions", [])
         suppressions.append(row)

@@ -130,6 +130,8 @@ def _try_two_bot_draft(
         prompt_ready = False
     skip_reason = negative_cache.should_skip(bot_state, event_id, bundle) if prompt_ready else None
     if skip_reason is not None:
+        for field in ("rejected_candidate", "model_diagnostics", "evidence_readiness"):
+            pipeline_result.pop(field, None)
         pipeline_result.update(kill_stage="negative_cache", kill_reason=skip_reason, stage_outcomes={})
         cache_ctx = _current_suppression_ctx() or {}
         _record_downstream_suppression(bot_state=bot_state, source=cache_ctx.get("source") or "writer",
@@ -158,6 +160,7 @@ def _try_two_bot_draft(
                 summary=getattr(bundle, "where", None) or city or None,
                 evidence_readiness=pipeline_result.get("evidence_readiness"),
                 model_diagnostics=pipeline_result.get("model_diagnostics"),
+                rejected_candidate=pipeline_result.get("rejected_candidate"),
             )
         return False
     final_text = _append_cyclone_advisory_url(draft["text"], bundle, legacy_type)
