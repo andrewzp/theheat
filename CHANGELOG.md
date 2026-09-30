@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.44] - 2026-09-30
+
+- Remove the orchestrator's legacy pending-only draft pruning; leave retention to the shared persistence policy after cycle selection. Approved and posted history, old pending drafts, unresolved attempts and revision conflicts survive a full queue.
+- Preserve the cycle's starting index while new drafts are saved; ordinary rejected-draft expiry and remaining cap slots still apply at persistence. Duplicate/cooldown/approval rules are unchanged. Rejected saves do not invoke retention. No production backend or publication-setting change.
+
 ## [0.9.108.43] - 2026-09-30
 
 - Qualify GDACS RSS alerts using explicit current status and current episode severity. Withhold inactive, unverified, inconsistent or below-threshold episodes before drafting, with distinct diagnostic counts.
