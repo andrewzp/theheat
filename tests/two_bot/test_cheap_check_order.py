@@ -92,11 +92,13 @@ def test_forbidden_scoped_claim_is_rejected_before_safety(calls):
     assert outcome["stage"] == "honesty_gate" and all(not m.mock_calls for m in calls)
 
 
-def test_cross_signal_causation_is_rejected_before_safety(calls):
+@pytest.mark.parametrize("text", ["The same system is behind both events.",
+                                 "Two locations, one dust event."])
+def test_cross_signal_causation_is_rejected_before_safety(calls, text):
     bundle = _bundle()
     bundle.related_signals = [Mock()]  # Gate only reads presence; no source claim is certified.
     outcome = {}
-    assert check("The same system is behind both events.", bundle,
+    assert check(text, bundle,
                  _state_with_memory(), outcome=outcome) is None
     assert outcome["stage"] == "cross_signal" and all(not m.mock_calls for m in calls)
 
