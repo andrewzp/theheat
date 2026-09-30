@@ -15,7 +15,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, domain_journal, spend_journal
+from src.commands import batch_journal, batch_worker_journal, batch_result_journal, check_journal, check_execution_journal, domain_journal, spend_journal
 from src.commands.reducer import AutomaticPolicy, failure_result, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 
@@ -77,6 +77,7 @@ class SQLiteAuthority:
         allowed.update(batch_worker_journal._TABLES)
         allowed.update(batch_result_journal._TABLES)
         allowed.update(check_journal._TABLES)
+        allowed.update(check_execution_journal._TABLES)
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
         if tables - allowed:
             raise domain_journal.DomainJournalError("Refusing a database that is not the separate local command authority")
@@ -125,6 +126,7 @@ class SQLiteAuthority:
                 batch_worker_journal.install(connection)
                 batch_result_journal.install(connection)
                 check_journal.install(connection)
+                check_execution_journal.install(connection)
                 if installed:
                     domain_journal.record_snapshot(connection, initial_state, origin="bootstrap",
                         origin_id=str(version), authority_version=version, raw=raw,
@@ -375,6 +377,27 @@ class SQLiteAuthority:
                     result = check_journal.status(connection, payload, now=now)
                 else:
                     raise check_journal.CheckJournalError("unknown_check_action")
+                if before_commit is not None:
+                    before_commit()
+                connection.commit()
+                return result
+            except BaseException:
+                connection.rollback()
+                raise
+
+    def check_execution(self, action: str, payload: dict, *, now: str,
+                        raw: bytes | None = None, before_commit: Callable[[], None] | None = None) -> dict:
+        """Retain/read local raw observations; no parsing or paid side effects."""
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                if action == "read" and raw is None:
+                    result = check_execution_journal.read(connection, payload)
+                elif action == "observe":
+                    result = check_execution_journal.record(connection, payload, raw=raw, now=now)
+                else:
+                    raise check_journal.CheckJournalError("unknown_check_execution_action")
                 if before_commit is not None:
                     before_commit()
                 connection.commit()

@@ -228,6 +228,26 @@ class SafetyCheckResult:
         return self.execution_status == "completed" and self.verdict == "allow"
 
 
+def prepare_request(tweet: str) -> dict:
+    """Pure exact request; shared with the durable single-attempt worker."""
+    if not isinstance(tweet, str) or not tweet.strip() or len(tweet) > 280:
+        raise ValueError("Invalid tweet")
+    tweet.encode("utf-8")
+    fields = [(field, spec, conversion) for _, field, spec, conversion in Formatter().parse(SAFETY_PROMPT_TEMPLATE) if field is not None]
+    if fields != [("tweet", "", None)]:
+        raise ValueError("Safety prompt must review the exact tweet")
+    prompt = SAFETY_PROMPT_TEMPLATE.format(tweet=tweet)
+    prompt.encode("utf-8")
+    return dict(model=GEMINI_SAFETY_MODEL, contents=prompt)
+
+
+def interpret_response(raw: str) -> str:
+    answer = raw.strip().upper()
+    if answer not in {"YES", "NO"}:
+        raise ValueError("safety_invalid_response: expected YES or NO")
+    return "allow" if answer == "NO" else "reject"
+
+
 def check_llm_result(tweet: str) -> SafetyCheckResult:
     """A check must complete explicitly; unavailable is never a passing verdict.
 
@@ -245,10 +265,7 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
     except (ValueError, UnicodeError):
         return SafetyCheckResult("failed", None, "safety_invalid_input", model, text_sha, prompt_sha, at)
     try:
-        fields = [(field, spec, conversion) for _, field, spec, conversion in Formatter().parse(SAFETY_PROMPT_TEMPLATE) if field is not None]
-        if fields != [("tweet", "", None)]:
-            raise ValueError("Safety prompt must review the exact tweet")
-        prompt = SAFETY_PROMPT_TEMPLATE.format(tweet=tweet)
+        prompt = prepare_request(tweet)["contents"]
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
     except (ValueError, UnicodeError, KeyError):
         return SafetyCheckResult("failed", None, "safety_invalid_prompt", model, text_sha, prompt_sha, at)
@@ -278,10 +295,10 @@ def check_llm_result(tweet: str) -> SafetyCheckResult:
             record_response("safety", response, model, "google")
         except Exception:
             pass  # Accounting cannot change an already returned check response.
-        answer = (response.text or "").strip().upper()
-        if answer not in {"YES", "NO"}:
+        try:
+            verdict = interpret_response(response.text or "")
+        except ValueError:
             return SafetyCheckResult("failed", None, "safety_invalid_response: expected YES or NO", model, text_sha, prompt_sha, at)
-        verdict = "allow" if answer == "NO" else "reject"
         result = SafetyCheckResult("completed", verdict,
             None if verdict == "allow" else "LLM flagged as potentially harmful", model,
             text_sha, prompt_sha, datetime.now(timezone.utc).isoformat())
