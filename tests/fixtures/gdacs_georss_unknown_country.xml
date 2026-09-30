@@ -2,8 +2,9 @@
 <!-- Regression shape based on the 2026-09-09 GDACS RSS capture. The first
      item's identity/date/point and empty country are source fields. The Red
      flood below is engineered so filtering cannot hide feed-wide failure.
-     Publication clocks are explicitly synthetic fixture additions; they do not
-     certify the freshness of the originally retained source notice. -->
+     Publication clocks, current flags and episode level/ID fields are synthetic
+     fixture additions; they do not certify freshness or current eligibility of
+     the originally retained source notice. -->
 <rss version="2.0" xmlns:gdacs="http://www.gdacs.org" xmlns:georss="http://www.georss.org/georss">
   <channel>
     <title>GDACS country-absence regression</title>
@@ -13,6 +14,9 @@
       <description>Affected countries are unknown in the source notice.</description>
       <gdacs:eventtype>TC</gdacs:eventtype>
       <gdacs:alertlevel>Green</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Green</gdacs:episodealertlevel>
+      <gdacs:episodeid>synthetic-country-absence</gdacs:episodeid>
       <gdacs:eventid>1001319</gdacs:eventid>
       <gdacs:eventname>TWENTYTHREE-26</gdacs:eventname>
       <gdacs:country />
@@ -25,6 +29,9 @@
       <description>Synthetic high-severity fixture for filter regression.</description>
       <gdacs:eventtype>FL</gdacs:eventtype>
       <gdacs:alertlevel>Red</gdacs:alertlevel>
+      <gdacs:iscurrent>true</gdacs:iscurrent>
+      <gdacs:episodealertlevel>Red</gdacs:episodealertlevel>
+      <gdacs:episodeid>synthetic-flood</gdacs:episodeid>
       <gdacs:eventid>fixture-red</gdacs:eventid>
       <gdacs:country>India</gdacs:country>
       <gdacs:fromdate>Wed, 09 Sep 2026 00:00:00 GMT</gdacs:fromdate>

@@ -48,6 +48,11 @@ def test_explicit_unknown_country_in_green_cyclone_does_not_block_red_alert():
     assert str(newest) == "2026-09-09"
     assert diagnostics == {"source_leg": "georss", "feed_items_validated": 2,
         "alert_counts": {"Green": 1, "Orange": 0, "Red": 1}, "selected_alerts": 1,
+        "episode_alert_counts": {"Green": 1, "Orange": 0, "Red": 1, "unknown": 0},
+        "current_flag_counts": {"true": 2, "false": 0, "unknown": 0},
+        "current_candidates_examined": 1, "withheld_current_alerts": 0,
+        "withheld_current_by_reason": {"not_current": 0, "unverified_current": 0,
+            "unverified_episode": 0, "episode_below_threshold": 0, "inconsistent_alert_levels": 0},
         "unknown_country_items": 1, "status": "valid_alerts",
         "feed_items_total": 2, "quarantined_items": 0,
         "rejected_by_field": {"event_type": 0, "alert_level": 0, "event_id": 0,
@@ -130,6 +135,7 @@ def test_malformed_or_empty_fallback_does_not_invoke_unrelated_witnesses(rss, mo
 @responses.activate
 def test_zero_selected_alerts_keeps_validated_feed_and_fallback_telemetry(monkeypatch):
     body = SOURCE.read_text().replace("<gdacs:alertlevel>Red</gdacs:alertlevel>", "<gdacs:alertlevel>Orange</gdacs:alertlevel>")
+    body = body.replace("<gdacs:episodealertlevel>Red</gdacs:episodealertlevel>", "<gdacs:episodealertlevel>Orange</gdacs:episodealertlevel>")
     responses.add(responses.GET, gdacs.GDACS_URL, json={})
     responses.add(responses.GET, gdacs.GDACS_GEORSS_URL, body=body)
     state = deepcopy(DEFAULT_STATE)
