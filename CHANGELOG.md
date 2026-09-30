@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.41] - 2026-09-30
+
+- Reject explicit single/shared weather-event assertions when a draft has only related-signal facts, with no relationship warrant. Cover bounded one/single/same event phrasing, whitespace and Unicode hyphens before paid checks.
+- Preserve bare place/date enumeration, existing causal checks and single-event behavior without related context. The experimental check path uses the same rule; required model checks still apply to eligible text.
+- Regenerate the policy manifest without editing retained drafts or changing runtime prompts, models, samples or publishing settings. This closes a lexical check gap; it does not establish better prose or complete semantic coverage.
+
 ## [0.9.108.40] - 2026-09-30
 
 - Use GDACS RSS publication and update timestamps for freshness, independently of event start and end dates. A future event window cannot freshen an old feed; an ongoing event can remain eligible when its source update is current.

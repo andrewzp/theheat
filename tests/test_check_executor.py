@@ -308,6 +308,27 @@ def test_local_gates_reject_before_paid_checks(case, monkeypatch):
     assert check_requests.deterministic_result(original)["passed"]
 
 
+@pytest.mark.parametrize("text,shared", [
+    ("Two locations, one dust event.", True),
+    ("The same\u2011weather\u2011system spans both places.", True),
+    ("Two reports in one country on the same day.", False),
+])
+def test_experimental_checks_share_event_identity_gate(case, text, shared):
+    packet = deepcopy(saved(case)["packet"])
+    # Explicit synthetic variants exercise the real check function; stored
+    # immutable candidates and their bindings are not changed.
+    packet["bundle"]["related_signals"] = [{
+        "event_id": "synthetic-related", "signal_kind": "drought", "where": "Mali",
+        "when": packet["bundle"]["when"], "country": "ML",
+        "headline_metric": {"label": "severity", "value": "extreme"},
+    }]
+    packet["candidate"]["tweet"] = text
+    result = check_requests.deterministic_result(packet)
+    assert ("unsupported_cross_signal_relation" in result["failures"]) is shared
+    if shared:
+        assert not result["passed"]
+
+
 def test_scientific_rejection_keeps_material_inventory_gate(case):
     packet = saved(case)["packet"]
     raw = envelope(

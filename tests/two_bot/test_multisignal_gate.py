@@ -90,6 +90,49 @@ class TestCrossSignalViolation:
 
 
 class TestPipelineIntegration:
+    @pytest.mark.parametrize("text", [
+        "Two locations, one dust event.",
+        "Two reports describe a single weather system.",
+        "Both cities are in the same heatwave.",
+        "One\n\tDUST   EVENT affected both places.",
+        "Two locations: a single-dust-event.",
+        "Two locations: one\u2011dust\u2011event.",
+        "Two locations: one\u2014dust\u2014event.",
+        "Two locations: one\u2212dust\u2212event.",
+        "The same tropical cyclone reached both places.",
+        "One smoke plume spans both places.",
+        "Two readings reflect a single episode.",
+        "A single heat wave crosses both places.",
+    ])
+    def test_shared_event_identity_rejected_with_related_context(self, text):
+        bundle = build_fire_bundle(_fire_event())
+        bundle.related_signals = _related()
+        assert _cross_signal_violation(text, bundle) is not None
+        bundle.related_signals = []
+        assert _cross_signal_violation(text, bundle) is None
+
+    @pytest.mark.parametrize("text", [
+        "Two readings on the same day in one country.",
+        "One station reported heat; a second station reported rainfall.",
+        "Two reports in the same week.",
+        "Dust in one city; smoke in another city.",
+        "A thermal signal and a drought were reported separately.",
+        "Someone reported an event elsewhere.",
+        "The same-day readings are from different places.",
+    ])
+    def test_enumeration_and_word_boundaries_remain_eligible(self, text):
+        bundle = build_fire_bundle(_fire_event())
+        bundle.related_signals = _related()
+        assert _cross_signal_violation(text, bundle) is None
+
+    def test_shared_event_negation_cannot_excuse_another_assertion(self):
+        bundle = build_fire_bundle(_fire_event())
+        bundle.related_signals = _related()
+        assert _cross_signal_violation(
+            "No single event was confirmed yesterday. Today, one dust event spans both places.",
+            bundle,
+        ) is not None
+
     def test_cross_signal_claim_killed(self, mock_writer, mock_fact_check, mock_critic, mock_safety):
         mock_writer.return_value = _writer("This Mali fire is driven by the regional drought.")
         bundle = build_fire_bundle(_fire_event())
@@ -99,6 +142,17 @@ class TestPipelineIntegration:
         assert draft is None
         assert ro["kill_stage"] == "cross_signal"
         assert not mock_fact_check.called  # gate runs before fact-check
+
+    def test_shared_identity_buys_no_downstream_checks(self, mock_writer, mock_fact_check,
+                                                     mock_critic, mock_safety):
+        mock_writer.return_value = _writer("Two locations, one dust event.")
+        bundle = build_fire_bundle(_fire_event())
+        bundle.related_signals = _related()
+        outcome = {}
+        assert generate_draft(bundle, _state_with_memory(), result_out=outcome) is None
+        assert outcome["kill_stage"] == "cross_signal"
+        assert mock_writer.call_count == 1
+        assert not mock_safety.called and not mock_fact_check.called and not mock_critic.called
 
     def test_bare_enumeration_passes_gate(self, mock_writer, mock_fact_check, mock_critic, mock_safety):
         mock_writer.return_value = _writer(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 import os
+import re
 from typing import Any
 
 from src import config
@@ -93,6 +94,15 @@ _CROSS_SIGNAL_BANNED_PHRASES: tuple[str, ...] = (
     "shared cause", "converg", "part of a", "part of the same",
 )
 
+# RelatedSignal contains no shared-event warrant. Co-occurrence cannot support
+# these compact identity assertions either. Keep the vocabulary bounded: "one
+# country" and "same day" are valid enumeration, not claims of a single event.
+_SHARED_EVENT_ASSERTION = re.compile(
+    r"\b(?:one|single|same)\s+"
+    r"(?:(?:weather|dust|smoke|heat|cold|rain|rainfall|snow|ice|flood|fire|tropical)\s+){0,2}"
+    r"(?:event|system|storm|episode|heatwave|coldwave|wave|plume|outbreak|cyclone|hurricane|typhoon|wildfire|flood)\b"
+)
+
 
 def _cross_signal_violation(tweet: str, bundle: StoryBundle) -> str | None:
     """Reject a causal / shared-system / "global pattern" framing in a draft that
@@ -107,6 +117,12 @@ def _cross_signal_violation(tweet: str, bundle: StoryBundle) -> str | None:
     for phrase in _CROSS_SIGNAL_BANNED_PHRASES:
         if phrase in low:
             return phrase
+    # Normalize spacing and common Unicode hyphens only for this new rule, so
+    # existing substring behavior and its established diagnostics stay intact.
+    normalized = re.sub(r"[\s\-\u2010-\u2015\u2212]+", " ", low)
+    match = _SHARED_EVENT_ASSERTION.search(normalized)
+    if match:
+        return match.group(0)
     return None
 
 
