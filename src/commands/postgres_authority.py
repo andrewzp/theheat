@@ -1,4 +1,4 @@
-"""Isolated PostgreSQL command core; no production ingress, jobs or publishing.
+"""Isolated PostgreSQL command/spending core; no production ingress or providers.
 
 Principal/resolver/policy are trusted local adapter inputs, not authentication.
 The current pointer, immutable projection and terminal result commit together.
@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
+from src.commands import postgres_spending
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -83,12 +84,32 @@ class PostgresCommandAuthority:
             p._require(row[4] == self.projections.user, "migration_owner_required")
 
     @staticmethod
-    def _state(c, *, lock: bool = False) -> tuple[int, dict]:
+    def _pointer(c, *, lock: bool = False) -> tuple[int, str, str]:
         row = c.execute(f"SELECT version,namespace,snapshot_id FROM {SCHEMA}.state WHERE singleton=1" + (" FOR UPDATE" if lock else "")).fetchone()
         p._require(row is not None and row[1] == NAMESPACE and row[2] == str(row[0]),
                    "corrupt_authority_pointer")
+        return row
+
+    @staticmethod
+    def _state(c, *, lock: bool = False) -> tuple[int, dict]:
+        row = PostgresCommandAuthority._pointer(c, lock=lock)
         _, state = p.PostgresProjectionRepository._read(c, row[1], row[2])
         return row[0], state
+
+    def initialize_spending(self) -> None:
+        """Explicit owner-only install; never selects limits or changes state."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_spending.install(c, self.environment)
+
+    def spending(self, action: str, payload: dict, *, now: str) -> dict:
+        """Trusted local operation; dispatch permission exists only after commit."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_spending.apply(c, action, payload, now=now, environment=self.environment)
+        return result
 
     def initialize(self, initial_state: dict, *, runtime_role: str) -> None:
         encoded, fields = p._snapshot(initial_state)
