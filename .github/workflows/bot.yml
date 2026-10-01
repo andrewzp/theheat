@@ -62,7 +62,7 @@ jobs:
     # Skipping the test job here leaves both jobs skipped on that PR (run is
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -78,7 +78,18 @@ jobs:
           cache: 'npm'
           cache-dependency-path: dashboard/package-lock.json
 
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt -r requirements-postgres.txt
+
+      - name: Install PostgreSQL 17 contract-test binaries
+        # Disposable CI runner only. Tests start their own private Unix-socket
+        # cluster; no service, TCP listener or existing database is used.
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg /etc/postgresql-common
+          sudo curl --fail --silent --show-error https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt noble-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          echo "create_main_cluster = false" | sudo tee /etc/postgresql-common/createcluster.conf > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-client-17
 
       - name: Install dashboard dependencies
         working-directory: dashboard
@@ -101,6 +112,9 @@ jobs:
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
       - run: python -m pytest tests/ -v -m "not voice_replay"
+        env:
+          THEHEAT_TEST_POSTGRES: "1"
+          THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
 
       - name: SQLite backend smoke
         run: |
