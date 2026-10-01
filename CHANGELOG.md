@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.66 — 2026-10-01
+
+- Stage all five graphic assets and the independently rebuilt prospective revision atomically in the existing local/preview PostgreSQL authority. Verify exact bytes, current predecessor/policy and current operator permission; retain immutable, bounded package references for a later attachment command.
+- Preserve the complete draft state, command journal and publication evidence during staging. Historical readback verifies the retained package without granting current review, attachment or posting approval; test rollback, lost acknowledgements, concurrent staging and backup/restore.
+
 ## 0.9.108.65 — 2026-10-01
 
 - Separate pull-request checks from the production workflow queue. Scheduled and manual bot runs retain their existing shared group and cannot cancel an in-progress producer; obsolete checks can be cancelled only by another head of the same PR.

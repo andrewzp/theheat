@@ -30,6 +30,8 @@ POLICY_FILES = (
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py", "src/data/nhc.py", "src/data/cyclones.py",
     "src/commands/postgres_check_observations.py",
+    "src/commands/postgres_media.py", "src/commands/media_journal.py",
+    "src/storage/migrations/009_media_staging.sql",
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
 )
