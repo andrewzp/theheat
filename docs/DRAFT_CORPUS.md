@@ -11,6 +11,96 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-01 — Daily corpus grading (6 fresh drafts; **dry spell broken after 70 days — first drafts since Jul 23**; 0% A-rate)
+
+**Context:** Step 0 hard-reset `main` (tip `49acc9c`, PR #576 — `main` moved from the Sep 29 tip
+`c71d6cf`; 50+ commits of bounded-check/Postgres engineering). Checked out `daily-plan-current`;
+`git rebase origin/main` conflicted on the same pre-merge Jul 7 commit and was aborted per the
+fallback (unchanged since Aug 20). Gist read via git-clone (success).
+
+**Queue: 6 pending, all fresh** (created Sep 30T17:49Z → Oct 1T10:42Z; oldest ~21h at pull). Gist
+total now 46 (38 posted, 2 approved, 6 pending) — the first change in drafts since Jul 23. Nothing
+carried over; nothing fabricated. **The writer is producing drafts again** — billing outage /
+suppression cause not re-pulled this cycle (gist `state.json` carries drafts only); operator should
+confirm recovery in the suppression ledger / issue #500.
+
+**Grade distribution:** A 0 · B 3 · C 3 · D/F 0 → **A-rate 0% (0/6)**. Bar ✗ (50 pp gap).
+
+**Headline finding:** the voice regime looks different from the July corpus. All six drafts are
+*data-only*: a number, a WHO multiple or a peer reading, and no mechanism sentence, no ecosystem
+specificity, no close. July's dust/air-quality drafts carried a shamal/heat-trap mechanism; none of
+these do. Three end on a bare second data point, two end on a parenthetical source tag
+("(CAMS/Open-Meteo)", "(CAMS global model, 45 km resolution)"). Accurate and clean — no Wodehouse
+violation — but nothing for a named mechanic to operate on. Pure data delivery is valid; this is
+data delivery on signals too routine to carry it alone.
+
+### B range (3)
+
+**[1] Riyadh dust_event (score 75) — B-.** "CAMS model estimates a dust daily maximum of 4,338 µg/m³
+on Sept 30, with PM10 averaging 1,176 µg/m³ over 24 hours — about 26× the WHO daily guideline. A
+concurrent PM2.5 signal reached 162 µg/m³ the same day." WHO anchor present and correct (1,176/45 =
+26.1) — P_dust fix holding. Second sentence is a bare added reading, no mechanism, no close. "A
+concurrent PM2.5 signal" = the bot naming its own signal kind (A4 shape).
+
+**[2] Mecca dust_event (score 71) — B-.** "...622 µg/m³ on Sept 30, with PM10 averaging 4× the WHO
+24-hour guideline — while Riyadh registered a peak of 4,338 µg/m³ the same day. Two major Saudi
+cities, one dust event. (CAMS/Open-Meteo)" WHO anchor present. Closest thing to a mechanic in the
+batch: the tally close "Two major Saudi cities, one dust event" is a deadpan compression, but it
+restates what the sentence already said and the source tag after it buries it. Leads with the
+*weaker* city (tier 1, 4×) and relegates the 4,338 peak to a clause. "Registered" overstates a model
+estimate. Duplicates [1]'s Riyadh figure across two drafts.
+
+**[4] Riyadh air_quality_hazard (score 74) — B-.** "model-estimated PM2.5 daily mean of 213 µg/m³ on
+Oct. 1 — 14× the WHO 24-hour guideline of 15 µg/m³. A related dust signal for the city peaked at
+4,711 µg/m³ the same day. (CAMS global model, 45 km resolution)" 213.3/15 = 14.2 ✓. Strongest numbers
+in the batch (US AQI 1,720 in the bundle, unused). Same shape as [1]: bare second reading, "dust
+signal" self-naming (A4), source-method parenthetical as the last element. Third Riyadh draft of six.
+
+### C range (3)
+
+**[3] Cerrado fire (score 78) — C+.** "888 MW of radiative heat logged by NASA FIRMS on Oct. 1 —
+very-high intensity, satellite-confirmed at 100% confidence. Two nearby signals the same day reached
+1,584 and 1,018 MW." Three problems: (a) "very-high intensity" is the scoring-tier label
+(`_shared.py` tier `very_high`) in copy — P_tier-class leak on a type (fire) where it hadn't
+appeared; (b) the lead is the *smallest* of three readings, so the peer sentence undercuts it
+(1,584 MW should lead — stranded punchline, P5 shape); (c) "Two nearby signals" self-names the
+signal kind, and there is no season/ecosystem sentence even though early-October Cerrado dry-season
+context was the obvious setup.
+
+**[5] Taiz dust_event (score 71) — C+.** "model-estimated PM10 averaged ~266 µg/m³ over 24 hours — about
+5.9× the WHO daily guideline. Dust daily maximum reached 829 µg/m³ (CAMS global model, 45 km
+resolution)." WHO anchor present (266/45 = 5.9 ✓). "~266" **and** "about 5.9×" — approximation where
+exact is available, double-hedged (Wodehouse / P4-class, 1 instance). Tier-1 signal, no mechanism, no
+close; reads as a lab readout.
+
+**[6] Hurricane Rachel cyclone_tier_crossing (score 68) — C+.** "Hurricane Rachel has strengthened to
+Category 2 in the East Pacific, packing 85-kt winds and a 972 mb central pressure as of the Oct. 1
+NHC advisory." Accurate (85 kt is Cat 2), first `cyclone_tier_crossing` draft in corpus. News-wire
+register, no voice; a routine 1→2 crossing at score 68 (threshold 66) doesn't carry a data-only
+delivery. "Packing" is the one try-hard word. Evidence block's public-advisory field is a stringified
+dict (`{'advNum': ...}`) — not in copy, logged as an infra anomaly only.
+
+### Patterns named
+
+1. **Flat data-only regime (new → A10).** 6/6 drafts: no mechanism, no close. 0 A.
+2. **P_close — all six fail by omission.** None reaches even mechanism-only; [2]'s tally is the only
+   borderline. Counts as a failing cycle (0 positive / 5 failing / 1 borderline).
+3. **A4 signal-kind self-naming recurs (2nd cycle: Jul 7, Oct 1) → promoted.** "concurrent PM2.5
+   signal" [1], "related dust signal" [4], "Two nearby signals" [3] — 3 instances in one cycle, a
+   cross-signal-reference variant (cross-signal identity work is on `main`).
+4. **P_dust CONFIRMED holding after the gap.** 3/3 dust/PM drafts state the WHO multiple.
+5. **P_tier re-sighting (fire).** "very-high intensity" — 1 instance; reopens tracking.
+6. **Same-city saturation.** Riyadh in 3 of 6 drafts (4,338 reused in [2]).
+7. **Source-method parenthetical as terminal element** [2], [4], [5] — deadens the last beat.
+8. **Untested:** P9, P_compound, A5, A6, A7, A8, A9 (no target-type draft; no agreement errors seen).
+   Zero Wodehouse violations except [5]'s double-hedged approximation.
+
+### Followups
+
+- Operator: confirm billing/suppression recovery; consider whether the flat regime is a writer-prompt
+  or model change since Jul 23 (compare against `src/two_bot` diffs).
+- Staleness: 0 candidates (oldest ~21h). Bulk-reject moot.
+
 ## 2026-09-29 — Daily corpus grading (0 fresh drafts; 68th consecutive; dry spell now 68 days)
 
 **Context:** Step 0 hard-reset `main` (tip still `c71d6cf`, PR #525). Checked out
