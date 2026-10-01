@@ -63,7 +63,9 @@ jobs:
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Real PostgreSQL crash/restore checks now add several minutes to the suite.
+    # Keep every regression and allow the job to reach dashboard validation.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
 
