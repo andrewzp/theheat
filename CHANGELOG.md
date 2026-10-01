@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.65 — 2026-10-01
+
+- Separate pull-request checks from the production workflow queue. Scheduled and manual bot runs retain their existing shared group and cannot cancel an in-progress producer; obsolete checks can be cancelled only by another head of the same PR.
+- Allow 35 minutes for full CI after the suite exceeded the prior 25-minute limit; report the slowest tests and print thread stacks when a test stalls for two minutes. Preserve every offline regression, the production timeout, schedules and publishing controls.
+
 ## 0.9.108.64 — 2026-10-01
 
 - Build an exact prospective media revision and joint-review packet before attaching a graphic. Replacement and removal invalidate old checks, approval and queued intent while retaining source and publication evidence; no authority or production attachment is activated.
