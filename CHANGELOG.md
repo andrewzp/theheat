@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.62 — 2026-10-01
+
+- Reject the canary's explicitly invented positive fixtures before any model call. Report monitoring as blocked with provider access and writer quality unobserved; preserve the positive threshold and required safety checks.
+- Require a reviewed exact-packet qualification and a current bounded evidence window before a future positive fixture can run. Removing synthetic labels alone cannot qualify evidence.
+- Separate malformed writer output, clean refusal, recorded budget exhaustion, unclassified call failures and unpassed safety checks without dumping response text. Existing schedules and paid replay opt-in remain unchanged; the complete read-only production monitor is still pending.
+
 ## 0.9.108.61 — 2026-10-01
 
 - Retain a bounded, content-free window of provider-reported usage: requested/resolved model, thinking and tool counts, cache-duration splits, service labels and modality breakdowns. Missing or malformed dimensions remain explicit.

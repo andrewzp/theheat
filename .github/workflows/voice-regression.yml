@@ -1,41 +1,17 @@
 name: voice-regression
 
-# Live writer-replay regression + daily billing canary.
-#
-# Cost (measured 2026-07-13 — the previous header's "$6/month" was 5× stale
-# against the observed ~$30/month nightly bill). Stated as base + per-event,
-# because PR runs bill per qualifying EVENT (opened/synchronize/reopened/
-# labeled), not per PR:
-#   weekly full suite    ~$1.00/run × 4.3/mo               ≈ $4.3/month
-#   daily canary         ~$0.08/run × 26/mo (skips Sunday) ≈ $2.1/month
-#   fixed base                                             ≈ $6.4/month
-#   + ~$1.00 per qualifying writer-path PR event (a busy month with ~5
-#     such events ≈ $11–12 total; was ~$30/month nightly regardless).
-#
-# Triggers (economics master plan P0.4):
-#   - pull_request (only with THEHEAT_PAID_PR_REPLAY_ENABLED=1) when the PR touches the writer prompt or the
-#     writer itself: src/two_bot/prompts/** or src/two_bot/writer.py. The
-#     suite goes red on the exact PRs that can break the voice. Same-repo
-#     PRs only: forks receive no secrets, so the paid job would fail on a
-#     missing key with no way to self-green — it is skipped for forks (the
-#     required `test` check still covers them). Advisory
-#     gate: the repo's only *required* check is `test` (a path-filtered
-#     required check would wedge unrelated PRs as "expected"), but merge
-#     discipline treats ANY red check as blocking (INDEX §Standing rules).
-#   - pull_request with label `voice-check`: opt-in full run for any other
-#     PR (label persists across pushes).
-#   - schedule 09:17 UTC Mon–Sat: 3-fixture billing + voice canary — the
-#     outage tripwire. 2026-07-11: the Anthropic balance hit $0 and drafting
-#     stopped SILENTLY (bot.yml tolerates writer failures); the nightly full
-#     suite was the only loud signal. The canary keeps that tripwire at ~3%
-#     of the old cost and fails RED on billing/auth errors and on a missing
-#     key (a skipped canary is no canary).
-#   - schedule weekly Sunday 09:00 UTC: full replay suite.
-#   - workflow_dispatch: manual full suite.
+# Existing paid replay cadence is unchanged. Routine positive canary fixtures
+# are currently unqualified: preflight fails visibly before any provider call.
+# This means monitoring is blocked, not that provider billing failed. Do not hide
+# synthetic labels, skip the gate or retry those packets to obtain a green run.
+# Retained normal-run observations are a separate future monitoring input; they
+# cannot establish source truth or all required check results without exact joins.
+# No current all-in price or monthly-savings estimate has been established.
+# PR replay remains opt-in, with hermetic required CI independent of paid probes.
 
 on:
   schedule:
-    - cron: '17 9 * * 1-6'   # daily canary (3 fixtures; Sunday covered by the full suite)
+    - cron: '17 9 * * 1-6'   # daily canary preflight; unqualified fixtures make no provider calls
     - cron: '0 9 * * 0'    # weekly full suite (Sunday)
   workflow_dispatch: {}
   pull_request:
@@ -105,7 +81,7 @@ jobs:
         run: python -m pytest tests/voice_regression/ -v -m voice_replay
 
   canary:
-    # Daily 3-fixture billing + voice canary — the outage tripwire.
+    # Positive writer monitor; fixture qualification precedes every paid call.
     if: github.event_name == 'schedule' && github.event.schedule == '17 9 * * 1-6'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -119,7 +95,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Run daily canary (3 fixtures, billing error = RED)
+      - name: Run canary qualification and positive writer gate
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
