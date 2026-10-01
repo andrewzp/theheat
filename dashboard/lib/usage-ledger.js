@@ -1,3 +1,4 @@
+import { summarizeUsageObservations } from "./usage-observations.js"
 // Paired with src/two_bot/usage_ledger.py and usage_summary.py.
 export const COVERAGE_FIELDS = ["priced_calls", "unpriced_calls", "missing_usage_calls", "priced_usd"]
 const COUNT_FIELDS = COVERAGE_FIELDS.slice(0, 3)
@@ -137,11 +138,12 @@ export function summarizeUsage(state, { now = Date.now() } = {}) {
       "Workflow agents, other account usage and non-state-writing evaluations remain untracked; no budget enforcement is implemented here.",
       "Pre-response failures, late source threads and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
       "The shared buffer retains 500 responses; new stage traffic can evict earlier writer responses before a drain.",
-      "Google thought/tool/modality/tier and grounding charges are not priced or fully represented; Google responses remain unpriced.",
+      "Recent observations retain reported model/token/tool dimensions, but do not establish complete charging or account totals; Google responses remain unpriced.",
+    "The recent usage window retains at most 32 observations of at most 4096 bytes each; truncation, invalid input and retained identity conflicts remain explicit.",
       "The ledger retains 45 day buckets. MAX cumulative merges can undercount concurrent writers and cannot prove zero spending on missing days.",
       "Coverage keeps up to 32 original cumulative snapshots per day/model; conflicts or overflow make the subtotal unknown.",
       "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader."
 ],
-    budget_enforced: false,
+    budget_enforced: false, usage_observation_window: summarizeUsageObservations(state?.llm_usage_observations),
   }
 }

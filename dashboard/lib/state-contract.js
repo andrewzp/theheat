@@ -49,6 +49,7 @@ export const STATE_DEFAULTS = {
   "publish_ledger": {},
   "tweet_metrics": {},
   "llm_usage": {},
+  "llm_usage_observations": {},
   "writer_negative_cache": {},
   "_state_rev": 0,
   "ocean_sst_streak": {
@@ -86,6 +87,66 @@ export const STATE_DEFAULTS = {
     "drought_snapshot": null
   },
   "synthesis_cooldown": {}
+}
+
+export const USAGE_OBSERVATION_CONTRACT = {
+  "schema_version": 1,
+  "limit": 32,
+  "record_bytes": 4096,
+  "input_limit": 1024,
+  "count_limit": 1000000000000,
+  "modality_limit": 8,
+  "identifier_pattern": "^[A-Za-z0-9_.:/@-]{1,160}$",
+  "modalities": [
+    "MODALITY_UNSPECIFIED",
+    "TEXT",
+    "IMAGE",
+    "VIDEO",
+    "AUDIO",
+    "DOCUMENT"
+  ],
+  "counts": {
+    "google": [
+      "prompt_token_count",
+      "candidates_token_count",
+      "cached_content_token_count",
+      "thoughts_token_count",
+      "tool_use_prompt_token_count",
+      "total_token_count"
+    ],
+    "anthropic": [
+      "input_tokens",
+      "output_tokens",
+      "cache_creation_input_tokens",
+      "cache_read_input_tokens",
+      "cache_creation.ephemeral_5m_input_tokens",
+      "cache_creation.ephemeral_1h_input_tokens",
+      "output_tokens_details.thinking_tokens",
+      "server_tool_use.web_search_requests",
+      "server_tool_use.web_fetch_requests"
+    ],
+    "unknown": []
+  },
+  "labels": {
+    "google": [
+      "traffic_type"
+    ],
+    "anthropic": [
+      "service_tier",
+      "inference_geo"
+    ],
+    "unknown": []
+  },
+  "breakdowns": {
+    "google": [
+      "prompt_tokens_details",
+      "candidates_tokens_details",
+      "cache_tokens_details",
+      "tool_use_prompt_tokens_details"
+    ],
+    "anthropic": [],
+    "unknown": []
+  }
 }
 
 export const METADATA_JSON_KEYS = [
@@ -145,6 +206,7 @@ export const METADATA_JSON_KEYS = [
   "publish_ledger",
   "tweet_metrics",
   "llm_usage",
+  "llm_usage_observations",
   "writer_negative_cache",
   "_state_rev",
   "reganom_last_fired",

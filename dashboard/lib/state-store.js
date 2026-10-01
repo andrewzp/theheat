@@ -1,3 +1,4 @@
+import { mergeUsageObservations } from "./usage-observations.js"
 import { mergePublicationControl } from "./publication-control.js"
 import { mergeUsageLedgers } from "./usage-ledger.js"
 import { DatabaseSync } from "node:sqlite"
@@ -518,6 +519,7 @@ function mergeState(current, incoming) {
     suppressions: mergeSuppressions(base.suppressions, next.suppressions),
     ...pythonOwnedMetadata,
     llm_usage: Object.hasOwn(rawIncoming, "llm_usage") ? mergeUsageLedgers(base.llm_usage, rawIncoming.llm_usage) : base.llm_usage,
+    llm_usage_observations: mergeUsageObservations(base.llm_usage_observations, rawIncoming.llm_usage_observations),
     publication_control: mergePublicationControl(base.publication_control, next.publication_control),
     temperature_history: mergeTemperatureHistory(base.temperature_history, rawIncoming.temperature_history),
     publish_ledger: mergePublishLedger(base.publish_ledger, rawIncoming.publish_ledger),
