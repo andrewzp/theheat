@@ -11,7 +11,7 @@ from pathlib import Path
 from uuid import UUID
 
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
-from src.commands import postgres_check_observations, postgres_checks
+from src.commands import postgres_check_observations, postgres_checks, postgres_media
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -96,6 +96,53 @@ class PostgresCommandAuthority:
         row = PostgresCommandAuthority._pointer(c, lock=lock)
         _, state = p.PostgresProjectionRepository._read(c, row[1], row[2])
         return row[0], state
+
+    def initialize_media_staging(self) -> None:
+        """Explicit owner migration; no attachment or production activation."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_media.install(c, self.environment)
+
+    def stage_media_proposal(self, draft_id: str, request: dict, principal: Principal, *,
+                             assets: dict, resolve_principal: Callable[[str], Principal | None],
+                             now: datetime) -> dict:
+        """Trusted local ingress; a Principal object is not web authentication."""
+        request, assets = postgres_media.prepare(request, assets)
+        if not isinstance(principal, Principal):
+            raise CommandError("forbidden", "An authenticated local principal is required")
+        principal = Principal(principal.subject, principal.role, principal.authentication_context)
+        authorize(principal, "stage_media_proposal")
+        if not isinstance(now, datetime):
+            raise CommandError("invalid_time", "An explicit aware staging clock is required")
+        clock = _clock(now)
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            version, state = self._state(c, lock=True)
+            try:
+                current = resolve_principal(principal.subject)
+                if current is not None:
+                    if not isinstance(current, Principal):
+                        raise TypeError("invalid resolved principal")
+                    current = Principal(current.subject, current.role, current.authentication_context)
+            except Exception:
+                raise CommandError("authorization_unavailable", "Current operator authorization is unavailable") from None
+            if current is None or current.subject != principal.subject:
+                raise CommandError("forbidden", "Operator authorization is unavailable")
+            authorize(current, "stage_media_proposal")
+            actor = Principal(principal.subject, current.role, principal.authentication_context)
+            result = postgres_media.stage(c, draft_id, request, assets=assets, principal=actor,
+                state=state, authority_version=version, policy=current_editorial_policy(),
+                now=clock, environment=self.environment)
+        return result
+
+    def read_media_proposal(self, proposal_sha256: str) -> dict:
+        """Trusted local historical read; no public asset-serving endpoint."""
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_media.read(c, proposal_sha256, self.environment)
+        return result
 
     def initialize_check_executions(self) -> None:
         """Explicit owner install for immutable raw check observations."""
