@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.58 — 2026-10-01
+
+- Retain bounded raw mandatory-check responses in an explicitly initialized local PostgreSQL schema, with exact request/grant binding and immutable metadata.
+- Recover the same retained evidence after a lost acknowledgment; reject conflicting replacements without another paid grant, spending settlement or posting approval.
+- Verify SQLite read parity, response interpretation, transaction failures, concurrent writers and eight-schema backup/restore. Production authority and executor integration remain disabled.
+
 ## [0.9.108.57] - 2026-10-01
 
 - Parse NHC public advisory objects into their actual URL, number and issue time instead of stringifying the object into a broken link. Preserve legacy scalar fields and independent forecast-product parsing.

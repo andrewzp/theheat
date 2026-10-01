@@ -7,6 +7,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/check_execution_journal.py": "4abdf688a7b8aeccc1d0ae083f47700e67b26102411e5a9d601fd2472101ad39",
     "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
+    "src/commands/postgres_check_observations.py": "53b3e706b7251e648f6455c2241e65e322c51c3376bbd9bffdaa16f10337f26b",
     "src/commands/postgres_checks.py": "e4022751878e1e95b87d4d4d30487a698d39f38dd93ec082bf415c92f86bae8f",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
     "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
@@ -17,7 +18,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "c49755cacbc65d5cda2e9a60106dedc65b022181e3a255d098d266dea877181a",
+    "src/editorial/policy.py": "64b1488bdc9a27fa19fa0b1e9c39bb162a242ffe14fd426013b2527e4c59f987",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
@@ -57,5 +58,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "793074fbaf4dbcd9fb88ff1d3a589656cb3850752fdee2e797a57e894e977b45"
+  "source_sha256": "490a545020dc3b9f3a5438b16e819c772ff244a75de5e4492c5824eb046a3f34"
 }
