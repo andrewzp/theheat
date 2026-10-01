@@ -7,6 +7,8 @@ rejected in CODE, not just the prompt.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 import pytest
 
 from src.two_bot.intern import build_fire_bundle
@@ -90,6 +92,34 @@ class TestCrossSignalViolation:
 
 
 class TestPipelineIntegration:
+    @pytest.mark.parametrize("case,code", [
+        ("identical_duplicate", "duplicate_related_identity"),
+        ("conflicting_duplicate", "duplicate_related_identity"),
+        ("self", "self_related_identity"),
+        ("blank", "invalid_related_identity"),
+        ("padded", "invalid_related_identity"),
+        ("malformed", "invalid_related_identity"),
+    ])
+    def test_ambiguous_supplied_identity_buys_no_model_calls(
+        self, case, code, mock_writer, mock_fact_check, mock_critic, mock_safety,
+    ):
+        bundle = build_fire_bundle(_fire_event())
+        related = _related()
+        if case.endswith("duplicate"):
+            related.append(deepcopy(related[0]))
+            if case == "conflicting_duplicate":
+                related[1].headline_metric["value"] = "exceptional"
+        else:
+            related[0].event_id = {"self": bundle.event_id, "blank": " ",
+                                   "padded": " related ", "malformed": ["id"]}[case]
+        bundle.related_signals = related
+        result = {}
+        assert generate_draft(bundle, _state_with_memory(), result_out=result) is None
+        assert result["kill_stage"] == "evidence_contract"
+        assert code in result["kill_reason"]
+        for call in (mock_writer, mock_fact_check, mock_critic, mock_safety):
+            call.assert_not_called()
+
     @pytest.mark.parametrize("text", [
         "Two locations, one dust event.",
         "Two reports describe a single weather system.",

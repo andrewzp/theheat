@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.55] - 2026-09-30
+
+- Withhold optional related observations when one event identity has conflicting summaries. Collapse identical summaries before ranking, preserve underlying candidates, clear stale attachments and detach retained context from later mutations.
+- Reject duplicate, self-referential or malformed related identities at the evidence boundary before any writer or checking call. Bind the assembly rule to current editorial policy and regenerate the dashboard policy manifest so obsolete checks cannot remain current.
+
 ## [0.9.108.54] - 2026-09-30
 
 - Retain exact batch metadata, result bytes and immutable review documents in the optional local PostgreSQL authority. Preserve the existing semantic receipt/candidate identities separately from raw byte checksums, with bounded reads, typed artifact tables and atomic rollback.
