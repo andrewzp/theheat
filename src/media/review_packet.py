@@ -293,7 +293,31 @@ def _build(
         "claim_agreement_status": "unreviewed",
         "publication_approved": False,
     }
+    if "media_attachment" in draft:
+        # Derive content without the draft/packet/review identity to avoid a
+        # circular hash. The supplied render must be the attachment being shown.
+        attached = _object(draft["media_attachment"])
+        def encoded(value):
+            return json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        _require(
+            encoded(attached) == encoded(media_attachment_content(packet)),
+            "Draft attachment differs from the independently validated graphic",
+        )
     return {**packet, "packet_sha256": fingerprint(packet)}
+
+
+def media_attachment_content(validated_packet: dict) -> dict:
+    """Extract content from a validated packet, never authority or a decision.
+
+    This projection alone validates nothing. Attachment proposals call the packet
+    builder first; approval paths must independently revalidate current inputs.
+    """
+    return deepcopy({
+        "schema_version": 1,
+        "graphic_binding": validated_packet["graphic_binding"],
+        "media": validated_packet["media"],
+        "synthetic": validated_packet["synthetic"],
+    })
 
 
 def media_review_packet_is_current(packet: dict, draft: dict, **current_inputs: Any) -> bool:

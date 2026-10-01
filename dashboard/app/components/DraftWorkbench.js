@@ -76,7 +76,7 @@ export function DraftWorkbench({
                 <div className="queue-text">{clipText(draft.text, 118)}</div>
                 <div className="queue-meta">
                   <span>{timeAgo(draft.created_at)}</span>
-                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? "awaiting publication" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
+                  <span>{draft.publish_blocked ? "publication needs reconciliation" : draft.review_status === "media_review_required" ? "graphic review needed" : draft.review_status === "policy_unverified" ? "editorial policy unverified" : draft.review_status !== "passed" ? "review needed" : draft.status === "approved" ? "awaiting publication" : draft.review_kind === "human" ? "human reviewed" : policySummary(draft)}</span>
                 </div>
               </button>
             ))}
@@ -96,7 +96,7 @@ export function DraftWorkbench({
 
                 <div className="draft-status-row">
                   <span className="workbench-pill">
-                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? "awaiting publication" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
+                    {selectedDraft.publish_blocked ? "publication needs reconciliation" : selectedDraft.review_status === "media_review_required" ? "graphic review needed" : selectedDraft.review_status === "policy_unverified" ? "editorial policy unverified" : controls.conflict ? "conflicting versions" : controls.needsReview ? "review needed" : selectedDraft.status === "approved" ? "awaiting publication" : selectedDraft.review_kind === "human" ? "human reviewed" : "model checks current"}
                   </span>
                   <span className="workbench-pill">
                     signal {selectedDraft.score?.total ?? "—"}
@@ -106,7 +106,7 @@ export function DraftWorkbench({
                     copy {selectedDraft.candidate_score?.total ?? "—"}
                     {selectedCandidate?.source ? ` · ${selectedCandidate.source}` : ""}
                   </span>
-                  {selectedDraft.automatic_publication?.enabled !== true && <p className="runtime-note">Automatic scheduling is paused or unverified. Review remains available.</p>}
+                  {selectedDraft.automatic_publication?.enabled !== true && <p className="runtime-note">{selectedDraft.review_status === "media_review_required" ? "Automatic scheduling is paused or unverified. This graphic needs joint review." : "Automatic scheduling is paused or unverified. Review remains available."}</p>}
                   {selectedDraft.auto_approve_at ? (
                     <span className="workbench-pill alert">{countdownText(selectedDraft.auto_approve_at)}</span>
                   ) : selectedDraft.approval_policy?.mode === "manual_only" ? (
@@ -281,7 +281,9 @@ export function DraftWorkbench({
                   <div className="workbench-panel">
                     <h3>Approval Policy</h3>
                     <div className="workbench-headline">
-                      {selectedDraft.review_status === "policy_unverified"
+                      {selectedDraft.review_status === "media_review_required"
+                        ? "Review the text and attached graphic together before approval. Joint graphic review is not available here yet."
+                        : selectedDraft.review_status === "policy_unverified"
                         ? selectedDraft.editorial_policy?.reason
                         : controls.needsReview
                         ? "This version needs review before approval."

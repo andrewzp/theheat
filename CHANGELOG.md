@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.64 — 2026-10-01
+
+- Build an exact prospective media revision and joint-review packet before attaching a graphic. Replacement and removal invalidate old checks, approval and queued intent while retaining source and publication evidence; no authority or production attachment is activated.
+- Bind image, alt text and renderer metadata into shared Python/JavaScript revision identity while preserving all existing identities without media. Reject reviews of a different graphic and keep earlier decisions obsolete after content returns to an earlier value.
+- Refuse attached drafts in text-only review and posting paths, including malformed attachment fields. Show the joint-review requirement in the workbench; no image-model call, runtime-model change or new paid service is introduced.
+
 ## 0.9.108.63 — 2026-10-01
 
 - Add a read-only writer operating report using retained run configuration, provider responses, draft bindings and exactly joined failure records. Keep response, output, source truth, required checks and editorial quality separate.

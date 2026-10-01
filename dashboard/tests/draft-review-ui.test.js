@@ -46,3 +46,11 @@ test("the draft counter counts astral emoji as code points rather than UTF-16 ha
   assert.equal(draftTextLength(text), Array.from(text).length)
   assert.ok(draftTextLength(text) < 280)
 })
+
+test("joint graphic review cannot be replaced by the text-only confirmation", () => {
+  const controls = draftReviewControls({ status: "pending", review_status: "media_review_required" })
+  assert.equal(controls.canReview, false)
+  assert.equal(controls.canApprove, false)
+  assert.equal(controls.canSchedule, false)
+  assert.equal(controls.canEdit, true)
+})

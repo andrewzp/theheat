@@ -98,6 +98,8 @@ test("SQLite preserves nested contract fields and rolls back rejected revisions"
   process.env.GIST_ID = ""
   process.env.GITHUB_TOKEN = ""
   const draft = { id: "d1", event_id: "e1", text: "40°C", content_revision: 2, status: "pending", revision_history: [{ content_revision: 1, text: "30°C" }], revision_conflicts: [{ content_revision: 2, text: "41°C" }], publish_outcome: "unknown" }
+  draft.media_attachment = { schema_version: 1, media: { alt_text: "Synthetic current chart" } }
+  draft.revision_history[0].media_attachment = { media: { alt_text: "Synthetic previous chart" } }
   draft.review_binding = { ...draftIdentity(draft), kind: "human" }
   const ledger = { e1: { intent_id: "i1", phase: "unknown", ...draftIdentity(draft), text: draft.text, attempt_conflicts: [{ intent_id: "old", tweet_id: "receipt" }] } }
   try {

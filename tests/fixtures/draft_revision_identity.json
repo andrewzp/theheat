@@ -77,5 +77,52 @@
       "text_sha256": "66476e47549d3f87764f283bb169cf5b750e056b2b3411b82d73efba9ec210b3",
       "evidence_sha256": "f0c5ba1eb23f348f7397139a421ac8214a50621c0771830c23c841a1cddad560"
     }
+  },
+{
+  "name": "attached media content identity",
+  "draft": {
+    "id": "synthetic-media-draft",
+    "text": "Synthetic chart text.",
+    "content_revision": 2,
+    "media_attachment": {
+      "schema_version": 1,
+      "graphic_binding": {
+        "template": "temperature_comparator",
+        "template_version": "synthetic-contract",
+        "evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "render_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "render_manifest_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "media": {
+        "mime_type": "image/png",
+        "png_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "byte_count": 33,
+        "width": 1200,
+        "height": 1500,
+        "alt_text": "Synthetic 40°C chart 🌀",
+        "alt_text_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "synthetic": true
+    }
+  },
+  "identity": {
+    "content_revision": 2,
+    "text_sha256": "dc693ecd89593ff2ac6b8d335fc5e90c8c70d5a4848e670c895768a82fa6e9a3",
+    "evidence_sha256": "85a7da6b4f57574aaee605ddabbbe92d29edb0ead46483dcdef0538f17f771ec"
   }
+},
+{
+  "name": "present null attachment differs from absent",
+  "draft": {
+    "id": "synthetic-media-draft",
+    "text": "Synthetic chart text.",
+    "content_revision": 2,
+    "media_attachment": null
+  },
+  "identity": {
+    "content_revision": 2,
+    "text_sha256": "dc693ecd89593ff2ac6b8d335fc5e90c8c70d5a4848e670c895768a82fa6e9a3",
+    "evidence_sha256": "9ce378befdfe29d7b72423c3c1321429ebd566fc5dd40d66e6dbec9cd5453598"
+  }
+}
 ]

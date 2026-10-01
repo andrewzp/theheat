@@ -134,3 +134,43 @@ test("non-finite evidence and malformed Unicode never acquire review bindings", 
   assert.throws(() => recordHumanReview(draft), /finite/)
   assert.throws(() => textHash("\ud800"), /Unicode/)
 })
+
+for (const attachment of [null, false, {}, [], { schema_version: 1 }]) {
+  test(`present media blocks text-only review and approval: ${JSON.stringify(attachment)}`, () => {
+    const draft = reviewed()
+    authorizeDraft(draft, "manual", "old-intent")
+    draft.media_attachment = attachment
+    assert.equal(reviewIsCurrent(draft), false)
+    assert.equal(approvalIsCurrent(draft), false)
+    assert.equal(projectDraft(draft).review_status, "media_review_required")
+    const before = structuredClone(draft)
+    assert.throws(() => recordHumanReview(draft), /Joint media review/)
+    assert.deepEqual(draft, before)
+    recordModelReview(draft)
+    assert.equal(draft.review_binding, undefined)
+    assert.equal(draft.approval_binding, undefined)
+    for (const mode of ["manual", "auto"]) assert.throws(() => authorizeDraft(draft, mode), /revalidation/)
+  })
+}
+
+test("text edits preserve media in both revisions and discard its obsolete decision", () => {
+  const draft = reviewed()
+  draft.media_attachment = { schema_version: 1, media: { alt_text: "Synthetic chart" } }
+  draft.media_review_binding = { review_sha256: "a".repeat(64) }
+  const before = structuredClone(draft)
+  invalidateText(draft, "Changed synthetic wording.")
+  assert.deepEqual(draft.media_attachment, before.media_attachment)
+  assert.deepEqual(draft.revision_history.at(-1).media_attachment, before.media_attachment)
+  assert.deepEqual(draft.revision_history.at(-1).media_review_binding, before.media_review_binding)
+  assert.equal(draft.media_review_binding, undefined)
+})
+
+for (const [field, value] of [["content_revision", Number.MAX_SAFE_INTEGER], ["decision_revision", Number.MAX_SAFE_INTEGER - 1], ["revision_history", null]]) {
+  test(`invalid transition preserves the draft: ${field}`, () => {
+    const draft = reviewed()
+    draft[field] = value
+    const before = structuredClone(draft)
+    assert.throws(() => invalidateText(draft, "Changed synthetic wording."))
+    assert.deepEqual(draft, before)
+  })
+}
