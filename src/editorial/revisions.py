@@ -58,13 +58,17 @@ def _evidence_payload(draft: dict) -> dict:
         two_bot = review.pop("two_bot", None)
         if isinstance(two_bot, dict) and "bundle" in two_bot:
             review["two_bot"] = {"bundle": two_bot["bundle"]}
-    return {
+    payload = {
         "event_id": draft.get("event_id"),
         "type": draft.get("type"),
         "tweet_date": draft.get("tweet_date"),
         "review_context": review,
         "hot10_rows": draft.get("hot10_rows"),
     }
+    # Preserve every legacy identity; presence (even null) is new content.
+    if "media_attachment" in draft:
+        payload["media_attachment"] = deepcopy(draft["media_attachment"])
+    return payload
 
 
 def draft_identity(draft: dict) -> dict:
@@ -137,6 +141,9 @@ def _policy_matches(binding, policy):
 
 
 def review_is_current(draft: dict, *, policy=_CURRENT_POLICY) -> bool:
+    # Text-only reviews cannot authorize an image or silently drop it at send.
+    if "media_attachment" in draft:
+        return False
     binding = draft.get("review_binding")
     if draft.get("revision_conflicts") or not isinstance(binding, dict) or not binding_matches(draft, binding):
         return False
@@ -214,7 +221,8 @@ def record_model_review(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
     policy = _editorial_policy(policy)
     try:
         proven = (
-            policy is not None
+            "media_attachment" not in draft
+            and policy is not None
             and two_bot.get("reviewed_policy_sha256") == fingerprint(policy)
             and _checks_pass(two_bot)
             and two_bot.get("reviewed_text_sha256") == text_hash(draft.get("text", ""))
@@ -240,6 +248,8 @@ def initialize_revision(draft: dict) -> dict:
 
 
 def record_human_review(draft: dict, *, at: str | None = None, policy=_CURRENT_POLICY) -> dict:
+    if "media_attachment" in draft:
+        raise ValueError("Joint media review is required; text-only review cannot approve this draft")
     if draft.get("revision_conflicts"):
         raise ValueError("Resolve the conflicting revision before reviewing")
     text = draft.get("text")
@@ -318,17 +328,55 @@ def invalidate_text(draft: dict, new_text: str, *, at: str | None = None) -> dic
     text_hash(new_text)  # Reject malformed Unicode before changing durable fields.
     if new_text == draft.get("text") and not draft.get("revision_conflicts"):
         return draft
+    _invalidate_content(draft, at=at)
+    draft["text"] = new_text
+    return draft
+
+
+def invalidate_media_attachment(draft: dict, attachment: dict | None, *, at: str) -> dict:
+    """Content transition only; callers qualify media and resolve current state.
+
+    None removes a present attachment. This never records a joint review or
+    authorizes transport, and existing text-only review paths refuse the field.
+    """
+    if attachment is not None and not isinstance(attachment, dict):
+        raise ValueError("Media content must be an object")
+    if attachment is None and "media_attachment" not in draft:
+        return draft
+    if attachment is not None:
+        fingerprint(attachment)
+        if "media_attachment" in draft:
+            def encode(value):
+                return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True)
+            if encode(attachment) == encode(draft["media_attachment"]):
+                return draft
+    _invalidate_content(draft, at=at)
+    if attachment is None:
+        draft.pop("media_attachment", None)
+    else:
+        draft["media_attachment"] = deepcopy(attachment)
+    return draft
+
+
+def _invalidate_content(draft: dict, *, at: str | None = None) -> dict:
     previous = {key: deepcopy(draft[key]) for key in (
         "text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision",
+        "media_attachment", "media_review_binding",
     ) if key in draft}
     previous.update(draft_identity(draft))
+    if previous["content_revision"] >= 9007199254740991:
+        raise ValueError("Content revision exhausted")
+    if decision_revision(draft) >= 9007199254740990:
+        raise ValueError("Decision revision exhausted")
+    history = draft.get("revision_history", [])
+    if not isinstance(history, list) or any(not isinstance(row, dict) for row in history):
+        raise ValueError("Invalid revision history")
     previous["invalidated_at"] = at if at is not None else _now()
     draft.setdefault("revision_history", []).append(previous)
     draft["content_revision"] = previous["content_revision"] + 1
-    draft["text"] = new_text
     draft["status"] = "pending"
     revoke_approval(draft)
-    for key in ("review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"):
+    for key in ("review_binding", "media_review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"):
         draft.pop(key, None)
     review = draft.get("review_context")
     if isinstance(review, dict) and isinstance(review.get("two_bot"), dict):
@@ -341,6 +389,6 @@ def project_draft(draft: dict, *, policy=_CURRENT_POLICY) -> dict:
     current = review_is_current(draft, policy=policy)
     return {
         **draft, "revision_identity": {**draft_identity(draft), "decision_revision": decision_revision(draft)},
-        "review_status": "conflict" if draft.get("revision_conflicts") else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
+        "review_status": "conflict" if draft.get("revision_conflicts") else "media_review_required" if "media_attachment" in draft else "policy_unverified" if policy is None else "passed" if current else "needs_revalidation",
         "review_kind": draft.get("review_binding", {}).get("kind") if current else None,
     }

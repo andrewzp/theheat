@@ -70,5 +70,57 @@
     "absent": ["approval_binding"],
     "history": true,
     "conflict": true
-  }
+  },
+{
+  "name": "equal revision media content conflict preserves both versions",
+  "current": {
+    "id": "d1",
+    "text": "Same synthetic text.",
+    "content_revision": 2,
+    "status": "pending",
+    "updated_at": "2026-10-01T12:00:00Z",
+    "media_attachment": {
+      "schema_version": 1,
+      "graphic_binding": {
+        "template": "temperature_comparator",
+        "template_version": "synthetic-contract",
+        "evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "render_binding_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "render_manifest_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "media": {
+        "mime_type": "image/png",
+        "png_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "byte_count": 33,
+        "width": 1200,
+        "height": 1500,
+        "alt_text": "Synthetic 40°C chart 🌀",
+        "alt_text_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "synthetic": true
+    }
+  },
+  "incoming": {
+    "id": "d1",
+    "text": "Same synthetic text.",
+    "content_revision": 2,
+    "status": "pending",
+    "updated_at": "2026-10-01T13:00:00Z",
+    "media_attachment": null,
+    "approval_binding": {
+      "mode": "manual"
+    }
+  },
+  "expected": {
+    "content_revision": 2,
+    "text": "Same synthetic text.",
+    "status": "pending",
+    "media_attachment": null
+  },
+  "absent": [
+    "approval_binding"
+  ],
+  "history": true,
+  "conflict": true
+}
 ]

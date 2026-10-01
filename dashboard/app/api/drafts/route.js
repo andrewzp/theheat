@@ -166,6 +166,7 @@ export async function POST(request) {
         draft.status = "pending"
       } else if (action === "review") {
         assertPending(draft)
+        if (Object.hasOwn(draft, "media_attachment")) fail("Review the text and graphic together; text-only confirmation cannot approve attached media.", 409, "media_review_required")
         if (body.reviewConfirmed !== true) fail("Confirm that you checked this text against its source evidence.", 400, "review_confirmation_required")
         if (draft.revision_conflicts?.length) fail("Resolve the conflicting text with an edit before reviewing it.")
         if (!editorialPolicy.policy) fail(editorialPolicy.reason, 409, "editorial_policy_unverified")

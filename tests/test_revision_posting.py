@@ -443,3 +443,17 @@ def test_policy_change_during_intent_write_stops_transport(external, monkeypatch
     send.assert_not_called()
     assert state["publish_ledger"][draft["event_id"]]["phase"] == "not_sent"
     assert draft["publish_outcome"] == "not_sent"
+
+
+@pytest.mark.parametrize("attachment", [None, False, {}, {"schema_version": 1}])
+@pytest.mark.parametrize("mode", ["manual", "auto"])
+def test_generic_attachment_cannot_be_silently_sent_as_text_only(external, attachment, mode):
+    storage, send = external
+    draft = _draft(mode)
+    draft["media_attachment"] = attachment
+    # Even a coherently rebound text decision is no joint media permission.
+    draft["review_binding"].update(draft_identity(draft))
+    draft["approval_binding"].update(draft_identity(draft))
+    assert posting.post_approved(draft, {"drafts": [draft], "publish_ledger": {}}) == "failed"
+    storage.write_state.assert_not_called()
+    send.assert_not_called()

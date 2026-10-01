@@ -42,8 +42,11 @@ on:
         type: string
 
 concurrency:
-  group: theheat-bot
-  cancel-in-progress: false
+  # PR checks must not occupy or replace pending production runs. Keep every
+  # scheduled/manual producer in the existing shared group during this change.
+  group: ${{ github.event_name == 'pull_request' && format('theheat-ci-{0}', github.event.pull_request.number) || 'theheat-bot' }}
+  # Only a newer head of the same PR may cancel its obsolete checks.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -63,9 +66,10 @@ jobs:
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
-    # Real PostgreSQL crash/restore checks now add several minutes to the suite.
-    # Keep every regression and allow the job to reach dashboard validation.
-    timeout-minutes: 25
+    # A prior test job timed out; oversized display IDs are now rejected before
+    # execution. Preserve every check and bound CI while reporting stalled tests.
+    # The production run's separate 20-minute limit is unchanged.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
 
@@ -113,7 +117,7 @@ jobs:
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - run: python -m pytest tests/ -v -m "not voice_replay"
+      - run: python -m pytest tests/ -v -m "not voice_replay" --durations=20 -o faulthandler_timeout=120
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin

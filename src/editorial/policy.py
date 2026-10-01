@@ -17,7 +17,7 @@ POLICY_FILES = (
     "src/two_bot/check_requests.py", "src/two_bot/check_transport.py",
     "src/commands/check_journal.py", "src/commands/batch_result_journal.py",
     "src/config.py", "src/editorial/policy.py", "src/editorial/revisions.py",
-    "src/orchestrator/posting.py",
+    "src/orchestrator/posting.py", "src/media/attachment.py", "src/media/review_packet.py",
     "dashboard/lib/editorial-policy.js", "dashboard/lib/draft-revisions.js",
     "src/two_bot/writer.py", "src/two_bot/critic.py", "src/two_bot/fact_check.py",
     "src/two_bot/pipeline.py", "src/two_bot/provider_preflight.py", "src/two_bot/memory.py", "src/two_bot/types.py",

@@ -212,3 +212,31 @@ def test_unhashable_evidence_cannot_receive_authorization(value):
     assert not review_is_current(draft)
     with pytest.raises(ValueError):
         record_human_review(draft)
+
+
+@pytest.mark.parametrize("attachment", [None, False, {}, [], {"schema_version": 1}])
+def test_any_present_attachment_cannot_acquire_text_only_review_or_approval(attachment):
+    draft = reviewed_draft()
+    authorize_draft(draft, "manual", "old-intent")
+    draft["media_attachment"] = attachment
+    assert not review_is_current(draft) and not approval_is_current(draft)
+    assert project_draft(draft)["review_status"] == "media_review_required"
+    before = deepcopy(draft)
+    with pytest.raises(ValueError, match="Joint media review"):
+        record_human_review(draft)
+    assert draft == before
+    record_model_review(draft)
+    assert "review_binding" not in draft and "approval_binding" not in draft
+    for mode in ("manual", "auto"):
+        with pytest.raises(ValueError, match="revalidation"):
+            authorize_draft(draft, mode)
+
+
+@pytest.mark.parametrize("field,value", [("content_revision", 9007199254740991), ("decision_revision", 9007199254740990), ("revision_history", None)])
+def test_unrepresentable_content_transition_refuses_before_mutating_history(field, value):
+    draft = reviewed_draft()
+    draft[field] = value
+    before = deepcopy(draft)
+    with pytest.raises(ValueError):
+        invalidate_text(draft, "A changed synthetic text.")
+    assert draft == before

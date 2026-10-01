@@ -98,6 +98,8 @@ def test_gist_expected_draft_rejects_observed_concurrent_change(change):
 
 def test_sqlite_round_trip_keeps_nested_revision_and_attempt_evidence(tmp_path):
     draft = {"id": "d1", "event_id": "e1", "text": "40°C", "content_revision": 2, "status": "pending", "revision_history": [{"content_revision": 1, "text": "30°C"}], "revision_conflicts": [{"content_revision": 2, "text": "41°C"}], "publish_outcome": "unknown"}
+    draft["media_attachment"] = {"schema_version": 1, "media": {"alt_text": "Synthetic current chart"}}
+    draft["revision_history"][0]["media_attachment"] = {"media": {"alt_text": "Synthetic previous chart"}}
     draft["review_binding"] = {**draft_identity(draft), "kind": "human"}
     state = {"drafts": [draft], "publish_ledger": {"e1": {"intent_id": "i1", "phase": "unknown", **draft_identity(draft), "text": draft["text"], "attempt_conflicts": [{"intent_id": "old", "tweet_id": "receipt"}]}}}
     with patch.multiple("src.state", STATE_BACKEND="sqlite", DB_PATH=str(tmp_path / "state.sqlite"), GIST_ID="", GITHUB_TOKEN=""):

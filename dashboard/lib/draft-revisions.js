@@ -42,10 +42,12 @@ function evidencePayload(draft) {
     delete review.two_bot
     if (twoBot && Object.hasOwn(twoBot, "bundle")) review.two_bot = { bundle: twoBot.bundle }
   }
-  return {
+  const payload = {
     event_id: draft.event_id ?? null, type: draft.type ?? null, tweet_date: draft.tweet_date ?? null,
     review_context: review, hot10_rows: draft.hot10_rows ?? null,
   }
+  if (Object.hasOwn(draft, "media_attachment")) payload.media_attachment = structuredClone(draft.media_attachment)
+  return payload
 }
 
 export function draftIdentity(draft) {
@@ -78,6 +80,7 @@ function policyMatches(binding, policy) {
 }
 
 export function reviewIsCurrent(draft, policy = null) {
+  if (Object.hasOwn(draft, "media_attachment")) return false
   const binding = draft.review_binding
   if (draft.revision_conflicts?.length || !bindingMatches(draft, binding)) return false
   if (!policyMatches(binding, policy)) return false
@@ -119,7 +122,7 @@ export function recordModelReview(draft, policy = null) {
   const value = twoBot(draft)
   let proven = false
   try {
-    proven = validEditorialPolicy(policy) && value.reviewed_policy_sha256 === fingerprint(policy) && checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
+    proven = !Object.hasOwn(draft, "media_attachment") && validEditorialPolicy(policy) && value.reviewed_policy_sha256 === fingerprint(policy) && checksPass(value) && value.reviewed_text_sha256 === textHash(draft.text ?? "")
       && Object.hasOwn(value, "bundle") && value.reviewed_bundle_sha256 === fingerprint(value.bundle)
   } catch { /* Invalid evidence cannot establish a review. */ }
   if (proven && !draft.revision_conflicts?.length) {
@@ -134,6 +137,7 @@ export function initializeRevision(draft, policy = null) {
 }
 
 export function recordHumanReview(draft, policy = null) {
+  if (Object.hasOwn(draft, "media_attachment")) throw new Error("Joint media review is required; text-only review cannot approve this draft")
   if (draft.revision_conflicts?.length) throw new Error("Resolve the conflicting revision before reviewing")
   if (typeof draft.text !== "string" || !draft.text.trim() || [...draft.text].length > 280) throw new Error("Invalid draft text")
   if (!validEditorialPolicy(policy)) throw new Error("Editorial policy unverified; cannot establish a new review")
@@ -174,17 +178,20 @@ export function invalidateText(draft, newText) {
   textHash(newText) // Reject malformed Unicode before changing durable fields.
   if (newText === draft.text && !draft.revision_conflicts?.length) return draft
   const previous = {}
-  for (const key of ["text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision"]) {
+  for (const key of ["text", "review_context", "review_binding", "approval_binding", "revision_conflicts", "decision_revision", "media_attachment", "media_review_binding"]) {
     if (Object.hasOwn(draft, key)) previous[key] = structuredClone(draft[key])
   }
   Object.assign(previous, draftIdentity(draft), { invalidated_at: new Date().toISOString() })
+  if (previous.content_revision >= Number.MAX_SAFE_INTEGER) throw new Error("Content revision exhausted")
+  if (decisionRevision(draft) >= Number.MAX_SAFE_INTEGER - 1) throw new Error("Decision revision exhausted")
+  if (Object.hasOwn(draft, "revision_history") && (!Array.isArray(draft.revision_history) || draft.revision_history.some((row) => !row || typeof row !== "object" || Array.isArray(row)))) throw new Error("Invalid revision history")
   draft.revision_history ??= []
   draft.revision_history.push(previous)
   draft.content_revision = previous.content_revision + 1
   draft.text = newText
   draft.status = "pending"
   revokeApproval(draft)
-  for (const key of ["review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"]) delete draft[key]
+  for (const key of ["review_binding", "media_review_binding", "revision_conflicts", "candidate_score", "selected_candidate_rank"]) delete draft[key]
   if (draft.review_context?.two_bot) {
     draft.review_context.two_bot = Object.fromEntries(Object.entries(draft.review_context.two_bot).filter(([key]) => ["bundle", "signal_kind"].includes(key)))
   }
@@ -193,5 +200,5 @@ export function invalidateText(draft, newText) {
 
 export function projectDraft(draft, policy = null) {
   const current = reviewIsCurrent(draft, policy)
-  return { ...draft, revision_identity: { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }, review_status: draft.revision_conflicts?.length ? "conflict" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
+  return { ...draft, revision_identity: { ...draftIdentity(draft), decision_revision: decisionRevision(draft) }, review_status: draft.revision_conflicts?.length ? "conflict" : Object.hasOwn(draft, "media_attachment") ? "media_review_required" : !validEditorialPolicy(policy) ? "policy_unverified" : current ? "passed" : "needs_revalidation", review_kind: current ? draft.review_binding.kind : null }
 }

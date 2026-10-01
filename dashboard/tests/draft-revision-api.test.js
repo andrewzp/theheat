@@ -345,3 +345,24 @@ test("human confirmation cannot silently adopt a changed or unverified policy", 
     })
   }
 })
+
+for (const attachment of [null, false, {}, { schema_version: 1 }]) {
+  test(`API cannot promote attached media through text review: ${JSON.stringify(attachment)}`, async () => {
+    const draft = fixture()
+    draft.media_attachment = attachment
+    draft.review_binding = { ...draft.review_binding, ...draftIdentity(draft) }
+    await withStore([draft], async ({ post, route, headers, writes, dispatches, state }) => {
+      const response = await route.GET(new Request("http://localhost/api/drafts", { headers }))
+      assert.equal((await response.json()).drafts[0].review_status, "media_review_required")
+      const before = structuredClone(state())
+      for (const action of ["review", "approve", "auto_approve"]) {
+        const result = await post(request(draft, action, { reviewConfirmed: true, expectedPolicySha256: fingerprint(policy) }))
+        assert.equal(result.status, 409, action)
+        if (action === "review") assert.equal(result.body.code, "media_review_required")
+      }
+      assert.equal(writes(), 0)
+      assert.equal(dispatches.length, 0)
+      assert.deepEqual(state(), before)
+    })
+  })
+}
