@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.53] - 2026-09-30
+
+- Port fenced batch-worker ownership to the optional local PostgreSQL authority. Commit the first submission grant with its spending dispatch; expired workers, restarts and lost commit responses cannot obtain a second grant.
+- Retain bounded exact acknowledgment bytes, including malformed and late responses. Require the current owner to adopt a valid, unambiguous provider identity; conflicting evidence hides the identity and preserves spending uncertainty.
+- Add explicit installation, immutable permissions, strict readback, real competing-worker/crash tests and five-schema backup/restore. Production storage, provider transports, publishing, runtime models, prompts and billing settings remain unchanged.
+
 ## [0.9.108.52] - 2026-09-30
 
 - Retain exact batch plans, immutable job identities and spending holds atomically in the optional local PostgreSQL authority. Preserve strict plan/reservation joins, useful-window checks, shared allowance contention and safe same-request readback after expiry or an unknown commit response.

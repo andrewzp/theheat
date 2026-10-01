@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from src.commands import postgres_batch, postgres_spending
+from src.commands import postgres_batch, postgres_batch_worker, postgres_spending
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -95,6 +95,21 @@ class PostgresCommandAuthority:
         row = PostgresCommandAuthority._pointer(c, lock=lock)
         _, state = p.PostgresProjectionRepository._read(c, row[1], row[2])
         return row[0], state
+
+    def initialize_batch_workers(self) -> None:
+        """Explicit owner-only installation; no limits, jobs or grants selected."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_batch_worker.install(c, self.environment)
+
+    def batch_work(self, action: str, payload: dict, *, now: str, raw: bytes | None = None) -> dict:
+        with self.projections._connection(writing=action != "status") as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_batch_worker.apply(c, action, payload, now=now, raw=raw, environment=self.environment)
+        # A lost commit acknowledgment never returns a provisional dispatch grant.
+        return result
 
     def initialize_spending(self) -> None:
         """Explicit owner-only install; never selects limits or changes state."""
