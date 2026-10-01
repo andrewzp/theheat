@@ -1,0 +1,2 @@
+# Optional local PostgreSQL repository/test profile; not a production backend switch.
+psycopg[binary]==3.3.6

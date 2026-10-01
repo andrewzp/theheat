@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.49] - 2026-09-30
+
+- Add an optional local PostgreSQL 17 projection archive with immutable, content-addressed whole-field artifacts and version receipts. Preserve complete canonical JSON, including unknown fields, Unicode and distinct numeric representations; retain original wire/source bytes separately.
+- Commit each version and its references atomically, acknowledge only after commit, and make retries idempotent. Verify schema, permissions, artifact hashes, byte bounds and reconstructed identity; restrict the runtime role to reads and inserts.
+- Gate this adapter with real temporary Unix-socket PostgreSQL tests for concurrency, rollback, lost acknowledgments, corruption, privilege boundaries and backup/restore. Keep production storage, publishing and model configuration unchanged; no hosted backend or current-state pointer is selected.
+
 ## [0.9.108.48] - 2026-09-30
 
 - Preserve GDACS subtype-witness identity when backup feeds return no qualifying records. Report degraded primary availability for both empty and populated fallback results, with per-leg received/selected counts and unknown counts for failed legs.
