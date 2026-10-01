@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.52] - 2026-09-30
+
+- Retain exact batch plans, immutable job identities and spending holds atomically in the optional local PostgreSQL authority. Preserve strict plan/reservation joins, useful-window checks, shared allowance contention and safe same-request readback after expiry or an unknown commit response.
+- Add explicit owner installation, bounded raw-plan storage, restricted permissions, immutable records and actual four-schema recovery tests. Preserve existing projection, command, spending and SQLite contracts.
+- Keep registration/status receipts free of dispatch or publication permission. No production backend, provider call, lease/submission path, runtime model, prompt, sample count or billing setting changes.
+
 ## [0.9.108.51] - 2026-09-30
 
 - Add explicit local PostgreSQL spending reservations under the command authority's shared row lock. Preserve immutable allowances, exact request identities, unknown holds and one committed dispatch grant across workers, retries and restarts.
