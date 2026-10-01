@@ -149,7 +149,7 @@ def apply(c, action, payload, *, now, environment, raw=None):
     return dict(reused=False, raw_retained=True, publication_approved=False)
 
 
-def read_response(c, identity, stage, grant_id, *, environment):
+def _scoped_attempt(c, identity, stage, grant_id, environment):
     s._sha(identity)
     s._sha(grant_id)
     checks._require(stage in checks.STAGES, "unknown_required_check")
@@ -157,5 +157,15 @@ def read_response(c, identity, stage, grant_id, *, environment):
     saved = _read(c, identity, environment)
     attempt = saved["attempts"].get(stage)
     checks._require(attempt is not None and attempt["grant_id"] == grant_id, "unknown_check_grant")
+    return attempt
+
+
+def read_request(c, identity, stage, grant_id, *, environment):
+    attempt = _scoped_attempt(c, identity, stage, grant_id, environment)
+    return pg._raw(c, "request_artifacts", attempt["binding"]["request_sha256"])
+
+
+def read_response(c, identity, stage, grant_id, *, environment):
+    attempt = _scoped_attempt(c, identity, stage, grant_id, environment)
     checks._require(attempt["observation"] is not None, "check_observation_not_found")
     return _raw(c, "raw_artifacts", attempt["observation"]["raw_sha256"])

@@ -11,10 +11,10 @@ from collections.abc import Callable
 from datetime import timedelta
 import hashlib
 import os
+from typing import Protocol
 
 from src.commands import check_journal as checks
 from src.commands.schema import canonical_json, utc_datetime
-from src.commands.sqlite_authority import SQLiteAuthority
 from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
 from src.two_bot import check_requests
@@ -26,6 +26,23 @@ from src.two_bot.check_transport import (
     SOCKET_TIMEOUT_SECONDS,
 )
 from src.voice import safety
+
+
+class CheckAuthority(Protocol):
+    """Only the grant-bound storage operations required by this local runner."""
+
+    def batch_work(self, action: str, payload: dict, *, now: str,
+                   raw: bytes | None = None) -> dict: ...
+
+    def candidate_checks(self, action: str, payload: dict, *, now: str,
+                         request: bytes | None = None, receipt: dict | None = None) -> dict: ...
+
+    def check_execution(self, action: str, payload: dict, *, now: str,
+                        raw: bytes | None = None) -> dict: ...
+
+    def read_check_request(self, check_set_id: str, stage: str, grant_id: str) -> bytes: ...
+
+    def read_check_response(self, check_set_id: str, stage: str, grant_id: str) -> bytes: ...
 
 
 def _report(outcome, *, reason=None, stage=None, status=None):
@@ -54,13 +71,21 @@ def _finish(authority, identity, packet, stage, attempt, clock):
     binding = attempt["binding"]
     if (
         hashlib.sha256(expected).hexdigest() != binding["request_sha256"]
-        or authority.read_artifact(binding["request_sha256"]) != expected
+        or authority.read_check_request(identity["check_set_id"], stage, attempt["grant_id"]) != expected
     ):
         return _report("reconciliation_required", reason="check_request_not_exact", stage=stage)
     observation = attempt["observation"]
     if observation is None:
         return _report("reconciliation_required", reason="check_response_not_retained", stage=stage)
-    raw = authority.read_artifact(observation["raw_sha256"])
+    raw = authority.read_check_response(identity["check_set_id"], stage, attempt["grant_id"])
+    if (
+        observation["check_set_id"] != identity["check_set_id"]
+        or observation["stage"] != stage
+        or observation["grant_id"] != attempt["grant_id"]
+        or observation["request_sha256"] != binding["request_sha256"]
+        or hashlib.sha256(raw).hexdigest() != observation["raw_sha256"]
+    ):
+        return _report("reconciliation_required", reason="check_observation_not_exact", stage=stage)
     outcome = check_requests.interpret_observation(packet, stage, observation, raw)
     receipt = dict(outcome, grant_id=attempt["grant_id"], request_sha256=binding["request_sha256"])
     # A recovered observation still belongs to the original execution owner.
@@ -92,7 +117,7 @@ def _window_available(packet, lease, now):
 
 
 def execute_check_once(
-    authority: SQLiteAuthority,
+    authority: CheckAuthority,
     check_set_id: str,
     *,
     current_context: dict,

@@ -113,6 +113,15 @@ class PostgresCommandAuthority:
                                                        raw=raw, environment=self.environment)
         return result
 
+    def read_check_request(self, check_set_id: str, stage: str, grant_id: str) -> bytes:
+        """Exact request for one committed grant, even before a response exists."""
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            raw = postgres_check_observations.read_request(c, check_set_id, stage, grant_id,
+                                                           environment=self.environment)
+        return raw
+
     def read_check_response(self, check_set_id: str, stage: str, grant_id: str) -> bytes:
         """Grant-bound retained bytes; does not interpret or approve the response."""
         with self.projections._connection() as c:

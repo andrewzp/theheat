@@ -4,11 +4,13 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "dashboard/lib/draft-revisions.js": "0ec65e63b612baf1bec8a613d2469cd3e68a8c1db60450cd7259fe6d5e23f6a0",
     "dashboard/lib/editorial-policy.js": "df41493de12fe26dccd7d93a9c710a6a7bb97a4871ad7e086578ba19b388f568",
     "src/commands/batch_result_journal.py": "261b6572b49e827502629ab6eecd53d613d45d66f44c7c3d8dfeb39438a45ec4",
-    "src/commands/check_execution_journal.py": "4abdf688a7b8aeccc1d0ae083f47700e67b26102411e5a9d601fd2472101ad39",
+    "src/commands/check_execution_journal.py": "58747187da8ae80535015f77a41bf9e3f84edabb0bedaa6f7fa828e92567ec24",
     "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
+    "src/commands/postgres_authority.py": "84a07281281746fa337d24caccd63e1f5bf42f52db137ffdb00081b438071d1c",
     "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
-    "src/commands/postgres_check_observations.py": "53b3e706b7251e648f6455c2241e65e322c51c3376bbd9bffdaa16f10337f26b",
+    "src/commands/postgres_check_observations.py": "debcb5367ffba2f0c7402416b5948a0c9dcd2b2e24e4aba2838ed2ea097f24f6",
     "src/commands/postgres_checks.py": "e4022751878e1e95b87d4d4d30487a698d39f38dd93ec082bf415c92f86bae8f",
+    "src/commands/sqlite_authority.py": "a54b8618806d37a168ea9adad92b85ee234dcf612767b789b18685a23034dd05",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
     "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
@@ -18,12 +20,12 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "64b1488bdc9a27fa19fa0b1e9c39bb162a242ffe14fd426013b2527e4c59f987",
+    "src/editorial/policy.py": "4c28ee20c693fcfd2905676e5ba56855107f2b6cb561e143d216765e9b4bfbcf",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
     "src/two_bot/bundle_capture.py": "d099ea07a048cc716b460792b8b24681b404a6eeb0f8e5d36928d8260b35972b",
-    "src/two_bot/check_executor.py": "41f8959f5e4ee0af379290bcb46790b78adcafe15f599695f4d1980b533279fa",
+    "src/two_bot/check_executor.py": "2be0f1cf4b90bc4eb02f201ac09d824f04e6732af1b51ab248484ad045384e9f",
     "src/two_bot/check_requests.py": "63a160f049073589923e708f673ec0ac86ae4889f6ff52a84e3b0dd4b1bf8b77",
     "src/two_bot/check_transport.py": "39384726ee281d6cf3ffc2a49706329a30f07811376019625522e956507af2e4",
     "src/two_bot/critic.py": "47c01ae89323dde6d764d40994f1eb0a1f652f1e69022981ede236d74bb10cf5",
@@ -58,5 +60,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "490a545020dc3b9f3a5438b16e819c772ff244a75de5e4492c5824eb046a3f34"
+  "source_sha256": "cf707b1682feef0d5bc8b6ac9b09ec2196b1a30f020c8b1801220e420a8dc1e0"
 }
