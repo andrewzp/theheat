@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+import re
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin, urlsplit
 
 import requests
 
@@ -103,32 +105,33 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
     lat = parse_coordinate(_first_present(raw, "latitudeNumeric", "lat", "latitude"))
     lon = parse_coordinate(_first_present(raw, "longitudeNumeric", "lon", "longitude"))
     basin = str(_first_present(raw, "basin", "region", default=_basin_from_storm_id(storm_id)) or "")
-    advisory_number = str(_first_present(
-        raw,
-        "advisoryNumber",
-        "advisory_number",
-        "advNum",
-        "number",
-        default="",
-    ) or "").strip()
-    issued_at = str(_first_present(
-        raw,
-        "lastUpdate",
-        "last_update",
-        "advisoryTime",
-        "issued_at",
-        "pubDate",
-        default="",
-    ) or "").strip()
-    public_advisory_url = _normalize_url(str(_first_present(
+    public_value = _first_present(
         raw,
         "publicAdvisory",
         "publicAdvisoryUrl",
         "public_advisory",
         "public_advisory_url",
         "advisoryUrl",
-        default="",
-    ) or "").strip())
+        default=None,
+    )
+    public = public_value if isinstance(public_value, dict) else {}
+    public_advisory_url = _normalize_url(public.get("url") if public else public_value)
+    # CurrentStorms identifies the public product inside its own object. Do not
+    # stringify that object, or borrow a forecast product's number/update time.
+    advisory_number = _advisory_number(public.get("advNum")) or next((
+        value for key in ("advisoryNumber", "advisory_number", "advNum", "number")
+        if (value := _advisory_number(raw.get(key), allow_integer=True))
+    ), "")
+    # Storm measurements retain their issue time even when the public product
+    # differs. Its issuance is only a fallback; fileUpdateTime is never validity.
+    issued_at = next((
+        value for key in ("lastUpdate", "last_update", "advisoryTime", "issued_at", "pubDate")
+        if (value := _issue_time(raw.get(key)))
+    ), "") or _issue_time(public.get("issuance"))
+    # A source row without an issue instant cannot support a current event.
+    # In particular, do not let downstream date-only fallbacks make it fresh.
+    if not issued_at:
+        return None
     advisory_text = _fetch_advisory_text(public_advisory_url)
 
     # Land-threat leg (#375): the Forecast/Advisory (TCM) product carries the
@@ -139,7 +142,7 @@ def _parse_active_storm(raw: dict[str, Any]) -> CycloneAdvisory | None:
     forecast_points: tuple[ForecastPoint, ...] = ()
     tcm_obj = raw.get("forecastAdvisory")
     if isinstance(tcm_obj, dict):
-        tcm_url = _normalize_url(str(tcm_obj.get("url") or "").strip())
+        tcm_url = _normalize_url(tcm_obj.get("url"))
         tcm_text = _fetch_advisory_text(tcm_url)
         if tcm_text:
             forecast_points = parse_nhc_forecast_advisory(tcm_text)
@@ -169,10 +172,59 @@ def _first_present(raw: dict[str, Any], *keys: str, default: Any = None) -> Any:
     return default
 
 
-def _normalize_url(url: str) -> str:
-    if not url:
+def _advisory_number(value: Any, *, allow_integer: bool = False) -> str:
+    if allow_integer and type(value) is int:
+        value = str(value)
+    if not isinstance(value, str):
         return ""
-    return urljoin(NHC_BASE_URL, url)
+    value = value.strip()
+    return value if len(value) <= 32 and re.fullmatch(r"[0-9]+[A-Za-z]?", value) else ""
+
+
+def _issue_time(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > 80:
+        return ""
+    value = value.strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})", value):
+        return ""
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    # Do not turn a bare date or an unspecified timezone into an issue instant.
+    return value if parsed.tzinfo is not None and parsed.utcoffset() is not None else ""
+
+
+def _normalize_url(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > 2048:
+        return ""
+    try:
+        value.encode("utf-8")
+    except UnicodeError:
+        return ""
+    if any(ord(c) < 32 or ord(c) == 127 for c in value):
+        return ""
+    value = value.strip()
+    decoded = unquote(value)
+    if not value or value.startswith("///") or any(
+        c.isspace() or ord(c) < 32 or ord(c) == 127 or c in "\\{}[]<>\"'"
+        for c in decoded
+    ):
+        return ""
+    try:
+        original = urlsplit(value)
+        if original.scheme and (original.scheme not in {"http", "https"} or not original.netloc):
+            return ""
+        url = urljoin(NHC_BASE_URL, value)
+        parsed = urlsplit(url)
+        if (parsed.scheme not in {"http", "https"}
+                or parsed.hostname not in {"www.nhc.noaa.gov", "nhc.noaa.gov"}
+                or parsed.username is not None or parsed.password is not None
+                or parsed.port not in (None, 443 if parsed.scheme == "https" else 80)):
+            return ""
+    except ValueError:
+        return ""
+    return url
 
 
 def _fetch_advisory_text(url: str) -> str:

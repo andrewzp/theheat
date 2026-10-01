@@ -28,7 +28,7 @@ POLICY_FILES = (
     "src/two_bot/rejected_candidate.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
-    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py",
+    "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py", "src/data/nhc.py",
     "src/orchestrator/sources/open_meteo.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
