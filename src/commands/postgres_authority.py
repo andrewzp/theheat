@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from src.commands import postgres_spending
+from src.commands import postgres_batch, postgres_spending
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -109,6 +109,30 @@ class PostgresCommandAuthority:
             self._validate(c)
             self._pointer(c, lock=True)
             result = postgres_spending.apply(c, action, payload, now=now, environment=self.environment)
+        return result
+
+    def initialize_batches(self) -> None:
+        """Explicit owner-only registration schema install; no holds or jobs."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_batch.install(c, self.environment)
+
+    def prepare_batch(self, plan_bytes: bytes, *, expected_plan_sha256: str,
+                      reservation: dict, now: str) -> dict:
+        with self.projections._connection(writing=True) as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_batch.register(c, plan_bytes,
+                expected_plan_sha256=expected_plan_sha256, reservation=reservation,
+                now=now, environment=self.environment)
+        return result
+
+    def batch_status(self, job_id: str) -> dict:
+        with self.projections._connection() as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_batch.read(c, job_id, environment=self.environment)
         return result
 
     def initialize(self, initial_state: dict, *, runtime_role: str) -> None:
