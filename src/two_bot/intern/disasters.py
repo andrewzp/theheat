@@ -262,7 +262,7 @@ def build_cyclone_tier_crossing_bundle(event: TierCrossingEvent) -> StoryBundle:
     )
 
 def build_cyclone_landfall_bundle(event: LandfallEvent) -> StoryBundle:
-    """A Cat 3+ tropical cyclone landfall was confirmed in an advisory."""
+    """Build a candidate, not a warrant for observed landfall time/intensity."""
 
     return StoryBundle(
         signal_kind="cyclone_landfall",
