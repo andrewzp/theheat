@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.59 — 2026-10-01
+
+- Run the existing default-off local required-check executor through either SQLite or PostgreSQL using exact grant-bound request and response reads. Refuse changed bytes, malformed evidence and mismatched request/response joins before interpretation.
+- Exercise real PostgreSQL transaction failures, lost acknowledgments, process death, concurrent workers and restored databases using offline SDK fixtures. Unresolved grants never authorize another provider request; unknown spending remains held and completed checks do not approve publication.
+- Bind both authority adapters to editorial policy. This is a local integration with no production backend, publishing, model, prompt or sample-setting change.
+
 ## 0.9.108.58 — 2026-10-01
 
 - Retain bounded raw mandatory-check responses in an explicitly initialized local PostgreSQL schema, with exact request/grant binding and immutable metadata.

@@ -704,3 +704,109 @@ def test_process_death_retention_and_recovery_never_repurchase(case, monkeypatch
         assert result["reason"] == "check_response_not_retained"
     else:
         assert result["checks"]["stages"]["safety"] == "passed"
+
+
+def test_scoped_request_available_before_observation_and_identity_is_required(case, monkeypatch):
+    packet = saved(case)["packet"]
+    request = canonical_json(check_requests.prepare_request(packet, "deterministic")).encode()
+    identity = dict(check_set_id=case["identity"], owner="worker-one", fence=1,
+        current_context=case["payload"]["current_context"], checker_state_sha256=packet["checker_state_sha256"])
+    grant = case["store"].candidate_checks("begin", dict(identity, stage="deterministic", reservation=None), request=request, now=NOW)
+    args = dict(check_set_id=case["identity"], stage="deterministic", grant_id=grant["grant_id"])
+    before = workers.snapshot(case["store"])
+    assert case["store"].read_check_request(**args) == request
+    with pytest.raises(checks.CheckJournalError, match="not_found"):
+        case["store"].read_check_response(**args)
+    monkeypatch.setenv("THEHEAT_CRITIC_ENABLED", "0")
+    assert case["store"].read_check_request(**args) == request
+    for field, value in (("check_set_id", "f" * 64), ("grant_id", "f" * 64), ("stage", "safety"), ("stage", [])):
+        with pytest.raises(ValueError):
+            case["store"].read_check_request(**dict(args, **{field: value}))
+    assert workers.snapshot(case["store"]) == before
+
+
+def _damaged_sqlite_restore(case, change):
+    """Simulate damaged data while restoring the original catalog exactly."""
+    with closing(case["store"]._connect()) as conn:
+        rows = conn.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' AND tbl_name IN ('domain_artifacts','check_observations','check_attempts')").fetchall()
+        for row in rows:
+            conn.execute('DROP TRIGGER "' + row["name"] + '"')
+        change(conn)
+        for row in rows:
+            conn.execute(row["sql"])
+        conn.commit()
+
+
+@pytest.mark.parametrize("kind", ["request-size", "request-bytes", "request-type", "binding", "meta-size", "meta-type", "meta-join", "meta-complete", "meta-http", "meta-reason", "meta-canonical", "time", "raw-size", "raw-bytes", "raw-type"])
+def test_scoped_sqlite_reads_refuse_corrupt_bytes_and_joins(case, monkeypatch, kind):
+    run(case)
+    attempt = saved(case)["attempts"]["deterministic"]
+    args = (case["identity"], "deterministic", attempt["grant_id"])
+    with closing(case["store"]._connect()) as conn:
+        row = conn.execute("SELECT metadata_sha256 FROM check_observations WHERE grant_id=?", (attempt["grant_id"],)).fetchone()
+        metadata_sha = row[0]
+    target = (attempt["binding"]["request_sha256"] if kind.startswith("request") else
+              attempt["binding_sha256"] if kind == "binding" else
+              metadata_sha if kind.startswith("meta") else attempt["observation"]["raw_sha256"])
+    def damage(conn):
+        if kind.endswith("size"):
+            bound = checks.MAX_INPUT_BYTES if kind.startswith("request") else 4096 if kind.startswith("meta") else observations.MAX_RESPONSE_BYTES
+            conn.execute("UPDATE domain_artifacts SET payload=zeroblob(?),byte_count=? WHERE sha256=?", (bound + 1, bound + 1, target))
+        elif kind.endswith("bytes"):
+            conn.execute("UPDATE domain_artifacts SET payload=?,byte_count=1 WHERE sha256=?", (b"x", target))
+        elif kind.endswith("type"):
+            conn.execute("UPDATE domain_artifacts SET payload='x',byte_count=1 WHERE sha256=?", (target,))
+        elif kind == "binding":
+            conn.execute("UPDATE check_attempts SET recorded_at='2026-09-28T00:00:00.000000Z'")
+        elif kind == "time":
+            conn.execute("UPDATE check_observations SET recorded_at='2026-09-28T00:00:00.000000Z'")
+        else:
+            data = deepcopy(attempt["observation"])
+            if kind == "meta-join":
+                data["request_sha256"] = "f" * 64
+            elif kind == "meta-complete":
+                data["complete"] = 1
+            elif kind == "meta-http":
+                data["http_status"] = True
+            elif kind == "meta-reason":
+                data["reason"] = "received"
+            raw = (json.dumps(data, indent=2) if kind == "meta-canonical" else canonical_json(data)).encode()
+            digest = hashlib.sha256(raw).hexdigest()
+            conn.execute("INSERT INTO domain_artifacts VALUES(?,?,?)", (digest, len(raw), raw))
+            conn.execute("UPDATE check_observations SET metadata_sha256=?", (digest,))
+    _damaged_sqlite_restore(case, damage)
+    if kind.endswith(("size", "type")):
+        original = observations.domain_journal.read_artifact
+        def guarded(conn, sha):
+            assert sha != target, "read invalid/oversized blob before preflight"
+            return original(conn, sha)
+        monkeypatch.setattr(observations.domain_journal, "read_artifact", guarded)
+    reader = case["store"].read_check_request if kind.startswith("request") else case["store"].read_check_response
+    error = observations.domain_journal.DomainJournalError if kind.endswith("bytes") else ValueError
+    with pytest.raises(error):
+        reader(*args)
+
+
+@pytest.mark.parametrize("part", ["bytes", "set", "stage", "grant", "request", "digest"])
+def test_executor_refuses_mismatched_scoped_observation(case, monkeypatch, part):
+    run(case)
+    sent, _ = provider(monkeypatch, [envelope("NO")])
+    interpret = check_requests.interpret_observation
+    monkeypatch.setattr(check_requests, "interpret_observation", lambda *a: (_ for _ in ()).throw(RuntimeError("park response")))
+    assert run(case, "safety")["outcome"] == "reconciliation_required" and len(sent) == 1
+    monkeypatch.setattr(check_requests, "interpret_observation", interpret)
+    if part == "bytes":
+        monkeypatch.setattr(case["store"], "read_check_response", lambda *a: b"another response")
+    else:
+        original = case["store"].check_execution
+        key = {"set": "check_set_id", "stage": "stage", "grant": "grant_id", "request": "request_sha256", "digest": "raw_sha256"}[part]
+        def altered(action, *args, **kwargs):
+            result = original(action, *args, **kwargs)
+            if action == "read":
+                result["attempts"]["safety"]["observation"][key] = "other" if part == "stage" else "f" * 64
+            return result
+        monkeypatch.setattr(case["store"], "check_execution", altered)
+    monkeypatch.setattr(check_requests, "interpret_observation", lambda *a: pytest.fail("interpreted mismatched observation"))
+    result = run(case, "safety")
+    assert result["reason"] == "check_observation_not_exact" and len(sent) == 1
+    assert not result["publication_approved"] and result["cost_usd"] is None

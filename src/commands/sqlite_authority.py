@@ -388,6 +388,25 @@ class SQLiteAuthority:
                 connection.rollback()
                 raise
 
+    def read_check_request(self, check_set_id: str, stage: str, grant_id: str) -> bytes:
+        return self._read_check_artifact(check_set_id, stage, grant_id, response=False)
+
+    def read_check_response(self, check_set_id: str, stage: str, grant_id: str) -> bytes:
+        return self._read_check_artifact(check_set_id, stage, grant_id, response=True)
+
+    def _read_check_artifact(self, check_set_id: str, stage: str, grant_id: str, *, response: bool) -> bytes:
+        with closing(self._connect()) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            try:
+                self._check_environment(connection)
+                reader = check_execution_journal.read_response if response else check_execution_journal.read_request
+                raw = reader(connection, check_set_id, stage, grant_id)
+                connection.commit()
+                return raw
+            except BaseException:
+                connection.rollback()
+                raise
+
     def check_execution(self, action: str, payload: dict, *, now: str,
                         raw: bytes | None = None, before_commit: Callable[[], None] | None = None) -> dict:
         """Retain/read local raw observations; no parsing or paid side effects."""

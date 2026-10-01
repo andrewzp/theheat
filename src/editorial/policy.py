@@ -30,6 +30,7 @@ POLICY_FILES = (
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
     "src/data/ghcn.py", "src/data/ghcn_format.py", "src/data/gdacs.py", "src/data/nhc.py",
     "src/commands/postgres_check_observations.py",
+    "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
 )
 MODEL_KEYS = {"writer", "writer_provider", "fact_check", "critic", "safety"}
