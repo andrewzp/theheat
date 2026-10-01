@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.50] - 2026-09-30
+
+- Add the isolated PostgreSQL command core for revision-aware editing and decisions. Serialize acceptance and consumption under a real row lock; commit each changed projection, current pointer, terminal result and history event together.
+- Reconcile repeated requests and lost commit acknowledgments without duplicating edits or approval intents. Reuse existing reducer/role/epoch rules, reject stale revisions, and preserve unknown publication outcomes. Resolver failures remain pending infrastructure uncertainty.
+- Extend storage permission checks to column and sequence grants; verify immutable history, bounded journal pages, rollback, separate-process concurrency and backup/restore. Preserve the previous projection archive format. No production backend, hosted ingress, provider job, publishing or runtime model change.
+
 ## [0.9.108.49] - 2026-09-30
 
 - Add an optional local PostgreSQL 17 projection archive with immutable, content-addressed whole-field artifacts and version receipts. Preserve complete canonical JSON, including unknown fields, Unicode and distinct numeric representations; retain original wire/source bytes separately.
