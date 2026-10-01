@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.54] - 2026-09-30
+
+- Retain exact batch metadata, result bytes and immutable review documents in the optional local PostgreSQL authority. Preserve the existing semantic receipt/candidate identities separately from raw byte checksums, with bounded reads, typed artifact tables and atomic rollback.
+- Re-evaluate results against current worker ownership, context, deadlines, receipt inventory and provider identity. Partial, malformed, stale or conflicting evidence remains available for accounting but cannot supply an eligible candidate; a successful parse never completes required checks or approves publication.
+- Verify independent workers, lost commit responses, corruption and permissions, exact SQLite parity, capacity boundaries and six-schema backup/restore. Production storage, provider transports, runtime models, publishing and billing settings remain unchanged.
+
 ## [0.9.108.53] - 2026-09-30
 
 - Port fenced batch-worker ownership to the optional local PostgreSQL authority. Commit the first submission grant with its spending dispatch; expired workers, restarts and lost commit responses cannot obtain a second grant.

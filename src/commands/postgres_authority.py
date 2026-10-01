@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID
 
-from src.commands import postgres_batch, postgres_batch_worker, postgres_spending
+from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -95,6 +95,35 @@ class PostgresCommandAuthority:
         row = PostgresCommandAuthority._pointer(c, lock=lock)
         _, state = p.PostgresProjectionRepository._read(c, row[1], row[2])
         return row[0], state
+
+    def initialize_batch_results(self) -> None:
+        """Explicit owner install for raw results and immutable review evidence."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_batch_results.install(c, self.environment)
+
+    def record_batch_results(self, payload: dict, *, metadata: bytes, results: bytes, now: str) -> dict:
+        return self._batch_results_transaction("record", payload, metadata=metadata, results=results, now=now)
+
+    def batch_results_status(self, job_id: str, *, now: str) -> dict:
+        return self._batch_results_transaction("index", {"job_id": job_id}, now=now)
+
+    def review_batch_results(self, payload: dict, *, now: str) -> dict:
+        return self._batch_results_transaction("review", payload, now=now)
+
+    def _batch_results_transaction(self, action: str, payload: dict, *, now: str,
+                                   metadata: bytes | None = None, results: bytes | None = None) -> dict:
+        with self.projections._connection(writing=action != "index") as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            if action == "record":
+                receipt = postgres_batch_results.record(c, payload, metadata, results, now=now, environment=self.environment)
+            elif action == "index":
+                receipt = postgres_batch_results.index(c, payload, now=now, environment=self.environment)
+            else:
+                receipt = postgres_batch_results.review(c, payload, now=now, environment=self.environment)
+        return receipt
 
     def initialize_batch_workers(self) -> None:
         """Explicit owner-only installation; no limits, jobs or grants selected."""
