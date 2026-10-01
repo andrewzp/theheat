@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.57] - 2026-10-01
+
+- Parse NHC public advisory objects into their actual URL, number and issue time instead of stringifying the object into a broken link. Preserve legacy scalar fields and independent forecast-product parsing.
+- Reject malformed optional URLs before fetching them; withhold storm rows without a qualified issue instant instead of borrowing file-update times or inventing a date. Keep existing forecast-versus-confirmed-landfall checks and bounded source retries.
+- Bind the NHC source adapter to editorial policy and regenerate the dashboard manifest so obsolete checks and approvals cannot remain current. Production publishing and runtime model settings remain unchanged.
+
 ## [0.9.108.56] - 2026-10-01
 
 - Add exact candidate/check intake, immutable terminal receipts and one fenced grant per mandatory stage to the optional local PostgreSQL authority. Commit paid check reservations, dispatch and retained request bindings together; preserve unknown charges across failures and retries.

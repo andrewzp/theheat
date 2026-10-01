@@ -30,7 +30,7 @@ def test_generated_source_manifest_is_current_and_version_is_not_an_input():
     subprocess.run([__import__('sys').executable, "scripts/gen_editorial_policy.py", "--check"], cwd=ROOT, check=True)
     manifest = policy.source_manifest()
     assert "VERSION" not in manifest["files"]
-    for name in ("src/two_bot/prompts/writer_prompt.py", "src/two_bot/strict_contract.py", "src/data/temperature_evidence.py", "src/two_bot/multisignal.py", "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py"):
+    for name in ("src/two_bot/prompts/writer_prompt.py", "src/two_bot/strict_contract.py", "src/data/temperature_evidence.py", "src/two_bot/multisignal.py", "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py", "src/data/nhc.py"):
         assert name in manifest["files"]
 
 
