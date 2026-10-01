@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.56] - 2026-10-01
+
+- Add exact candidate/check intake, immutable terminal receipts and one fenced grant per mandatory stage to the optional local PostgreSQL authority. Commit paid check reservations, dispatch and retained request bindings together; preserve unknown charges across failures and retries.
+- Revalidate policy, candidate, checker state, ownership, UTC day and deadlines before readiness. Retain late evidence without turning it into a pass; completed checks never approve publication or settle spending.
+- Bind the PostgreSQL result/check implementation to editorial policy and regenerate the dashboard manifest. Keep production storage and publishing settings unchanged.
+
 ## [0.9.108.55] - 2026-09-30
 
 - Withhold optional related observations when one event identity has conflicting summaries. Collapse identical summaries before ranking, preserve underlying candidates, clear stale attachments and detach retained context from later mutations.
