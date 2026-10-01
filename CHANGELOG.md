@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 - Separate pull-request checks from the production workflow queue. Scheduled and manual bot runs retain their existing shared group and cannot cancel an in-progress producer; obsolete checks can be cancelled only by another head of the same PR.
 - Allow 35 minutes for full CI after the suite exceeded the prior 25-minute limit; report the slowest tests and print thread stacks when a test stalls for two minutes. Preserve every offline regression, the production timeout, schedules and publishing controls.
+- Bound pytest display IDs before execution: use short labels for oversized draft and prompt fixtures while preserving their full inputs and assertions. Fail collection with a bounded diagnostic if another payload-sized ID is introduced.
 
 ## 0.9.108.64 — 2026-10-01
 

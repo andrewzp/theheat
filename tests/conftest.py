@@ -32,6 +32,20 @@ from src.state import DEFAULT_STATE
 _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
 
+def pytest_itemcollected(item):
+    """Reject payload-sized display IDs before CI logs or subprocess environments.
+
+    Large parameter values still belong in tests; give them short explicit IDs.
+    Do not echo an offending payload while reporting this collection error.
+    """
+    if len(item.nodeid.encode("utf-8")) > 1024:
+        name = item.nodeid.split("[", 1)[0][:180]
+        raise pytest.UsageError(
+            f"Test ID exceeds 1024 UTF-8 bytes ({name}). "
+            "Use short explicit parametrization ids; preserve the full test inputs."
+        )
+
+
 @pytest.fixture
 def fresh_state():
     return deepcopy(DEFAULT_STATE)

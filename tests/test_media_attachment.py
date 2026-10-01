@@ -223,6 +223,12 @@ def test_bad_or_published_authoritative_state_is_not_editable(inputs, change):
         ("extra", float("nan")),
         ("extra", "\ud800"),
     ],
+    ids=[
+        "posted", "rejected", "receipt", "confirmed", "submitted",
+        "conflicts", "missing-history", "zero-revision", "exhausted-revision",
+        "exhausted-decision", "blank-text", "missing-event", "oversized-draft",
+        "nonfinite-extra", "invalid-unicode",
+    ],
 )
 def test_invalid_draft_is_refused_without_mutation(inputs, field, value):
     inputs["draft"][field] = value

@@ -66,8 +66,8 @@ jobs:
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
-    # The full PostgreSQL suite exceeded the former 25-minute job allowance.
-    # Preserve every check; bound CI at 35 minutes and report slow/stalled tests.
+    # A prior test job timed out; oversized display IDs are now rejected before
+    # execution. Preserve every check and bound CI while reporting stalled tests.
     # The production run's separate 20-minute limit is unchanged.
     timeout-minutes: 35
     steps:

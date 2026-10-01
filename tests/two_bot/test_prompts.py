@@ -28,7 +28,7 @@ SYSTEMS = (WRITER_SYSTEM_PROMPT, FACT_CHECK_SYSTEM_PROMPT, CRITIC_SYSTEM_PROMPT)
 
 @pytest.mark.parametrize("prompt,limit", [
     (WRITER_SYSTEM_PROMPT, 10500), (FACT_CHECK_SYSTEM_PROMPT, 10000), (CRITIC_SYSTEM_PROMPT, 6500),
-])
+], ids=["writer", "fact-check", "critic"])
 def test_common_prompt_size_has_an_explicit_review_budget(prompt, limit):
     # Character budget guards input growth; it is not an API-token or cost claim.
     assert len(prompt) <= limit
@@ -38,7 +38,7 @@ def test_common_prompt_size_has_an_explicit_review_budget(prompt, limit):
 @pytest.mark.parametrize("prompt,rules", [
     (WRITER_SYSTEM_PROMPT, EVIDENCE_RULES), (FACT_CHECK_SYSTEM_PROMPT, EVIDENCE_RULES),
     (CRITIC_SYSTEM_PROMPT, CRITIC_EVIDENCE_RULES),
-])
+], ids=["writer", "fact-check", "critic"])
 def test_roles_include_their_current_evidence_policy_once(prompt, rules):
     assert prompt.count(rules) == 1
 
