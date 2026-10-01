@@ -137,7 +137,7 @@ class ProjectionReceipt:
     created_at: str
 
 
-def _catalog(connection) -> str:
+def _catalog(connection, schema: str = SCHEMA) -> str:
     """Fingerprint semantic catalog definitions, excluding OIDs/physical layout."""
     queries = (
         """SELECT n.nspname,pg_get_userbyid(n.nspowner),
@@ -173,12 +173,18 @@ def _catalog(connection) -> str:
            a.privilege_type,a.is_grantable FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
            CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl,acldefault('f',p.proowner))) a
            WHERE n.nspname=%s ORDER BY 1,2,3,4,5""",
-        """SELECT c.relname,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
-           a.privilege_type,a.is_grantable FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-           CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault('r',c.relowner))) a
-           WHERE n.nspname=%s AND c.relkind='r' ORDER BY 1,2,3,4""",
+        """WITH relations AS (SELECT c.* FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=%s)
+           SELECT c.relname::text,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM relations c
+           CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a
+           WHERE c.relkind IN ('r','S')
+           UNION ALL
+           SELECT c.relname||'.'||col.attname,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,
+           a.privilege_type,a.is_grantable FROM relations c JOIN pg_attribute col ON col.attrelid=c.oid
+           CROSS JOIN LATERAL aclexplode(col.attacl) a
+           WHERE col.attnum>0 AND NOT col.attisdropped ORDER BY 1,2,3,4""",
     )
-    material = [connection.execute(q, (SCHEMA,)).fetchall() for q in queries]
+    material = [connection.execute(q, (schema,)).fetchall() for q in queries]
     return _sha(json.dumps(material, sort_keys=True, separators=(",", ":"), default=str).encode())
 
 
@@ -208,6 +214,7 @@ class PostgresProjectionRepository:
                                 application_name="theheat_projection_local", autocommit=True,
                                 options="-c statement_timeout=30000 -c lock_timeout=10000 -c timezone=UTC") as connection:
                 with connection.transaction():
+                    connection.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
                     connection.execute("SET LOCAL search_path=pg_catalog")
                     connection.execute("SET LOCAL synchronous_commit=on")
                     _require(170000 <= connection.info.server_version < 180000,
@@ -305,23 +312,34 @@ class PostgresProjectionRepository:
         """Idempotent immutable version, acknowledged only after commit."""
         namespace, snapshot_id = _identifier(namespace), _identifier(snapshot_id)
         encoded, fields = _snapshot(value)
-        digest = _sha(encoded)
         with self._connection(writing=True) as connection:
             self._validate(connection)
-            inserted = connection.execute(f"""INSERT INTO {SCHEMA}.versions
-                (namespace,snapshot_id,canonical_sha,byte_count,field_count) VALUES(%s,%s,%s,%s,%s)
-                ON CONFLICT(namespace,snapshot_id) DO NOTHING RETURNING snapshot_id""",
-                (namespace, snapshot_id, digest, len(encoded), len(fields))).fetchone()
-            if inserted:
-                # Sorting shared artifact keys also avoids inverse lock ordering
-                # when concurrent, different versions reuse overlapping fields.
-                for payload in sorted(set(fields.values()), key=_sha):
-                    artifact_sha = _sha(payload)
-                    connection.execute(f"INSERT INTO {SCHEMA}.artifacts VALUES(%s,%s,%s) ON CONFLICT(sha) DO NOTHING", (artifact_sha, payload, len(payload)))
-                    actual = connection.execute(f"SELECT payload,byte_count FROM {SCHEMA}.artifacts WHERE sha=%s", (artifact_sha,)).fetchone()
-                    _require(actual == (payload, len(payload)), "corrupt_projection_artifact")
-                for name, payload in fields.items():
-                    connection.execute(f"INSERT INTO {SCHEMA}.fields VALUES(%s,%s,%s,%s)", (namespace, snapshot_id, name, _sha(payload)))
-            receipt, _ = self._read(connection, namespace, snapshot_id)
-            _require(receipt.canonical_sha256 == digest, "projection_idempotency_conflict")
+            receipt = self._record(connection, namespace, snapshot_id, encoded, fields)
+        return receipt
+
+    @classmethod
+    def _record(cls, connection, namespace: str, snapshot_id: str, encoded: bytes,
+                fields: dict[bytes, bytes]) -> ProjectionReceipt:
+        """Compose only inside a validated caller-owned transaction.
+
+        Private callers must use _snapshot and the connection/schema/role guards.
+        This provisional receipt must not escape before the outer commit succeeds.
+        """
+        digest = _sha(encoded)
+        inserted = connection.execute(f"""INSERT INTO {SCHEMA}.versions
+            (namespace,snapshot_id,canonical_sha,byte_count,field_count) VALUES(%s,%s,%s,%s,%s)
+            ON CONFLICT(namespace,snapshot_id) DO NOTHING RETURNING snapshot_id""",
+            (namespace, snapshot_id, digest, len(encoded), len(fields))).fetchone()
+        if inserted:
+            # Sorting shared artifact keys also avoids inverse lock ordering
+            # when concurrent, different versions reuse overlapping fields.
+            for payload in sorted(set(fields.values()), key=_sha):
+                artifact_sha = _sha(payload)
+                connection.execute(f"INSERT INTO {SCHEMA}.artifacts VALUES(%s,%s,%s) ON CONFLICT(sha) DO NOTHING", (artifact_sha, payload, len(payload)))
+                actual = connection.execute(f"SELECT payload,byte_count FROM {SCHEMA}.artifacts WHERE sha=%s", (artifact_sha,)).fetchone()
+                _require(actual == (payload, len(payload)), "corrupt_projection_artifact")
+            for name, payload in fields.items():
+                connection.execute(f"INSERT INTO {SCHEMA}.fields VALUES(%s,%s,%s,%s)", (namespace, snapshot_id, name, _sha(payload)))
+        receipt, _ = cls._read(connection, namespace, snapshot_id)
+        _require(receipt.canonical_sha256 == digest, "projection_idempotency_conflict")
         return receipt
