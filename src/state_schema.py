@@ -299,6 +299,7 @@ class BotState(TypedDict, total=False):
     tweet_metrics: dict[str, TweetMetric]
     writer_negative_cache: dict[str, dict]
     llm_usage: dict[str, dict]
+    llm_usage_observations: dict
     _state_rev: int
     ocean_sst_streak: OceanSSTStreak
     ice_mass_max_loss: dict[str, IceMassLoss]

@@ -6,6 +6,7 @@ import math
 
 from src.two_bot.usage_ledger import _COVERAGE_FIELDS, _is_valid_day_key, coverage_fields_valid
 from src.two_bot.usage_coverage import count as valid_count, evidence_inconsistent
+from src.two_bot.usage_observations import summarize_observations
 
 INSTRUMENTED_STAGES = ['writer', 'fact_check', 'critic', 'safety', 'newsworthiness_search', 'newsworthiness_verify']
 UNTRACKED_STAGES = ['workflow_agents', 'other_account_usage']
@@ -15,7 +16,8 @@ LIMITS = [
     "Workflow agents, other account usage and non-state-writing evaluations remain untracked; no budget enforcement is implemented here.",
     "Pre-response failures, late source threads and failed persistence can leave usage untracked; a recorded response is not proof of billing.",
     "The shared buffer retains 500 responses; new stage traffic can evict earlier writer responses before a drain.",
-    "Google thought/tool/modality/tier and grounding charges are not priced or fully represented; Google responses remain unpriced.",
+    "Recent observations retain reported model/token/tool dimensions, but do not establish complete charging or account totals; Google responses remain unpriced.",
+    "The recent usage window retains at most 32 observations of at most 4096 bytes each; truncation, invalid input and retained identity conflicts remain explicit.",
     "The ledger retains 45 day buckets. MAX cumulative merges can undercount concurrent writers and cannot prove zero spending on missing days.",
     "Coverage keeps up to 32 original cumulative snapshots per day/model; conflicts or overflow make the subtotal unknown.",
     "The unchanged price table was last documented as checked on 2026-07-13; historical values are never repriced by this reader."
@@ -95,4 +97,5 @@ def summarize_usage(state, *, now=None) -> dict:
         "legacy_rows": legacy_rows, "inconsistent_rows": inconsistent, "excluded_rows": excluded,
         "instrumented_stages": list(INSTRUMENTED_STAGES), "untracked_stages": list(UNTRACKED_STAGES), "scope": SCOPE, "limitations": list(LIMITS),
         "budget_enforced": False,
+        "usage_observation_window": summarize_observations(state.get("llm_usage_observations") if hasattr(state, "get") else None),
     }

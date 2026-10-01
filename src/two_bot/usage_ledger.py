@@ -26,6 +26,7 @@ from src.two_bot.usage_coverage import (
     COVERAGE_COUNTS as _COVERAGE_COUNT_FIELDS, COVERAGE_FIELDS as _COVERAGE_FIELDS,
     SNAPSHOTS, count as valid_count, money, coverage_evidence, coverage_fields_valid, union_evidence,
 )
+from src.two_bot.usage_observations import merge_observations, observe_response
 
 # $/MTok (input, output, cache_write, cache_read) — verified live 2026-07-13
 # against the Anthropic pricing page. Boundary-aware prefix match (below) so
@@ -40,6 +41,13 @@ _BUFFER: list[dict[str, Any]] = []
 # Backstop for paths that never drain (voice-regression replays call
 # write_tweet directly, with no bot_state): keep only the newest rows.
 _BUFFER_CAP = 500
+
+
+def _trim_buffer() -> None:
+    """Called under the lock; preserve loss evidence on the surviving rows."""
+    if len(_BUFFER) > _BUFFER_CAP:
+        del _BUFFER[: len(_BUFFER) - _BUFFER_CAP]
+        _BUFFER[0]["usage_window_truncated"] = True
 
 LLM_USAGE_RETENTION_DAYS = 45
 
@@ -116,6 +124,8 @@ def record_usage(
     cache_read_tokens: int = 0,
     usage_complete: bool = True,
     pricing_supported: bool = True,
+    usage_observation: dict | None = None,
+    response_observed: bool = False,
 ) -> None:
     """Buffer one provider call's usage. Thread-safe (writer samples run in a
     ThreadPoolExecutor). Never raises — the ledger must not take down a call
@@ -137,11 +147,14 @@ def record_usage(
             "usd": usd, "priced_usd": usd,
             "priced_calls": int(priced), "unpriced_calls": int(not priced),
             "missing_usage_calls": int(not complete),
+            "response_observed": response_observed,
         }
+        if usage_observation is not None:
+            row["usage_observation"] = usage_observation
+            row["day"] = usage_observation["observed_at"][:10]
         with _LEDGER_LOCK:
             _BUFFER.append(row)
-            if len(_BUFFER) > _BUFFER_CAP:
-                del _BUFFER[: len(_BUFFER) - _BUFFER_CAP]
+            _trim_buffer()
     except Exception as exc:  # noqa: BLE001 — never break a successful call
         print(f"[usage_ledger] record error (ignored): {exc!r}")
 
@@ -177,8 +190,14 @@ def record_response(stage: str, response: Any, model: str, provider: str) -> Non
     except Exception:  # Metadata access cannot turn a returned response into a retry.
         values = {}
     try:
+        try:
+            observation = observe_response(stage, response, model, provider)
+        except Exception:
+            # Capture must not suppress the pre-existing aggregate or retry a call.
+            observation = None
         record_usage(stage, model, usage_complete=complete,
-                     pricing_supported=provider == "anthropic", **values)
+                     pricing_supported=provider == "anthropic", usage_observation=observation,
+                     response_observed=True, **values)
     except Exception:  # Accounting failure must neither retry nor change stage disposition.
         pass
 
@@ -214,6 +233,8 @@ def drain_into_state(state: Any) -> int:
     if not rows:
         return 0
     try:
+        if not isinstance(state, dict):
+            raise TypeError("usage_state_requires_dict")
         # Validate before folding: a corrupted gist can hand us None / a
         # list / a string here. Reset rather than crash — losing corrupt
         # history is better than blocking every subsequent write_state.
@@ -273,12 +294,19 @@ def drain_into_state(state: Any) -> int:
             del ledger[day]
         # Commit only after the whole fold succeeds; a retry must not replay
         # earlier rows on top of a partially mutated state.
-        state["llm_usage"] = ledger
+        window = merge_observations(state.get("llm_usage_observations"), {
+            "schema_version": 1,
+            "observations": [r["usage_observation"] for r in rows if "usage_observation" in r],
+            "truncated": any(r.get("usage_window_truncated", False) for r in rows),
+            "invalid": any("usage_observation" not in r and r.get("response_observed", False) for r in rows),
+        })
+        # Both values have been completely prepared before modifying the state.
+        # No provider call, await or custom mapping callback occurs in this commit.
+        dict.update(state, llm_usage=ledger, llm_usage_observations=window)
         return len(rows)
     except Exception as exc:  # noqa: BLE001 — never break the state save
         print(f"[usage_ledger] drain error (rows re-buffered): {exc!r}")
         with _LEDGER_LOCK:
             _BUFFER[:0] = rows
-            if len(_BUFFER) > _BUFFER_CAP:
-                del _BUFFER[: len(_BUFFER) - _BUFFER_CAP]
+            _trim_buffer()
         return 0

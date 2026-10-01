@@ -23,6 +23,7 @@ from src.state_schema import (
 from src.storage import sqlite_store
 from src.data.metric_history import merge_metric_rows
 from src.two_bot.json_utils import json_default
+from src.two_bot.usage_observations import merge_observations
 from src.editorial.publication import automatic_approval_allowed, merge_publication_control
 from src.data.temperature_history import merge_temperature_history
 from src.editorial.revisions import decision_revision, draft_identity, fingerprint
@@ -136,6 +137,7 @@ DEFAULT_STATE: BotState = {
     # {calls, in, cached_in, cache_write, out, usd}. Pruned to
     # usage_ledger.LLM_USAGE_RETENTION_DAYS days — single-digit KB (#390).
     "llm_usage": {},
+    "llm_usage_observations": {},
     "writer_negative_cache": {},
     # Monotonic state revision used to detect and re-merge gist write conflicts.
     "_state_rev": 0,
@@ -2097,6 +2099,7 @@ MERGE_SPEC: dict[str, Callable[..., Any]] = {
     "publish_ledger": _merge_publish_ledger,
     "tweet_metrics": _merge_tweet_metrics,
     "llm_usage": _merge_llm_usage,
+    "llm_usage_observations": merge_observations,
     "writer_negative_cache": _merge_writer_negative_cache,
     "_state_rev": _strat_max_int,
     "ocean_sst_streak": _strat_take_incoming,

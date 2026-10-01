@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.61 — 2026-10-01
+
+- Retain a bounded, content-free window of provider-reported usage: requested/resolved model, thinking and tool counts, cache-duration splits, service labels and modality breakdowns. Missing or malformed dimensions remain explicit.
+- Preserve exact observations through Python, dashboard and SQLite saves, including stale-write deduplication, conflicting identities and visible truncation. Capture adds no provider requests and cannot change draft/check outcomes.
+- Expose recent observations in the protected usage API. Existing prices, unknown Google charges, runtime models and publication controls remain unchanged; this window is neither a full call ledger nor invoice or budget enforcement.
+
 ## 0.9.108.60 — 2026-10-01
 
 - Screen cyclone landfall candidates for direct, affirmative completion clauses naming the current storm. Withhold forecast, negated, conditional, historical, ambiguous and conflicting mentions before the story queue.

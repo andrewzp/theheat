@@ -22,12 +22,15 @@ from src.state import (  # noqa: E402
 )
 from src.storage.sqlite_store import _METADATA_JSON_KEYS  # noqa: E402
 
+from src.two_bot.usage_observations import CONTRACT as USAGE_OBSERVATION_CONTRACT  # noqa: E402
+
 OUTPUT = REPO / "dashboard/lib/state-contract.js"
 
 
 def render() -> str:
     contract = {
         "STATE_DEFAULTS": DEFAULT_STATE,
+        "USAGE_OBSERVATION_CONTRACT": USAGE_OBSERVATION_CONTRACT,
         "METADATA_JSON_KEYS": list(_METADATA_JSON_KEYS),
         "DRAFT_RETENTION": {
             "maxItems": MAX_DRAFTS,
