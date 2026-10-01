@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.63 — 2026-10-01
+
+- Add a read-only writer operating report using retained run configuration, provider responses, draft bindings and exactly joined failure records. Keep response, output, source truth, required checks and editorial quality separate.
+- Report stale, missing, malformed, conflicting and truncated evidence explicitly; an hourly publishing heartbeat cannot freshen writer health. Preserve unknown usage and cost without printing private text, identifiers or error bodies.
+- Read the report in the existing daily canary job without model credentials or model calls. Keep its independently qualified positive gate visible even if the report cannot be read; schedules, paid replay opt-in and publication controls are unchanged.
+
 ## 0.9.108.62 — 2026-10-01
 
 - Reject the canary's explicitly invented positive fixtures before any model call. Report monitoring as blocked with provider access and writer quality unobserved; preserve the positive threshold and required safety checks.

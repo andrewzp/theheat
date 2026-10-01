@@ -95,7 +95,21 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # Report existing production evidence without a model request. Its exit0
+      # only means the report was read; the separate positive gate stays visible.
+      - name: Read retained writer operating evidence
+        env:
+          GH_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+        run: |
+          set -euo pipefail
+          STATE_PATH="$RUNNER_TEMP/theheat-writer-health-state.json"
+          trap 'rm -f "$STATE_PATH"' EXIT
+          gh gist view "$GIST_ID" -f state.json > "$STATE_PATH"
+          python scripts/writer_health.py "$STATE_PATH"
+
       - name: Run canary qualification and positive writer gate
+        if: always()
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
