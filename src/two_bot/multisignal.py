@@ -10,12 +10,16 @@ missing-country candidates are excluded both as host and as a related signal.
 from __future__ import annotations
 
 import os
+import json
+import logging
 from datetime import date, datetime
 
+from src.two_bot.strict_contract import _evidence_default
 from src.two_bot.types import RelatedSignal
 
 MAX_RELATED_SIGNALS = 2
 RELATED_WINDOW_DAYS = 7
+logger = logging.getLogger(__name__)
 
 # Global / planetary / whole-country signal kinds are excluded from windowing
 # (codex must-fix #2: exclude global / missing-coordinate signals). They have no
@@ -75,6 +79,24 @@ def _score_total(candidate) -> int:
         return 0
 
 
+def _identity(value) -> str | None:
+    return value if isinstance(value, str) and value and value == value.strip() else None
+
+
+def _summary(candidate) -> tuple[str, RelatedSignal]:
+    """Compare and detach exactly the facts that will reach the writer."""
+    bundle = candidate.bundle
+    signal = RelatedSignal(
+        event_id=candidate.event_id, signal_kind=bundle.signal_kind,
+        where=bundle.where, when=bundle.when, headline_metric=bundle.headline_metric,
+        country=_bundle_country(bundle),
+    )
+    encoded = json.dumps(signal.to_dict(), sort_keys=True, allow_nan=False,
+                         ensure_ascii=False, default=_evidence_default)
+    encoded.encode("utf-8")
+    return encoded, RelatedSignal(**json.loads(encoded))
+
+
 def attach_related_signals(
     queue,
     *,
@@ -86,48 +108,72 @@ def attach_related_signals(
 
     Conservative window: exact country match AND ``|Δdays| <= window_days``.
     A candidate with no country or an unparseable date participates in neither
-    direction. Distinct events only (same event_id never relates to itself).
+    direction. Each identity contributes at most once. Conflicting summaries for
+    one identity are withheld, even when one falls outside the host's window.
+    This does not adjudicate or remove the underlying primary candidates.
     """
-    metas = []
+    queue = list(queue)
     for candidate in queue:
         bundle = getattr(candidate, "bundle", None)
-        metas.append((
-            candidate,
-            _bundle_country(bundle) if bundle is not None else "",
-            _bundle_date(bundle) if bundle is not None else None,
-        ))
+        if bundle is not None:
+            bundle.related_signals = []
 
-    for candidate, country, when in metas:
+    # Resolve identities before windowing/ranking. Otherwise a low-ranked or
+    # out-of-window duplicate could conceal conflicting evidence for the same ID.
+    metas = []
+    summaries: dict[str, tuple[str, RelatedSignal, int]] = {}
+    invalid: set[str] = set()
+    conflicting: set[str] = set()
+    invalid_rows = 0
+    for candidate in queue:
+        bundle = getattr(candidate, "bundle", None)
+        candidate_id = _identity(getattr(candidate, "event_id", None))
+        bundle_id = _identity(getattr(bundle, "event_id", None))
+        if candidate_id is None or bundle_id is None or candidate_id != bundle_id:
+            invalid.update(value for value in (candidate_id, bundle_id) if value is not None)
+            invalid_rows += 1
+            continue
+        try:
+            encoded, signal = _summary(candidate)
+        except (ValueError, TypeError, UnicodeError, OverflowError, AttributeError, RecursionError):
+            invalid.add(candidate_id)
+            invalid_rows += 1
+            continue
+        score = _score_total(candidate)
+        previous = summaries.get(candidate_id)
+        if previous is not None:
+            if previous[0] != encoded:
+                conflicting.add(candidate_id)
+            score = max(score, previous[2])
+        summaries[candidate_id] = (encoded, signal, score)
+        metas.append((candidate, candidate_id, signal.country, _bundle_date(bundle)))
+
+    if invalid_rows or conflicting:
+        logger.info("Related-signal context withheld: invalid_identity_rows=%d conflicting_identities=%d",
+                    invalid_rows, len(conflicting))
+    eligible = {key: value for key, value in summaries.items() if key not in invalid | conflicting}
+    limit = max(0, min(max_related, MAX_RELATED_SIGNALS))
+
+    for candidate, event_id, country, when in metas:
         if not country or when is None or not _is_regional(getattr(candidate, "bundle", None)):
             continue
         matches = []
-        for other, other_country, other_when in metas:
-            if other is candidate:
+        for other_id, (encoded, other, score) in eligible.items():
+            if other_id == event_id:
                 continue
-            if getattr(other, "event_id", None) == getattr(candidate, "event_id", None):
-                continue
+            other_country, other_when = other.country, _bundle_date(other)
             if not other_country or other_country != country or other_when is None:
                 continue
-            if not _is_regional(getattr(other, "bundle", None)):
+            if not _is_regional(other):
                 continue
             if abs((other_when - when).days) > window_days:
                 continue
-            matches.append(other)
+            matches.append((encoded, score))
 
-        matches.sort(key=_score_total, reverse=True)
-        related = [
-            RelatedSignal(
-                event_id=other.event_id,
-                signal_kind=other.bundle.signal_kind,
-                where=other.bundle.where,
-                when=other.bundle.when,
-                headline_metric=other.bundle.headline_metric,
-                country=_bundle_country(other.bundle),
-            )
-            for other in matches[:max_related]
+        matches.sort(key=lambda item: item[1], reverse=True)
+        candidate.bundle.related_signals = [
+            RelatedSignal(**json.loads(encoded)) for encoded, _ in matches[:limit]
         ]
-        if related:
-            candidate.bundle.related_signals = related
 
 
 __all__ = [

@@ -106,6 +106,23 @@ def bundle_schema_issues(bundle) -> list[tuple[str, str, str]]:
     if not _has_primary_source(payload.get("raw_signal_dump"), payload.get("current_facts")):
         issues.append(("missing_provenance", "raw_signal_dump", "An event ID or place name is not a source or source-record identity"))
 
+    related = payload.get("related_signals", [])
+    seen_related: set[str] = set()
+    if not isinstance(related, list):
+        issues.append(("invalid_related_identity", "related_signals", "Related observations require a list of distinct identities"))
+        related = []
+    for index, signal in enumerate(related):
+        event_id = signal.get("event_id") if isinstance(signal, dict) else None
+        field = f"related_signals[{index}].event_id"
+        if not isinstance(event_id, str) or not event_id or event_id != event_id.strip():
+            issues.append(("invalid_related_identity", field, "Supply an exact nonblank event identity"))
+        elif event_id == payload.get("event_id"):
+            issues.append(("self_related_identity", field, "The primary event cannot be its own related observation"))
+        elif event_id in seen_related:
+            issues.append(("duplicate_related_identity", field, "One identity cannot establish multiple related observations"))
+        else:
+            seen_related.add(event_id)
+
     for field in ("raw_signal_dump", "historical_context"):
         if not isinstance(payload.get(field), dict):
             issues.append(("invalid_evidence_structure", field, "Supply an evidence object; preserve malformed input for repair"))

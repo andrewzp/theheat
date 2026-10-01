@@ -23,6 +23,7 @@ POLICY_FILES = (
     "src/two_bot/strict_contract.py", "src/two_bot/evidence_contract.py",
     "src/two_bot/scientific_claims.py", "src/two_bot/json_utils.py",
     "src/two_bot/bundle_capture.py",
+    "src/two_bot/multisignal.py",
     "src/two_bot/rejected_candidate.py",
     "src/voice/safety.py", "src/data/temperature_evidence.py",
     "src/editorial/approval.py", "src/data/world_thresholds.py", "src/data/open_meteo.py",
