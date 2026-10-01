@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import UUID
 
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
+from src.commands import postgres_checks
 from src.commands.reducer import AutomaticPolicy, reduce_command
 from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
@@ -95,6 +96,23 @@ class PostgresCommandAuthority:
         row = PostgresCommandAuthority._pointer(c, lock=lock)
         _, state = p.PostgresProjectionRepository._read(c, row[1], row[2])
         return row[0], state
+
+    def initialize_candidate_checks(self) -> None:
+        """Explicit owner install; no provider execution or check pass is implied."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_checks.install(c, self.environment)
+
+    def candidate_checks(self, action: str, payload: dict, *, now: str,
+                         request: bytes | None = None, receipt: dict | None = None) -> dict:
+        with self.projections._connection(writing=action != "status") as c:
+            self._validate(c)
+            self._pointer(c, lock=True)
+            result = postgres_checks.apply(c, action, payload, now=now, environment=self.environment,
+                                           request=request, receipt=receipt)
+        # Do not expose a grant until commit acknowledgment succeeds.
+        return result
 
     def initialize_batch_results(self) -> None:
         """Explicit owner install for raw results and immutable review evidence."""

@@ -6,6 +6,8 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/batch_result_journal.py": "261b6572b49e827502629ab6eecd53d613d45d66f44c7c3d8dfeb39438a45ec4",
     "src/commands/check_execution_journal.py": "4abdf688a7b8aeccc1d0ae083f47700e67b26102411e5a9d601fd2472101ad39",
     "src/commands/check_journal.py": "35e7edc7b5faccb50e192f5f328db2b7b847ef5b6e3d610a0dc147a8a32e30aa",
+    "src/commands/postgres_batch_results.py": "3fc0201e0b2f8f1c9a2670d2d6e94f4bcf9d6e0738c8df8cda55e7469dd7a1a5",
+    "src/commands/postgres_checks.py": "e4022751878e1e95b87d4d4d30487a698d39f38dd93ec082bf415c92f86bae8f",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
     "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
@@ -14,7 +16,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "0c8181a729c629868f3108a2616291d97cbf9c4eee4b061a56dd95c75b171b74",
+    "src/editorial/policy.py": "864368dc2f9cc96227d261f8eeb650fa2dcce8cc413381ba1239125ad4aede9c",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
@@ -54,5 +56,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "2c431291b2f39bc0375382fa4f6aad52bb17d35bf375d88ffc48e24ebecef601"
+  "source_sha256": "57b4d3257051b080af8a2ce54d2194a96608cac16814ec063e6334b3fe4e0c49"
 }
