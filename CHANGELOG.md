@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.108.51] - 2026-09-30
+
+- Add explicit local PostgreSQL spending reservations under the command authority's shared row lock. Preserve immutable allowances, exact request identities, unknown holds and one committed dispatch grant across workers, retries and restarts.
+- Calculate exact micro-USD totals in SQL without loading every request body. Keep conservative period/job accounting, overrun containment, body/column integrity, restricted permissions and atomic rollback/restore.
+- Preserve existing command/projection data and SQLite policy behavior. Production spending, provider calls, models, limits, publishing and hosting remain unchanged; complete accounting and production enforcement are still unavailable.
+
 ## [0.9.108.50] - 2026-09-30
 
 - Add the isolated PostgreSQL command core for revision-aware editing and decisions. Serialize acceptance and consumption under a real row lock; commit each changed projection, current pointer, terminal result and history event together.

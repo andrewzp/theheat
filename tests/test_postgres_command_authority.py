@@ -481,7 +481,10 @@ def test_production_and_unsupported_capabilities_absent(core):
     store, _, _, params = core
     with pytest.raises(p.ProjectionError, match="production_adapter_unavailable"):
         PostgresCommandAuthority(**options(params), environment="production")
-    assert not any(hasattr(store, name) for name in ["spending", "dispatch", "publish", "import_snapshot", "retain_media_review"])
+    assert not any(hasattr(store, name) for name in ["dispatch", "publish", "import_snapshot", "retain_media_review"])
+    from src.commands.spend_journal import SpendError
+    with pytest.raises(SpendError, match="spend_migration_required"):
+        store.spending("status", {}, now="2026-09-30T12:00:00Z")
 
 
 def test_owner_default_privileges_removed_from_core(make_authority):
