@@ -12,6 +12,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/commands/postgres_checks.py": "e4022751878e1e95b87d4d4d30487a698d39f38dd93ec082bf415c92f86bae8f",
     "src/commands/sqlite_authority.py": "a54b8618806d37a168ea9adad92b85ee234dcf612767b789b18685a23034dd05",
     "src/config.py": "90b6d9e6ffce88bfd08c990fccf899f0a046b353b61be7b612ba2498a2ca276b",
+    "src/data/cyclones.py": "e6f33c7cdbe9af0e91f661ae91be219ea7d325e3024822430338c9ee046666ac",
     "src/data/gdacs.py": "8229c6d82fe002ded5fa8dbb1e76ed09e5072e694d1568760241e07ccebb785d",
     "src/data/ghcn.py": "930ad3248593f969e199631a5ec3e6d29f88b5fd3b012e3a1c925d91d6cbf715",
     "src/data/ghcn_format.py": "fd3636069b477a484194c9debd6da2ede228ac1ca747746db60b5d9eb656ea18",
@@ -20,7 +21,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/data/temperature_evidence.py": "f656cee4dd86e6f6762932e98ea189e39e5965852c5d3e06299d8ffff3173046",
     "src/data/world_thresholds.py": "a817f8feabe3e41dac69ff3fef07ad9ac264843daa075caef2484fcf7fc5fe09",
     "src/editorial/approval.py": "7c74edff3e93cd2024522df5281dda73cef287c8b038f705f4e391ad8ebb89c3",
-    "src/editorial/policy.py": "4c28ee20c693fcfd2905676e5ba56855107f2b6cb561e143d216765e9b4bfbcf",
+    "src/editorial/policy.py": "4509ec498a41d34334029563eb1405c5078f2270af2d6519d9309c4fda3bf061",
     "src/editorial/revisions.py": "4d54924761a23ecdde63fa32009e7a4d91318d233b0f9842442b70fee8e5d694",
     "src/orchestrator/posting.py": "2fa0ee90d6ab51c6212c816ec3d04e796fe436ad1440e6ad7337ed53e458cde6",
     "src/orchestrator/sources/open_meteo.py": "c7ea30f8fa132cccd13023d3f1d1d6cb81b3c55b800b4e8b9c7b3691cb005ef1",
@@ -35,7 +36,7 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/two_bot/intern/_shared.py": "1296c3f3520ed3862d8d3c9d2d0437a21f1999efbaf9808fd829674f9a054a53",
     "src/two_bot/intern/air_quality.py": "c3763ae98e371b373d53bb9c44ae3f4790010e1f303c45be8738766ca4d22f91",
     "src/two_bot/intern/atmospheric.py": "6c7448b2e0e6bd2a45f447c9a29e5dd3cc295932b9482550eb9f76e5993ce572",
-    "src/two_bot/intern/disasters.py": "49904e55c64fe4850a92e2eb460dd6901bb6757891457414eff7f9076deb0e96",
+    "src/two_bot/intern/disasters.py": "a6f4d478a8475ee4106007aa4d6f038e0b27efa545d622ef781f8c7163c3841d",
     "src/two_bot/intern/drought.py": "2b6449d5ae3ae7dbdaafdcf47b2d56abab2cabda9d195bcfcdeac85345ee27ab",
     "src/two_bot/intern/fire.py": "3f5cc6d46cf80503021176c966c1e7f1dc26f6d37353c34865c83ac6ed160684",
     "src/two_bot/intern/marine.py": "51d95981defbaf3f4515103e16b9d88f4190112e93475b271667baff4aced773",
@@ -60,5 +61,5 @@ export const EDITORIAL_POLICY_MANIFEST = {
     "src/voice/safety.py": "4a828a22e451889f630e994add6ba38c463d44369d24d2e22c2ff85e7f0387e5"
   },
   "schema_version": 1,
-  "source_sha256": "cf707b1682feef0d5bc8b6ac9b09ec2196b1a30f020c8b1801220e420a8dc1e0"
+  "source_sha256": "77af19d6fb13a53bc98fea4fae55b72202cac57398f41c3ec748131c1ee36ab6"
 }

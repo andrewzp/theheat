@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.60 — 2026-10-01
+
+- Screen cyclone landfall candidates for direct, affirmative completion clauses naming the current storm. Withhold forecast, negated, conditional, historical, ambiguous and conflicting mentions before the story queue.
+- Keep the independent dated-source warrant gate: a candidate and current advisory intensity do not certify observed landfall time or intensity. Preserve forecast land threats, tier changes and rapid-intensification paths.
+- Bind the shared cyclone detector to editorial policy and regenerate the dashboard manifest. Runtime models, sample count, storage and the publishing pause remain unchanged.
+
 ## 0.9.108.59 — 2026-10-01
 
 - Run the existing default-off local required-check executor through either SQLite or PostgreSQL using exact grant-bound request and response reads. Refuse changed bytes, malformed evidence and mismatched request/response joins before interpretation.

@@ -351,13 +351,19 @@ def test_optional_public_fetch_failure_preserves_forecast(nested_storm, monkeypa
     "Last year another storm made landfall near Example Coast.",
 ])
 def test_restored_public_text_cannot_certify_landfall_or_buy_checks(nested_storm, monkeypatch, fresh_state, source_text):
+    from src.data.cyclones import LandfallEvent
     from src.two_bot import pipeline
     from src.two_bot.intern.disasters import build_cyclone_landfall_bundle
     monkeypatch.setattr(nhc, "fetch_with_retry", lambda *a, **k: SimpleNamespace(text=source_text))
     advisory = nhc._parse_active_storm(nested_storm)
-    # The legacy detector over-promotes these three cases. Source classification
-    # is separate work; restoring a link must not bypass the existing warrant gate.
-    event, = nhc.detect_landfalls([advisory])
+    assert nhc.detect_landfalls([advisory]) == []
+    # Keep a nonvacuous downstream gate test even when screening emits nothing.
+    # An explicit unqualified synthetic event must never become a source warrant.
+    event = LandfallEvent(source=advisory.source, storm_id=advisory.storm_id,
+        storm_name=advisory.storm_name, basin=advisory.basin,
+        advisory_number=advisory.advisory_number, issued_at=advisory.issued_at,
+        category=advisory.category, wind_kt=advisory.wind_kt, location="Example Coast",
+        public_advisory_url=advisory.public_advisory_url, event_id="synthetic-unqualified")
     bundle = build_cyclone_landfall_bundle(event)
     def forbidden(*args, **kwargs):
         pytest.fail("unqualified landfall bought a model check")

@@ -537,27 +537,68 @@ def detect_tier_crossings(
     return events
 
 
-_LANDFALL_PATTERNS = (
-    re.compile(r"made landfall (?:near|in|along)\s+([^.\n;]+)", re.IGNORECASE),
-    re.compile(r"landfall (?:near|in|along)\s+([^.\n;]+)", re.IGNORECASE),
+_LANDFALL_QUALIFIER = re.compile(
+    r"\b(?:if|unless|whether|may|might|could|would|should|will|not|never|no|"
+    r"expected|forecast(?:s|ed)?|predict(?:s|ed)?|possible|possibly|perhaps|"
+    r"uncertain|unconfirmed|hypothetical|tomorrow)\b|n['’]t\b|"
+    r"\b(?:last|previous|next)\s+(?:year|season|month|week)\b|"
+    r"\b(?:years?|seasons?|months?|weeks?)\s+ago\b|"
+    r"\b(?:in|during)\s+\d{4}\b",
+    re.IGNORECASE,
 )
 
 
+def _landfall_candidate_location(advisory: CycloneAdvisory) -> str:
+    """Screen explicit current-name completion clauses, without certifying them.
+
+    Current advisory wind/time are not observed landfall wind/time. A retained
+    candidate still needs independent dated evidence before completed copy passes
+    the scientific gate. Ambiguous prose is withheld, never completed by a model.
+    """
+    name = " ".join(advisory.storm_name.split())
+    if not name:
+        return ""
+    subject = rf"(?<![\w-]){re.escape(name)}(?![\w-])"
+    completion = re.compile(
+        rf"^(?:the center of\s+)?(?:(?:hurricane|typhoon|tropical storm|cyclone)\s+)?"
+        rf"{subject}\s+(?:has\s+(?:just\s+)?|just\s+)?made landfall "
+        rf"(?:near|in|along)\s+(.+)$", re.IGNORECASE,
+    )
+    text = " ".join(advisory.advisory_text.split())
+    selected = ""
+    # Keep common place abbreviations, initials and decimals inside the clause.
+    # Splitting St. James into a location of "St" would invent a different place.
+    boundary = r"[!?;]|(?<!\bSt)(?<!\bMt)(?<!\bFt)(?<!\bPt)(?<![A-Za-z]\.[A-Za-z])\.(?!\d|[A-Za-z]\b)"
+    for clause in re.split(boundary, text, flags=re.IGNORECASE):
+        clause = clause.strip()
+        named = re.search(subject, clause, re.IGNORECASE)
+        if named is None or not re.search(r"\blandfall\b", clause, re.IGNORECASE):
+            continue
+        # Do not select an affirmative from contradictory same-storm prose.
+        # A qualifier about another storm or in an unrelated sentence has no role.
+        if _LANDFALL_QUALIFIER.search(clause[:named.start()] + clause[named.end():]):
+            return ""
+        match = completion.fullmatch(clause)
+        if not match:
+            continue
+        location = re.split(r"\s+with\s+", match.group(1), maxsplit=1, flags=re.IGNORECASE)[0].strip(" ,")
+        # Multiple clauses must not turn another storm's location into this one's.
+        if not location or re.search(r"\blandfall\b", location, re.IGNORECASE):
+            return ""
+        if selected and location.casefold() != selected.casefold():
+            return ""
+        selected = selected or location
+    return selected
+
+
 def detect_landfalls(advisories: list[CycloneAdvisory]) -> list[LandfallEvent]:
-    """Detect Cat 3+ landfalls explicitly confirmed in advisory text."""
+    """Screen landfall candidates for current Cat 3+ advisories; not a warrant."""
 
     events: list[LandfallEvent] = []
     for advisory in advisories:
         if advisory.category < 3 or not advisory.advisory_text:
             continue
-        text = " ".join(advisory.advisory_text.split())
-        location = ""
-        for pattern in _LANDFALL_PATTERNS:
-            match = pattern.search(text)
-            if match:
-                location = match.group(1).strip(" .")
-                location = re.split(r"\s+with\s+", location, maxsplit=1, flags=re.IGNORECASE)[0]
-                break
+        location = _landfall_candidate_location(advisory)
         if not location:
             continue
         events.append(LandfallEvent(
