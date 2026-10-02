@@ -5,7 +5,11 @@ the deliberately narrow approved expression shape and exercise its partitioning;
 they do not claim to reproduce GitHub scheduling or cancellation behavior.
 """
 from pathlib import Path
+import os
 import re
+import select
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -116,3 +120,44 @@ def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
             assert step["if"] == "matrix.partition == 'core'"
     suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest"))
     assert "if" not in suite and "continue-on-error" not in worker
+
+
+def test_immediate_python_output_is_scoped_to_the_bot_step(workflow):
+    assert "PYTHONUNBUFFERED" not in workflow.get("env", {})
+    locations = []
+    for job_name, job in workflow["jobs"].items():
+        assert "PYTHONUNBUFFERED" not in job.get("env", {})
+        for step in job["steps"]:
+            if "PYTHONUNBUFFERED" in step.get("env", {}):
+                locations.append((job_name, step["name"], step["env"]["PYTHONUNBUFFERED"]))
+    assert locations == [("run", "Run bot", "1")]
+
+
+@pytest.mark.parametrize("use_workflow_setting", [True, False], ids=["unbuffered", "buffered-control"])
+def test_written_output_survives_abrupt_exit_with_workflow_setting(workflow, use_workflow_setting):
+    step = next(step for step in workflow["jobs"]["run"]["steps"] if step.get("name") == "Run bot")
+    # Launch only a synthetic child, with no application, provider or secret env.
+    env = {"PYTHONUNBUFFERED": step["env"]["PYTHONUNBUFFERED"]} if use_workflow_setting else {}
+    child = subprocess.Popen(
+        [sys.executable, "-c", (
+            "import sys, time\n"
+            "sys.stdout.write('synthetic output\\n')\n"
+            "sys.stderr.write('ready\\n'); sys.stderr.flush()\n"
+            "time.sleep(60)\n"
+        )],
+        env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
+    )
+    try:
+        assert select.select([child.stderr], [], [], 5)[0], "Child did not signal readiness"
+        assert os.read(child.stderr.fileno(), 4096) == b"ready\n"
+        readable = select.select([child.stdout], [], [], 1)[0]
+        retained = os.read(child.stdout.fileno(), 4096) if readable else b""
+    finally:
+        if child.poll() is None:
+            child.kill()
+        remaining, _ = child.communicate(timeout=5)
+    assert child.returncode != 0
+    assert retained == (b"synthetic output\n" if use_workflow_setting else b"")
+    # The buffered control loses its line on abrupt exit, rather than passing
+    # because normal interpreter shutdown happened to flush it after the check.
+    assert remaining == b""

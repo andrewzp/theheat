@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.69 — 2026-10-02
+
+- Flush existing Python output immediately in the scheduled/manual bot step so an abrupt runner exit is less likely to lose buffered diagnostics. Keep scheduling, timeouts, credentials, model settings and publication controls unchanged.
+- Verify output is readable before a synthetic child is killed, with a buffered control demonstrating the lost-output failure. This improves observability; it does not establish the cause of a runner shutdown or provide durable recovery.
+
 ## 0.9.108.68 — 2026-10-02
 
 - Format cyclone source links before candidate selection and required checks, including optional revisions and shadow drafts. Replace only clearly matching terminal display abbreviations and preserve existing length gates and scientific wording.

@@ -266,6 +266,8 @@ jobs:
 
       - name: Run bot
         env:
+          # Keep already-written output visible if the runner exits abruptly.
+          PYTHONUNBUFFERED: "1"
           TWITTER_API_KEY: ${{ secrets.TWITTER_API_KEY }}
           TWITTER_API_SECRET: ${{ secrets.TWITTER_API_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
