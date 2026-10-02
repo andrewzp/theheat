@@ -114,7 +114,7 @@ def _read(c, identity, environment):
                                if attempt["binding"]["reservation"] is not None else None),
                     observation=_observation(c, identity, stage, attempt))
         for stage, attempt in attempts.items() if attempt is not None
-    }, publication_approved=False)
+    }, derivation_verification=checks.packet_verification(packet), publication_approved=False)
 
 
 def apply(c, action, payload, *, now, environment, raw=None):

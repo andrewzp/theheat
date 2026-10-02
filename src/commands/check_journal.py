@@ -13,12 +13,16 @@ from src.commands import batch_journal, batch_result_journal as results
 from src.commands import batch_worker_journal as worker, domain_journal, spend_journal
 from src.commands.schema import canonical_json, utc_datetime
 from src.editorial.policy import current_editorial_policy
-from src.editorial.revisions import fingerprint, text_hash
+from src.editorial.revisions import fingerprint
+from src.two_bot.candidate_derivation import derive_candidate, packet_verification
 
 STAGES = ("deterministic", "safety", "fact_check", "critic")
 MAX_SETS = 100_000
 MAX_INPUT_BYTES = 2_000_000
 MAX_RECEIPT_BYTES = 1_000_000
+_PACKET_FIELDS = {"schema_version", "job_id", "custom_id", "candidate_id", "candidate", "text_sha256",
+                  "plan_sha256", "current_context", "useful_until", "policy", "bundle", "memory",
+                  "required_stages", "checker_state", "checker_state_sha256", "check_date"}
 _TABLES = {
     "check_schema": "singleton INTEGER PRIMARY KEY CHECK(singleton=1), schema_sha256 TEXT NOT NULL",
     "check_sets": "check_set_id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES batch_jobs(job_id), custom_id TEXT NOT NULL, packet_sha256 TEXT NOT NULL REFERENCES domain_artifacts(sha256), recorded_at TEXT NOT NULL, UNIQUE(job_id,custom_id)",
@@ -129,6 +133,8 @@ def _review(connection, payload, now):
 def intake(connection, payload, *, now):
     validate(connection)
     _shape(payload, _REVIEW_FIELDS | {"custom_id", "bundle", "memory", "checker_state"})
+    # Freeze caller-owned evidence before later SQL and repeated comparisons.
+    payload = json.loads(_encoded(payload, 3 * MAX_INPUT_BYTES + MAX_RECEIPT_BYTES))
     at = _at(connection, now)
     _require(isinstance(payload["current_context"], dict), "invalid_check_context")
     for key in ("bundle", "memory"):
@@ -152,13 +158,16 @@ def intake(connection, payload, *, now):
         domain_journal.read_artifact(connection, registration["plan_sha256"]),
         registration["plan_sha256"],
     )
+    derivation = derive_candidate(row["candidate"], row["candidate_id"], payload["bundle"], plan["policy"])
     packet = dict(
-        schema_version=1,
+        schema_version=2,
         job_id=payload["job_id"],
         custom_id=payload["custom_id"],
         candidate_id=row["candidate_id"],
         candidate=row["candidate"],
-        text_sha256=text_hash(row["candidate"]["tweet"]),
+        text_sha256=derivation["text_sha256"],
+        derivation=derivation,
+        derivation_id=fingerprint(derivation),
         plan_sha256=registration["plan_sha256"],
         current_context=payload["current_context"],
         useful_until=plan["useful_until"],
@@ -209,16 +218,26 @@ def _packet(connection, identity):
     ).fetchone()
     _require(row is not None, "check_set_not_found")
     packet = json.loads(domain_journal.read_artifact(connection, row["packet_sha256"]))
+    _require(isinstance(packet, dict), "changed_check_set")
+    _shape(packet, _PACKET_FIELDS | ({"derivation", "derivation_id"} if packet.get("schema_version") == 2 else set()))
     _require(
         fingerprint(packet) == identity
         and packet["job_id"] == row["job_id"]
         and packet["custom_id"] == row["custom_id"],
         "changed_check_set",
     )
+    for name in ("bundle", "memory", "checker_state"):
+        _require(isinstance(packet[name], dict), "changed_check_set")
+        _encoded(packet[name], MAX_INPUT_BYTES)
+        expected = packet["checker_state_sha256"] if name == "checker_state" else packet["current_context"][name + "_sha256"]
+        _require(fingerprint(packet[name]) == expected, "changed_check_set")
+    packet_verification(packet)
     return packet
 
 
 def _current(connection, packet, payload, at):
+    verification = packet_verification(packet)
+    _require(verification == "verified_current_formatter", verification)
     spend_journal._sha(payload["checker_state_sha256"])
     _require(
         payload["checker_state_sha256"] == packet["checker_state_sha256"], "changed_checker_state"
@@ -242,7 +261,8 @@ def _current(connection, packet, payload, at):
     _require(
         row is not None
         and row["eligible_for_checks"]
-        and row["candidate_id"] == packet["candidate_id"],
+        and row["candidate_id"] == packet["candidate_id"]
+        and fingerprint(row["candidate"]) == fingerprint(packet["candidate"]),
         "check_candidate_no_longer_current",
     )
     # The critic windows pending drafts by UTC calendar day. Even identical
@@ -288,7 +308,8 @@ def status(connection, payload, *, now):
     try:
         _current(connection, packet, payload, at)
     except (CheckJournalError, results.BatchResultError, worker.BatchWorkerError):
-        reason = "check_context_not_current"
+        verification = packet_verification(packet)
+        reason = verification if verification != "verified_current_formatter" else "check_context_not_current"
     stages = {
         stage: _stage_status(connection, _attempt(connection, payload["check_set_id"], stage))
         for stage in STAGES

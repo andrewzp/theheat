@@ -9,8 +9,9 @@ from typing import Any, cast
 from src.editorial.revisions import fingerprint
 from src.state_schema import BotState
 from src.two_bot import critic, fact_check, pipeline
+from src.two_bot.candidate_derivation import checked_text, retained_bundle
 from src.two_bot.evidence_contract import audit_story_bundle
-from src.two_bot.types import MemorySlice, RelatedSignal, StoryBundle
+from src.two_bot.types import MemorySlice, StoryBundle
 from src.voice import safety
 
 MAX_OUTPUT_TOKENS = 4096
@@ -18,10 +19,7 @@ MAX_OUTPUT_TOKENS = 4096
 
 def retained_inputs(packet: dict) -> tuple[StoryBundle, MemorySlice, BotState]:
     """Reject constructor repair/default drift instead of inventing evidence."""
-    value = deepcopy(packet["bundle"])
-    if "related_signals" in value:
-        value["related_signals"] = [RelatedSignal(**item) for item in value["related_signals"]]
-    bundle = StoryBundle(**value)
+    bundle = retained_bundle(packet["bundle"])
     memory = MemorySlice(**deepcopy(packet["memory"]))
     if fingerprint(bundle.to_dict()) != fingerprint(packet["bundle"]) or fingerprint(
         memory.to_dict()
@@ -35,7 +33,7 @@ def retained_inputs(packet: dict) -> tuple[StoryBundle, MemorySlice, BotState]:
 
 def prepare_request(packet: dict, stage: str) -> dict:
     bundle, memory, state = retained_inputs(packet)
-    tweet = packet["candidate"]["tweet"]
+    tweet = checked_text(packet)
     if stage == "deterministic":
         return dict(schema_version=1, stage=stage, check_set_sha256=fingerprint(packet))
     if stage == "safety":
@@ -61,7 +59,7 @@ def prepare_request(packet: dict, stage: str) -> dict:
 
 def deterministic_result(packet: dict) -> dict:
     bundle, _, state = retained_inputs(packet)
-    tweet = packet["candidate"]["tweet"]
+    tweet = checked_text(packet)
     failures: list[str] = []
     audit = audit_story_bundle(bundle)
     if not audit.prompt_ready:
@@ -108,6 +106,7 @@ def interpret_observation(packet: dict, stage: str, observation: dict, raw: byte
             outcome, execution_status="unavailable", result={"reason": "check_response_unavailable"}
         )
     try:
+        tweet = checked_text(packet)
         value = json.loads(raw, object_pairs_hook=_pairs)
         fingerprint(value)  # No NaN/infinity or malformed Unicode.
         if stage == "deterministic":
@@ -170,7 +169,6 @@ def interpret_observation(packet: dict, stage: str, observation: dict, raw: byte
         if not text.strip() or len(text.encode()) > 65_536:
             raise ValueError("invalid_check_text")
         _, _, state = retained_inputs(packet)
-        tweet = packet["candidate"]["tweet"]
         if stage == "safety":
             allowed = safety.interpret_response(text) == "allow"
             result = dict(passed=allowed)

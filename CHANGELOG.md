@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.70 — 2026-10-02
+
+- Keep raw batch candidates immutable and derive a separate final text before all required checks. Bind the exact raw result, bundle, policy and formatter into schema2 check packets; recompute formatting in both local database adapters before granting work.
+- Preserve legacy checks and unavailable formatter history without granting current execution. Retain late observations and exact receipt retries, keep unknown spending holds, and refuse silent in-place packet upgrades. Batch remains inactive and Gist remains production.
+
 ## 0.9.108.69 — 2026-10-02
 
 - Flush existing Python output immediately in the scheduled/manual bot step so an abrupt runner exit is less likely to lose buffered diagnostics. Keep scheduling, timeouts, credentials, model settings and publication controls unchanged.

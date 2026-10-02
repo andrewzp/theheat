@@ -100,7 +100,8 @@ def read(connection, payload):
             attempts[stage] = dict(
                 attempt, observation=observation(connection, attempt["grant_id"])
             )
-    return dict(packet=packet, attempts=attempts, publication_approved=False)
+    return dict(packet=packet, attempts=attempts,
+                derivation_verification=checks.packet_verification(packet), publication_approved=False)
 
 
 def _bounded_artifact(connection, digest, low, high):

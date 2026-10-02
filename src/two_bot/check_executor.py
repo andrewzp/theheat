@@ -145,6 +145,10 @@ def execute_check_once(
             return _report("blocked", reason="invalid_current_check_context")
         saved = _read(authority, check_set_id, clock)
         packet = saved["packet"]
+        from src.two_bot.candidate_derivation import packet_verification
+        verification = packet_verification(packet)
+        if verification != "verified_current_formatter":
+            return _report("blocked", reason=verification)
         check_requests.retained_inputs(packet)
         policy = current_editorial_policy()
         if policy is None:

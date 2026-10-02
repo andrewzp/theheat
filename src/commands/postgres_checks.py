@@ -11,7 +11,7 @@ from src.commands import batch_journal as b, check_journal as checks, spend_jour
 from src.commands import postgres_batch as batch, postgres_batch_results as results, postgres_spending as spend
 from src.commands import batch_result_journal as r, batch_worker_journal as w
 from src.commands.schema import canonical_json
-from src.editorial.revisions import fingerprint, text_hash
+from src.editorial.revisions import fingerprint
 from src.storage import postgres_projection as p
 
 SCHEMA = "theheat_checks"
@@ -19,9 +19,6 @@ MIGRATION = p.MIGRATION.with_name("007_candidate_checks.sql")
 MAX_PACKET_BYTES = 7_000_000
 _ARTIFACTS = {"packet_artifacts": MAX_PACKET_BYTES, "request_artifacts": checks.MAX_INPUT_BYTES,
               "binding_artifacts": 8192, "receipt_artifacts": checks.MAX_RECEIPT_BYTES}
-_PACKET_FIELDS = {"schema_version", "job_id", "custom_id", "candidate_id", "candidate", "text_sha256",
-                  "plan_sha256", "current_context", "useful_until", "policy", "bundle", "memory",
-                  "required_stages", "checker_state", "checker_state_sha256", "check_date"}
 
 
 def validate(c, environment):
@@ -100,8 +97,8 @@ def _packet(c, identity, environment):
     checks._require(row is not None, "check_set_not_found")
     job, custom, digest, at = row
     packet = _document(c, "packet_artifacts", digest)
-    checks._shape(packet, _PACKET_FIELDS)
-    checks._require(type(packet["schema_version"]) is int and packet["schema_version"] == 1
+    checks._shape(packet, checks._PACKET_FIELDS | ({"derivation", "derivation_id"} if packet.get("schema_version") == 2 else set()))
+    checks._require(type(packet["schema_version"]) is int and packet["schema_version"] in (1, 2)
                     and fingerprint(packet) == identity and packet["job_id"] == job
                     and packet["custom_id"] == custom and packet["required_stages"] == list(checks.STAGES), "changed_check_set")
     registration = batch.read(c, job, environment=environment)
@@ -118,9 +115,7 @@ def _packet(c, identity, environment):
         checks._encoded(packet[name], checks.MAX_INPUT_BYTES)
         expected = packet["checker_state_sha256"] if name == "checker_state" else packet["current_context"][name + "_sha256"]
         checks._require(fingerprint(packet[name]) == expected, "changed_check_set")
-    candidate = packet["candidate"]
-    checks._require(isinstance(candidate, dict) and isinstance(candidate.get("tweet"), str)
-                    and text_hash(candidate["tweet"]) == packet["text_sha256"], "changed_check_set")
+    checks.packet_verification(packet)
     s._sha(packet["candidate_id"])
     checks._require(spend._time(at) == at and registration["registered_at"] <= at
                     and at < spend._time(packet["useful_until"]) and packet["check_date"] == at[:10], "invalid_check_set_time")
@@ -128,6 +123,8 @@ def _packet(c, identity, environment):
 
 
 def _current(c, packet, payload, at, environment):
+    verification = checks.packet_verification(packet)
+    checks._require(verification == "verified_current_formatter", verification)
     s._sha(payload["checker_state_sha256"])
     checks._require(payload["checker_state_sha256"] == packet["checker_state_sha256"], "changed_checker_state")
     checks._require(isinstance(payload["current_context"], dict), "invalid_check_context")
@@ -229,8 +226,10 @@ def _intake(c, payload, at, environment):
     assert row is not None
     registration = batch.read(c, payload["job_id"], environment=environment)
     plan = b._plan(batch._plan_bytes(c, registration["plan_sha256"]), registration["plan_sha256"])
-    packet = dict(schema_version=1, job_id=payload["job_id"], custom_id=payload["custom_id"],
-        candidate_id=row["candidate_id"], candidate=row["candidate"], text_sha256=text_hash(row["candidate"]["tweet"]),
+    derivation = checks.derive_candidate(row["candidate"], row["candidate_id"], payload["bundle"], plan["policy"])
+    packet = dict(schema_version=2, job_id=payload["job_id"], custom_id=payload["custom_id"],
+        candidate_id=row["candidate_id"], candidate=row["candidate"], text_sha256=derivation["text_sha256"],
+        derivation=derivation, derivation_id=fingerprint(derivation),
         plan_sha256=registration["plan_sha256"], current_context=payload["current_context"], useful_until=plan["useful_until"],
         policy=plan["policy"], bundle=payload["bundle"], memory=payload["memory"], required_stages=list(checks.STAGES),
         checker_state=payload["checker_state"], checker_state_sha256=fingerprint(payload["checker_state"]), check_date=at[:10])
@@ -277,7 +276,8 @@ def apply(c, action, payload, *, now, environment, request=None, receipt=None):
         try:
             _current(c, packet, payload, at, environment)
         except (checks.CheckJournalError, r.BatchResultError, w.BatchWorkerError):
-            reason = "check_context_not_current"
+            verification = checks.packet_verification(packet)
+            reason = verification if verification != "verified_current_formatter" else "check_context_not_current"
         return dict(check_set_id=payload["check_set_id"], stages=stages, blocked_reason=reason,
                     required_checks_completed=reason is None and all(v == "passed" for v in stages.values()),
                     publication_approved=False, dispatch_granted=False, accounting_complete=False, cost_usd=None)

@@ -15,6 +15,7 @@ POLICY_FILES = (
     "src/commands/postgres_batch_results.py", "src/commands/postgres_checks.py",
     "src/commands/check_execution_journal.py", "src/two_bot/check_executor.py",
     "src/two_bot/check_requests.py", "src/two_bot/check_transport.py",
+    "src/two_bot/candidate_derivation.py",
     "src/commands/check_journal.py", "src/commands/batch_result_journal.py",
     "src/config.py", "src/editorial/policy.py", "src/editorial/revisions.py",
     "src/orchestrator/posting.py", "src/media/attachment.py", "src/media/review_packet.py",

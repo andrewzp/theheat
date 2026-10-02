@@ -1,6 +1,7 @@
 """Synthetic regressions: reusable scope labels never bypass factual checks."""
 
 from copy import deepcopy
+from dataclasses import asdict
 import json
 from unittest.mock import Mock
 
@@ -9,6 +10,8 @@ import pytest
 from src.two_bot import fact_check, memory, check_requests
 from src.two_bot.types import ExtractedClaim, WriterResult
 from src.editorial.revisions import fingerprint
+from src.editorial.policy import current_editorial_policy
+from src.two_bot.candidate_derivation import derive_candidate
 from tests.two_bot.conftest import _bundle, _memory, _state_with_memory
 
 
@@ -143,16 +146,30 @@ def test_duplicate_complete_tweet_does_not_reach_paid_check(monkeypatch):
     call.assert_not_called()
 
 
-def test_batch_uses_same_scientific_and_novelty_rules():
-    text = "A model-estimated thermal signal is shown."
-    state = _state_with_memory(used_era_anchors=["model-estimated"])
+def _batch_packet(text, state):
+    """Current derived packet around explicit offline scientific fixtures."""
     packet = dict(
+        schema_version=2,
         bundle=_bundle().to_dict(),
         memory=_memory().to_dict(),
         checker_state=state,
         checker_state_sha256=fingerprint(state),
-        candidate={"tweet": text},
+        policy=current_editorial_policy(),
+        candidate=asdict(WriterResult(
+            tweet=text, kill_reason=None, angle_chosen="plain_number",
+            era_anchor_used=None, peer_comparison_used=None, reasoning="synthetic fixture",
+        )),
+        candidate_id="c" * 64,
     )
+    derived = derive_candidate(packet["candidate"], packet["candidate_id"], packet["bundle"], packet["policy"])
+    packet.update(derivation=derived, derivation_id=fingerprint(derived), text_sha256=derived["text_sha256"])
+    return packet
+
+
+def test_batch_uses_same_scientific_and_novelty_rules():
+    text = "A model-estimated thermal signal is shown."
+    state = _state_with_memory(used_era_anchors=["model-estimated"])
+    packet = _batch_packet(text, state)
     for passed in (True, False):
         raw = json.dumps(
             dict(
@@ -171,5 +188,7 @@ def test_batch_uses_same_scientific_and_novelty_rules():
             packet, "fact_check", dict(complete=True, http_status=200), raw
         )
         assert result["verdict"] == ("pass" if passed else "reject")
-    packet["candidate"]["tweet"] = "A model-estimated thermal signal confirms a vegetation fire."
-    assert not check_requests.deterministic_result(packet)["passed"]
+    packet = _batch_packet("A model-estimated thermal signal confirms a vegetation fire.", state)
+    rejected = check_requests.deterministic_result(packet)
+    assert not rejected["passed"]
+    assert any("thermal" in failure.lower() for failure in rejected["failures"])
