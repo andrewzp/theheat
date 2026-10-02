@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## 0.9.108.67 — 2026-10-02
 
+- Split the complete offline CI suite into disjoint core, PostgreSQL and media partitions after the serial job exceeded its limit. Preserve the required `test` gate, real database tests, dashboard checks and production scheduling.
+
 - Apply explicit joint graphic review, its new draft revision and the terminal command receipt in one local/preview PostgreSQL transaction. Require the exact staged files, current actor, predecessor and policy; a review does not authorize posting.
 - Remove graphics through a new pending revision while retaining immutable asset/review history. Verify historical decisions against separate command, package and projection evidence; recover retries without duplicating revisions and roll back storage uncertainty.
 - Refuse media commands in unsupported reducers and preserve existing text-only posting guards. Add actual database failure, permission, concurrency and restore regressions; no production backend or paid model setting changes.

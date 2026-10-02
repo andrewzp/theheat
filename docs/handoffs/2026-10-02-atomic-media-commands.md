@@ -44,3 +44,10 @@ also requires the usual manual deployment. No new UI flow is introduced here.
 The next integration boundary is authenticated review UI and durable media
 transport through the eventual production authority, with hosting, migration and
 recovery settled before cutover. This slice does not complete production graphics.
+
+The initial serial CI run timed out while database cases were still passing.
+Offline CI now partitions collected files into core, PostgreSQL and media groups;
+normal local runs still select every test. The existing required `test` gate joins
+all three and fails for unsuccessful or skipped partitions. Database tests retain
+real PostgreSQL, all assertions and module fixture grouping; dashboard/SQLite/lint
+checks run once in core. Production schedules, queue and timeout are unchanged.

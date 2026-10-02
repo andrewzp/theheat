@@ -68,7 +68,7 @@ def test_non_pr_fallback_never_splits_or_cancels_producers(workflow, event):
 
 
 def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
-    test, run = workflow["jobs"]["test"], workflow["jobs"]["run"]
+    test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     assert test["if"] == "github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'"
     assert " ".join(run["if"].split()) == "always() && github.event_name != 'pull_request'"
     assert run["needs"] == "test"
@@ -78,9 +78,9 @@ def test_pr_and_display_branch_job_exclusions_remain_explicit(workflow):
 
 
 def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
-    test, run = workflow["jobs"]["test"], workflow["jobs"]["run"]
+    test, run = workflow["jobs"]["test-partition"], workflow["jobs"]["run"]
     suite = next(step for step in test["steps"] if step.get("run", "").startswith("python -m pytest tests/"))
-    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --durations=20 -o faulthandler_timeout=120'
+    assert suite["run"] == 'python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --durations=20 -o faulthandler_timeout=120'
     assert suite["env"]["THEHEAT_TEST_POSTGRES"] == "1"
     assert {step.get("name") for step in test["steps"]} >= {
         "SQLite backend smoke", "Test dashboard", "Build dashboard",
@@ -88,3 +88,31 @@ def test_required_offline_suite_and_own_production_smoke_gate_remain(workflow):
     assert any(step.get("name") == "Smoke gate" for step in run["steps"])
     assert test["timeout-minutes"] == "35"
     assert run["timeout-minutes"] == "20"
+
+
+def test_required_check_fails_for_unsuccessful_or_skipped_partition(workflow):
+    gate = workflow["jobs"]["test"]
+    assert gate["needs"] == "test-partition"
+    assert gate["if"] == (
+        "always() && github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'"
+    )
+    step, = gate["steps"]
+    assert step["env"] == {"PARTITION_RESULT": "${{ needs.test-partition.result }}"}
+    assert step["run"] == 'test "$PARTITION_RESULT" = success'
+    # Exercise the actual gate, including GitHub's skipped dependency outcome.
+    import subprocess
+    for result in ("success", "failure", "cancelled", "skipped", ""):
+        completed = subprocess.run(["sh", "-c", step["run"]], env={"PARTITION_RESULT": result})
+        assert (completed.returncode == 0) == (result == "success")
+
+
+def test_partitions_preserve_every_check_without_repeating_dashboard(workflow):
+    worker = workflow["jobs"]["test-partition"]
+    assert worker["strategy"] == {
+        "fail-fast": "false", "matrix": {"partition": ["core", "postgres", "media"]},
+    }
+    for step in worker["steps"]:
+        if step.get("name") in {"SQLite backend smoke", "Test dashboard", "Build dashboard"}:
+            assert step["if"] == "matrix.partition == 'core'"
+    suite = next(s for s in worker["steps"] if s.get("run", "").startswith("python -m pytest"))
+    assert "if" not in suite and "continue-on-error" not in worker
