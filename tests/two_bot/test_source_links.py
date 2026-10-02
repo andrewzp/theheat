@@ -128,6 +128,10 @@ def test_nonlist_facts_and_malformed_values_never_get_stringified():
     assert format_source_link(TEXT, bundle([{"url": URL}])) == TEXT
 
 
+def test_malformed_unicode_source_cannot_turn_valid_copy_into_invalid_text():
+    assert format_source_link(TEXT, bundle(["https://nhc.noaa.gov/\ud800"])) == TEXT
+
+
 @pytest.fixture
 def models(monkeypatch, configured_pipeline_providers):
     """Only external model behavior is stubbed; evidence/local gates stay real."""

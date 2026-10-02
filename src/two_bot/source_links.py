@@ -39,6 +39,7 @@ def _source_url(bundle: StoryBundle) -> str | None:
             or re.search(r"%(?![0-9A-Fa-f]{2})", url)):
         return None
     try:
+        url.encode("utf-8")  # Escaped lone surrogates are not usable source URLs.
         parts = urlsplit(url)
         if (parts.scheme not in {"http", "https"} or not parts.hostname
                 or parts.username is not None or parts.password is not None):
