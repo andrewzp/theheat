@@ -91,6 +91,16 @@ def _payload(value: Any) -> dict:
     return payload
 
 
+def validate_joint_review_payload(value: Any) -> dict:
+    """The shared explicit decision contract, detached from caller-owned input."""
+    try:
+        return _payload(value)
+    except MediaReviewError:
+        raise
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError):
+        raise MediaReviewError("Malformed joint-review payload") from None
+
+
 def _body(packet: dict, payload: dict, principal: Principal, reviewed_at: str) -> dict:
     utc_datetime(reviewed_at)
     return {

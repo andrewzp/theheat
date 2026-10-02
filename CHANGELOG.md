@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.67 — 2026-10-02
+
+- Apply explicit joint graphic review, its new draft revision and the terminal command receipt in one local/preview PostgreSQL transaction. Require the exact staged files, current actor, predecessor and policy; a review does not authorize posting.
+- Remove graphics through a new pending revision while retaining immutable asset/review history. Verify historical decisions against separate command, package and projection evidence; recover retries without duplicating revisions and roll back storage uncertainty.
+- Refuse media commands in unsupported reducers and preserve existing text-only posting guards. Add actual database failure, permission, concurrency and restore regressions; no production backend or paid model setting changes.
+
 ## 0.9.108.66 — 2026-10-01
 
 - Stage all five graphic assets and the independently rebuilt prospective revision atomically in the existing local/preview PostgreSQL authority. Verify exact bytes, current predecessor/policy and current operator permission; retain immutable, bounded package references for a later attachment command.
