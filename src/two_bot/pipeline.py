@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 import os
 import re
 from typing import Any
@@ -20,6 +21,7 @@ from src.two_bot.provider_preflight import current_provider_preflight
 from src.two_bot.strict_contract import model_failure_snapshot
 from src.two_bot.json_utils import model_response_diagnostic
 from src.two_bot.types import FactCheckResult, MemorySlice, StoryBundle, WriterResult
+from src.two_bot.source_links import format_source_link
 from src.voice.safety import run_safety_pipeline
 
 
@@ -360,7 +362,10 @@ def generate_draft(
         memory_slice = memory.build_memory_slice(state, bundle)
         samples = _writer_samples()
         writer_results = _writer_sample_slate(bundle, memory_slice, samples)
-        viable_results = [result for result in writer_results if result.tweet is not None]
+        viable_results = [
+            replace(result, tweet=format_source_link(result.tweet, bundle))
+            for result in writer_results if result.tweet is not None
+        ]
         if not viable_results:
             kill_reasons = [
                 result.kill_reason or "unknown"
@@ -463,8 +468,8 @@ def generate_draft(
                     _mark_stage("writer", "kill")
                     _record_kill("writer", revised.kill_reason or "unknown")
                     return None
-                revised_tweet = revised.tweet
-                writer_result = revised
+                revised_tweet = format_source_link(revised.tweet, bundle)
+                writer_result = replace(revised, tweet=revised_tweet)
                 fact_result = _check_safety_honesty_fact(
                     revised_tweet,
                     bundle,
@@ -615,6 +620,8 @@ def generate_shadow_draft(bundle: StoryBundle, state: BotState) -> dict | None:
             )
             return None
 
+        writer_result = replace(writer_result, tweet=format_source_link(writer_result.tweet, bundle))
+        assert writer_result.tweet is not None
         safety_passed, safety_reason = run_safety_pipeline(writer_result.tweet)
         if not safety_passed:
             print(

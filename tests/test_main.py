@@ -458,12 +458,13 @@ class TestSaveDraft:
 
         return importlib.reload(dispatch)
 
-    def test_cyclone_draft_gets_advisory_url_when_fits(self, monkeypatch):
+    def test_cyclone_old_pipeline_result_is_refused_without_another_check(self, monkeypatch):
         from src.editorial.scoring import score_cyclone_tier_crossing
-        from src.editorial.revisions import review_is_current
         dispatch = self._dispatch_module()
-        # This fixture checks URL edits and invalidation, not model availability.
-        monkeypatch.setattr("src.voice.safety.check_llm", lambda tweet: (True, None))
+        # A post-check edit must be refused without buying a second partial check.
+        def unexpected_check(*args, **kwargs):
+            pytest.fail("Dispatch must not run another safety check")
+        monkeypatch.setattr("src.voice.safety.check_llm", unexpected_check)
         checked_text = "Beryl jumped to Category 4 in the Atlantic."
 
         monkeypatch.setattr(
@@ -485,9 +486,9 @@ class TestSaveDraft:
             review_context={"facts": []},
         )
 
-        assert saved is True
-        assert state["drafts"][0]["text"].endswith(f"\n{url}")
-        assert not review_is_current(state["drafts"][0])
+        assert saved is False
+        assert state["drafts"] == []
+        assert state["suppressions"][-1]["stage"] == "final_format"
 
     def test_url_omitted_when_over_budget(self, monkeypatch):
         from src.editorial.scoring import score_cyclone_tier_crossing
