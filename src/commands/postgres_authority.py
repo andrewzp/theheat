@@ -11,9 +11,9 @@ from pathlib import Path
 from uuid import UUID
 
 from src.commands import postgres_batch, postgres_batch_results, postgres_batch_worker, postgres_spending
-from src.commands import postgres_check_observations, postgres_checks, postgres_media
+from src.commands import postgres_check_observations, postgres_checks, postgres_media, postgres_media_commands
 from src.commands.reducer import AutomaticPolicy, reduce_command
-from src.commands.schema import Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
+from src.commands.schema import MEDIA_ACTIONS, Command, CommandError, Principal, authorize, canonical_json, utc_datetime, utc_text
 from src.editorial.policy import current_editorial_policy
 from src.storage import postgres_projection as p
 
@@ -103,6 +103,25 @@ class PostgresCommandAuthority:
             self._validate(c, runtime=False)
             self._pointer(c, lock=True)
             postgres_media.install(c, self.environment)
+
+    def initialize_media_commands(self) -> None:
+        """Explicit owner migration after media staging; no production cutover."""
+        with self.projections._connection(writing=True) as c:
+            self._validate(c, runtime=False)
+            self._pointer(c, lock=True)
+            postgres_media_commands.install(c, self.environment)
+
+    def read_media_review(self, command_id: str) -> dict:
+        """Trusted local historical read, never current reviewer permission."""
+        command_id = _id(command_id)
+        with self.projections._connection() as c:
+            self._validate(c)
+            result = self._result(c, command_id)
+            intent = self._intent(c, command_id)
+            p._require(result is not None and intent is not None, "media_command_review_not_found")
+            assert intent is not None and result is not None
+            retained = postgres_media_commands.read(c, intent[0], result, self.environment)
+        return retained
 
     def stage_media_proposal(self, draft_id: str, request: dict, principal: Principal, *,
                              assets: dict, resolve_principal: Callable[[str], Principal | None],
@@ -360,6 +379,8 @@ class PostgresCommandAuthority:
         utc_datetime(result.get("completed_at"))
         self.projections._read(c, namespace, snapshot_id)
         self._verify_event(c, command_id, "completed", result["completed_at"], result)
+        if cmd.action == "attach_media_revision" and result["status"] == "applied":
+            postgres_media_commands.read(c, cmd, result, self.environment)
         return result
 
     def accept(self, command: Command, principal: Principal, *, now: datetime | None = None) -> dict:
@@ -431,19 +452,33 @@ class PostgresCommandAuthority:
                         raise CommandError("authorization_unavailable", "Current operator authorization is unavailable") from None
                     editorial_policy = current_editorial_policy()
                     changed = None
+                    media_transition = None
                     try:
                         if actor is None:
                             raise CommandError("forbidden", "Operator authorization was revoked before execution")
-                        reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
+                        if command.action in MEDIA_ACTIONS:
+                            media_transition = postgres_media_commands.prepare(c, state, command, actor,
+                                now=clock, editorial_policy=editorial_policy, environment=self.environment)
+                            reduction = media_transition.reduction
+                        else:
+                            reduction = reduce_command(state, command, actor, now=clock, policy=policy, editorial_policy=editorial_policy)
                         result = {"status": "applied" if reduction.changed_ids else "unchanged", "changed_ids": list(reduction.changed_ids),
                                   "identities": list(reduction.identities), "publish_intent_id": reduction.publish_intent_id}
+                        if media_transition is not None:
+                            result["media"] = media_transition.references
                         if reduction.changed_ids:
                             changed = reduction.state
                     except CommandError as exc:
                         result = {"status": "rejected", "code": exc.code, "message": str(exc)}
                     except (ValueError, TypeError, UnicodeError, OverflowError):
+                        if command.action in MEDIA_ACTIONS:
+                            # Media preparation converts deterministic input errors
+                            # itself; storage/implementation uncertainty rolls back.
+                            raise
                         result = {"status": "rejected", "code": "invalid_revision", "message": "Stored revision cannot be validated"}
                     # Storage work is deliberately outside reducer error handling.
+                    if media_transition is not None:
+                        postgres_media_commands.retain(c, command, media_transition)
                     if changed is not None:
                         encoded, fields = p._snapshot(changed)
                         p._require(version < p.MAX_INTEGER, "authority_version_exhausted")
@@ -456,6 +491,8 @@ class PostgresCommandAuthority:
                     c.execute(f"INSERT INTO {SCHEMA}.results VALUES(%s,%s,%s,%s,%s,%s)",
                               (command.command_id, encoded_result, p._sha(encoded_result), version, NAMESPACE, str(version)))
                     self._event(c, command.command_id, "completed", utc_text(clock), result)
+                    if command.action == "attach_media_revision" and result["status"] == "applied":
+                        self._result(c, command.command_id)
         return result
 
     def read(self) -> tuple[int, dict]:

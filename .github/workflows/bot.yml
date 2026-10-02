@@ -49,7 +49,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test:
+  test-partition:
     # Full suite gates PR merges ONLY. Scheduled drafting runs no longer run it:
     # a flaky/time-dependent unit test must never be able to block — or redden —
     # production drafting. On 2026-06-19 a time-bomb unit test (hardcoded dates)
@@ -66,9 +66,12 @@ jobs:
     # PR-excluded), so the run is neutral and sends no failure email.
     if: github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
     runs-on: ubuntu-24.04
-    # A prior test job timed out; oversized display IDs are now rejected before
-    # execution. Preserve every check and bound CI while reporting stalled tests.
-    # The production run's separate 20-minute limit is unchanged.
+    # Keep the full suite, split by collected file so module-scoped PostgreSQL
+    # fixtures stay together. The required test job below joins every partition.
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [core, postgres, media]
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v6
@@ -79,6 +82,7 @@ jobs:
           cache: 'pip'
 
       - uses: actions/setup-node@v6
+        if: matrix.partition == 'core'
         with:
           node-version: '24'
           cache: 'npm'
@@ -98,6 +102,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql-17 postgresql-client-17
 
       - name: Install dashboard dependencies
+        if: matrix.partition == 'core'
         working-directory: dashboard
         run: npm ci
 
@@ -105,35 +110,54 @@ jobs:
       # syntax issues, basic style. Fails fast before pytest so a broken-import
       # PR doesn't burn the full test budget.
       - run: ruff check src/ tests/
+        if: matrix.partition == 'core'
 
       # Type-check via mypy. Config in pyproject.toml. Three modules are
       # currently overridden (main, state, editorial.scoring) pending a
       # TypedDict refactor; remove overrides as files get cleaned up.
       - run: mypy src/
+        if: matrix.partition == 'core'
 
       - name: Verify editorial policy manifest
+        if: matrix.partition == 'core'
         run: python scripts/gen_editorial_policy.py --check
 
       # `voice_replay` tests live in tests/voice_regression/ and call the
       # real Anthropic writer. They run in voice-regression.yml (daily
       # canary + weekly full + writer-path PR gate), not in this suite.
-      - run: python -m pytest tests/ -v -m "not voice_replay" --durations=20 -o faulthandler_timeout=120
+      - run: python -m pytest tests/ -v -m "not voice_replay" --ci-partition=${{ matrix.partition }} --durations=20 -o faulthandler_timeout=120
         env:
           THEHEAT_TEST_POSTGRES: "1"
           THEHEAT_POSTGRES_BINDIR: /usr/lib/postgresql/17/bin
 
       - name: SQLite backend smoke
+        if: matrix.partition == 'core'
         run: |
           source .venv/bin/activate 2>/dev/null || true
           THEHEAT_DB_PATH=/tmp/theheat-smoke.sqlite python -m pytest tests/test_state.py -q -k "Sqlite" --tb=short
 
       - name: Test dashboard
+        if: matrix.partition == 'core'
         working-directory: dashboard
         run: npm test
 
       - name: Build dashboard
+        if: matrix.partition == 'core'
         working-directory: dashboard
         run: npm run build
+
+  test:
+    # Preserve the existing required-check name. A failed, cancelled or skipped
+    # partition must not turn the merge gate green through dependency skipping.
+    needs: test-partition
+    if: always() && github.event_name == 'pull_request' && github.head_ref != 'daily-plan-current'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require every offline partition
+        env:
+          PARTITION_RESULT: ${{ needs.test-partition.result }}
+        run: test "$PARTITION_RESULT" = success
 
   run:
     needs: test

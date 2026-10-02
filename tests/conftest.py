@@ -32,6 +32,31 @@ from src.state import DEFAULT_STATE
 _TIME_TRAVEL_ENV = "THEHEAT_TIME_TRAVEL_DAYS"
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--ci-partition", choices=("all", "core", "postgres", "media"), default="all",
+        help="Disjoint offline CI file partitions; ordinary local runs select all.",
+    )
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config, items):
+    partition = config.getoption("--ci-partition")
+    if partition == "all":
+        return
+    selected, deselected = [], []
+    for item in items:
+        filename = item.path.name
+        group = (
+            "media" if filename.startswith("test_postgres_media")
+            else "postgres" if filename.startswith("test_postgres_")
+            else "core"
+        )
+        (selected if group == partition else deselected).append(item)
+    items[:] = selected
+    config.hook.pytest_deselected(items=deselected)
+
+
 def pytest_itemcollected(item):
     """Reject payload-sized display IDs before CI logs or subprocess environments.
 

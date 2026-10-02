@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from src.commands.schema import Command, CommandError, Principal, authorize, utc_datetime, utc_text, valid_epoch
+from src.commands.schema import MEDIA_ACTIONS, Command, CommandError, Principal, authorize, utc_datetime, utc_text, valid_epoch
 from src.editorial.revisions import (
     bind_reviewed_revision, decision_revision, draft_identity, has_unresolved_publish,
     fingerprint, invalidate_text, record_human_review, revoke_approval, review_is_current,
@@ -91,6 +91,8 @@ def reduce_command(state: dict, command: Command, principal: Principal, *, now: 
     authorize(principal, command.action)
     if now >= utc_datetime(command.expires_at):
         raise CommandError("command_expired", "This command expired; refresh the draft before trying again")
+    if command.action in MEDIA_ACTIONS:
+        raise CommandError("media_backend_unsupported", "This reducer has no atomic media authority")
     # Read and validate EVERY fixed target before creating or changing any copy.
     original = _target_drafts(state, command)
     updated = deepcopy(state)

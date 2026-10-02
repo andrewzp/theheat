@@ -32,6 +32,8 @@ POLICY_FILES = (
     "src/commands/postgres_check_observations.py",
     "src/commands/postgres_media.py", "src/commands/media_journal.py",
     "src/storage/migrations/009_media_staging.sql",
+    "src/commands/postgres_media_commands.py", "src/storage/migrations/010_media_commands.sql",
+    "src/commands/schema.py", "src/commands/reducer.py", "src/media/joint_review.py",
     "src/commands/postgres_authority.py", "src/commands/sqlite_authority.py",
     "src/orchestrator/sources/open_meteo.py",
 )

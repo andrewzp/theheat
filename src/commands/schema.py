@@ -13,7 +13,8 @@ from src.editorial.publication import valid_epoch
 
 MAX_COMMAND_BYTES = 128 * 1024
 MAX_TARGETS = 500
-ACTIONS = frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
+MEDIA_ACTIONS = frozenset({"attach_media_revision", "remove_media_revision"})
+ACTIONS = MEDIA_ACTIONS | frozenset({"edit_revision", "select_candidate", "record_review", "approve_revision",
                      "schedule_revision", "cancel_approval", "reject_revision", "bulk_reject"})
 _HEX = re.compile(r"[a-f0-9]{64}")
 
@@ -114,6 +115,8 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         "record_review": {"confirmed", "reason", "expected_policy_sha256"}, "approve_revision": {"reason"},
         "schedule_revision": {"delay_minutes", "publication_epoch", "reason"},
         "cancel_approval": {"reason"}, "reject_revision": {"reason"}, "bulk_reject": {"reason"},
+        "attach_media_revision": {"proposal_sha256", "expected_packet_sha256", "expected_policy_sha256", "review"},
+        "remove_media_revision": {"expected_proposal_sha256", "expected_policy_sha256", "confirmed", "reason"},
     }[action]
     if action == "record_review" and allow_legacy_review and set(payload) == {"confirmed", "reason"}:
         required = {"confirmed", "reason"}  # Retained old intent must receive a terminal refusal, not wedge the journal.
@@ -127,6 +130,21 @@ def _validate_payload(action: str, payload: Any, *, allow_legacy_review: bool = 
         raise CommandError("editorial_policy_unverified", "Supply the exact policy fingerprint shown during review")
     if action == "record_review" and payload["confirmed"] is not True:
         raise CommandError("review_confirmation_required", "Confirm review against the exact source evidence")
+    if action in MEDIA_ACTIONS:
+        for key in ("proposal_sha256", "expected_proposal_sha256", "expected_packet_sha256"):
+            if key in payload and (not isinstance(payload[key], str) or not _HEX.fullmatch(payload[key])):
+                raise CommandError("invalid_media_identity", "Supply exact lowercase media fingerprints")
+        if action == "attach_media_revision":
+            # Local import avoids the joint-review module's Principal dependency.
+            from src.media.joint_review import validate_joint_review_payload
+            try:
+                review = validate_joint_review_payload(payload["review"])
+            except ValueError:
+                raise CommandError("invalid_media_review", "Supply a complete explicit joint review") from None
+            if review["decision"] != "accept":
+                raise CommandError("media_acceptance_required", "Attachment requires explicit joint acceptance")
+        elif payload["confirmed"] is not True:
+            raise CommandError("media_removal_confirmation_required", "Confirm removal of the exact graphic revision")
     if action == "select_candidate" and (type(payload["candidate_rank"]) is not int or not 1 <= payload["candidate_rank"] <= 100):
         raise CommandError("invalid_candidate", "Candidate rank must be an integer from 1 to 100")
     if action == "select_candidate" and (not isinstance(payload["candidate_sha256"], str) or not _HEX.fullmatch(payload["candidate_sha256"])):
