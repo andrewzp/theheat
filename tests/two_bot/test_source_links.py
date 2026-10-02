@@ -1,7 +1,6 @@
 """Invented copy and explicit offline model stubs; no source-truth certification."""
 
 from copy import deepcopy
-from dataclasses import replace
 from unittest.mock import Mock
 
 import pytest
@@ -10,18 +9,8 @@ from src.editorial.revisions import text_hash, review_is_current
 from src.two_bot import pipeline
 from src.two_bot.source_links import CYCLONE_LINK_KINDS, format_source_link
 from src.two_bot.types import WriterResult, FactCheckResult, CriticResult
-from tests.two_bot.conftest import _bundle, _state_with_memory
-
-
-URL = "https://www.nhc.noaa.gov/text/SYNTHETIC.shtml"
-TEXT = "Synthetic storm strengthens offshore."
-
-
-def bundle(values=None, kind="cyclone_tier_crossing"):
-    return replace(_bundle(), signal_kind=kind, current_facts=[
-        {"label": "public_advisory_url", "value": value}
-        for value in ([URL] if values is None else values)
-    ])
+from tests.two_bot.conftest import _state_with_memory
+from tests.two_bot.source_link_fixtures import bundle, TEXT, URL
 
 
 @pytest.mark.parametrize("kind", sorted(CYCLONE_LINK_KINDS))

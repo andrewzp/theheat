@@ -18,6 +18,7 @@ from src.editorial.policy import current_editorial_policy
 from src.editorial.revisions import fingerprint
 from src.two_bot import check_executor as executor, check_requests, check_transport
 from src.two_bot import critic, fact_check
+from src.two_bot.candidate_derivation import derive_candidate
 from src.voice import safety
 from tests import test_batch_result_journal as batches
 from tests import test_batch_worker_journal as workers
@@ -55,6 +56,12 @@ def case(store, inputs, monkeypatch):
 
 def saved(case):
     return case["store"].check_execution("read", {"check_set_id": case["identity"]}, now=NOW)
+
+
+def derive_synthetic_variant(packet):
+    """Bind a new in-memory fixture; never alter a retained authority record."""
+    value = derive_candidate(packet["candidate"], packet["candidate_id"], packet["bundle"], packet["policy"])
+    packet.update(derivation=value, derivation_id=fingerprint(value), text_sha256=value["text_sha256"])
 
 
 def reserve(case, stage):
@@ -301,6 +308,7 @@ def test_local_gates_reject_before_paid_checks(case, monkeypatch):
         "A satellite detected a 361 MW fire signal in Mali.",
     ]:
         packet["candidate"]["tweet"] = text
+        derive_synthetic_variant(packet)
         # Directly exercise real deterministic rules with synthetic variants;
         # immutable production candidate identities are never edited here.
         result = check_requests.deterministic_result(packet)
@@ -323,6 +331,7 @@ def test_experimental_checks_share_event_identity_gate(case, text, shared):
         "headline_metric": {"label": "severity", "value": "extreme"},
     }]
     packet["candidate"]["tweet"] = text
+    derive_synthetic_variant(packet)
     result = check_requests.deterministic_result(packet)
     assert ("unsupported_cross_signal_relation" in result["failures"]) is shared
     if shared:
