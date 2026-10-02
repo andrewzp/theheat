@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.71 — 2026-10-02
+
+- Add an offline Google token-price scenario report using retained resolved models, separate thinking tokens and cache uncertainty. Require an explicit dated standard-paid scenario; keep excluded charges, incomplete history and actual billing unknown.
+- Deduplicate exact observations, exclude competing identities (including malformed counterparts), and reconcile stage/model subtotals with bounded, content-free output. Keep runtime pricing, provider calls, publication and the historical ledger unchanged.
+
 ## 0.9.108.70 — 2026-10-02
 
 - Keep raw batch candidates immutable and derive a separate final text before all required checks. Bind the exact raw result, bundle, policy and formatter into schema2 check packets; recompute formatting in both local database adapters before granting work.
