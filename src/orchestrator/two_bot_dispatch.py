@@ -9,38 +9,7 @@ from src.orchestrator.suppression import (
     _record_downstream_suppression,
 )
 from src.state_schema import BotState
-from src.voice.safety import run_safety_pipeline
-
-
-_CYCLONE_LEGACY_TYPES = frozenset({
-    "cyclone_rapid_intensification",
-    "cyclone_tier_crossing",
-    "cyclone_landfall",
-    "cyclone_basin_record",
-})
-_TCO_URL_LENGTH = 23
-
-
-def _bundle_fact_value(bundle, label: str) -> str:
-    for fact in getattr(bundle, "current_facts", []) or []:
-        if isinstance(fact, dict) and fact.get("label") == label:
-            return str(fact.get("value") or "").strip()
-    return ""
-
-
-def _append_cyclone_advisory_url(tweet_text: str, bundle, legacy_type: str) -> str:
-    if legacy_type not in _CYCLONE_LEGACY_TYPES:
-        return tweet_text
-    url = _bundle_fact_value(bundle, "public_advisory_url")
-    if not url or url in tweet_text:
-        return tweet_text
-    if len(tweet_text) + 1 + _TCO_URL_LENGTH > 280:
-        return tweet_text
-    final_text = f"{tweet_text}\n{url}"
-    # Safety/posting length checks count raw characters, so keep this conservative.
-    if len(final_text) > 280:
-        return tweet_text
-    return final_text
+from src.two_bot.source_links import CYCLONE_LINK_KINDS, format_source_link
 
 
 def _two_bot_bundle_for_extreme_signal(
@@ -163,24 +132,23 @@ def _try_two_bot_draft(
                 rejected_candidate=pipeline_result.get("rejected_candidate"),
             )
         return False
-    final_text = _append_cyclone_advisory_url(draft["text"], bundle, legacy_type)
-    if final_text != draft["text"]:
-        safety_passed, safety_reason = run_safety_pipeline(final_text)
-        if not safety_passed:
-            ctx = _current_suppression_ctx()
-            if ctx is not None:
-                _record_downstream_suppression(
-                    bot_state=ctx["bot_state"],
-                    source=ctx.get("source"),
-                    run_id=ctx.get("run_id"),
-                    event_id=event_id,
-                    score=score,
-                    kill_stage="safety",
-                    kill_reason=safety_reason or "unknown",
-                    summary=getattr(bundle, "where", None) or city or None,
-                )
-            return False
-        draft["text"] = final_text
+    if legacy_type in CYCLONE_LINK_KINDS and (
+        getattr(bundle, "signal_kind", None) != legacy_type
+        or format_source_link(draft["text"], bundle) != draft["text"]
+    ):
+        # The pipeline must check the final formatted candidate. Never append a
+        # URL here or buy a second partial check to bless post-check editing.
+        reason = "Pipeline result requires final source-link formatting or has a mismatched kind"
+        pipeline_result.update(kill_stage="final_format", kill_reason=reason)
+        pipeline_result.setdefault("stage_outcomes", {})["final_format"] = "kill"
+        ctx = _current_suppression_ctx() or {}
+        _record_downstream_suppression(
+            bot_state=bot_state, source=ctx.get("source") or "writer",
+            run_id=ctx.get("run_id"), event_id=event_id, score=score,
+            kill_stage="final_format", kill_reason=reason,
+            summary=getattr(bundle, "where", None) or city or None,
+        )
+        return False
     review_context["two_bot"] = draft["two_bot_metadata"]
     from src.orchestrator import common as _common
 

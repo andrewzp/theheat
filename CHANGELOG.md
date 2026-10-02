@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.9.108.68 — 2026-10-02
+
+- Format cyclone source links before candidate selection and required checks, including optional revisions and shadow drafts. Replace only clearly matching terminal display abbreviations and preserve existing length gates and scientific wording.
+- Save the exact checked text; refuse pipeline results that would need a post-check link edit instead of appending another URL and running safety again. Bind the formatter and dispatch behavior into current editorial policy; keep runtime model, sample and retry settings unchanged.
+
 ## 0.9.108.67 — 2026-10-02
 
 - Split the complete offline CI suite into disjoint core, PostgreSQL and media partitions after the serial job exceeded its limit. Preserve the required `test` gate, real database tests, dashboard checks and production scheduling.
