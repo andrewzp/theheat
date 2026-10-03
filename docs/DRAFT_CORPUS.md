@@ -11,6 +11,33 @@ that worked. Re-read this before any voice-engine intervention.
 
 Add new dated sections at the top. Oldest stays at the bottom.
 
+## 2026-10-03 — Daily corpus grading (1 fresh draft; 6 carry-overs from Oct 1, previously graded)
+
+**Context:** Step 0 hard-reset `main` (tip `e22c123`, PR #592). The rolling `daily-plan-current`
+branch (through Oct 1) was picked up at commit time; rebase onto main still not attempted (same
+Jul 7 conflict). Gist read via git-clone (success). **Queue: 7 pending** — the 6 Oct 1 drafts
+(unchanged, grades stand) plus 1 new.
+
+**Grade distribution (fresh only):** A 0 · B 0 · C 1 · D/F 0 → **A-rate 0% (0/1)**, n=1, not
+meaningful. Bar ✗.
+
+**[7] Hurricane Rachel Cat 3 cyclone_tier_crossing (score 74) — C+.** "Hurricane Rachel has
+strengthened to Category 3 in the East Pacific, reaching 105 kt (121 mph) with a central pressure of
+950 mb, per NHC advisory 019. nhc.noaa.gov/text/MIATCPEP3…" Exact, dual-unit, no Wodehouse tell.
+Same news-wire register as [6]. **Stranded mechanic:** Cat 2 → Cat 3 (85 → 105 kt, 972 → 950 mb) in
+~10h is rapid intensification and is the story; the two independent tier-crossing drafts never say
+so. **Truncated URL** ("…MIATCPEP3…" with ellipsis) ships as a dead link in the tweet body — flag
+for the engineer (same class as the Jul 3 raw-JTWC-URL leak). "per NHC advisory 019" cites
+methodology (A4-adjacent). No close (P_close failing by omission, A10 continues).
+
+**Operational:**
+- [6] Rachel Cat 2 is **superseded by [7]** and now ~52h old; strict staleness candidate (intensity
+  status perishable). [7] crosses 48h next cycle. Post at most one of the pair.
+- Riyadh remains 3 of 7 pending (duplicate-location cluster); older Sep 30 drafts are ~69h old but
+  past-tense measurements (not policy triggers).
+- **Bulk-reject skipped:** `gh auth status` reports `GH_TOKEN` invalid; no gist-write tool.
+  Operator should reject [6] via dashboard.
+
 ## 2026-10-01 — Daily corpus grading (6 fresh drafts; **dry spell broken after 70 days — first drafts since Jul 23**; 0% A-rate)
 
 **Context:** Step 0 hard-reset `main` (tip `49acc9c`, PR #576 — `main` moved from the Sep 29 tip
